@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
-import { useNavigation } from 'expo-router';
+import { Redirect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { RestaurantCard, SkeletonCard } from '@/components/PreviewRestaurantCard';
@@ -15,6 +15,7 @@ import { ensureSessionForPurchase } from '@/lib/purchaseSession';
 import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
 import { openLegalLink } from '@/lib/legalLinks';
 import { purchaseTerms } from '@/lib/purchaseTerms';
+import { supabase } from '@/lib/supabase';
 
 /**
  * Shown instead of the search tab when a signed-in user's Fitsy Pro
@@ -30,7 +31,22 @@ export default function ResubscribeScreen() {
   const navigation = useNavigation();
   const focused = useIsFocused();
   const variants = usePreviewAccess();
-  const { offering, refreshOffering, purchase, restore, entitled, introEligibility } = usePurchases();
+  const { offering, refreshOffering, purchase, restore, entitled, introEligibility, ready, isLapsed, isUnknown } = usePurchases();
+  const [identity, setIdentity] = useState<'loading' | 'anonymous' | 'signed-in'>('loading');
+  useEffect(() => {
+    if (!focused) { setIdentity('loading'); return; }
+    let current = true;
+    let authEventReceived = false;
+    setIdentity('loading');
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      authEventReceived = true;
+      if (current) setIdentity(session ? 'signed-in' : 'anonymous');
+    });
+    void supabase.auth.getSession().then(({ data }) => {
+      if (current && !authEventReceived) setIdentity(data.session ? 'signed-in' : 'anonymous');
+    }).catch(() => { if (current) setIdentity('loading'); });
+    return () => { current = false; listener.subscription.unsubscribe(); };
+  }, [focused]);
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
@@ -38,8 +54,8 @@ export default function ResubscribeScreen() {
   // answer, a resubscribe made on another device) lets the user through
   // without a relaunch. See useRedirectOnceEntitled.
   const { claim } = useRedirectOnceEntitled({
-    entitled,
-    busy: loading || restoring || !focused,
+    entitled: identity === 'signed-in' ? entitled : null,
+    busy: loading || restoring || !focused || !ready,
     onEntitled: () => { void openPurchasedDestination(navigation, { requireTargets: true }); },
   });
   // A locked teaser of what resubscribing unlocks, same cards + fetch as the
@@ -63,6 +79,7 @@ export default function ResubscribeScreen() {
   const terms = purchaseTerms(offering?.annual?.product, introEligibility[offering?.annual?.product.identifier ?? '']);
 
   async function handleResubscribe() {
+    if (identity !== 'signed-in' || !ready || !isLapsed) return;
     const annual = offering?.annual ?? (await refreshOffering())?.annual;
     if (!annual) {
       Alert.alert('Just a moment', 'Plans are still loading, please try again.');
@@ -82,6 +99,7 @@ export default function ResubscribeScreen() {
   }
 
   async function handleRestore() {
+    if (identity !== 'signed-in' || !ready || !isLapsed) return;
     if (!(await ensureSessionForPurchase('resubscribe'))) return;
     setRestoring(true);
     try {
@@ -97,6 +115,13 @@ export default function ResubscribeScreen() {
     }
   }
 
+  // Deep links and old navigation state must settle authentication and the
+  // account verdict before a win-back purchase surface can render.
+  if (identity === 'loading' || identity === 'signed-in' && !ready) return null;
+  if (identity === 'anonymous') return <Redirect href="/welcome/signin?returnTo=resubscribe" />;
+  if (isUnknown) return <Redirect href="/welcome/subscription-check" />;
+  if (entitled === true) return null;
+  if (!isLapsed) return <Redirect href="/welcome/payment" />;
   return (
     <WelcomeScreen
       title={'Welcome back.'}

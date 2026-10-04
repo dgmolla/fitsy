@@ -15,6 +15,8 @@ import { supabase } from './supabase';
 import type { EntitlementVerdict } from './useEntitlementVerdict';
 import { identifyPurchasesUser, logoutPurchasesUser } from './purchases';
 import { clearPaywallIntent } from './paywallIntent';
+import { clearPaymentSignInContinuation } from './paymentSignInContinuation';
+import { clearPendingMealClaim } from './pendingMealClaim';
 import { withinMs } from './async';
 import { BOOT_VERDICT_CAP_MS } from './useEntitlementVerdict';
 
@@ -78,7 +80,9 @@ export function useAuthLifecycle({
         if (session.user.id === bootUserIdRef.current) return;
         signIn(session.user.id);
       } else if (event === 'SIGNED_OUT') {
-        void clearPaywallIntent().catch(() => undefined);
+        void Promise.allSettled([
+          clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(),
+        ]);
         bootInvalidatedRef.current = true;
         bootUserIdRef.current = null;
         pendingSignInUserIdRef.current = null;

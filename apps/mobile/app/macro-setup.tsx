@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect, useNavigation } from 'expo-router';
 import { saveMacroTargets } from '@/lib/macroStorage';
 import { pushProfileToServer } from '@/lib/profileSync';
 import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
@@ -12,6 +12,9 @@ import { calculateDailyMacros, dailyToPerMealMacros, macrosToStored } from '@/li
 import { getOnboardingData, calculateSuggestedCalories, type Goal } from '@/lib/onboardingStorage';
 import { FONTS } from '@/lib/brand';
 import { clearOnboardingResume, hasChosenWelcomeGoal, rememberGoalReturnTo, rememberMacroSetup } from '@/lib/onboardingResume';
+import { getPurchasedContinuation } from '@/lib/paywallIntent';
+import { openPurchasedDestination } from '@/lib/paywallJourney';
+import { syncPaywallVerdictForCheckout } from '@/lib/teaserGate';
 
 interface MacroValues {
   protein: number;
@@ -55,6 +58,7 @@ function recommendedSplit(cal: number, goal: Goal): MacroValues {
 
 export default function MacroSetupScreen() {
   const { colors } = useTheme();
+  const navigation = useNavigation();
   const { fromOnboarding } = useLocalSearchParams<{ fromOnboarding?: string }>();
 
   const [values, setValues] = useState<MacroValues>({ protein: 150, carbs: 200, fat: 66 });
@@ -132,6 +136,19 @@ export default function MacroSetupScreen() {
     setActiveFilter('custom');
   }
 
+  async function continueAfterSetup() {
+    if (fromOnboarding) { router.push('/welcome/how-it-works'); return; }
+    const selected = await getPurchasedContinuation();
+    if (selected) {
+      const verdict = await syncPaywallVerdictForCheckout();
+      if (!navigation.isFocused()) return;
+      if (verdict === 'active' && await openPurchasedDestination(navigation, { resumeOnly: true, isCurrent: () => navigation.isFocused() })) return;
+      router.replace(verdict === 'expired' ? '/welcome/resubscribe' : '/welcome/subscription-check');
+      return;
+    }
+    if (navigation.isFocused()) router.push('/(tabs)/search');
+  }
+
   async function handleSave() {
     if (!goal) return;
     try {
@@ -142,7 +159,7 @@ export default function MacroSetupScreen() {
         await clearOnboardingResume();
         pushProfileToServer(); // sync to server (onboarding syncs at payment)
       }
-      router.push(fromOnboarding ? '/welcome/how-it-works' : '/(tabs)/search');
+      await continueAfterSetup();
     } catch {
       Alert.alert('Save failed', 'Could not save your macro targets. Please try again.');
     }
@@ -151,7 +168,7 @@ export default function MacroSetupScreen() {
   async function handleSkip() {
     try {
       if (!fromOnboarding) await clearOnboardingResume();
-      router.push(fromOnboarding ? '/welcome/how-it-works' : '/(tabs)/search');
+      await continueAfterSetup();
     } catch {
       Alert.alert('Could not continue', 'Please try again.');
     }

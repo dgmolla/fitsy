@@ -14,6 +14,6 @@ import { supabase } from './supabase';
 export async function ensureSessionForPurchase(returnTo: 'payment' | 'resubscribe' = 'payment'): Promise<boolean> {
   const { data } = await supabase.auth.getSession();
   if (data.session) return true;
-  router.push(`/welcome/signin?returnTo=${returnTo}`);
+  router.replace(`/welcome/signin?returnTo=${returnTo}`);
   return false;
 }

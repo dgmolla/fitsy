@@ -1,5 +1,5 @@
-# A prior hard-paywall decline must not skip a new, bounded onboarding preview.
-# The flag is created through the real paywall UI; no storage fixture is injected.
+# Create a real paywall decline, then retain app storage while clearing the
+# disposable simulator's auth keychain to reproduce anonymous return.
 appId: com.fitsy.mobile
 tags: [billing, discovery, onboarding, changed-journey]
 ---
@@ -30,14 +30,23 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: goal-lose_fat
 - tapOn:
     id: welcome-continue
+# A direct payment link cannot expose plans before account creation.
 - openLink: com.fitsy.mobile://welcome/payment
 - tapOn:
     text: "^Open$"
     optional: true
 - extendedWaitUntil:
+    visible: "Continue with Apple"
+    timeout: 15000
+- assertNotVisible:
+    id: paywall-logo
+# Authenticate through the configured disposable dev account and decline the
+# real paywall. This does not purchase or synthesize entitlement.
+- tapOn: "Dev login"
+- extendedWaitUntil:
     visible:
       id: paywall-logo
-    timeout: 15000
+    timeout: 30000
 - scrollUntilVisible:
     element:
       id: welcome-skip
@@ -57,15 +66,22 @@ tags: [billing, discovery, onboarding, changed-journey]
     visible:
       id: paywall-logo
     timeout: 15000
-# The ordinary deep link remains hard-gated after the saved decline.
+# Clear only this disposable simulator's keychain. AsyncStorage still contains
+# the observed decline and onboarding checkpoint, so the next launch is
+# anonymous with real prior-decline state.
+- stopApp
+- launchApp:
+    clearState: false
+    clearKeychain: true
 - openLink: com.fitsy.mobile://welcome/preview
 - tapOn:
     text: "^Open$"
     optional: true
 - extendedWaitUntil:
-    visible:
-      id: paywall-logo
+    visible: "Continue with Apple"
     timeout: 15000
+- assertNotVisible:
+    id: paywall-logo
 # Continuing from the real nutrition-source screen carries onboarding intent.
 - openLink: com.fitsy.mobile://welcome/how-it-works
 - tapOn:
@@ -87,7 +103,7 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: preview-guide
 - assertVisible:
     id: preview-pick-2
-# Replay can move back and forward without erasing the prior decline.
+# Replay can move back and forward without erasing the bounded preview entry.
 - tapOn:
     id: preview-back
 - assertVisible:
@@ -113,8 +129,7 @@ tags: [billing, discovery, onboarding, changed-journey]
 - tapOn:
     id: discovery-hero
 - extendedWaitUntil:
-    visible:
-      id: paywall-logo
+    visible: "Continue with Apple"
     timeout: 15000
 - assertNotVisible:
     id: preview-guide
@@ -124,8 +139,7 @@ tags: [billing, discovery, onboarding, changed-journey]
     text: "^Open$"
     optional: true
 - extendedWaitUntil:
-    visible:
-      id: paywall-logo
+    visible: "Continue with Apple"
     timeout: 15000
 - assertNotVisible:
     id: preview-guide

@@ -62,6 +62,7 @@ const routes = {
   _layout: () => <PurchasesProvider><Stack screenOptions={{ headerShown: false }} /></PurchasesProvider>,
   'welcome/_layout': WelcomeLayout, 'welcome/trial': TrialScreen, 'welcome/trial-reminder': TrialReminderScreen,
   'welcome/payment': PaymentScreen,
+  'welcome/signin': () => <Text>Sign in before plans</Text>,
   'welcome/notification-permission': OldNotificationScreen,
   '(tabs)/_layout': () => <Stack />, '(tabs)/search': () => <Text>Meal search</Text>, 'restaurant/[id]': Restaurant,
 };
@@ -85,7 +86,9 @@ beforeEach(async () => {
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: offering, all: { default: offering } });
   jest.spyOn(Purchases, 'restorePurchases').mockResolvedValue(subscribed);
   jest.spyOn(Purchases, 'addCustomerInfoUpdateListener').mockImplementation(listener => { nativeListener = listener; });
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ active: false, synced: true }) });
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false,
+  }) });
   await rememberPaywallIntent(selected);
 });
 afterEach(() => { global.fetch = originalFetch; jest.restoreAllMocks(); });
@@ -98,6 +101,15 @@ async function openPayment() {
   expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ image_variant: 'none', layout_variant: 'trial_timeline' }));
   return screen;
 }
+
+test('anonymous direct payment entry shows sign-in without rendering plans first', async () => {
+  mockAuthSession = null;
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
+  expect(screen.getByText('Sign in before plans')).toBeTruthy();
+  expect(screen.queryByTestId('paywall-price-yearly')).toBeNull();
+  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+});
 
 test.each([
   { eligibility: { annual: 2, monthly: 1 }, expected: 'yearly', trial: true },

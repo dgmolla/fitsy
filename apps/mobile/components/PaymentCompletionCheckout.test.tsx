@@ -98,22 +98,20 @@ test('a checkout identity timeout never starts a late purchase and a retry can s
   jest.useRealTimers();
 });
 
-test('a pending boot identity keeps repeated checkout attempts blocked until the native request settles', async () => {
+test('a pending boot identity hides checkout until the native request settles', async () => {
   const alert = jest.spyOn(Alert, 'alert');
   let resolveIdentity!: (value: { customerInfo: CustomerInfo; created: boolean }) => void;
   (Purchases.logIn as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { resolveIdentity = resolve; }));
-  const screen = await openPayment();
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(resolveIdentity).toBeDefined());
-  expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(true);
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-    expect(Purchases.purchasePackage).not.toHaveBeenCalled();
-  }
+  expect(screen.queryByTestId('welcome-continue')).toBeNull();
+  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
   expect(alert).not.toHaveBeenCalled();
   expect(Purchases.logIn).toHaveBeenCalledTimes(1);
   await act(async () => { nativeUserId = 'buyer'; resolveIdentity({ customerInfo: noSubscription, created: false }); });
   expect(Purchases.purchasePackage).not.toHaveBeenCalled();
-  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(false));
+  await waitFor(() => expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99'));
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(false);
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(Purchases.purchasePackage).toHaveBeenCalledWith(annual);
 });

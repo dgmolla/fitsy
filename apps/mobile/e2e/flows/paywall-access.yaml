@@ -52,93 +52,61 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: locked-value-cta
 - assertVisible: "Continue with Apple"
 - assertVisible: "Continue with Google"
-- openLink: com.fitsy.mobile://welcome/leave-review
-# A fresh simulator can require system confirmation for an app link.
-- tapOn:
-    text: "^Open$"
-    optional: true
-# Retired review links resolve directly to live plans when no trial is eligible.
-- extendedWaitUntil:
-    visible:
-      id: paywall-plan-yearly
-    timeout: 15000
-- assertNotVisible: "Find your next meal with Fitsy."
-- assertNotVisible: "Leave a review"
-- assertNotVisible: "Allow notifications"
-- assertNotVisible: "Remind me"
+# Direct no-trial entry must authenticate before any plan or checkout control.
 - openLink: com.fitsy.mobile://welcome/payment
-# A fresh simulator can require system confirmation for an app link.
 - tapOn:
     text: "^Open$"
     optional: true
 - extendedWaitUntil:
-    visible:
-      id: paywall-price-yearly
+    visible: "Continue with Apple"
     timeout: 15000
-# The decline action follows the legal links and may be below the safe area.
-- scrollUntilVisible:
-    element:
-      id: welcome-skip
-    direction: DOWN
+- assertVisible: "Continue with Google"
+- assertNotVisible:
+    id: paywall-plan-yearly
+- assertNotVisible:
+    id: paywall-price-yearly
+# A stale win-back link has the same pre-auth guard, and Back must not loop.
+- openLink: com.fitsy.mobile://welcome/resubscribe
 - tapOn:
-    id: welcome-skip
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible: "Continue with Apple"
+    timeout: 15000
+- assertNotVisible:
+    id: resubscribe-restore
 - tapOn:
-    id: paywall-discount-decline
-- tapOn:
-    id: paywall-decline
-# iOS can invalidate AX elements while the redirect replaces its navigator.
-# Retry only the settled observation, never the access-control action.
-- retry:
-    maxRetries: 2
-    commands:
-      - waitForAnimationToEnd:
-          timeout: 10000
-      - assertVisible:
-          id: paywall-plan-yearly
+    id: welcome-back
+- extendedWaitUntil:
+    visible: "Find meals that fit"
+    timeout: 15000
+# Hard-gated anonymous preview and restaurant links also remain at sign-in.
 - openLink: com.fitsy.mobile://search?preview=1
-# A fresh simulator can require system confirmation for an app link.
 - tapOn:
     text: "^Open$"
     optional: true
-# iOS can invalidate AX elements while the redirect replaces its navigator.
-# Retry only the settled observation, never the access-control action.
-- retry:
-    maxRetries: 2
-    commands:
-      - waitForAnimationToEnd:
-          timeout: 10000
-      - assertVisible:
-          id: paywall-plan-yearly
-- assertNotVisible: "Search restaurants or dishes"
+- extendedWaitUntil:
+    visible: "Continue with Apple"
+    timeout: 15000
+- assertNotVisible:
+    id: paywall-plan-yearly
 - openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
-# A fresh simulator can require system confirmation for an app link.
 - tapOn:
     text: "^Open$"
     optional: true
-# iOS can invalidate AX elements while the redirect replaces its navigator.
-# Retry only the settled observation, never the access-control action.
-- retry:
-    maxRetries: 2
-    commands:
-      - waitForAnimationToEnd:
-          timeout: 10000
-      - assertVisible:
-          id: paywall-plan-yearly
-- assertNotVisible: "Seed Bowl Co #01"
+- extendedWaitUntil:
+    visible: "Continue with Apple"
+    timeout: 15000
+- assertNotVisible:
+    id: paywall-plan-yearly
 - stopApp
 - launchApp
 - openLink: com.fitsy.mobile://search?preview=1
-# A fresh simulator can require system confirmation for an app link.
 - tapOn:
     text: "^Open$"
     optional: true
-# iOS can invalidate AX elements while the redirect replaces its navigator.
-# Retry only the settled observation, never the access-control action.
-- retry:
-    maxRetries: 2
-    commands:
-      - waitForAnimationToEnd:
-          timeout: 10000
-      - assertVisible:
-          id: paywall-plan-yearly
-- assertNotVisible: "Search restaurants or dishes"
+- extendedWaitUntil:
+    visible: "Continue with Apple"
+    timeout: 15000
+- assertNotVisible:
+    id: paywall-plan-yearly

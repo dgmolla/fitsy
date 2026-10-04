@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { useIsFocused } from '@react-navigation/native';
 import { Alert, AppState } from 'react-native';
-import { router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { Redirect, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { PaywallView } from '@/components/PaywallView';
 import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
 import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
@@ -22,6 +22,7 @@ import { paywallVariantConfig, resolvePaywallVariant, type PaywallVariant } from
 import { supabase } from '@/lib/supabase';
 import { readReminderPreferences } from '@/lib/notificationSchedule';
 import { getNotificationPermission } from '@/lib/useNotifications';
+import { clearPaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
 import type { ReminderAvailability } from '@/components/PaywallOfferTimeline';
 
 type PlanId = 'monthly' | 'yearly';
@@ -64,10 +65,12 @@ export default function PaymentScreen() {
     const sessionRead = supabase.auth.getSession();
     void withinMs(sessionRead, BOOT_VERDICT_CAP_MS).then(result => {
       if (authEventReceived) return;
-      resolveIdentity(result?.data.session?.user.id ?? null);
-      if (!result) void sessionRead.then(({ data }) => {
+      if (result) resolveIdentity(result.data.session?.user.id ?? null);
+      else void sessionRead.then(({ data }) => {
+        // A slow read is still unknown, not proof of an anonymous visitor.
+        // Keep the paywall hidden until its late answer arrives.
         if (!authEventReceived) resolveIdentity(data.session?.user.id ?? null);
-      }).catch(() => undefined);
+      }).catch(() => { if (!authEventReceived) resolveIdentity(null); });
     }).catch(() => { if (!authEventReceived) resolveIdentity(null); });
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, [focused]);
@@ -92,10 +95,10 @@ export default function PaymentScreen() {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
-  const { offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, showManageSubscriptions, entitled } = usePurchases();
+  const { ready: purchasesReady, isLapsed, isUnknown, offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, showManageSubscriptions, entitled } = usePurchases();
   const variantConfig = paywallVariantConfig(offering?.metadata);
   const paywallVariant = resolvePaywallVariant(variantConfig, userId, testerOverride);
-  const discovery = usePaywallDiscovery(focused && identityReady && paywallVariant === 'A', userId);
+  const discovery = usePaywallDiscovery(focused && identityReady && !!userId && paywallVariant === 'A', userId);
   const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, devTrialVisual === '14' ? 14 : 7);
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
@@ -109,7 +112,7 @@ export default function PaymentScreen() {
   // just like a buyer (flag, profile push, onboarding_completed), and that
   // helper tracks no purchase event. See useRedirectOnceEntitled.
   const { claim } = useRedirectOnceEntitled({
-    entitled,
+    entitled: userId ? entitled : null,
     busy: loading || restoring || !focused,
     onEntitled: () => { void completeOnboarding(false); },
   });
@@ -134,9 +137,8 @@ export default function PaymentScreen() {
   const annualPercent = annualSavingPercent(shownOffering?.annual?.product, shownOffering?.monthly?.product);
 
   useEffect(() => {
-    if (!visualRequested) trackOnboardingScreenView('payment');
-
-  }, [visualRequested]);
+    if (focused && identityReady && userId && !visualRequested) trackOnboardingScreenView('payment');
+  }, [focused, identityReady, userId, visualRequested]);
 
   // The boot-time offering fetch can fail (offline at launch, StoreKit hiccup).
   // Retry when this screen opens without one so the CTA isn't dead on arrival.
@@ -146,10 +148,8 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (!focused) { exposure.current = ''; return; }
-    if (!offering || visualRequested || !identityReady || !identityResolvedForFocus.current) return;
-    // A visible anonymous paywall is still a view. Cohort selection remains
-    // account-bound; repeat only when the actual identity or variant changes.
-    const key = `${userId ?? 'anonymous'}:${offering.identifier}:${variants.access}:${paywallVariant}:${variantConfig.version}:${!!testerOverride}`;
+    if (!offering || visualRequested || !userId || !identityReady || !identityResolvedForFocus.current) return;
+    const key = `${userId}:${offering.identifier}:${variants.access}:${paywallVariant}:${variantConfig.version}:${!!testerOverride}`;
     if (exposure.current === key) return;
     exposure.current = key;
     const attribution = { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride };
@@ -160,6 +160,7 @@ export default function PaymentScreen() {
   async function declineSubscription() {
     try {
       await rememberPaywallDecline();
+      await clearPaymentSignInContinuation();
       setModal('none');
       resetWelcomeJourney(navigation, variants.access === 'preview' ? 'preview' : 'payment');
     } catch { Alert.alert('Could not save your choice', 'Please try again.'); }
@@ -174,6 +175,7 @@ export default function PaymentScreen() {
     claim();
     await recordOnboardingComplete(discounted);
     await openPurchasedDestination(navigation);
+    await clearPaymentSignInContinuation();
   }
 
   // This screen IS the paywall - it renders Fitsy's own design and buys the
@@ -240,6 +242,14 @@ export default function PaymentScreen() {
   }
 
   if (!identityReady) return null;
+  // Deep links, old onboarding checkpoints, and a session lost while this
+  // screen is open must never expose a purchase screen before authentication.
+  // The existing dev-only visual fixture has no purchase or restore action.
+  if (!userId && !visualRequested) return <Redirect href="/welcome/signin?returnTo=payment" />;
+  if (userId && !purchasesReady) return null;
+  if (userId && isUnknown) return <Redirect href="/welcome/subscription-check" />;
+  if (userId && isLapsed && entitled !== true) return <Redirect href="/welcome/resubscribe" />;
+  if (userId && entitled === true) return null;
   return (
     <>
       <PaywallView
@@ -257,7 +267,7 @@ export default function PaymentScreen() {
         visualReminderSimulated={simulatedReminder}
         onSelect={setChosenPlan}
         onBack={() => {
-          if (navigation.canGoBack()) router.back();
+          if (navigation.canGoBack()) void clearPaymentSignInContinuation().then(() => router.back());
           else setModal(discountTerms && discountPercent ? 'discount' : 'goodbye');
         }}
         onRestore={() => { void handleRestore(); }}

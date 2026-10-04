@@ -25,6 +25,11 @@ import { getOnboardingResume } from '../lib/onboardingResume';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+jest.mock('@supabase/supabase-js', () => {
+  process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
+  return { createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }) } }) };
+});
 jest.mock('@fitsy/shared', () => ({ calculateAge: () => 28 }));
 jest.mock('../lib/profileSync', () => ({ pushProfileToServer: jest.fn() }));
 jest.mock('posthog-react-native', () => {
