@@ -80,33 +80,5 @@ tags: [billing, discovery, onboarding, changed-journey]
 - extendedWaitUntil:
     visible: "Find meals that fit"
     timeout: 15000
-# Hard-gated anonymous preview and restaurant links also remain at sign-in.
-- openLink: com.fitsy.mobile://search?preview=1
-- tapOn:
-    text: "^Open$"
-    optional: true
-- extendedWaitUntil:
-    visible: "Continue with Apple"
-    timeout: 15000
-- assertNotVisible:
-    id: paywall-plan-yearly
-- openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
-- tapOn:
-    text: "^Open$"
-    optional: true
-- extendedWaitUntil:
-    visible: "Continue with Apple"
-    timeout: 15000
-- assertNotVisible:
-    id: paywall-plan-yearly
-- stopApp
-- launchApp
-- openLink: com.fitsy.mobile://search?preview=1
-- tapOn:
-    text: "^Open$"
-    optional: true
-- extendedWaitUntil:
-    visible: "Continue with Apple"
-    timeout: 15000
-- assertNotVisible:
-    id: paywall-plan-yearly
+# The post-decline preview and cold-resume route are exercised after an
+# observed paywall decline in onboarding-returning-preview.yaml.
