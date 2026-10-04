@@ -105,7 +105,7 @@ describe("getDisplayPricing", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("reports a changed failure, recovers, and retains the 24-hour success cache", async () => {
+  it("reports a changed failure, recovers, and refreshes verified pricing after six hours", async () => {
     primeCreds();
     const fetchMock = jest.spyOn(globalThis, "fetch").mockResolvedValue(
       errorResponse(403, "FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED"),
@@ -125,8 +125,11 @@ describe("getDisplayPricing", () => {
       monthly: "$8.99", annual: "$49.99", trialDays: 7,
     });
     const callsAfterRecovery = fetchMock.mock.calls.length;
-    cache().advance(6 * 60 * 60 * 1000);
+    cache().advance(6 * 60 * 60 * 1000 - 1);
     await expect(getDisplayPricing()).resolves.toMatchObject({ monthly: "$8.99" });
     expect(fetchMock).toHaveBeenCalledTimes(callsAfterRecovery);
+    cache().advance(1);
+    await expect(getDisplayPricing()).resolves.toMatchObject({ monthly: "$8.99" });
+    expect(fetchMock).toHaveBeenCalledTimes(callsAfterRecovery + 6);
   });
 });

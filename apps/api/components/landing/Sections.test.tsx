@@ -44,6 +44,9 @@ describe("landing FAQ pricing", () => {
 
   it("renders live ASC prices and trial duration", () => {
     const html = renderToStaticMarkup(<Faq pricing={{ monthly: "$8.99", annual: "$49.99", trialDays: 7 }} />);
-    expect(html).toContain("7-day free trial, then $8.99 a month or $49.99 a year");
+    expect(html).toContain("$8.99 a month or $49.99 a year");
+    expect(html).toContain("7-day free trial may be available if you are eligible");
+    expect(html).toContain("Check the app&#x27;s purchase screen for your offer and first charge");
+    expect(html).not.toContain("Nothing is charged until the trial ends");
   });
 });

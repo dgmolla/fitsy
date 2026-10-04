@@ -15,9 +15,9 @@ import {
  * The mobile paywall reads the same prices live through RevenueCat; this
  * loader keeps the website honest without a second hand-maintained copy.
  *
- * Successful ASC reads are cached for 24 hours. A failed read is cached as
- * unavailable for six hours, limiting retries and alerts across serverless
- * instances while the dependency is down. No unverified offer is displayed.
+ * ASC reads and unavailable results are cached for six hours across serverless
+ * instances, limiting retries and alerts while the dependency is down.
+ * No unverified offer is displayed.
  */
 
 export interface DisplayPricing {
@@ -177,20 +177,11 @@ export async function fetchPricingFromAsc(
   };
 }
 
-/** Successful ASC reads only; a throw is not cached, so the next request retries. */
-const getCachedAscPricing = unstable_cache(
-  () => fetchPricingFromAsc(),
-  ["asc-display-pricing"],
-  {
-    revalidate: 86400,
-  },
-);
-
-/** A shared short-lived unavailable result bounds persistent ASC failures. */
+/** One shared cache covers success and unavailable results for the same lifetime. */
 const getCachedDisplayPricing = unstable_cache(
   async (): Promise<DisplayPricing | null> => {
     try {
-      return await getCachedAscPricing();
+      return await fetchPricingFromAsc();
     } catch (err) {
       reportServerError("landing pricing (ASC)", err);
       return null;

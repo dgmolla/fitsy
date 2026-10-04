@@ -131,7 +131,7 @@ function priceAnswer(p: DisplayPricing | null): string {
   }
   const plans = `${p.monthly} a month or ${p.annual} a year`;
   if (p.trialDays > 0) {
-    return `${p.trialDays}-day free trial, then ${plans}. Cancel anytime. Nothing is charged until the trial ends.`;
+    return `${plans}. A ${p.trialDays}-day free trial may be available if you are eligible. Check the app's purchase screen for your offer and first charge before you subscribe. Cancel anytime.`;
   }
   return `${plans}. Cancel anytime.`;
 }
