@@ -124,8 +124,11 @@ export function Trust() {
   );
 }
 
-/** "3-day free trial, then $7.99 a month or $39.99 a year." Omits the trial clause when there is none. */
-function priceAnswer(p: DisplayPricing): string {
+/** Formats verified terms, or directs visitors to the app when ASC is unavailable. */
+function priceAnswer(p: DisplayPricing | null): string {
+  if (!p) {
+    return "See current subscription prices and any available introductory offer in the app before you subscribe.";
+  }
   const plans = `${p.monthly} a month or ${p.annual} a year`;
   if (p.trialDays > 0) {
     return `${p.trialDays}-day free trial, then ${plans}. Cancel anytime. Nothing is charged until the trial ends.`;
@@ -133,7 +136,7 @@ function priceAnswer(p: DisplayPricing): string {
   return `${plans}. Cancel anytime.`;
 }
 
-function faqItems(pricing: DisplayPricing): Array<{ q: string; a: string }> {
+function faqItems(pricing: DisplayPricing | null): Array<{ q: string; a: string }> {
   return [
     {
       q: "Where does Fitsy work right now?",
@@ -154,7 +157,7 @@ function faqItems(pricing: DisplayPricing): Array<{ q: string; a: string }> {
   ];
 }
 
-export function Faq({ pricing }: { pricing: DisplayPricing }) {
+export function Faq({ pricing }: { pricing: DisplayPricing | null }) {
   return (
     <section className={s.section} id="faq">
       <div className={s.container}>
