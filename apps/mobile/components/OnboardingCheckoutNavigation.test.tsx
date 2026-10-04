@@ -21,6 +21,21 @@ it('sends an already signed-in never-subscribed deep link to the first-time plan
   expect(screen.queryByText('Welcome back.')).toBeNull();
 });
 
+it('routes an ordinary locked-meal sign-in for a lapsed account to resubscribe with its meal', async () => {
+  await rememberPaywallIntent(selected);
+  global.fetch = jest.fn((url: RequestInfo | URL) => Promise.resolve(String(url).endsWith('/api/auth/login')
+    ? response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false })
+    : response({ active: false, status: 'expired', verdict: 'expired', expiresAt: null,
+      lastRcVerifiedAt: new Date().toISOString(), stale: false, synced: true })));
+  const screen = renderJourney('/welcome/signin');
+  expect(await screen.findByText('Varilla')).toBeTruthy();
+  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/resubscribe'));
+  expect(await getPaywallIntent()).toEqual(selected);
+  expect(screen.queryByText('Trial introduction')).toBeNull();
+});
+
 it.each([
   ['never_subscribed', '/welcome/payment'],
   ['expired', '/welcome/resubscribe'],

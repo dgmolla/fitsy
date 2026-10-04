@@ -126,7 +126,25 @@ export default function SignInScreen() {
       if (isCurrent()) router.dismissTo(`/welcome/${returnTo}`);
       return;
     }
-    const destination = isNewUser || await getPaywallIntent() ? '/welcome/trial' : '/(tabs)/search';
+    const intent = await getPaywallIntent();
+    if (!isCurrent()) return;
+    if (intent) {
+      const verdict = await syncPaywallVerdictForCheckout();
+      if (!isCurrent()) return;
+      if (verdict === 'active') {
+        await openPurchasedDestination(navigation, { requireTargets: true, isCurrent });
+        return;
+      }
+      if (verdict === 'expired') {
+        router.replace('/welcome/resubscribe');
+        return;
+      }
+      if (verdict === 'unknown') {
+        router.replace('/welcome/subscription-check');
+        return;
+      }
+    }
+    const destination = isNewUser || intent ? '/welcome/trial' : '/(tabs)/search';
     if (isCurrent()) router.replace(destination);
     await clearPendingMealClaim();
   }, [navigation, outOfArea, returnTo]);

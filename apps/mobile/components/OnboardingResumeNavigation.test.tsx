@@ -185,7 +185,9 @@ it.each([
 ] as const)('continues %s (%s) only when still on sign-in: success=%s, Back=%s', async (provider, path, success, back) => {
   const exchange = deferred<Response>();
   const alert = jest.spyOn(Alert, 'alert');
-  (global.fetch as jest.Mock).mockImplementation((url: string) => url.endsWith(path) || url.endsWith('/api/auth/register') ? exchange.promise : Promise.resolve(response({ active: false })));
+  (global.fetch as jest.Mock).mockImplementation((url: string) => url.endsWith(path) || url.endsWith('/api/auth/register') ? exchange.promise
+    : Promise.resolve(response({ active: false, verdict: 'never_subscribed', status: null, expiresAt: null,
+      lastRcVerifiedAt: new Date().toISOString(), stale: false, synced: true })));
   await rememberPaywallIntent(selected);
   const screen = renderJourney('/welcome/preview');
   await act(async () => { fireEvent.press(screen.getByText('Open selected menu')); });
