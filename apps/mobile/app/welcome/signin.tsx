@@ -20,11 +20,18 @@ import { bindPaymentSignInContinuation, clearPaymentSignInContinuation, hasPayme
 import { clearPendingMealClaim } from '@/lib/pendingMealClaim';
 import { syncPaywallVerdictForCheckout } from '@/lib/teaserGate';
 import { openPurchasedDestination } from '@/lib/paywallJourney';
+import { withinMs } from '@/lib/async';
+import { BOOT_VERDICT_CAP_MS } from '@/lib/usePurchases';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+
+async function checkoutVerdict() {
+  try { return await withinMs(syncPaywallVerdictForCheckout(), BOOT_VERDICT_CAP_MS) ?? 'unknown'; }
+  catch { return 'unknown'; }
+}
 
 async function captureIdentity(userId: string, email?: string | null): Promise<void> {
   const [mt, od] = await Promise.all([getMacroTargets(), getOnboardingData()]);
@@ -78,7 +85,7 @@ export default function SignInScreen() {
       return;
     }
     if (ownedCheckout !== null) {
-      const verdict = await syncPaywallVerdictForCheckout();
+      const verdict = await checkoutVerdict();
       if (!isCurrent()) return;
       if (verdict === 'active') {
         // Keep the selected meal durable before consuming the sign-in marker.
@@ -105,7 +112,7 @@ export default function SignInScreen() {
       return;
     }
     if (returnTo === 'resubscribe') {
-      const verdict = await syncPaywallVerdictForCheckout();
+      const verdict = await checkoutVerdict();
       if (!isCurrent()) return;
       await clearPaymentSignInContinuation();
       if (!isCurrent()) return;
@@ -129,7 +136,7 @@ export default function SignInScreen() {
     const intent = await getPaywallIntent();
     if (!isCurrent()) return;
     if (intent) {
-      const verdict = await syncPaywallVerdictForCheckout();
+      const verdict = await checkoutVerdict();
       if (!isCurrent()) return;
       if (verdict === 'active') {
         await openPurchasedDestination(navigation, { requireTargets: true, isCurrent });

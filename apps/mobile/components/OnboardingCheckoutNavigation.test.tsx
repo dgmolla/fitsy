@@ -71,6 +71,20 @@ it('replaces completed sign-in so Paywall Back cannot reopen it', async () => {
   expect(screen.queryByText('Continue with Apple')).toBeNull();
 });
 
+it('keeps an owned meal and checkout when the post-sign-in verdict stalls', async () => {
+  await rememberPaywallIntent(selected);
+  await saveMacroTargets({ calories: '600', protein: '40', carbs: '50', fat: '20' });
+  global.fetch = jest.fn((url: RequestInfo | URL) => String(url).endsWith('/api/auth/login')
+    ? Promise.resolve(response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false }))
+    : new Promise<Response>(() => {}));
+  const screen = renderJourney('/welcome/signin?returnTo=payment');
+  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/subscription-check'), { timeout: 5000 });
+  expect(await getPaywallIntent()).toEqual(selected);
+  expect(await hasPaymentSignInContinuation('buyer')).toBe(true);
+});
+
 it.each([
   ['never_subscribed', '/welcome/payment'],
   ['expired', '/welcome/resubscribe'],

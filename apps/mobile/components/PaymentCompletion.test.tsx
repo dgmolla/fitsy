@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-native-purchases';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
+import { router } from 'expo-router';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 import { hasPaymentSignInContinuation, rememberPaymentSignInContinuation } from '../lib/paymentSignInContinuation';
 import { ONBOARDING_COMPLETE_KEY } from '../lib/onboardingCompletion';
@@ -106,6 +107,16 @@ test('authenticated payment retains checkout through the purchase, then clears i
   expect(await hasPaymentSignInContinuation()).toBe(true);
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(async () => expect(await hasPaymentSignInContinuation()).toBe(false));
+});
+
+test('Paywall Back keeps a completed checkout off its spent preview', async () => {
+  await rememberPaymentSignInContinuation();
+  const screen = renderRouter({ ...routes, 'welcome/preview': () => null }, { initialUrl: '/welcome/preview' });
+  await act(async () => { router.push('/welcome/payment'); });
+  await waitFor(() => expect(screen.getByTestId('paywall-price-yearly')).toBeTruthy());
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  expect(screen.getPathname()).toBe('/welcome/payment');
+  expect(screen.getByTestId('paywall-decline')).toBeTruthy();
 });
 
 test('a stalled session read does not reveal the paywall before identity resolves', async () => {

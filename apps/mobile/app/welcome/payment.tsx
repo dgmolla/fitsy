@@ -23,7 +23,7 @@ import { paywallVariantConfig, resolvePaywallVariant, type PaywallVariant } from
 import { supabase } from '@/lib/supabase';
 import { readReminderPreferences } from '@/lib/notificationSchedule';
 import { getNotificationPermission } from '@/lib/useNotifications';
-import { clearPaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
+import { clearPaymentSignInContinuation, hasPaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
 import type { ReminderAvailability } from '@/components/PaywallOfferTimeline';
 
 type PlanId = 'monthly' | 'yearly';
@@ -276,8 +276,14 @@ export default function PaymentScreen() {
         visualReminderSimulated={simulatedReminder}
         onSelect={setChosenPlan}
         onBack={() => {
-          if (navigation.canGoBack()) void clearPaymentSignInContinuation().then(() => router.back());
-          else setModal(discountTerms && discountPercent ? 'discount' : 'goodbye');
+          const exit = () => setModal(discountTerms && discountPercent ? 'discount' : 'goodbye');
+          if (!navigation.canGoBack()) { exit(); return; }
+          void hasPaymentSignInContinuation(userId ?? undefined).then(checkout => {
+            // A consumed guided preview redirects straight back here. Use the
+            // paywall exit instead of bouncing through that spent screen.
+            if (checkout) exit();
+            else router.back();
+          }).catch(exit);
         }}
         onRestore={() => { void handleRestore(); }}
         onManage={() => { void showManageSubscriptions(); }}
