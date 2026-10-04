@@ -14,8 +14,8 @@ const offering = {
 test('development visual offer keeps live prices while clearly synthesizing eligibility', () => {
   const visual = devTrialVisualOffer(offering, true, true);
   expect(visual).not.toBeNull();
-  expect(purchaseTerms(visual?.offering.annual?.product, visual?.eligibility.annual)).toMatchObject({ trial: '7 days', price: '€54,99' });
-  expect(purchaseTerms(visual?.offering.monthly?.product, visual?.eligibility.monthly)).toMatchObject({ trial: '7 days', price: '€7,99' });
+  expect(purchaseTerms(visual?.offering.annual?.product, visual?.eligibility.annual)).toMatchObject({ trial: '14 days', price: '€54,99' });
+  expect(purchaseTerms(visual?.offering.monthly?.product, visual?.eligibility.monthly)).toMatchObject({ trial: '14 days', price: '€7,99' });
   expect(visual?.offering.availablePackages[0]).toBe(visual?.offering.annual);
   expect(visual?.offering.availablePackages[1]).toBe(visual?.offering.monthly);
   expect(offering.annual?.product.introPrice).toBeNull();

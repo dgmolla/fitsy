@@ -8,8 +8,9 @@ import { TrialArtwork } from '@/components/TrialArtwork';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
+import { defaultTrialPlan, trialPresentation } from '@/lib/trialPresentation';
+import { trialReminderLeadLabel } from '../../../../packages/shared/src/contracts/trialPolicy';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
-import { canOfferTrialReminder } from '@/lib/notificationPlan';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { supabase } from '@/lib/supabase';
 import { readReminderPreferences, saveReminderPreferences } from '@/lib/notificationSchedule';
@@ -31,9 +32,11 @@ export default function TrialReminderScreen() {
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
   const eligibilityReady = !!visual || introEligibilityReady;
-  const offers = [shownOffering?.annual, shownOffering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? shownEligibility[pkg.product.identifier] : undefined));
-  const trialOffer = offers.find(terms => terms?.trial);
-  const trial = trialOffer?.trial;
+  const annual = purchaseTerms(shownOffering?.annual?.product, shownOffering?.annual ? shownEligibility[shownOffering.annual.product.identifier] : undefined);
+  const monthly = purchaseTerms(shownOffering?.monthly?.product, shownOffering?.monthly ? shownEligibility[shownOffering.monthly.product.identifier] : undefined);
+  const selectedPlan = defaultTrialPlan(annual, monthly);
+  const presentation = trialPresentation(selectedPlan === 'yearly' ? annual : monthly);
+  const trial = presentation.trial;
   const { begin } = useRouteContinuation();
   const pending = useRef(false);
   const navigating = useRef(false);
@@ -106,13 +109,13 @@ export default function TrialReminderScreen() {
   // Calendar-month trials have no fixed day count, but their confirmed end
   // date still allows the existing one-off scheduler to choose a safe time.
   const inBrowser = Platform.OS === 'web';
-  const canSchedule = !inBrowser && offers.some(canOfferTrialReminder);
+  const canSchedule = !inBrowser && presentation.reminderAvailable;
   const canOptIn = canSchedule && permission !== 'denied';
   const title = inBrowser ? 'Reminders need the mobile app' : !canSchedule ? 'Review your trial' : permission === 'denied' ? 'Reminders are off' : 'Get a trial reminder';
   const subtitle = inBrowser ? 'You can still review your plan and renewal terms.'
     : !canSchedule ? 'This offer is too short for a reminder before the cancellation deadline.'
     : permission === 'denied' ? 'Turn on notifications in device settings if you want a reminder.'
-      : `With notifications allowed, we can remind you before your ${trial} trial ends.`;
+      : `With notifications allowed, we can remind you about ${trialReminderLeadLabel()} before your store-confirmed free trial of ${trial} ends. Quiet hours may move it earlier.`;
   return <WelcomeScreen progress={1} title={title} subtitle={subtitle}
     canContinue={!busy} showBack={!busy} onContinue={() => { if (canOptIn) void allow(); else skip(); }}
     footerContent={<WelcomeActions label={busy ? 'Asking…' : canOptIn ? 'Remind me' : 'Continue to plans'} onPress={canOptIn ? () => { void allow(); } : skip} disabled={busy}

@@ -10,11 +10,13 @@ import { BOOT_VERDICT_CAP_MS, usePurchases } from '@/lib/usePurchases';
 import { withinMs } from '@/lib/async';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
-import { trackOnboardingScreenView, trackPaywallExperimentExposure, trackPaywallShown } from '@/lib/analytics';
+import { trackOnboardingScreenView, trackPaywallExperimentExposure, trackPaywallShown, trackTrialCatalogMismatch } from '@/lib/analytics';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
 import { annualSavingPercent, purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
+import { defaultTrialPlan, trialPresentation, type PlanId } from '@/lib/trialPresentation';
+import { TRIAL_CATALOG_POLICY } from '../../../../packages/shared/src/contracts/trialPolicy';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
 import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
@@ -24,11 +26,9 @@ import { readReminderPreferences } from '@/lib/notificationSchedule';
 import { getNotificationPermission } from '@/lib/useNotifications';
 import type { ReminderAvailability } from '@/components/PaywallOfferTimeline';
 
-type PlanId = 'monthly' | 'yearly';
-
 export default function PaymentScreen() {
   const { devTrialVisual, devPaywallVariant, devReminderEnabled } = useLocalSearchParams<{ devTrialVisual?: string; devPaywallVariant?: string; devReminderEnabled?: string }>();
-  const visualRequested = __DEV__ && (devTrialVisual === '1' || devTrialVisual === '14');
+  const visualRequested = __DEV__ && (devTrialVisual === '1' || devTrialVisual === '7' || devTrialVisual === '14');
   const simulatedReminder = visualRequested && devReminderEnabled === '1';
   useOnboardingStep('payment');
   const navigation = useNavigation();
@@ -39,6 +39,7 @@ export default function PaymentScreen() {
   const [chosenPlan, setChosenPlan] = useState<PlanId | null>(null);
   const variants = usePreviewAccess();
   const exposure = useRef('');
+  const reportedCatalogMismatches = useRef(new Set<string>());
   const identityResolvedForFocus = useRef(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [identityReady, setIdentityReady] = useState(false);
@@ -96,7 +97,7 @@ export default function PaymentScreen() {
   const variantConfig = paywallVariantConfig(offering?.metadata);
   const paywallVariant = resolvePaywallVariant(variantConfig, userId, testerOverride);
   const discovery = usePaywallDiscovery(focused && identityReady && paywallVariant === 'A', userId);
-  const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, devTrialVisual === '14' ? 14 : 7);
+  const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, devTrialVisual === '7' ? 7 : 14);
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
   const eligibilityReady = !!visual || introEligibilityReady;
@@ -119,7 +120,7 @@ export default function PaymentScreen() {
   // Follow the trial promised earlier in onboarding unless the user has
   // explicitly chosen another available plan. Recompute when store terms or
   // eligibility change while the paywall is open.
-  const defaultPlan: PlanId = monthlyTerms?.trial && !annualTerms?.trial ? 'monthly' : annualTerms ? 'yearly' : monthlyTerms ? 'monthly' : 'yearly';
+  const defaultPlan = defaultTrialPlan(annualTerms, monthlyTerms);
   const checkingPlans = !!shownOffering && !eligibilityReady;
   if (!checkingPlans) settledDefaultPlan.current = defaultPlan;
   const heldPlan = settledDefaultPlan.current;
@@ -156,6 +157,17 @@ export default function PaymentScreen() {
     trackPaywallShown({ source: 'onboarding', ...attribution });
     trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: paywallVariant === 'A' ? 'meal' : 'none', layout_variant: paywallVariant === 'A' ? 'mosaic_benefits' : 'trial_timeline', ...attribution });
   }, [offering, variants.access, visualRequested, userId, focused, identityReady, paywallVariant, variantConfig.version, testerOverride]);
+
+  useEffect(() => {
+    if (visualRequested || !offering || !selected || !eligibilityReady) return;
+    const presentation = trialPresentation(terms);
+    if (!presentation.catalogMismatch || !presentation.trial) return;
+    const key = `${offering.identifier}:${selected.product.identifier}:${presentation.trial}`;
+    if (reportedCatalogMismatches.current.has(key)) return;
+    reportedCatalogMismatches.current.add(key);
+    trackTrialCatalogMismatch({ offering_id: offering.identifier, product_id: selected.product.identifier,
+      actual_days: presentation.days, actual_period: presentation.trial, desired_days: TRIAL_CATALOG_POLICY.desiredDays });
+  }, [visualRequested, offering, selected, eligibilityReady, terms]);
 
   async function declineSubscription() {
     try {
@@ -253,7 +265,7 @@ export default function PaymentScreen() {
         loading={loading}
         restoring={restoring}
         checkingPlans={checkingPlans}
-        visualPreview={visual ? (devTrialVisual === '14' ? 14 : 7) : undefined}
+        visualPreview={visual ? (devTrialVisual === '7' ? 7 : 14) : undefined}
         visualReminderSimulated={simulatedReminder}
         onSelect={setChosenPlan}
         onBack={() => {

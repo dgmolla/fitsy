@@ -54,7 +54,7 @@ export default function NotificationSettingsScreen() {
     })}
     {__DEV__ && <View style={s.card}>
       <Text style={s.title}>Development reminder probe</Text>
-      <Text style={s.body}>Synthetic seven-day trial dates; does not change your subscription. {userId ? '' : 'Sign in to use this probe.'}</Text>
+      <Text style={s.body}>Synthetic trial dates for reminder testing; does not change your subscription. {userId ? '' : 'Sign in to use this probe.'}</Text>
       <Pressable style={s.action} disabled={busy || !userId} onPress={() => { void scheduleDevTrialReminder(userId)
         .then(value => setProbe(`Native pending: ${value.count}; trial: ${value.scheduledFor ?? 'none'}`))
         .catch(error => setProbe(String(error))); }} accessibilityRole="button" testID="dev-reminder-schedule">
