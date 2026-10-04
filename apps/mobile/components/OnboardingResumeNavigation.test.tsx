@@ -165,6 +165,24 @@ it('opens payment when a selected-meal entitlement becomes never subscribed duri
   expect(screen.queryByText('Checking subscription')).toBeNull();
 });
 
+it('recovers from a stalled account verdict after macro setup without losing the meal', async () => {
+  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  global.fetch = jest.fn().mockResolvedValue(response({ active: true, synced: true, verdict: 'active',
+    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' }));
+  await saveOnboardingField('goal', 'lose_fat');
+  await rememberPaywallIntent(selected);
+  await rememberPaymentSignInContinuation();
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'signin');
+  const screen = renderJourney('/', { ...routes, 'macro-setup': MacroSetup });
+  await waitFor(() => expect(screen.getPathname()).toBe('/macro-setup'));
+  await screen.findByTestId('macro-setup-skip');
+  global.fetch = jest.fn(() => new Promise<Response>(() => {}));
+  await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-skip')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/subscription-check'), { timeout: 5000 });
+  expect(global.fetch).toHaveBeenCalled();
+  expect(await getPaywallIntent()).toEqual(selected);
+});
+
 it.each(['/welcome/signin?returnTo=payment', '/welcome/signin'])('can cancel root checkout sign-in at %s', async route => {
   await rememberPaywallIntent(selected);
   if (route === '/welcome/signin') await rememberPaymentSignInContinuation();
@@ -175,6 +193,11 @@ it.each(['/welcome/signin?returnTo=payment', '/welcome/signin'])('can cancel roo
   expect(await getPaywallIntent()).toBeNull();
   expect(await hasPaymentSignInContinuation()).toBe(false);
   expect(screen.queryByText('Payment plans')).toBeNull();
+  expect(await AsyncStorage.getItem('@fitsy/onboardingStep')).toBeNull();
+  screen.unmount();
+  const restarted = renderJourney('/');
+  await waitFor(() => expect(restarted.getPathname()).toBe('/welcome/problem'));
+  expect(restarted.queryByText('Continue with Apple')).toBeNull();
 });
 
 it.each([

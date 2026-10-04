@@ -15,6 +15,8 @@ import { clearOnboardingResume, hasChosenWelcomeGoal, rememberGoalReturnTo, reme
 import { getPurchasedContinuation } from '@/lib/paywallIntent';
 import { openPurchasedDestination } from '@/lib/paywallJourney';
 import { syncPaywallVerdictForCheckout } from '@/lib/teaserGate';
+import { withinMs } from '@/lib/async';
+import { BOOT_VERDICT_CAP_MS } from '@/lib/usePurchases';
 
 interface MacroValues {
   protein: number;
@@ -140,7 +142,9 @@ export default function MacroSetupScreen() {
     if (fromOnboarding) { router.push('/welcome/how-it-works'); return; }
     const selected = await getPurchasedContinuation();
     if (selected) {
-      const verdict = await syncPaywallVerdictForCheckout();
+      let verdict: Awaited<ReturnType<typeof syncPaywallVerdictForCheckout>> = 'unknown';
+      try { verdict = await withinMs(syncPaywallVerdictForCheckout(), BOOT_VERDICT_CAP_MS) ?? 'unknown'; }
+      catch { /* Retry from subscription-check when the account verdict fails. */ }
       if (!navigation.isFocused()) return;
       if (verdict === 'active' && await openPurchasedDestination(navigation, { resumeOnly: true, isCurrent: () => navigation.isFocused() })) return;
       router.replace(verdict === 'expired' ? '/welcome/resubscribe'

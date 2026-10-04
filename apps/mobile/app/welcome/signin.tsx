@@ -1,4 +1,4 @@
-import { useOnboardingStep } from '@/lib/onboardingResume';
+import { clearOnboardingResume, useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect, useNavigation } from 'expo-router';
@@ -269,7 +269,7 @@ export default function SignInScreen() {
         // marker before clearing it. Never Back into a retained paywall.
         const paymentReturn = returnTo === 'payment' || returnTo === 'resubscribe' ||
           await hasPaymentSignInContinuation().catch(() => true);
-        await Promise.allSettled([clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim()]);
+        await Promise.allSettled([clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(), clearOnboardingResume()]);
         if (!navigation.isFocused()) return;
         if (paymentReturn || !navigation.canGoBack()) router.replace('/welcome/problem');
         else if (navigation.canGoBack()) router.back();
