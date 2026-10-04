@@ -12,6 +12,9 @@ it('claims an anonymous meal when checkout restarts after the session is saved',
   const screen = renderJourney('/');
   await waitFor(() => expect(screen.getPathname()).toBe('/restaurant/varilla'));
   expect(screen.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy();
+  expect(await AsyncStorage.getItem('onboardingComplete')).toBe('true');
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringContaining('/api/user/profile?goalSchema=2'), expect.objectContaining({ method: 'PATCH' })));
   expect(await hasPaymentSignInContinuation()).toBe(false);
 });
 

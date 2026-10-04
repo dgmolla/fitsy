@@ -1,6 +1,7 @@
 import { StackRouter, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { clearPaywallIntent, getPaywallIntent, getPurchasedContinuation, markPurchasedContinuation } from './paywallIntent';
 import { getMacroTargets } from './macroStorage';
+import { recordOnboardingComplete } from './onboardingCompletion';
 
 type Navigation = Pick<NavigationProp<ParamListBase>, 'reset' | 'getParent'> & {
   getState: () => ReturnType<NavigationProp<ParamListBase>['getState']> | undefined;
@@ -69,6 +70,10 @@ export async function openPurchasedDestination(navigation: Navigation, options?:
       ...(intent.action === 'save' ? { saveSelected: '1' } : {}),
     } }] : []),
   ];
+  if (!isCurrent()) return false;
+  // Every active-account route that opens a purchased destination completes
+  // onboarding, including sign-in and cold-resume paths that skip the paywall.
+  await recordOnboardingComplete(false);
   if (!isCurrent()) return false;
   resetJourney(navigation, { index: routes.length - 1, routes });
   await clearPaywallIntent();

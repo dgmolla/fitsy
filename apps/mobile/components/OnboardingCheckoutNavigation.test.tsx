@@ -105,7 +105,12 @@ it.each([
   await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
   await waitFor(() => expect(screen.getPathname()).toBe(destination));
   if (verdict === 'never_subscribed') expect(await getPaywallIntent()).toEqual(selected);
-  if (verdict === 'active') expect(screen.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy();
+  if (verdict === 'active') {
+    expect(screen.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy();
+    expect(await AsyncStorage.getItem('onboardingComplete')).toBe('true');
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/user/profile?goalSchema=2'), expect.objectContaining({ method: 'PATCH' })));
+  }
 });
 
 it('does not transfer account A checkout to account B after an interrupted sign-out', async () => {
