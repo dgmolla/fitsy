@@ -98,7 +98,7 @@ export default function SignInScreen() {
       } else {
         await clearPendingMealClaim();
         if (!isCurrent()) return;
-        router.dismissTo(verdict === 'never_subscribed'
+        router.replace(verdict === 'never_subscribed'
           ? ownedCheckout ? '/welcome/payment' : '/welcome/trial'
           : '/welcome/subscription-check');
       }
@@ -112,9 +112,9 @@ export default function SignInScreen() {
       if (verdict === 'active') {
         await openPurchasedDestination(navigation, { requireTargets: true, isCurrent });
       } else if (verdict === 'expired') {
-        router.dismissTo('/welcome/resubscribe');
+        router.replace('/welcome/resubscribe');
       } else if (verdict === 'never_subscribed') {
-        router.dismissTo('/welcome/payment');
+        router.replace('/welcome/payment');
       } else {
         router.dismissTo('/welcome/subscription-check');
       }

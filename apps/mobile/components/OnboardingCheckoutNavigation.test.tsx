@@ -54,6 +54,23 @@ it.each([
   if (verdict === 'never_subscribed') expect(screen.queryByText('Resubscribe plans')).toBeNull();
 });
 
+it('replaces completed sign-in so Paywall Back cannot reopen it', async () => {
+  await rememberPaywallIntent(selected);
+  await saveMacroTargets({ calories: '600', protein: '40', carbs: '50', fat: '20' });
+  global.fetch = jest.fn((url: RequestInfo | URL) => Promise.resolve(String(url).endsWith('/api/auth/login')
+    ? response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false })
+    : response({ active: false, status: null, verdict: 'never_subscribed', expiresAt: null,
+      lastRcVerifiedAt: new Date().toISOString(), stale: false, synced: true })));
+  const screen = renderJourney('/welcome/preview');
+  await act(async () => { router.push('/welcome/signin?returnTo=payment'); });
+  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  await act(async () => { router.back(); });
+  expect(screen.getPathname()).toBe('/welcome/preview');
+  expect(screen.queryByText('Continue with Apple')).toBeNull();
+});
+
 it.each([
   ['never_subscribed', '/welcome/payment'],
   ['expired', '/welcome/resubscribe'],
