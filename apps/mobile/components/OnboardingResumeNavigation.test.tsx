@@ -146,6 +146,25 @@ it('replays an interrupted active checkout after missing targets are saved', asy
   expect(screen.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy();
 });
 
+it('opens payment when a selected-meal entitlement becomes never subscribed during macro setup', async () => {
+  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  global.fetch = jest.fn().mockResolvedValue(response({ active: true, synced: true, verdict: 'active',
+    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' }));
+  await saveOnboardingField('goal', 'lose_fat');
+  await rememberPaywallIntent(selected);
+  await rememberPaymentSignInContinuation();
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'signin');
+  const screen = renderJourney('/', { ...routes, 'macro-setup': MacroSetup });
+  await waitFor(() => expect(screen.getPathname()).toBe('/macro-setup'));
+  await screen.findByTestId('macro-setup-skip');
+  (global.fetch as jest.Mock).mockResolvedValue(response({ active: false, synced: true, verdict: 'never_subscribed',
+    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: null }));
+  await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-skip')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(await getPaywallIntent()).toEqual(selected);
+  expect(screen.queryByText('Checking subscription')).toBeNull();
+});
+
 it.each(['/welcome/signin?returnTo=payment', '/welcome/signin'])('can cancel root checkout sign-in at %s', async route => {
   await rememberPaywallIntent(selected);
   if (route === '/welcome/signin') await rememberPaymentSignInContinuation();

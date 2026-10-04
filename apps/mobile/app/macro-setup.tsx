@@ -143,7 +143,8 @@ export default function MacroSetupScreen() {
       const verdict = await syncPaywallVerdictForCheckout();
       if (!navigation.isFocused()) return;
       if (verdict === 'active' && await openPurchasedDestination(navigation, { resumeOnly: true, isCurrent: () => navigation.isFocused() })) return;
-      router.replace(verdict === 'expired' ? '/welcome/resubscribe' : '/welcome/subscription-check');
+      router.replace(verdict === 'expired' ? '/welcome/resubscribe'
+        : verdict === 'never_subscribed' ? '/welcome/payment' : '/welcome/subscription-check');
       return;
     }
     if (navigation.isFocused()) router.push('/(tabs)/search');

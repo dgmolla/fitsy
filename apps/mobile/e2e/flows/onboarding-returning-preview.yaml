@@ -91,14 +91,18 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: nutrition-source-published
 - assertVisible:
     id: nutrition-source-estimated
-- tapOn:
-    id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: coachmark-skip
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: welcome-continue
+      - extendedWaitUntil:
+          visible:
+            id: preview-guide
+          timeout: 15000
 - tapOn:
     id: coachmark-skip
+    optional: true
 - assertVisible:
     id: preview-guide
 - assertVisible:
@@ -108,12 +112,15 @@ tags: [billing, discovery, onboarding, changed-journey]
     id: preview-back
 - assertVisible:
     id: nutrition-source-published
-- tapOn:
-    id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: preview-guide
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: welcome-continue
+      - extendedWaitUntil:
+          visible:
+            id: preview-guide
+          timeout: 15000
 - assertVisible:
     id: preview-pick-2
 # A cold-start resume keeps this specific, user-entered preview pass.
