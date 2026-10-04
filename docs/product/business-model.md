@@ -158,9 +158,9 @@ Cancellation and renewal disclosures follow those live terms.
 Discount percentages are calculated only between comparable live products.
 The June three-day copy and fixed-price mobile fallbacks are superseded.
 
-The website reads US prices and introductory duration from App Store Connect in `apps/api/lib/pricing.ts`, caching successful reads for 24 hours.
-Its existing failure path still uses a legacy static fallback, including a three-day trial; this is separate from the mobile paywall and remains an unresolved inconsistency.
-Do not treat that fallback as the current offer configuration or claim that all website terms are already free of hardcoded values.
+The website reads US prices and introductory duration from App Store Connect in `apps/api/lib/pricing.ts`, caching verified and unavailable results for six hours.
+When App Store Connect is unavailable, the website directs visitors to verify current prices and any introductory offer in the app instead of showing static terms.
+The shared cache bounds repeated dependency requests and alerts.
 
 ### Historical decisions
 

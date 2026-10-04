@@ -15,11 +15,9 @@ import {
  * The mobile paywall reads the same prices live through RevenueCat; this
  * loader keeps the website honest without a second hand-maintained copy.
  *
- * Only successful ASC reads are cached (24h). If ASC is not configured in
- * this environment (preview, dev) the fallback is used quietly; if ASC fails
- * in an environment where it is configured, the fallback is used and the
- * failure is reported through the normal server-error alert, and nothing is
- * cached so the next request retries.
+ * ASC reads and unavailable results are cached for six hours across serverless
+ * instances, limiting retries and alerts while the dependency is down.
+ * No unverified offer is displayed.
  */
 
 export interface DisplayPricing {
@@ -30,13 +28,6 @@ export interface DisplayPricing {
   /** 0 when there is no free trial. */
   trialDays: number;
 }
-
-/** Mirrors docs/product/business-model.md, Pricing Decision Record. */
-export const PRICING_FALLBACK: DisplayPricing = {
-  monthly: "$7.99",
-  annual: "$39.99",
-  trialDays: 3,
-};
 
 /** ASC product identifiers (App Store Connect, Subscriptions). */
 const KEY_BY_PRODUCT_ID: Record<string, "monthly" | "annual"> = {
@@ -186,22 +177,22 @@ export async function fetchPricingFromAsc(
   };
 }
 
-/** Successful ASC reads only; a throw is not cached, so the next request retries. */
-const getCachedAscPricing = unstable_cache(
-  () => fetchPricingFromAsc(),
-  ["asc-display-pricing"],
-  {
-    revalidate: 86400,
+/** One shared cache covers success and unavailable results for the same lifetime. */
+const getCachedDisplayPricing = unstable_cache(
+  async (): Promise<DisplayPricing | null> => {
+    try {
+      return await fetchPricingFromAsc();
+    } catch (err) {
+      reportServerError("landing pricing (ASC)", err);
+      return null;
+    }
   },
+  ["asc-display-pricing-availability-v2"],
+  { revalidate: 6 * 60 * 60 },
 );
 
-/** Display pricing with fallback. Never throws. */
-export async function getDisplayPricing(): Promise<DisplayPricing> {
-  if (!isAscConfigured()) return PRICING_FALLBACK;
-  try {
-    return await getCachedAscPricing();
-  } catch (err) {
-    reportServerError("landing pricing (ASC)", err);
-    return PRICING_FALLBACK;
-  }
+/** Display verified terms, or indicate that live terms are unavailable. */
+export async function getDisplayPricing(): Promise<DisplayPricing | null> {
+  if (!isAscConfigured()) return null;
+  return getCachedDisplayPricing();
 }

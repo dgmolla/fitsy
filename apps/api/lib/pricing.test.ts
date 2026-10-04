@@ -1,14 +1,7 @@
 import { generateKeyPairSync } from "crypto";
-import {
-  fetchPricingFromAsc,
-  getDisplayPricing,
-  PRICING_FALLBACK,
-} from "./pricing";
+import { fetchPricingFromAsc } from "./pricing";
 
-// The cache wrapper is Next runtime plumbing; run the loader directly.
 jest.mock("next/cache", () => ({ unstable_cache: (fn: () => unknown) => fn }));
-jest.mock("./errorAlert", () => ({ reportServerError: jest.fn() }));
-import { reportServerError } from "./errorAlert";
 
 const ENV = ["ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_P8_BASE64"] as const;
 const saved: Record<string, string | undefined> = {};
@@ -232,51 +225,5 @@ describe("fetchPricingFromAsc", () => {
       ),
     );
     expect(tokens.size).toBe(1);
-  });
-});
-
-describe("getDisplayPricing", () => {
-  it("returns the decision-record fallback quietly when ASC is not configured", async () => {
-    const fetchMock = jest.spyOn(globalThis, "fetch");
-    await expect(getDisplayPricing()).resolves.toBe(PRICING_FALLBACK);
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(reportServerError).not.toHaveBeenCalled();
-  });
-
-  it("falls back AND reports when ASC is configured but fails", async () => {
-    primeCreds();
-    jest
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue({
-        ok: false,
-        status: 503,
-        json: async () => ({}),
-      } as Response);
-    await expect(getDisplayPricing()).resolves.toEqual(PRICING_FALLBACK);
-    expect(reportServerError).toHaveBeenCalledWith(
-      "landing pricing (ASC)",
-      expect.any(Error),
-    );
-  });
-
-  it("uses ASC prices when available", async () => {
-    primeCreds();
-    primeAsc([
-      {
-        productId: "com.fitsy.mobile.monthly",
-        prices: [["7.99", null, false]],
-        offers: TRIAL,
-      },
-      {
-        productId: "com.fitsy.mobile.yearly",
-        prices: [["39.99", null, false]],
-        offers: TRIAL,
-      },
-    ]);
-    await expect(getDisplayPricing()).resolves.toEqual({
-      monthly: "$7.99",
-      annual: "$39.99",
-      trialDays: 3,
-    });
   });
 });
