@@ -106,11 +106,12 @@ export async function publishProductFlow(prNumber, {
     assert(!release || release.isDraft, 'Evidence release must remain a private draft');
     if (!release) gh(['release', 'create', tag, '--repo', repo, '--draft', '--target', head, '--title', `Local product evidence ${head.slice(0, 8)}`, '--notes-file', notes]);
     gh(['release', 'upload', tag, archive, '--repo', repo, '--clobber']);
-    const published = JSON.parse(gh(['api', `repos/${repo}/releases/tags/${tag}`]));
+    // GitHub's releases/tags endpoint returns 404 for drafts, even to their owner.
+    const published = JSON.parse(gh(['release', 'view', tag, '--repo', repo, '--json', 'isDraft,url,assets']));
     const uploaded = published.assets?.find(asset => asset.name === 'local-evidence.tar.gz');
-    assert(published.draft && uploaded?.state === 'uploaded' && uploaded.size === archiveSize && uploaded.digest === archiveDigest,
+    assert(published.isDraft && uploaded?.state === 'uploaded' && uploaded.size === archiveSize && uploaded.digest === archiveDigest,
       'Draft evidence asset digest/size readback did not match the local archive');
-    target = published.html_url;
+    target = published.url;
     assert(report.inputHash === sourceHash() && !execute('git', ['status', '--porcelain']), 'Candidate changed during publication');
   }
   const latest = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid']));

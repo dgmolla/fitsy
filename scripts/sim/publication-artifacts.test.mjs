@@ -73,7 +73,7 @@ test('the publisher path retains every flow command, screen and complete video w
     const head = 'a'.repeat(40);
     const prUrl = 'https://github.com/dgmolla/fitsy/pull/7';
     const states = [];
-    let uploadedBytes = null, suppressUpload = false, corruptDigest = false, validations = 0, identityChecks = 0, uploadAttempts = 0;
+    let uploadedBytes = null, suppressUpload = false, corruptDigest = false, validations = 0, identityChecks = 0, uploadAttempts = 0, created = false;
     const execute = (command, args, options = {}) => {
       if (command === 'tar') return execFileSync('tar', args, { encoding: 'utf8' }).trim();
       if (command === 'git') return args[0] === 'rev-parse' ? head : '';
@@ -90,18 +90,19 @@ test('the publisher path retains every flow command, screen and complete video w
         states.push(JSON.parse(options.input).state);
         return '';
       }
-      if (args[0] === 'release' && args[1] === 'view') throw new Error('fixture release absent');
+      if (args[0] === 'release' && args[1] === 'view') {
+        if (!created) throw new Error('fixture release absent');
+        return JSON.stringify({ isDraft: true, url: 'https://github.com/dgmolla/fitsy/releases/tag/fixture',
+          assets: uploadedBytes ? [{ name: 'local-evidence.tar.gz', state: 'uploaded', size: uploadedBytes.length,
+            digest: corruptDigest ? `sha256:${'0'.repeat(64)}` : `sha256:${createHash('sha256').update(uploadedBytes).digest('hex')}` }] : [] });
+      }
+      if (args[0] === 'release' && args[1] === 'create') { created = true; return ''; }
       if (args[0] === 'release' && args[1] === 'upload') {
         uploadAttempts++;
         if (!suppressUpload) uploadedBytes = readFileSync(args[3]);
         return '';
       }
       if (args[0] === 'release') return '';
-      if (args[0] === 'api' && args[1].includes('/releases/tags/')) {
-        return JSON.stringify({ draft: true, html_url: 'https://github.com/dgmolla/fitsy/releases/tag/fixture',
-          assets: uploadedBytes ? [{ name: 'local-evidence.tar.gz', state: 'uploaded', size: uploadedBytes.length,
-            digest: corruptDigest ? `sha256:${'0'.repeat(64)}` : `sha256:${createHash('sha256').update(uploadedBytes).digest('hex')}` }] : [] });
-      }
       assert.fail(`Unexpected forge command: ${args.join(' ')}`);
     };
     const validateIdentity = (actual, plan, currentSourceHash) => {
@@ -244,7 +245,7 @@ test('final candidate publishes complete non-video proof when recording was not 
       writeFileSync(join(evidenceDirectory, path), path === 'report.json' ? JSON.stringify(report) : path);
     }
     const head = 'b'.repeat(40), url = 'https://github.com/dgmolla/fitsy/pull/8';
-    let uploaded = null, validations = 0;
+    let uploaded = null, validations = 0, created = false;
     const execute = (command, args) => {
       if (command === 'tar') return execFileSync('tar', args, { encoding: 'utf8' }).trim();
       if (command === 'git') return args[0] === 'rev-parse' ? head : '';
@@ -252,12 +253,14 @@ test('final candidate publishes complete non-video proof when recording was not 
       assert.equal(command, 'gh');
       if (args[0] === 'pr') return JSON.stringify({ headRefOid: head, baseRefName: 'main',
         headRepositoryOwner: { login: 'dgmolla' }, state: 'OPEN', url });
-      if (args[0] === 'release' && args[1] === 'view') throw new Error('fixture release absent');
+      if (args[0] === 'release' && args[1] === 'view') {
+        if (!created) throw new Error('fixture release absent');
+        return JSON.stringify({ isDraft: true, url: 'https://github.com/dgmolla/fitsy/releases/tag/fixture',
+          assets: [{ name: 'local-evidence.tar.gz', state: 'uploaded', size: uploaded.length,
+            digest: `sha256:${createHash('sha256').update(uploaded).digest('hex')}` }] });
+      }
+      if (args[0] === 'release' && args[1] === 'create') { created = true; return ''; }
       if (args[0] === 'release' && args[1] === 'upload') uploaded = readFileSync(args[3]);
-      if (args[0] === 'api' && args[1].includes('/releases/tags/')) return JSON.stringify({ draft: true,
-        html_url: 'https://github.com/dgmolla/fitsy/releases/tag/fixture',
-        assets: [{ name: 'local-evidence.tar.gz', state: 'uploaded', size: uploaded.length,
-          digest: `sha256:${createHash('sha256').update(uploaded).digest('hex')}` }] });
       return '';
     };
     const result = await publishProductFlow('8', { execute, evidenceDirectory, publicationDirectory,
@@ -305,7 +308,7 @@ test('publisher default validator accepts complete non-video proof and rejects c
       backendRevision: 'dev-revision', backend: 'https://dev.fitsy.org', simulator, os: 'iOS 26.4',
       storeMode: 'test-store', fixture: 'run-owned-user', maestroVersion: '2.3.0', flows, exploration: [] };
     writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
-    let uploaded = null, uploads = 0;
+    let uploaded = null, uploads = 0, created = false;
     const execute = (command, args, options = {}) => {
       if (command === 'tar') return execFileSync('tar', args, { encoding: 'utf8' }).trim();
       if (command === 'git') return args[0] === 'rev-parse' ? head : '';
@@ -313,12 +316,14 @@ test('publisher default validator accepts complete non-video proof and rejects c
       assert.equal(command, 'gh');
       if (args[0] === 'pr') return JSON.stringify({ headRefOid: head, baseRefName: 'main',
         headRepositoryOwner: { login: 'dgmolla' }, state: 'OPEN', url: 'https://github.com/dgmolla/fitsy/pull/9' });
-      if (args[0] === 'release' && args[1] === 'view') throw new Error('fixture release absent');
+      if (args[0] === 'release' && args[1] === 'view') {
+        if (!created) throw new Error('fixture release absent');
+        return JSON.stringify({ isDraft: true, url: 'https://github.com/dgmolla/fitsy/releases/tag/fixture',
+          assets: [{ name: 'local-evidence.tar.gz', state: 'uploaded', size: uploaded.length,
+            digest: `sha256:${sha(uploaded)}` }] });
+      }
+      if (args[0] === 'release' && args[1] === 'create') { created = true; return ''; }
       if (args[0] === 'release' && args[1] === 'upload') { uploads++; uploaded = readFileSync(args[3]); return ''; }
-      if (args[0] === 'api' && args[1].includes('/releases/tags/')) return JSON.stringify({ draft: true,
-        html_url: 'https://github.com/dgmolla/fitsy/releases/tag/fixture',
-        assets: [{ name: 'local-evidence.tar.gz', state: 'uploaded', size: uploaded.length,
-          digest: `sha256:${sha(uploaded)}` }] });
       if (args[0] === 'api' && args[1].includes('/statuses/')) return '';
       return '';
     };
