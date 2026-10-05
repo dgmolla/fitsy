@@ -22,6 +22,8 @@ import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 import { recordOnboardingComplete } from '../lib/onboardingCompletion';
 import { resetWelcomeJourney } from '../lib/paywallJourney';
 import { getStoredToken } from '../lib/authClient';
+import { getMacroTargets } from '../lib/macroStorage';
+import { replayPendingProfileSync } from '../lib/profileSync';
 
 type Session = { access_token: string; user: { id: string } } | null;
 let mockSession: Session = null;
@@ -303,11 +305,9 @@ it('hydrates a newer account target through selected-meal sign-in before complet
   await screen.findByTestId('signup-dev');
   await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
-  const { getMacroTargets } = await import('../lib/macroStorage');
   expect(await getMacroTargets()).toEqual({ calories: '740', protein: '60', carbs: '80', fat: '20' });
   expect((await getPaywallIntent())?.menuItemId).toBe(selected.menuItemId);
   await recordOnboardingComplete(false);
-  const { replayPendingProfileSync } = await import('../lib/profileSync');
   await replayPendingProfileSync();
   expect(target).toEqual({ calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' });
 });
