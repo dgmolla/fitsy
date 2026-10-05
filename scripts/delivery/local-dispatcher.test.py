@@ -141,10 +141,15 @@ class DispatcherProcessTest(unittest.TestCase):
             'profiles': {'standard': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'medium', 'executable': str(self.codex)},
                          'deep': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high', 'executable': str(self.codex)}},
             'review': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high'},
+            'simulator_use_file': str(self.state / 'device-owner-uses.json'),
             'min_free_bytes': 1, 'scratch_reserve_bytes': 0, 'lsof_bin': str(self.base / 'fake-lsof'), 'worker_timeout_seconds': 10}))
         (self.base / 'fake-lsof').write_text('#!/bin/sh\nexit 1\n')
         (self.base / 'fake-lsof').chmod(0o700)
         self.config.chmod(0o600)
+        (self.state / 'device-owner-uses.json').write_text(json.dumps({'version': 1, 'devices': {
+            udid: {'owner': 'ended-fixture', 'last_owner_use': '2026-09-01T00:00:00Z',
+                   'released_at': '2026-09-01T01:00:00Z'}
+            for udid in ('9EC11FCA-B224-4380-A91D-235ED2BBF7C4', 'CE4397A7-AB61-4099-B843-51D38DA417D9')}}))
         self.env = {**os.environ, 'FAKE_GH_STATE': str(self.board)}
 
     def set_board(self, items):
@@ -354,6 +359,53 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual((checkout / 'retained-source.txt').read_text(), 'unfinished work must survive\n')
         self.assertEqual(len(list(self.worktrees.iterdir())), 1)
 
+    def test_created_checkout_survives_prelaunch_crash_before_claim_update(self):
+        real_git = shutil.which('git')
+        wrapped = self.base / 'crash-git'
+        wrapped.write_text('#!' + sys.executable + '\nimport os,signal,subprocess,sys\n'
+            + 'code=subprocess.call([' + repr(real_git) + ',*sys.argv[1:]])\n'
+            + 'if code==0 and "worktree" in sys.argv and "add" in sys.argv: os.kill(os.getppid(),signal.SIGKILL)\n'
+            + 'raise SystemExit(code)\n')
+        wrapped.chmod(0o700)
+        config = json.loads(self.config.read_text()); config['git_bin'] = str(wrapped)
+        self.config.write_text(json.dumps(config))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.tick()
+        checkout = next(self.worktrees.iterdir())
+        (checkout / 'crash-retained-source.txt').write_text('preserve the orphan-window source')
+        config['git_bin'] = real_git; self.config.write_text(json.dumps(config))
+        self.tick()
+        self.set_board([item(385)])
+        board = self.board_data(); board['ready_at']['385'] = '2026-09-27T02:00:00Z'
+        self.board.write_text(json.dumps(board))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        self.assertEqual(Path(self.state_data()['active']['worktree']).resolve(), checkout.resolve())
+        self.assertEqual(len(list(self.worktrees.iterdir())), 1)
+        self.assertEqual((checkout / 'crash-retained-source.txt').read_text(), 'preserve the orphan-window source')
+
+    def test_creation_intent_without_created_checkout_can_retry_without_orphan(self):
+        real_git = shutil.which('git')
+        wrapped = self.base / 'crash-before-git'
+        wrapped.write_text('#!' + sys.executable + '\nimport os,signal,subprocess,sys\n'
+            + 'if "worktree" in sys.argv and "add" in sys.argv: os.kill(os.getppid(),signal.SIGKILL); raise SystemExit(1)\n'
+            + 'raise SystemExit(subprocess.call([' + repr(real_git) + ',*sys.argv[1:]]))\n')
+        wrapped.chmod(0o700)
+        config = json.loads(self.config.read_text()); config['git_bin'] = str(wrapped)
+        self.config.write_text(json.dumps(config))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.tick()
+        self.assertEqual(list(self.worktrees.iterdir()), [])
+        self.assertTrue(self.state_data()['active']['worktree_creation_intent'])
+        config['git_bin'] = real_git; self.config.write_text(json.dumps(config))
+        self.tick()
+        self.set_board([item(385)])
+        board = self.board_data(); board['ready_at']['385'] = '2026-09-27T02:00:00Z'
+        self.board.write_text(json.dumps(board))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        self.assertEqual(len(list(self.worktrees.iterdir())), 1)
+
     def test_admission_preserves_floor_plus_scratch_reserve(self):
         self.set_board([])
         config = json.loads(self.config.read_text())
@@ -405,6 +457,26 @@ class DispatcherProcessTest(unittest.TestCase):
              mock.patch.object(dispatcher, 'terminal_verified', return_value=False), \
              mock.patch.object(dispatcher, 'retire_task_device') as retire:
             dispatcher.retire_verified_simulator(config, state, path)
+            retire.assert_not_called()
+            self.assertEqual(state['simulator_retirement'][udid]['status'], 'held')
+
+    def test_recent_device_owner_release_protects_an_older_verified_task(self):
+        claim_id = '12345678-1234-1234-1234-123456789abc'
+        worktree = self.worktrees / f'fitsy-issue-412-{claim_id[:8]}'
+        build = worktree / '.evidence/product-build'; build.mkdir(parents=True)
+        udid = '9EC11FCA-B224-4380-A91D-235ED2BBF7C4'
+        (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
+        clock = dispatcher.utc()
+        (self.state / 'device-owner-uses.json').write_text(json.dumps({'version': 1, 'devices': {
+            udid: {'owner': 'later-owner', 'last_owner_use': clock, 'released_at': clock}}}))
+        config = json.loads(self.config.read_text())
+        state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412, 'branch': 'issue-412'}},
+                 'history': [{'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'issue': 412,
+                              'id': claim_id, 'branch': 'issue-412', 'worktree': str(worktree)}]}
+        with mock.patch.object(dispatcher, 'board', return_value=[item(412, status='Done')]), \
+             mock.patch.object(dispatcher, 'terminal_verified', return_value=True), \
+             mock.patch.object(dispatcher, 'retire_task_device') as retire:
+            dispatcher.retire_verified_simulator(config, state, self.state / 'state.json')
             retire.assert_not_called()
             self.assertEqual(state['simulator_retirement'][udid]['status'], 'held')
 
@@ -1030,7 +1102,65 @@ class ResourceRetentionTest(unittest.TestCase):
 
     def test_seven_day_device_grace_and_unknown_release(self):
         self.assertEqual(self.resources.retention({}, 'task_simulator', {}, self.now)['state'], 'unknown')
-        self.assertEqual(self.resources.retention({}, 'task_simulator', {'released_at': self.old}, self.now)['state'], 'assessment-due')
+        self.assertEqual(self.resources.retention({}, 'task_simulator', {'released_at': self.old, 'last_owner_use': self.old}, self.now)['state'], 'assessment-due')
+
+class SimulatorUseProcessTest(unittest.TestCase):
+    """Exercise the real shared-lock CLI with a disposable home and fake simctl."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.home = self.root / 'home'; self.home.mkdir()
+        self.repo = self.root / 'repo'; (self.repo / 'scripts/sim').mkdir(parents=True)
+        source = SCRIPT.parent.parent / 'sim'
+        for name in ('sim', 'sim_resource_uses.py'):
+            shutil.copy2(source / name, self.repo / 'scripts/sim' / name)
+        self.bin = self.root / 'bin'; self.bin.mkdir()
+        self.udid = '9EC11FCA-B224-4380-A91D-235ED2BBF7C4'
+        xcrun = self.bin / 'xcrun'
+        xcrun.write_text('#!/bin/sh\nif [ "$3" = devices ]; then echo "iPhone 16 (' + self.udid + ') (Booted)"; fi\n[ "${FAKE_SIM_FAIL:-}" != 1 ]\n')
+        xcrun.chmod(0o755)
+        self.env = {**os.environ, 'HOME': str(self.home), 'FITSY_SIM_OWNER': 'owner-a',
+                    'PATH': str(self.bin) + ':' + os.environ['PATH']}
+
+    def run_sim(self, *args, owner=None, fail=False):
+        env = {**self.env, 'FITSY_SIM_OWNER': owner or 'owner-a'}
+        if fail:
+            env['FAKE_SIM_FAIL'] = '1'
+        return subprocess.run(['bash', str(self.repo / 'scripts/sim/sim'), *args],
+                              env=env, text=True, capture_output=True)
+
+    def record(self):
+        return json.loads((self.home / '.fitsy-sim-uses.json').read_text())['devices'][self.udid]
+
+    def test_actual_use_claim_renewal_and_release_survive_owner_metadata_removal(self):
+        self.assertEqual(self.run_sim('claim').returncode, 0)
+        self.assertEqual(self.run_sim('install', 'fixture.app').returncode, 0)
+        used = self.record()['last_owner_use']
+        self.assertEqual(self.run_sim('status').returncode, 0)
+        self.assertEqual(self.run_sim('claim').returncode, 0)
+        self.assertEqual(self.record()['last_owner_use'], used)
+        self.assertEqual(self.run_sim('release').returncode, 0)
+        self.assertFalse((self.home / '.fitsy-sim-claim.json').exists())
+        self.assertIsNotNone(self.record()['released_at'])
+        self.assertFalse(self.record()['pending_use'])
+
+    def test_denied_other_owner_command_does_not_change_device_clock(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()
+        self.assertNotEqual(self.run_sim('launch', 'com.fitsy', owner='other').returncode, 0)
+        self.assertEqual(self.record(), before)
+
+    def test_failed_action_retains_unknown_pending_use_instead_of_aging_device(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()['last_owner_use']
+        self.assertNotEqual(self.run_sim('launch', 'com.fitsy', fail=True).returncode, 0)
+        self.assertTrue(self.record()['pending_use'])
+        self.assertEqual(self.record()['last_owner_use'], before)
+        self.run_sim('release')
+        from sim_resource_uses import owner_release
+        self.assertEqual(owner_release(self.home / '.fitsy-sim-uses.json', self.udid), {})
 
 class ClaudeDispatcherProcessTest(DispatcherProcessTest):
     """Run the same crash, race, retry and receipt fixtures with the Claude adapter."""

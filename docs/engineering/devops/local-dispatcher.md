@@ -80,3 +80,13 @@ The installer binds an absolute ownership-tool path, pauses the previous runtime
 Enabling checks those digests so interrupted or mixed runtime updates remain disabled until reinstalled.
 Enable reports resource-hold explicitly when headroom is insufficient; the existing tick still forbids launching any worker below floor plus reserve.
 Active claims continue to prevent installation or enabling.
+
+Checkout creation records its exact path and branch intent before invoking Git.
+Crash recovery archives that intent with the terminal time and reuses an already-created checkout after the same source and ownership checks.
+An intent that created neither a registered checkout nor a branch can retry without inventing retained source.
+
+The shared-lock simulator CLI records exact device use intent before commands and completed use only after successful commands.
+The durable device registry survives claim release, and claim renewal preserves the devices used by that owner.
+Status polling and denied commands do not renew resource clocks.
+Device retirement reevaluates the latest actual owner-use and release clocks under the shared simulator lock immediately before deletion.
+Missing legacy clocks or an interrupted pending command retain the device for evidence-based backfill rather than guessing age from an older worker's completion time.

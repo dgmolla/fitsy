@@ -95,6 +95,17 @@ def resume_checkout(config, state, issue):
     previous = max(candidates, key=lambda entry: entry.get('finished_at') or '', default=None)
     if not previous:
         return None
+    intended = Path(previous.get('worktree', ''))
+    if previous.get('worktree_creation_intent') and not intended.exists():
+        origin = previous.get('worktree_origin_claim', previous['id'])
+        expected = Path(config['worktree_root']).resolve() / f"fitsy-issue-{issue}-{origin[:8]}"
+        registered = execute([config['git_bin'], '-C', config['repo_root'], 'worktree', 'list', '--porcelain'])
+        branch = execute([config['git_bin'], '-C', config['repo_root'], 'show-ref', '--verify', '--quiet',
+                          'refs/heads/' + previous.get('branch', '')])
+        if intended.resolve() == expected and not intended.is_symlink() and registered.returncode == 0 and \
+                f'worktree {expected}\n' not in registered.stdout and branch.returncode == 1:
+            released(config, previous, [])
+            return None  # The durable creation intent never produced any source checkout.
     path = owned_checkout(config, previous)
     receipt_path = Path(config['state_dir']) / 'claims' / previous['id'] / 'receipt.json'
     receipt = json.loads(receipt_path.read_text())
@@ -207,6 +218,10 @@ def retention(config, kind, record, now):
         if lease.get('owner') and lease.get('next_action') and age is not None and age < maximum:
             return {'state': 'retained', 'reason': 'bounded owner/action lease'}
     basis = record.get('last_consumer_release') if kind == 'dependency_donor' else record.get('released_at')
+    if kind == 'task_simulator':
+        released_age, used_age = elapsed(record.get('released_at'), now), elapsed(record.get('last_owner_use'), now)
+        if released_age is None or used_age is None or released_age > used_age:
+            return {'state': 'unknown', 'reason': 'missing trusted device owner-use/release clock; backfill required'}
     if kind in ('build_cache', 'durable_evidence'):
         basis = record.get('last_owner_use')
     age = elapsed(basis, now)

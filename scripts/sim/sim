@@ -40,8 +40,7 @@ booted_udid() { xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | he
 # Multiple agents share one Mac; destructive verbs (boot/install/launch/reset)
 # respect an active claim by someone else. Claims expire on their own so a
 # dead agent never wedges the sim. Claim acquisition is check-then-write, not
-# atomic: cooperating agents on one machine, worst case equals the no-sheet
-# world - accepted tradeoff.
+# atomic under the shared simulator lock held for the full command.
 CLAIM_FILE="$HOME/.fitsy-sim-claim.json"
 claim_owner() { # prints active owner, or nothing
   [ -f "$CLAIM_FILE" ] || return 0
@@ -65,6 +64,16 @@ require_claim_or_free() { # identity from FITSY_SIM_OWNER (defaults to "anonymou
   fi
 }
 
+record_device_event() {
+  python3 "$REPO_ROOT/scripts/sim/sim_resource_uses.py" "$1" "$CLAIM_FILE" "${FITSY_SIM_OWNER:-anonymous}" "${2:-}"
+}
+# Intent protects uncertain interrupted actions; only completed commands renew use.
+case "$CMD" in install|launch|reset) require_claim_or_free ;; esac
+case "$CMD" in install|launch|screenshot|logs|reset)
+  UDID="$(booted_udid)"
+  [ -z "$UDID" ] || record_device_event intent "$UDID"
+  ;; esac
+
 case "$CMD" in
   claim)
     ME="${FITSY_SIM_OWNER:?export FITSY_SIM_OWNER=<agent-name> first}"
@@ -80,8 +89,14 @@ case "$CMD" in
     fi
     python3 - "$CLAIM_FILE" "$ME" "$MIN" <<'PY'
 import json, sys, time
-json.dump({"owner": sys.argv[2], "expires": time.time() + int(sys.argv[3]) * 60,
-           "claimed_at": time.strftime("%FT%TZ", time.gmtime())}, open(sys.argv[1], "w"))
+from pathlib import Path
+path = Path(sys.argv[1])
+previous = json.loads(path.read_text()) if path.exists() else {}
+claim = {"owner": sys.argv[2], "expires": time.time() + int(sys.argv[3]) * 60,
+         "claimed_at": time.strftime("%FT%TZ", time.gmtime())}
+if previous.get('owner') == sys.argv[2]:
+    claim['device_uses'] = previous.get('device_uses', [])
+json.dump(claim, open(path, "w"))
 PY
     printf '{"name":"sim-claim","status":"pass","owner":"%s","minutes":%s}
 ' "$ME" "$MIN"
@@ -94,6 +109,7 @@ PY
 ' "$OWNER"
       exit 1
     fi
+    record_device_event release
     rm -f "$CLAIM_FILE"
     printf '{"name":"sim-release","status":"pass","owner":"%s"}
 ' "$ME"
@@ -106,6 +122,7 @@ PY
     if [ -z "$UDID" ]; then
       UDID="$(xcrun simctl list devices available | grep -F "$DEVICE (" | grep -oE '[0-9A-F-]{36}' | head -1)"
       [ -n "$UDID" ] || { echo "no available simulator named '$DEVICE'" >&2; exit 1; }
+      record_device_event intent "$UDID"
       xcrun simctl boot "$UDID"
       open -a Simulator --background || true
     fi
@@ -160,3 +177,7 @@ PY
     ;;
   *) echo "unknown subcommand: $CMD" >&2; exit 1 ;;
 esac
+
+case "$CMD" in boot|install|launch|screenshot|logs|reset)
+  [ -z "${UDID:-}" ] || record_device_event use "$UDID"
+  ;; esac

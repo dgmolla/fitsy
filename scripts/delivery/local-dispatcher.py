@@ -23,6 +23,7 @@ from resource_lifecycle import cleanup_released, resume_checkout, assess_retenti
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'sim'))
 from retire_task_device import retire as retire_task_device
+from sim_resource_uses import owner_release
 
 
 def incident(state, claim, reason):
@@ -573,10 +574,14 @@ def retire_verified_simulator(config, state, state_path):
             def still_verified():
                 current = next((entry for entry in board(config) if
                                 entry.get('content', {}).get('number') == issue), None)
-                return bool(current and terminal_verified(config, current, identity, archived=True))
-            if not still_verified():
+                use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
+                return bool(current and terminal_verified(config, current, identity, archived=True) and
+                            retention(config, 'task_simulator', use, time.time())['state'] == 'assessment-due')
+            current = next((entry for entry in board(config) if entry.get('content', {}).get('number') == issue), None)
+            if not current or not terminal_verified(config, current, identity, archived=True):
                 raise ValueError('issue is no longer terminal-verified')
-            grace = retention(config, 'task_simulator', {'released_at': claim.get('finished_at')}, time.time())
+            use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
+            grace = retention(config, 'task_simulator', use, time.time())
             if grace['state'] != 'assessment-due':
                 raise ValueError(grace['reason'])
             result = retire_task_device(
@@ -688,6 +693,7 @@ def tick(config, state, state_path, script):
             edit_item(config, item['id'], BLOCKER_FIELD, text=reason)
             state.setdefault('parked', {})[str(active['issue'])] = active['ready_at']
             incident(state, active, reason)
+            active['finished_at'] = utc()
             archive(state, active, 'parked-prelaunch', state_path)
             write_json(state_path, state)
             try:
@@ -790,8 +796,11 @@ def tick(config, state, state_path, script):
                 worktree, branch = Path(reused['worktree']), reused['branch']
                 claim.update(reused)
             else:
+                claim.update({'worktree': str(worktree), 'branch': branch,
+                              'worktree_origin_claim': claim_id, 'worktree_creation_intent': True})
+                write_json(state_path, state)
                 command([config['git_bin'], '-C', config['repo_root'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'], timeout=60)
-                claim['worktree_origin_claim'] = claim_id
+                claim['worktree_creation_intent'] = False
         except Exception as error:
             reason = f"Worktree preparation failed ({type(error).__name__}); inspect claim {claim_id}"
             gh(config, 'issue', 'edit', str(number), '-R', 'dgmolla/fitsy', '--add-label', 'dispatch-hold')
@@ -799,6 +808,7 @@ def tick(config, state, state_path, script):
             edit_item(config, item['id'], BLOCKER_FIELD, text=reason)
             state.setdefault('parked', {})[str(number)] = claim['ready_at']
             incident(state, claim, reason)
+            claim['finished_at'] = utc()
             archive(state, claim, 'parked-setup-failure', state_path)
             write_json(state_path, state)
             try:
