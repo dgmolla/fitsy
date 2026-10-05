@@ -18,8 +18,12 @@ from datetime import datetime, timezone
 import urllib.request
 import uuid
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from resource_lifecycle import cleanup_released, resume_checkout, assess_retention, retention
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'sim'))
 from retire_task_device import retire as retire_task_device
+from sim_resource_uses import owner_release
 
 
 def incident(state, claim, reason):
@@ -550,7 +554,10 @@ def retire_verified_simulator(config, state, state_path):
                 claim.get('id') != claim_id or claim.get('branch') != identity.get('branch')):
             continue
         worktree = Path(claim.get('worktree', '')).resolve()
-        expected = Path(config['worktree_root']).resolve() / f'fitsy-issue-{issue}-{claim_id[:8]}'
+        origin_claim = claim.get('worktree_origin_claim', claim_id)
+        if not re.fullmatch(r'[0-9a-f-]{36}', origin_claim):
+            continue
+        expected = Path(config['worktree_root']).resolve() / f'fitsy-issue-{issue}-{origin_claim[:8]}'
         if worktree != expected:
             continue
         receipt_file = worktree / '.evidence/product-build/receipt.json'
@@ -567,9 +574,16 @@ def retire_verified_simulator(config, state, state_path):
             def still_verified():
                 current = next((entry for entry in board(config) if
                                 entry.get('content', {}).get('number') == issue), None)
-                return bool(current and terminal_verified(config, current, identity, archived=True))
-            if not still_verified():
+                use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
+                return bool(current and terminal_verified(config, current, identity, archived=True) and
+                            retention(config, 'task_simulator', use, time.time())['state'] == 'assessment-due')
+            current = next((entry for entry in board(config) if entry.get('content', {}).get('number') == issue), None)
+            if not current or not terminal_verified(config, current, identity, archived=True):
                 raise ValueError('issue is no longer terminal-verified')
+            use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
+            grace = retention(config, 'task_simulator', use, time.time())
+            if grace['state'] != 'assessment-due':
+                raise ValueError(grace['reason'])
             result = retire_task_device(
                 issue=issue, udid=udid, worktree=worktree,
                 archive_root=Path(config['state_dir']) / 'retired-simulator-evidence',
@@ -679,6 +693,7 @@ def tick(config, state, state_path, script):
             edit_item(config, item['id'], BLOCKER_FIELD, text=reason)
             state.setdefault('parked', {})[str(active['issue'])] = active['ready_at']
             incident(state, active, reason)
+            active['finished_at'] = utc()
             archive(state, active, 'parked-prelaunch', state_path)
             write_json(state_path, state)
             try:
@@ -720,9 +735,19 @@ def tick(config, state, state_path, script):
         pass  # A notification fault never changes claim ownership or queue decisions.
     if not config.get('enabled'):
         return {'state': 'disabled'}
+    assess_retention(config, state, time.time())
+    write_json(state_path, state)
+    cleanup_released(config, state, lambda: write_json(state_path, state))
     retire_verified_simulator(config, state, state_path)
-    if shutil.disk_usage(config['worktree_root']).free < config.get('min_free_bytes', 8 * 1024**3):
-        return {'state': 'resource-hold', 'reason': 'disk below configured minimum'}
+    floor = config.get('min_free_bytes', 8 * 1024**3)
+    reserve = config.get('scratch_reserve_bytes', 4 * 1024**3)
+    if not isinstance(reserve, int) or isinstance(reserve, bool) or reserve < 0:
+        raise RuntimeError('scratch reserve must be nonnegative bytes')
+    required = floor + reserve
+    available = shutil.disk_usage(config['worktree_root']).free
+    if available < required:
+        return {'state': 'resource-hold', 'reason': 'disk below floor plus scratch reserve',
+                'free_bytes': available, 'required_free_bytes': required}
     items = board(config)
     candidates = eligible(items, state.setdefault('readiness', {}), state.setdefault('readiness_source', {}),
                           config, state.setdefault('verified', {}))
@@ -766,7 +791,16 @@ def tick(config, state, state_path, script):
         branch = f'codex/issue-{number}-{claim_id[:8]}'
         try:
             command([config['git_bin'], '-C', config['repo_root'], 'fetch', 'origin', 'main'], timeout=60)
-            command([config['git_bin'], '-C', config['repo_root'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'], timeout=60)
+            reused = resume_checkout(config, state, number)
+            if reused:
+                worktree, branch = Path(reused['worktree']), reused['branch']
+                claim.update(reused)
+            else:
+                claim.update({'worktree': str(worktree), 'branch': branch,
+                              'worktree_origin_claim': claim_id, 'worktree_creation_intent': True})
+                write_json(state_path, state)
+                command([config['git_bin'], '-C', config['repo_root'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'], timeout=60)
+                claim['worktree_creation_intent'] = False
         except Exception as error:
             reason = f"Worktree preparation failed ({type(error).__name__}); inspect claim {claim_id}"
             gh(config, 'issue', 'edit', str(number), '-R', 'dgmolla/fitsy', '--add-label', 'dispatch-hold')
@@ -774,6 +808,7 @@ def tick(config, state, state_path, script):
             edit_item(config, item['id'], BLOCKER_FIELD, text=reason)
             state.setdefault('parked', {})[str(number)] = claim['ready_at']
             incident(state, claim, reason)
+            claim['finished_at'] = utc()
             archive(state, claim, 'parked-setup-failure', state_path)
             write_json(state_path, state)
             try:
@@ -833,7 +868,8 @@ def worker(config, state_path, lock_path, claim_id):
     environment = {**os.environ, 'FITSY_REVIEW_PROVIDER': review['provider'],
                    'FITSY_REVIEW_MODEL': review['model'], 'FITSY_REVIEW_REASONING_EFFORT': review['effort'],
                    'FITSY_DISPATCH_CLAIM_ID': claim_id, 'FITSY_DISPATCH_BRANCH': claim['branch'],
-                   'FITSY_DISPATCH_ISSUE': str(claim['issue'])}
+                   'FITSY_DISPATCH_ISSUE': str(claim['issue']),
+                   'FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS': str(config.get('worker_timeout_seconds', 90 * 60))}
     with open(claim['prompt_path']) as prompt, open(claim['output_path'], 'a') as output:
         child = subprocess.Popen(args, stdin=prompt, stdout=output, stderr=subprocess.STDOUT, cwd=worktree,
                                  env=environment)
@@ -881,13 +917,7 @@ def worker(config, state_path, lock_path, claim_id):
             write_json(state_path, state)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('tick', 'status', 'worker'))
-    parser.add_argument('--config', required=True)
-    parser.add_argument('--claim-id')
-    args = parser.parse_args()
-    path = Path(args.config).expanduser().resolve()
+def load_config(path):
     if path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
         raise RuntimeError('dispatcher config must be owned and private')
     config = json.loads(path.read_text())
@@ -903,6 +933,17 @@ def main():
     if not isinstance(review, dict) or review.get('provider') not in ('codex', 'claude') or not isinstance(review.get('model'), str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}', review['model']) or review.get('effort') not in ('low', 'medium', 'high', 'xhigh'):
         raise RuntimeError('invalid independent reviewer configuration')
     config['_path'] = str(path)
+    return config
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('mode', choices=('tick', 'status', 'worker'))
+    parser.add_argument('--config', required=True)
+    parser.add_argument('--claim-id')
+    args = parser.parse_args()
+    path = Path(args.config).expanduser().resolve()
+    config = load_config(path)
     state_dir = Path(config['state_dir']).expanduser().resolve()
     state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     state_path = state_dir / 'state.json'
@@ -925,6 +966,9 @@ def main():
         except BlockingIOError:
             print(json.dumps({'state': 'busy'}))
             return
+        config = load_config(path)  # Installer pause/replacement must win before admission.
+        if Path(config['state_dir']).expanduser().resolve() != state_dir:
+            raise RuntimeError('dispatcher state directory changed across the lock boundary')
         state = read_json(state_path, {'version': 1, 'active': None, 'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []})
         print(json.dumps(tick(config, state, state_path, Path(__file__).resolve())))
 
