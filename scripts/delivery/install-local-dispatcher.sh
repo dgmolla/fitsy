@@ -44,7 +44,7 @@ fi
 [[ "$mode" == --check || "$mode" == --install || "$mode" == --enable || "$mode" == --pause ]] || { echo 'unknown mode' >&2; exit 2; }
 
 python3 - "$mode" "$repo" "$state" "$worktree_root" <<'PY'
-import fcntl, json, os, re, shutil, subprocess, sys, tempfile
+import fcntl, hashlib, json, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 mode, repo, state_name, root_name = sys.argv[1:]
@@ -122,13 +122,30 @@ if mode == 'install':
                           'profiles': profiles, 'review': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high'},
                           'min_free_bytes': 8 * 1024**3, 'worker_timeout_seconds': 90 * 60}
     config.setdefault('scratch_reserve_bytes', 4 * 1024**3)
+    lsof = shutil.which('lsof') or ('/usr/sbin/lsof' if os.access('/usr/sbin/lsof', os.X_OK) else None)
+    if not lsof:
+        raise SystemExit('open-file ownership tool unavailable for installed recovery')
+    config['lsof_bin'] = str(Path(lsof).resolve())
     config.update({'enabled': False, 'source_sha': head, 'jev_enabled': jev_enabled,
                    'jev_key_file': str(key_file) if jev_enabled else None,
                    'repo_root': str(repo), 'worktree_root': str(root), 'slack': slack})
+    targets = [state / 'runtime/resource_lifecycle.py', state / 'runtime/local-dispatcher.py',
+               state / 'sim/retire_task_device.py']
+    # Pause the old identity before touching any runtime, then publish the new
+    # identity only after every installed byte has been verified under the lock.
+    if previous:
+        paused = dict(previous); paused['enabled'] = False
+        save(config_path, json.dumps(paused, sort_keys=True) + '\n')
+    digests = {}
+    for source, target in zip(runtime_sources, targets):
+        content = source.read_text()
+        save(target, content); target.chmod(0o700)
+        expected = hashlib.sha256(content.encode()).hexdigest()
+        if hashlib.sha256(target.read_bytes()).hexdigest() != expected:
+            raise SystemExit('installed runtime content verification failed')
+        digests[str(target.relative_to(state))] = expected
+    config['runtime_sha256'] = digests
     save(config_path, json.dumps(config, sort_keys=True) + '\n')
-    for source, target in zip(runtime_sources, [state / 'runtime/resource_lifecycle.py',
-                           state / 'runtime/local-dispatcher.py', state / 'sim/retire_task_device.py']):
-        save(target, source.read_text()); target.chmod(0o700)
     available = shutil.disk_usage(root).free
     required = config['min_free_bytes'] + config['scratch_reserve_bytes']
     print(json.dumps({'installed_paused': True, 'worker_admission': 'ready' if available >= required else 'resource-hold',
@@ -143,6 +160,13 @@ if mode in ('enable', 'pause'):
         current = output('gh', 'api', 'repos/dgmolla/fitsy/commits/main', '--jq', '.sha')
         if config['source_sha'] != current:
             raise SystemExit('installed dispatcher runtime does not match current main')
+        expected_paths = {'runtime/resource_lifecycle.py', 'runtime/local-dispatcher.py', 'sim/retire_task_device.py'}
+        digests = config.get('runtime_sha256', {})
+        if set(digests) != expected_paths or any(
+                not (state / path).is_file() or (state / path).is_symlink() or
+                hashlib.sha256((state / path).read_bytes()).hexdigest() != digest
+                for path, digest in digests.items()):
+            raise SystemExit('installed runtime content does not match published source identity')
         runs = json.loads(output('gh', 'run', 'list', '--branch', 'main', '--limit', '30', '--json',
                                  'workflowName,headSha,status,conclusion'))
         if not all(any(run['workflowName'] == name and run['headSha'] == current and
@@ -178,7 +202,7 @@ if [[ "$mode" == --install ]]; then
   <key>StartInterval</key><integer>60</integer>
   <key>RunAtLoad</key><true/>
   <key>EnvironmentVariables</key><dict>
-    <key>PATH</key><string>$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>PATH</key><string>$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
   <key>StandardOutPath</key><string>$state/launchd.log</string>
   <key>StandardErrorPath</key><string>$state/launchd.log</string>

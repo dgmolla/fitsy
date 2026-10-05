@@ -76,5 +76,7 @@ No source, dirty work, user-owned device, queued pinned app or required historic
 Paused runtime updates are separate from worker admission.
 The installer atomically copies the small reviewed scripts under dispatcher.lock with enough free bytes for the update and reports available and required worker capacity.
 It can install recovery code during a resource hold without lowering the worker floor or admitting work.
+The installer binds an absolute ownership-tool path, pauses the previous runtime identity, verifies each installed file digest, and publishes the new identity last.
+Enabling checks those digests so interrupted or mixed runtime updates remain disabled until reinstalled.
 Enable reports resource-hold explicitly when headroom is insufficient; the existing tick still forbids launching any worker below floor plus reserve.
 Active claims continue to prevent installation or enabling.

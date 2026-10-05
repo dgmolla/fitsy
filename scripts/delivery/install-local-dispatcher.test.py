@@ -80,6 +80,24 @@ class InstallTest(unittest.TestCase):
             self.assertFalse(config['enabled'])
             self.assertEqual(config['scratch_reserve_bytes'], 4 * 1024**3)
             self.assertEqual((home / '.fitsy-dispatcher/runtime/resource_lifecycle.py').read_bytes(), RESOURCE.read_bytes())
+            # Installed recovery must resolve ownership tools under the timer's narrow PATH.
+            self.assertTrue(Path(config['lsof_bin']).is_absolute())
+            empty = base / 'released-scratch'; empty.mkdir()
+            claim = {'id': 'released-fixture', 'terminal': 'waiting', 'finished_at': '2026-10-05T00:00:00Z'}
+            receipt = home / '.fitsy-dispatcher/claims/released-fixture/receipt.json'
+            receipt.parent.mkdir(parents=True); receipt.write_text(json.dumps(claim))
+            command(sys.executable, '-c',
+                    'import sys,json; sys.path.insert(0,sys.argv[1]); import resource_lifecycle as r; '
+                    'r.released(json.load(open(sys.argv[2])),json.loads(sys.argv[3]),[sys.argv[4]])',
+                    str(installed_runtime.parent), str(config_path), json.dumps(claim), str(empty))
+            # A mixed runtime must never be enabled using the published source identity.
+            original_runtime = installed_runtime.read_bytes()
+            installed_runtime.write_bytes(original_runtime + b'\n# interrupted update fixture\n')
+            rejected = subprocess.run(['bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable'],
+                                      cwd=repo, env=env, text=True, capture_output=True, timeout=15)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn('runtime content', rejected.stderr)
+            installed_runtime.write_bytes(original_runtime)
             self.assertFalse(config['jev_enabled'])
             self.assertIsNone(config['jev_key_file'])
             self.assertEqual(config['worker_timeout_seconds'], 90 * 60)
