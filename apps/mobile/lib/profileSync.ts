@@ -147,41 +147,48 @@ async function retryPendingProfileSync(scheduleRetry = true): Promise<boolean> {
 /** Keep a failed local edit pending and retry before a later profile pull. */
 async function performSavedProfileSync(revision: number,
   session: ReturnType<typeof supabase.auth.getSession>, bodyOverride?: Record<string, unknown>): Promise<void> {
-  try {
-    const { data } = await session;
-    const userId = data.session?.user?.id;
-    if (!userId) {
-      await pushProfileToServer();
-      return;
-    }
-    if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
-    retryCount = 0;
-    const nextBody = bodyOverride ?? await buildProfileBody();
-    if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
-    if (Object.keys(nextBody).length === 0) return;
-    // A later target-only edit must retain offline body facts in the same
-    // account's durable request. The serialized queue owns this merge.
-    const raw = await AsyncStorage.getItem(pendingKey(userId));
-    const previous = raw ? JSON.parse(raw) as { body: Record<string, unknown> } : null;
-    const body = { ...previous?.body, ...nextBody };
-    if (body.macroTarget) delete body.preserveMacroTarget;
-    if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
-    await AsyncStorage.setItem(pendingKey(userId),
-      JSON.stringify({ revision, body }));
-    await retryPendingProfileSync();
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[profileSync] could not queue saved profile:', err);
+  const { data } = await session;
+  const userId = data.session?.user?.id;
+  if (!userId) {
+    await pushProfileToServer();
+    return;
   }
+  if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
+  retryCount = 0;
+  const nextBody = bodyOverride ?? await buildProfileBody();
+  if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
+  if (Object.keys(nextBody).length === 0) return;
+  // A later target-only edit must retain offline body facts in the same
+  // account's durable request. The serialized queue owns this merge.
+  const raw = await AsyncStorage.getItem(pendingKey(userId));
+  const previous = raw ? JSON.parse(raw) as { body: Record<string, unknown> } : null;
+  const body = { ...previous?.body, ...nextBody };
+  if (body.macroTarget) delete body.preserveMacroTarget;
+  if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
+  await AsyncStorage.setItem(pendingKey(userId),
+    JSON.stringify({ revision, body }));
 }
 
-export function syncSavedProfileToServer(bodyOverride?: Record<string, unknown>): Promise<void> {
+export function queueSavedProfileToServer(bodyOverride?: Record<string, unknown>): Promise<void> {
   const revision = ++profileRevision;
   const session = supabase.auth.getSession();
   const attempt = savedSyncQueue.then(() => performSavedProfileSync(revision, session, bodyOverride),
     () => performSavedProfileSync(revision, session, bodyOverride));
   savedSyncQueue = attempt.catch(() => {});
   return attempt;
+}
+
+/** Persist before acknowledging an edit; network delivery never owns the storage queue. */
+export async function syncSavedProfileToServer(bodyOverride?: Record<string, unknown>): Promise<void> {
+  await queueSavedProfileToServer(bodyOverride);
+  await retryPendingProfileSync();
+}
+
+export function deliverQueuedProfile(): void {
+  void retryPendingProfileSync().catch(err => {
+    // eslint-disable-next-line no-console
+    console.warn('[profileSync] pending profile delivery failed:', err);
+  });
 }
 
 /** Resume a durable edit on ordinary authenticated app startup. */

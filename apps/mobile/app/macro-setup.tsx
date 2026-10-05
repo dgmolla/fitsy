@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { saveMacroTargets } from '@/lib/macroStorage';
-import { syncSavedProfileToServer } from '@/lib/profileSync';
+import { queueSavedProfileToServer, deliverQueuedProfile } from '@/lib/profileSync';
 import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
 import { useTheme, type ThemeColors } from '@/lib/theme';
 import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggestions';
@@ -140,7 +140,8 @@ export default function MacroSetupScreen() {
       await saveMacroTargets(mealTargets, 'complete', activeFilter === 'recommended' && !customizedRef.current ? 'automatic' : 'manual');
       if (!fromOnboarding) {
         await clearOnboardingResume();
-        void syncSavedProfileToServer(); // sync to server (onboarding syncs at payment)
+        await queueSavedProfileToServer();
+        deliverQueuedProfile(); // sync to server (onboarding syncs at payment)
       }
       router.push(fromOnboarding ? '/welcome/how-it-works' : '/(tabs)/search');
     } catch {

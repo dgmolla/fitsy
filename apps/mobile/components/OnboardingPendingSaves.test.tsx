@@ -25,7 +25,7 @@ import { getOnboardingData, saveOnboardingField } from '../lib/onboardingStorage
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('@fitsy/shared', () => ({ calculateAge: () => 28 }));
-jest.mock('../lib/profileSync', () => ({ syncSavedProfileToServer: jest.fn(), replayPendingProfileSync: jest.fn() }));
+jest.mock('../lib/profileSync', () => ({ syncSavedProfileToServer: jest.fn(), queueSavedProfileToServer: jest.fn(), deliverQueuedProfile: jest.fn(), replayPendingProfileSync: jest.fn() }));
 jest.mock('posthog-react-native', () => {
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY = 'unit-test-analytics';
   return jest.fn().mockImplementation(() => ({ capture: jest.fn() }));

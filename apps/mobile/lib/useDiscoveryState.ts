@@ -14,13 +14,13 @@ import { useEntitlementMismatch } from './useEntitlementMismatch';
 import { usePurchases } from './usePurchases';
 import { routeToPaywall } from './teaserGate';
 import { getDiscoveryMacroTargetSnapshot, saveDiscoveryMacroTargets, type MacroTargetMode } from './macroStorage';
-import { syncSavedProfileToServer } from './profileSync';
+import { queueSavedProfileToServer, deliverQueuedProfile } from './profileSync';
 import { getPreviewSetup } from './previewSetup';
 import { saveOnboardingField } from './onboardingStorage';
 import { onboardingPitch, type TriedApproach } from './onboardingPersonalization';
 import { useOnboardingStep } from './onboardingResume';
 import { clearPaywallIntent } from './paywallIntent';
-import { trackOnboardingScreenView, trackLocationManualOverrideOpened, trackLocationManualOverridePicked, trackLocationManualOverrideCleared, trackSaveMacroTargetsFailed, trackMacroTargetsEdited } from './analytics';
+import { trackOnboardingScreenView, trackLocationManualOverrideOpened, trackLocationManualOverridePicked, trackLocationManualOverrideCleared, trackMacroTargetsEdited } from './analytics';
 const DEFAULT_INPUTS: MacroValues = { protein: '', carbs: '', fat: '', calories: '' };
 export function useDiscoveryState({ onboardingPreview = false }: { onboardingPreview?: boolean }) {
   const { query: initialQuery } = useLocalSearchParams<{ query?: string }>();
@@ -148,31 +148,15 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     ? 'Your purchase went through. Tap to refresh if this takes more than a moment.'
     : 'Tap to refresh.';
   const unlockLabel = `${unlockTitle} tap to refresh`;
-  const persistMacroTargets = useCallback((values: MacroValues, mode: MacroTargetMode) => {
-    saveDiscoveryMacroTargets(values, mode).then(() => {
-      if (mode === 'complete') void syncSavedProfileToServer();
-    }).catch((err: unknown) => {
-      // eslint-disable-next-line no-console
-      console.warn('[search] saveMacroTargets failed:', err);
-      trackSaveMacroTargetsFailed(err);
-      Alert.alert(
-        "Couldn't save targets",
-        "We couldn't save your macro targets. Check your connection and try again.",
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Retry',
-            onPress: () => persistMacroTargets(values, mode),
-          },
-        ],
-      );
-    });
-  }, []);
-  function handleApplyFilters(newValues: MacroValues, mode: MacroTargetMode = 'complete') {
+  async function handleApplyFilters(newValues: MacroValues, mode: MacroTargetMode = 'complete') {
+    await saveDiscoveryMacroTargets(newValues, mode);
+    if (mode === 'complete') {
+      await queueSavedProfileToServer();
+      deliverQueuedProfile();
+    }
     setFilterVisible(false);
     setInputs(newValues);
     setFilterMode(mode);
-    persistMacroTargets(newValues, mode);
     trackMacroTargetsEdited({
       entry_point: 'search',
       has_protein: newValues.protein !== '',

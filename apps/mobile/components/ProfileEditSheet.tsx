@@ -1,5 +1,6 @@
 import React, { type ComponentProps, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
   Modal,
@@ -26,14 +27,14 @@ interface ChoiceOption {
 interface BaseProps {
   visible: boolean;
   title: string;
-  onClose: () => void;
+  onClose: () => void | Promise<void>;
 }
 
 interface ChoiceProps extends BaseProps {
   type: 'choice';
   options: ChoiceOption[];
   value: string;
-  onApply: (value: string) => void;
+  onApply: (value: string) => void | Promise<void>;
 }
 
 interface NumericProps extends BaseProps {
@@ -41,13 +42,13 @@ interface NumericProps extends BaseProps {
   value: string;
   unit: string;
   placeholder?: string;
-  onApply: (value: string) => void;
+  onApply: (value: string) => void | Promise<void>;
 }
 
 interface HeightProps extends BaseProps {
   type: 'height';
   valueCm: string;
-  onApply: (valueCm: string) => void;
+  onApply: (valueCm: string) => void | Promise<void>;
 }
 
 export type ProfileEditSheetProps = ChoiceProps | NumericProps | HeightProps;
@@ -123,7 +124,7 @@ export function ProfileEditSheet(props: ProfileEditSheetProps) {
 
 // ─── Choice content ─────────────────────────────────────────────────────────
 
-function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dismiss: (cb: () => void) => void }) {
+function ChoiceContent({ options, value, onApply }: ChoiceProps & { dismiss: (cb: () => void) => void }) {
   const [selected, setSelected] = useState(value);
 
   useEffect(() => { setSelected(value); }, [value]);
@@ -155,7 +156,7 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
           );
         })}
       </View>
-      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={() => dismiss(() => onApply(selected))}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(selected); } catch { Alert.alert("Save failed", "Your edits are still here. Please try again."); } }}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>
@@ -164,7 +165,7 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
 
 // ─── Numeric content ────────────────────────────────────────────────────────
 
-function NumericContent({ title, value, unit, placeholder, onApply, dismiss }: NumericProps & { dismiss: (cb: () => void) => void }) {
+function NumericContent({ title, value, unit, placeholder, onApply }: NumericProps & { dismiss: (cb: () => void) => void }) {
   const [draft, setDraft] = useState(value);
 
   useEffect(() => { setDraft(value); }, [value]);
@@ -183,7 +184,7 @@ function NumericContent({ title, value, unit, placeholder, onApply, dismiss }: N
           onStep={(dir) => setDraft((prev) => String(clampInt((parseInt(prev, 10) || 0) + dir, 0, 99999)))}
         />
       </View>
-      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={() => dismiss(() => onApply(draft))}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(draft); } catch { Alert.alert("Save failed", "Your edits are still here. Please try again."); } }}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>
@@ -192,7 +193,7 @@ function NumericContent({ title, value, unit, placeholder, onApply, dismiss }: N
 
 // ─── Height content (ft/in or cm) ───────────────────────────────────────────
 
-function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (cb: () => void) => void }) {
+function HeightContent({ valueCm, onApply }: HeightProps & { dismiss: (cb: () => void) => void }) {
   const [mode, setMode] = useState<'imperial' | 'metric'>('metric');
   const [cm, setCm] = useState(valueCm);
   const [ft, setFt] = useState('');
@@ -247,7 +248,7 @@ function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (
         </View>
       )}
 
-      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={() => dismiss(() => onApply(getCm()))}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(getCm()); } catch { Alert.alert("Save failed", "Your edits are still here. Please try again."); } }}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>

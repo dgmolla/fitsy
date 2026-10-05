@@ -20,7 +20,7 @@ import { getMacroTargets, getQuarantinedLegacyTarget, restoreQuarantinedLegacyTa
   saveMacroTargets, type MacroTargetMode } from '@/lib/macroStorage';
 import { getOnboardingData, type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
 import { calculateAge } from '@fitsy/shared';
-import { syncSavedProfileToServer } from '@/lib/profileSync';
+import { syncSavedProfileToServer, queueSavedProfileToServer, deliverQueuedProfile } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
@@ -94,7 +94,7 @@ export default function ProfileScreen() {
           setProfile(onboarding);
           const snapshot = JSON.stringify(onboarding);
           if (prevProfile.current && prevProfile.current !== snapshot) {
-            void syncSavedProfileToServer();
+            await syncSavedProfileToServer();
           }
           prevProfile.current = snapshot;
         } catch (err) {
@@ -155,9 +155,11 @@ export default function ProfileScreen() {
 
   async function updateFieldAndRecalc<K extends keyof OnboardingData>(field: K, value: OnboardingData[K]) {
     const { profile: updated, targets } = await updateProfileFieldAndTargets(field, value);
+    await queueSavedProfileToServer();
+    deliverQueuedProfile();
     setProfile(updated);
     if (targets) setMacroTargets(targets);
-    void syncSavedProfileToServer();
+    setEditField(null);
   }
 
   function offerLegacyRestore() {
@@ -166,14 +168,15 @@ export default function ProfileScreen() {
       `This device has an older ${kind} without an account label. Restore it to this account?`, [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Restore', onPress: () => {
-          void restoreQuarantinedLegacyTarget().then(snapshot => {
+          void restoreQuarantinedLegacyTarget().then(async snapshot => {
             if (!snapshot) return;
             setLegacyTargetMode(null);
             if (snapshot.mode === 'complete') {
+              await queueSavedProfileToServer();
+              deliverQueuedProfile();
               setMacroTargets(snapshot.targets);
-              void syncSavedProfileToServer();
             }
-          });
+          }).catch(() => Alert.alert("Save failed", "Please try restoring again."));
         } },
       ]);
   }
@@ -207,7 +210,7 @@ export default function ProfileScreen() {
           title: 'Your Goal',
           options: GOAL_OPTIONS,
           value: profile.goal ?? 'maintain',
-          onApply: (v) => { setEditField(null); updateFieldAndRecalc('goal', v as Goal); },
+          onApply: (v) => { return updateFieldAndRecalc('goal', v as Goal); },
           onClose: () => setEditField(null),
         };
       case 'activity':
@@ -217,7 +220,7 @@ export default function ProfileScreen() {
           title: 'Activity Level',
           options: ACTIVITY_OPTIONS,
           value: profile.activity ?? 'lightly_active',
-          onApply: (v) => { setEditField(null); updateFieldAndRecalc('activity', v as ActivityLevel); },
+          onApply: (v) => { return updateFieldAndRecalc('activity', v as ActivityLevel); },
           onClose: () => setEditField(null),
         };
       case 'height':
@@ -226,7 +229,7 @@ export default function ProfileScreen() {
           visible: true,
           title: 'Height',
           valueCm: profile.heightCm ? String(profile.heightCm) : '',
-          onApply: (v) => { setEditField(null); updateFieldAndRecalc('heightCm', parseInt(v) || undefined); },
+          onApply: (v) => { return updateFieldAndRecalc('heightCm', parseInt(v) || undefined); },
           onClose: () => setEditField(null),
         };
       case 'weight':
@@ -237,7 +240,7 @@ export default function ProfileScreen() {
           value: profile.weightKg ? String(Math.round(profile.weightKg * 2.20462)) : '',
           unit: 'lbs',
           placeholder: '70',
-          onApply: (v) => { setEditField(null); updateFieldAndRecalc('weightKg', Math.round(((parseInt(v) || 0) * 0.453592) * 10) / 10 || undefined); },
+          onApply: (v) => { return updateFieldAndRecalc('weightKg', Math.round(((parseInt(v) || 0) * 0.453592) * 10) / 10 || undefined); },
           onClose: () => setEditField(null),
         };
       case 'age':
@@ -249,10 +252,9 @@ export default function ProfileScreen() {
           unit: 'years',
           placeholder: '25',
           onApply: (v) => {
-            setEditField(null);
             const ageNum = parseInt(v) || 25;
             const year = new Date().getFullYear() - ageNum;
-            updateFieldAndRecalc('birthday', `${year}-01-01`);
+            return updateFieldAndRecalc('birthday', `${year}-01-01`);
           },
           onClose: () => setEditField(null),
         };
@@ -395,10 +397,11 @@ export default function ProfileScreen() {
       mode="complete"
       goal={profile.goal}
       onApply={async (updated) => {
+        await saveMacroTargets(updated);
+        await queueSavedProfileToServer();
+        deliverQueuedProfile();
         setFilterVisible(false);
         setMacroTargets(updated);
-        await saveMacroTargets(updated);
-        void syncSavedProfileToServer();
         trackMacroTargetsEdited({
           entry_point: 'profile',
           has_protein: updated.protein !== '',

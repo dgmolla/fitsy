@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { pullProfileFromServer, pushProfileToServer, replayPendingProfileSync, syncSavedProfileToServer } from './profileSync';
+import { pullProfileFromServer, pushProfileToServer, replayPendingProfileSync, queueSavedProfileToServer, syncSavedProfileToServer } from './profileSync';
 import { getOnboardingData, saveOnboardingField } from './onboardingStorage';
 import { getDiscoveryMacroTargetSnapshot, getMacroTargets, getQuarantinedLegacyTarget,
   saveDiscoveryMacroTargets, saveMacroTargets } from './macroStorage';
@@ -136,10 +136,14 @@ it('serializes rapid saved edits through their durable queue and API writes', as
   const first = syncSavedProfileToServer();
   while ((global.fetch as jest.Mock).mock.calls.length === 0) await new Promise(resolve => setTimeout(resolve, 0));
   await saveMacroTargets({ calories: '640', protein: '50', carbs: '65', fat: '20' });
-  const second = syncSavedProfileToServer();
+  const second = queueSavedProfileToServer();
+  await second;
+  const pending = JSON.parse((await AsyncStorage.getItem('@fitsy/pending_profile_sync:test-user'))!);
+  expect(pending.body.macroTarget).toEqual({ proteinG: 175, carbsG: 228, fatG: 70, calories: 2242, source: 'manual' });
   expect(global.fetch).toHaveBeenCalledTimes(1);
   finishFirst?.({ ok: true, status: 200, json: async () => ({}) });
   await Promise.all([first, second]);
+  await replayPendingProfileSync();
   const calls = (global.fetch as jest.Mock).mock.calls;
   expect(JSON.parse(calls[0][1].body).macroTarget.proteinG).toBe(140);
   expect(JSON.parse(calls[1][1].body).macroTarget.proteinG).toBe(175);

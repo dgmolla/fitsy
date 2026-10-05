@@ -23,8 +23,8 @@ import { isCompleteTarget, normalizeCompleteTarget, parseTarget, settleTargetEdi
 interface FilterPopupProps {
   visible: boolean;
   values: MacroValues;
-  onApply: (values: MacroValues, mode?: "search" | "complete") => void;
-  onClose: () => void;
+  onApply: (values: MacroValues, mode?: "search" | "complete") => void | Promise<void>;
+  onClose: () => void | Promise<void>;
   mode?: "search" | "complete";
   allowPartial?: boolean;
   goal?: "build_muscle" | "lose_fat" | "maintain" | "performance";
@@ -49,6 +49,7 @@ export function FilterPopup({
   allowPartial = false,
   goal = "maintain",
 }: FilterPopupProps) {
+  const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<MacroValues>(values);
   const [linked, setLinked] = useState(mode === "complete");
   const linkedRef = useRef(mode === "complete");
@@ -235,7 +236,9 @@ export function FilterPopup({
             accessibilityRole="button"
             accessibilityLabel="Apply meal targets"
             testID="meal-filter-apply"
-            onPress={() => {
+            disabled={saving}
+            onPress={async () => {
+              if (saving) return;
               if (clearedProfileMacro(draftRef.current)) {
                 Alert.alert("Complete your target", "Enter valid calories and all three macros before applying.");
                 return;
@@ -246,10 +249,16 @@ export function FilterPopup({
                 Alert.alert("Complete your target", "Enter valid calories and all three macros before applying.");
                 return;
               }
-              dismiss(() => onApply(independent ? settled : normalizeCompleteTarget(settled), independent ? "search" : "complete"));
+              setSaving(true);
+              try {
+                await onApply(independent ? settled : normalizeCompleteTarget(settled), independent ? "search" : "complete");
+                dismiss(() => {});
+              } catch {
+                Alert.alert("Couldn't save targets", "Your edits are still here. Please try again.");
+              } finally { setSaving(false); }
             }}
           >
-            <Text style={s.applyText}>Apply</Text>
+            <Text style={s.applyText}>{saving ? "Saving..." : "Apply"}</Text>
           </Pressable>
         </Animated.View>
       </KeyboardAvoidingView>
