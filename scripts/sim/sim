@@ -166,6 +166,8 @@ PYTHON
       record_device_event intent "$UDID"
       xcrun simctl boot "$UDID"
       open -a Simulator --background || true
+    else
+      record_device_event intent "$UDID"
     fi
     printf '{"name":"sim-boot","status":"pass","udid":"%s"}\n' "$UDID"
     ;;

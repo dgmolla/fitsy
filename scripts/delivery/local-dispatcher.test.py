@@ -1272,6 +1272,19 @@ class SimulatorUseProcessTest(unittest.TestCase):
                 self.assertFalse(self.record()['pending_use'])
                 self.assertIsNotNone(self.record()['released_at'])
 
+    def test_already_booted_device_reuse_records_actual_owned_use_and_release(self):
+        self.assertEqual(self.run_sim('claim').returncode, 0)
+        result = self.run_sim('boot')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['udid'], self.udid)
+        record = self.record()
+        self.assertEqual(record['owner'], 'owner-a')
+        self.assertFalse(record['pending_use'])
+        self.assertIsNotNone(record['last_owner_use'])
+        self.assertIsNone(record['released_at'])
+        self.assertEqual(self.run_sim('release').returncode, 0)
+        self.assertIsNotNone(self.record()['released_at'])
+
     def test_repeated_completion_cannot_renew_actual_use_without_new_intent(self):
         self.run_sim('claim'); self.run_sim('use-intent', self.udid)
         self.assertEqual(self.run_sim('use-complete', self.udid).returncode, 0)
