@@ -9,6 +9,7 @@ A claim snapshots the issue acceptance, implementation provider/model/effort, in
 A first claim creates an owned Git worktree; an authorized same-issue successor reuses the latest ended checkout and branch after fresh registration, terminal-receipt, process/group, open-file and source-identity checks.
 Tracked and untracked unfinished work stay in place, and the new claim records its creation claim, predecessor and exact resume identity.
 An uncertain retained checkout parks preparation rather than making a second dependency environment.
+Durable claim receipts preserve discovery after the compact in-memory history rolls over.
 The worker follows the existing shipping gates and unchanged issue-bound review history.
 A live or uncertain worker retains the lane; a proven stopped worker without verified Done is parked with a reason so independent ready work may proceed.
 
@@ -71,3 +72,9 @@ The dispatcher records bounded checkout retention assessments and enforces the s
 Other expired resources are explicit assessment actions for the coordinator and existing operators, not blanket deletion loops.
 Incoming dependency links protect a donor only through a chain ending in a known live consumer; a historical idle checkout's link alone does not establish current execution.
 No source, dirty work, user-owned device, queued pinned app or required historical evidence becomes disposable solely through age.
+
+Paused runtime updates are separate from worker admission.
+The installer atomically copies the small reviewed scripts under dispatcher.lock with enough free bytes for the update and reports available and required worker capacity.
+It can install recovery code during a resource hold without lowering the worker floor or admitting work.
+Enable reports resource-hold explicitly when headroom is insufficient; the existing tick still forbids launching any worker below floor plus reserve.
+Active claims continue to prevent installation or enabling.

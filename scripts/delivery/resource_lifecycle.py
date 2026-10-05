@@ -83,9 +83,16 @@ def source_identity(config, path):
 
 
 def resume_checkout(config, state, issue):
-    previous = next((entry for entry in reversed(state.get('history', []))
-                     if entry.get('issue') == issue and entry.get('worktree') and
-                     entry.get('terminal') != 'verified'), None)
+    candidates = [entry for entry in state.get('history', []) if entry.get('issue') == issue
+                  and entry.get('worktree') and entry.get('terminal') != 'verified']
+    # Compact in-memory history is not the durable ownership record.
+    for receipt_path in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
+        entry = json.loads(receipt_path.read_text())
+        if entry.get('issue') == issue and entry.get('worktree') and entry.get('terminal') != 'verified':
+            if receipt_path.parent.name != entry.get('id'):
+                raise RuntimeError('durable claim receipt identity mismatch')
+            candidates.append(entry)
+    previous = max(candidates, key=lambda entry: entry.get('finished_at') or '', default=None)
     if not previous:
         return None
     path = owned_checkout(config, previous)

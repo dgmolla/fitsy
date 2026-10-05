@@ -110,6 +110,19 @@ class InstallTest(unittest.TestCase):
             reinstalled = json.loads(config_path.read_text())
             self.assertFalse(reinstalled['enabled'])
             self.assertEqual(reinstalled['profiles']['standard']['provider'], 'claude')
+            # Paused recovery code installs during a hold but cannot admit another owner.
+            reinstalled['min_free_bytes'] = 10**18
+            config_path.write_text(json.dumps(reinstalled))
+            result = command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--install',
+                             '--worktree-root', str(roots))
+            self.assertIn('"worker_admission": "resource-hold"', result)
+            self.assertFalse(json.loads(config_path.read_text())['enabled'])
+            command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable')
+            tick = command('python3', str(home / '.fitsy-dispatcher/runtime/local-dispatcher.py'),
+                           'tick', '--config', str(config_path))
+            self.assertEqual(json.loads(tick)['state'], 'resource-hold')
+            self.assertIsNone(json.loads((home / '.fitsy-dispatcher/state.json').read_text())['active'])
+            self.assertEqual(config_path.stat().st_mode & 0o077, 0)
             lock = (home / '.fitsy-dispatcher/dispatcher.lock').open('a')
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX)

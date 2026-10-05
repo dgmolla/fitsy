@@ -294,6 +294,22 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertTrue(scratch.exists())
         self.assertIn('terminal receipt', self.state_data()['resource_releases'][old['id']]['reason'])
 
+    def test_resume_finds_durable_checkout_after_history_rollover(self):
+        state, old, checkout = self.ended_checkout()
+        (checkout / 'retained-source.txt').write_text('old issue source')
+        state['history'] = [{'id': 'later-%s' % n, 'issue': 999, 'terminal': 'verified'} for n in range(100)]
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.set_board([item(385)])
+        board = self.board_data(); board['ready_at']['385'] = '2026-09-27T01:00:00Z'
+        self.board.write_text(json.dumps(board))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        new = self.state_data()['active']
+        self.assertEqual(Path(new['worktree']).resolve(), checkout.resolve())
+        self.assertEqual(new['resumed_from_claim'], old['id'])
+        self.assertEqual((checkout / 'retained-source.txt').read_text(), 'old issue source')
+        self.assertEqual(len(list(self.worktrees.iterdir())), 1)
+
     def test_authorized_resume_reuses_ended_issue_checkout(self):
         self.env['FAKE_WORKER_MODE'] = 'fail'
         self.tick()
