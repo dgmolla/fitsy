@@ -105,6 +105,7 @@ export default function LoginScreen() {
       const r = await devLogin();
       trackAuthSuccess({ provider: 'dev', is_new_user: false });
       await captureIdentity(r.user.id, r.user.email);
+      await pullProfileFromServer();
       router.replace('/(tabs)/search');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Dev login failed';
