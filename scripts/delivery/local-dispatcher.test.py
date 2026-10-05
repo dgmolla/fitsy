@@ -260,6 +260,7 @@ class DispatcherProcessTest(unittest.TestCase):
         outside = self.base / 'outside-module-cache'; outside.mkdir()
         (outside / 'keep').write_text('not task owned')
         scratch = checkout / '.evidence/ModuleCache.noindex'
+        scratch.parent.mkdir(parents=True, exist_ok=True)
         scratch.symlink_to(outside, target_is_directory=True)
         state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
             'removed': [], 'removal_intent': str(scratch.absolute())}
