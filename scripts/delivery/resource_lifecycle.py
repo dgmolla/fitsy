@@ -84,11 +84,11 @@ def source_identity(config, path):
 
 def resume_checkout(config, state, issue):
     candidates = [entry for entry in state.get('history', []) if entry.get('issue') == issue
-                  and entry.get('worktree') and entry.get('terminal') != 'verified']
+                  and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at')]
     # Compact in-memory history is not the durable ownership record.
     for receipt_path in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
         entry = json.loads(receipt_path.read_text())
-        if entry.get('issue') == issue and entry.get('worktree') and entry.get('terminal') != 'verified':
+        if entry.get('issue') == issue and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at'):
             if receipt_path.parent.name != entry.get('id'):
                 raise RuntimeError('durable claim receipt identity mismatch')
             candidates.append(entry)
