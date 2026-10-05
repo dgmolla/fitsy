@@ -1,6 +1,7 @@
 jest.unmock('react-native');
 jest.unmock('expo-router');
 import React from 'react';
+import { installAccountProfile } from './test-fixtures/accountProfile';
 import { Alert, Button, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
@@ -73,6 +74,7 @@ jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { 
 const originalFetch = global.fetch;
 const selected = { action: 'menu' as const, restaurantId: 'varilla', restaurantName: 'Varilla', menuItemId: 'meal-1', query: 'pizza' };
 const defaultGetItem = (AsyncStorage.getItem as jest.Mock).getMockImplementation() as typeof AsyncStorage.getItem;
+const emptyProfile = { user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null }, macroTarget: null };
 function response(body: unknown) { return { ok: true, status: 200, json: async () => body } as Response; }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 function Preview() { return <><Text>Discovery preview</Text><Button title="Open selected menu" onPress={() => router.push('/welcome/signin')} /></>; }
@@ -106,7 +108,9 @@ beforeEach(async () => {
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
-  global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', expiresAt: null }));
+  global.fetch = jest.fn().mockImplementation((url: string) => Promise.resolve(response(
+    String(url).includes('/api/user/profile') ? emptyProfile : { active: true, status: 'active', expiresAt: null },
+  )));
 });
 
 it('asks an anonymous trial reminder opt-in to sign in before permission, then returns to the choice', async () => {
@@ -123,7 +127,7 @@ it('asks an anonymous trial reminder opt-in to sign in before permission, then r
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: false });
   (global.fetch as jest.Mock).mockImplementation((url: string) => Promise.resolve(url.endsWith('/api/auth/login')
     ? response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: true })
-    : response({ active: false })));
+    : response(String(url).includes('/api/user/profile') ? emptyProfile : { active: false })));
   mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
   await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
@@ -176,7 +180,7 @@ it('does not sign out account B for account A push registration returning 401 la
   jest.spyOn(NotificationHelpers, 'getExpoPushTokenAsync').mockResolvedValueOnce('ExponentPushToken[buyer-a]');
   const pushResponse = deferred<Response>();
   global.fetch = jest.fn((url: RequestInfo | URL) => String(url).endsWith('/api/user/push-token')
-    ? pushResponse.promise : Promise.resolve(response({ active: false })));
+    ? pushResponse.promise : Promise.resolve(response(String(url).includes('/api/user/profile') ? emptyProfile : { active: false })));
   const screen = renderJourney('/welcome/trial-reminder');
   await screen.findByTestId('trial-reminder-allow');
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
@@ -246,7 +250,7 @@ it.each([
 ] as const)('continues %s (%s) only when still on sign-in: success=%s, Back=%s', async (provider, path, success, back) => {
   const exchange = deferred<Response>();
   const alert = jest.spyOn(Alert, 'alert');
-  (global.fetch as jest.Mock).mockImplementation((url: string) => url.endsWith(path) || url.endsWith('/api/auth/register') ? exchange.promise : Promise.resolve(response({ active: false })));
+  (global.fetch as jest.Mock).mockImplementation((url: string) => url.endsWith(path) || url.endsWith('/api/auth/register') ? exchange.promise : Promise.resolve(response(String(url).includes('/api/user/profile') ? emptyProfile : { active: false })));
   await rememberPaywallIntent(selected);
   const screen = renderJourney('/welcome/preview');
   await act(async () => { fireEvent.press(screen.getByText('Open selected menu')); });
@@ -283,24 +287,7 @@ it('hydrates a newer account target through selected-meal sign-in before complet
     calories: '660', protein: '50', carbs: '70', fat: '20', _mode: 'complete', _owner: userId, _source: 'manual',
   }));
   await rememberPaywallIntent(selected);
-  let target = { calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' };
-  global.fetch = jest.fn().mockImplementation((url: string, init?: RequestInit) => {
-    if (url.endsWith('/api/auth/login')) return Promise.resolve(response({
-      token: 'test-token', refreshToken: 'refresh', user: { id: userId }, isNewUser: false,
-    }));
-    if (url.includes('/api/user/profile')) {
-      if (init?.method === 'PATCH') {
-        const body = JSON.parse(String(init.body));
-        if (body.macroTarget) target = body.macroTarget;
-        return Promise.resolve(response({}));
-      }
-      return Promise.resolve(response({
-        user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
-        macroTarget: target,
-      }));
-    }
-    return Promise.resolve(response({ active: true, status: 'active', expiresAt: null }));
-  });
+  const readTarget = installAccountProfile(userId, { calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' });
   const screen = renderJourney('/welcome/signin?returnTo=payment');
   await screen.findByTestId('signup-dev');
   await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
@@ -309,5 +296,5 @@ it('hydrates a newer account target through selected-meal sign-in before complet
   expect((await getPaywallIntent())?.menuItemId).toBe(selected.menuItemId);
   await recordOnboardingComplete(false);
   await replayPendingProfileSync();
-  expect(target).toEqual({ calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' });
+  expect(readTarget()).toEqual({ calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' });
 });
