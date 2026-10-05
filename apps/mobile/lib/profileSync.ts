@@ -47,6 +47,8 @@ async function buildProfileBody(): Promise<Record<string, unknown>> {
     ]);
     const macros = macroSnapshot?.targets;
     const partialFilter = !macros && discoverySnapshot?.mode === 'search';
+    const userId = (await supabase.auth.getSession()).data.session?.user?.id;
+    const unreconciledArchive = !macros && userId && await getArchivedMacroTarget(userId);
 
     const body: Record<string, unknown> = {};
 
@@ -58,7 +60,7 @@ async function buildProfileBody(): Promise<Record<string, unknown>> {
     if (onboarding.goal) body.goal = onboarding.goal;
 
     // Convert per-meal → daily (×MEALS_PER_DAY)
-    if (partialFilter) body.preserveMacroTarget = true;
+    if (partialFilter || unreconciledArchive) body.preserveMacroTarget = true;
     if (macros && !partialFilter) {
       const p = parseTarget(macros.protein);
       const c = parseTarget(macros.carbs);

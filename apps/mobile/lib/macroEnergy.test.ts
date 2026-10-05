@@ -70,3 +70,9 @@ test('rapid ordered edits keep the latest values and restored complete targets a
   expect(normalizeCompleteTarget({ ...third, calories: '999' })).toEqual(third);
   expect(normalizeCompleteTarget({ ...third, calories: '' })).toEqual({ ...third, calories: '' });
 });
+
+test.each(['', '.', 'invalid'])('macro fallback preserves intentionally invalid calories %j', calories => {
+  const incomplete = { ...balanced, calories, protein: '85' };
+  expect(settleTargetEdit(incomplete, 'protein', 'build_muscle', true)).toEqual(incomplete);
+  expect(normalizeCompleteTarget(incomplete)).toEqual(incomplete);
+});

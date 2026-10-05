@@ -136,3 +136,19 @@ it('merges a later target-only write with durable pending body facts', async () 
   });
   expect(await AsyncStorage.getItem('@fitsy/pending_profile_sync:existing-account')).toBeNull();
 });
+
+it('never queues an archive as an active target while server reconciliation is unavailable', async () => {
+  await AsyncStorage.clear();
+  mockSession = { access_token: 'account-token', user: { id: 'existing-account' } };
+  await saveMacroTargets({ calories: '660', protein: '50', carbs: '70', fat: '20' });
+  await clearToken();
+  mockSession = { access_token: 'account-token', user: { id: 'existing-account' } };
+  expect(await getMacroTargets()).toBeNull();
+  await AsyncStorage.setItem('@fitsy/onboarding', JSON.stringify({ goal: 'maintain' }));
+  global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+  await pullProfileFromServer();
+  await syncSavedProfileToServer();
+  const pending = JSON.parse((await AsyncStorage.getItem('@fitsy/pending_profile_sync:existing-account'))!);
+  expect(pending.body).toEqual({ goal: 'maintain', preserveMacroTarget: true });
+  expect(await AsyncStorage.getItem('@fitsy/macro_targets:existing-account')).not.toBeNull();
+});

@@ -184,3 +184,26 @@ it('discards edits when dismissed without applying', async () => {
   act(() => { jest.runAllTimers(); });
   expect(field(screen, 'Calories per meal')).toBe('600');
 });
+
+it('keeps intentionally cleared profile calories incomplete through macro edits and Apply', async () => {
+  const onApply = jest.fn();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    const screen = render(<FilterPopup visible values={values} mode="complete" onApply={onApply} onClose={jest.fn()} />);
+    fireEvent.changeText(screen.getByLabelText('Calories per meal'), '');
+    fireEvent(screen.getByLabelText('Calories per meal'), 'blur');
+    fireEvent.changeText(screen.getByLabelText('Protein grams'), '50');
+    fireEvent(screen.getByLabelText('Protein grams'), 'blur');
+    fireEvent.press(screen.getByLabelText('Increase Carbs'));
+    expect(field(screen, 'Calories per meal')).toBe('');
+    expect(field(screen, 'Protein grams')).toBe('50');
+    await act(async () => { fireEvent.press(screen.getByLabelText('Apply meal targets')); });
+    expect(onApply).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith('Complete your target', expect.any(String));
+    fireEvent.changeText(screen.getByLabelText('Calories per meal'), '700');
+    fireEvent(screen.getByLabelText('Calories per meal'), 'blur');
+    expect(Number(field(screen, 'Calories per meal'))).toBeGreaterThan(0);
+    await act(async () => { fireEvent.press(screen.getByLabelText('Apply meal targets')); });
+    expect(onApply).toHaveBeenCalledTimes(1);
+  } finally { alert.mockRestore(); }
+});

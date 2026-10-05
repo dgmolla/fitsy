@@ -104,11 +104,9 @@ async function readSnapshot(key: string): Promise<MacroTargetSnapshot | null> {
 
 export async function getMacroTargetSnapshot(): Promise<MacroTargetSnapshot | null> {
   const snapshot = await readSnapshot(MACRO_TARGETS_KEY);
-  if (snapshot?.mode === 'complete') return snapshot;
-  const userId = await currentUserId();
-  if (!userId) return null;
-  const owned = await readSnapshot(ownedTargetKey(userId));
-  return await currentUserId() === userId && owned?.mode === 'complete' ? owned : null;
+  // Archives are recovery data, not an active allocation or a pending edit.
+  // Only profile reconciliation may restore them after checking the server.
+  return snapshot?.mode === 'complete' ? snapshot : null;
 }
 
 export async function getArchivedMacroTarget(userId: string): Promise<(MacroTargetSnapshot & {

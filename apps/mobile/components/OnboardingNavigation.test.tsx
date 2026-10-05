@@ -274,3 +274,40 @@ it.each(['covered', 'empty', 'failure'])('ignores a %s area response after Back'
   expect(screen.getPathname()).toBe('/welcome/problem');
   expect(alert).not.toHaveBeenCalled();
 });
+
+it('hydrates a newer account target through selected-meal sign-in before completion can write it', async () => {
+  const userId = 'buyer';
+  await AsyncStorage.setItem(`@fitsy/macro_targets:${userId}`, JSON.stringify({
+    calories: '660', protein: '50', carbs: '70', fat: '20', _mode: 'complete', _owner: userId, _source: 'manual',
+  }));
+  await rememberPaywallIntent(selected);
+  let target = { calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' };
+  global.fetch = jest.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (url.endsWith('/api/auth/login')) return Promise.resolve(response({
+      token: 'test-token', refreshToken: 'refresh', user: { id: userId }, isNewUser: false,
+    }));
+    if (url.includes('/api/user/profile')) {
+      if (init?.method === 'PATCH') {
+        const body = JSON.parse(String(init.body));
+        if (body.macroTarget) target = body.macroTarget;
+        return Promise.resolve(response({}));
+      }
+      return Promise.resolve(response({
+        user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+        macroTarget: target,
+      }));
+    }
+    return Promise.resolve(response({ active: true, status: 'active', expiresAt: null }));
+  });
+  const screen = renderJourney('/welcome/signin?returnTo=payment');
+  await screen.findByTestId('signup-dev');
+  await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  const { getMacroTargets } = await import('../lib/macroStorage');
+  expect(await getMacroTargets()).toEqual({ calories: '740', protein: '60', carbs: '80', fat: '20' });
+  expect((await getPaywallIntent())?.menuItemId).toBe(selected.menuItemId);
+  await recordOnboardingComplete(false);
+  const { replayPendingProfileSync } = await import('../lib/profileSync');
+  await replayPendingProfileSync();
+  expect(target).toEqual({ calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' });
+});

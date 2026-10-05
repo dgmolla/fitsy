@@ -77,9 +77,11 @@ export default function SignInScreen() {
     // A stale continuation must not claim a newer preview's selected meal.
     if (!isCurrent()) return;
     await claimPaywallIntent(r.user.id);
+    // Reconcile account targets before completion can queue a profile write.
+    // The selected-meal intent still owns the destination, not target freshness.
+    if (outOfArea !== '1' && isCurrent()) await pullProfileFromServer();
     await captureIdentity(r.user.id, r.user.email);
     if (!isCurrent()) return;
-    if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent()) && isCurrent()) await pullProfileFromServer();
     await navigateAfterAuth(r.isNewUser, isCurrent);
   }, [navigateAfterAuth, outOfArea]);
 

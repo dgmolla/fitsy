@@ -47,6 +47,7 @@ export function settleTargetEdit(
 ): MacroTextValues {
   const edited = parseTarget(values[field]);
   if (edited === null || (field === 'calories' && edited === 0)) return values;
+  if (field !== 'calories' && parseTarget(values.calories) === null) return values;
 
   const current = parsedGrams(values);
   if (!current && !allowFallback) return values;

@@ -128,7 +128,8 @@ export function FilterPopup({
     || parseTarget(values.calories) === null
     || (!linkedRef.current && [values.protein, values.carbs, values.fat].some(value => parseTarget(value) === 0)));
   const clearedProfileMacro = (values: MacroValues) => !allowPartial && linkedRef.current
-    && hadAllocation.current && !isCompleteTarget(values);
+    && (parseTarget(values.calories) === null
+      || (hadAllocation.current && !isCompleteTarget(values)));
   function settle(key: keyof MacroValues) {
     if (linkedRef.current && !partialDraft(draftRef.current) && !clearedProfileMacro(draftRef.current))
       replaceDraft(settleTargetEdit(draftRef.current, key, goal, true));
