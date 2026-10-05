@@ -90,8 +90,8 @@ async function readSnapshot(key: string): Promise<MacroTargetSnapshot | null> {
     const completeZero = parsed.every(value => value !== null)
       && parsed.some(value => value === 0)
       && parseTarget(targets.calories) === macroCalories({ protein: parsed[0]!, carbs: parsed[1]!, fat: parsed[2]! });
-    const legacyPartial = _mode === undefined && !completeZero
-      && parsed.some(value => value === null || value === 0);
+    const legacyPartial = _mode === undefined && (parseTarget(targets.calories) === null
+      || (!completeZero && parsed.some(value => value === null || value === 0)));
     const mode = _mode === 'search' || legacyPartial ||
       (_mode === undefined && legacyIndependentFilter(targets, generated)) ? 'search' : 'complete';
     // Legacy values have no provenance. A manual target can exactly match an
@@ -122,7 +122,7 @@ export async function getArchivedMacroTarget(userId: string): Promise<(MacroTarg
     if (raw && (JSON.parse(raw) as { _source?: MacroTargetSource })._source === 'automatic')
       source = 'automatic';
   } catch { /* A missing source tag is treated as a manual target. */ }
-  return { ...archived, source };
+  return await currentUserId() === userId ? { ...archived, source } : null;
 }
 
 export async function clearArchivedMacroTarget(userId: string): Promise<void> {
@@ -203,13 +203,15 @@ export async function restoreQuarantinedLegacyTarget(): Promise<MacroTargetSnaps
 }
 
 export async function getMacroTargetSource(): Promise<MacroTargetSource> {
+  const userId = await currentUserId();
   const raw = await AsyncStorage.getItem(MACRO_TARGETS_KEY);
-  if (!raw) return 'manual';
-  try {
+  if (await currentUserId() !== userId) return 'manual';
+  if (raw) try {
     const saved = JSON.parse(raw) as { _source?: MacroTargetSource; _owner?: string | null };
-    if (saved._owner && saved._owner !== await currentUserId()) return 'manual';
-    return saved._source === 'automatic' ? 'automatic' : 'manual';
-  } catch { return 'manual'; }
+    if (!saved._owner || saved._owner === userId)
+      return saved._source === 'automatic' ? 'automatic' : 'manual';
+  } catch { /* Fall back to the current account's retained target. */ }
+  return userId ? (await getArchivedMacroTarget(userId))?.source ?? 'manual' : 'manual';
 }
 
 /** A saved partial search filter is enough to resume a completed account. */

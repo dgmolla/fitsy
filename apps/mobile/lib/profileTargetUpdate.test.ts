@@ -2,7 +2,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { syncSavedProfileToServer } from './profileSync';
 import { saveOnboardingField } from './onboardingStorage';
-import { getMacroTargetSource, getMacroTargets, saveMacroTargets } from './macroStorage';
+import { archiveActiveMacroTargets, getMacroTargetSource, getMacroTargets, saveMacroTargets } from './macroStorage';
+import { calculateMacros, macrosToStored } from './macroCalculator';
 import { updateProfileFieldAndTargets } from './profileTargetUpdate';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
@@ -33,5 +34,16 @@ it('keeps a manual high-protein target through profile edits and API sync', asyn
   await saveMacroTargets(automatic, 'complete', 'automatic');
   const recalculated = await updateProfileFieldAndTargets('weightKg', 95);
   expect(recalculated.targets).toEqual(await getMacroTargets());
+  expect(await getMacroTargetSource()).toBe('automatic');
+});
+
+it('retunes an archived automatic target after a profile edit before hydration', async () => {
+  await AsyncStorage.clear();
+  await saveOnboardingField('goal', 'build_muscle');
+  await saveMacroTargets({ calories: '600', protein: '40', carbs: '65', fat: '20' }, 'complete', 'automatic');
+  await archiveActiveMacroTargets('test-user');
+  const updated = await updateProfileFieldAndTargets('weightKg', 90);
+  expect(updated.targets).toEqual(macrosToStored(calculateMacros(updated.profile)));
+  expect(updated.targets?.calories).not.toBe('600');
   expect(await getMacroTargetSource()).toBe('automatic');
 });

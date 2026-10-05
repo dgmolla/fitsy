@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { archiveActiveMacroTargets, getDiscoveryMacroTargetSnapshot, getMacroTargetSnapshot, getMacroTargets, hasSavedMealTargets, saveMacroTargets, saveDiscoveryMacroTargets, clearMacroTargets, MACRO_TARGETS_KEY, SEARCH_MACRO_TARGETS_KEY } from './macroStorage';
+import { archiveActiveMacroTargets, getDiscoveryMacroTargetSnapshot, getMacroTargetSnapshot, getMacroTargetSource, getMacroTargets, hasSavedMealTargets, saveMacroTargets, saveDiscoveryMacroTargets, clearMacroTargets, MACRO_TARGETS_KEY, SEARCH_MACRO_TARGETS_KEY } from './macroStorage';
 import type { StoredMacroTargets } from './macroStorage';
 
 // Mock @react-native-async-storage/async-storage
@@ -39,6 +39,30 @@ const AsyncStorage = (
 ).default;
 
 const SAMPLE: StoredMacroTargets = { protein: '150', carbs: '200', fat: '67', calories: '2003' };
+
+test.each(['', 'invalid'])('legacy calorie value %p retains independent filter semantics', async calories => {
+  const legacy = { protein: '40', carbs: '65', fat: '20', calories };
+  store[MACRO_TARGETS_KEY] = JSON.stringify(legacy);
+  expect(await getMacroTargetSnapshot()).toBeNull();
+  expect(await getMacroTargets()).toBeNull();
+  expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: legacy, mode: 'search' });
+  await saveDiscoveryMacroTargets(legacy, 'search');
+  expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: legacy, mode: 'search' });
+});
+
+test('archived automatic provenance follows only its account until hydration', async () => {
+  mockUserId = 'account-a';
+  await saveMacroTargets(SAMPLE, 'complete', 'automatic');
+  await archiveActiveMacroTargets(mockUserId);
+  expect(await getMacroTargetSource()).toBe('automatic');
+  mockUserId = 'account-b';
+  expect(await getMacroTargetSource()).toBe('manual');
+  mockUserId = null;
+  expect(await getMacroTargetSource()).toBe('manual');
+  mockUserId = 'account-a';
+  await saveMacroTargets(SAMPLE, 'complete', 'manual');
+  expect(await getMacroTargetSource()).toBe('manual');
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
