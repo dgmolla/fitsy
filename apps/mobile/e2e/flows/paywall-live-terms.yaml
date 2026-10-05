@@ -1,7 +1,7 @@
 # Run with an identified Test Store build and a freshly reset disposable keychain.
 # Compare each disclosure to the price actually returned by the store.
 appId: com.fitsy.mobile
-tags: [billing, onboarding, changed-journey]
+tags: [auth, billing, onboarding, changed-journey]
 ---
 - launchApp:
     clearState: true
