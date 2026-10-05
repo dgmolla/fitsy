@@ -124,7 +124,8 @@ def resume_checkout(config, state, issue):
 def owned_scratch(path, entry):
     if not entry.is_absolute() or not entry.is_relative_to(path) or entry.is_symlink():
         return False
-    if not ((entry.is_relative_to(path / '.evidence') and entry.name in SCRATCH) or
+    compiler_root = path / '.evidence/product-build'
+    if not ((entry.name in SCRATCH and entry.parent in (compiler_root, compiler_root / 'Build')) or
             entry == path / 'apps/api/.next/cache'):
         return False
     if any(parent.suffix == '.app' or parent.name == 'Products' for parent in entry.parents):
@@ -134,7 +135,8 @@ def owned_scratch(path, entry):
 
 
 def safe_scratch(path):
-    candidates = [entry for name in SCRATCH for entry in (path / '.evidence').glob(f'**/{name}')]
+    root = path / '.evidence/product-build'
+    candidates = [parent / name for parent in (root, root / 'Build') for name in SCRATCH]
     candidates += [path / 'apps/api/.next/cache']
     owned = set(entry for entry in candidates if entry.is_dir() and owned_scratch(path, entry))
     return sorted(entry for entry in owned if not any(parent in owned for parent in entry.parents))

@@ -67,6 +67,20 @@ require_claim_or_free() { # identity from FITSY_SIM_OWNER (defaults to "anonymou
 record_device_event() {
   python3 "$REPO_ROOT/scripts/sim/sim_resource_uses.py" "$1" "$CLAIM_FILE" "${FITSY_SIM_OWNER:-anonymous}" "${2:-}"
 }
+# Reject incomplete arguments before recording an uncertain device action.
+validate_device_arguments() {
+  case "$CMD" in
+    install) : "${1:?path to .app}" ;;
+    launch)
+      if [ "${1:-}" = --url ]; then : "${2:?URL}"; else : "${1:?bundle id}"; fi ;;
+    screenshot) : "${1:?screenshot name}" ;;
+    logs)
+      while [ $# -gt 0 ]; do
+        case "$1" in --grep|--seconds) : "${2:?option value}"; shift 2 ;; *) shift ;; esac
+      done ;;
+  esac
+}
+validate_device_arguments "$@"
 # Intent protects uncertain interrupted actions; only completed commands renew use.
 case "$CMD" in install|launch|screenshot|logs|reset) require_claim_or_free ;; esac
 case "$CMD" in install|launch|screenshot|logs|reset)

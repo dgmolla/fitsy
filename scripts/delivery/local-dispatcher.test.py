@@ -200,12 +200,16 @@ class DispatcherProcessTest(unittest.TestCase):
         (checkout / '.evidence/external').symlink_to(external, target_is_directory=True)
         raw = checkout / '.evidence/review-failure.log'
         raw.write_text('historical failure')
+        raw_named_cache = checkout / '.evidence/review/ModuleCache.noindex'
+        raw_named_cache.mkdir(parents=True)
+        (raw_named_cache / 'failure.log').write_text('retained raw review')
         self.tick()
         state = self.state_data()
         self.assertFalse(scratch.exists())
         self.assertFalse(sibling.exists())
         self.assertEqual((app / 'binary').read_bytes(), b'retained app')
         self.assertEqual(raw.read_text(), 'historical failure')
+        self.assertEqual((raw_named_cache / 'failure.log').read_text(), 'retained raw review')
         self.assertEqual((protected_cache / 'keep').read_text(), 'app content')
         self.assertEqual((external / 'keep').read_text(), 'external content')
         record = state['resource_releases'][old['id']]
@@ -221,7 +225,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.until(lambda: self.state_data()['active'].get('finished_at'))
         old = self.state_data()['active'].copy()
         self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
-        scratch = Path(old['worktree']) / '.evidence/ModuleCache.noindex'
+        scratch = Path(old['worktree']) / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('keep')
         (self.base / 'fake-lsof').write_text('#!/bin/sh\necho owned-open-file\nexit 0\n')
         self.tick()
@@ -234,7 +238,7 @@ class DispatcherProcessTest(unittest.TestCase):
         state, old, checkout = self.ended_checkout()
         state['resource_releases'] = {}
         (self.state / 'state.json').write_text(json.dumps(state))
-        scratch = checkout / '.evidence/ModuleCache.noindex'
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('keep live build output')
         child = subprocess.Popen([sys.executable, '-c',
             'import sys,time; f=open(sys.argv[1]); print("ready",flush=True); time.sleep(30)',
@@ -263,7 +267,7 @@ class DispatcherProcessTest(unittest.TestCase):
 
     def test_interrupted_delete_intent_is_reconciled_before_next_release(self):
         state, old, checkout = self.ended_checkout()
-        scratch = checkout / '.evidence/ModuleCache.noindex'
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
         state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
             'removed': [], 'removal_intent': str(scratch.resolve())}
@@ -277,7 +281,7 @@ class DispatcherProcessTest(unittest.TestCase):
 
     def test_absent_interrupted_delete_gets_uncertain_reconciliation_receipt(self):
         state, old, checkout = self.ended_checkout()
-        scratch = checkout / '.evidence/ModuleCache.noindex'
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
             'removed': [], 'removal_intent': str(scratch.resolve())}
         (self.state / 'state.json').write_text(json.dumps(state))
@@ -291,7 +295,7 @@ class DispatcherProcessTest(unittest.TestCase):
         state, old, checkout = self.ended_checkout()
         outside = self.base / 'outside-module-cache'; outside.mkdir()
         (outside / 'keep').write_text('not task owned')
-        scratch = checkout / '.evidence/ModuleCache.noindex'
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.parent.mkdir(parents=True, exist_ok=True)
         scratch.symlink_to(outside, target_is_directory=True)
         state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
@@ -315,7 +319,7 @@ class DispatcherProcessTest(unittest.TestCase):
 
     def test_changed_terminal_receipt_refuses_release(self):
         state, old, checkout = self.ended_checkout()
-        scratch = checkout / '.evidence/ModuleCache.noindex'
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'keep').write_text('retained')
         state['resource_releases'].pop(old['id'])
         (self.state / 'state.json').write_text(json.dumps(state))
@@ -1228,6 +1232,23 @@ class SimulatorUseProcessTest(unittest.TestCase):
         path.write_text(json.dumps(claim))
         self.run_sim('release')
         self.assertEqual(self.record(), before)
+
+    def test_incomplete_arguments_do_not_create_a_device_action_intent(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()
+        for args in [('install',), ('launch',), ('launch', '--url'), ('screenshot',),
+                     ('logs', '--grep'), ('logs', '--seconds')]:
+            with self.subTest(args=args):
+                self.assertNotEqual(self.run_sim(*args).returncode, 0)
+                self.assertEqual(self.record(), before)
+        self.assertEqual(self.run_sim('release').returncode, 0)
+        self.assertFalse(self.record()['pending_use'])
+        from sim_resource_uses import owner_release
+        release = owner_release(self.home / '.fitsy-sim-uses.json', self.udid)
+        self.assertEqual(release['released_at'], self.record()['released_at'])
+        from resource_lifecycle import retention
+        self.assertEqual(retention({}, 'task_simulator', release, time.time() + 8 * 86400)['state'],
+                         'assessment-due')
 
     def test_failed_action_retains_unknown_pending_use_instead_of_aging_device(self):
         self.run_sim('claim'); self.run_sim('install', 'fixture.app')
