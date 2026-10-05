@@ -68,7 +68,7 @@ record_device_event() {
   python3 "$REPO_ROOT/scripts/sim/sim_resource_uses.py" "$1" "$CLAIM_FILE" "${FITSY_SIM_OWNER:-anonymous}" "${2:-}"
 }
 # Intent protects uncertain interrupted actions; only completed commands renew use.
-case "$CMD" in install|launch|reset) require_claim_or_free ;; esac
+case "$CMD" in install|launch|screenshot|logs|reset) require_claim_or_free ;; esac
 case "$CMD" in install|launch|screenshot|logs|reset)
   UDID="$(booted_udid)"
   [ -z "$UDID" ] || record_device_event intent "$UDID"
@@ -113,6 +113,23 @@ PY
     rm -f "$CLAIM_FILE"
     printf '{"name":"sim-release","status":"pass","owner":"%s"}
 ' "$ME"
+    ;;
+  use-intent|use-complete)
+    ME="${FITSY_SIM_OWNER:?export FITSY_SIM_OWNER=<agent-name> first}"
+    OWNER="$(claim_owner)"
+    [ "$ME" != anonymous ] && [ "$OWNER" = "$ME" ] || { echo "device event requires your active claim" >&2; exit 1; }
+    UDID="${1:?exact device UDID}"
+    if [ "$CMD" = use-intent ]; then
+      record_device_event intent "$UDID"
+    else
+      python3 - "$CLAIM_FILE" "$UDID" <<'PYTHON'
+import json, sys
+if sys.argv[2] not in json.load(open(sys.argv[1])).get('device_uses', []):
+    raise SystemExit('completed use requires an exact device intent under this claim')
+PYTHON
+      record_device_event use "$UDID"
+    fi
+    printf '{"name":"sim-%s","status":"pass","udid":"%s"}\n' "$CMD" "$UDID"
     ;;
   boot)
     require_claim_or_free

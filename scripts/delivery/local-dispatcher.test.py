@@ -1152,6 +1152,36 @@ class SimulatorUseProcessTest(unittest.TestCase):
         self.assertNotEqual(self.run_sim('launch', 'com.fitsy', owner='other').returncode, 0)
         self.assertEqual(self.record(), before)
 
+    def test_observer_cannot_replace_the_active_owner_clock(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()
+        for command in ('screenshot', 'logs'):
+            self.assertNotEqual(self.run_sim(command, 'observer', owner='other').returncode, 0)
+            self.assertEqual(self.record(), before)
+        self.run_sim('release')
+        self.assertEqual(self.record()['owner'], 'owner-a')
+        self.assertIsNotNone(self.record()['released_at'])
+
+    def test_canonical_runner_handoff_records_exact_raw_command_device(self):
+        runner = (SCRIPT.parent.parent / 'sim/product-flow.mjs').resolve().as_uri()
+        code = "import {claimDevice,recordDeviceUse,releaseDevice} from " + json.dumps(runner) + ";"
+        code += "import {execFileSync} from 'node:child_process';"
+        code += "const udid=" + json.dumps(self.udid) + ";claimDevice(udid);"
+        code += "execFileSync('xcrun',['simctl','install',udid,'fixture.app']);recordDeviceUse(udid);releaseDevice();"
+        result = subprocess.run(['node', '--input-type=module', '-e', code], env=self.env,
+                                text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.record()['owner'], 'owner-a')
+        self.assertIsNotNone(self.record()['last_owner_use'])
+        self.assertIsNotNone(self.record()['released_at'])
+        self.assertFalse(self.record()['pending_use'])
+
+    def test_completed_device_event_requires_owned_intent(self):
+        self.run_sim('claim')
+        self.assertNotEqual(self.run_sim('use-complete', self.udid).returncode, 0)
+        self.assertNotEqual(self.run_sim('use-intent', self.udid, owner='other').returncode, 0)
+        self.assertFalse((self.home / '.fitsy-sim-uses.json').exists())
+
     def test_failed_action_retains_unknown_pending_use_instead_of_aging_device(self):
         self.run_sim('claim'); self.run_sim('install', 'fixture.app')
         before = self.record()['last_owner_use']

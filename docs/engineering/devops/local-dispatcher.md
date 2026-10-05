@@ -90,3 +90,8 @@ The durable device registry survives claim release, and claim renewal preserves 
 Status polling and denied commands do not renew resource clocks.
 Device retirement reevaluates the latest actual owner-use and release clocks under the shared simulator lock immediately before deletion.
 Missing legacy clocks or an interrupted pending command retain the device for evidence-based backfill rather than guessing age from an older worker's completion time.
+
+The canonical product-flow runner hands its explicit selected UDID to use-intent after claiming and records completed use after an identified native build or successful install.
+Both events run through the existing shared-lock CLI; completion requires an intent under the same active owner claim.
+A failed or interrupted runner leaves uncertain intent protected for backfill.
+Screenshot and log commands respect another active owner before attributing device use.

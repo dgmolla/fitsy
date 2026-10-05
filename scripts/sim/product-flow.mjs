@@ -66,11 +66,13 @@ function device(udid) {
   assert(found, 'The selected simulator is not booted');
   return { simulator: udid, os: found[0] };
 }
-function claim() {
+export function claimDevice(udid) {
   assert(process.env.FITSY_SIM_OWNER, 'Set FITSY_SIM_OWNER for simulator coordination');
   run('bash', ['scripts/sim/sim', 'claim', '--minutes', '60'], { stdio: 'inherit' });
+  run('bash', ['scripts/sim/sim', 'use-intent', udid], { stdio: 'inherit' });
 }
-const release = () => run('bash', ['scripts/sim/sim', 'release'], { stdio: 'inherit' });
+export const releaseDevice = () => run('bash', ['scripts/sim/sim', 'release'], { stdio: 'inherit' });
+export const recordDeviceUse = udid => run('bash', ['scripts/sim/sim', 'use-complete', udid], { stdio: 'inherit' });
 const metroFile = join(buildDir, 'metro.json');
 const processIdentity = pid => run('ps', ['-p', String(pid), '-o', 'lstart=,command=']);
 export function runSelectedRecordedFlow(mode, options) {
@@ -342,7 +344,7 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
   mkdirSync(resumeDir, { recursive: true });
   const admission = admitDisk(root, 'Native build');
   event(join(resumeDir, 'runner-events.jsonl'), { type: 'build-admission', ...admission, simulator: udid, reasons, nativeIdentity: native.hash });
-  claim();
+  claimDevice(udid);
   try {
     mkdirSync(buildDir, { recursive: true });
     const outputApp = join(buildDir, `Build/Products/${profile.configuration}-iphonesimulator/Fitsy.app`);
@@ -372,9 +374,10 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
       recipeIdentity: buildRecipe, buildRecipeHash: buildRecipe.hash,
       simulatorApplicationIdentifier: entitlements['application-identifier'],
       buildReasons: reasons, builtAt: new Date().toISOString() }));
+    recordDeviceUse(udid);
     console.log('Built identified simulator app. Next: run <UDID> [flow names].');
     return false;
-  } finally { release(); }
+  } finally { releaseDevice(); }
 }
 async function execute(udid, names, mode) {
   const runFlow = options => runSelectedRecordedFlow(mode, options);
@@ -463,7 +466,7 @@ async function execute(udid, names, mode) {
     history.at(-1).diagnosis = { file: supplied, at: new Date().toISOString() };
     save(failuresFile, history);
   }
-  claim();
+  claimDevice(udid);
   try {
     // Retain complete raw proof from a previous run before invalidating its report.
     if (existsSync(out)) {
@@ -499,6 +502,7 @@ async function execute(udid, names, mode) {
       save(join(out, 'report.json'), report);
     }
     run('xcrun', ['simctl', 'install', udid, app]);
+    recordDeviceUse(udid);
     installedApp(udid, r.appHash);
     for (const flow of flowSources) {
       assert(hash === inputHash() && r.appHash === treeHash(app) && report.configHash === environment().configHash,
@@ -597,7 +601,7 @@ async function execute(udid, names, mode) {
     const evidenceErrors = recordRunFailure(join(out, 'report.json'), join(out, 'runner-timeline.jsonl'), error);
     if (evidenceErrors.length) console.error(`Failure receipt write errors: ${evidenceErrors.join('; ')}`);
     throw error;
-  } finally { release(); }
+  } finally { releaseDevice(); }
 }
 async function finish(walkthrough) {
   const report = read(join(out, 'report.json'));
