@@ -36,6 +36,11 @@ def owned_checkout(config, claim):
 def released(config, claim, paths):
     if not claim.get('finished_at') or not claim.get('terminal'):
         raise RuntimeError('claim has not released execution')
+    receipt_path = Path(config['state_dir']) / 'claims' / claim['id'] / 'receipt.json'
+    receipt = json.loads(receipt_path.read_text())
+    fields = ('id', 'issue', 'terminal', 'finished_at', 'worktree', 'branch', 'pid', 'launcher_pid', 'worker_pgid')
+    if any(receipt.get(key) != claim.get(key) for key in fields):
+        raise RuntimeError('terminal receipt changed')
     for key in ('pid', 'launcher_pid'):
         if claim.get(key) and execute(['ps', '-p', str(claim[key]), '-o', 'command=']).returncode == 0:
             raise RuntimeError('claim process remains live or PID was reused')
@@ -98,19 +103,22 @@ def resume_checkout(config, state, issue):
             'resumed_from_claim': previous['id'], 'resume_source': before}
 
 
+def owned_scratch(path, entry):
+    if not entry.is_absolute() or not entry.is_relative_to(path) or entry.is_symlink():
+        return False
+    if not ((entry.is_relative_to(path / '.evidence') and entry.name in SCRATCH) or
+            entry == path / 'apps/api/.next/cache'):
+        return False
+    if any(parent.suffix == '.app' or parent.name == 'Products' for parent in entry.parents):
+        return False
+    return not any(parent.is_symlink() for parent in entry.parents
+                   if parent != path and parent.is_relative_to(path))
+
+
 def safe_scratch(path):
     candidates = [entry for name in SCRATCH for entry in (path / '.evidence').glob(f'**/{name}')]
     candidates += [path / 'apps/api/.next/cache']
-    result = []
-    for entry in candidates:
-        if not entry.is_dir() or entry.is_symlink() or not entry.resolve().is_relative_to(path):
-            continue
-        if any(parent.suffix == '.app' or parent.name == 'Products' for parent in entry.parents):
-            continue
-        if any(parent.is_symlink() for parent in entry.parents if parent != path and parent.is_relative_to(path)):
-            continue
-        result.append(entry)
-    return sorted(set(result))
+    return sorted(set(entry for entry in candidates if entry.is_dir() and owned_scratch(path, entry)))
 
 
 def cleanup_released(config, state, save):
@@ -120,15 +128,27 @@ def cleanup_released(config, state, save):
     assessed = state.setdefault('resource_releases', {})
     previous = next((entry for entry in reversed(state.get('history', []))
                      if entry.get('finished_at') and entry.get('terminal') and entry.get('worktree')
-                     and entry.get('id') not in assessed), None)
+                     and (entry.get('id') not in assessed or assessed[entry['id']].get('removal_intent'))), None)
     if not previous:
         return
-    result = {'issue': previous['issue'], 'claim': previous['id'], 'removed': []}
+    result = dict(assessed.get(previous['id']) or
+                  {'issue': previous['issue'], 'claim': previous['id'], 'removed': []})
     try:
         path = owned_checkout(config, previous)
+        intent = Path(result['removal_intent']) if result.get('removal_intent') else None
+        if intent:
+            if not owned_scratch(path, intent):
+                raise RuntimeError('persisted scratch intent is not owned')
+            released(config, previous, [intent] if intent.exists() else [path])
+            if not intent.exists():
+                # Absence reconciles uncertainty, not a newly measured deletion or reclaimed-byte claim.
+                result.setdefault('reconciled_absent', []).append(str(intent))
+                result.pop('removal_intent')
+                assessed[previous['id']] = result
+                save()
         candidates = safe_scratch(path)
         released(config, previous, candidates)
-        result['free_before'] = shutil.disk_usage(path).free
+        result.setdefault('free_before', shutil.disk_usage(path).free)
         for candidate in candidates:
             owned_checkout(config, previous)
             released(config, previous, [candidate])
@@ -144,7 +164,8 @@ def cleanup_released(config, state, save):
         result['free_after'] = shutil.disk_usage(path).free
         result['state'] = 'released'
     except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as error:
-        result.update({'state': 'deferred', 'reason': str(error)[:240]})
+        result.update({'state': 'deferred', 'reason': str(error)[:240],
+                       'next_action': 'Recheck exact ended owner, terminal receipt and open-file ownership before retry'})
     assessed[previous['id']] = result
     save()
 

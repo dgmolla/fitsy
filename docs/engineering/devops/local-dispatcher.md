@@ -42,7 +42,9 @@ A simulator with no InternalDaemon attachment directory has an empty raw invento
 Before admitting another owner, the idle dispatcher assesses one ended claim's compiler scratch under dispatcher.lock.
 It removes only owned inactive compiler intermediates and module/compiler/SDK/API caches; retained app products, source, raw reviews/logs, screenshots, receipts and budget history remain.
 Exact removal intent and completion paths, original issue/claim and host free bytes persist in resource_releases without rewriting original failure receipts.
-An ownership failure records a deferred assessment rather than repeatedly searching the same exhausted candidate.
+An ownership failure records a deferred assessment and a concrete next action rather than repeatedly searching the same exhausted candidate.
+A persisted deletion intent is reconciled on the next idle tick with fresh terminal-receipt and path/process/open-file checks; an already absent output is recorded as uncertain reconciliation, not a newly measured deletion.
+Retention assessments persist even when disk admission returns a hold.
 
 Admission preserves min_free_bytes plus scratch_reserve_bytes.
 The default floor remains 8 GiB and the initial configurable reserve is 4 GiB.

@@ -219,6 +219,80 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.state_data()['resource_releases'][old['id']]['state'], 'deferred')
         self.assertIn('ownership', self.state_data()['resource_releases'][old['id']]['reason'])
 
+    def ended_checkout(self):
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        old = self.state_data()['active'].copy()
+        self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        self.tick()
+        state = self.state_data()
+        return state, state['history'][-1], Path(old['worktree'])
+
+    def test_interrupted_delete_intent_is_reconciled_before_next_release(self):
+        state, old, checkout = self.ended_checkout()
+        scratch = checkout / '.evidence/ModuleCache.noindex'
+        scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
+        state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
+            'removed': [], 'removal_intent': str(scratch.resolve())}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertFalse(scratch.exists())
+        self.assertNotIn('removal_intent', result)
+        self.assertEqual(result['state'], 'released')
+        self.assertIn(str(scratch.resolve()), result['removed'])
+
+    def test_absent_interrupted_delete_gets_uncertain_reconciliation_receipt(self):
+        state, old, checkout = self.ended_checkout()
+        scratch = checkout / '.evidence/ModuleCache.noindex'
+        state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
+            'removed': [], 'removal_intent': str(scratch.resolve())}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertNotIn('removal_intent', result)
+        self.assertEqual(result['removed'], [])
+        self.assertIn(str(scratch.resolve()), result['reconciled_absent'])
+
+    def test_interrupted_intent_cannot_delete_external_symlink_target(self):
+        state, old, checkout = self.ended_checkout()
+        outside = self.base / 'outside-module-cache'; outside.mkdir()
+        (outside / 'keep').write_text('not task owned')
+        scratch = checkout / '.evidence/ModuleCache.noindex'
+        scratch.symlink_to(outside, target_is_directory=True)
+        state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
+            'removed': [], 'removal_intent': str(scratch.absolute())}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertEqual((outside / 'keep').read_text(), 'not task owned')
+        self.assertEqual(result['state'], 'deferred')
+        self.assertIn('not owned', result['reason'])
+
+    def test_disk_hold_persists_expired_retention_assessment(self):
+        state, old, checkout = self.ended_checkout()
+        state['history'][-1]['finished_at'] = '2026-09-01T00:00:00Z'
+        state['resource_retention'] = {}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        config = json.loads(self.config.read_text()); config['scratch_reserve_bytes'] = 10**18
+        self.config.write_text(json.dumps(config))
+        self.assertEqual(self.tick()['state'], 'resource-hold')
+        self.assertEqual(self.state_data()['resource_retention'][str(checkout)]['state'], 'assessment-due')
+
+    def test_changed_terminal_receipt_refuses_release(self):
+        state, old, checkout = self.ended_checkout()
+        scratch = checkout / '.evidence/ModuleCache.noindex'
+        scratch.mkdir(parents=True); (scratch / 'keep').write_text('retained')
+        state['resource_releases'].pop(old['id'])
+        (self.state / 'state.json').write_text(json.dumps(state))
+        receipt = self.state / 'claims' / old['id'] / 'receipt.json'
+        value = json.loads(receipt.read_text()); value['terminal'] = 'changed'
+        receipt.write_text(json.dumps(value))
+        self.tick()
+        self.assertTrue(scratch.exists())
+        self.assertIn('terminal receipt', self.state_data()['resource_releases'][old['id']]['reason'])
+
     def test_authorized_resume_reuses_ended_issue_checkout(self):
         self.env['FAKE_WORKER_MODE'] = 'fail'
         self.tick()

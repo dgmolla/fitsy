@@ -730,6 +730,7 @@ def tick(config, state, state_path, script):
     if not config.get('enabled'):
         return {'state': 'disabled'}
     assess_retention(config, state, time.time())
+    write_json(state_path, state)
     cleanup_released(config, state, lambda: write_json(state_path, state))
     retire_verified_simulator(config, state, state_path)
     floor = config.get('min_free_bytes', 8 * 1024**3)
