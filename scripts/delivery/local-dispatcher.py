@@ -20,6 +20,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from resource_lifecycle import cleanup_released, resume_checkout, assess_retention, retention
+from cold_retention import recover as recover_pressure
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'sim'))
 from retire_task_device import retire as retire_task_device
@@ -738,6 +739,16 @@ def tick(config, state, state_path, script):
     assess_retention(config, state, time.time())
     write_json(state_path, state)
     cleanup_released(config, state, lambda: write_json(state_path, state))
+    def completed_recovery_verified(claim):
+        identity = (state.get('verified') or {}).get(str(claim['issue']))
+        if not identity or identity.get('id') != claim['id']:
+            return False
+        try:
+            current = next((item for item in board(config) if item.get('content', {}).get('number') == claim['issue']), None)
+            return bool(current and terminal_verified(config, current, identity, archived=True))
+        except Exception:
+            return False  # Unavailable live acceptance is uncertainty, never retirement permission.
+    recover_pressure(config, state, lambda: write_json(state_path, state), time.time(), completed_recovery_verified)
     retire_verified_simulator(config, state, state_path)
     floor = config.get('min_free_bytes', 8 * 1024**3)
     reserve = config.get('scratch_reserve_bytes', 4 * 1024**3)

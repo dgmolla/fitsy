@@ -1,0 +1,325 @@
+"""Private verified cold recovery for superseded, ended dispatcher checkouts."""
+import gzip
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tarfile
+import time
+
+from resource_lifecycle import elapsed, execute, owned_checkout, released, source_identity
+
+
+def sha(path):
+    h = hashlib.sha256()
+    with path.open('rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
+def incoming(config, target):
+    references = []
+    for directory, dirs, files in os.walk(config['worktree_root'], followlinks=False):
+        for name in dirs + files:
+            path = Path(directory) / name
+            if path.is_symlink() and not path.is_relative_to(target) and path.resolve().is_relative_to(target):
+                references.append(str(path))
+        dirs[:] = [name for name in dirs if name not in ('node_modules', 'Pods', '.git')
+                   and not (Path(directory) / name).is_symlink()]
+    return references
+
+
+def guard(config, state, claim):
+    path = owned_checkout(config, claim)
+    registered = execute([config['git_bin'], '-C', config['repo_root'], 'worktree', 'list', '--porcelain'])
+    block = next((entry for entry in registered.stdout.split('\n\n') if entry.startswith('worktree ' + str(path) + '\n')), '')
+    if registered.returncode or not block or any(line.startswith('locked') for line in block.splitlines()):
+        raise RuntimeError('Git ownership lock or uncertain registration; retain checkout')
+    if (state.get('active') or {}).get('worktree') == str(path):
+        raise RuntimeError('active execution owner')
+    if path == Path(config['repo_root']).resolve():
+        raise RuntimeError('configured runtime source checkout')
+    if str(path) in config.get('resource_pinned_checkouts', []):
+        raise RuntimeError('explicit retained source/app pin')
+    if incoming(config, path):
+        raise RuntimeError('incoming dependency or artifact reference')
+    released(config, claim, [path])
+    processes = execute(['ps', '-axo', 'pid=,command='])
+    if processes.returncode:
+        raise RuntimeError('process ownership unavailable')
+    for line in processes.stdout.splitlines():
+        fields = line.strip().split(maxsplit=1)
+        if len(fields) == 2 and str(path) in fields[1] and int(fields[0]) != os.getpid():
+            raise RuntimeError('checkout referenced by running command')
+    return path
+
+
+def shared_bundle(config, path, head, directory):
+    """One immutable source pack serves every covered recovery, avoiding full-history copies."""
+    store = Path(config['state_dir']) / 'recovery/source-bundles'
+    store.mkdir(parents=True, exist_ok=True); store.chmod(0o700)
+    shared = None
+    for candidate in store.glob('*.bundle'):
+        if sha(candidate) != candidate.stem:
+            raise RuntimeError('shared source recovery pack identity changed')
+        heads = execute([config['git_bin'], 'bundle', 'list-heads', str(candidate)])
+        if heads.returncode == 0 and head in [line.split()[0] for line in heads.stdout.splitlines()]:
+            shared = candidate; break
+    if shared is None:
+        temporary = store / 'source-pack.tmp'
+        result = execute([config['git_bin'], '-C', str(path), 'bundle', 'create', str(temporary), '--all'], timeout=180)
+        if result.returncode:
+            raise RuntimeError('source bundle creation failed')
+        temporary.chmod(0o600)
+        shared = store / (sha(temporary) + '.bundle'); os.replace(temporary, shared)
+    bundle = directory / 'source.bundle'
+    os.link(shared, bundle)
+    return bundle
+
+
+def object_identity(file):
+    h = hashlib.sha256()
+    with gzip.open(file, 'rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
+def app_object(config, file, digest):
+    """A retained large app file has one immutable compressed recovery object."""
+    store = Path(config['state_dir']) / 'recovery/file-objects'
+    store.mkdir(parents=True, exist_ok=True); store.chmod(0o700)
+    target = store / (digest + '.gz')
+    if target.is_symlink():
+        raise RuntimeError('recovery app object is a redirected link')
+    if not target.exists():
+        temporary = store / ('object-' + str(time.time_ns()) + '.tmp')
+        with temporary.open('xb') as raw:
+            temporary.chmod(0o600)
+            with gzip.GzipFile(fileobj=raw, mode='wb', mtime=0) as compressed, file.open('rb') as source:
+                shutil.copyfileobj(source, compressed, 1024 * 1024)
+        if object_identity(temporary) != digest:
+            raise RuntimeError('app recovery bytes changed during preservation')
+        os.replace(temporary, target)
+    if object_identity(target) != digest:
+        raise RuntimeError('retained app recovery object changed')
+    return {'object': str(target), 'object_sha256': sha(target), 'object_bytes': target.stat().st_size}
+
+
+def verify_objects(manifest):
+    for row in manifest['files']:
+        if 'object' in row:
+            file = Path(row['object'])
+            if file.is_symlink() or sha(file) != row['object_sha256'] or object_identity(file) != row['sha256']:
+                raise RuntimeError('retained app recovery object identity changed')
+
+
+def preserve(config, path, claim, directory):
+    """Verify every source/env/app/raw-evidence member and a recoverable branch bundle."""
+    directory.mkdir(parents=True, exist_ok=True)
+    directory.chmod(0o700)
+    head = source_identity(config, path)['head']
+    bundle = shared_bundle(config, path, head, directory)
+    recovered = directory / 'recovery-test.git'
+    result = execute([config['git_bin'], 'clone', '--bare', str(bundle), str(recovered)], timeout=180)
+    if result.returncode:
+        raise RuntimeError('source recovery clone failed')
+    head = source_identity(config, path)['head']
+    result = execute([config['git_bin'], '--git-dir', str(recovered), 'cat-file', '-e', head + '^{commit}'])
+    if result.returncode:
+        raise RuntimeError('source commit missing from recovery')
+    shutil.rmtree(recovered)
+    archive = directory / 'files.tar.gz'
+    files, excluded = [], []
+    with tarfile.open(archive, 'w:gz', compresslevel=6, dereference=False) as target:
+        for current, dirs, names in os.walk(path, followlinks=False):
+            dirs.sort(); names.sort()
+            for name in list(dirs):
+                file = Path(current) / name
+                rebuildable = (name == 'node_modules' or file == path / 'apps/mobile/ios/Pods')
+                if rebuildable and not file.is_symlink():
+                    # Only rebuildable dependency directories, never source, apps or raw proof.
+                    if any(file.rglob('*.app')):
+                        raise RuntimeError('dependency directory contains a retained app')
+                    excluded.append(str(file)); dirs.remove(name)
+                elif file.is_symlink():
+                    target.add(file, arcname=str(file.relative_to(path)), recursive=False)
+                    files.append({'path': str(file.relative_to(path)), 'link': os.readlink(file)})
+                    dirs.remove(name)
+            relative = Path(current).relative_to(path)
+            if str(relative) != '.':
+                target.add(current, arcname=str(relative), recursive=False)
+            for name in names:
+                file = Path(current) / name
+                if file.is_symlink():
+                    record = {'path': str(file.relative_to(path)), 'link': os.readlink(file)}
+                elif file.is_file():
+                    record = {'path': str(file.relative_to(path)), 'sha256': sha(file),
+                              'bytes': file.stat().st_size, 'mode': file.stat().st_mode & 0o777}
+                else:
+                    raise RuntimeError('unsupported filesystem object; retain checkout')
+                if 'sha256' in record and record['bytes'] >= 8 * 1024**2 and '.app/' in record['path']:
+                    record.update(app_object(config, file, record['sha256']))
+                else:
+                    target.add(file, arcname=record['path'], recursive=False)
+                files.append(record)
+    archive.chmod(0o600)
+    verify_objects({'files': files})
+    expected, seen = {row['path']: row for row in files if 'object' not in row}, set()
+    with tarfile.open(archive, 'r:gz') as source:
+        for member in source:
+            if member.isdir():
+                continue
+            record = expected.get(member.name)
+            if record is None:
+                raise RuntimeError('unexpected recovery member')
+            if 'link' in record:
+                if not member.issym() or member.linkname != record['link']:
+                    raise RuntimeError('recovery link mismatch')
+            else:
+                h = hashlib.sha256()
+                with source.extractfile(member) as stream:
+                    for block in iter(lambda: stream.read(1024 * 1024), b''):
+                        h.update(block)
+                if h.hexdigest() != record['sha256'] or member.size != record['bytes'] or member.mode != record['mode']:
+                    raise RuntimeError('recovery bytes mismatch')
+            seen.add(member.name)
+    if seen != set(expected):
+        raise RuntimeError('recovery omitted source or evidence')
+    manifest = directory / 'manifest.json'
+    manifest.write_text(json.dumps({'files': files, 'excluded_rebuildable_dependencies': excluded}, indent=2) + '\n')
+    manifest.chmod(0o600)
+    return {'path': str(archive), 'sha256': sha(archive), 'bytes': archive.stat().st_size,
+            'manifest': str(manifest), 'manifest_sha256': sha(manifest), 'verified_members': len(files),
+            'bundle': str(bundle), 'bundle_sha256': sha(bundle), 'source_head': head}
+
+
+def retire(config, state, claim, save):
+    records = state.setdefault('cold_retention', {})
+    previous = records.get(claim['id'])
+    record = {'issue': claim['issue'], 'claim': claim['id'], 'worktree': claim['worktree'],
+              'state': 'preservation-intent', 'free_before': shutil.disk_usage(config['worktree_root']).free}
+    if previous:
+        record['previous_attempt'] = previous
+    records[claim['id']] = record; save()
+    try:
+        path = guard(config, state, claim)
+        identity = source_identity(config, path)
+        directory = Path(config['state_dir']) / 'recovery' / claim['id'] / str(time.time_ns())
+        record['archive'] = preserve(config, path, claim, directory)
+        record['source_identity'] = identity
+        record['state'] = 'recovery-verified'; save()
+        guard(config, state, claim)
+        if source_identity(config, path) != identity:
+            raise RuntimeError('source changed before retirement')
+        # Bind ignored environments/apps/evidence again immediately before retirement.
+        manifest = json.loads(Path(record['archive']['manifest']).read_text())
+        verify_objects(manifest)
+        for row in manifest['files']:
+            file = path / row['path']
+            if 'link' in row:
+                if not file.is_symlink() or os.readlink(file) != row['link']:
+                    raise RuntimeError('ignored link changed before retirement')
+            elif (not file.is_file() or sha(file) != row['sha256'] or
+                  file.stat().st_mode & 0o777 != row['mode']):
+                raise RuntimeError('ignored file changed before retirement')
+        seen = set()
+        excluded = set(manifest['excluded_rebuildable_dependencies'])
+        for current, dirs, names in os.walk(path, followlinks=False):
+            for name in list(dirs):
+                file = Path(current) / name
+                if str(file) in excluded:
+                    dirs.remove(name)
+                elif file.is_symlink():
+                    seen.add(str(file.relative_to(path))); dirs.remove(name)
+            seen.update(str((Path(current) / name).relative_to(path)) for name in names)
+        if seen != {row['path'] for row in manifest['files']}:
+            raise RuntimeError('new source/evidence appeared after recovery snapshot')
+        record['state'] = 'removal-intent'; save()
+        command = [config['git_bin'], '-C', config['repo_root'], 'worktree', 'remove']
+        # Dirty work is explicitly cold-retained, byte-verified and recoverable, never discarded unarchived.
+        if execute([config['git_bin'], '-C', str(path), 'status', '--porcelain']).stdout:
+            command.append('--force')
+        result = execute([*command, str(path)], timeout=120)
+        if result.returncode or path.exists():
+            raise RuntimeError('Git retirement failed; reconcile persisted recovery intent')
+        record.update(state='cold-retired', free_after=shutil.disk_usage(config['worktree_root']).free,
+                      finished_at=time.time(), restore='Clone source.bundle at source_head, restore files.tar.gz excluding historical .git pointer, decompress manifest file objects to their exact relative paths, restore recorded modes and verify decoded hashes, rebuild dependencies from retained locks only under a new authorized owner. Preserve private environment secrecy.')
+    except (OSError, EOFError, RuntimeError, ValueError, subprocess.SubprocessError, tarfile.TarError) as error:
+        record.update(state='deferred', reason=str(error)[:240], retry_after=time.time() + 1800,
+                      next_action='Resolve exact owner/reference/source/recovery uncertainty before retry; source and original receipts remain retained')
+    save()
+    return record
+
+
+def recover(config, state, save, now, completed_verified=None):
+    """One owner-bound candidate per existing idle tick, before admission can hold."""
+    if state.get('active'):
+        return
+    high = config.get('cleanup_high_watermark_bytes', 20 * 1024**3)
+    minimum = config.get('min_free_bytes', 8 * 1024**3) + config.get('scratch_reserve_bytes', 4 * 1024**3)
+    if not isinstance(high, int) or isinstance(high, bool) or high < 0:
+        raise RuntimeError('cleanup high watermark must be nonnegative bytes')
+    high = max(high, minimum)
+    pressure = shutil.disk_usage(config['worktree_root']).free < high
+    grace = config.get('superseded_checkout_grace_seconds', 3600 if pressure else 86400)
+    if not isinstance(grace, int) or isinstance(grace, bool) or grace < 0:
+        raise RuntimeError('superseded checkout grace must be nonnegative seconds')
+    claims, uncertain_paths = {}, set()
+    for receipt in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
+        c = json.loads(receipt.read_text())
+        if not c.get('worktree'):
+            continue  # Legacy shipping receipts without a resource path cannot authorize cleanup.
+        if (not c.get('finished_at') or not c.get('terminal') or
+                receipt.parent.name != c.get('id') or not isinstance(c.get('issue'), int)):
+            uncertain_paths.add(c['worktree'])
+            state.setdefault('cold_retention_legacy', {}).setdefault(str(receipt), {
+                'state': 'deferred', 'worktree': c['worktree'],
+                'reason': 'durable resource claim identity incomplete or mismatched',
+                'next_action': 'Backfill exact terminal owner identity; preserve original receipt and resources'})
+            continue
+        if c.get('worktree') and c.get('finished_at') and c.get('terminal'):
+            previous = claims.get(c['worktree'])
+            if previous is None or c['finished_at'] > previous['finished_at']:
+                claims[c['worktree']] = c
+    newest = {}
+    for c in claims.values():
+        if c['finished_at'] > newest.get(c['issue'], {}).get('finished_at', ''):
+            newest[c['issue']] = c
+    records = state.setdefault('cold_retention', {})
+    for c in sorted(claims.values(), key=lambda row: row['finished_at']):
+        if c['worktree'] in uncertain_paths:
+            continue
+        prior = records.get(c['id'], {})
+        age = elapsed(c['finished_at'], now)
+        latest_unfinished = c == newest[c['issue']] and c.get('terminal') != 'verified'
+        minimum_age = config.get('resource_ttl_seconds', {}).get('integrated_checkout', 86400) if c.get('terminal') == 'verified' else grace
+        if not isinstance(minimum_age, int) or isinstance(minimum_age, bool) or minimum_age < 0:
+            raise RuntimeError('checkout TTL must be nonnegative seconds')
+        if latest_unfinished or age is None or age < minimum_age or prior.get('state') == 'cold-retired' or prior.get('retry_after', 0) > now:
+            continue
+        if prior.get('state') == 'removal-intent' and not Path(c['worktree']).exists():
+            archive = prior.get('archive', {})
+            if any(not Path(archive.get(key, '')).is_file() or sha(Path(archive[key])) != archive.get(digest)
+                   for key, digest in (('path', 'sha256'), ('manifest', 'manifest_sha256'), ('bundle', 'bundle_sha256'))):
+                prior.update(state='deferred', reason='missing or changed cold recovery after uncertain removal',
+                             next_action='Reconcile recovery identity and absent source; no successful retirement claim')
+                save(); return
+            prior.update(state='cold-retired', reconciliation='verified recovery retained; absent checkout reconciled without new deletion or byte-gain claim')
+            save(); return
+        if c == newest[c['issue']]:
+            # Local terminal labels alone cannot prove current shipping acceptance.
+            if completed_verified is None or not completed_verified(c):
+                continue
+            product = Path(c['worktree']) / '.evidence/product-build/receipt.json'
+            if product.is_file():
+                device = json.loads(product.read_text()).get('simulator')
+                if device and (state.get('simulator_retirement', {}).get(device) or {}).get('status') != 'retired':
+                    # The existing device retirement operator still requires these hot proof paths.
+                    continue
+        if Path(c['worktree']).is_dir():
+            retire(config, state, c, save)
+            return

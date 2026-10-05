@@ -79,7 +79,7 @@ if mode == 'install':
     if not root.is_dir():
         raise SystemExit('worktree root must exist')
     # Installing paused recovery code does not admit a worker or native build.
-    runtime_sources = [repo / 'scripts/delivery/resource_lifecycle.py', repo / 'scripts/delivery/local-dispatcher.py',
+    runtime_sources = [repo / 'scripts/delivery/cold_retention.py', repo / 'scripts/delivery/resource_lifecycle.py', repo / 'scripts/delivery/local-dispatcher.py',
                        repo / 'scripts/sim/retire_task_device.py', repo / 'scripts/sim/sim_resource_uses.py']
     required_update_bytes = sum(path.stat().st_size for path in runtime_sources) + 1024**2
     if shutil.disk_usage(state).free < required_update_bytes:
@@ -122,6 +122,7 @@ if mode == 'install':
                           'profiles': profiles, 'review': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high'},
                           'min_free_bytes': 8 * 1024**3, 'worker_timeout_seconds': 90 * 60}
     config.setdefault('scratch_reserve_bytes', 4 * 1024**3)
+    config.setdefault('cleanup_high_watermark_bytes', 20 * 1024**3)
     lsof = shutil.which('lsof') or ('/usr/sbin/lsof' if os.access('/usr/sbin/lsof', os.X_OK) else None)
     if not lsof:
         raise SystemExit('open-file ownership tool unavailable for installed recovery')
@@ -129,7 +130,7 @@ if mode == 'install':
     config.update({'enabled': False, 'source_sha': head, 'jev_enabled': jev_enabled,
                    'jev_key_file': str(key_file) if jev_enabled else None,
                    'repo_root': str(repo), 'worktree_root': str(root), 'slack': slack})
-    targets = [state / 'runtime/resource_lifecycle.py', state / 'runtime/local-dispatcher.py',
+    targets = [state / 'runtime/cold_retention.py', state / 'runtime/resource_lifecycle.py', state / 'runtime/local-dispatcher.py',
                state / 'sim/retire_task_device.py', state / 'sim/sim_resource_uses.py']
     # Pause the old identity before touching any runtime, then publish the new
     # identity only after every installed byte has been verified under the lock.
@@ -160,7 +161,7 @@ if mode in ('enable', 'pause'):
         current = output('gh', 'api', 'repos/dgmolla/fitsy/commits/main', '--jq', '.sha')
         if config['source_sha'] != current:
             raise SystemExit('installed dispatcher runtime does not match current main')
-        expected_paths = {'runtime/resource_lifecycle.py', 'runtime/local-dispatcher.py', 'sim/retire_task_device.py', 'sim/sim_resource_uses.py'}
+        expected_paths = {'runtime/cold_retention.py', 'runtime/resource_lifecycle.py', 'runtime/local-dispatcher.py', 'sim/retire_task_device.py', 'sim/sim_resource_uses.py'}
         digests = config.get('runtime_sha256', {})
         if set(digests) != expected_paths or any(
                 not (state / path).is_file() or (state / path).is_symlink() or

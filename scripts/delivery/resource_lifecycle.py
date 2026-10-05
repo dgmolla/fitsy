@@ -8,7 +8,7 @@ import shutil
 import subprocess
 
 
-SCRATCH = ('Intermediates.noindex', 'ModuleCache.noindex', 'CompilationCache.noindex', 'SDKStatCaches.noindex')
+SCRATCH = ('Intermediates.noindex', 'ModuleCache.noindex', 'CompilationCache.noindex', 'SDKStatCaches.noindex', 'Index.noindex')
 
 
 def execute(args, timeout=30):
@@ -106,6 +106,18 @@ def resume_checkout(config, state, issue):
                 f'worktree {expected}\n' not in registered.stdout and branch.returncode == 1:
             released(config, previous, [])
             return None  # The durable creation intent never produced any source checkout.
+    cold = state.get('cold_retention', {}).get(previous['id'], {})
+    if previous.get('terminal') == 'verified' and cold.get('state') == 'cold-retired' and not intended.exists():
+        archive = cold.get('archive', {})
+        from cold_retention import sha
+        if cold.get('worktree') != str(intended) or cold.get('claim') != previous['id'] or any(
+                not Path(archive.get(key, '')).is_file() or sha(Path(archive[key])) != archive.get(digest)
+                for key, digest in (('path', 'sha256'), ('manifest', 'manifest_sha256'), ('bundle', 'bundle_sha256'))):
+            raise RuntimeError('completed-source cold recovery is unavailable or changed')
+        from cold_retention import verify_objects
+        verify_objects(json.loads(Path(archive['manifest']).read_text()))
+        # A completed, verified issue reopened later starts on current main; its old source/evidence stays recoverable.
+        return None
     path = owned_checkout(config, previous)
     receipt_path = Path(config['state_dir']) / 'claims' / previous['id'] / 'receipt.json'
     receipt = json.loads(receipt_path.read_text())

@@ -16,6 +16,7 @@ import unittest
 INSTALLER = Path(__file__).with_name('install-local-dispatcher.sh')
 RUNTIME = Path(__file__).with_name('local-dispatcher.py')
 RESOURCE = Path(__file__).with_name('resource_lifecycle.py')
+COLD = Path(__file__).with_name('cold_retention.py')
 RETIREMENT = Path(__file__).parents[1] / 'sim/retire_task_device.py'
 USES = Path(__file__).parents[1] / 'sim/sim_resource_uses.py'
 
@@ -31,6 +32,7 @@ class InstallTest(unittest.TestCase):
             shutil.copy2(INSTALLER, repo / 'scripts/delivery/install-local-dispatcher.sh')
             shutil.copy2(RUNTIME, repo / 'scripts/delivery/local-dispatcher.py')
             shutil.copy2(RESOURCE, repo / 'scripts/delivery/resource_lifecycle.py')
+            shutil.copy2(COLD, repo / 'scripts/delivery/cold_retention.py')
             shutil.copy2(RETIREMENT, repo / 'scripts/sim/retire_task_device.py')
             shutil.copy2(USES, repo / 'scripts/sim/sim_resource_uses.py')
             (home / 'firstmate/config/slack-notifications.json').write_text(json.dumps({

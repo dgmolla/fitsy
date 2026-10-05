@@ -108,3 +108,28 @@ The coordinator preserves its raw bytes, checks live task ownership and command 
 
 Tick admission rereads and validates the installed configuration inside dispatcher.lock, so a completed installer pause wins over an earlier enabled snapshot.
 Device completion consumes one outstanding owner-bound intent; retries without another actual action cannot renew its use clock.
+
+## Pressure recovery and cold checkout retirement
+
+The cleanup high watermark defaults to 20 GiB and never falls below the worker floor plus scratch reserve.
+The unchanged 8 GiB floor plus 4 GiB reserve controls worker admission; the 20 GiB target begins recovery early rather than admitting marginal workers.
+At the existing idle tick, the dispatcher assesses one superseded ended checkout before returning any resource hold.
+Below the high watermark, a superseded checkout has a one-hour release grace by default; without pressure the default is 24 hours.
+Configure cleanup_high_watermark_bytes and superseded_checkout_grace_seconds explicitly when needed; polling never renews owner-use or release clocks.
+The latest unfinished checkout for each issue and resource_pinned_checkouts remain protected, along with active owners, incoming donor/artifact references and uncertain process/open-file ownership.
+Before normal Git removal, private Gitbundle recovery and every source/environment/app/raw-evidence archive member must pass exact content verification.
+Dirty or untracked source is retained in that verified archive; no original branch, terminal receipt, failure, review budget or UI approval is deleted or reset.
+One immutable content-addressed source bundle serves covered recoveries instead of copying repository history into every archive.
+Identical app files of at least 8 MiB use one private compressed recovery object with compressed and decoded hashes recorded in each manifest.
+Restore those objects to their exact manifest paths and recorded file modes, then verify decoded hashes; a damaged object retains the next hot source and cannot satisfy completed-source recovery.
+Original app binaries, screenshots and raw proof remain retrievable; only rebuildable Node/Pods are excluded from file archives.
+Immediate ended-owner compiler cleanup now includes exact Index.noindex roots alongside compiler intermediates/module caches and API build cache.
+Unknown ownership or unresolved file use persists a concrete deferred action; a retry never manufactures a removal or reclaimed-byte receipt.
+Measured free bytes and archive overhead are recorded separately from APFS logical sizes.
+This uses the existing dispatcher lock and timer; no additional worker, queue or reporting loop is created.
+
+A latest verified completed checkout becomes eligible after its integrated-checkout TTL, default 24 hours, only when the current board and canonical terminal shipping proof still agree.
+A local terminal label alone is insufficient.
+Its simulator proof paths stay hot until the existing device retirement procedure completes; a disconnected or expired device alone cannot waive those gates.
+If that completed issue is later explicitly reopened, the dispatcher validates its retained archive hashes and starts new work from current main; unfinished latest work continues to reuse its original checkout.
+This never resets original issue budgets, histories, failures or source-bound approval receipts.
