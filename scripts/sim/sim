@@ -76,7 +76,11 @@ validate_device_arguments() {
     screenshot) : "${1:?screenshot name}" ;;
     logs)
       while [ $# -gt 0 ]; do
-        case "$1" in --grep|--seconds) : "${2:?option value}"; shift 2 ;; *) shift ;; esac
+        case "$1" in
+          --grep) : "${2:?option value}"; grep -E -- "$2" /dev/null >/dev/null || [ "$?" -eq 1 ]; shift 2 ;;
+          --seconds) : "${2:?option value}"; shift 2 ;;
+          *) shift ;;
+        esac
       done ;;
   esac
 }
@@ -185,7 +189,7 @@ PYTHON
     GREP=""; SECS=30
     while [ $# -gt 0 ]; do case "$1" in --grep) GREP="$2"; shift 2;; --seconds) SECS="$2"; shift 2;; *) shift;; esac; done
     if [ -n "$GREP" ]; then
-      xcrun simctl spawn booted log show --last "${SECS}s" --style compact 2>/dev/null | grep -E "$GREP" | tail -100
+      xcrun simctl spawn booted log show --last "${SECS}s" --style compact 2>/dev/null | { grep -E -- "$GREP" || [ "$?" -eq 1 ]; } | tail -100
     else
       xcrun simctl spawn booted log show --last "${SECS}s" --style compact 2>/dev/null | tail -100
     fi

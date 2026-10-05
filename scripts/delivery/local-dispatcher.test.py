@@ -1237,7 +1237,7 @@ class SimulatorUseProcessTest(unittest.TestCase):
         self.run_sim('claim'); self.run_sim('install', 'fixture.app')
         before = self.record()
         for args in [('install',), ('launch',), ('launch', '--url'), ('screenshot',),
-                     ('logs', '--grep'), ('logs', '--seconds')]:
+                     ('logs', '--grep'), ('logs', '--grep', '['), ('logs', '--seconds')]:
             with self.subTest(args=args):
                 self.assertNotEqual(self.run_sim(*args).returncode, 0)
                 self.assertEqual(self.record(), before)
@@ -1249,6 +1249,19 @@ class SimulatorUseProcessTest(unittest.TestCase):
         from resource_lifecycle import retention
         self.assertEqual(retention({}, 'task_simulator', release, time.time() + 8 * 86400)['state'],
                          'assessment-due')
+
+    def test_empty_log_filter_completes_observation_but_log_command_failure_stays_uncertain(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        self.assertEqual(self.run_sim('logs', '--grep', 'absent-pattern').returncode, 0)
+        self.assertFalse(self.record()['pending_use'])
+        self.assertEqual(self.run_sim('release').returncode, 0)
+        from sim_resource_uses import owner_release
+        self.assertIsNotNone(owner_release(self.home / '.fitsy-sim-uses.json', self.udid)['released_at'])
+        self.run_sim('claim')
+        self.assertNotEqual(self.run_sim('logs', '--grep', 'absent-pattern', fail=True).returncode, 0)
+        self.assertTrue(self.record()['pending_use'])
+        self.run_sim('release')
+        self.assertEqual(owner_release(self.home / '.fitsy-sim-uses.json', self.udid), {})
 
     def test_failed_action_retains_unknown_pending_use_instead_of_aging_device(self):
         self.run_sim('claim'); self.run_sim('install', 'fixture.app')
