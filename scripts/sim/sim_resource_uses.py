@@ -56,6 +56,8 @@ def event(claim_path, owner, action, udid=None):
     if action not in ('intent', 'use') or not re.fullmatch(r'[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}', udid or ''):
         raise ValueError('device use event identity invalid')
     record = uses['devices'].setdefault(udid, {})
+    if action == 'use' and (record.get('owner') != owner or not record.get('pending_use')):
+        raise ValueError('completed use requires an outstanding exact device intent for this owner')
     record.update({'owner': owner, 'released_at': now if action == 'use' and not owned and owner != 'anonymous' else None,
                    'pending_use': action == 'intent'})
     if action == 'use':

@@ -178,6 +178,22 @@ class DispatcherProcessTest(unittest.TestCase):
         log = self.board.with_suffix('.workers')
         return log.read_text().splitlines() if log.exists() else []
 
+    def test_installer_pause_after_initial_config_read_prevents_tick_admission(self):
+        hooks = self.base / 'pause-hooks'; hooks.mkdir()
+        (hooks / 'sitecustomize.py').write_text(
+            'import json,os\nfrom pathlib import Path\noriginal=Path.read_text\n'
+            'def raced(path,*a,**kw):\n value=original(path,*a,**kw)\n'
+            ' if str(path.resolve())==os.environ.get("RACE_CONFIG") and json.loads(value).get("enabled"):\n'
+            '  paused=json.loads(value);paused["enabled"]=False;path.write_text(json.dumps(paused))\n'
+            ' return value\nPath.read_text=raced\n')
+        result = run(sys.executable, str(SCRIPT), 'tick', '--config', str(self.config),
+                     cwd=self.base, env={**self.env, 'PYTHONPATH': str(hooks),
+                                         'RACE_CONFIG': str(self.config.resolve())})
+        self.assertFalse(json.loads(self.config.read_text())['enabled'])
+        self.assertEqual(json.loads(result.stdout)['state'], 'disabled')
+        self.assertEqual(self.workers(), [])
+        self.assertEqual(self.board_data()['items'][0]['status'], 'Queued')
+
     def test_worker_exports_configured_native_completion_budget(self):
         config = json.loads(self.config.read_text()); config['worker_timeout_seconds'] = 5400
         self.config.write_text(json.dumps(config))
@@ -1255,6 +1271,17 @@ class SimulatorUseProcessTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertFalse(self.record()['pending_use'])
                 self.assertIsNotNone(self.record()['released_at'])
+
+    def test_repeated_completion_cannot_renew_actual_use_without_new_intent(self):
+        self.run_sim('claim'); self.run_sim('use-intent', self.udid)
+        self.assertEqual(self.run_sim('use-complete', self.udid).returncode, 0)
+        before = self.record(); time.sleep(0.02)
+        result = self.run_sim('use-complete', self.udid)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('outstanding exact device intent', result.stderr)
+        self.assertEqual(self.record(), before)
+        self.assertEqual(self.run_sim('use-intent', self.udid).returncode, 0)
+        self.assertEqual(self.run_sim('use-complete', self.udid).returncode, 0)
 
     def test_completed_device_event_requires_owned_intent(self):
         self.run_sim('claim')

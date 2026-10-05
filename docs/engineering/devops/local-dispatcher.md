@@ -105,3 +105,6 @@ Compiler cleanup scans the whole retained checkout and the exact scratch path im
 Simulator claim updates use atomic fsync and replacement under the existing shared lock.
 A malformed legacy claim remains unchanged and blocks device commands with an explicit owner-reconciliation action; corrupt metadata never proves the device is free.
 The coordinator preserves its raw bytes, checks live task ownership and command evidence under the existing locks, and restores a verified claim or retires only a positively ended owner claim.
+
+Tick admission rereads and validates the installed configuration inside dispatcher.lock, so a completed installer pause wins over an earlier enabled snapshot.
+Device completion consumes one outstanding owner-bound intent; retries without another actual action cannot renew its use clock.

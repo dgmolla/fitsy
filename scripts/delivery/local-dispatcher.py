@@ -917,13 +917,7 @@ def worker(config, state_path, lock_path, claim_id):
             write_json(state_path, state)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('tick', 'status', 'worker'))
-    parser.add_argument('--config', required=True)
-    parser.add_argument('--claim-id')
-    args = parser.parse_args()
-    path = Path(args.config).expanduser().resolve()
+def load_config(path):
     if path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
         raise RuntimeError('dispatcher config must be owned and private')
     config = json.loads(path.read_text())
@@ -939,6 +933,17 @@ def main():
     if not isinstance(review, dict) or review.get('provider') not in ('codex', 'claude') or not isinstance(review.get('model'), str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}', review['model']) or review.get('effort') not in ('low', 'medium', 'high', 'xhigh'):
         raise RuntimeError('invalid independent reviewer configuration')
     config['_path'] = str(path)
+    return config
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('mode', choices=('tick', 'status', 'worker'))
+    parser.add_argument('--config', required=True)
+    parser.add_argument('--claim-id')
+    args = parser.parse_args()
+    path = Path(args.config).expanduser().resolve()
+    config = load_config(path)
     state_dir = Path(config['state_dir']).expanduser().resolve()
     state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     state_path = state_dir / 'state.json'
@@ -961,6 +966,9 @@ def main():
         except BlockingIOError:
             print(json.dumps({'state': 'busy'}))
             return
+        config = load_config(path)  # Installer pause/replacement must win before admission.
+        if Path(config['state_dir']).expanduser().resolve() != state_dir:
+            raise RuntimeError('dispatcher state directory changed across the lock boundary')
         state = read_json(state_path, {'version': 1, 'active': None, 'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []})
         print(json.dumps(tick(config, state, state_path, Path(__file__).resolve())))
 
