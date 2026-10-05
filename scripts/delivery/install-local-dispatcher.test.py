@@ -38,9 +38,11 @@ class InstallTest(unittest.TestCase):
             gh = tools / 'gh'
             gh.write_text('#!/bin/sh\nif [ "$1" = api ]; then git rev-parse HEAD; '
                           'else sha=$(git rev-parse HEAD); printf \'[{"workflowName":"Verify","headSha":"%s","status":"completed","conclusion":"success"},{"workflowName":"Deploy","headSha":"%s","status":"completed","conclusion":"success"}]\\n\' "$sha" "$sha"; fi\n')
-            for name in ('gh', 'codex', 'launchctl'):
+            for name in ('gh', 'codex', 'launchctl', 'lsof'):
                 path = tools / name
-                if name == 'launchctl':
+                if name == 'lsof':
+                    path.write_text('#!/bin/sh\nif [ \"${FAKE_LSOF_UNCERTAIN:-0}\" = 1 ]; then echo ownership-uncertain >&2; fi\nexit 1\n')
+                elif name == 'launchctl':
                     path.write_text('#!/bin/sh\nif [ "$1" = print ] && [ "${FAKE_LAUNCH_LOADED:-0}" != 1 ]; '
                                     'then exit 1; fi\nexit 0\n')
                 elif name != 'gh': path.write_text('#!/bin/sh\nexit 0\n')
@@ -87,9 +89,18 @@ class InstallTest(unittest.TestCase):
             receipt = home / '.fitsy-dispatcher/claims/released-fixture/receipt.json'
             receipt.parent.mkdir(parents=True); receipt.write_text(json.dumps(claim))
             command(sys.executable, '-c',
-                    'import sys,json; sys.path.insert(0,sys.argv[1]); import resource_lifecycle as r; '
+                    "import os,sys,json; os.environ['PATH']='/usr/bin:/bin'; sys.path.insert(0,sys.argv[1]); import resource_lifecycle as r; "
                     'r.released(json.load(open(sys.argv[2])),json.loads(sys.argv[3]),[sys.argv[4]])',
                     str(installed_runtime.parent), str(config_path), json.dumps(claim), str(empty))
+            # Container-level lsof warnings are uncertainty, not permission to release.
+            uncertain_env = {**env, 'FAKE_LSOF_UNCERTAIN': '1'}
+            rejected_release = subprocess.run([sys.executable, '-c',
+                    "import os,sys,json; os.environ['PATH']='/usr/bin:/bin'; sys.path.insert(0,sys.argv[1]); import resource_lifecycle as r; "
+                    'r.released(json.load(open(sys.argv[2])),json.loads(sys.argv[3]),[sys.argv[4]])',
+                    str(installed_runtime.parent), str(config_path), json.dumps(claim), str(empty)],
+                    cwd=repo, env=uncertain_env, text=True, capture_output=True, timeout=15)
+            self.assertNotEqual(rejected_release.returncode, 0)
+            self.assertIn('uncertain file ownership', rejected_release.stderr)
             # A mixed runtime must never be enabled using the published source identity.
             original_runtime = installed_runtime.read_bytes()
             installed_runtime.write_bytes(original_runtime + b'\n# interrupted update fixture\n')
