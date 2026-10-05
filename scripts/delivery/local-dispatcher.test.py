@@ -76,6 +76,7 @@ p=Path(os.environ['FAKE_GH_STATE']); log=p.with_suffix('.workers')
 sys.stdin.read()
 with log.open('a') as f: f.write('started\n')
 with p.with_suffix('.args').open('a') as f: f.write(json.dumps(sys.argv[1:])+'\n')
+p.with_suffix('.worker-budget').write_text(os.environ.get('FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS','missing'))
 mode=os.environ.get('FAKE_WORKER_MODE','done')
 if mode=='sleep': time.sleep(float(os.environ.get('FAKE_WORKER_SLEEP','2')))
 if mode=='spawn_child':
@@ -141,8 +142,15 @@ class DispatcherProcessTest(unittest.TestCase):
             'profiles': {'standard': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'medium', 'executable': str(self.codex)},
                          'deep': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high', 'executable': str(self.codex)}},
             'review': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high'},
-            'min_free_bytes': 1, 'worker_timeout_seconds': 10}))
+            'simulator_use_file': str(self.state / 'device-owner-uses.json'),
+            'min_free_bytes': 1, 'scratch_reserve_bytes': 0, 'lsof_bin': str(self.base / 'fake-lsof'), 'worker_timeout_seconds': 10}))
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\nexit 1\n')
+        (self.base / 'fake-lsof').chmod(0o700)
         self.config.chmod(0o600)
+        (self.state / 'device-owner-uses.json').write_text(json.dumps({'version': 1, 'devices': {
+            udid: {'owner': 'ended-fixture', 'last_owner_use': '2026-09-01T00:00:00Z',
+                   'released_at': '2026-09-01T01:00:00Z'}
+            for udid in ('9EC11FCA-B224-4380-A91D-235ED2BBF7C4', 'CE4397A7-AB61-4099-B843-51D38DA417D9')}}))
         self.env = {**os.environ, 'FAKE_GH_STATE': str(self.board)}
 
     def set_board(self, items):
@@ -170,6 +178,298 @@ class DispatcherProcessTest(unittest.TestCase):
         log = self.board.with_suffix('.workers')
         return log.read_text().splitlines() if log.exists() else []
 
+    def test_installer_pause_after_initial_config_read_prevents_tick_admission(self):
+        hooks = self.base / 'pause-hooks'; hooks.mkdir()
+        (hooks / 'sitecustomize.py').write_text(
+            'import json,os\nfrom pathlib import Path\noriginal=Path.read_text\n'
+            'def raced(path,*a,**kw):\n value=original(path,*a,**kw)\n'
+            ' if str(path.resolve())==os.environ.get("RACE_CONFIG") and json.loads(value).get("enabled"):\n'
+            '  paused=json.loads(value);paused["enabled"]=False;path.write_text(json.dumps(paused))\n'
+            ' return value\nPath.read_text=raced\n')
+        result = run(sys.executable, str(SCRIPT), 'tick', '--config', str(self.config),
+                     cwd=self.base, env={**self.env, 'PYTHONPATH': str(hooks),
+                                         'RACE_CONFIG': str(self.config.resolve())})
+        self.assertFalse(json.loads(self.config.read_text())['enabled'])
+        self.assertEqual(json.loads(result.stdout)['state'], 'disabled')
+        self.assertEqual(self.workers(), [])
+        self.assertEqual(self.board_data()['items'][0]['status'], 'Queued')
+
+    def test_worker_exports_configured_native_completion_budget(self):
+        config = json.loads(self.config.read_text()); config['worker_timeout_seconds'] = 5400
+        self.config.write_text(json.dumps(config))
+        self.env['FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS'] = '60'
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        self.assertEqual(self.board.with_suffix('.worker-budget').read_text(), '5400')
+
+    def test_release_cleans_scratch_and_preserves_app_and_raw_history(self):
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        old = self.state_data()['active'].copy()
+        self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        checkout = Path(old['worktree'])
+        scratch = checkout / '.evidence/product-build/Build/Intermediates.noindex'
+        app = checkout / '.evidence/product-build/Build/Products/Fitsy.app'
+        scratch.mkdir(parents=True); app.mkdir(parents=True)
+        (scratch / 'object.o').write_bytes(b'rebuildable')
+        nested = scratch / 'ModuleCache.noindex'; nested.mkdir()
+        (nested / 'module').write_text('nested rebuildable')
+        sibling = checkout / '.evidence/product-build/SDKStatCaches.noindex'; sibling.mkdir()
+        (sibling / 'sdk').write_text('sibling rebuildable')
+        (app / 'binary').write_bytes(b'retained app')
+        protected_cache = app / 'ModuleCache.noindex'
+        protected_cache.mkdir(); (protected_cache / 'keep').write_text('app content')
+        external = self.base / 'external-cache'
+        external.mkdir(); (external / 'keep').write_text('external content')
+        (checkout / '.evidence/external').symlink_to(external, target_is_directory=True)
+        raw = checkout / '.evidence/review-failure.log'
+        raw.write_text('historical failure')
+        raw_named_cache = checkout / '.evidence/review/ModuleCache.noindex'
+        raw_named_cache.mkdir(parents=True)
+        (raw_named_cache / 'failure.log').write_text('retained raw review')
+        self.tick()
+        state = self.state_data()
+        self.assertFalse(scratch.exists())
+        self.assertFalse(sibling.exists())
+        self.assertEqual((app / 'binary').read_bytes(), b'retained app')
+        self.assertEqual(raw.read_text(), 'historical failure')
+        self.assertEqual((raw_named_cache / 'failure.log').read_text(), 'retained raw review')
+        self.assertEqual((protected_cache / 'keep').read_text(), 'app content')
+        self.assertEqual((external / 'keep').read_text(), 'external content')
+        record = state['resource_releases'][old['id']]
+        self.assertEqual(record['state'], 'released')
+        self.assertEqual(record['removed'], [str(scratch.resolve()), str(sibling.resolve())])
+        self.assertEqual(state['history'][-1]['exit_code'], 7)
+        receipt = json.loads((self.state / 'claims' / old['id'] / 'receipt.json').read_text())
+        self.assertEqual(receipt['exit_code'], 7)
+
+    def test_release_open_file_guard_keeps_scratch_and_persists_next_assessment(self):
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        old = self.state_data()['active'].copy()
+        self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        scratch = Path(old['worktree']) / '.evidence/product-build/ModuleCache.noindex'
+        scratch.mkdir(parents=True); (scratch / 'module').write_text('keep')
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\necho owned-open-file\nexit 0\n')
+        self.tick()
+        self.assertTrue(scratch.exists())
+        self.assertEqual(self.state_data()['resource_releases'][old['id']]['state'], 'deferred')
+        self.assertIn('ownership', self.state_data()['resource_releases'][old['id']]['reason'])
+
+    @unittest.skipUnless(shutil.which('lsof'), 'real process open-file fixture requires lsof')
+    def test_open_source_process_protects_scratch_before_first_release_assessment(self):
+        state, old, checkout = self.ended_checkout()
+        state['resource_releases'] = {}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
+        scratch.mkdir(parents=True); (scratch / 'module').write_text('keep live build output')
+        child = subprocess.Popen([sys.executable, '-c',
+            'import sys,time; f=open(sys.argv[1]); print("ready",flush=True); time.sleep(30)',
+            str(checkout / 'README.md')], stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(child.stdout.readline().strip(), 'ready')
+            config = json.loads(self.config.read_text()); config['lsof_bin'] = shutil.which('lsof')
+            self.config.write_text(json.dumps(config))
+            self.tick()
+            self.assertTrue(scratch.exists())
+            result = self.state_data()['resource_releases'][old['id']]
+            self.assertEqual(result['state'], 'deferred')
+            self.assertIn('ownership', result['reason'])
+        finally:
+            child.terminate(); child.wait(); child.stdout.close()
+
+    def ended_checkout(self):
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        old = self.state_data()['active'].copy()
+        self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        self.tick()
+        state = self.state_data()
+        return state, state['history'][-1], Path(old['worktree'])
+
+    def test_interrupted_delete_intent_is_reconciled_before_next_release(self):
+        state, old, checkout = self.ended_checkout()
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
+        scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
+        state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
+            'removed': [], 'removal_intent': str(scratch.resolve())}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertFalse(scratch.exists())
+        self.assertNotIn('removal_intent', result)
+        self.assertEqual(result['state'], 'released')
+        self.assertIn(str(scratch.resolve()), result['removed'])
+
+    def test_absent_interrupted_delete_gets_uncertain_reconciliation_receipt(self):
+        state, old, checkout = self.ended_checkout()
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
+        state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
+            'removed': [], 'removal_intent': str(scratch.resolve())}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertNotIn('removal_intent', result)
+        self.assertEqual(result['removed'], [])
+        self.assertIn(str(scratch.resolve()), result['reconciled_absent'])
+
+    def test_interrupted_intent_cannot_delete_external_symlink_target(self):
+        state, old, checkout = self.ended_checkout()
+        outside = self.base / 'outside-module-cache'; outside.mkdir()
+        (outside / 'keep').write_text('not task owned')
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
+        scratch.parent.mkdir(parents=True, exist_ok=True)
+        scratch.symlink_to(outside, target_is_directory=True)
+        state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
+            'removed': [], 'removal_intent': str(scratch.absolute())}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertEqual((outside / 'keep').read_text(), 'not task owned')
+        self.assertEqual(result['state'], 'deferred')
+        self.assertIn('not owned', result['reason'])
+
+    def test_disk_hold_persists_expired_retention_assessment(self):
+        state, old, checkout = self.ended_checkout()
+        state['history'][-1]['finished_at'] = '2026-09-01T00:00:00Z'
+        state['resource_retention'] = {}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        config = json.loads(self.config.read_text()); config['scratch_reserve_bytes'] = 10**18
+        self.config.write_text(json.dumps(config))
+        self.assertEqual(self.tick()['state'], 'resource-hold')
+        self.assertEqual(self.state_data()['resource_retention'][str(checkout)]['state'], 'assessment-due')
+
+    def test_changed_terminal_receipt_refuses_release(self):
+        state, old, checkout = self.ended_checkout()
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
+        scratch.mkdir(parents=True); (scratch / 'keep').write_text('retained')
+        state['resource_releases'].pop(old['id'])
+        (self.state / 'state.json').write_text(json.dumps(state))
+        receipt = self.state / 'claims' / old['id'] / 'receipt.json'
+        value = json.loads(receipt.read_text()); value['terminal'] = 'changed'
+        receipt.write_text(json.dumps(value))
+        self.tick()
+        self.assertTrue(scratch.exists())
+        self.assertIn('terminal receipt', self.state_data()['resource_releases'][old['id']]['reason'])
+
+    def test_resume_finds_durable_checkout_after_history_rollover(self):
+        state, old, checkout = self.ended_checkout()
+        (checkout / 'retained-source.txt').write_text('old issue source')
+        state['history'] = [{'id': 'later-%s' % n, 'issue': 999, 'terminal': 'verified'} for n in range(100)]
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.set_board([item(385)])
+        board = self.board_data(); board['ready_at']['385'] = '2026-09-27T01:00:00Z'
+        self.board.write_text(json.dumps(board))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        new = self.state_data()['active']
+        self.assertEqual(Path(new['worktree']).resolve(), checkout.resolve())
+        self.assertEqual(new['resumed_from_claim'], old['id'])
+        self.assertEqual((checkout / 'retained-source.txt').read_text(), 'old issue source')
+        self.assertEqual(len(list(self.worktrees.iterdir())), 1)
+
+    def test_reopened_verified_issue_reuses_its_retained_checkout(self):
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        old = self.state_data()['active'].copy()
+        self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        self.tick()
+        self.assertEqual(self.state_data()['history'][-1]['terminal'], 'verified')
+        checkout = Path(old['worktree'])
+        self.set_board([item(385)])
+        board = self.board_data(); board['ready_at']['385'] = '2026-09-27T01:00:00Z'
+        self.board.write_text(json.dumps(board))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        new = self.state_data()['active']
+        self.assertEqual(Path(new['worktree']).resolve(), checkout.resolve())
+        self.assertEqual(new['resumed_from_claim'], old['id'])
+        self.assertEqual(len(list(self.worktrees.iterdir())), 1)
+
+    def test_authorized_resume_reuses_ended_issue_checkout(self):
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        old = self.state_data()['active'].copy()
+        checkout = Path(old['worktree'])
+        (checkout / 'retained-source.txt').write_text('unfinished work must survive\n')
+        self.tick()
+        self.set_board([item(385)])
+        board = self.board_data()
+        board['ready_at']['385'] = '2026-09-27T01:00:00Z'
+        self.board.write_text(json.dumps(board))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        successor = self.state_data()['active']
+        self.assertEqual(Path(successor['worktree']).resolve(), Path(old['worktree']).resolve())
+        self.assertEqual(successor['branch'], old['branch'])
+        self.assertNotEqual(successor['id'], old['id'])
+        self.assertEqual((checkout / 'retained-source.txt').read_text(), 'unfinished work must survive\n')
+        self.assertEqual(len(list(self.worktrees.iterdir())), 1)
+
+    def test_created_checkout_survives_prelaunch_crash_before_claim_update(self):
+        real_git = shutil.which('git')
+        wrapped = self.base / 'crash-git'
+        wrapped.write_text('#!' + sys.executable + '\nimport os,signal,subprocess,sys\n'
+            + 'code=subprocess.call([' + repr(real_git) + ',*sys.argv[1:]])\n'
+            + 'if code==0 and "worktree" in sys.argv and "add" in sys.argv: os.kill(os.getppid(),signal.SIGKILL)\n'
+            + 'raise SystemExit(code)\n')
+        wrapped.chmod(0o700)
+        config = json.loads(self.config.read_text()); config['git_bin'] = str(wrapped)
+        self.config.write_text(json.dumps(config))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.tick()
+        checkout = next(self.worktrees.iterdir())
+        (checkout / 'crash-retained-source.txt').write_text('preserve the orphan-window source')
+        config['git_bin'] = real_git; self.config.write_text(json.dumps(config))
+        self.tick()
+        self.set_board([item(385)])
+        board = self.board_data(); board['ready_at']['385'] = '2026-09-27T02:00:00Z'
+        self.board.write_text(json.dumps(board))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        self.assertEqual(Path(self.state_data()['active']['worktree']).resolve(), checkout.resolve())
+        self.assertEqual(len(list(self.worktrees.iterdir())), 1)
+        self.assertEqual((checkout / 'crash-retained-source.txt').read_text(), 'preserve the orphan-window source')
+
+    def test_creation_intent_without_created_checkout_can_retry_without_orphan(self):
+        real_git = shutil.which('git')
+        wrapped = self.base / 'crash-before-git'
+        wrapped.write_text('#!' + sys.executable + '\nimport os,signal,subprocess,sys\n'
+            + 'if "worktree" in sys.argv and "add" in sys.argv: os.kill(os.getppid(),signal.SIGKILL); raise SystemExit(1)\n'
+            + 'raise SystemExit(subprocess.call([' + repr(real_git) + ',*sys.argv[1:]]))\n')
+        wrapped.chmod(0o700)
+        config = json.loads(self.config.read_text()); config['git_bin'] = str(wrapped)
+        self.config.write_text(json.dumps(config))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.tick()
+        self.assertEqual(list(self.worktrees.iterdir()), [])
+        self.assertTrue(self.state_data()['active']['worktree_creation_intent'])
+        config['git_bin'] = real_git; self.config.write_text(json.dumps(config))
+        self.tick()
+        self.set_board([item(385)])
+        board = self.board_data(); board['ready_at']['385'] = '2026-09-27T02:00:00Z'
+        self.board.write_text(json.dumps(board))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        self.assertEqual(len(list(self.worktrees.iterdir())), 1)
+
+    def test_admission_preserves_floor_plus_scratch_reserve(self):
+        self.set_board([])
+        config = json.loads(self.config.read_text())
+        config.update({'_path': str(self.config), 'min_free_bytes': 80, 'scratch_reserve_bytes': 40})
+        state = {'active': None, 'history': []}
+        with mock.patch.dict(os.environ, self.env), mock.patch.object(dispatcher.shutil, 'disk_usage',
+                return_value=types.SimpleNamespace(free=100)):
+            result = dispatcher.tick(config, state, self.state / 'state.json', SCRIPT)
+        self.assertEqual(result['state'], 'resource-hold')
+        self.assertEqual(result['required_free_bytes'], 120)
+        self.assertEqual(self.workers(), [])
+
     def test_manual_successor_verified_claim_retires_only_its_receipt_device(self):
         claim_id = '12345678-1234-1234-1234-123456789abc'
         worktree = self.worktrees / f'fitsy-issue-412-{claim_id[:8]}'
@@ -181,7 +481,7 @@ class DispatcherProcessTest(unittest.TestCase):
         state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412, 'branch': 'issue-412'}},
                  'history': [{'terminal': 'parked-after-exit', 'issue': 412, 'id': claim_id,
                               'branch': 'issue-412', 'worktree': str(worktree)},
-                             {'terminal': 'verified', 'issue': 412, 'id': claim_id,
+                             {'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'issue': 412, 'id': claim_id,
                               'branch': 'issue-412', 'worktree': str(worktree)}]}
         path = self.state / 'state.json'
         with mock.patch.object(dispatcher, 'board', return_value=[item(412, status='Done')]), \
@@ -212,6 +512,26 @@ class DispatcherProcessTest(unittest.TestCase):
             retire.assert_not_called()
             self.assertEqual(state['simulator_retirement'][udid]['status'], 'held')
 
+    def test_recent_device_owner_release_protects_an_older_verified_task(self):
+        claim_id = '12345678-1234-1234-1234-123456789abc'
+        worktree = self.worktrees / f'fitsy-issue-412-{claim_id[:8]}'
+        build = worktree / '.evidence/product-build'; build.mkdir(parents=True)
+        udid = '9EC11FCA-B224-4380-A91D-235ED2BBF7C4'
+        (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
+        clock = dispatcher.utc()
+        (self.state / 'device-owner-uses.json').write_text(json.dumps({'version': 1, 'devices': {
+            udid: {'owner': 'later-owner', 'last_owner_use': clock, 'released_at': clock}}}))
+        config = json.loads(self.config.read_text())
+        state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412, 'branch': 'issue-412'}},
+                 'history': [{'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'issue': 412,
+                              'id': claim_id, 'branch': 'issue-412', 'worktree': str(worktree)}]}
+        with mock.patch.object(dispatcher, 'board', return_value=[item(412, status='Done')]), \
+             mock.patch.object(dispatcher, 'terminal_verified', return_value=True), \
+             mock.patch.object(dispatcher, 'retire_task_device') as retire:
+            dispatcher.retire_verified_simulator(config, state, self.state / 'state.json')
+            retire.assert_not_called()
+            self.assertEqual(state['simulator_retirement'][udid]['status'], 'held')
+
     def test_held_older_device_does_not_starve_later_verified_device(self):
         state = {'active': None, 'verified': {}, 'history': []}
         udids = ('9EC11FCA-B224-4380-A91D-235ED2BBF7C4',
@@ -224,7 +544,7 @@ class DispatcherProcessTest(unittest.TestCase):
             build.mkdir(parents=True)
             (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
             state['verified'][str(issue)] = {'id': claim_id, 'issue': issue, 'branch': branch}
-            state['history'].append({'terminal': 'verified', 'id': claim_id, 'issue': issue,
+            state['history'].append({'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'id': claim_id, 'issue': issue,
                                      'branch': branch, 'worktree': str(worktree)})
         config = json.loads(self.config.read_text())
         path = self.state / 'state.json'
@@ -250,7 +570,7 @@ class DispatcherProcessTest(unittest.TestCase):
         (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
         saved = self.state / 'claims' / claim_id / 'receipt.json'
         saved.parent.mkdir(parents=True)
-        claim = {'terminal': 'verified', 'issue': 412, 'id': claim_id,
+        claim = {'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'issue': 412, 'id': claim_id,
                  'branch': 'issue-412', 'worktree': str(worktree)}
         saved.write_text(json.dumps(claim))
         config = json.loads(self.config.read_text())
@@ -279,7 +599,7 @@ class DispatcherProcessTest(unittest.TestCase):
         (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
         config = json.loads(self.config.read_text())
         state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412,
-                 'branch': 'issue-412'}}, 'history': [{'terminal': 'verified', 'issue': 412,
+                 'branch': 'issue-412'}}, 'history': [{'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'issue': 412,
                  'id': claim_id, 'branch': 'issue-412', 'worktree': str(worktree)}]}
         path = self.state / 'state.json'
         with mock.patch.object(dispatcher, 'board', return_value=[item(412, status='Done')]), \
@@ -300,7 +620,7 @@ class DispatcherProcessTest(unittest.TestCase):
         (build / 'receipt.json').write_text('{bad json')
         config = json.loads(self.config.read_text())
         state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412,
-                 'branch': 'issue-412'}}, 'history': [{'terminal': 'verified', 'issue': 412,
+                 'branch': 'issue-412'}}, 'history': [{'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'issue': 412,
                  'id': claim_id, 'branch': 'issue-412', 'worktree': str(worktree)}]}
         dispatcher.retire_verified_simulator(config, state, self.state / 'state.json')
         self.assertEqual(state['simulator_retirement'][f'claim:{claim_id}']['status'], 'held')
@@ -792,6 +1112,260 @@ class DispatcherProcessTest(unittest.TestCase):
         receipt = json.loads((self.state / 'claims/claim-101/receipt.json').read_text())
         self.assertEqual(receipt['terminal'], 'verified')
         self.assertEqual(receipt['worker_profile']['provider'], 'claude')
+
+class ResourceRetentionTest(unittest.TestCase):
+    def setUp(self):
+        import resource_lifecycle
+        self.resources = resource_lifecycle
+        self.now = 1791201600
+        self.old = '2026-09-01T00:00:00Z'
+
+    def test_unknown_legacy_access_is_not_rewritten_as_recent(self):
+        result = self.resources.retention({}, 'build_cache', {}, self.now)
+        self.assertEqual(result['state'], 'unknown')
+
+    def test_expired_unfinished_work_preserves_source(self):
+        result = self.resources.retention({}, 'unfinished_checkout', {'released_at': self.old}, self.now)
+        self.assertEqual(result['state'], 'assessment-due')
+        self.assertIn('preserve branch, source and dirty work', result['next_action'])
+
+    def test_durable_evidence_expires_only_to_retrievable_archive(self):
+        result = self.resources.retention({}, 'durable_evidence', {'last_owner_use': self.old}, self.now)
+        self.assertIn('never TTL purge', result['next_action'])
+
+    def test_expired_generic_near_term_lease_does_not_renew_on_poll(self):
+        record = {'released_at': self.old, 'near_term_lease': {
+            'owner': 'ended', 'next_action': 'capture UI', 'last_owner_use': self.old}}
+        first = self.resources.retention({}, 'booted_simulator', record, self.now)
+        second = self.resources.retention({}, 'booted_simulator', record, self.now + 1800)
+        self.assertEqual(first['state'], 'assessment-due')
+        self.assertEqual(second['state'], 'assessment-due')
+        self.assertEqual(record['near_term_lease']['last_owner_use'], self.old)
+
+    def test_queued_pinned_app_survives_ttl_and_cache_budget(self):
+        result = self.resources.retention({}, 'build_cache', {'last_owner_use': self.old,
+            'bytes': 100 * 1024**3, 'pinned': True}, self.now)
+        self.assertEqual(result['state'], 'retained')
+
+    def test_transitive_dependency_reference_requires_live_end_consumer(self):
+        edges = [('current431', 'treehouse4'), ('historical5', 'treehouse2'), ('treehouse4', 'shared')]
+        self.assertEqual(self.resources.live_donors(edges, {'current431'}), {'treehouse4', 'shared'})
+        self.assertNotIn('treehouse2', self.resources.live_donors(edges, {'current431'}))
+
+    def test_seven_day_device_grace_and_unknown_release(self):
+        self.assertEqual(self.resources.retention({}, 'task_simulator', {}, self.now)['state'], 'unknown')
+        self.assertEqual(self.resources.retention({}, 'task_simulator', {'released_at': self.old, 'last_owner_use': self.old}, self.now)['state'], 'assessment-due')
+
+class SimulatorUseProcessTest(unittest.TestCase):
+    """Exercise the real shared-lock CLI with a disposable home and fake simctl."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.home = self.root / 'home'; self.home.mkdir()
+        self.repo = self.root / 'repo'; (self.repo / 'scripts/sim').mkdir(parents=True)
+        source = SCRIPT.parent.parent / 'sim'
+        for name in ('sim', 'sim_resource_uses.py'):
+            shutil.copy2(source / name, self.repo / 'scripts/sim' / name)
+        self.bin = self.root / 'bin'; self.bin.mkdir()
+        self.udid = '9EC11FCA-B224-4380-A91D-235ED2BBF7C4'
+        xcrun = self.bin / 'xcrun'
+        xcrun.write_text('#!/bin/sh\nif [ "$3" = devices ]; then echo "iPhone 16 (' + self.udid + ') (Booted)"; fi\n[ "${FAKE_SIM_FAIL:-}" != 1 ]\n')
+        xcrun.chmod(0o755)
+        self.env = {**os.environ, 'HOME': str(self.home), 'FITSY_SIM_OWNER': 'owner-a',
+                    'PATH': str(self.bin) + ':' + os.environ['PATH']}
+
+    def run_sim(self, *args, owner=None, fail=False):
+        env = {**self.env, 'FITSY_SIM_OWNER': owner or 'owner-a'}
+        if fail:
+            env['FAKE_SIM_FAIL'] = '1'
+        return subprocess.run(['bash', str(self.repo / 'scripts/sim/sim'), *args],
+                              env=env, text=True, capture_output=True)
+
+    def record(self):
+        return json.loads((self.home / '.fitsy-sim-uses.json').read_text())['devices'][self.udid]
+
+    def test_interrupted_atomic_claim_renewal_keeps_previous_owner_and_recovers(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        claim = self.home / '.fitsy-sim-claim.json'; before = claim.read_bytes()
+        spy = self.root / 'crash-before-replace'; spy.mkdir()
+        (spy / 'sitecustomize.py').write_text("import os,signal\noriginal=os.replace\ndef interrupted(src,dst):\n if str(dst).endswith('/.fitsy-sim-claim.json'):os.kill(os.getpid(),signal.SIGKILL)\n return original(src,dst)\nos.replace=interrupted\n")
+        result = subprocess.run(['bash', str(self.repo / 'scripts/sim/sim'), 'claim'],
+            env={**self.env, 'PYTHONPATH': str(spy)}, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(claim.read_bytes(), before)
+        self.assertEqual(self.run_sim('claim').returncode, 0)
+        self.assertEqual(self.run_sim('release').returncode, 0)
+        self.assertFalse(self.record()['pending_use'])
+        self.assertIsNotNone(self.record()['released_at'])
+
+    def test_malformed_legacy_claim_preserves_raw_owner_evidence_and_recovery_guidance(self):
+        claim = self.home / '.fitsy-sim-claim.json'
+        for raw in [b'{"owner":"owner-a","expires":', b'{}', b'[]']:
+            with self.subTest(raw=raw):
+                claim.write_bytes(raw)
+                for args in [('claim',), ('install', 'fixture.app'), ('release',)]:
+                    result = self.run_sim(*args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('reconcile its owner', result.stderr)
+                    self.assertEqual(claim.read_bytes(), raw)
+                self.assertFalse((self.home / '.fitsy-sim-uses.json').exists())
+
+    def test_actual_use_claim_renewal_and_release_survive_owner_metadata_removal(self):
+        self.assertEqual(self.run_sim('claim').returncode, 0)
+        self.assertEqual(self.run_sim('install', 'fixture.app').returncode, 0)
+        used = self.record()['last_owner_use']
+        self.assertEqual(self.run_sim('status').returncode, 0)
+        self.assertEqual(self.run_sim('claim').returncode, 0)
+        self.assertEqual(self.record()['last_owner_use'], used)
+        self.assertEqual(self.run_sim('release').returncode, 0)
+        self.assertFalse((self.home / '.fitsy-sim-claim.json').exists())
+        self.assertIsNotNone(self.record()['released_at'])
+        self.assertFalse(self.record()['pending_use'])
+
+    def test_denied_other_owner_command_does_not_change_device_clock(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()
+        self.assertNotEqual(self.run_sim('launch', 'com.fitsy', owner='other').returncode, 0)
+        self.assertEqual(self.record(), before)
+
+    def test_observer_cannot_replace_the_active_owner_clock(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()
+        for command in ('screenshot', 'logs'):
+            self.assertNotEqual(self.run_sim(command, 'observer', owner='other').returncode, 0)
+            self.assertEqual(self.record(), before)
+        self.run_sim('release')
+        self.assertEqual(self.record()['owner'], 'owner-a')
+        self.assertIsNotNone(self.record()['released_at'])
+
+    def test_canonical_runner_handoff_records_exact_raw_command_device(self):
+        runner = (SCRIPT.parent.parent / 'sim/product-flow.mjs').resolve().as_uri()
+        code = "import {claimDevice,recordDeviceUse,releaseDevice} from " + json.dumps(runner) + ";"
+        code += "import {execFileSync} from 'node:child_process';"
+        code += "const udid=" + json.dumps(self.udid) + ";claimDevice(udid);"
+        code += "execFileSync('xcrun',['simctl','install',udid,'fixture.app']);recordDeviceUse(udid);releaseDevice();"
+        result = subprocess.run(['node', '--input-type=module', '-e', code], env=self.env,
+                                text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.record()['owner'], 'owner-a')
+        self.assertIsNotNone(self.record()['last_owner_use'])
+        self.assertIsNotNone(self.record()['released_at'])
+        self.assertFalse(self.record()['pending_use'])
+
+    def test_canonical_native_completion_crosses_one_hour_within_worker_budget(self):
+        runner = (SCRIPT.parent.parent / 'sim/product-flow.mjs').resolve().as_uri()
+        for budget, elapsed_minutes in [(5400, 61), (7200, 119)]:
+            with self.subTest(budget=budget):
+                code = 'import {claimDevice,recordDeviceUse,releaseDevice} from ' + json.dumps(runner) + ';'
+                code += 'import fs from "node:fs";const udid=' + json.dumps(self.udid) + ';claimDevice(udid);'
+                code += 'const file=' + json.dumps(str(self.home / '.fitsy-sim-claim.json')) + ';'
+                code += 'const claim=JSON.parse(fs.readFileSync(file));'
+                code += 'if(claim.expires-Date.now()/1000<' + str(budget) + ')throw new Error("lease shorter than worker budget");'
+                code += 'claim.expires-=' + str(elapsed_minutes * 60) + ';fs.writeFileSync(file,JSON.stringify(claim));'
+                code += 'recordDeviceUse(udid);releaseDevice();'
+                result = subprocess.run(['node', '--input-type=module', '-e', code],
+                    env={**self.env, 'FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS': str(budget)},
+                    text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertFalse(self.record()['pending_use'])
+                self.assertIsNotNone(self.record()['released_at'])
+
+    def test_already_booted_device_reuse_records_actual_owned_use_and_release(self):
+        self.assertEqual(self.run_sim('claim').returncode, 0)
+        result = self.run_sim('boot')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['udid'], self.udid)
+        record = self.record()
+        self.assertEqual(record['owner'], 'owner-a')
+        self.assertFalse(record['pending_use'])
+        self.assertIsNotNone(record['last_owner_use'])
+        self.assertIsNone(record['released_at'])
+        self.assertEqual(self.run_sim('release').returncode, 0)
+        self.assertIsNotNone(self.record()['released_at'])
+
+    def test_repeated_completion_cannot_renew_actual_use_without_new_intent(self):
+        self.run_sim('claim'); self.run_sim('use-intent', self.udid)
+        self.assertEqual(self.run_sim('use-complete', self.udid).returncode, 0)
+        before = self.record(); time.sleep(0.02)
+        result = self.run_sim('use-complete', self.udid)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('outstanding exact device intent', result.stderr)
+        self.assertEqual(self.record(), before)
+        self.assertEqual(self.run_sim('use-intent', self.udid).returncode, 0)
+        self.assertEqual(self.run_sim('use-complete', self.udid).returncode, 0)
+
+    def test_completed_device_event_requires_owned_intent(self):
+        self.run_sim('claim')
+        self.assertNotEqual(self.run_sim('use-complete', self.udid).returncode, 0)
+        self.assertNotEqual(self.run_sim('use-intent', self.udid, owner='other').returncode, 0)
+        self.assertFalse((self.home / '.fitsy-sim-uses.json').exists())
+
+    def test_claim_free_completed_command_has_bounded_owner_release(self):
+        self.assertEqual(self.run_sim('install', 'fixture.app').returncode, 0)
+        record = self.record()
+        self.assertEqual(record['last_owner_use'], record['released_at'])
+        self.assertFalse(record['pending_use'])
+        self.assertFalse((self.home / '.fitsy-sim-claim.json').exists())
+
+    def test_expired_reclaim_without_use_cannot_renew_device_release(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()
+        path = self.home / '.fitsy-sim-claim.json'
+        claim = json.loads(path.read_text()); claim['expires'] = time.time() - 1
+        path.write_text(json.dumps(claim))
+        self.run_sim('claim'); self.run_sim('release')
+        self.assertEqual(self.record(), before)
+
+    def test_expired_release_without_active_session_does_not_stamp_clock(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()
+        path = self.home / '.fitsy-sim-claim.json'
+        claim = json.loads(path.read_text()); claim['expires'] = time.time() - 1
+        path.write_text(json.dumps(claim))
+        self.run_sim('release')
+        self.assertEqual(self.record(), before)
+
+    def test_incomplete_arguments_do_not_create_a_device_action_intent(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()
+        for args in [('install',), ('launch',), ('launch', '--url'), ('screenshot',),
+                     ('logs', '--grep'), ('logs', '--grep', '['), ('logs', '--seconds')]:
+            with self.subTest(args=args):
+                self.assertNotEqual(self.run_sim(*args).returncode, 0)
+                self.assertEqual(self.record(), before)
+        self.assertEqual(self.run_sim('release').returncode, 0)
+        self.assertFalse(self.record()['pending_use'])
+        from sim_resource_uses import owner_release
+        release = owner_release(self.home / '.fitsy-sim-uses.json', self.udid)
+        self.assertEqual(release['released_at'], self.record()['released_at'])
+        from resource_lifecycle import retention
+        self.assertEqual(retention({}, 'task_simulator', release, time.time() + 8 * 86400)['state'],
+                         'assessment-due')
+
+    def test_empty_log_filter_completes_observation_but_log_command_failure_stays_uncertain(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        self.assertEqual(self.run_sim('logs', '--grep', 'absent-pattern').returncode, 0)
+        self.assertFalse(self.record()['pending_use'])
+        self.assertEqual(self.run_sim('release').returncode, 0)
+        from sim_resource_uses import owner_release
+        self.assertIsNotNone(owner_release(self.home / '.fitsy-sim-uses.json', self.udid)['released_at'])
+        self.run_sim('claim')
+        self.assertNotEqual(self.run_sim('logs', '--grep', 'absent-pattern', fail=True).returncode, 0)
+        self.assertTrue(self.record()['pending_use'])
+        self.run_sim('release')
+        self.assertEqual(owner_release(self.home / '.fitsy-sim-uses.json', self.udid), {})
+
+    def test_failed_action_retains_unknown_pending_use_instead_of_aging_device(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()['last_owner_use']
+        self.assertNotEqual(self.run_sim('launch', 'com.fitsy', fail=True).returncode, 0)
+        self.assertTrue(self.record()['pending_use'])
+        self.assertEqual(self.record()['last_owner_use'], before)
+        self.run_sim('release')
+        from sim_resource_uses import owner_release
+        self.assertEqual(owner_release(self.home / '.fitsy-sim-uses.json', self.udid), {})
 
 class ClaudeDispatcherProcessTest(DispatcherProcessTest):
     """Run the same crash, race, retry and receipt fixtures with the Claude adapter."""
