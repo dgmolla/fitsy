@@ -1,6 +1,7 @@
 """Durable device use/release clocks, called while the shared simulator lock is held."""
 from datetime import datetime, timezone
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -20,10 +21,25 @@ def save(path, value):
         os.close(fd)
 
 
+def read_claim(path):
+    path = Path(path)
+    if not path.exists():
+        return {}
+    try:
+        claim = json.loads(path.read_text())
+        if (not isinstance(claim, dict) or not isinstance(claim.get('owner'), str) or
+                not claim['owner'] or isinstance(claim.get('expires'), bool) or
+                not isinstance(claim.get('expires'), (int, float)) or not math.isfinite(claim['expires'])):
+            raise ValueError('invalid claim identity')
+        return claim
+    except (ValueError, UnicodeError) as error:
+        raise ValueError(f'Malformed simulator claim preserved at {path}; reconcile its owner against live task receipts and commands under the dispatcher/simulator locks, then archive the exact raw bytes and restore a verified claim or retire only a proved ended owner claim.') from error
+
+
 def event(claim_path, owner, action, udid=None):
     claim_path = Path(claim_path)
     uses_path = claim_path.with_name('.fitsy-sim-uses.json')
-    claim = json.loads(claim_path.read_text()) if claim_path.exists() else {}
+    claim = read_claim(claim_path)
     uses = json.loads(uses_path.read_text()) if uses_path.exists() else {'version': 1, 'devices': {}}
     if uses.get('version') != 1 or not isinstance(uses.get('devices'), dict):
         raise ValueError('device use registry is invalid')

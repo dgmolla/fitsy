@@ -1170,6 +1170,32 @@ class SimulatorUseProcessTest(unittest.TestCase):
     def record(self):
         return json.loads((self.home / '.fitsy-sim-uses.json').read_text())['devices'][self.udid]
 
+    def test_interrupted_atomic_claim_renewal_keeps_previous_owner_and_recovers(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        claim = self.home / '.fitsy-sim-claim.json'; before = claim.read_bytes()
+        spy = self.root / 'crash-before-replace'; spy.mkdir()
+        (spy / 'sitecustomize.py').write_text("import os,signal\noriginal=os.replace\ndef interrupted(src,dst):\n if str(dst).endswith('/.fitsy-sim-claim.json'):os.kill(os.getpid(),signal.SIGKILL)\n return original(src,dst)\nos.replace=interrupted\n")
+        result = subprocess.run(['bash', str(self.repo / 'scripts/sim/sim'), 'claim'],
+            env={**self.env, 'PYTHONPATH': str(spy)}, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(claim.read_bytes(), before)
+        self.assertEqual(self.run_sim('claim').returncode, 0)
+        self.assertEqual(self.run_sim('release').returncode, 0)
+        self.assertFalse(self.record()['pending_use'])
+        self.assertIsNotNone(self.record()['released_at'])
+
+    def test_malformed_legacy_claim_preserves_raw_owner_evidence_and_recovery_guidance(self):
+        claim = self.home / '.fitsy-sim-claim.json'
+        for raw in [b'{"owner":"owner-a","expires":', b'{}', b'[]']:
+            with self.subTest(raw=raw):
+                claim.write_bytes(raw)
+                for args in [('claim',), ('install', 'fixture.app'), ('release',)]:
+                    result = self.run_sim(*args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('reconcile its owner', result.stderr)
+                    self.assertEqual(claim.read_bytes(), raw)
+                self.assertFalse((self.home / '.fitsy-sim-uses.json').exists())
+
     def test_actual_use_claim_renewal_and_release_survive_owner_metadata_removal(self):
         self.assertEqual(self.run_sim('claim').returncode, 0)
         self.assertEqual(self.run_sim('install', 'fixture.app').returncode, 0)

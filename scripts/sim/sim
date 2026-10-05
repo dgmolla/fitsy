@@ -39,19 +39,22 @@ booted_udid() { xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | he
 # ── Claim sheet ─────────────────────────────────────────────────────────────
 # Multiple agents share one Mac; destructive verbs (boot/install/launch/reset)
 # respect an active claim by someone else. Claims expire on their own so a
-# dead agent never wedges the sim. Claim acquisition is check-then-write, not
-# atomic under the shared simulator lock held for the full command.
+# dead agent never wedges the sim. Claim acquisition uses checked, durable
+# atomic replacement under the shared simulator lock held for the full command.
 CLAIM_FILE="$HOME/.fitsy-sim-claim.json"
 claim_owner() { # prints active owner, or nothing
   [ -f "$CLAIM_FILE" ] || return 0
-  python3 - "$CLAIM_FILE" <<'PY'
-import json, sys, time
+  python3 - "$CLAIM_FILE" "$REPO_ROOT/scripts/sim" <<'PY'
+import sys, time
+sys.dont_write_bytecode = True
+sys.path.insert(0, sys.argv[2])
+from sim_resource_uses import read_claim
 try:
-    d = json.load(open(sys.argv[1]))
-    if d.get("expires", 0) > time.time():
-        print(d.get("owner", ""))
-except Exception:
-    pass
+    d = read_claim(sys.argv[1])
+except ValueError as error:
+    raise SystemExit(str(error))
+if d.get("expires", 0) > time.time():
+    print(d.get("owner", ""))
 PY
 }
 require_claim_or_free() { # identity from FITSY_SIM_OWNER (defaults to "anonymous", which any claim blocks)
@@ -105,16 +108,19 @@ case "$CMD" in
 ' "$OWNER"
       exit 1
     fi
-    python3 - "$CLAIM_FILE" "$ME" "$MIN" <<'PY'
+    python3 - "$CLAIM_FILE" "$ME" "$MIN" "$REPO_ROOT/scripts/sim" <<'PY'
 import json, sys, time
 from pathlib import Path
+sys.dont_write_bytecode = True
+sys.path.insert(0, sys.argv[4])
+from sim_resource_uses import read_claim, save
 path = Path(sys.argv[1])
-previous = json.loads(path.read_text()) if path.exists() else {}
+previous = read_claim(path)
 claim = {"owner": sys.argv[2], "expires": time.time() + int(sys.argv[3]) * 60,
          "claimed_at": time.strftime("%FT%TZ", time.gmtime())}
 if previous.get('owner') == sys.argv[2] and previous.get('expires', 0) > time.time():
     claim['device_uses'] = previous.get('device_uses', [])
-json.dump(claim, open(path, "w"))
+save(path, claim)
 PY
     printf '{"name":"sim-claim","status":"pass","owner":"%s","minutes":%s}
 ' "$ME" "$MIN"

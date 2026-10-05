@@ -101,3 +101,7 @@ Completed named-owner commands without a claim have a bounded command release cl
 Anonymous activity remains uncertain and cannot establish task ownership for deletion.
 Only renewal of an unexpired same-owner claim retains its session devices; expired claim/release without execution cannot restart a device grace period.
 Compiler cleanup scans the whole retained checkout and the exact scratch path immediately before removal, retaining outputs when another process holds source or ownership is uncertain.
+
+Simulator claim updates use atomic fsync and replacement under the existing shared lock.
+A malformed legacy claim remains unchanged and blocks device commands with an explicit owner-reconciliation action; corrupt metadata never proves the device is free.
+The coordinator preserves its raw bytes, checks live task ownership and command evidence under the existing locks, and restores a verified claim or retires only a positively ended owner claim.
