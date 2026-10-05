@@ -65,19 +65,19 @@ async function buildProfileBody(): Promise<Record<string, unknown>> {
       const f = parseTarget(macros.fat);
       const cal = parseTarget(macros.calories);
       if (p !== null && c !== null && f !== null && cal !== null)
-        body.macroTarget = dailyMacroTarget(macros);
+        body.macroTarget = dailyMacroTarget(macros, await getMacroTargetSource());
     }
 
     return body;
 }
 
-function dailyMacroTarget(macros: StoredMacroTargets) {
+function dailyMacroTarget(macros: StoredMacroTargets, source: 'automatic' | 'manual') {
   const daily = {
     proteinG: Math.round(Number(macros.protein) * MEALS_PER_DAY),
     carbsG: Math.round(Number(macros.carbs) * MEALS_PER_DAY),
     fatG: Math.round(Number(macros.fat) * MEALS_PER_DAY),
   };
-  return { ...daily, calories: macroCalories({ protein: daily.proteinG,
+  return { ...daily, source, calories: macroCalories({ protein: daily.proteinG,
     carbs: daily.carbsG, fat: daily.fatG }) };
 }
 
@@ -216,7 +216,7 @@ export async function pullProfileFromServer(): Promise<void> {
     if (claimedTarget) {
       await saveMacroTargets(claimedTarget, 'complete', anonymousTarget!.source, expectedUserId);
       if (!(await stillCurrent())) return;
-      await syncSavedProfileToServer({ macroTarget: dailyMacroTarget(claimedTarget) });
+      await syncSavedProfileToServer({ macroTarget: dailyMacroTarget(claimedTarget, anonymousTarget!.source) });
     }
     if (!(await retryPendingProfileSync())) return;
     if (!(await stillCurrent())) return;
@@ -253,9 +253,12 @@ export async function pullProfileFromServer(): Promise<void> {
       const perMeal: StoredMacroTargets = { protein: String(grams.protein), carbs: String(grams.carbs),
         fat: String(grams.fat), calories: String(macroCalories(grams)) };
       const source = archivedTarget?.source ?? await getMacroTargetSource();
-      const keepAutomatic = source === 'automatic' && localSnapshot
+      // Older APIs lack provenance. Retain only an explicitly tagged local
+      // automatic target that matches; never infer origin from remote numbers.
+      const keepAutomatic = profile.macroTarget.source === 'automatic' ||
+        (profile.macroTarget.source === undefined && source === 'automatic' && localSnapshot
         && (['protein', 'carbs', 'fat', 'calories'] as const)
-          .every(field => localSnapshot.targets[field] === perMeal[field]);
+          .every(field => localSnapshot.targets[field] === perMeal[field]));
       await saveMacroTargets(perMeal, 'complete', keepAutomatic ? 'automatic' : 'manual', expectedUserId);
       if (archivedTarget && await stillCurrent()) await clearArchivedMacroTarget(expectedUserId);
     } else if (archivedTarget && await stillCurrent()) {
@@ -263,7 +266,7 @@ export async function pullProfileFromServer(): Promise<void> {
       // without replacing a newer remote allocation.
       await saveMacroTargets(archivedTarget.targets, 'complete', archivedTarget.source, expectedUserId);
       if (!(await stillCurrent())) return;
-      await syncSavedProfileToServer({ macroTarget: dailyMacroTarget(archivedTarget.targets) });
+      await syncSavedProfileToServer({ macroTarget: dailyMacroTarget(archivedTarget.targets, archivedTarget.source) });
       if (await stillCurrent() && !(await AsyncStorage.getItem(pendingKey(expectedUserId))))
         await clearArchivedMacroTarget(expectedUserId);
     }

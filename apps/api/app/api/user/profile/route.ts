@@ -63,6 +63,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             proteinG: true,
             carbsG: true,
             fatG: true,
+            source: true,
           },
         },
       },
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             proteinG: user.macroTarget.proteinG,
             carbsG: user.macroTarget.carbsG,
             fatG: user.macroTarget.fatG,
+            source: user.macroTarget.source,
           }
         : null,
     };
@@ -123,6 +125,11 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   }
 
   const update = body as Partial<ProfileUpdateRequest>;
+
+  if (update.macroTarget?.source !== undefined &&
+      update.macroTarget.source !== "manual" && update.macroTarget.source !== "automatic") {
+    return NextResponse.json({ error: "macroTarget source must be manual or automatic" }, { status: 400 });
+  }
 
   if (update.preserveMacroTarget !== undefined && typeof update.preserveMacroTarget !== "boolean") {
     return NextResponse.json({ error: "preserveMacroTarget must be a boolean" }, { status: 400 });
@@ -267,12 +274,14 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
             carbsG: update.macroTarget.carbsG,
             fatG: update.macroTarget.fatG,
             goalType: "maintain",
+            source: update.macroTarget.source ?? "manual",
           },
           update: {
             calories: update.macroTarget.calories,
             proteinG: update.macroTarget.proteinG,
             carbsG: update.macroTarget.carbsG,
             fatG: update.macroTarget.fatG,
+            source: update.macroTarget.source ?? "manual",
           },
         });
       } else if (
@@ -302,12 +311,14 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
             carbsG: tdee.carbsG,
             fatG: tdee.fatG,
             goalType: "maintain",
+            source: "automatic",
           },
           update: {
             calories: tdee.calories,
             proteinG: tdee.proteinG,
             carbsG: tdee.carbsG,
             fatG: tdee.fatG,
+            source: "automatic",
           },
         });
       }

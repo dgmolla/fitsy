@@ -255,5 +255,5 @@ test("PATCH accepts performance and preserves explicit macro targets", async () 
   expect(res.status).toBe(200);
   expect(mockPrismaUserUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ goal: "performance" }) }));
   expect(mockCalculateTdee).not.toHaveBeenCalled();
-  expect(mockPrismaMacroTargetUpsert).toHaveBeenCalledWith(expect.objectContaining({ update: macroTarget }));
+  expect(mockPrismaMacroTargetUpsert).toHaveBeenCalledWith(expect.objectContaining({ update: { ...macroTarget, source: 'manual' } }));
 });

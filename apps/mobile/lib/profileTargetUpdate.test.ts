@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { syncSavedProfileToServer } from './profileSync';
+import { pullProfileFromServer, syncSavedProfileToServer } from './profileSync';
 import { saveOnboardingField } from './onboardingStorage';
 import { archiveActiveMacroTargets, getMacroTargetSource, getMacroTargets, saveMacroTargets } from './macroStorage';
 import { calculateMacros, macrosToStored } from './macroCalculator';
@@ -17,6 +17,38 @@ jest.mock('@supabase/supabase-js', () => {
 
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
+
+it.each(['automatic', 'manual'] as const)('restores %s provenance on a fresh device before a goal edit', async source => {
+  await AsyncStorage.clear();
+  const profile = { birthday: '1995-01-01', heightCm: 180, weightKg: 90,
+    sex: 'male' as const, activity: 'active' as const, goal: 'build_muscle' as const };
+  global.fetch = jest.fn().mockImplementation((_url, init) => Promise.resolve({
+    ok: true, status: 200, json: async () => init?.method === 'PATCH' ? {} : {
+      user: { ...profile, activityLevel: profile.activity },
+      macroTarget: { calories: 3207, proteinG: 120, carbsG: 441, fatG: 107, source },
+    },
+  }));
+  await pullProfileFromServer();
+  expect(await getMacroTargetSource()).toBe(source);
+  const restored = await getMacroTargets();
+  const updated = await updateProfileFieldAndTargets('goal', 'lose_fat');
+  expect(updated.targets).toEqual(source === 'automatic'
+    ? macrosToStored(calculateMacros({ ...profile, goal: 'lose_fat' })) : restored);
+  if (source === 'automatic') expect(updated.targets).not.toEqual(restored);
+  await syncSavedProfileToServer();
+  const body = JSON.parse((global.fetch as jest.Mock).mock.calls.at(-1)[1].body);
+  expect(body.macroTarget.source).toBe(source);
+  expect(body.macroTarget.calories).toBe(4 * body.macroTarget.proteinG
+    + 4 * body.macroTarget.carbsG + 9 * body.macroTarget.fatG);
+  // A reinstall discards local tags; server provenance alone must restore them.
+  await AsyncStorage.clear();
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    user: { ...profile, goal: 'lose_fat', activityLevel: profile.activity }, macroTarget: body.macroTarget,
+  }) });
+  await pullProfileFromServer();
+  expect(await getMacroTargetSource()).toBe(source);
+  expect(await getMacroTargets()).toEqual(updated.targets);
+});
 
 it('keeps a manual high-protein target through profile edits and API sync', async () => {
   await AsyncStorage.clear();

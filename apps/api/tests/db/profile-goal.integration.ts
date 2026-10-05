@@ -21,6 +21,7 @@ test('performance profile persists, calculates balanced macros and preserves exp
   const stored = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { macroTarget: true } });
   assert.equal(stored.goal, 'performance');
   assert.ok(stored.macroTarget);
+  assert.equal(stored.macroTarget.source, 'automatic');
   assert.equal(stored.macroTarget.calories,
     stored.macroTarget.proteinG * 4 + stored.macroTarget.carbsG * 4 + stored.macroTarget.fatG * 9);
   assert.ok(stored.macroTarget.proteinG / 3.5 <= 40);
@@ -41,14 +42,14 @@ test('performance profile persists, calculates balanced macros and preserves exp
   assert.equal(legacy.status, 200);
   const legacyProfile = await legacy.json();
   assert.equal(legacyProfile.user.goal, 'maintain', 'old clients receive a supported goal');
-  assert.deepEqual(legacyProfile.macroTarget, macroTarget);
+  assert.deepEqual(legacyProfile.macroTarget, { ...macroTarget, source: 'manual' });
   const unknownSchema = await GET(request(undefined, '999'));
   assert.equal((await unknownSchema.json()).user.goal, 'maintain');
   const refreshed = await GET(request(undefined, '2'));
   assert.equal(refreshed.status, 200);
   const profile = await refreshed.json();
   assert.equal(profile.user.goal, 'performance');
-  assert.deepEqual(profile.macroTarget, macroTarget);
+  assert.deepEqual(profile.macroTarget, { ...macroTarget, source: 'manual' });
   const persisted = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
   assert.equal(persisted.goal, 'performance', 'compatibility serialization must not overwrite the stored goal');
   // The old client pushes its aliased goal alongside a weight-only edit.
@@ -67,4 +68,13 @@ test('performance profile persists, calculates balanced macros and preserves exp
       assert.equal((await unchanged.json()).user.goal, goal);
     }
   }
+  // Explicit generated provenance survives persistence and a fresh GET.
+  assert.equal((await PATCH(request({ macroTarget: { ...macroTarget, source: 'automatic' } }, '2'))).status, 200);
+  assert.equal((await (await GET(request(undefined, '2'))).json()).macroTarget.source, 'automatic');
+  assert.equal((await PATCH(request({ weightKg: 80, preserveMacroTarget: true }, '2'))).status, 200);
+  assert.equal((await (await GET(request(undefined, '2'))).json()).macroTarget.source, 'automatic');
+  // A legacy explicit allocation is manual, even when its numbers match.
+  assert.equal((await PATCH(request({ macroTarget }, '2'))).status, 200);
+  assert.equal((await (await GET(request(undefined, '2'))).json()).macroTarget.source, 'manual');
+  assert.equal((await PATCH(request({ macroTarget: { ...macroTarget, source: 'guessed' } }, '2'))).status, 400);
 });

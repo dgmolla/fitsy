@@ -36,7 +36,7 @@ it('opts into performance goals, restores them and preserves explicit meal targe
   const request = (global.fetch as jest.Mock).mock.calls.at(-1);
   expect(request[0]).toContain('/api/user/profile?goalSchema=2');
   expect(request[1].method).toBe('PATCH');
-  expect(JSON.parse(request[1].body)).toEqual(expect.objectContaining({ goal: 'performance', macroTarget: { calories: 2359, proteinG: 126, carbsG: 259, fatG: 91 } }));
+  expect(JSON.parse(request[1].body)).toEqual(expect.objectContaining({ goal: 'performance', macroTarget: { calories: 2359, proteinG: 126, carbsG: 259, fatG: 91, source: 'manual' } }));
   expect(await getMacroTargets()).toEqual({ ...own, calories: '674' });
 });
 
@@ -100,7 +100,7 @@ it('syncs a linked discovery target to the profile API and restores it on a new 
   await saveMacroTargets({ calories: '620', protein: '45', carbs: '65', fat: '20' }, 'search');
   await saveDiscoveryMacroTargets(linked, 'complete');
   await syncSavedProfileToServer();
-  expect(serverTarget).toEqual({ calories: 2102, proteinG: 140, carbsG: 228, fatG: 70 });
+  expect(serverTarget).toEqual({ calories: 2102, proteinG: 140, carbsG: 228, fatG: 70, source: 'manual' });
   await AsyncStorage.clear();
   await pullProfileFromServer();
   const restored = await getMacroTargets();
