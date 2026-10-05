@@ -7,12 +7,13 @@ import { getOnboardingResume } from '@/lib/onboardingResume';
 import { paywallVariants, readPaywallDecline } from '@/lib/paywallAccess';
 import { ONBOARDING_COMPLETE_KEY } from '@/lib/onboardingCompletion';
 import { getStoredToken } from '@/lib/authClient';
-import { getMacroTargets } from '@/lib/macroStorage';
+import { hasSavedMealTargets } from '@/lib/macroStorage';
 import { readOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
 import { usePurchases } from '@/lib/usePurchases';
 import { onboardingEntry, type EntryDestination } from '@/lib/onboardingEntry';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { openPurchasedDestination } from '@/lib/paywallJourney';
+import { replayPendingProfileSync } from '@/lib/profileSync';
 
 export default function Index() {
   const navigation = useNavigation();
@@ -25,9 +26,10 @@ export default function Index() {
       try {
         const [token, resume, declined, completed, targets, onboardingPreviewEntry] = await Promise.all([
           getStoredToken(), getOnboardingResume(), readPaywallDecline(),
-          AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY), getMacroTargets(), readOnboardingPreviewEntry(),
+          AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY), hasSavedMealTargets(), readOnboardingPreviewEntry(),
         ]);
         if (!current) return;
+        if (token) void replayPendingProfileSync();
         if (token && purchasesReady && isUnknown) {
           setDestination('/welcome/subscription-check');
           return;

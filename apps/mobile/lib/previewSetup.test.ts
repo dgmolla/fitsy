@@ -11,7 +11,7 @@ jest.mock('expo-secure-store', () => ({
   getItemAsync: async (key: string) => secure[key] ?? null,
   setItemAsync: async (key: string, value: string) => { secure[key] = value; },
 }));
-const targets = { calories: '600', protein: '40', carbs: '60', fat: '20' };
+const targets = { calories: '580', protein: '40', carbs: '60', fat: '20' };
 function setup() {
   let module!: typeof import('./previewSetup');
   jest.isolateModules(() => { module = require('./previewSetup'); });

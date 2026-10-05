@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculateAge } from '../../../packages/shared/src/utils/dateUtils';
+import { SUGGESTED_CALORIE_RANGE } from '../../../packages/shared/src/utils/macroTargets';
 import type { TriedApproach } from './onboardingPersonalization';
 
 const KEY = '@fitsy/onboarding';
@@ -81,5 +82,5 @@ export function calculateSuggestedCalories(data: OnboardingData): number {
   const bmr = calcBMR(weight, height, age, sex);
   const tdee = Math.round(bmr * (ACTIVITY_MULTIPLIERS[activity] ?? ACTIVITY_MULTIPLIERS.lightly_active));
   const adjusted = tdee + (GOAL_ADJUSTMENTS[goal] ?? 0);
-  return Math.max(1200, Math.min(3500, adjusted));
+  return Math.max(SUGGESTED_CALORIE_RANGE.min, Math.min(SUGGESTED_CALORIE_RANGE.max, adjusted));
 }

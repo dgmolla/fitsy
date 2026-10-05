@@ -1,23 +1,32 @@
 import { api } from './api';
 import { getStoredToken } from './authClient';
 import { getOnboardingData, type OnboardingData } from './onboardingStorage';
-import { getMacroTargets, saveMacroTargets, type StoredMacroTargets } from './macroStorage';
+import { clearArchivedMacroTarget, getAnonymousCompleteTarget, getArchivedMacroTarget, getDiscoveryMacroTargetSnapshot, getMacroTargetSnapshot, getMacroTargetSource, getQuarantinedLegacyTarget, saveMacroTargets, type StoredMacroTargets } from './macroStorage';
 import { MEALS_PER_DAY } from './macroCalculator';
+import { macroCalories, parseTarget } from './macroEnergy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
 import type { ProfileResponse as ProfileContract, UserGoalV2 } from '@fitsy/shared';
 
 // This client opts into goalSchema=2; legacy clients keep the default contract.
 type ProfileResponse = ProfileContract<UserGoalV2>;
 
 const ONBOARDING_KEY = '@fitsy/onboarding';
+const PENDING_PROFILE_SYNC_KEY = '@fitsy/pending_profile_sync';
+const pendingKey = (userId: string) => `${PENDING_PROFILE_SYNC_KEY}:${userId}`;
+let lastPush: Promise<boolean> = Promise.resolve(true);
+let savedSyncQueue: Promise<void> = Promise.resolve();
+let profileRevision = 0;
+let retryCount = 0;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Fetch the user's profile from the server.
  * Returns null on auth failure or network error.
  */
-export async function fetchProfile(): Promise<ProfileResponse | null> {
+export async function fetchProfile(expectedUserId?: string): Promise<ProfileResponse | null> {
   try {
-    return await api.get<ProfileResponse>('/api/user/profile?goalSchema=2', true);
+    return await api.get<ProfileResponse>('/api/user/profile?goalSchema=2', true, {}, expectedUserId);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[profileSync] fetchProfile failed:', err);
@@ -27,17 +36,17 @@ export async function fetchProfile(): Promise<ProfileResponse | null> {
 
 /**
  * Push local profile + macro targets to the server.
- * Fire-and-forget — data stays local on failure (next push retries).
+ * Returns whether the serialized write reached the API. Callers can keep a
+ * pending local edit when a transient request fails.
  */
-export async function pushProfileToServer(): Promise<void> {
-  try {
-    const token = await getStoredToken();
-    if (!token) return;
-
-    const [onboarding, macros] = await Promise.all([
+async function buildProfileBody(): Promise<Record<string, unknown>> {
+    const [onboarding, macroSnapshot, discoverySnapshot] = await Promise.all([
       getOnboardingData(),
-      getMacroTargets(),
+      getMacroTargetSnapshot(),
+      getDiscoveryMacroTargetSnapshot(),
     ]);
+    const macros = macroSnapshot?.targets;
+    const partialFilter = !macros && discoverySnapshot?.mode === 'search';
 
     const body: Record<string, unknown> = {};
 
@@ -49,30 +58,132 @@ export async function pushProfileToServer(): Promise<void> {
     if (onboarding.goal) body.goal = onboarding.goal;
 
     // Convert per-meal → daily (×MEALS_PER_DAY)
-    if (macros) {
-      const p = parseFloat(macros.protein);
-      const c = parseFloat(macros.carbs);
-      const f = parseFloat(macros.fat);
-      const cal = parseFloat(macros.calories);
-      if (!isNaN(p) && !isNaN(c) && !isNaN(f) && !isNaN(cal)) {
-        body.macroTarget = {
-          calories: Math.round(cal * MEALS_PER_DAY),
-          proteinG: Math.round(p * MEALS_PER_DAY),
-          carbsG: Math.round(c * MEALS_PER_DAY),
-          fatG: Math.round(f * MEALS_PER_DAY),
-        };
-      }
+    if (partialFilter) body.preserveMacroTarget = true;
+    if (macros && !partialFilter) {
+      const p = parseTarget(macros.protein);
+      const c = parseTarget(macros.carbs);
+      const f = parseTarget(macros.fat);
+      const cal = parseTarget(macros.calories);
+      if (p !== null && c !== null && f !== null && cal !== null)
+        body.macroTarget = dailyMacroTarget(macros);
     }
 
-    if (Object.keys(body).length === 0) return;
+    return body;
+}
 
-    await api.patch('/api/user/profile?goalSchema=2', body, true);
+function dailyMacroTarget(macros: StoredMacroTargets) {
+  const daily = {
+    proteinG: Math.round(Number(macros.protein) * MEALS_PER_DAY),
+    carbsG: Math.round(Number(macros.carbs) * MEALS_PER_DAY),
+    fatG: Math.round(Number(macros.fat) * MEALS_PER_DAY),
+  };
+  return { ...daily, calories: macroCalories({ protein: daily.proteinG,
+    carbs: daily.carbsG, fat: daily.fatG }) };
+}
+
+async function performProfilePush(expectedUserId: string, savedBody?: Record<string, unknown>): Promise<boolean> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user?.id !== expectedUserId) return false;
+    const token = await getStoredToken();
+    if (!token) return false;
+    const body = savedBody ?? await buildProfileBody();
+    if (Object.keys(body).length === 0) return true;
+    await api.patch('/api/user/profile?goalSchema=2', body, true, expectedUserId);
+    return true;
   } catch (err) {
     // Data stays local; the next pushProfileToServer call retries. Surface in
     // console so we don't silently lose the entire profile sync silently
     // during onboarding the way we did before S-221.
     // eslint-disable-next-line no-console
     console.warn('[profileSync] pushProfileToServer failed:', err);
+    return false;
+  }
+}
+
+/** Serialize all profile writes so a slower older request cannot overwrite a newer edit. */
+export function pushProfileToServer(expectedUserId?: string, savedBody?: Record<string, unknown>): Promise<boolean> {
+  const session = expectedUserId ? null : supabase.auth.getSession();
+  const run = async () => {
+    const userId = expectedUserId ?? (await session!)?.data.session?.user?.id ?? null;
+    if (!userId) return false;
+    return performProfilePush(userId, savedBody);
+  };
+  const attempt = lastPush.then(run, run);
+  lastPush = attempt;
+  return attempt;
+}
+
+async function retryPendingProfileSync(scheduleRetry = true): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id;
+  if (!userId) return true;
+  const key = pendingKey(userId);
+  const raw = await AsyncStorage.getItem(key);
+  if (!raw) return true;
+  const pending = JSON.parse(raw) as { revision: number; body: Record<string, unknown> };
+  if (await pushProfileToServer(userId, pending.body)) {
+    if (await AsyncStorage.getItem(key) === raw) {
+      await AsyncStorage.removeItem(key);
+      retryCount = 0;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+    return true;
+  }
+  if (scheduleRetry && !retryTimer) {
+    const delay = [1000, 5000, 15000][retryCount++] ?? 60000;
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      void retryPendingProfileSync().catch(err => {
+        // eslint-disable-next-line no-console
+        console.warn('[profileSync] pending profile retry failed:', err);
+      });
+    }, delay);
+  }
+  return false;
+}
+
+/** Keep a failed local edit pending and retry before a later profile pull. */
+async function performSavedProfileSync(revision: number,
+  session: ReturnType<typeof supabase.auth.getSession>, bodyOverride?: Record<string, unknown>): Promise<void> {
+  try {
+    const { data } = await session;
+    const userId = data.session?.user?.id;
+    if (!userId) {
+      await pushProfileToServer();
+      return;
+    }
+    if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
+    retryCount = 0;
+    const body = bodyOverride ?? await buildProfileBody();
+    if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
+    if (Object.keys(body).length === 0) return;
+    await AsyncStorage.setItem(pendingKey(userId),
+      JSON.stringify({ revision, body }));
+    await retryPendingProfileSync();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[profileSync] could not queue saved profile:', err);
+  }
+}
+
+export function syncSavedProfileToServer(bodyOverride?: Record<string, unknown>): Promise<void> {
+  const revision = ++profileRevision;
+  const session = supabase.auth.getSession();
+  const attempt = savedSyncQueue.then(() => performSavedProfileSync(revision, session, bodyOverride),
+    () => performSavedProfileSync(revision, session, bodyOverride));
+  savedSyncQueue = attempt.catch(() => {});
+  return attempt;
+}
+
+/** Resume a durable edit on ordinary authenticated app startup. */
+export async function replayPendingProfileSync(): Promise<void> {
+  try {
+    await retryPendingProfileSync();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[profileSync] pending profile replay failed:', err);
   }
 }
 
@@ -82,8 +193,26 @@ export async function pushProfileToServer(): Promise<void> {
  */
 export async function pullProfileFromServer(): Promise<void> {
   try {
-    const profile = await fetchProfile();
-    if (!profile) return;
+    const { data: startingAuth } = await supabase.auth.getSession();
+    const expectedUserId = startingAuth.session?.user?.id;
+    if (!expectedUserId) return;
+    const stillCurrent = async () =>
+      (await supabase.auth.getSession()).data.session?.user?.id === expectedUserId;
+    await getQuarantinedLegacyTarget();
+    const anonymousTarget = await getAnonymousCompleteTarget();
+    const archivedTarget = anonymousTarget ? null : await getArchivedMacroTarget(expectedUserId);
+    if (!(await stillCurrent())) return;
+    const claimedTarget = anonymousTarget?.targets ?? archivedTarget?.targets;
+    if (claimedTarget) {
+      await saveMacroTargets(claimedTarget, 'complete', anonymousTarget?.source ?? archivedTarget?.source ?? 'manual', expectedUserId);
+      if (!(await stillCurrent())) return;
+      await syncSavedProfileToServer({ macroTarget: dailyMacroTarget(claimedTarget) });
+    }
+    if (!(await retryPendingProfileSync())) return;
+    if (archivedTarget) await clearArchivedMacroTarget(expectedUserId);
+    if (!(await stillCurrent())) return;
+    const profile = await fetchProfile(expectedUserId);
+    if (!profile || !(await stillCurrent())) return;
 
     // Write body stats to onboarding storage
     const onboarding: OnboardingData = {};
@@ -95,18 +224,29 @@ export async function pullProfileFromServer(): Promise<void> {
     if (profile.user.goal !== null) onboarding.goal = profile.user.goal;
 
     if (Object.keys(onboarding).length > 0) {
+      if (!(await stillCurrent())) return;
       await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify(onboarding));
     }
 
     // Convert daily → per-meal (÷MEALS_PER_DAY) and write to macro storage
+    const localSnapshot = await getMacroTargetSnapshot();
+    const discoverySnapshot = await getDiscoveryMacroTargetSnapshot();
+    if (!(await stillCurrent())) return;
+    if (!localSnapshot && discoverySnapshot?.mode === 'search')
+      await saveMacroTargets(discoverySnapshot.targets, 'search', 'manual', expectedUserId);
     if (profile.macroTarget) {
-      const perMeal: StoredMacroTargets = {
-        protein: String(Math.round(profile.macroTarget.proteinG / MEALS_PER_DAY)),
-        carbs: String(Math.round(profile.macroTarget.carbsG / MEALS_PER_DAY)),
-        fat: String(Math.round(profile.macroTarget.fatG / MEALS_PER_DAY)),
-        calories: String(Math.round(profile.macroTarget.calories / MEALS_PER_DAY)),
+      const grams = {
+        protein: Math.round(profile.macroTarget.proteinG / MEALS_PER_DAY),
+        carbs: Math.round(profile.macroTarget.carbsG / MEALS_PER_DAY),
+        fat: Math.round(profile.macroTarget.fatG / MEALS_PER_DAY),
       };
-      await saveMacroTargets(perMeal);
+      const perMeal: StoredMacroTargets = { protein: String(grams.protein), carbs: String(grams.carbs),
+        fat: String(grams.fat), calories: String(macroCalories(grams)) };
+      const source = await getMacroTargetSource();
+      const keepAutomatic = source === 'automatic' && localSnapshot
+        && (['protein', 'carbs', 'fat', 'calories'] as const)
+          .every(field => localSnapshot.targets[field] === perMeal[field]);
+      await saveMacroTargets(perMeal, 'complete', keepAutomatic ? 'automatic' : 'manual', expectedUserId);
     }
   } catch (err) {
     // Use whatever is in local storage; surface in dev console so we can spot

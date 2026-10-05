@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearOnboardingResume } from './onboardingResume';
-import { pushProfileToServer } from './profileSync';
+import { syncSavedProfileToServer } from './profileSync';
 import { getOnboardingData } from './onboardingStorage';
 import { trackOnboardingCompleted } from './analytics';
 import { markPurchasedContinuation } from './paywallIntent';
@@ -24,7 +24,7 @@ export async function recordOnboardingComplete(discounted: boolean): Promise<boo
   if ((await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)) === 'true') return false;
   await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
   if (discounted) await AsyncStorage.setItem(DISCOUNT_APPLIED_KEY, 'true');
-  pushProfileToServer();
+  void syncSavedProfileToServer();
   const d = await getOnboardingData();
   trackOnboardingCompleted({
     goal: d.goal,

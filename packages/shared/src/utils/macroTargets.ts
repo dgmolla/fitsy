@@ -6,13 +6,18 @@
  * https://ods.od.nih.gov/factsheets/ExerciseAndAthleticPerformance-HealthProfessional/
  */
 const GOAL_RATIOS = {
-  build_muscle: { protein: 0.25, carbs: 0.45, fat: 0.30 },
-  lose_fat: { protein: 0.25, carbs: 0.45, fat: 0.30 },
-  performance: { protein: 0.20, carbs: 0.55, fat: 0.25 },
-  maintain: { protein: 0.20, carbs: 0.50, fat: 0.30 },
+  build_muscle: { protein: 0.15, carbs: 0.55, fat: 0.30 },
+  lose_fat: { protein: 0.14, carbs: 0.56, fat: 0.30 },
+  performance: { protein: 0.13, carbs: 0.62, fat: 0.25 },
+  maintain: { protein: 0.12, carbs: 0.58, fat: 0.30 },
 } as const;
 
 export type MacroGoal = keyof typeof GOAL_RATIOS;
+export const SUGGESTED_CALORIE_RANGE = { min: 1200, max: 3500 } as const;
+
+export function caloriesFromMacros(grams: { protein: number; carbs: number; fat: number }): number {
+  return grams.protein * 4 + grams.carbs * 4 + grams.fat * 9;
+}
 
 /** Keep daily values unrounded so consumers can round once at their storage boundary. */
 export function calculateDailyMacros(calories: number, goal: MacroGoal = 'maintain') {

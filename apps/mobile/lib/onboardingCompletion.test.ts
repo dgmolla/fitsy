@@ -18,7 +18,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
     setItem: async (key: string, value: string) => { store[key] = value; },
   },
 }));
-jest.mock('./profileSync', () => ({ pushProfileToServer: (...a: unknown[]) => mockPush(...a) }));
+jest.mock('./profileSync', () => ({ syncSavedProfileToServer: (...a: unknown[]) => mockPush(...a) }));
 jest.mock('./onboardingStorage', () => ({
   getOnboardingData: async () => ({ goal: 'lose', activity: 'moderate', weightKg: 70, heightCm: undefined }),
 }));

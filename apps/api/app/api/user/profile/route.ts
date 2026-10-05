@@ -124,6 +124,13 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
   const update = body as Partial<ProfileUpdateRequest>;
 
+  if (update.preserveMacroTarget !== undefined && typeof update.preserveMacroTarget !== "boolean") {
+    return NextResponse.json({ error: "preserveMacroTarget must be a boolean" }, { status: 400 });
+  }
+  if (update.preserveMacroTarget && update.macroTarget) {
+    return NextResponse.json({ error: "macroTarget cannot be combined with preserveMacroTarget" }, { status: 400 });
+  }
+
   // ─── Field validation ──────────────────────────────────────────────────────
 
   if (update.birthday !== undefined) {
@@ -269,6 +276,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
           },
         });
       } else if (
+        !update.preserveMacroTarget &&
         user.birthday !== null &&
         user.heightCm !== null &&
         user.weightKg !== null &&

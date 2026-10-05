@@ -104,6 +104,15 @@ it('routes a restored account with no local targets through macro setup', async 
   expect(screen.queryByText('Meal search')).toBeNull();
 });
 
+it('resumes search with a saved partial filter after purchase', async () => {
+  action = 'resubscribe';
+  await clearMacroTargets();
+  await saveMacroTargets({ calories: '600', protein: '', carbs: '64', fat: '20' }, 'search');
+  const screen = render(<Journey />);
+  await waitFor(() => expect(screen.getByText('Meal search')).toBeTruthy());
+  expect(screen.queryByText('Set macro targets')).toBeNull();
+});
+
 it('shows optional reminders without replaying stale parent payment params', async () => {
   action = 'notification';
   const screen = render(<Journey />);

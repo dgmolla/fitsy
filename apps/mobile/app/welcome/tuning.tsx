@@ -1,15 +1,16 @@
 import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
 import { useOnboardingStep } from '@/lib/onboardingResume';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { getOnboardingData, saveOnboardingField, type Goal } from '@/lib/onboardingStorage';
-import { getMacroTargets, saveMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
+import { getMacroTargets, getMacroTargetSource, saveMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
 import { calculateMacros } from '@/lib/macroCalculator';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
+import { isCompleteTarget, macroCalories, parseTarget, settleTargetEdit } from '@/lib/macroEnergy';
 
 const FIELDS = [['calories', 'Calories', 'kcal'], ['protein', 'Protein', 'g'], ['carbs', 'Carbs', 'g'], ['fat', 'Fat', 'g']] as const;
 const GOALS = [['lose_fat', 'Lose weight'], ['performance', 'Improve performance'], ['build_muscle', 'Build muscle']] as const;
@@ -27,33 +28,55 @@ function PlanReadyScreen() {
   const [data, setData] = useState<Awaited<ReturnType<typeof getOnboardingData>>>({});
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const lastEdited = useRef<keyof StoredMacroTargets>('calories');
+  const manuallyEdited = useRef(false);
+  const hadAllocation = useRef(false);
   // Store the profile basis separately from edited targets. Back must not
   // silently replace manual edits unless the underlying answers changed.
   useFocusEffect(useCallback(() => {
     let cancelled = false;
-    void Promise.all([getOnboardingData(), getMacroTargets()]).then(([d, saved]) => {
+    void Promise.all([getOnboardingData(), getMacroTargets(), getMacroTargetSource()]).then(([d, saved, source]) => {
       if (cancelled) return;
       setData(d);
-      setTargets(saved && (d.targetMode === 'known' || d.targetBasis === basisOf(d)) ? saved : d.targetMode === 'known' ? empty : asStrings(calculateMacros(d)));
+      const reusable = !!saved && (d.targetMode === 'known' || d.targetBasis === basisOf(d));
+      manuallyEdited.current = reusable && source === 'manual';
+      const nextTargets = reusable ? saved! : d.targetMode === 'known' ? empty : asStrings(calculateMacros(d));
+      hadAllocation.current = isCompleteTarget(nextTargets);
+      setTargets(nextTargets);
       setReady(true);
     });
     return () => { cancelled = true; };
   }, []));
 
-  const valid = FIELDS.every(([key]) => targets[key].trim() !== '' && Number.isFinite(Number(targets[key]))
-    && Number(targets[key]) >= (key === 'calories' ? 1 : 0) && Number(targets[key]) <= (key === 'calories' ? 4000 : 500));
+  const valid = FIELDS.every(([key]) => parseTarget(targets[key]) !== null
+    && Number.isInteger(Number(targets[key]))
+    && Number(targets[key]) >= (key === 'calories' ? 1 : 0) && Number(targets[key]) <= (key === 'calories' ? 4000 : 500))
+    && Number(targets.calories) === macroCalories({ protein: Number(targets.protein), carbs: Number(targets.carbs), fat: Number(targets.fat) });
+  const entered = { protein: parseTarget(targets.protein), carbs: parseTarget(targets.carbs), fat: parseTarget(targets.fat) };
+  const incomplete = Object.values(entered).some(value => value === null);
+  const enteredEnergy = macroCalories({ protein: entered.protein ?? 0, carbs: entered.carbs ?? 0, fat: entered.fat ?? 0 });
+  const calorieShortfall = incomplete && parseTarget(targets.calories) !== null
+    && enteredEnergy > Number(targets.calories);
   async function pickGoal(goal: Goal) {
     const next = { ...data, goal };
     setData(next);
     setTargets(asStrings(calculateMacros(next)));
+    hadAllocation.current = true;
+    manuallyEdited.current = false;
     await saveOnboardingField('goal', goal);
   }
   async function proceed() {
-    if (!valid || busy) return;
+    if (hadAllocation.current && !isCompleteTarget(targets)) return;
+    const settled = settleTargetEdit(targets, lastEdited.current, data.goal ?? 'maintain', true);
+    const complete = FIELDS.every(([key]) => parseTarget(settled[key]) !== null
+      && Number.isInteger(Number(settled[key]))
+      && Number(settled[key]) >= (key === 'calories' ? 1 : 0)
+      && Number(settled[key]) <= (key === 'calories' ? 4000 : 500));
+    if (!complete || busy) return;
     const isCurrent = begin();
     setBusy(true);
     try {
-      await saveMacroTargets(targets);
+      await saveMacroTargets(settled, 'complete', data.targetMode === 'known' || manuallyEdited.current ? 'manual' : 'automatic');
       await saveOnboardingField('targetBasis', basisOf(data));
       await saveOnboardingField('targetChoiceInProgress', false);
       if (!isCurrent()) return;
@@ -71,13 +94,16 @@ function PlanReadyScreen() {
             <Text style={s.label}>{label} / meal</Text>
             <View style={s.inputRow}>
               <TextInput style={s.input} keyboardType="decimal-pad" value={targets[key]} editable={ready && !busy} selectTextOnFocus
-                onChangeText={value => setTargets(previous => ({ ...previous, [key]: value.replace(/[^0-9.]/g, '') }))}
+                onChangeText={value => { lastEdited.current = key; manuallyEdited.current = true; setTargets(previous => ({ ...previous, [key]: value.replace(/[^0-9.]/g, '') })); }}
+                onBlur={() => setTargets(previous => hadAllocation.current && !isCompleteTarget(previous)
+                  ? previous : settleTargetEdit(previous, key, data.goal ?? 'maintain', true))}
                 accessibilityLabel={`${label} per meal`} testID={`meal-target-${key}`} placeholder="0" maxLength={7} />
               <Text style={s.unit}>{unit}</Text>
             </View>
           </View>
         ))}
       </View>
+      {calorieShortfall && <Text style={s.note} accessibilityLiveRegion="polite">Calories must cover the macros you entered.</Text>}
       {data.targetMode !== 'known' && <View style={s.goals}>
         <Text style={s.note}>Your goal · Tap to change</Text>
         {GOALS.map(([goal, label]) => <AnimatedPress key={goal} style={[s.goal, data.goal === goal && s.selected]}

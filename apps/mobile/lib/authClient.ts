@@ -8,6 +8,7 @@ import type {
   GoogleAuthResponse,
 } from '@fitsy/shared';
 import { supabase } from './supabase';
+import { archiveActiveMacroTargets, clearActiveMacroTargets } from './macroStorage';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 // SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
@@ -42,12 +43,15 @@ export async function storeToken(token: string): Promise<void> {
  * Clear all auth state — Supabase session AND legacy token. Used by logout,
  * account deletion, and the 401 unauthorized handler in api.ts.
  */
-export async function clearToken(): Promise<void> {
+export async function clearToken(options: { forgetTargets?: boolean } = {}): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  await archiveActiveMacroTargets(data.session?.user?.id ?? null, options.forgetTargets);
   // Supabase's signOut clears its own SecureStore key (the session blob).
   await supabase.auth.signOut().catch(() => {
     // signOut may fail offline — don't let that block local cleanup.
   });
   await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await clearActiveMacroTargets();
 }
 
 /**

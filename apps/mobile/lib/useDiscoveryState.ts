@@ -13,7 +13,8 @@ import { useDiscoveryLocation } from './useDiscoveryLocation';
 import { useEntitlementMismatch } from './useEntitlementMismatch';
 import { usePurchases } from './usePurchases';
 import { routeToPaywall } from './teaserGate';
-import { getMacroTargets, saveMacroTargets } from './macroStorage';
+import { getDiscoveryMacroTargetSnapshot, saveDiscoveryMacroTargets, type MacroTargetMode } from './macroStorage';
+import { syncSavedProfileToServer } from './profileSync';
 import { getPreviewSetup } from './previewSetup';
 import { saveOnboardingField } from './onboardingStorage';
 import { onboardingPitch, type TriedApproach } from './onboardingPersonalization';
@@ -32,6 +33,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     if (isOnboardingPreview) trackOnboardingScreenView('results');
   }, [isOnboardingPreview]);
   const [inputs, setInputs] = useState<MacroValues>(DEFAULT_INPUTS);
+  const [filterMode, setFilterMode] = useState<MacroTargetMode>('search');
   const { entitled, isPro, syncEntitlement, storeConfirmed } = usePurchases();
   const tourEditRef = useRef<View | null>(null);
   const tourSearchRef = useRef<View | null>(null);
@@ -72,8 +74,14 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const finishTour = useCallback(() => { cancelDemo(); finishPreviewTour(); }, [cancelDemo, finishPreviewTour]);
   useFocusEffect(
     useCallback(() => {
-      getMacroTargets()
-        .then((saved) => {
+      let live = true;
+      setTargetsLoaded(false);
+      getDiscoveryMacroTargetSnapshot()
+        .then((snapshot) => {
+          if (!live) return;
+          const saved = snapshot?.targets;
+          if (snapshot) setFilterMode(snapshot.mode);
+          else setFilterMode('search');
           if (saved) {
             setInputs((prev) =>
               prev.protein === saved.protein &&
@@ -83,13 +91,14 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
                 ? prev
                 : saved,
             );
-          }
+          } else setInputs(DEFAULT_INPUTS);
         })
         .catch((err: unknown) => {
           // eslint-disable-next-line no-console
           console.warn('[search] getMacroTargets failed:', err);
         })
-        .finally(() => setTargetsLoaded(true));
+        .finally(() => { if (live) setTargetsLoaded(true); });
+      return () => { live = false; };
     }, []),
   );
   useFocusEffect(useCallback(() => {
@@ -139,8 +148,10 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     ? 'Your purchase went through. Tap to refresh if this takes more than a moment.'
     : 'Tap to refresh.';
   const unlockLabel = `${unlockTitle} tap to refresh`;
-  const persistMacroTargets = useCallback((values: MacroValues) => {
-    saveMacroTargets(values).catch((err: unknown) => {
+  const persistMacroTargets = useCallback((values: MacroValues, mode: MacroTargetMode) => {
+    saveDiscoveryMacroTargets(values, mode).then(() => {
+      if (mode === 'complete') void syncSavedProfileToServer();
+    }).catch((err: unknown) => {
       // eslint-disable-next-line no-console
       console.warn('[search] saveMacroTargets failed:', err);
       trackSaveMacroTargetsFailed(err);
@@ -151,16 +162,17 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Retry',
-            onPress: () => persistMacroTargets(values),
+            onPress: () => persistMacroTargets(values, mode),
           },
         ],
       );
     });
   }, []);
-  function handleApplyFilters(newValues: MacroValues) {
+  function handleApplyFilters(newValues: MacroValues, mode: MacroTargetMode = 'complete') {
     setFilterVisible(false);
     setInputs(newValues);
-    persistMacroTargets(newValues);
+    setFilterMode(mode);
+    persistMacroTargets(newValues, mode);
     trackMacroTargetsEdited({
       entry_point: 'search',
       has_protein: newValues.protein !== '',
@@ -211,7 +223,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
       { key: 'more', title: results.length === 0 ? 'Keep exploring.' : 'Explore full menus.', body: results.length === 0 ? 'Try another dish or area. Your targets stay saved. Unlock full menus with Pro when you find a meal.' : 'Explore full menus with Pro. Try your first craving now.', target: tourMoreRef, placement: 'above' as const },
     ]; }, [tried, results, demo.typing, loading, error, emptyTour]);
 
-  return { navigation, isOnboardingPreview, tried, inputs, query, setQuery: demo.editQuery, canSearch, hasQuery, location,
+  return { navigation, isOnboardingPreview, tried, inputs, filterMode, query, setQuery: demo.editQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible: tour.visible, startTour: tour.start,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown: demo.showStep, cancelTourTyping: demo.cancel, handleClearQuery, handleApplyFilters,

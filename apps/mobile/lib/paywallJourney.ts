@@ -1,6 +1,6 @@
 import { StackRouter, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { clearPaywallIntent, getPaywallIntent, getPurchasedContinuation } from './paywallIntent';
-import { getMacroTargets } from './macroStorage';
+import { hasSavedMealTargets } from './macroStorage';
 
 type Navigation = Pick<NavigationProp<ParamListBase>, 'reset' | 'getParent'> & {
   getState: () => ReturnType<NavigationProp<ParamListBase>['getState']> | undefined;
@@ -52,7 +52,7 @@ export async function openPurchasedDestination(navigation: Navigation, options?:
   const resume = options && 'resumeOnly' in options;
   const intent = resume ? await getPurchasedContinuation() : await getPaywallIntent();
   if (resume && (!intent || !options.isCurrent())) return false;
-  if (options && 'requireTargets' in options && !(await getMacroTargets())) {
+  if (options && 'requireTargets' in options && !(await hasSavedMealTargets())) {
     resetJourney(navigation, { index: 0, routes: [{ name: 'macro-setup' }] });
     return true;
   }

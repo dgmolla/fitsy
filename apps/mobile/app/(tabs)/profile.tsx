@@ -16,15 +16,16 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
-import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
-import { getOnboardingData, saveOnboardingField, type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
+import { getMacroTargets, getQuarantinedLegacyTarget, restoreQuarantinedLegacyTarget,
+  saveMacroTargets, type MacroTargetMode } from '@/lib/macroStorage';
+import { getOnboardingData, type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
 import { calculateAge } from '@fitsy/shared';
-import { pushProfileToServer } from '@/lib/profileSync';
+import { syncSavedProfileToServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
 import { MACRO_COLORS } from '@/lib/macroColors';
-import { calculateMacros, macrosToStored } from '@/lib/macroCalculator';
+import { updateProfileFieldAndTargets } from '@/lib/profileTargetUpdate';
 import { openLegalLink } from '@/lib/legalLinks';
 import {
   trackMacroTargetsEdited,
@@ -72,6 +73,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
+  const [legacyTargetMode, setLegacyTargetMode] = useState<MacroTargetMode | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const [profile, setProfile] = useState<OnboardingData>({});
   const [editField, setEditField] = useState<EditField>(null);
@@ -88,10 +90,11 @@ export default function ProfileScreen() {
           ]);
           if (token) setEmail(decodeEmailFromToken(token));
           if (stored) setMacroTargets(stored as unknown as MacroValues);
+          setLegacyTargetMode((await getQuarantinedLegacyTarget())?.mode ?? null);
           setProfile(onboarding);
           const snapshot = JSON.stringify(onboarding);
           if (prevProfile.current && prevProfile.current !== snapshot) {
-            pushProfileToServer();
+            void syncSavedProfileToServer();
           }
           prevProfile.current = snapshot;
         } catch (err) {
@@ -115,7 +118,7 @@ export default function ProfileScreen() {
     try {
       await api.del('/api/user');
       trackProfileAccountDeleted({ success: true });
-      await clearToken();
+      await clearToken({ forgetTargets: true });
       router.replace('/welcome/problem');
     } catch {
       trackProfileAccountDeleted({ success: false });
@@ -151,14 +154,28 @@ export default function ProfileScreen() {
   }, [handleDelete, isPro, showManageSubscriptions]);
 
   async function updateFieldAndRecalc<K extends keyof OnboardingData>(field: K, value: OnboardingData[K]) {
-    await saveOnboardingField(field, value);
-    const updated = await getOnboardingData();
+    const { profile: updated, targets } = await updateProfileFieldAndTargets(field, value);
     setProfile(updated);
-    const newMacros = calculateMacros(updated);
-    const stored = macrosToStored(newMacros);
-    await saveMacroTargets(stored);
-    setMacroTargets(stored);
-    pushProfileToServer();
+    if (targets) setMacroTargets(targets);
+    void syncSavedProfileToServer();
+  }
+
+  function offerLegacyRestore() {
+    const kind = legacyTargetMode === 'search' ? 'search filter' : 'meal target';
+    Alert.alert(`Restore older ${kind}?`,
+      `This device has an older ${kind} without an account label. Restore it to this account?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Restore', onPress: () => {
+          void restoreQuarantinedLegacyTarget().then(snapshot => {
+            if (!snapshot) return;
+            setLegacyTargetMode(null);
+            if (snapshot.mode === 'complete') {
+              setMacroTargets(snapshot.targets);
+              void syncSavedProfileToServer();
+            }
+          });
+        } },
+      ]);
   }
 
   // `editField` is the key used internally by ProfileEditSheet, but the
@@ -318,6 +335,13 @@ export default function ProfileScreen() {
             </View>
           </Pressable>
         )}
+        {legacyTargetMode && (
+          <Pressable testID="profile-restore-older-target" style={s.feedbackBanner}
+            accessibilityRole="button" onPress={offerLegacyRestore}>
+            <Text style={s.feedbackValue}>Restore older {legacyTargetMode === 'search' ? 'search filter' : 'meal target'}</Text>
+            <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
+          </Pressable>
+        )}
 
         {/* Feedback */}
         <Pressable testID="profile-feedback" style={s.feedbackBanner} onPress={() => router.push('/feedback-board')}>
@@ -368,11 +392,13 @@ export default function ProfileScreen() {
     <FilterPopup
       visible={filterVisible}
       values={macroTargets ?? { protein: '', carbs: '', fat: '', calories: '' }}
+      mode="complete"
+      goal={profile.goal}
       onApply={async (updated) => {
         setFilterVisible(false);
         setMacroTargets(updated);
         await saveMacroTargets(updated);
-        pushProfileToServer();
+        void syncSavedProfileToServer();
         trackMacroTargetsEdited({
           entry_point: 'profile',
           has_protein: updated.protein !== '',

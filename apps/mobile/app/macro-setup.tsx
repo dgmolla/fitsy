@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { saveMacroTargets } from '@/lib/macroStorage';
-import { pushProfileToServer } from '@/lib/profileSync';
+import { syncSavedProfileToServer } from '@/lib/profileSync';
 import { ScrollPicker, rangeValues } from '@/components/ScrollPicker';
 import { useTheme, type ThemeColors } from '@/lib/theme';
 import { applySuggestionFilter, type SuggestionFilter } from '@/lib/macroSuggestions';
@@ -21,7 +21,7 @@ interface MacroValues {
 
 const PICKER_VALUES = {
   protein: rangeValues(50, 300, 5),
-  carbs: rangeValues(50, 500, 5),
+  carbs: rangeValues(50, 600, 5),
   fat: rangeValues(20, 150, 2),
 };
 
@@ -48,7 +48,7 @@ function recommendedSplit(cal: number, goal: Goal): MacroValues {
   const daily = calculateDailyMacros(cal, goal);
   return {
     protein: clamp(snapToStep(daily.protein, 5), 50, 300),
-    carbs: clamp(snapToStep(daily.carbs, 5), 50, 500),
+    carbs: clamp(snapToStep(daily.carbs, 5), 50, 600),
     fat: clamp(snapToStep(daily.fat, 2), 20, 150),
   };
 }
@@ -120,7 +120,7 @@ export default function MacroSetupScreen() {
     customizedRef.current = false;
     const split = applySuggestionFilter(filterId, String(suggestedCal));
     const protein = clamp(snapToStep(parseInt(split.protein, 10), 5), 50, 300);
-    const carbs = clamp(snapToStep(parseInt(split.carbs, 10), 5), 50, 500);
+    const carbs = clamp(snapToStep(parseInt(split.carbs, 10), 5), 50, 600);
     const fat = clamp(snapToStep(parseInt(split.fat, 10), 2), 20, 150);
     setValues({ protein, carbs, fat });
     setActiveFilter(filterId);
@@ -137,10 +137,10 @@ export default function MacroSetupScreen() {
     try {
       const cal = computeCalories(values);
       const mealTargets = macrosToStored(dailyToPerMealMacros({ ...values, calories: cal }));
-      await saveMacroTargets(mealTargets);
+      await saveMacroTargets(mealTargets, 'complete', activeFilter === 'recommended' && !customizedRef.current ? 'automatic' : 'manual');
       if (!fromOnboarding) {
         await clearOnboardingResume();
-        pushProfileToServer(); // sync to server (onboarding syncs at payment)
+        void syncSavedProfileToServer(); // sync to server (onboarding syncs at payment)
       }
       router.push(fromOnboarding ? '/welcome/how-it-works' : '/(tabs)/search');
     } catch {

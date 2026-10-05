@@ -21,9 +21,10 @@ test('performance profile persists, calculates balanced macros and preserves exp
   const stored = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { macroTarget: true } });
   assert.equal(stored.goal, 'performance');
   assert.ok(stored.macroTarget);
-  assert.equal(stored.macroTarget.proteinG, Math.round(stored.macroTarget.calories * 0.2 / 4));
-  assert.equal(stored.macroTarget.carbsG, Math.round(stored.macroTarget.calories * 0.55 / 4));
-  assert.equal(stored.macroTarget.fatG, Math.round(stored.macroTarget.calories * 0.25 / 9));
+  assert.equal(stored.macroTarget.calories,
+    stored.macroTarget.proteinG * 4 + stored.macroTarget.carbsG * 4 + stored.macroTarget.fatG * 9);
+  assert.ok(stored.macroTarget.proteinG / 3.5 <= 40);
+  assert.ok(Math.abs(stored.macroTarget.proteinG * 4 / stored.macroTarget.calories - 0.13) < 0.01);
 
   const macroTarget = { calories: 2100, proteinG: 120, carbsG: 250, fatG: 69 };
   for (const schema of [undefined, '999', '2']) {
@@ -32,6 +33,10 @@ test('performance profile persists, calculates balanced macros and preserves exp
     assert.equal((await patched.json()).user.goal, schema === '2' ? 'performance' : 'maintain');
     assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).goal, 'performance');
   }
+  assert.equal((await PATCH(request({ weightKg: 75, preserveMacroTarget: true }, '2'))).status, 200);
+  const preserved = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { macroTarget: true } });
+  assert.deepEqual({ calories: preserved.macroTarget?.calories, proteinG: preserved.macroTarget?.proteinG,
+    carbsG: preserved.macroTarget?.carbsG, fatG: preserved.macroTarget?.fatG }, macroTarget);
   const legacy = await GET(request());
   assert.equal(legacy.status, 200);
   const legacyProfile = await legacy.json();

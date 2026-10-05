@@ -1,4 +1,4 @@
-import { calculateDailyMacros, type ActivityLevel, type MacroGoal, type Sex } from "@fitsy/shared";
+import { calculateDailyMacros, caloriesFromMacros, SUGGESTED_CALORIE_RANGE, type ActivityLevel, type MacroGoal, type Sex } from "@fitsy/shared";
 
 // ─── TDEE Calculator ──────────────────────────────────────────────────────────
 
@@ -44,13 +44,17 @@ export function calculateTdee(
   const sexTerm = sex === "male" ? 5 : sex === "female" ? -161 : -78;
   const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + sexTerm;
   const tdee = bmr * ACTIVITY_MULTIPLIERS[activityLevel];
-  const calories = Math.round(tdee + GOAL_OFFSETS[goal]);
+  const calories = Math.max(SUGGESTED_CALORIE_RANGE.min,
+    Math.min(SUGGESTED_CALORIE_RANGE.max, Math.round(tdee + GOAL_OFFSETS[goal])));
 
   const daily = calculateDailyMacros(calories, goal);
+  const proteinG = Math.round(daily.protein);
+  const carbsG = Math.round(daily.carbs);
+  const fatG = Math.round(daily.fat);
   return {
-    calories: daily.calories,
-    proteinG: Math.round(daily.protein),
-    carbsG: Math.round(daily.carbs),
-    fatG: Math.round(daily.fat),
+    calories: caloriesFromMacros({ protein: proteinG, carbs: carbsG, fat: fatG }),
+    proteinG,
+    carbsG,
+    fatG,
   };
 }

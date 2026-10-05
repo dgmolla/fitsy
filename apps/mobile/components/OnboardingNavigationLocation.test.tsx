@@ -94,6 +94,7 @@ const routes = {
   'welcome/tried': () => <Text>Healthy eating approaches</Text>,
   'welcome/out-of-area': () => <Text>Area waitlist</Text>,
   'welcome/complete': CompletePurchase,
+  'macro-setup': () => <Text>Macro setup</Text>,
   '(tabs)/_layout': () => <Stack />, '(tabs)/search': () => <Text>Meal search</Text>,
   'restaurant/[id]': Restaurant,
 };

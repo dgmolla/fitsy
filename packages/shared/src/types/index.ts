@@ -327,6 +327,8 @@ export interface ProfileUpdateRequest {
     carbsG: number;
     fatG: number;
   };
+  /** Keep an existing complete target when this request only edits profile fields. */
+  preserveMacroTarget?: boolean;
 }
 
 export interface ProfileResponse<Goal extends UserGoalV2 = UserGoal> {
@@ -413,4 +415,3 @@ export interface FeedbackVoteResponse {
 }
 
 export type FeedbackVoteApiResponse = { data: FeedbackVoteResponse } | ApiError;
-

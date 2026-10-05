@@ -21,6 +21,7 @@ interface SerifFieldProps {
   value: string;
   unit?: string;
   onChangeText: (text: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
   maxLength?: number;
   /** Accessibility label for the +/- buttons ("Decrease {label}") and, unless
@@ -37,6 +38,7 @@ export function SerifField({
   value,
   unit,
   onChangeText,
+  onBlur,
   placeholder = "—",
   maxLength = 4,
   label,
@@ -53,6 +55,7 @@ export function SerifField({
         onChangeText={(t) =>
           onChangeText(t.replace(decimal ? /[^0-9.]/g : /[^0-9]/g, ""))
         }
+        onBlur={onBlur}
         keyboardType={decimal ? "decimal-pad" : "number-pad"}
         placeholder={placeholder}
         placeholderTextColor={PLACEHOLDER}

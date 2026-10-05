@@ -236,6 +236,15 @@ describe("PATCH /api/user/profile — success", () => {
     );
     expect(mockPrismaMacroTargetUpsert).toHaveBeenCalledTimes(1);
   });
+
+  it("preserves an existing target when profile fields accompany a partial discovery filter", async () => {
+    mockRequireAuth.mockResolvedValue(VALID_PAYLOAD);
+    mockPrismaUserUpdate.mockResolvedValue({ ...MOCK_USER_BASE, weightKg: 75 });
+    const res = await PATCH(makeRequest({ weightKg: 75, preserveMacroTarget: true }, "Bearer valid"));
+    expect(res.status).toBe(200);
+    expect(mockCalculateTdee).not.toHaveBeenCalled();
+    expect(mockPrismaMacroTargetUpsert).not.toHaveBeenCalled();
+  });
 });
 
 test("PATCH accepts performance and preserves explicit macro targets", async () => {
