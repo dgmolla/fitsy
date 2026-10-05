@@ -95,3 +95,8 @@ The canonical product-flow runner hands its explicit selected UDID to use-intent
 Both events run through the existing shared-lock CLI; completion requires an intent under the same active owner claim.
 A failed or interrupted runner leaves uncertain intent protected for backfill.
 Screenshot and log commands respect another active owner before attributing device use.
+
+Completed named-owner commands without a claim have a bounded command release clock under the same lock.
+Anonymous activity remains uncertain and cannot establish task ownership for deletion.
+Only renewal of an unexpired same-owner claim retains its session devices; expired claim/release without execution cannot restart a device grace period.
+Compiler cleanup scans the whole retained checkout and the exact scratch path immediately before removal, retaining outputs when another process holds source or ownership is uncertain.

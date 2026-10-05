@@ -229,6 +229,28 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.state_data()['resource_releases'][old['id']]['state'], 'deferred')
         self.assertIn('ownership', self.state_data()['resource_releases'][old['id']]['reason'])
 
+    @unittest.skipUnless(shutil.which('lsof'), 'real process open-file fixture requires lsof')
+    def test_open_source_process_protects_scratch_before_first_release_assessment(self):
+        state, old, checkout = self.ended_checkout()
+        state['resource_releases'] = {}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        scratch = checkout / '.evidence/ModuleCache.noindex'
+        scratch.mkdir(parents=True); (scratch / 'module').write_text('keep live build output')
+        child = subprocess.Popen([sys.executable, '-c',
+            'import sys,time; f=open(sys.argv[1]); print("ready",flush=True); time.sleep(30)',
+            str(checkout / 'README.md')], stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(child.stdout.readline().strip(), 'ready')
+            config = json.loads(self.config.read_text()); config['lsof_bin'] = shutil.which('lsof')
+            self.config.write_text(json.dumps(config))
+            self.tick()
+            self.assertTrue(scratch.exists())
+            result = self.state_data()['resource_releases'][old['id']]
+            self.assertEqual(result['state'], 'deferred')
+            self.assertIn('ownership', result['reason'])
+        finally:
+            child.terminate(); child.wait(); child.stdout.close()
+
     def ended_checkout(self):
         self.env['FAKE_WORKER_MODE'] = 'fail'
         self.tick()
@@ -1181,6 +1203,31 @@ class SimulatorUseProcessTest(unittest.TestCase):
         self.assertNotEqual(self.run_sim('use-complete', self.udid).returncode, 0)
         self.assertNotEqual(self.run_sim('use-intent', self.udid, owner='other').returncode, 0)
         self.assertFalse((self.home / '.fitsy-sim-uses.json').exists())
+
+    def test_claim_free_completed_command_has_bounded_owner_release(self):
+        self.assertEqual(self.run_sim('install', 'fixture.app').returncode, 0)
+        record = self.record()
+        self.assertEqual(record['last_owner_use'], record['released_at'])
+        self.assertFalse(record['pending_use'])
+        self.assertFalse((self.home / '.fitsy-sim-claim.json').exists())
+
+    def test_expired_reclaim_without_use_cannot_renew_device_release(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()
+        path = self.home / '.fitsy-sim-claim.json'
+        claim = json.loads(path.read_text()); claim['expires'] = time.time() - 1
+        path.write_text(json.dumps(claim))
+        self.run_sim('claim'); self.run_sim('release')
+        self.assertEqual(self.record(), before)
+
+    def test_expired_release_without_active_session_does_not_stamp_clock(self):
+        self.run_sim('claim'); self.run_sim('install', 'fixture.app')
+        before = self.record()
+        path = self.home / '.fitsy-sim-claim.json'
+        claim = json.loads(path.read_text()); claim['expires'] = time.time() - 1
+        path.write_text(json.dumps(claim))
+        self.run_sim('release')
+        self.assertEqual(self.record(), before)
 
     def test_failed_action_retains_unknown_pending_use_instead_of_aging_device(self):
         self.run_sim('claim'); self.run_sim('install', 'fixture.app')

@@ -158,7 +158,7 @@ def cleanup_released(config, state, save):
         if intent:
             if not owned_scratch(path, intent):
                 raise RuntimeError('persisted scratch intent is not owned')
-            released(config, previous, [intent] if intent.exists() else [path])
+            released(config, previous, [path, intent] if intent.exists() else [path])
             if not intent.exists():
                 # Absence reconciles uncertainty, not a newly measured deletion or reclaimed-byte claim.
                 result.setdefault('reconciled_absent', []).append(str(intent))
@@ -166,17 +166,18 @@ def cleanup_released(config, state, save):
                 assessed[previous['id']] = result
                 save()
         candidates = safe_scratch(path)
-        released(config, previous, candidates)
+        released(config, previous, [path, *candidates])
         result.setdefault('free_before', shutil.disk_usage(path).free)
         for candidate in candidates:
             owned_checkout(config, previous)
-            released(config, previous, [candidate])
+            released(config, previous, [path, candidate])
             if candidate not in safe_scratch(path):
                 raise RuntimeError('scratch ownership changed')
             # Intent and exact path persist before deletion, allowing uncertain recovery without fake receipts.
             result['removal_intent'] = str(candidate)
             assessed[previous['id']] = result
             save()
+            released(config, previous, [path, candidate])
             shutil.rmtree(candidate)
             result['removed'].append(str(candidate))
             result.pop('removal_intent', None)

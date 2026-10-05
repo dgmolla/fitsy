@@ -94,7 +94,7 @@ path = Path(sys.argv[1])
 previous = json.loads(path.read_text()) if path.exists() else {}
 claim = {"owner": sys.argv[2], "expires": time.time() + int(sys.argv[3]) * 60,
          "claimed_at": time.strftime("%FT%TZ", time.gmtime())}
-if previous.get('owner') == sys.argv[2]:
+if previous.get('owner') == sys.argv[2] and previous.get('expires', 0) > time.time():
     claim['device_uses'] = previous.get('device_uses', [])
 json.dump(claim, open(path, "w"))
 PY

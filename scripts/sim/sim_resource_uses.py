@@ -27,7 +27,7 @@ def event(claim_path, owner, action, udid=None):
     uses = json.loads(uses_path.read_text()) if uses_path.exists() else {'version': 1, 'devices': {}}
     if uses.get('version') != 1 or not isinstance(uses.get('devices'), dict):
         raise ValueError('device use registry is invalid')
-    owned = owner != 'anonymous' and claim.get('owner') == owner
+    owned = owner != 'anonymous' and claim.get('owner') == owner and claim.get('expires', 0) > time.time()
     now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     if action == 'release':
         if owned:
@@ -40,7 +40,8 @@ def event(claim_path, owner, action, udid=None):
     if action not in ('intent', 'use') or not re.fullmatch(r'[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}', udid or ''):
         raise ValueError('device use event identity invalid')
     record = uses['devices'].setdefault(udid, {})
-    record.update({'owner': owner, 'released_at': None, 'pending_use': action == 'intent'})
+    record.update({'owner': owner, 'released_at': now if action == 'use' and not owned and owner != 'anonymous' else None,
+                   'pending_use': action == 'intent'})
     if action == 'use':
         record['last_owner_use'] = now
     save(uses_path, uses)  # Uncertain interrupted use protects the device without inventing a use timestamp.
