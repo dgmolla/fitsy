@@ -93,6 +93,7 @@ Missing legacy clocks or an interrupted pending command retain the device for ev
 
 The canonical product-flow runner hands its explicit selected UDID to use-intent after claiming and records completed use after an identified native build or successful install.
 Both events run through the existing shared-lock CLI; completion requires an intent under the same active owner claim.
+The native lease covers the configured worker wall-clock budget plus five minutes for completion and release, so a permitted phase cannot outlive a shorter fixed lease.
 A failed or interrupted runner leaves uncertain intent protected for backfill.
 Screenshot and log commands respect another active owner before attributing device use.
 

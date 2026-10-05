@@ -868,7 +868,8 @@ def worker(config, state_path, lock_path, claim_id):
     environment = {**os.environ, 'FITSY_REVIEW_PROVIDER': review['provider'],
                    'FITSY_REVIEW_MODEL': review['model'], 'FITSY_REVIEW_REASONING_EFFORT': review['effort'],
                    'FITSY_DISPATCH_CLAIM_ID': claim_id, 'FITSY_DISPATCH_BRANCH': claim['branch'],
-                   'FITSY_DISPATCH_ISSUE': str(claim['issue'])}
+                   'FITSY_DISPATCH_ISSUE': str(claim['issue']),
+                   'FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS': str(config.get('worker_timeout_seconds', 90 * 60))}
     with open(claim['prompt_path']) as prompt, open(claim['output_path'], 'a') as output:
         child = subprocess.Popen(args, stdin=prompt, stdout=output, stderr=subprocess.STDOUT, cwd=worktree,
                                  env=environment)

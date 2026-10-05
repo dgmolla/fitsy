@@ -68,7 +68,11 @@ function device(udid) {
 }
 export function claimDevice(udid) {
   assert(process.env.FITSY_SIM_OWNER, 'Set FITSY_SIM_OWNER for simulator coordination');
-  run('bash', ['scripts/sim/sim', 'claim', '--minutes', '60'], { stdio: 'inherit' });
+  const workerSeconds = Number(process.env.FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS || 90 * 60);
+  assert(Number.isFinite(workerSeconds) && workerSeconds > 0, 'Native phase requires a positive worker time budget');
+  // One bounded lease covers the permitted worker run plus completion and release.
+  const minutes = String(Math.ceil(workerSeconds / 60) + 5);
+  run('bash', ['scripts/sim/sim', 'claim', '--minutes', minutes], { stdio: 'inherit' });
   run('bash', ['scripts/sim/sim', 'use-intent', udid], { stdio: 'inherit' });
 }
 export const releaseDevice = () => run('bash', ['scripts/sim/sim', 'release'], { stdio: 'inherit' });

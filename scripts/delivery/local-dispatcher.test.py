@@ -76,6 +76,7 @@ p=Path(os.environ['FAKE_GH_STATE']); log=p.with_suffix('.workers')
 sys.stdin.read()
 with log.open('a') as f: f.write('started\n')
 with p.with_suffix('.args').open('a') as f: f.write(json.dumps(sys.argv[1:])+'\n')
+p.with_suffix('.worker-budget').write_text(os.environ.get('FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS','missing'))
 mode=os.environ.get('FAKE_WORKER_MODE','done')
 if mode=='sleep': time.sleep(float(os.environ.get('FAKE_WORKER_SLEEP','2')))
 if mode=='spawn_child':
@@ -176,6 +177,15 @@ class DispatcherProcessTest(unittest.TestCase):
     def workers(self):
         log = self.board.with_suffix('.workers')
         return log.read_text().splitlines() if log.exists() else []
+
+    def test_worker_exports_configured_native_completion_budget(self):
+        config = json.loads(self.config.read_text()); config['worker_timeout_seconds'] = 5400
+        self.config.write_text(json.dumps(config))
+        self.env['FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS'] = '60'
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        self.assertEqual(self.board.with_suffix('.worker-budget').read_text(), '5400')
 
     def test_release_cleans_scratch_and_preserves_app_and_raw_history(self):
         self.env['FAKE_WORKER_MODE'] = 'fail'
@@ -1201,6 +1211,24 @@ class SimulatorUseProcessTest(unittest.TestCase):
         self.assertIsNotNone(self.record()['last_owner_use'])
         self.assertIsNotNone(self.record()['released_at'])
         self.assertFalse(self.record()['pending_use'])
+
+    def test_canonical_native_completion_crosses_one_hour_within_worker_budget(self):
+        runner = (SCRIPT.parent.parent / 'sim/product-flow.mjs').resolve().as_uri()
+        for budget, elapsed_minutes in [(5400, 61), (7200, 119)]:
+            with self.subTest(budget=budget):
+                code = 'import {claimDevice,recordDeviceUse,releaseDevice} from ' + json.dumps(runner) + ';'
+                code += 'import fs from "node:fs";const udid=' + json.dumps(self.udid) + ';claimDevice(udid);'
+                code += 'const file=' + json.dumps(str(self.home / '.fitsy-sim-claim.json')) + ';'
+                code += 'const claim=JSON.parse(fs.readFileSync(file));'
+                code += 'if(claim.expires-Date.now()/1000<' + str(budget) + ')throw new Error("lease shorter than worker budget");'
+                code += 'claim.expires-=' + str(elapsed_minutes * 60) + ';fs.writeFileSync(file,JSON.stringify(claim));'
+                code += 'recordDeviceUse(udid);releaseDevice();'
+                result = subprocess.run(['node', '--input-type=module', '-e', code],
+                    env={**self.env, 'FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS': str(budget)},
+                    text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertFalse(self.record()['pending_use'])
+                self.assertIsNotNone(self.record()['released_at'])
 
     def test_completed_device_event_requires_owned_intent(self):
         self.run_sim('claim')
