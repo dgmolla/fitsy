@@ -46,3 +46,25 @@ it('does not sign out a new account for an old profile GET returning 401', async
   await oldPull;
   expect(mockSession.user.id).toBe('account-b');
 });
+
+it('does not restore a delayed GET over a newer saved profile edit', async () => {
+  await AsyncStorage.clear();
+  let finishGet: ((response: unknown) => void) | undefined;
+  global.fetch = jest.fn().mockImplementation((_url: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    return new Promise(resolve => { finishGet = resolve; });
+  }) as jest.Mock;
+  const oldPull = pullProfileFromServer();
+  while ((global.fetch as jest.Mock).mock.calls.length === 0) await new Promise(resolve => setTimeout(resolve, 0));
+  const edited = { calories: '660', protein: '40', carbs: '80', fat: '20' };
+  await saveMacroTargets(edited);
+  const { syncSavedProfileToServer } = await import('./profileSync');
+  await syncSavedProfileToServer({ weightKg: 90, macroTarget: { calories: 2310, proteinG: 140, carbsG: 280, fatG: 70 } });
+  finishGet?.({ ok: true, status: 200, json: async () => ({
+    user: { birthday: null, heightCm: null, weightKg: 70, sex: null, activityLevel: null, goal: 'maintain' },
+    macroTarget: { calories: 1890, proteinG: 105, carbsG: 210, fatG: 70 },
+  }) });
+  await oldPull;
+  expect(await getMacroTargets()).toEqual(edited);
+  expect(await AsyncStorage.getItem('@fitsy/onboarding')).toBeNull();
+});

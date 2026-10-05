@@ -156,9 +156,16 @@ async function performSavedProfileSync(revision: number,
     }
     if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
     retryCount = 0;
-    const body = bodyOverride ?? await buildProfileBody();
+    const nextBody = bodyOverride ?? await buildProfileBody();
     if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
-    if (Object.keys(body).length === 0) return;
+    if (Object.keys(nextBody).length === 0) return;
+    // A later target-only edit must retain offline body facts in the same
+    // account's durable request. The serialized queue owns this merge.
+    const raw = await AsyncStorage.getItem(pendingKey(userId));
+    const previous = raw ? JSON.parse(raw) as { body: Record<string, unknown> } : null;
+    const body = { ...previous?.body, ...nextBody };
+    if (body.macroTarget) delete body.preserveMacroTarget;
+    if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
     await AsyncStorage.setItem(pendingKey(userId),
       JSON.stringify({ revision, body }));
     await retryPendingProfileSync();
@@ -198,21 +205,24 @@ export async function pullProfileFromServer(): Promise<void> {
     if (!expectedUserId) return;
     const stillCurrent = async () =>
       (await supabase.auth.getSession()).data.session?.user?.id === expectedUserId;
+    await savedSyncQueue;
     await getQuarantinedLegacyTarget();
     const anonymousTarget = await getAnonymousCompleteTarget();
     const archivedTarget = anonymousTarget ? null : await getArchivedMacroTarget(expectedUserId);
     if (!(await stillCurrent())) return;
-    const claimedTarget = anonymousTarget?.targets ?? archivedTarget?.targets;
+    // An archive is a local cache, not evidence of an unsynced write.
+    // Replay the account's durable pending request before reading the server.
+    const claimedTarget = anonymousTarget?.targets;
     if (claimedTarget) {
-      await saveMacroTargets(claimedTarget, 'complete', anonymousTarget?.source ?? archivedTarget?.source ?? 'manual', expectedUserId);
+      await saveMacroTargets(claimedTarget, 'complete', anonymousTarget!.source, expectedUserId);
       if (!(await stillCurrent())) return;
       await syncSavedProfileToServer({ macroTarget: dailyMacroTarget(claimedTarget) });
     }
     if (!(await retryPendingProfileSync())) return;
-    if (archivedTarget) await clearArchivedMacroTarget(expectedUserId);
     if (!(await stillCurrent())) return;
+    const revision = profileRevision;
     const profile = await fetchProfile(expectedUserId);
-    if (!profile || !(await stillCurrent())) return;
+    if (!profile || !(await stillCurrent()) || profileRevision !== revision) return;
 
     // Write body stats to onboarding storage
     const onboarding: OnboardingData = {};
@@ -242,11 +252,20 @@ export async function pullProfileFromServer(): Promise<void> {
       };
       const perMeal: StoredMacroTargets = { protein: String(grams.protein), carbs: String(grams.carbs),
         fat: String(grams.fat), calories: String(macroCalories(grams)) };
-      const source = await getMacroTargetSource();
+      const source = archivedTarget?.source ?? await getMacroTargetSource();
       const keepAutomatic = source === 'automatic' && localSnapshot
         && (['protein', 'carbs', 'fat', 'calories'] as const)
           .every(field => localSnapshot.targets[field] === perMeal[field]);
       await saveMacroTargets(perMeal, 'complete', keepAutomatic ? 'automatic' : 'manual', expectedUserId);
+      if (archivedTarget && await stillCurrent()) await clearArchivedMacroTarget(expectedUserId);
+    } else if (archivedTarget && await stillCurrent()) {
+      // No server target exists. Recover the same account's local target
+      // without replacing a newer remote allocation.
+      await saveMacroTargets(archivedTarget.targets, 'complete', archivedTarget.source, expectedUserId);
+      if (!(await stillCurrent())) return;
+      await syncSavedProfileToServer({ macroTarget: dailyMacroTarget(archivedTarget.targets) });
+      if (await stillCurrent() && !(await AsyncStorage.getItem(pendingKey(expectedUserId))))
+        await clearArchivedMacroTarget(expectedUserId);
     }
   } catch (err) {
     // Use whatever is in local storage; surface in dev console so we can spot
