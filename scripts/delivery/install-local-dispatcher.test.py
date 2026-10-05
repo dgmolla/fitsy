@@ -15,6 +15,7 @@ import unittest
 
 INSTALLER = Path(__file__).with_name('install-local-dispatcher.sh')
 RUNTIME = Path(__file__).with_name('local-dispatcher.py')
+RESOURCE = Path(__file__).with_name('resource_lifecycle.py')
 RETIREMENT = Path(__file__).parents[1] / 'sim/retire_task_device.py'
 
 
@@ -28,6 +29,7 @@ class InstallTest(unittest.TestCase):
                 path.mkdir(parents=True, exist_ok=True)
             shutil.copy2(INSTALLER, repo / 'scripts/delivery/install-local-dispatcher.sh')
             shutil.copy2(RUNTIME, repo / 'scripts/delivery/local-dispatcher.py')
+            shutil.copy2(RESOURCE, repo / 'scripts/delivery/resource_lifecycle.py')
             shutil.copy2(RETIREMENT, repo / 'scripts/sim/retire_task_device.py')
             (home / 'firstmate/config/slack-notifications.json').write_text(json.dumps({
                 'channel': 'CCHANNEL', 'user': 'UHUMAN', 'bridge_path': str(base / 'bridge')}))
@@ -76,6 +78,8 @@ class InstallTest(unittest.TestCase):
             config_path = home / '.fitsy-dispatcher/config.json'
             config = json.loads(config_path.read_text())
             self.assertFalse(config['enabled'])
+            self.assertEqual(config['scratch_reserve_bytes'], 4 * 1024**3)
+            self.assertEqual((home / '.fitsy-dispatcher/runtime/resource_lifecycle.py').read_bytes(), RESOURCE.read_bytes())
             self.assertFalse(config['jev_enabled'])
             self.assertIsNone(config['jev_key_file'])
             self.assertEqual(config['worker_timeout_seconds'], 90 * 60)

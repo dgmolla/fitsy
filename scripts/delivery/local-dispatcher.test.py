@@ -141,7 +141,9 @@ class DispatcherProcessTest(unittest.TestCase):
             'profiles': {'standard': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'medium', 'executable': str(self.codex)},
                          'deep': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high', 'executable': str(self.codex)}},
             'review': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high'},
-            'min_free_bytes': 1, 'worker_timeout_seconds': 10}))
+            'min_free_bytes': 1, 'scratch_reserve_bytes': 0, 'lsof_bin': str(self.base / 'fake-lsof'), 'worker_timeout_seconds': 10}))
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\nexit 1\n')
+        (self.base / 'fake-lsof').chmod(0o700)
         self.config.chmod(0o600)
         self.env = {**os.environ, 'FAKE_GH_STATE': str(self.board)}
 
@@ -170,6 +172,86 @@ class DispatcherProcessTest(unittest.TestCase):
         log = self.board.with_suffix('.workers')
         return log.read_text().splitlines() if log.exists() else []
 
+    def test_release_cleans_scratch_and_preserves_app_and_raw_history(self):
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        old = self.state_data()['active'].copy()
+        self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        checkout = Path(old['worktree'])
+        scratch = checkout / '.evidence/product-build/Build/Intermediates.noindex'
+        app = checkout / '.evidence/product-build/Build/Products/Fitsy.app'
+        scratch.mkdir(parents=True); app.mkdir(parents=True)
+        (scratch / 'object.o').write_bytes(b'rebuildable')
+        (app / 'binary').write_bytes(b'retained app')
+        protected_cache = app / 'ModuleCache.noindex'
+        protected_cache.mkdir(); (protected_cache / 'keep').write_text('app content')
+        external = self.base / 'external-cache'
+        external.mkdir(); (external / 'keep').write_text('external content')
+        (checkout / '.evidence/external').symlink_to(external, target_is_directory=True)
+        raw = checkout / '.evidence/review-failure.log'
+        raw.write_text('historical failure')
+        self.tick()
+        state = self.state_data()
+        self.assertFalse(scratch.exists())
+        self.assertEqual((app / 'binary').read_bytes(), b'retained app')
+        self.assertEqual(raw.read_text(), 'historical failure')
+        self.assertEqual((protected_cache / 'keep').read_text(), 'app content')
+        self.assertEqual((external / 'keep').read_text(), 'external content')
+        record = state['resource_releases'][old['id']]
+        self.assertEqual(record['state'], 'released')
+        self.assertEqual(record['removed'], [str(scratch.resolve())])
+        self.assertEqual(state['history'][-1]['exit_code'], 7)
+        receipt = json.loads((self.state / 'claims' / old['id'] / 'receipt.json').read_text())
+        self.assertEqual(receipt['exit_code'], 7)
+
+    def test_release_open_file_guard_keeps_scratch_and_persists_next_assessment(self):
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        old = self.state_data()['active'].copy()
+        self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        scratch = Path(old['worktree']) / '.evidence/ModuleCache.noindex'
+        scratch.mkdir(parents=True); (scratch / 'module').write_text('keep')
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\necho owned-open-file\nexit 0\n')
+        self.tick()
+        self.assertTrue(scratch.exists())
+        self.assertEqual(self.state_data()['resource_releases'][old['id']]['state'], 'deferred')
+        self.assertIn('ownership', self.state_data()['resource_releases'][old['id']]['reason'])
+
+    def test_authorized_resume_reuses_ended_issue_checkout(self):
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        old = self.state_data()['active'].copy()
+        checkout = Path(old['worktree'])
+        (checkout / 'retained-source.txt').write_text('unfinished work must survive\n')
+        self.tick()
+        self.set_board([item(385)])
+        board = self.board_data()
+        board['ready_at']['385'] = '2026-09-27T01:00:00Z'
+        self.board.write_text(json.dumps(board))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('finished_at'))
+        successor = self.state_data()['active']
+        self.assertEqual(Path(successor['worktree']).resolve(), Path(old['worktree']).resolve())
+        self.assertEqual(successor['branch'], old['branch'])
+        self.assertNotEqual(successor['id'], old['id'])
+        self.assertEqual((checkout / 'retained-source.txt').read_text(), 'unfinished work must survive\n')
+        self.assertEqual(len(list(self.worktrees.iterdir())), 1)
+
+    def test_admission_preserves_floor_plus_scratch_reserve(self):
+        self.set_board([])
+        config = json.loads(self.config.read_text())
+        config.update({'_path': str(self.config), 'min_free_bytes': 80, 'scratch_reserve_bytes': 40})
+        state = {'active': None, 'history': []}
+        with mock.patch.dict(os.environ, self.env), mock.patch.object(dispatcher.shutil, 'disk_usage',
+                return_value=types.SimpleNamespace(free=100)):
+            result = dispatcher.tick(config, state, self.state / 'state.json', SCRIPT)
+        self.assertEqual(result['state'], 'resource-hold')
+        self.assertEqual(result['required_free_bytes'], 120)
+        self.assertEqual(self.workers(), [])
+
     def test_manual_successor_verified_claim_retires_only_its_receipt_device(self):
         claim_id = '12345678-1234-1234-1234-123456789abc'
         worktree = self.worktrees / f'fitsy-issue-412-{claim_id[:8]}'
@@ -181,7 +263,7 @@ class DispatcherProcessTest(unittest.TestCase):
         state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412, 'branch': 'issue-412'}},
                  'history': [{'terminal': 'parked-after-exit', 'issue': 412, 'id': claim_id,
                               'branch': 'issue-412', 'worktree': str(worktree)},
-                             {'terminal': 'verified', 'issue': 412, 'id': claim_id,
+                             {'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'issue': 412, 'id': claim_id,
                               'branch': 'issue-412', 'worktree': str(worktree)}]}
         path = self.state / 'state.json'
         with mock.patch.object(dispatcher, 'board', return_value=[item(412, status='Done')]), \
@@ -224,7 +306,7 @@ class DispatcherProcessTest(unittest.TestCase):
             build.mkdir(parents=True)
             (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
             state['verified'][str(issue)] = {'id': claim_id, 'issue': issue, 'branch': branch}
-            state['history'].append({'terminal': 'verified', 'id': claim_id, 'issue': issue,
+            state['history'].append({'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'id': claim_id, 'issue': issue,
                                      'branch': branch, 'worktree': str(worktree)})
         config = json.loads(self.config.read_text())
         path = self.state / 'state.json'
@@ -250,7 +332,7 @@ class DispatcherProcessTest(unittest.TestCase):
         (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
         saved = self.state / 'claims' / claim_id / 'receipt.json'
         saved.parent.mkdir(parents=True)
-        claim = {'terminal': 'verified', 'issue': 412, 'id': claim_id,
+        claim = {'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'issue': 412, 'id': claim_id,
                  'branch': 'issue-412', 'worktree': str(worktree)}
         saved.write_text(json.dumps(claim))
         config = json.loads(self.config.read_text())
@@ -279,7 +361,7 @@ class DispatcherProcessTest(unittest.TestCase):
         (build / 'receipt.json').write_text(json.dumps({'simulator': udid}))
         config = json.loads(self.config.read_text())
         state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412,
-                 'branch': 'issue-412'}}, 'history': [{'terminal': 'verified', 'issue': 412,
+                 'branch': 'issue-412'}}, 'history': [{'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'issue': 412,
                  'id': claim_id, 'branch': 'issue-412', 'worktree': str(worktree)}]}
         path = self.state / 'state.json'
         with mock.patch.object(dispatcher, 'board', return_value=[item(412, status='Done')]), \
@@ -300,7 +382,7 @@ class DispatcherProcessTest(unittest.TestCase):
         (build / 'receipt.json').write_text('{bad json')
         config = json.loads(self.config.read_text())
         state = {'active': None, 'verified': {'412': {'id': claim_id, 'issue': 412,
-                 'branch': 'issue-412'}}, 'history': [{'terminal': 'verified', 'issue': 412,
+                 'branch': 'issue-412'}}, 'history': [{'terminal': 'verified', 'finished_at': '2026-09-01T00:00:00Z', 'issue': 412,
                  'id': claim_id, 'branch': 'issue-412', 'worktree': str(worktree)}]}
         dispatcher.retire_verified_simulator(config, state, self.state / 'state.json')
         self.assertEqual(state['simulator_retirement'][f'claim:{claim_id}']['status'], 'held')
@@ -792,6 +874,49 @@ class DispatcherProcessTest(unittest.TestCase):
         receipt = json.loads((self.state / 'claims/claim-101/receipt.json').read_text())
         self.assertEqual(receipt['terminal'], 'verified')
         self.assertEqual(receipt['worker_profile']['provider'], 'claude')
+
+class ResourceRetentionTest(unittest.TestCase):
+    def setUp(self):
+        import resource_lifecycle
+        self.resources = resource_lifecycle
+        self.now = 1791201600
+        self.old = '2026-09-01T00:00:00Z'
+
+    def test_unknown_legacy_access_is_not_rewritten_as_recent(self):
+        result = self.resources.retention({}, 'build_cache', {}, self.now)
+        self.assertEqual(result['state'], 'unknown')
+
+    def test_expired_unfinished_work_preserves_source(self):
+        result = self.resources.retention({}, 'unfinished_checkout', {'released_at': self.old}, self.now)
+        self.assertEqual(result['state'], 'assessment-due')
+        self.assertIn('preserve branch, source and dirty work', result['next_action'])
+
+    def test_durable_evidence_expires_only_to_retrievable_archive(self):
+        result = self.resources.retention({}, 'durable_evidence', {'last_owner_use': self.old}, self.now)
+        self.assertIn('never TTL purge', result['next_action'])
+
+    def test_expired_generic_near_term_lease_does_not_renew_on_poll(self):
+        record = {'released_at': self.old, 'near_term_lease': {
+            'owner': 'ended', 'next_action': 'capture UI', 'last_owner_use': self.old}}
+        first = self.resources.retention({}, 'booted_simulator', record, self.now)
+        second = self.resources.retention({}, 'booted_simulator', record, self.now + 1800)
+        self.assertEqual(first['state'], 'assessment-due')
+        self.assertEqual(second['state'], 'assessment-due')
+        self.assertEqual(record['near_term_lease']['last_owner_use'], self.old)
+
+    def test_queued_pinned_app_survives_ttl_and_cache_budget(self):
+        result = self.resources.retention({}, 'build_cache', {'last_owner_use': self.old,
+            'bytes': 100 * 1024**3, 'pinned': True}, self.now)
+        self.assertEqual(result['state'], 'retained')
+
+    def test_transitive_dependency_reference_requires_live_end_consumer(self):
+        edges = [('current431', 'treehouse4'), ('historical5', 'treehouse2'), ('treehouse4', 'shared')]
+        self.assertEqual(self.resources.live_donors(edges, {'current431'}), {'treehouse4', 'shared'})
+        self.assertNotIn('treehouse2', self.resources.live_donors(edges, {'current431'}))
+
+    def test_seven_day_device_grace_and_unknown_release(self):
+        self.assertEqual(self.resources.retention({}, 'task_simulator', {}, self.now)['state'], 'unknown')
+        self.assertEqual(self.resources.retention({}, 'task_simulator', {'released_at': self.old}, self.now)['state'], 'assessment-due')
 
 class ClaudeDispatcherProcessTest(DispatcherProcessTest):
     """Run the same crash, race, retry and receipt fixtures with the Claude adapter."""

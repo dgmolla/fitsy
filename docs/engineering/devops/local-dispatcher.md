@@ -6,7 +6,10 @@ Readiness starts at the label event or first observation when historical event t
 
 One local host holds an exclusive file lock and writes a durable claim before touching the board or starting a worker.
 A claim snapshots the issue acceptance, implementation provider/model/effort, independent reviewer settings, advisory classifier response, and process identity.
-The worker uses a fresh Git worktree and follows the existing shipping gates and review budget.
+A first claim creates an owned Git worktree; an authorized same-issue successor reuses the latest ended checkout and branch after fresh registration, terminal-receipt, process/group, open-file and source-identity checks.
+Tracked and untracked unfinished work stay in place, and the new claim records its creation claim, predecessor and exact resume identity.
+An uncertain retained checkout parks preparation rather than making a second dependency environment.
+The worker follows the existing shipping gates and unchanged issue-bound review history.
 A live or uncertain worker retains the lane; a proven stopped worker without verified Done is parked with a reason so independent ready work may proceed.
 
 Jev classification is advisory and cached by bounded issue content, model, prompt version and configured profiles.
@@ -33,3 +36,36 @@ An absent simulator listing remains retryable until the directory is also gone a
 If a held device outlives the bounded in-memory history, the dispatcher resolves its exact verified claim from the durable claim receipt.
 This deliberately retains all raw attachments, including files not referenced by the final report, so retirement does not also become an evidence-pruning policy.
 A simulator with no InternalDaemon attachment directory has an empty raw inventory and remains eligible when its other proofs pass.
+
+## Resource lifetime and admission
+
+Before admitting another owner, the idle dispatcher assesses one ended claim's compiler scratch under dispatcher.lock.
+It removes only owned inactive compiler intermediates and module/compiler/SDK/API caches; retained app products, source, raw reviews/logs, screenshots, receipts and budget history remain.
+Exact removal intent and completion paths, original issue/claim and host free bytes persist in resource_releases without rewriting original failure receipts.
+An ownership failure records a deferred assessment rather than repeatedly searching the same exhausted candidate.
+
+Admission preserves min_free_bytes plus scratch_reserve_bytes.
+The default floor remains 8 GiB and the initial configurable reserve is 4 GiB.
+The reserve is a provisional allowance motivated by recent floor flapping, not an attributed peak-growth measurement or a guarantee; replace it with measured owner-specific demand when available.
+This check does not interrupt an owner already running.
+
+The configurable resource_ttl_seconds policy separates expiration from permission to discard data.
+Known owner execution/release and explicit owner/action leases supply its clock; polling and filesystem atime do not renew it.
+Legacy timestamps missing from trusted receipts remain unknown and require ownership backfill.
+
+| Resource | Default expiration | Result after fresh ownership checks |
+| --- | --- | --- |
+| Rebuildable compiler scratch | Ended worker release | Remove inactive exact outputs, retaining app/evidence |
+| Integrated, unreferenced terminal checkout | 24 hours after release | Evidence-preserving retirement assessment |
+| Paused or unfinished checkout | 72 hours after release | Cold-retention assessment; preserve source, branch and dirty contents |
+| Dependency donor | 7 days after its last live consumer releases | Assess rebuildable dependencies; resolve consumer liveness transitively |
+| Booted task simulator | 30 minutes after owner release | Assess shutdown only; preserve an active owner or explicit near-term lease |
+| Explicit near-term device lease | 24 hours since actual owner use | Reassess planned owner/action; no indefinite polling renewal |
+| Inactive owned task simulator | 7 days after release | Existing source-bound evidence-preserving retirement policy |
+| Compatible native build cache | 7 days since actual owner use | Assess eviction within build_cache_max_bytes, default 4 GiB; queued pinned apps remain protected |
+| Required screenshots, raw reviews and receipts | 30 days since actual owner use | Verified retrievable cold archive; never automatic TTL purge |
+
+The dispatcher records bounded checkout retention assessments and enforces the seven-day device grace before the existing retirement operator.
+Other expired resources are explicit assessment actions for the coordinator and existing operators, not blanket deletion loops.
+Incoming dependency links protect a donor only through a chain ending in a known live consumer; a historical idle checkout's link alone does not establish current execution.
+No source, dirty work, user-owned device, queued pinned app or required historical evidence becomes disposable solely through age.

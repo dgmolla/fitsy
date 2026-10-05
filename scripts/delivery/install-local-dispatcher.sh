@@ -117,6 +117,7 @@ if mode == 'install':
                           'gh_bin': shutil.which('gh'), 'git_bin': shutil.which('git'),
                           'profiles': profiles, 'review': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high'},
                           'min_free_bytes': 8 * 1024**3, 'worker_timeout_seconds': 90 * 60}
+    config.setdefault('scratch_reserve_bytes', 4 * 1024**3)
     config.update({'enabled': False, 'source_sha': head, 'jev_enabled': jev_enabled,
                    'jev_key_file': str(key_file) if jev_enabled else None,
                    'repo_root': str(repo), 'worktree_root': str(root), 'slack': slack})
@@ -150,6 +151,7 @@ if [[ "$mode" == --check ]]; then exit 0; fi
 if [[ "$mode" == --install ]]; then
   mkdir -p "$state/runtime" "$state/sim" "$state/credentials" "$HOME/Library/LaunchAgents"
   chmod 700 "$state" "$state/runtime" "$state/sim" "$state/credentials"
+  install -m 0700 "$repo/scripts/delivery/resource_lifecycle.py" "$state/runtime/resource_lifecycle.py"
   install -m 0700 "$repo/scripts/delivery/local-dispatcher.py" "$state/runtime/local-dispatcher.py"
   install -m 0700 "$repo/scripts/sim/retire_task_device.py" "$state/sim/retire_task_device.py"
   python_bin="$(command -v python3)"

@@ -18,6 +18,9 @@ from datetime import datetime, timezone
 import urllib.request
 import uuid
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from resource_lifecycle import cleanup_released, resume_checkout, assess_retention, retention
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'sim'))
 from retire_task_device import retire as retire_task_device
 
@@ -550,7 +553,10 @@ def retire_verified_simulator(config, state, state_path):
                 claim.get('id') != claim_id or claim.get('branch') != identity.get('branch')):
             continue
         worktree = Path(claim.get('worktree', '')).resolve()
-        expected = Path(config['worktree_root']).resolve() / f'fitsy-issue-{issue}-{claim_id[:8]}'
+        origin_claim = claim.get('worktree_origin_claim', claim_id)
+        if not re.fullmatch(r'[0-9a-f-]{36}', origin_claim):
+            continue
+        expected = Path(config['worktree_root']).resolve() / f'fitsy-issue-{issue}-{origin_claim[:8]}'
         if worktree != expected:
             continue
         receipt_file = worktree / '.evidence/product-build/receipt.json'
@@ -570,6 +576,9 @@ def retire_verified_simulator(config, state, state_path):
                 return bool(current and terminal_verified(config, current, identity, archived=True))
             if not still_verified():
                 raise ValueError('issue is no longer terminal-verified')
+            grace = retention(config, 'task_simulator', {'released_at': claim.get('finished_at')}, time.time())
+            if grace['state'] != 'assessment-due':
+                raise ValueError(grace['reason'])
             result = retire_task_device(
                 issue=issue, udid=udid, worktree=worktree,
                 archive_root=Path(config['state_dir']) / 'retired-simulator-evidence',
@@ -720,9 +729,18 @@ def tick(config, state, state_path, script):
         pass  # A notification fault never changes claim ownership or queue decisions.
     if not config.get('enabled'):
         return {'state': 'disabled'}
+    assess_retention(config, state, time.time())
+    cleanup_released(config, state, lambda: write_json(state_path, state))
     retire_verified_simulator(config, state, state_path)
-    if shutil.disk_usage(config['worktree_root']).free < config.get('min_free_bytes', 8 * 1024**3):
-        return {'state': 'resource-hold', 'reason': 'disk below configured minimum'}
+    floor = config.get('min_free_bytes', 8 * 1024**3)
+    reserve = config.get('scratch_reserve_bytes', 4 * 1024**3)
+    if not isinstance(reserve, int) or isinstance(reserve, bool) or reserve < 0:
+        raise RuntimeError('scratch reserve must be nonnegative bytes')
+    required = floor + reserve
+    available = shutil.disk_usage(config['worktree_root']).free
+    if available < required:
+        return {'state': 'resource-hold', 'reason': 'disk below floor plus scratch reserve',
+                'free_bytes': available, 'required_free_bytes': required}
     items = board(config)
     candidates = eligible(items, state.setdefault('readiness', {}), state.setdefault('readiness_source', {}),
                           config, state.setdefault('verified', {}))
@@ -766,7 +784,13 @@ def tick(config, state, state_path, script):
         branch = f'codex/issue-{number}-{claim_id[:8]}'
         try:
             command([config['git_bin'], '-C', config['repo_root'], 'fetch', 'origin', 'main'], timeout=60)
-            command([config['git_bin'], '-C', config['repo_root'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'], timeout=60)
+            reused = resume_checkout(config, state, number)
+            if reused:
+                worktree, branch = Path(reused['worktree']), reused['branch']
+                claim.update(reused)
+            else:
+                command([config['git_bin'], '-C', config['repo_root'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'], timeout=60)
+                claim['worktree_origin_claim'] = claim_id
         except Exception as error:
             reason = f"Worktree preparation failed ({type(error).__name__}); inspect claim {claim_id}"
             gh(config, 'issue', 'edit', str(number), '-R', 'dgmolla/fitsy', '--add-label', 'dispatch-hold')
