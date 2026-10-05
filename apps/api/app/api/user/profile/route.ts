@@ -292,6 +292,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
         user.activityLevel !== null &&
         user.goal !== null
       ) {
+        const existingTarget = await tx.macroTarget.findUnique({ where: { userId: auth.sub }, select: { source: true } });
+        // A sparse profile write may retune an automatic target, never a manual one.
+        if (existingTarget && existingTarget.source !== "automatic") return user;
         // Auto-calculate TDEE only when no explicit macros provided
         const tdee = calculateTdee(
           calculateAge(user.birthday),

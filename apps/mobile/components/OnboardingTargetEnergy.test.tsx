@@ -70,6 +70,32 @@ it('keeps an empty tuning calorie draft invalid', async () => {
   expect(await getMacroTargets()).toBeNull();
 });
 
+it('derives untouched calories from macro-only entry, saves and restores the same target', async () => {
+  await saveOnboardingField('goal', 'build_muscle');
+  await saveOnboardingField('targetMode', 'known');
+  const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
+  await screen.findByTestId('meal-target-protein');
+  for (const [key, value] of [['protein', '40'], ['carbs', '65'], ['fat', '20']]) {
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId(`meal-target-${key}`), value);
+      fireEvent(screen.getByTestId(`meal-target-${key}`), 'blur');
+    });
+  }
+  expect(screen.getByTestId('meal-target-calories').props.value).toBe('600');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
+  expect(await getMacroTargets()).toEqual({ calories: '600', protein: '40', carbs: '65', fat: '20' });
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  expect(screen.getByTestId('meal-target-calories').props.value).toBe('600');
+  await act(async () => {
+    fireEvent.changeText(screen.getByTestId('meal-target-calories'), '');
+    fireEvent.changeText(screen.getByTestId('meal-target-protein'), '55');
+    fireEvent(screen.getByTestId('meal-target-protein'), 'blur');
+  });
+  expect(screen.getByTestId('meal-target-calories').props.value).toBe('');
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true);
+});
+
 it.each(['restored', 'generated'])('keeps a cleared macro invalid after a %s allocation', async source => {
   await saveOnboardingField('goal', 'build_muscle');
   await saveOnboardingField('targetMode', 'known');

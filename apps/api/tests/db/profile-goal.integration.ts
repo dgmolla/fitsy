@@ -50,6 +50,10 @@ test('performance profile persists, calculates balanced macros and preserves exp
   const profile = await refreshed.json();
   assert.equal(profile.user.goal, 'performance');
   assert.deepEqual(profile.macroTarget, { ...macroTarget, source: 'manual' });
+  // Sparse legacy/profile-only edits must preserve intentional manual targets.
+  assert.equal((await PATCH(request({ weightKg: 81 }, '2'))).status, 200);
+  assert.deepEqual((await (await GET(request(undefined, '2'))).json()).macroTarget,
+    { ...macroTarget, source: 'manual' });
   const persisted = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
   assert.equal(persisted.goal, 'performance', 'compatibility serialization must not overwrite the stored goal');
   // The old client pushes its aliased goal alongside a weight-only edit.
@@ -73,6 +77,11 @@ test('performance profile persists, calculates balanced macros and preserves exp
   assert.equal((await (await GET(request(undefined, '2'))).json()).macroTarget.source, 'automatic');
   assert.equal((await PATCH(request({ weightKg: 80, preserveMacroTarget: true }, '2'))).status, 200);
   assert.equal((await (await GET(request(undefined, '2'))).json()).macroTarget.source, 'automatic');
+  assert.equal((await PATCH(request({ weightKg: 90 }, '2'))).status, 200);
+  const regenerated = (await (await GET(request(undefined, '2'))).json()).macroTarget;
+  assert.equal(regenerated.source, 'automatic');
+  assert.notEqual(regenerated.calories, macroTarget.calories);
+  assert.equal(regenerated.calories, regenerated.proteinG * 4 + regenerated.carbsG * 4 + regenerated.fatG * 9);
   // A legacy explicit allocation is manual, even when its numbers match.
   assert.equal((await PATCH(request({ macroTarget }, '2'))).status, 200);
   assert.equal((await (await GET(request(undefined, '2'))).json()).macroTarget.source, 'manual');

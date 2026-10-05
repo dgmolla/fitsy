@@ -54,6 +54,7 @@ export function FilterPopup({
   const [linked, setLinked] = useState(mode === "complete");
   const linkedRef = useRef(mode === "complete");
   const hadAllocation = useRef(isCompleteTarget(values));
+  const caloriesEdited = useRef(values.calories !== '');
   const draftRef = useRef(values);
   const lastEdited = useRef<keyof MacroValues>("calories");
   const latestValues = useRef(values);
@@ -73,6 +74,7 @@ export function FilterPopup({
       setDraft(latestValues.current);
       linkedRef.current = mode === "complete";
       hadAllocation.current = isCompleteTarget(latestValues.current);
+      caloriesEdited.current = latestValues.current.calories !== '';
       setLinked(linkedRef.current);
       scaleAnim.setValue(0.72);
       opacityAnim.setValue(0);
@@ -122,6 +124,7 @@ export function FilterPopup({
     ]).start(() => cb());
   }
   function update(key: keyof MacroValues, val: string) {
+    if (key === "calories") caloriesEdited.current = true;
     lastEdited.current = key;
     replaceDraft({ ...draftRef.current, [key]: val });
   }
@@ -129,11 +132,11 @@ export function FilterPopup({
     || parseTarget(values.calories) === null
     || (!linkedRef.current && [values.protein, values.carbs, values.fat].some(value => parseTarget(value) === 0)));
   const clearedProfileMacro = (values: MacroValues) => !allowPartial && linkedRef.current
-    && (parseTarget(values.calories) === null
+    && ((caloriesEdited.current && !parseTarget(values.calories))
       || (hadAllocation.current && !isCompleteTarget(values)));
   function settle(key: keyof MacroValues) {
     if (linkedRef.current && !partialDraft(draftRef.current) && !clearedProfileMacro(draftRef.current))
-      replaceDraft(settleTargetEdit(draftRef.current, key, goal, true));
+      replaceDraft(settleTargetEdit(draftRef.current, key, goal, true, !caloriesEdited.current));
   }
   function step(
     key: keyof MacroValues,
@@ -142,9 +145,10 @@ export function FilterPopup({
     const current = parseInt(draftRef.current[key], 10) || 0;
     const macro = MACROS.find((m) => m.key === key)!;
     lastEdited.current = key;
+    if (key === "calories") caloriesEdited.current = true;
     const next = { ...draftRef.current, [key]: String(Math.max(0, current + delta * macro.step)) };
     replaceDraft(linkedRef.current && !partialDraft(next) && !clearedProfileMacro(next)
-      ? settleTargetEdit(next, key, goal, true) : next);
+      ? settleTargetEdit(next, key, goal, true, !caloriesEdited.current) : next);
   }
   const translateY = scaleAnim.interpolate({
     inputRange: [0.72, 1],
@@ -246,7 +250,7 @@ export function FilterPopup({
                 return;
               }
               const independent = !linkedRef.current || partialDraft(draftRef.current);
-              const settled = independent ? draftRef.current : settleTargetEdit(draftRef.current, lastEdited.current, goal, true);
+              const settled = independent ? draftRef.current : settleTargetEdit(draftRef.current, lastEdited.current, goal, true, !caloriesEdited.current);
               if (!independent && (!isCompleteTarget(settled) || !parseTarget(settled.calories))) {
                 Alert.alert("Complete your target", "Enter valid calories and all three macros before applying.");
                 return;

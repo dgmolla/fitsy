@@ -44,15 +44,19 @@ export function settleTargetEdit(
   field: Field,
   goal: MacroGoal = 'maintain',
   allowFallback = false,
+  deriveInitialCalories = false,
 ): MacroTextValues {
   const edited = parseTarget(values[field]);
   if (edited === null || (field === 'calories' && edited === 0)) return values;
-  if (field !== 'calories' && parseTarget(values.calories) === null) return values;
+  // Only an untouched, initially blank calorie field may be derived. Explicit
+  // clears/invalid drafts and independent search constraints stay unchanged.
+  if (field !== 'calories' && !(parseTarget(values.calories) ?? 0)
+    && !(deriveInitialCalories && values.calories === '')) return values;
 
   const current = parsedGrams(values);
   if (!current && !allowFallback) return values;
   if (!allowFallback && (!current || Object.values(current).some(value => value <= 0)
-    || parseTarget(values.calories) === null)) return values;
+    || !parseTarget(values.calories))) return values;
 
   if (field === 'calories') {
     const energy = current ? macroCalories(current) : 0;
@@ -85,6 +89,7 @@ export function settleTargetEdit(
   if (!current) return values;
   const grams = { protein: Math.round(current!.protein), carbs: Math.round(current!.carbs),
     fat: Math.round(current!.fat), [field]: Math.round(edited) };
+  if (deriveInitialCalories && values.calories === '' && macroCalories(grams) === 0) return values;
   return { protein: String(grams.protein), carbs: String(grams.carbs), fat: String(grams.fat),
     calories: String(macroCalories(grams)) };
 }

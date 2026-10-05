@@ -50,10 +50,6 @@ tags: [onboarding, discovery, changed-journey]
     id: welcome-continue
 - assertVisible: "What works.*for one meal.*"
 - tapOn:
-    id: meal-target-calories
-- waitForAnimationToEnd
-- inputText: "600"
-- tapOn:
     id: meal-target-protein
 - waitForAnimationToEnd
 - inputText: "40"
@@ -70,6 +66,9 @@ tags: [onboarding, discovery, changed-journey]
 - inputText: "20"
 - tapOn:
     id: meal-target-protein
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${Number(maestro.copiedText) === 600}
 - eraseText: 7
 - inputText: "55"
 - tapOn:

@@ -31,6 +31,7 @@ function PlanReadyScreen() {
   const lastEdited = useRef<keyof StoredMacroTargets>('calories');
   const manuallyEdited = useRef(false);
   const hadAllocation = useRef(false);
+  const caloriesEdited = useRef(false);
   // Store the profile basis separately from edited targets. Back must not
   // silently replace manual edits unless the underlying answers changed.
   useFocusEffect(useCallback(() => {
@@ -42,6 +43,7 @@ function PlanReadyScreen() {
       manuallyEdited.current = reusable && source === 'manual';
       const nextTargets = reusable ? saved! : d.targetMode === 'known' ? empty : asStrings(calculateMacros(d));
       hadAllocation.current = isCompleteTarget(nextTargets);
+      caloriesEdited.current = nextTargets.calories !== '';
       setTargets(nextTargets);
       setReady(true);
     });
@@ -67,7 +69,7 @@ function PlanReadyScreen() {
   }
   async function proceed() {
     if (hadAllocation.current && !isCompleteTarget(targets)) return;
-    const settled = settleTargetEdit(targets, lastEdited.current, data.goal ?? 'maintain', true);
+    const settled = settleTargetEdit(targets, lastEdited.current, data.goal ?? 'maintain', true, !caloriesEdited.current);
     const complete = FIELDS.every(([key]) => parseTarget(settled[key]) !== null
       && Number.isInteger(Number(settled[key]))
       && Number(settled[key]) >= (key === 'calories' ? 1 : 0)
@@ -94,10 +96,10 @@ function PlanReadyScreen() {
             <Text style={s.label}>{label} / meal</Text>
             <View style={s.inputRow}>
               <TextInput style={s.input} keyboardType="decimal-pad" value={targets[key]} editable={ready && !busy} selectTextOnFocus
-                onChangeText={value => { lastEdited.current = key; manuallyEdited.current = true; setTargets(previous => ({ ...previous, [key]: value.replace(/[^0-9.]/g, '') })); }}
+                onChangeText={value => { lastEdited.current = key; manuallyEdited.current = true; if (key === 'calories') caloriesEdited.current = true; setTargets(previous => ({ ...previous, [key]: value.replace(/[^0-9.]/g, '') })); }}
                 onBlur={() => setTargets(previous => {
                   const next = hadAllocation.current && !isCompleteTarget(previous)
-                    ? previous : settleTargetEdit(previous, key, data.goal ?? 'maintain', true);
+                    ? previous : settleTargetEdit(previous, key, data.goal ?? 'maintain', true, !caloriesEdited.current);
                   hadAllocation.current ||= isCompleteTarget(next);
                   return next;
                 })}

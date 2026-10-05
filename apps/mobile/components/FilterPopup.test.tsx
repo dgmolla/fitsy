@@ -16,6 +16,7 @@ it('keeps the editor and intentional draft when durable saving fails', async () 
   const apply = jest.fn().mockRejectedValue(new Error('storage unavailable'));
   try {
     const screen = render(<FilterPopup visible values={values} mode="complete" onApply={apply} onClose={close} />);
+    act(() => { jest.runAllTimers(); });
     fireEvent.press(screen.getByLabelText('Increase Protein'));
     await act(async () => { fireEvent.press(screen.getByLabelText('Apply meal targets')); });
     expect(alert).toHaveBeenCalledWith("Couldn't save targets", expect.any(String));
@@ -195,6 +196,20 @@ it('preserves a cleared macro after generating the first profile allocation', ()
   fireEvent.changeText(screen.getByLabelText('Calories per meal'), '700');
   fireEvent(screen.getByLabelText('Calories per meal'), 'blur');
   expect(field(screen, 'Protein grams')).toBe('');
+});
+
+it('derives an initially blank complete profile target from three macro entries', async () => {
+  const onApply = jest.fn();
+  const screen = render(<FilterPopup visible values={{ calories: '', protein: '', carbs: '', fat: '' }}
+    mode="complete" onApply={onApply} onClose={jest.fn()} />);
+  act(() => { jest.runAllTimers(); });
+  for (const [label, value] of [['Protein grams', '40'], ['Carbs grams', '65'], ['Fat grams', '20']]) {
+    fireEvent.changeText(screen.getByLabelText(label), value);
+    fireEvent(screen.getByLabelText(label), 'blur');
+  }
+  expect(field(screen, 'Calories per meal')).toBe('600');
+  await act(async () => { fireEvent.press(screen.getByLabelText('Apply meal targets')); });
+  expect(onApply).toHaveBeenCalledWith({ calories: '600', protein: '40', carbs: '65', fat: '20' }, 'complete');
 });
 
 it('keeps intentionally cleared profile calories incomplete through macro edits and Apply', async () => {

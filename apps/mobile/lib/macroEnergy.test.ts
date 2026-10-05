@@ -35,6 +35,25 @@ test('entering a complete target one field at a time keeps unfinished drafts', (
   expect(settleTargetEdit({ ...withCarbs, fat: '20' }, 'fat', 'build_muscle', true)).toEqual(balanced);
 });
 
+test('untouched calories are derived only after a complete initial macro allocation', () => {
+  const first = { calories: '', protein: '40', carbs: '', fat: '' };
+  expect(settleTargetEdit(first, 'protein', 'maintain', true, true)).toEqual(first);
+  const second = { ...first, carbs: '65' };
+  expect(settleTargetEdit(second, 'carbs', 'maintain', true, true)).toEqual(second);
+  expect(settleTargetEdit({ ...second, fat: '20' }, 'fat', 'maintain', true, true)).toEqual(balanced);
+  // The same text is an intentional independent search filter unless opted in.
+  expect(settleTargetEdit({ ...second, fat: '20' }, 'fat')).toEqual({ ...second, fat: '20' });
+  const zeros = { calories: '', protein: '0', carbs: '0', fat: '0' };
+  expect(settleTargetEdit(zeros, 'fat', 'maintain', true, true)).toEqual(zeros);
+  expect(settleTargetEdit({ ...zeros, protein: '40' }, 'protein', 'maintain', true, true))
+    .toEqual({ ...zeros, protein: '40', calories: '160' });
+});
+
+test.each(['0', '.', 'invalid'])('macro edits preserve explicitly invalid calories %j', calories => {
+  const values = { ...balanced, calories };
+  expect(settleTargetEdit(values, 'protein', 'maintain', true, true)).toEqual(values);
+});
+
 test('calorie fallback retains protein entered before the remaining macros', () => {
   const first = { calories: '600', protein: '80', carbs: '', fat: '' };
   const result = settleTargetEdit(first, 'calories', 'build_muscle', true);

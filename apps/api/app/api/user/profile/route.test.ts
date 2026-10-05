@@ -19,6 +19,7 @@ jest.mock("@/lib/restaurantService", () => {
       create: mockPrismaUserCreate,
     },
     macroTarget: {
+      findUnique: jest.fn().mockResolvedValue(null),
       upsert: mockPrismaMacroTargetUpsert,
     },
   };
