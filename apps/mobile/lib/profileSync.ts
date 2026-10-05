@@ -125,12 +125,19 @@ async function retryPendingProfileSync(scheduleRetry = true): Promise<boolean> {
   if (!raw) return true;
   const pending = JSON.parse(raw) as { revision: number; body: Record<string, unknown> };
   if (await pushProfileToServer(userId, pending.body)) {
-    if (await AsyncStorage.getItem(key) === raw) {
-      await AsyncStorage.removeItem(key);
-      retryCount = 0;
-      if (retryTimer) clearTimeout(retryTimer);
-      retryTimer = null;
-    }
+    // Acknowledgement and durable writes share the same storage queue.
+    // Network delivery stays outside it so an offline request cannot block edits.
+    const cleanup = async () => {
+      if (await AsyncStorage.getItem(key) === raw) {
+        await AsyncStorage.removeItem(key);
+        retryCount = 0;
+        if (retryTimer) clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+    };
+    const acknowledged = savedSyncQueue.then(cleanup, cleanup);
+    savedSyncQueue = acknowledged.catch(() => {});
+    await acknowledged;
     return true;
   }
   if (scheduleRetry && !retryTimer) {

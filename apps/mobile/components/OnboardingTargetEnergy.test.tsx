@@ -70,13 +70,17 @@ it('keeps an empty tuning calorie draft invalid', async () => {
   expect(await getMacroTargets()).toBeNull();
 });
 
-it('keeps a cleared macro invalid when calories change on a restored target', async () => {
+it.each(['restored', 'generated'])('keeps a cleared macro invalid after a %s allocation', async source => {
   await saveOnboardingField('goal', 'build_muscle');
   await saveOnboardingField('targetMode', 'known');
   const saved = { calories: '600', protein: '40', carbs: '65', fat: '20' };
-  await saveMacroTargets(saved);
+  if (source === 'restored') await saveMacroTargets(saved);
   const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
-  await waitFor(() => expect(screen.getByTestId('meal-target-protein').props.value).toBe('40'));
+  await screen.findByTestId('meal-target-calories');
+  if (source === 'generated') await act(async () => {
+    fireEvent.changeText(screen.getByTestId('meal-target-calories'), '600');
+    fireEvent(screen.getByTestId('meal-target-calories'), 'blur');
+  });
   await act(async () => {
     fireEvent.changeText(screen.getByTestId('meal-target-protein'), '');
     fireEvent.changeText(screen.getByTestId('meal-target-calories'), '700');
@@ -84,7 +88,7 @@ it('keeps a cleared macro invalid when calories change on a restored target', as
   });
   expect(screen.getByTestId('meal-target-protein').props.value).toBe('');
   expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true);
-  expect(await getMacroTargets()).toEqual(saved);
+  expect(await getMacroTargets()).toEqual(source === 'restored' ? saved : null);
 });
 
 it('explains when calories cannot cover an entered macro', async () => {

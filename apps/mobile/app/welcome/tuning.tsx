@@ -95,8 +95,12 @@ function PlanReadyScreen() {
             <View style={s.inputRow}>
               <TextInput style={s.input} keyboardType="decimal-pad" value={targets[key]} editable={ready && !busy} selectTextOnFocus
                 onChangeText={value => { lastEdited.current = key; manuallyEdited.current = true; setTargets(previous => ({ ...previous, [key]: value.replace(/[^0-9.]/g, '') })); }}
-                onBlur={() => setTargets(previous => hadAllocation.current && !isCompleteTarget(previous)
-                  ? previous : settleTargetEdit(previous, key, data.goal ?? 'maintain', true))}
+                onBlur={() => setTargets(previous => {
+                  const next = hadAllocation.current && !isCompleteTarget(previous)
+                    ? previous : settleTargetEdit(previous, key, data.goal ?? 'maintain', true);
+                  hadAllocation.current ||= isCompleteTarget(next);
+                  return next;
+                })}
                 accessibilityLabel={`${label} per meal`} testID={`meal-target-${key}`} placeholder="0" maxLength={7} />
               <Text style={s.unit}>{unit}</Text>
             </View>

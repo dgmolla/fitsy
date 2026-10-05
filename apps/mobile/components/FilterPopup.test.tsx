@@ -185,6 +185,18 @@ it('discards edits when dismissed without applying', async () => {
   expect(field(screen, 'Calories per meal')).toBe('600');
 });
 
+it('preserves a cleared macro after generating the first profile allocation', () => {
+  const screen = render(<FilterPopup visible values={{ calories: '', protein: '', carbs: '', fat: '' }}
+    mode="complete" onApply={jest.fn()} onClose={jest.fn()} />);
+  fireEvent.changeText(screen.getByLabelText('Calories per meal'), '600');
+  fireEvent(screen.getByLabelText('Calories per meal'), 'blur');
+  expect(Number(field(screen, 'Protein grams'))).toBeGreaterThan(0);
+  fireEvent.changeText(screen.getByLabelText('Protein grams'), '');
+  fireEvent.changeText(screen.getByLabelText('Calories per meal'), '700');
+  fireEvent(screen.getByLabelText('Calories per meal'), 'blur');
+  expect(field(screen, 'Protein grams')).toBe('');
+});
+
 it('keeps intentionally cleared profile calories incomplete through macro edits and Apply', async () => {
   const onApply = jest.fn();
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});

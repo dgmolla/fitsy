@@ -60,6 +60,7 @@ export function FilterPopup({
   latestValues.current = values;
   const wasVisible = useRef(false);
   function replaceDraft(next: MacroValues) {
+    hadAllocation.current ||= isCompleteTarget(next);
     draftRef.current = next;
     setDraft(next);
   }
