@@ -125,7 +125,8 @@ def owned_scratch(path, entry):
 def safe_scratch(path):
     candidates = [entry for name in SCRATCH for entry in (path / '.evidence').glob(f'**/{name}')]
     candidates += [path / 'apps/api/.next/cache']
-    return sorted(set(entry for entry in candidates if entry.is_dir() and owned_scratch(path, entry)))
+    owned = set(entry for entry in candidates if entry.is_dir() and owned_scratch(path, entry))
+    return sorted(entry for entry in owned if not any(parent in owned for parent in entry.parents))
 
 
 def cleanup_released(config, state, save):

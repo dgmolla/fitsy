@@ -183,6 +183,10 @@ class DispatcherProcessTest(unittest.TestCase):
         app = checkout / '.evidence/product-build/Build/Products/Fitsy.app'
         scratch.mkdir(parents=True); app.mkdir(parents=True)
         (scratch / 'object.o').write_bytes(b'rebuildable')
+        nested = scratch / 'ModuleCache.noindex'; nested.mkdir()
+        (nested / 'module').write_text('nested rebuildable')
+        sibling = checkout / '.evidence/product-build/SDKStatCaches.noindex'; sibling.mkdir()
+        (sibling / 'sdk').write_text('sibling rebuildable')
         (app / 'binary').write_bytes(b'retained app')
         protected_cache = app / 'ModuleCache.noindex'
         protected_cache.mkdir(); (protected_cache / 'keep').write_text('app content')
@@ -194,13 +198,14 @@ class DispatcherProcessTest(unittest.TestCase):
         self.tick()
         state = self.state_data()
         self.assertFalse(scratch.exists())
+        self.assertFalse(sibling.exists())
         self.assertEqual((app / 'binary').read_bytes(), b'retained app')
         self.assertEqual(raw.read_text(), 'historical failure')
         self.assertEqual((protected_cache / 'keep').read_text(), 'app content')
         self.assertEqual((external / 'keep').read_text(), 'external content')
         record = state['resource_releases'][old['id']]
         self.assertEqual(record['state'], 'released')
-        self.assertEqual(record['removed'], [str(scratch.resolve())])
+        self.assertEqual(record['removed'], [str(scratch.resolve()), str(sibling.resolve())])
         self.assertEqual(state['history'][-1]['exit_code'], 7)
         receipt = json.loads((self.state / 'claims' / old['id'] / 'receipt.json').read_text())
         self.assertEqual(receipt['exit_code'], 7)
