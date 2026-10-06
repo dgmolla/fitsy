@@ -367,9 +367,13 @@ def recover(config, state, save, now, completed_verified=None):
             continue
         if prior.get('state') == 'removal-intent' and not Path(c['worktree']).exists():
             archive = prior.get('archive', {})
+            if not archive.get('index_patch') or not archive.get('index_patch_sha256'):
+                prior.update(reason='legacy staged-source recovery is unproven',
+                             next_action='Recover and verify original index state or explicit original clean-index proof; preserve removal intent and raw archive')
+                save(); return
             if any(not Path(archive.get(key, '')).is_file() or sha(Path(archive[key])) != archive.get(digest)
                    for key, digest in ([('path', 'sha256'), ('manifest', 'manifest_sha256'), ('bundle', 'bundle_sha256')] +
-                                       ([('index_patch', 'index_patch_sha256')] if 'index_patch' in archive else []))):
+                                       [('index_patch', 'index_patch_sha256')])):
                 prior.update(reason='missing or changed cold recovery after uncertain removal',
                              next_action='Restore verified recovery identity for absent source; keep removal intent, no successful retirement claim')
                 save(); return

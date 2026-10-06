@@ -110,9 +110,10 @@ def resume_checkout(config, state, issue):
     if previous.get('terminal') == 'verified' and cold.get('state') == 'cold-retired' and not intended.exists():
         archive = cold.get('archive', {})
         from cold_retention import sha
+        if not archive.get('index_patch') or not archive.get('index_patch_sha256'):
+            raise RuntimeError('completed-source staged recovery is unproven; reconcile legacy archive first')
         archive_hashes = [('path', 'sha256'), ('manifest', 'manifest_sha256'), ('bundle', 'bundle_sha256')]
-        if archive.get('index_patch'):
-            archive_hashes.append(('index_patch', 'index_patch_sha256'))
+        archive_hashes.append(('index_patch', 'index_patch_sha256'))
         if cold.get('worktree') != str(intended) or cold.get('claim') != previous['id'] or any(
                 not Path(archive.get(key, '')).is_file() or sha(Path(archive[key])) != archive.get(digest)
                 for key, digest in archive_hashes):

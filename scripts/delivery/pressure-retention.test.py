@@ -276,6 +276,30 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertEqual(fixture.run('git', 'show', ':README.md', cwd=restored).stdout, 'staged version\n')
         self.assertEqual((restored / 'README.md').read_text(), 'latest working version\n')
 
+    def test_legacy_absent_archive_without_staged_proof_stays_unreconciled(self):
+        from cold_retention import recover
+        from resource_lifecycle import resume_checkout
+        self.new['terminal'] = 'verified'
+        (self.c.state / 'claims' / self.new['id'] / 'receipt.json').write_text(json.dumps(self.new))
+        source = Path(self.new['worktree']) / 'README.md'
+        source.write_text('legacy staged version\n')
+        fixture.run('git', 'add', 'README.md', cwd=source.parent)
+        source.write_text('legacy working version\n')
+        config = json.loads(self.c.config.read_text())
+        self.state['cold_retention'] = {self.old['id']: {'state': 'cold-retired'}}
+        recover(config, self.state, lambda: None, 1900000000, lambda _: True)
+        record = self.state['cold_retention'][self.new['id']]
+        self.assertFalse(source.parent.exists())
+        # The previous archive format retained only HEAD and working files, not its independently staged version.
+        Path(record['archive'].pop('index_patch')).unlink()
+        record['archive'].pop('index_patch_sha256')
+        with self.assertRaisesRegex(RuntimeError, 'recovery|staged'):
+            resume_checkout(config, self.state, self.new['issue'])
+        record['state'] = 'removal-intent'
+        recover(config, self.state, lambda: None, 1900000000, lambda _: True)
+        self.assertEqual(record['state'], 'removal-intent')
+        self.assertIn('staged', record['reason'])
+
     def test_registered_consumer_outside_worker_root_keeps_donor(self):
         consumer = self.c.base / 'external-consumer'
         fixture.run('git', 'worktree', 'add', '-b', 'external-consumer', str(consumer), 'main', cwd=self.c.repo)
