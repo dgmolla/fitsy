@@ -118,7 +118,22 @@ def resume_checkout(config, state, issue):
                   and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at')]
     # Compact in-memory history is not the durable ownership record.
     durable = {}
-    for receipt_path, entry in read_claims(config, state)[0]:
+    receipts, uncertain = read_claims(config, state)
+    if uncertain:
+        registered = execute([config['git_bin'], '-C', config['repo_root'], 'worktree', 'list', '--porcelain', '-z'])
+        if registered.returncode:
+            raise RuntimeError('uncertain ownership cannot inventory retained same-issue checkouts')
+        root = Path(config['worktree_root']).resolve()
+        known = {Path(entry['worktree']).resolve() for _, entry in receipts
+                 if entry.get('issue') == issue and entry.get('worktree') and
+                 entry.get('terminal') and entry.get('finished_at')}
+        for line in registered.stdout.split('\0'):
+            if not line.startswith('worktree '):
+                continue
+            path = Path(line[9:]).resolve()
+            if path.parent == root and re.fullmatch(r'fitsy-issue-' + str(issue) + r'-[0-9a-f]{8}', path.name) and path not in known:
+                raise RuntimeError('unreadable durable ownership for retained same-issue checkout: ' + str(path))
+    for receipt_path, entry in receipts:
         if entry.get('issue') == issue and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at'):
             if receipt_path.parent.name != entry.get('id'):
                 raise RuntimeError('durable claim receipt identity mismatch')

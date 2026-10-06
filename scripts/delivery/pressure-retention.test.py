@@ -345,6 +345,25 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertTrue(self.path.exists())
         self.assertEqual(self.c.state_data()['cold_retention_legacy'][str(receipt)]['state'], 'deferred')
 
+    def rollover_uncertain_tick(self, issue):
+        for claim in (self.old, self.new):
+            (self.c.state / 'claims' / claim['id'] / 'receipt.json').write_text('{broken')
+        self.state['history'] = []
+        (self.c.state / 'state.json').write_text(json.dumps(self.state))
+        self.c.set_board([fixture.item(issue)])
+        self.c.tick()
+        self.assertTrue((self.path / 'unfinished.txt').is_file())
+        return self.c.state_data()['active']
+
+    def test_rolled_out_unreadable_same_issue_owner_blocks_fresh_main_checkout(self):
+        self.assertIsNone(self.rollover_uncertain_tick(385),
+                          'unreadable retained same-issue ownership must not start from main')
+
+    def test_rolled_out_unreadable_other_issue_owner_does_not_block_independent_work(self):
+        active = self.rollover_uncertain_tick(386)
+        self.assertIsNotNone(active, 'uncertain issue385 must not stall independent issue386')
+        self.assertEqual(active['issue'], 386)
+
     def test_same_issue_compact_history_cannot_bypass_malformed_durable_origin(self):
         damaged = {**self.new, 'worktree_origin_claim': []}
         receipt = self.c.state / 'claims' / self.new['id'] / 'receipt.json'
