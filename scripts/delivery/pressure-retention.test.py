@@ -85,11 +85,34 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.state['cold_retention'] = {self.old['id']: {'state': 'cold-retired'}}
         recover(config, self.state, lambda: None, 1900000000, lambda _: True)
         self.assertTrue(Path(self.new['worktree']).exists())
-        self.state['simulator_retirement'] = {'fixture-device': {'status': 'retired'}}
+        self.state['simulator_retirement'] = {'fixture-device': {'status': 'retired', 'issue': 385}}
         recover(config, self.state, lambda: None, 1900000000, lambda _: True)
         self.assertFalse(Path(self.new['worktree']).exists())
         from resource_lifecycle import resume_checkout
         self.assertIsNone(resume_checkout(config, self.state, self.new['issue']))
+
+    def test_superseded_verified_mobile_proof_waits_for_matching_device_retirement(self):
+        self.old['terminal'] = 'verified'
+        (self.c.state / 'claims' / self.old['id'] / 'receipt.json').write_text(json.dumps(self.old))
+        receipt = self.path / '.evidence/product-build/receipt.json'
+        receipt.write_text(json.dumps({'simulator': 'fixture-device'}))
+        self.state['simulator_retirement'] = {'fixture-device': {'status': 'held', 'issue': 385}}
+        (self.c.state / 'state.json').write_text(json.dumps(self.state))
+        self.c.tick()
+        self.assertTrue(self.path.exists(), 'superseded completed claim still needs its hot device proof')
+        record = self.c.state_data()['cold_retention'][self.old['id']]
+        self.assertEqual(record['state'], 'deferred')
+        self.state = self.c.state_data()
+        self.state['simulator_retirement']['fixture-device'] = {'status': 'retired', 'issue': 999}
+        (self.c.state / 'state.json').write_text(json.dumps(self.state))
+        self.c.tick()
+        self.assertTrue(self.path.exists(), 'another issue retirement cannot release this proof')
+        self.state = self.c.state_data()
+        self.state['simulator_retirement']['fixture-device'] = {'status': 'retired', 'issue': 385}
+        (self.c.state / 'state.json').write_text(json.dumps(self.state))
+        self.c.tick()
+        self.assertFalse(self.path.exists())
+        self.assertEqual(self.c.workers(), [])
 
     def test_missing_mobile_build_receipt_retains_hot_device_proof(self):
         self.new['terminal'] = 'verified'
@@ -111,7 +134,7 @@ class PressureRetentionProcessTest(unittest.TestCase):
             recover(config, self.state, lambda: None, 1900000000, lambda _: True)
             self.assertTrue(Path(self.new['worktree']).exists())
         (product / 'receipt.json').write_text(json.dumps({'simulator': 'fixture-device'}))
-        self.state['simulator_retirement'] = {'fixture-device': {'status': 'retired'}}
+        self.state['simulator_retirement'] = {'fixture-device': {'status': 'retired', 'issue': 385}}
         recover(config, self.state, lambda: None, 1900000000, lambda _: True)
         self.assertFalse(Path(self.new['worktree']).exists())
 

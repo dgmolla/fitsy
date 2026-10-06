@@ -329,6 +329,7 @@ def recover(config, state, save, now, completed_verified=None):
             # Local terminal labels alone cannot prove current shipping acceptance.
             if completed_verified is None or not completed_verified(c):
                 continue
+        if c.get('terminal') == 'verified':
             evidence = Path(c['worktree']) / '.evidence'
             product = evidence / 'product-build/receipt.json'
             if product.is_file() or any((evidence / name).exists() for name in ('product-build', 'product-flow')):
@@ -337,8 +338,9 @@ def recover(config, state, save, now, completed_verified=None):
                     device = build.get('simulator') if isinstance(build, dict) else None
                 except (OSError, ValueError):
                     device = None
-                if (not isinstance(device, str) or not device or
-                        (state.get('simulator_retirement', {}).get(device) or {}).get('status') != 'retired'):
+                retired = (state.get('simulator_retirement', {}).get(device) or {}) if isinstance(device, str) else {}
+                if (not isinstance(device, str) or not device or retired.get('status') != 'retired' or
+                        retired.get('issue') != c['issue']):
                     # Missing or unusable mobile proof is uncertainty, never absence of a device.
                     record = records.setdefault(c['id'], {'issue': c['issue'], 'claim': c['id'], 'worktree': c['worktree']})
                     record.update(state='deferred', reason='unresolved device proof; preserve required hot paths',
