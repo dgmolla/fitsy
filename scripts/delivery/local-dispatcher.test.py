@@ -1511,6 +1511,30 @@ class QueueReadTest(unittest.TestCase):
                 dispatcher.board(self.config)
         self.assertEqual(raised.exception.retry_at, 1061)
 
+    def test_secondary_throttle_does_not_wait_for_unexhausted_primary_reset(self):
+        response = self.response({'message': 'Too many requests'}, 1,
+            'HTTP/2 429\nX-RateLimit-Remaining: 4000\nX-RateLimit-Reset: 4600\nRetry-After: 60\n\n')
+        with mock.patch.object(dispatcher.time, 'time', return_value=1000), mock.patch.object(dispatcher.subprocess, 'run', return_value=response):
+            with self.assertRaises(dispatcher.QueueReadBackoff) as raised:
+                dispatcher.board(self.config)
+        self.assertEqual(raised.exception.retry_at, 1061)
+
+    def test_non_json_429_also_suppresses_repeated_network_reads(self):
+        response = subprocess.CompletedProcess([], 1, 'HTTP/2 429\n\nToo many requests', '')
+        with mock.patch.object(dispatcher.time, 'time', return_value=1000), mock.patch.object(dispatcher.subprocess, 'run', return_value=response) as transport:
+            for _ in range(2):
+                with self.assertRaises(dispatcher.QueueReadBackoff):
+                    dispatcher.board(self.config)
+        self.assertEqual(transport.call_count, 1)
+
+    def test_primary_query_cost_exhaustion_uses_reset_even_when_remaining_nonzero(self):
+        response = self.response({'errors': [{'message': 'API rate limit exceeded'}]}, 1,
+            'HTTP/2 403\nX-RateLimit-Remaining: 89\nX-RateLimit-Reset: 4600\n\n')
+        with mock.patch.object(dispatcher.time, 'time', return_value=1000), mock.patch.object(dispatcher.subprocess, 'run', return_value=response):
+            with self.assertRaises(dispatcher.QueueReadBackoff) as raised:
+                dispatcher.board(self.config)
+        self.assertEqual(raised.exception.retry_at, 4601)
+
     def test_unsupported_field_value_cannot_hide_hold_or_dependency(self):
         for field in ('f3', 'f4'):
             page = self.page(['one']); page['data']['node']['items']['nodes'][0][field] = {}

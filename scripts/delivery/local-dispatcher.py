@@ -227,8 +227,9 @@ def board(config):
             args.extend(['-f', 'after=' + cursor])
         result = subprocess.run(args, text=True, capture_output=True, timeout=45)
         offset = result.stdout.find('{')
+        header_text = result.stdout[:offset] if offset >= 0 else result.stdout.split('\n\n', 1)[0]
         headers = {key.lower(): value.strip() for key, value in
-                   re.findall(r'^([\w-]+):[ \t]*(.*)$', result.stdout[:max(offset, 0)], re.M)}
+                   re.findall(r'^([\w-]+):[ \t]*(.*)$', header_text, re.M)}
         try:
             response = json.loads(result.stdout[offset:]) if offset >= 0 else {}
         except json.JSONDecodeError:
@@ -236,19 +237,21 @@ def board(config):
         rate = (response.get('data') or {}).get('rateLimit') or {}
         exhausted = headers.get('x-ratelimit-remaining') == '0' or rate.get('remaining') == 0
         errors = response.get('errors') or []
-        statuses = re.findall(r'^HTTP/\S+\s+(\d+)', result.stdout[:max(offset, 0)], re.M)
+        statuses = re.findall(r'^HTTP/\S+\s+(\d+)', header_text, re.M)
         message = (result.stderr + json.dumps(errors) + str(response.get('message', ''))).lower()
         throttled = (bool(statuses) and statuses[-1] == '429') or any(
             text in message for text in ('rate limit', 'too many requests'))
+        primary_limited = exhausted or ('api rate limit exceeded' in message and 'secondary' not in message)
         retry_at = 0
         if exhausted or throttled or headers.get('retry-after'):
-            try:
-                retry_at = float(headers['x-ratelimit-reset'])
-            except (KeyError, ValueError):
+            if primary_limited:
                 try:
-                    retry_at = datetime.fromisoformat(rate['resetAt'].replace('Z', '+00:00')).timestamp()
-                except (KeyError, TypeError, ValueError):
-                    retry_at = 0
+                    retry_at = float(headers['x-ratelimit-reset'])
+                except (KeyError, ValueError):
+                    try:
+                        retry_at = datetime.fromisoformat(rate['resetAt'].replace('Z', '+00:00')).timestamp()
+                    except (KeyError, TypeError, ValueError):
+                        retry_at = 0
             if headers.get('retry-after'):
                 try:
                     retry_at = max(retry_at, time.time() + float(headers['retry-after']))
