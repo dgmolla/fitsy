@@ -163,7 +163,7 @@ Already-authorized independent issues without a matching retained checkout remai
 ### Complete queue reads and quota cooldown
 
 The canonical `snapshot` mode reads the same complete live GitHub queue as dispatch admission.
-Use `python3 ~/.fitsy-dispatcher/local-dispatcher.py snapshot --config ~/.fitsy-dispatcher/config.json` for coordination instead of a separate broad project CLI query.
+Use `python3 ~/.fitsy-dispatcher/runtime/local-dispatcher.py snapshot --config ~/.fitsy-dispatcher/config.json` for coordination instead of a separate broad project CLI query.
 The transport pages at 100 cards and requests only delivery fields and issue labels; total counts, unique IDs and advancing cursors must agree before dispatch.
 A truncated label connection fails closed so a hold cannot disappear through truncation.
 The private `github-queue-quota.json` stores observed cost and quota reset timing, never board content or launch permission.

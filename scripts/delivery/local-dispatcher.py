@@ -276,7 +276,7 @@ def board(config):
             if not isinstance(labels, dict) or not isinstance(labels.get('nodes'), list):
                 raise RuntimeError('GitHub issue labels missing; refusing dispatch')
             names = [label['name'] for label in labels['nodes']]
-            if labels.get('totalCount') != len(names):
+            if type(labels.get('totalCount')) is not int or labels['totalCount'] != len(names):
                 raise RuntimeError('GitHub issue labels incomplete; refusing dispatch')
             item = {'id': identity, 'title': content.get('title'), 'labels': names,
                     'content': {**content, 'type': content.get('__typename'),

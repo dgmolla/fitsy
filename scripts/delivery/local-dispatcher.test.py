@@ -27,6 +27,11 @@ with lock.open('a') as f:
  fcntl.flock(f,fcntl.LOCK_EX)
  d=json.loads(p.read_text()); a=sys.argv[1:]; result=''
  if a[:2]==['api','graphql']:
+  d['board_reads']=d.get('board_reads',0)+1
+  if os.environ.get('FAKE_QUEUE_QUOTA_RESET'):
+   p.write_text(json.dumps(d))
+   print('HTTP/2 403\nX-Ratelimit-Remaining: 0\nX-Ratelimit-Reset: '+os.environ['FAKE_QUEUE_QUOTA_RESET']+'\n\n'+json.dumps({'errors':[{'message':'API rate limit exceeded'}]}))
+   raise SystemExit(1)
   fields=['status','priority','progress','blocker','dependencies','next action','verified at','started at']
   nodes=[]
   for x in d['items']:
@@ -186,6 +191,17 @@ class DispatcherProcessTest(unittest.TestCase):
     def workers(self):
         log = self.board.with_suffix('.workers')
         return log.read_text().splitlines() if log.exists() else []
+
+    def test_exhausted_live_queue_defers_without_claim_or_repeated_read(self):
+        self.env['FAKE_QUEUE_QUOTA_RESET'] = '4070908800'
+        first = self.tick()
+        second = self.tick()
+        self.assertEqual(first['state'], 'queue-read-backoff')
+        self.assertEqual(second['state'], 'queue-read-backoff')
+        fake = self.board_data()
+        self.assertEqual(fake['board_reads'], 1)
+        self.assertIsNone(json.loads((self.state / 'state.json').read_text()).get('active'))
+        self.assertEqual(fake['items'][0]['status'], 'Queued')
 
     def test_installer_pause_after_initial_config_read_prevents_tick_admission(self):
         hooks = self.base / 'pause-hooks'; hooks.mkdir()
