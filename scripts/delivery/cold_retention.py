@@ -21,15 +21,28 @@ def sha(path):
 
 
 def incoming(config, target):
-    references = []
-    for directory, dirs, files in os.walk(config['worktree_root'], followlinks=False):
-        for name in dirs + files:
-            path = Path(directory) / name
-            if path.is_symlink() and not path.is_relative_to(target) and path.resolve().is_relative_to(target):
-                references.append(str(path))
-        dirs[:] = [name for name in dirs if name not in ('node_modules', 'Pods', '.git')
-                   and not (Path(directory) / name).is_symlink()]
-    return references
+    budget = config.get('incoming_reference_scan_seconds', 30)
+    if isinstance(budget, bool) or not isinstance(budget, (int, float)) or not 0 < budget <= 30:
+        raise RuntimeError('invalid incoming-reference scan budget; retain checkout')
+    deadline = time.monotonic() + budget
+    pending = [str(config['worktree_root'])]
+    while pending:
+        if time.monotonic() >= deadline:
+            raise RuntimeError('incoming-reference scan deadline; retain uncertain checkout')
+        directory = pending.pop()
+        if directory == str(target):
+            continue  # Internal references disappear together; only external consumers matter.
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('incoming-reference scan deadline; retain uncertain checkout')
+                if entry.is_symlink():
+                    path = Path(entry.path)
+                    if path.resolve().is_relative_to(target):
+                        return [str(path)]
+                elif entry.name != '.git' and entry.is_dir(follow_symlinks=False):
+                    pending.append(entry.path)
+    return []
 
 
 def guard(config, state, claim):
@@ -139,7 +152,9 @@ def preserve(config, path, claim, directory):
             dirs.sort(); names.sort()
             for name in list(dirs):
                 file = Path(current) / name
-                rebuildable = (name == 'node_modules' or file == path / 'apps/mobile/ios/Pods')
+                rebuildable = file in {path / relative for relative in (
+                    'node_modules', 'apps/api/node_modules', 'apps/mobile/node_modules',
+                    'packages/shared/node_modules', 'scripts/node_modules', 'apps/mobile/ios/Pods')}
                 if rebuildable and not file.is_symlink():
                     # Only rebuildable dependency directories, never source, apps or raw proof.
                     if any(file.rglob('*.app')):

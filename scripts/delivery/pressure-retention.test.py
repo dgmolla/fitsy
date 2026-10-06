@@ -171,6 +171,35 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertTrue(self.path.exists())
         self.assertIn('reference', self.c.state_data()['cold_retention'][self.old['id']]['reason'])
 
+    def test_nested_dependency_consumer_protects_old_checkout(self):
+        consumer = self.c.worktrees / 'known-nested-consumer'; consumer.mkdir()
+        for name in ('node_modules', 'Pods'):
+            directory = consumer / name; directory.mkdir()
+            (directory / 'package').symlink_to(self.path / 'node_modules')
+        self.c.tick()
+        self.assertTrue(self.path.exists())
+        self.assertIn('reference', self.c.state_data()['cold_retention'][self.old['id']]['reason'])
+
+    def test_evidence_directory_named_node_modules_is_preserved(self):
+        evidence = self.path / '.evidence/raw/node_modules'; evidence.mkdir(parents=True)
+        (evidence / 'trace.json').write_text('original raw proof')
+        self.c.tick()
+        record = self.c.state_data()['cold_retention'][self.old['id']]
+        with tarfile.open(record['archive']['path']) as archive:
+            self.assertEqual(archive.extractfile('.evidence/raw/node_modules/trace.json').read(), b'original raw proof')
+
+    def test_reference_scan_deadline_preserves_source_and_records_next_action(self):
+        config = json.loads(self.c.config.read_text())
+        config['incoming_reference_scan_seconds'] = 1e-9
+        self.c.config.write_text(json.dumps(config))
+        self.c.tick()
+        self.assertTrue(self.path.exists())
+        record = self.c.state_data()['cold_retention'][self.old['id']]
+        self.assertEqual(record['state'], 'deferred')
+        self.assertIn('deadline', record['reason'])
+        self.assertIn('retry_after', record)
+        self.assertIn('next_action', record)
+
     def test_mismatched_legacy_resource_receipt_retains_its_exact_path(self):
         directory = self.c.state / 'claims' / 'legacy-mismatched'; directory.mkdir()
         bad = {**self.old, 'id': 'wrong-identity'}
