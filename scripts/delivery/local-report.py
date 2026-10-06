@@ -102,7 +102,8 @@ def compose_update(report, state, slot, now=None):
         current = {str(item['number']): item['status'] for item in report.get('editorialFacts', [])}
         bindings = update.get('board_bindings', {})
         if not isinstance(bindings, dict) or not bindings or any(
-                current.get(str(number)) != status for number, status in bindings.items()):
+                str(number) not in current or status not in ('Queued', 'In flight', 'Done') or
+                current[str(number)] != status for number, status in bindings.items()):
             raise ValueError('editorial evidence no longer matches board')
         report['editorial'] = {'authored_at': update['authored_at'], 'board_bindings': bindings,
                                'state': 'fresh', 'bullets': bullets}

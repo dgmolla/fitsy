@@ -110,6 +110,18 @@ class LocalReportTest(unittest.TestCase):
             reporter.compose_update(report, state, '2026-09-27T04:30', now)
             self.assertEqual(report['editorial']['state'], 'fallback')
 
+    def test_missing_issue_null_binding_cannot_publish_authored_status(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T04:35:00Z')
+            reporter.save(state / 'editorial-update.json', {'authored_at':'2026-09-27T04:30:00Z',
+                'board_bindings':{'999999':None},'bullets':['Missing issue shipped.',
+                'Second statement.','Third statement.']})
+            report = {'editorialFacts':[]}
+            message = reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fallback')
+            self.assertNotIn('Missing issue shipped', message)
+
     def test_history_pagination_and_legacy_marker_prevent_a_second_post(self):
         class PagedSlack(Slack):
             def call(self, method, params=None, payload=None):
