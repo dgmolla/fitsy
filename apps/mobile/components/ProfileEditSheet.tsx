@@ -156,7 +156,7 @@ function ChoiceContent({ options, value, onApply }: ChoiceProps & { dismiss: (cb
           );
         })}
       </View>
-      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(selected); } catch { Alert.alert("Save failed", "Your edits are still here. Please try again."); } }}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(selected); } catch (error) { Alert.alert("Save failed", error instanceof Error ? error.message : "Your edits are still here. Please try again."); } }}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>
@@ -184,7 +184,7 @@ function NumericContent({ title, value, unit, placeholder, onApply }: NumericPro
           onStep={(dir) => setDraft((prev) => String(clampInt((parseInt(prev, 10) || 0) + dir, 0, 99999)))}
         />
       </View>
-      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(draft); } catch { Alert.alert("Save failed", "Your edits are still here. Please try again."); } }}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(draft); } catch (error) { Alert.alert("Save failed", error instanceof Error ? error.message : "Your edits are still here. Please try again."); } }}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>
@@ -248,7 +248,7 @@ function HeightContent({ valueCm, onApply }: HeightProps & { dismiss: (cb: () =>
         </View>
       )}
 
-      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(getCm()); } catch { Alert.alert("Save failed", "Your edits are still here. Please try again."); } }}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(getCm()); } catch (error) { Alert.alert("Save failed", error instanceof Error ? error.message : "Your edits are still here. Please try again."); } }}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>

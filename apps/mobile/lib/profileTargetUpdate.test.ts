@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { pullProfileFromServer, syncSavedProfileToServer } from './profileSync';
-import { saveOnboardingField } from './onboardingStorage';
+import { saveOnboardingField, getOnboardingData } from './onboardingStorage';
 import { archiveActiveMacroTargets, getMacroTargetSource, getMacroTargets, saveMacroTargets } from './macroStorage';
 import { calculateMacros, macrosToStored } from './macroCalculator';
 import { updateProfileFieldAndTargets } from './profileTargetUpdate';
@@ -17,6 +17,22 @@ jest.mock('@supabase/supabase-js', () => {
 
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
+
+it.each([
+  ['weightKg', undefined], ['weightKg', 0], ['weightKg', 22.9], ['weightKg', 320.1], ['weightKg', NaN],
+  ['heightCm', undefined], ['heightCm', 121], ['heightCm', 230], ['birthday', undefined], ['birthday', 'invalid'],
+] as const)('rejects invalid %s without changing facts, targets or pending API body', async (field, value) => {
+  await AsyncStorage.clear();
+  await saveOnboardingField('weightKg', 90);
+  await saveOnboardingField('heightCm', 180);
+  const target = { calories: '600', protein: '40', carbs: '65', fat: '20' };
+  await saveMacroTargets(target, 'complete', 'automatic');
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+  await expect(updateProfileFieldAndTargets(field, value)).rejects.toThrow('Enter');
+  expect(await getOnboardingData()).toEqual({ weightKg: 90, heightCm: 180 });
+  expect(await getMacroTargets()).toEqual(target);
+  expect(global.fetch).not.toHaveBeenCalled();
+});
 
 it.each(['automatic', 'manual'] as const)('restores %s provenance on a fresh device before a goal edit', async source => {
   await AsyncStorage.clear();

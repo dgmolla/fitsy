@@ -22,13 +22,15 @@ beforeEach(() => {
   for (const key of Object.keys(secure)) delete secure[key];
 });
 
-it('upgrades an older install using its saved coordinates and preserves editable targets', async () => {
+it('upgrades saved coordinates and editable targets while retaining an ambiguous older goal separately', async () => {
   store['@fitsy/onboarding'] = JSON.stringify({ goal: 'build_muscle' });
   store['@fitsy/macro_targets'] = JSON.stringify(targets);
   secure.fitsy_last_known_coords = JSON.stringify({ lat: 34.0522, lng: -118.2437 });
   const result = await setup();
   expect(result.targets).toEqual(targets);
-  expect(result.data).toMatchObject({ goal: 'build_muscle', targetMode: 'known', area: { lat: 34.0522, lng: -118.2437, source: 'saved' } });
+  expect(result.data).toMatchObject({ targetMode: 'known', area: { lat: 34.0522, lng: -118.2437, source: 'saved' } });
+  expect(result.data.goal).toBeUndefined();
+  expect(JSON.parse(store['@fitsy/onboarding_unowned']!)).toEqual({ goal: 'build_muscle' });
   expect(JSON.parse(store['@fitsy/onboarding']!)).toMatchObject(result.data);
 });
 

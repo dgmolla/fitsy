@@ -18,14 +18,15 @@ import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
 import { getMacroTargets, getQuarantinedLegacyTarget, restoreQuarantinedLegacyTarget,
   saveMacroTargets, type MacroTargetMode } from '@/lib/macroStorage';
-import { getOnboardingData, type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
+import { getOnboardingData, getLegacyOnboardingData, restoreLegacyOnboardingData, retireLegacyOnboardingData,
+  type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
 import { calculateAge } from '@fitsy/shared';
 import { syncSavedProfileToServer, queueSavedProfileToServer, deliverQueuedProfile } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
 import { MACRO_COLORS } from '@/lib/macroColors';
-import { updateProfileFieldAndTargets } from '@/lib/profileTargetUpdate';
+import { updateProfileFieldAndTargets, refreshAutomaticProfileTargets } from '@/lib/profileTargetUpdate';
 import { openLegalLink } from '@/lib/legalLinks';
 import {
   trackMacroTargetsEdited,
@@ -74,6 +75,7 @@ export default function ProfileScreen() {
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
   const [legacyTargetMode, setLegacyTargetMode] = useState<MacroTargetMode | null>(null);
+  const [hasLegacyProfile, setHasLegacyProfile] = useState(false);
   const [filterVisible, setFilterVisible] = useState(false);
   const [profile, setProfile] = useState<OnboardingData>({});
   const [editField, setEditField] = useState<EditField>(null);
@@ -91,6 +93,7 @@ export default function ProfileScreen() {
           if (token) setEmail(decodeEmailFromToken(token));
           if (stored) setMacroTargets(stored as unknown as MacroValues);
           setLegacyTargetMode((await getQuarantinedLegacyTarget())?.mode ?? null);
+          setHasLegacyProfile(Boolean(await getLegacyOnboardingData()));
           setProfile(onboarding);
           const snapshot = JSON.stringify(onboarding);
           if (prevProfile.current && prevProfile.current !== snapshot) {
@@ -181,6 +184,24 @@ export default function ProfileScreen() {
       ]);
   }
 
+  function offerLegacyProfileRestore() {
+    Alert.alert('Restore older profile facts?',
+      'This device has older measurements and goals without an account label. Restore them to this account, replacing its current facts?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Restore', onPress: () => {
+          void restoreLegacyOnboardingData().then(async restored => {
+            const updated = await refreshAutomaticProfileTargets(restored.owner);
+            await queueSavedProfileToServer();
+            await retireLegacyOnboardingData(restored.owner);
+            deliverQueuedProfile();
+            setProfile(updated.profile);
+            if (updated.targets) setMacroTargets(updated.targets);
+            setHasLegacyProfile(false);
+          }).catch(() => Alert.alert('Restore failed', 'Your older facts are still available. Please try again.'));
+        } },
+      ]);
+  }
+
   // `editField` is the key used internally by ProfileEditSheet, but the
   // `birthday` field is exposed in the UI as "age". We map back to the UI
   // label for the analytics event so dashboards group by what users see.
@@ -229,7 +250,7 @@ export default function ProfileScreen() {
           visible: true,
           title: 'Height',
           valueCm: profile.heightCm ? String(profile.heightCm) : '',
-          onApply: (v) => { return updateFieldAndRecalc('heightCm', parseInt(v) || undefined); },
+          onApply: (v) => { return updateFieldAndRecalc('heightCm', v.trim() ? Number(v) : undefined); },
           onClose: () => setEditField(null),
         };
       case 'weight':
@@ -240,7 +261,7 @@ export default function ProfileScreen() {
           value: profile.weightKg ? String(Math.round(profile.weightKg * 2.20462)) : '',
           unit: 'lbs',
           placeholder: '70',
-          onApply: (v) => { return updateFieldAndRecalc('weightKg', Math.round(((parseInt(v) || 0) * 0.453592) * 10) / 10 || undefined); },
+          onApply: (v) => { return updateFieldAndRecalc('weightKg', v.trim() ? Math.round(Number(v) * 0.453592 * 10) / 10 : undefined); },
           onClose: () => setEditField(null),
         };
       case 'age':
@@ -252,7 +273,7 @@ export default function ProfileScreen() {
           unit: 'years',
           placeholder: '25',
           onApply: (v) => {
-            const ageNum = parseInt(v) || 25;
+            const ageNum = v.trim() ? Number(v) : NaN;
             const year = new Date().getFullYear() - ageNum;
             return updateFieldAndRecalc('birthday', `${year}-01-01`);
           },
@@ -341,6 +362,13 @@ export default function ProfileScreen() {
           <Pressable testID="profile-restore-older-target" style={s.feedbackBanner}
             accessibilityRole="button" onPress={offerLegacyRestore}>
             <Text style={s.feedbackValue}>Restore older {legacyTargetMode === 'search' ? 'search filter' : 'meal target'}</Text>
+            <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
+          </Pressable>
+        )}
+        {hasLegacyProfile && (
+          <Pressable testID="profile-restore-older-facts" style={s.feedbackBanner}
+            accessibilityRole="button" onPress={offerLegacyProfileRestore}>
+            <Text style={s.feedbackValue}>Restore older profile facts</Text>
             <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
           </Pressable>
         )}

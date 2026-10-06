@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearToken } from './authClient';
 import { claimAnonymousOnboardingData, getOnboardingData, replaceAccountOnboardingData,
-  saveOnboardingField } from './onboardingStorage';
+  saveOnboardingField, getLegacyOnboardingData, restoreLegacyOnboardingData, retireLegacyOnboardingData } from './onboardingStorage';
 import { buildProfileBody } from './profileTargetBody';
 import { pullProfileFromServer } from './profileSync';
 
@@ -46,6 +46,39 @@ it('does not claim legacy unowned measurements into an authenticated account', a
   expect(await claimAnonymousOnboardingData('a')).toBe(false);
   expect(await getOnboardingData()).toEqual({});
   expect(await buildProfileBody()).toEqual({});
+});
+
+it('does not relabel legacy measurements when a logged-out user edits only their goal', async () => {
+  mockSession = null;
+  await AsyncStorage.setItem('@fitsy/onboarding', JSON.stringify({ weightKg: 140, heightCm: 200, goal: 'build_muscle' }));
+  expect(await getOnboardingData()).toEqual({});
+  await saveOnboardingField('goal', 'performance');
+  expect(await getOnboardingData()).toEqual({ goal: 'performance' });
+  useB();
+  let user = emptyUser as Record<string, unknown>;
+  global.fetch = jest.fn().mockImplementation((_url, init?: RequestInit) => {
+    if (init?.method === 'PATCH') user = { ...user, ...JSON.parse(String(init.body)) };
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ user, macroTarget: null }) });
+  });
+  await pullProfileFromServer();
+  expect(await getOnboardingData()).toEqual({ goal: 'performance' });
+  expect(user.weightKg).toBeNull();
+  expect(user.heightCm).toBeNull();
+  expect(await getLegacyOnboardingData()).toMatchObject({ weightKg: 140, heightCm: 200 });
+  // Only explicit account restoration recovers these retained intentional edits.
+  expect(await restoreLegacyOnboardingData()).toMatchObject({ owner: 'b', profile: { weightKg: 140, heightCm: 200, goal: 'build_muscle' } });
+  await retireLegacyOnboardingData('b');
+  expect(await getLegacyOnboardingData()).toBeNull();
+});
+
+it('retains legacy facts through an empty profile reconciliation and rejects anonymous restoration', async () => {
+  await AsyncStorage.setItem('@fitsy/onboarding', JSON.stringify({ weightKg: 140 }));
+  await replaceAccountOnboardingData('a', {});
+  expect(await getOnboardingData()).toEqual({});
+  expect(await getLegacyOnboardingData()).toMatchObject({ weightKg: 140 });
+  mockSession = null;
+  await expect(restoreLegacyOnboardingData()).rejects.toThrow('Sign in');
+  expect(await getLegacyOnboardingData()).toMatchObject({ weightKg: 140 });
 });
 
 it('claims explicitly saved anonymous onboarding facts and sends them through real profile synchronization', async () => {
