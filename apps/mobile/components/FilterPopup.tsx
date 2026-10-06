@@ -19,7 +19,7 @@ import { filterPopupStyles as s } from "./FilterPopup.styles";
 import { StepperControl } from "@/components/StepperControl";
 import { MACRO_COLORS } from "@/lib/macroColors";
 import type { MacroValues } from "@/lib/macroPresets";
-import { isCompleteTarget, normalizeCompleteTarget, parseTarget, settleTargetEdit } from "@/lib/macroEnergy";
+import { isCompleteTarget, macroCalories, normalizeCompleteTarget, parseTarget, settleTargetEdit } from "@/lib/macroEnergy";
 interface FilterPopupProps {
   visible: boolean;
   values: MacroValues;
@@ -217,7 +217,7 @@ export function FilterPopup({
           </ScrollView>
           {mode === "search" && !linked && isCompleteTarget(draft)
             && parseTarget(draft.calories) !== null && Number(draft.calories) > 0
-            && [draft.protein, draft.carbs, draft.fat].every(value => (parseTarget(value) ?? 0) > 0) && (
+            && macroCalories({ protein: Number(draft.protein), carbs: Number(draft.carbs), fat: Number(draft.fat) }) > 0 && (
               <Pressable accessibilityRole="button" accessibilityLabel="Link calories and macros"
                 testID="meal-filter-link" onPress={() => {
                   replaceDraft(settleTargetEdit(draftRef.current, 'calories', goal, true));

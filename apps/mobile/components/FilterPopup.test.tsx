@@ -10,6 +10,29 @@ afterEach(() => jest.useRealTimers());
 const values = { calories: '600', protein: '40', carbs: '65', fat: '20' };
 const field = (screen: ReturnType<typeof render>, name: string) => screen.getByLabelText(name).props.value as string;
 
+it.each([
+  { protein: '0', carbs: '65', fat: '20', calories: '440' },
+  { protein: '40', carbs: '0', fat: '20', calories: '340' },
+  { protein: '40', carbs: '65', fat: '0', calories: '420' },
+])('links a complete zero-macro allocation and preserves it on reopen: %j', async target => {
+  const onApply = jest.fn();
+  const screen = render(<FilterPopup visible values={target} mode="search" allowPartial onApply={onApply} onClose={jest.fn()} />);
+  act(() => { jest.runAllTimers(); });
+  fireEvent.press(screen.getByLabelText('Link calories and macros'));
+  await act(async () => { fireEvent.press(screen.getByLabelText('Apply meal targets')); });
+  expect(onApply).toHaveBeenLastCalledWith(target, 'complete');
+  screen.rerender(<FilterPopup visible={false} values={target} mode="complete" allowPartial onApply={onApply} onClose={jest.fn()} />);
+  screen.rerender(<FilterPopup visible values={target} mode="complete" allowPartial onApply={onApply} onClose={jest.fn()} />);
+  expect(field(screen, 'Calories per meal')).toBe(target.calories);
+  expect(field(screen, 'Protein grams')).toBe(target.protein);
+});
+
+it('does not offer linking for an allocation with no macro energy', () => {
+  const screen = render(<FilterPopup visible values={{ calories: '440', protein: '0', carbs: '0', fat: '0' }}
+    mode="search" allowPartial onApply={jest.fn()} onClose={jest.fn()} />);
+  expect(screen.queryByLabelText('Link calories and macros')).toBeNull();
+});
+
 it('keeps the editor and intentional draft when durable saving fails', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const close = jest.fn();

@@ -10,6 +10,7 @@ import type {
 import { supabase } from './supabase';
 import { archiveActiveMacroTargets, clearActiveMacroTargets } from './macroStorage';
 import { clearAccountOnboardingData } from './onboardingStorage';
+import { forgetPendingProfileSync } from './profileSyncStorage';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 // SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
@@ -46,6 +47,7 @@ export async function storeToken(token: string): Promise<void> {
  */
 export async function clearToken(options: { forgetTargets?: boolean } = {}): Promise<void> {
   const { data } = await supabase.auth.getSession();
+  if (options.forgetTargets && data.session?.user?.id) await forgetPendingProfileSync(data.session.user.id);
   await archiveActiveMacroTargets(data.session?.user?.id ?? null, options.forgetTargets);
   await clearAccountOnboardingData(data.session?.user?.id ?? null);
   // Supabase's signOut clears its own SecureStore key (the session blob).

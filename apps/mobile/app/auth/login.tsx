@@ -76,7 +76,7 @@ export default function LoginScreen() {
       const result = await appleSignIn();
       trackAuthSuccess({ provider: 'apple', is_new_user: result.isNewUser });
       await captureIdentity(result.user.id, result.user.email);
-      if (!result.isNewUser) await requireProfileFromServer();
+      await requireProfileFromServer();
       router.replace('/(tabs)/search');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';

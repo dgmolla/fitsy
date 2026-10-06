@@ -8,14 +8,14 @@ import { macroCalories } from './macroEnergy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import type { ProfileResponse as ProfileContract, UserGoalV2 } from '@fitsy/shared';
+import { PENDING_PROFILE_SYNC_KEY, isProfileSyncForgotten, queueProfileStorage,
+  waitForProfileStorage } from './profileSyncStorage';
 
 // This client opts into goalSchema=2; legacy clients keep the default contract.
 type ProfileResponse = ProfileContract<UserGoalV2>;
 
-const PENDING_PROFILE_SYNC_KEY = '@fitsy/pending_profile_sync';
 const pendingKey = (userId: string) => `${PENDING_PROFILE_SYNC_KEY}:${userId}`;
 let lastPush: Promise<boolean> = Promise.resolve(true);
-let savedSyncQueue: Promise<void> = Promise.resolve();
 let profileRevision = 0;
 let retryCount = 0;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -33,12 +33,14 @@ export async function fetchProfile(expectedUserId?: string): Promise<ProfileResp
 
 async function performProfilePush(expectedUserId: string, savedBody?: Record<string, unknown>): Promise<boolean> {
   try {
+    if (isProfileSyncForgotten(expectedUserId)) return false;
     const { data } = await supabase.auth.getSession();
     if (data.session?.user?.id !== expectedUserId) return false;
     const token = await getStoredToken();
     if (!token) return false;
     const body = savedBody ?? await buildProfileBody();
     if (Object.keys(body).length === 0) return true;
+    if (isProfileSyncForgotten(expectedUserId)) return false;
     await api.patch('/api/user/profile?goalSchema=2', body, true, expectedUserId);
     return true;
   } catch (err) {
@@ -68,6 +70,7 @@ async function retryPendingProfileSync(scheduleRetry = true): Promise<boolean> {
   const { data } = await supabase.auth.getSession();
   const userId = data.session?.user?.id;
   if (!userId) return true;
+  if (isProfileSyncForgotten(userId)) return true;
   const key = pendingKey(userId);
   let sentRaw: string | null = null;
   // Read inside delivery serialization: an earlier delayed read must never
@@ -94,9 +97,7 @@ async function retryPendingProfileSync(scheduleRetry = true): Promise<boolean> {
         retryTimer = null;
       }
     };
-    const acknowledged = savedSyncQueue.then(cleanup, cleanup);
-    savedSyncQueue = acknowledged.catch(() => {});
-    await acknowledged;
+    await queueProfileStorage(cleanup);
     return true;
   }
   if (scheduleRetry && !retryTimer) {
@@ -121,6 +122,7 @@ async function performSavedProfileSync(revision: number,
     await pushProfileToServer();
     return;
   }
+  if (isProfileSyncForgotten(userId)) return;
   if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
   retryCount = 0;
   const nextBody = bodyOverride ?? await buildProfileBody();
@@ -132,7 +134,7 @@ async function performSavedProfileSync(revision: number,
   const previous = raw ? JSON.parse(raw) as { body: Record<string, unknown> } : null;
   const body = { ...previous?.body, ...nextBody };
   if (body.macroTarget) delete body.preserveMacroTarget;
-  if ((await supabase.auth.getSession()).data.session?.user?.id !== userId) return;
+  if ((await supabase.auth.getSession()).data.session?.user?.id !== userId || isProfileSyncForgotten(userId)) return;
   await AsyncStorage.setItem(pendingKey(userId),
     JSON.stringify({ revision, body }));
 }
@@ -140,10 +142,7 @@ async function performSavedProfileSync(revision: number,
 export function queueSavedProfileToServer(bodyOverride?: Record<string, unknown>): Promise<void> {
   const revision = ++profileRevision;
   const session = supabase.auth.getSession();
-  const attempt = savedSyncQueue.then(() => performSavedProfileSync(revision, session, bodyOverride),
-    () => performSavedProfileSync(revision, session, bodyOverride));
-  savedSyncQueue = attempt.catch(() => {});
-  return attempt;
+  return queueProfileStorage(() => performSavedProfileSync(revision, session, bodyOverride));
 }
 
 /** Persist before acknowledging an edit; network delivery never owns the storage queue. */
@@ -182,7 +181,7 @@ export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
     if (!expectedUserId) return 'account-changed';
     const stillCurrent = async () =>
       (await supabase.auth.getSession()).data.session?.user?.id === expectedUserId;
-    await savedSyncQueue;
+    await waitForProfileStorage();
     await getQuarantinedLegacyTarget();
     const anonymousTarget = await getAnonymousCompleteTarget();
     const archivedTarget = anonymousTarget ? null : await getArchivedMacroTarget(expectedUserId);
