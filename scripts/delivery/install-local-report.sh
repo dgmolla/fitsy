@@ -81,25 +81,24 @@ import time
 state = Path(sys.argv[1]); roots = [str(Path(root).expanduser().resolve()) for root in sys.argv[2:]]
 source = json.loads((Path.home() / 'firstmate/config/slack-notifications.json').read_text())
 path = state / 'config.json'
+sys.path.insert(0, source['bridge_path'])
+import bridge
+bridge.load_env()
+settings = bridge.Config.from_env()
+if settings.channel != source['channel']:
+    raise SystemExit('Slack channel does not match shared limiter configuration')
+identity = bridge.Slack(bridge.Store(settings)).call('auth.test')
+sender = identity.get('user_id')
+if identity.get('ok') is not True or not isinstance(sender, str) or not re.fullmatch(r'U[A-Z0-9]+', sender):
+    raise SystemExit('Slack publisher sender identity unavailable')
 if path.exists():
     old = json.loads(path.read_text())
     activated = old['activated_at']
-    if old['channel'] != source['channel'] or old.get('bridge_path') != source['bridge_path']:
-        # Notification user is the recipient; the existing publisher user is its sender.
+    if old['channel'] != source['channel'] or old.get('bridge_path') != source['bridge_path'] or old.get('user') != sender:
+        # A mismatched legacy sender needs receipt reconciliation, never silent reassignment.
         raise SystemExit('Slack publisher identity changed; reconcile existing receipts first')
-    sender = old['user']
 else:
     activated = math.ceil(time.time() / 1800) * 1800
-    sys.path.insert(0, source['bridge_path'])
-    import bridge
-    bridge.load_env()
-    settings = bridge.Config.from_env()
-    if settings.channel != source['channel']:
-        raise SystemExit('Slack channel does not match shared limiter configuration')
-    identity = bridge.Slack(bridge.Store(settings)).call('auth.test')
-    sender = identity.get('user_id')
-    if identity.get('ok') is not True or not isinstance(sender, str) or not re.fullmatch(r'U[A-Z0-9]+', sender):
-        raise SystemExit('Slack publisher sender identity unavailable')
 value = {'activated_at': activated, 'channel': source['channel'], 'user': sender,
          'bridge_path': source['bridge_path'], 'timing_roots': roots}
 temporary = path.with_suffix('.tmp'); temporary.write_text(json.dumps(value) + '\n')

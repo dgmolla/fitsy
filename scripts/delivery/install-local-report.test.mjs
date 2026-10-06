@@ -69,11 +69,17 @@ class Slack:
     const reinstall = spawnSync('bash',[installer,'--install','--timing-root',repo],{cwd:repo,env,encoding:'utf8'});
     assert.equal(reinstall.status,0,reinstall.stderr);
     assert.deepEqual(JSON.parse(readFileSync(configPath,'utf8')),original);
+    writeFileSync(configPath,JSON.stringify({...original,user:'U1'}));
+    const legacy = spawnSync('bash',[installer,'--install','--timing-root',repo],{cwd:repo,env,encoding:'utf8'});
+    assert.notEqual(legacy.status,0);
+    assert.match(legacy.stderr,/identity changed/);
+    assert.equal(JSON.parse(readFileSync(configPath,'utf8')).user,'U1');
+    writeFileSync(configPath,JSON.stringify(original));
     writeFileSync(join(home,'firstmate/config/slack-notifications.json'),
       JSON.stringify({bridge_path:join(root,'bridge'),channel:'COTHER',user:'U1'}));
     const changed = spawnSync('bash',[installer,'--install','--timing-root',repo],{cwd:repo,env,encoding:'utf8'});
     assert.notEqual(changed.status,0);
-    assert.match(changed.stderr,/identity changed/);
+    assert.match(changed.stderr,/channel does not match shared limiter configuration/);
     assert.deepEqual(JSON.parse(readFileSync(configPath,'utf8')),original);
     env.TEST_MAIN_SHA = 'f'.repeat(40);
     assert.match(check().stderr, /not the exact current main commit/);
