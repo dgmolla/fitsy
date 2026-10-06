@@ -257,6 +257,58 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertEqual(assessment['state'], 'deferred')
         self.assertEqual(json.loads((directory / 'receipt.json').read_text()), bad)
 
+    def test_cold_recovery_retains_staged_version_separate_from_working_version(self):
+        readme = self.path / 'README.md'
+        readme.write_text('staged version\n')
+        fixture.run('git', 'add', 'README.md', cwd=self.path)
+        readme.write_text('latest working version\n')
+        self.c.tick()
+        record = self.c.state_data()['cold_retention'][self.old['id']]
+        self.assertEqual(record['state'], 'cold-retired')
+        restored = self.c.base / 'restore-staged-work'
+        fixture.run('git', 'clone', record['archive']['bundle'], str(restored))
+        fixture.run('git', 'checkout', record['archive']['source_head'], cwd=restored)
+        patch = record['archive'].get('index_patch')
+        if patch:
+            fixture.run('git', 'apply', '--cached', patch, cwd=restored)
+        with tarfile.open(record['archive']['path']) as archive:
+            (restored / 'README.md').write_bytes(archive.extractfile('README.md').read())
+        self.assertEqual(fixture.run('git', 'show', ':README.md', cwd=restored).stdout, 'staged version\n')
+        self.assertEqual((restored / 'README.md').read_text(), 'latest working version\n')
+
+    def test_registered_consumer_outside_worker_root_keeps_donor(self):
+        consumer = self.c.base / 'external-consumer'
+        fixture.run('git', 'worktree', 'add', '-b', 'external-consumer', str(consumer), 'main', cwd=self.c.repo)
+        (consumer / 'node_modules').symlink_to(self.path / 'node_modules')
+        self.c.tick()
+        self.assertTrue(self.path.exists(), 'registered external consumer cannot lose its donor')
+        self.assertTrue((consumer / 'node_modules').exists())
+        self.assertEqual(self.c.state_data()['cold_retention'][self.old['id']]['state'], 'deferred')
+
+    def test_ambiguous_git_removal_keeps_intent_and_reconciles_reopened_work(self):
+        from cold_retention import recover
+        from resource_lifecycle import resume_checkout
+        import shlex
+        self.new['terminal'] = 'verified'
+        (self.c.state / 'claims' / self.new['id'] / 'receipt.json').write_text(json.dumps(self.new))
+        self.state['cold_retention'] = {self.old['id']: {'state': 'cold-retired'}}
+        config = json.loads(self.c.config.read_text())
+        real_git = config['git_bin']
+        wrapper = self.c.base / 'git-removal-uncertainty'
+        wrapper.write_text('#!/bin/bash\nreal=' + shlex.quote(real_git) +
+                           '\nif [[ "$3" == worktree && "$4" == remove ]]; then "$real" "$@"; exit 17; fi\nexec "$real" "$@"\n')
+        wrapper.chmod(0o700)
+        config['git_bin'] = str(wrapper)
+        recover(config, self.state, lambda: None, 1900000000, lambda _: True)
+        self.assertFalse(Path(self.new['worktree']).exists())
+        record = self.state['cold_retention'][self.new['id']]
+        self.assertEqual(record['state'], 'removal-intent', 'ambiguous removal must retain reconciliation intent')
+        recover(config, self.state, lambda: None, 1900000000, lambda _: True)
+        self.assertEqual(record['state'], 'cold-retired')
+        self.assertIn('reconciliation', record)
+        self.assertNotIn('free_after', record, 'absence reconciliation is not measured reclamation')
+        self.assertIsNone(resume_checkout(config, self.state, self.new['issue']))
+
     def test_git_locked_owner_is_deferred_before_creating_an_archive(self):
         fixture.run('git', 'worktree', 'lock', str(self.path), cwd=self.c.repo)
         self.c.tick()

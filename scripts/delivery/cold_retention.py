@@ -20,12 +20,41 @@ def sha(path):
     return h.hexdigest()
 
 
+
+def index_snapshot(config, path):
+    conflicts = execute([config['git_bin'], '-C', str(path), 'ls-files', '--unmerged'])
+    if conflicts.returncode or conflicts.stdout:
+        raise RuntimeError('unresolved index stages require complete Git-state recovery; retain checkout')
+    result = subprocess.run([config['git_bin'], '-C', str(path), 'diff', '--cached', '--binary',
+                             '--full-index', '--no-ext-diff', '--no-textconv', '--no-renames', 'HEAD'],
+                            capture_output=True, timeout=120)
+    if result.returncode:
+        raise RuntimeError('staged source snapshot unavailable; retain checkout')
+    return result.stdout
+
+
 def incoming(config, target):
     budget = config.get('incoming_reference_scan_seconds', 30)
     if isinstance(budget, bool) or not isinstance(budget, (int, float)) or not 0 < budget <= 30:
         raise RuntimeError('invalid incoming-reference scan budget; retain checkout')
     deadline = time.monotonic() + budget
-    pending = [str(config['worktree_root'])]
+    if time.monotonic() >= deadline:
+        raise RuntimeError('incoming-reference scan deadline; retain uncertain checkout')
+    registered = execute([config['git_bin'], '-C', config['repo_root'], 'worktree', 'list', '--porcelain', '-z'], timeout=budget)
+    if registered.returncode:
+        raise RuntimeError('consumer worktree inventory unavailable; retain checkout')
+    extra = config.get('resource_reference_roots', [])
+    if not isinstance(extra, list) or any(not isinstance(root, str) or not Path(root).is_absolute() for root in extra):
+        raise RuntimeError('invalid explicit consumer roots; retain checkout')
+    roots = {Path(config['worktree_root']).resolve()}
+    roots.update(Path(entry[9:]).resolve() for entry in registered.stdout.split('\0') if entry.startswith('worktree '))
+    roots.update(Path(root).resolve() for root in extra)
+    dependencies = Path(config['state_dir']) / 'dependencies'
+    if dependencies.exists():
+        roots.add(dependencies.resolve())
+    if any(not root.is_dir() for root in roots):
+        raise RuntimeError('registered or declared consumer root unavailable; retain checkout')
+    pending = [str(root) for root in roots if not any(other != root and root.is_relative_to(other) for other in roots)]
     while pending:
         if time.monotonic() >= deadline:
             raise RuntimeError('incoming-reference scan deadline; retain uncertain checkout')
@@ -135,6 +164,8 @@ def preserve(config, path, claim, directory):
     directory.mkdir(parents=True, exist_ok=True)
     directory.chmod(0o700)
     head = source_identity(config, path)['head']
+    index_data = index_snapshot(config, path)
+    index_patch = directory / 'index.patch'; index_patch.write_bytes(index_data); index_patch.chmod(0o600)
     bundle = shared_bundle(config, path, head, directory)
     recovered = directory / 'recovery-test.git'
     result = execute([config['git_bin'], 'clone', '--bare', str(bundle), str(recovered)], timeout=180)
@@ -144,6 +175,17 @@ def preserve(config, path, claim, directory):
     result = execute([config['git_bin'], '--git-dir', str(recovered), 'cat-file', '-e', head + '^{commit}'])
     if result.returncode:
         raise RuntimeError('source commit missing from recovery')
+    result = execute([config['git_bin'], '--git-dir', str(recovered), 'read-tree', head])
+    if result.returncode:
+        raise RuntimeError('staged source recovery base unavailable')
+    if index_data and execute([config['git_bin'], '--git-dir', str(recovered), 'apply', '--cached',
+                               '--whitespace=nowarn', str(index_patch)]).returncode:
+        raise RuntimeError('staged source recovery patch failed')
+    restored = subprocess.run([config['git_bin'], '--git-dir', str(recovered), 'diff', '--cached', '--binary',
+                               '--full-index', '--no-ext-diff', '--no-textconv', '--no-renames', head],
+                              capture_output=True, timeout=120)
+    if restored.returncode or restored.stdout != index_data:
+        raise RuntimeError('staged source recovery identity mismatch')
     shutil.rmtree(recovered)
     archive = directory / 'files.tar.gz'
     files, excluded = [], []
@@ -209,7 +251,8 @@ def preserve(config, path, claim, directory):
     manifest.chmod(0o600)
     return {'path': str(archive), 'sha256': sha(archive), 'bytes': archive.stat().st_size,
             'manifest': str(manifest), 'manifest_sha256': sha(manifest), 'verified_members': len(files),
-            'bundle': str(bundle), 'bundle_sha256': sha(bundle), 'source_head': head}
+            'bundle': str(bundle), 'bundle_sha256': sha(bundle), 'source_head': head,
+            'index_patch': str(index_patch), 'index_patch_sha256': sha(index_patch)}
 
 
 def retire(config, state, claim, save):
@@ -253,6 +296,8 @@ def retire(config, state, claim, save):
             seen.update(str((Path(current) / name).relative_to(path)) for name in names)
         if seen != {row['path'] for row in manifest['files']}:
             raise RuntimeError('new source/evidence appeared after recovery snapshot')
+        if hashlib.sha256(index_snapshot(config, path)).hexdigest() != record['archive']['index_patch_sha256']:
+            raise RuntimeError('staged source changed after recovery snapshot')
         record['state'] = 'removal-intent'; save()
         command = [config['git_bin'], '-C', config['repo_root'], 'worktree', 'remove']
         # Dirty work is explicitly cold-retained, byte-verified and recoverable, never discarded unarchived.
@@ -262,10 +307,14 @@ def retire(config, state, claim, save):
         if result.returncode or path.exists():
             raise RuntimeError('Git retirement failed; reconcile persisted recovery intent')
         record.update(state='cold-retired', free_after=shutil.disk_usage(config['worktree_root']).free,
-                      finished_at=time.time(), restore='Clone source.bundle at source_head, restore files.tar.gz excluding historical .git pointer, decompress manifest file objects to their exact relative paths, restore recorded modes and verify decoded hashes, rebuild dependencies from retained locks only under a new authorized owner. Preserve private environment secrecy.')
+                      finished_at=time.time(), restore='Clone source.bundle at source_head, apply private index.patch with git apply --cached at source_head, restore files.tar.gz excluding historical .git pointer, decompress manifest file objects to their exact relative paths, restore recorded modes and verify decoded hashes, rebuild dependencies from retained locks only under a new authorized owner. Preserve private environment secrecy.')
     except (OSError, EOFError, RuntimeError, ValueError, subprocess.SubprocessError, tarfile.TarError) as error:
-        record.update(state='deferred', reason=str(error)[:240], retry_after=time.time() + 1800,
-                      next_action='Resolve exact owner/reference/source/recovery uncertainty before retry; source and original receipts remain retained')
+        if record.get('state') == 'removal-intent':
+            # Keep the intent even when Git failed after removing the path; never delete again on that uncertainty.
+            record.update(reason=str(error)[:240], next_action='Reconcile absent path against verified recovery before reopening; if source remains, recheck ownership before another removal')
+        else:
+            record.update(state='deferred', reason=str(error)[:240], retry_after=time.time() + 1800,
+                          next_action='Resolve exact owner/reference/source/recovery uncertainty before retry; source and original receipts remain retained')
     save()
     return record
 
@@ -319,9 +368,15 @@ def recover(config, state, save, now, completed_verified=None):
         if prior.get('state') == 'removal-intent' and not Path(c['worktree']).exists():
             archive = prior.get('archive', {})
             if any(not Path(archive.get(key, '')).is_file() or sha(Path(archive[key])) != archive.get(digest)
-                   for key, digest in (('path', 'sha256'), ('manifest', 'manifest_sha256'), ('bundle', 'bundle_sha256'))):
-                prior.update(state='deferred', reason='missing or changed cold recovery after uncertain removal',
-                             next_action='Reconcile recovery identity and absent source; no successful retirement claim')
+                   for key, digest in ([('path', 'sha256'), ('manifest', 'manifest_sha256'), ('bundle', 'bundle_sha256')] +
+                                       ([('index_patch', 'index_patch_sha256')] if 'index_patch' in archive else []))):
+                prior.update(reason='missing or changed cold recovery after uncertain removal',
+                             next_action='Restore verified recovery identity for absent source; keep removal intent, no successful retirement claim')
+                save(); return
+            try:
+                verify_objects(json.loads(Path(archive['manifest']).read_text()))
+            except (OSError, ValueError, RuntimeError, EOFError) as error:
+                prior.update(reason=str(error)[:240], next_action='Restore verified archived objects; keep absent-path removal intent and do not remove again')
                 save(); return
             prior.update(state='cold-retired', reconciliation='verified recovery retained; absent checkout reconciled without new deletion or byte-gain claim')
             save(); return

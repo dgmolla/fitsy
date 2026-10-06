@@ -110,9 +110,12 @@ def resume_checkout(config, state, issue):
     if previous.get('terminal') == 'verified' and cold.get('state') == 'cold-retired' and not intended.exists():
         archive = cold.get('archive', {})
         from cold_retention import sha
+        archive_hashes = [('path', 'sha256'), ('manifest', 'manifest_sha256'), ('bundle', 'bundle_sha256')]
+        if archive.get('index_patch'):
+            archive_hashes.append(('index_patch', 'index_patch_sha256'))
         if cold.get('worktree') != str(intended) or cold.get('claim') != previous['id'] or any(
                 not Path(archive.get(key, '')).is_file() or sha(Path(archive[key])) != archive.get(digest)
-                for key, digest in (('path', 'sha256'), ('manifest', 'manifest_sha256'), ('bundle', 'bundle_sha256'))):
+                for key, digest in archive_hashes):
             raise RuntimeError('completed-source cold recovery is unavailable or changed')
         from cold_retention import verify_objects
         verify_objects(json.loads(Path(archive['manifest']).read_text()))

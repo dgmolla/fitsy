@@ -123,6 +123,7 @@ if mode == 'install':
                           'min_free_bytes': 8 * 1024**3, 'worker_timeout_seconds': 90 * 60}
     config.setdefault('scratch_reserve_bytes', 4 * 1024**3)
     config.setdefault('cleanup_high_watermark_bytes', 20 * 1024**3)
+    config.setdefault('resource_reference_roots', [])
     lsof = shutil.which('lsof') or ('/usr/sbin/lsof' if os.access('/usr/sbin/lsof', os.X_OK) else None)
     if not lsof:
         raise SystemExit('open-file ownership tool unavailable for installed recovery')

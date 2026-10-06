@@ -136,3 +136,11 @@ A local terminal label alone is insufficient.
 Its simulator proof paths stay hot until the existing device retirement procedure completes; a disconnected or expired device alone cannot waive those gates.
 If that completed issue is later explicitly reopened, the dispatcher validates its retained archive hashes and starts new work from current main; unfinished latest work continues to reuse its original checkout.
 This never resets original issue budgets, histories, failures or source-bound approval receipts.
+
+Incoming-reference protection recursively includes all registered Git consumer roots, the managed dependency store and explicit absolute resource_reference_roots.
+Unavailable roots and scan deadlines preserve the candidate with an owned next action.
+An ambiguous Git removal preserves its durable intent, checks all recovery identities and archived objects, and reconciles absence without another deletion or a new byte-gain claim.
+
+Cold recovery preserves a private binary index.patch separately from working files and validates actual staged-source reconstruction before removal.
+Restore that patch with git apply --cached at the retained source head before restoring working files; this retains independently staged and unstaged versions.
+An unresolved merge index remains hot until complete Git-state recovery can be proven.
