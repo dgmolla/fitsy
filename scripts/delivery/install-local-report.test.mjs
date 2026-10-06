@@ -44,6 +44,19 @@ test('installer accepts only a clean checkout at the current main commit', () =>
     assert.equal(install.status,0,install.stderr);
     const plist = readFileSync(join(home,'Library/LaunchAgents/com.fitsy.local-delivery-report.plist'),'utf8');
     assert.match(plist,new RegExp(`<key>FITSY_DISPATCHER_CONFIG</key><string>${realpathSync(root)}/custom-dispatcher/config.json</string>`));
+    const configPath = join(home,'.fitsy-delivery/config.json');
+    const original = JSON.parse(readFileSync(configPath,'utf8'));
+    original.user = 'USENDER';
+    writeFileSync(configPath,JSON.stringify(original));
+    const reinstall = spawnSync('bash',[installer,'--install','--timing-root',repo],{cwd:repo,env,encoding:'utf8'});
+    assert.equal(reinstall.status,0,reinstall.stderr);
+    assert.deepEqual(JSON.parse(readFileSync(configPath,'utf8')),original);
+    writeFileSync(join(home,'firstmate/config/slack-notifications.json'),
+      JSON.stringify({bridge_path:join(root,'bridge'),channel:'COTHER',user:'U1'}));
+    const changed = spawnSync('bash',[installer,'--install','--timing-root',repo],{cwd:repo,env,encoding:'utf8'});
+    assert.notEqual(changed.status,0);
+    assert.match(changed.stderr,/identity changed/);
+    assert.deepEqual(JSON.parse(readFileSync(configPath,'utf8')),original);
     env.TEST_MAIN_SHA = 'f'.repeat(40);
     assert.match(check().stderr, /not the exact current main commit/);
     env.TEST_MAIN_SHA = head;

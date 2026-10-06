@@ -41,7 +41,7 @@ class InstallTest(unittest.TestCase):
                 'channel': 'CCHANNEL', 'user': 'USENDER', 'bridge_path': str(base / 'bridge')}))
             gh = tools / 'gh'
             gh.write_text('#!/bin/sh\nif [ "$1" = api ]; then git rev-parse HEAD; '
-                          'else sha=$(git rev-parse HEAD); printf \'[{"workflowName":"Verify","headSha":"%s","status":"completed","conclusion":"success"},{"workflowName":"Deploy","headSha":"%s","status":"completed","conclusion":"success"}]\\n\' "$sha" "$sha"; fi\n')
+                          'elif echo "$*" | /usr/bin/grep -q -- "--repo dgmolla/fitsy --commit"; then sha=$(git rev-parse HEAD); printf \'[{"workflowName":"Verify","headSha":"%s","status":"completed","conclusion":"success"},{"workflowName":"Deploy","headSha":"%s","status":"completed","conclusion":"success"}]\\n\' "$sha" "$sha"; else echo []; fi\n')
             for name in ('gh', 'codex', 'launchctl', 'lsof'):
                 path = tools / name
                 if name == 'lsof':
