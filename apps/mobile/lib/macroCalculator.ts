@@ -1,4 +1,4 @@
-import { calculateDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
+import { calculateSettledDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
 export { calculateDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
 import { calculateSuggestedCalories, type OnboardingData } from './onboardingStorage';
 import type { StoredMacroTargets } from './macroStorage';
@@ -38,7 +38,7 @@ export function dailyToPerMealMacros(daily: Macros): Macros {
 }
 
 export function calculateMacros(data: OnboardingData): Macros {
-  return dailyToPerMealMacros(calculateDailyMacros(calculateSuggestedCalories(data), data.goal));
+  return dailyToPerMealMacros(calculateSettledDailyMacros(calculateSuggestedCalories(data), data.goal));
 }
 
 export function macrosToStored(m: Macros): StoredMacroTargets {

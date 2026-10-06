@@ -27,9 +27,11 @@ test('performance profile persists, calculates balanced macros and preserves exp
   assert.ok(stored.macroTarget.proteinG / 3.5 <= 40);
   assert.ok(Math.abs(stored.macroTarget.proteinG * 4 / stored.macroTarget.calories - 0.13) < 0.01);
 
-  const macroTarget = { calories: 2100, proteinG: 120, carbsG: 250, fatG: 69 };
+  // Reproduce a legacy stale-calorie request against the actual database.
+  const staleTarget = { calories: 2100, proteinG: 120, carbsG: 250, fatG: 69 };
+  const macroTarget = { ...staleTarget, calories: 2101 };
   for (const schema of [undefined, '999', '2']) {
-    const patched = await PATCH(request({ goal: 'performance', macroTarget }, schema));
+    const patched = await PATCH(request({ goal: 'performance', macroTarget: staleTarget }, schema));
     assert.equal(patched.status, 200);
     assert.equal((await patched.json()).user.goal, schema === '2' ? 'performance' : 'maintain');
     assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).goal, 'performance');
@@ -86,4 +88,16 @@ test('performance profile persists, calculates balanced macros and preserves exp
   assert.equal((await PATCH(request({ macroTarget }, '2'))).status, 200);
   assert.equal((await (await GET(request(undefined, '2'))).json()).macroTarget.source, 'manual');
   assert.equal((await PATCH(request({ macroTarget: { ...macroTarget, source: 'guessed' } }, '2'))).status, 400);
+  for (const invalid of [null, {}, { ...macroTarget, calories: '' }, { ...macroTarget, proteinG: '' },
+    { ...macroTarget, fatG: -1 }, { calories: 100, proteinG: 0, carbsG: 0, fatG: 0 },
+    { ...macroTarget, proteinG: 0.1, carbsG: 0.1, fatG: 0.1 }]) {
+    assert.equal((await PATCH(request({ macroTarget: invalid }, '2'))).status, 400);
+    assert.deepEqual((await (await GET(request(undefined, '2'))).json()).macroTarget,
+      { ...macroTarget, source: 'manual' }, 'invalid drafts must not overwrite the saved target');
+  }
+  // Manual daily protein above the recommendation range stays editable.
+  const rounded = { calories: 999, proteinG: 210.6, carbsG: 244.6, fatG: 69.6, source: 'manual' };
+  assert.equal((await PATCH(request({ macroTarget: rounded }, '2'))).status, 200);
+  assert.deepEqual((await (await GET(request(undefined, '2'))).json()).macroTarget,
+    { calories: 2454, proteinG: 211, carbsG: 245, fatG: 70, source: 'manual' });
 });

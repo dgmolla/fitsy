@@ -1,4 +1,5 @@
 import { calculateDailyMacros, calculateMacros, dailyToPerMealMacros, MEALS_PER_DAY } from './macroCalculator';
+import { calculateSettledDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
 import { calculateSuggestedCalories, type Goal } from './onboardingStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -49,13 +50,13 @@ describe('adult macro recommendations', () => {
   test.each(goals)('profile calculation uses shared %s policy and calorie calculation', (goal) => {
     const profile = { goal, weightKg: 75, heightCm: 170 };
     expect(calculateMacros(profile)).toEqual(
-      dailyToPerMealMacros(calculateDailyMacros(calculateSuggestedCalories(profile), goal)),
+      dailyToPerMealMacros(calculateSettledDailyMacros(calculateSuggestedCalories(profile), goal)),
     );
   });
 
   test.each(goals)('%s stays at or below 40 g per meal over every generated daily calorie', goal => {
     for (let calories = 1200; calories <= 3500; calories++) {
-      const meal = dailyToPerMealMacros(calculateDailyMacros(calories, goal));
+      const meal = dailyToPerMealMacros(calculateSettledDailyMacros(calories, goal));
       expect(meal.protein).toBeLessThanOrEqual(40);
       expect(meal.calories).toBe(meal.protein * 4 + meal.carbs * 4 + meal.fat * 9);
     }

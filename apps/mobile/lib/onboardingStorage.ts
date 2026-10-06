@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculateAge } from '../../../packages/shared/src/utils/dateUtils';
-import { SUGGESTED_CALORIE_RANGE } from '../../../packages/shared/src/utils/macroTargets';
+import { calculateRecommendedCalories } from '../../../packages/shared/src/utils/macroTargets';
 import type { TriedApproach } from './onboardingPersonalization';
 
 const KEY = '@fitsy/onboarding';
@@ -52,35 +52,13 @@ export async function getOnboardingData(): Promise<OnboardingData> {
   }
 }
 
-const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
-  sedentary: 1.2,
-  lightly_active: 1.375,
-  active: 1.55,
-  very_active: 1.725,
-};
-
-const GOAL_ADJUSTMENTS: Record<Goal, number> = {
-  lose_fat: -500,
-  maintain: 0,
-  performance: 0,
-  build_muscle: 250,
-};
-
-// Mifflin-St Jeor BMR. The sex term is +5 (male) / −161 (female); when sex is
-// unknown we use −78, the midpoint, so the estimate degrades gracefully.
-function calcBMR(weightKg: number, heightCm: number, age: number, sex?: Sex): number {
-  const sexTerm = sex === 'male' ? 5 : sex === 'female' ? -161 : -78;
-  return Math.round(10 * weightKg + 6.25 * heightCm - 5 * age + sexTerm);
-}
-
 export function calculateSuggestedCalories(data: OnboardingData): number {
-  const { birthday, heightCm = 170, weightKg = 75, sex, activity = 'lightly_active', goal = 'maintain' } = data;
-  const parsedAge = birthday ? calculateAge(birthday) : 25;
-  const age = Number.isFinite(parsedAge) && parsedAge > 0 ? parsedAge : 25;
-  const weight = Number.isFinite(weightKg) && weightKg > 0 ? weightKg : 75;
-  const height = Number.isFinite(heightCm) && heightCm > 0 ? heightCm : 170;
-  const bmr = calcBMR(weight, height, age, sex);
-  const tdee = Math.round(bmr * (ACTIVITY_MULTIPLIERS[activity] ?? ACTIVITY_MULTIPLIERS.lightly_active));
-  const adjusted = tdee + (GOAL_ADJUSTMENTS[goal] ?? 0);
-  return Math.max(SUGGESTED_CALORIE_RANGE.min, Math.min(SUGGESTED_CALORIE_RANGE.max, adjusted));
+  return calculateRecommendedCalories({
+    age: data.birthday ? calculateAge(data.birthday) : undefined,
+    heightCm: data.heightCm,
+    weightKg: data.weightKg,
+    sex: data.sex,
+    activityLevel: data.activity,
+    goal: data.goal,
+  });
 }

@@ -31,7 +31,7 @@ function isLegacyGeneratedShape(targets: StoredMacroTargets): boolean {
   // Older automatic targets rounded the meal calories and each gram field
   // separately. Identify that exact historical output before interpreting a
   // mismatch as a user-chosen, independent discovery constraint.
-  const ratios = [
+  const ratios: readonly (readonly [number, number, number])[] = [
     [0.25, 0.45, 0.30], [0.20, 0.55, 0.25], [0.20, 0.50, 0.30],
   ];
   const mealSplit = 3.5;

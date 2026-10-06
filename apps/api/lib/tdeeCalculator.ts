@@ -1,4 +1,5 @@
-import { calculateDailyMacros, caloriesFromMacros, SUGGESTED_CALORIE_RANGE, type ActivityLevel, type MacroGoal, type Sex } from "@fitsy/shared";
+import { calculateRecommendedCalories, calculateSettledDailyMacros, type MacroGoal } from "../../../packages/shared/src/utils/macroTargets";
+import type { ActivityLevel, Sex } from "../../../packages/shared/src/types";
 
 // ─── TDEE Calculator ──────────────────────────────────────────────────────────
 
@@ -9,30 +10,7 @@ export interface TdeeResult {
   fatG: number;
 }
 
-const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
-  sedentary: 1.2,
-  lightly_active: 1.375,
-  active: 1.55,
-  very_active: 1.725,
-};
-
-const GOAL_OFFSETS: Record<MacroGoal, number> = {
-  lose_fat: -500,
-  maintain: 0,
-  performance: 0,
-  build_muscle: 300,
-};
-
-/**
- * Calculates TDEE and macro split using Mifflin-St Jeor.
- *
- * BMR = 10 * weightKg + 6.25 * heightCm - 5 * age + sexTerm
- *   sexTerm = +5 (male) / -161 (female) / -78 (unknown → the midpoint, so the
- *   estimate degrades gracefully when sex wasn't collected).
- * TDEE = BMR * activityMultiplier + goalOffset
- *
- * Macro split: shared goal-specific general adult defaults.
- */
+/** Daily generated targets share calorie policy and settlement with mobile. */
 export function calculateTdee(
   age: number,
   heightCm: number,
@@ -41,20 +19,7 @@ export function calculateTdee(
   goal: MacroGoal,
   sex?: Sex | null,
 ): TdeeResult {
-  const sexTerm = sex === "male" ? 5 : sex === "female" ? -161 : -78;
-  const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + sexTerm;
-  const tdee = bmr * ACTIVITY_MULTIPLIERS[activityLevel];
-  const calories = Math.max(SUGGESTED_CALORIE_RANGE.min,
-    Math.min(SUGGESTED_CALORIE_RANGE.max, Math.round(tdee + GOAL_OFFSETS[goal])));
-
-  const daily = calculateDailyMacros(calories, goal);
-  const proteinG = Math.round(daily.protein);
-  const carbsG = Math.round(daily.carbs);
-  const fatG = Math.round(daily.fat);
-  return {
-    calories: caloriesFromMacros({ protein: proteinG, carbs: carbsG, fat: fatG }),
-    proteinG,
-    carbsG,
-    fatG,
-  };
+  const calories = calculateRecommendedCalories({ age, heightCm, weightKg, activityLevel, goal, sex });
+  const daily = calculateSettledDailyMacros(calories, goal);
+  return { calories: daily.calories, proteinG: daily.protein, carbsG: daily.carbs, fatG: daily.fat };
 }

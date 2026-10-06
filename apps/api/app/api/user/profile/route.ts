@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
 import { calculateTdee } from "@/lib/tdeeCalculator";
-import { calculateAge } from "@fitsy/shared";
+import { calculateAge, caloriesFromMacros } from "@fitsy/shared";
 import type {
   ProfileUpdateRequest,
   ProfileResponse,
@@ -125,6 +125,24 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   }
 
   const update = body as Partial<ProfileUpdateRequest>;
+
+  let macroTarget: ProfileUpdateRequest['macroTarget'];
+  if (update.macroTarget !== undefined) {
+    const target = update.macroTarget;
+    if (!target || typeof target !== "object" ||
+        typeof target.calories !== "number" || !Number.isFinite(target.calories) || target.calories <= 0 ||
+        ![target.proteinG, target.carbsG, target.fatG].every(value =>
+          typeof value === "number" && Number.isFinite(value) && value >= 0)) {
+      return NextResponse.json({ error: "macroTarget requires positive calories and complete nonnegative macro grams" }, { status: 400 });
+    }
+    const grams = { protein: Math.round(target.proteinG), carbs: Math.round(target.carbsG), fat: Math.round(target.fatG) };
+    const calories = caloriesFromMacros(grams);
+    if (!Number.isSafeInteger(calories) || calories <= 0) {
+      return NextResponse.json({ error: "macroTarget must have positive finite energy after whole-gram rounding" }, { status: 400 });
+    }
+    // Legacy clients can send stale calories. Complete explicit grams own energy.
+    macroTarget = { calories, proteinG: grams.protein, carbsG: grams.carbs, fatG: grams.fat, source: target.source ?? "manual" };
+  }
 
   if (update.macroTarget?.source !== undefined &&
       update.macroTarget.source !== "manual" && update.macroTarget.source !== "automatic") {
@@ -264,24 +282,24 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
       // ─── Explicit macro targets override auto-calc ─────────────────────────
 
-      if (update.macroTarget) {
+      if (macroTarget) {
         await tx.macroTarget.upsert({
           where: { userId: auth.sub },
           create: {
             userId: auth.sub,
-            calories: update.macroTarget.calories,
-            proteinG: update.macroTarget.proteinG,
-            carbsG: update.macroTarget.carbsG,
-            fatG: update.macroTarget.fatG,
+            calories: macroTarget.calories,
+            proteinG: macroTarget.proteinG,
+            carbsG: macroTarget.carbsG,
+            fatG: macroTarget.fatG,
             goalType: "maintain",
-            source: update.macroTarget.source ?? "manual",
+            source: macroTarget.source ?? "manual",
           },
           update: {
-            calories: update.macroTarget.calories,
-            proteinG: update.macroTarget.proteinG,
-            carbsG: update.macroTarget.carbsG,
-            fatG: update.macroTarget.fatG,
-            source: update.macroTarget.source ?? "manual",
+            calories: macroTarget.calories,
+            proteinG: macroTarget.proteinG,
+            carbsG: macroTarget.carbsG,
+            fatG: macroTarget.fatG,
+            source: macroTarget.source ?? "manual",
           },
         });
       } else if (
