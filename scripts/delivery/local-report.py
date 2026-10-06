@@ -90,7 +90,10 @@ def compose_update(report, state, slot, now=None):
         update = json.loads(path.read_text())
         if not isinstance(update, dict) or not isinstance(update.get('authored_at'), str):
             raise ValueError('editorial timestamp must be a UTC string')
-        authored = datetime.fromisoformat(update['authored_at'].replace('Z', '+00:00')).timestamp()
+        authored_time = datetime.fromisoformat(update['authored_at'].replace('Z', '+00:00'))
+        if authored_time.tzinfo is None or authored_time.utcoffset().total_seconds() != 0:
+            raise ValueError('editorial timestamp must explicitly identify UTC')
+        authored = authored_time.timestamp()
         bullets = update['bullets']
         if not 0 <= now - authored <= 45 * 60:
             raise ValueError('editorial update expired')

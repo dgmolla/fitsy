@@ -4,6 +4,7 @@ import os
 from unittest.mock import patch
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from datetime import datetime, timezone
 
@@ -67,6 +68,22 @@ class LocalReportTest(unittest.TestCase):
             self.assertEqual(report['editorial']['state'], 'fresh')
             report['editorialFacts'][0]['status'] = 'Queued'
             reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fallback')
+
+    def test_timezone_free_editorial_is_rejected_on_non_utc_host(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T11:35:00Z')
+            reporter.save(state / 'editorial-update.json', {'authored_at':'2026-09-27T04:30:00',
+                'bullets':['Feature underway.', 'Acceptance pending.', 'Next: source review.'],
+                'board_bindings':{'443':'In flight'}})
+            report = {'editorialFacts':[{'number':443,'status':'In flight','title':'Feature'}]}
+            try:
+                with patch.dict(os.environ, {'TZ':'America/Los_Angeles'}):
+                    time.tzset()
+                    reporter.compose_update(report, state, '2026-09-27T11:30', now)
+            finally:
+                time.tzset()
             self.assertEqual(report['editorial']['state'], 'fallback')
 
     def test_malformed_optional_editorial_still_delivers_fallback(self):
