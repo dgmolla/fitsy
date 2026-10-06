@@ -169,7 +169,7 @@ if mode in ('enable', 'pause'):
                 hashlib.sha256((state / path).read_bytes()).hexdigest() != digest
                 for path, digest in digests.items()):
             raise SystemExit('installed runtime content does not match published source identity')
-        runs = json.loads(output('gh', 'run', 'list', '--branch', 'main', '--limit', '30', '--json',
+        runs = json.loads(output('gh', 'run', 'list', '--repo', 'dgmolla/fitsy', '--commit', current, '--branch', 'main', '--limit', '30', '--json',
                                  'workflowName,headSha,status,conclusion'))
         if not all(any(run['workflowName'] == name and run['headSha'] == current and
                        run['status'] == 'completed' and run['conclusion'] == 'success' for run in runs)

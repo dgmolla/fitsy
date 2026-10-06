@@ -73,6 +73,7 @@ python3 - "$state" "${roots[@]}" <<'PY'
 import json
 import math
 import os
+import re
 from pathlib import Path
 import sys
 import time
@@ -80,14 +81,25 @@ import time
 state = Path(sys.argv[1]); roots = [str(Path(root).expanduser().resolve()) for root in sys.argv[2:]]
 source = json.loads((Path.home() / 'firstmate/config/slack-notifications.json').read_text())
 path = state / 'config.json'
+sys.path.insert(0, source['bridge_path'])
+import bridge
+bridge.load_env()
+settings = bridge.Config.from_env()
+if settings.channel != source['channel']:
+    raise SystemExit('Slack channel does not match shared limiter configuration')
+identity = bridge.Slack(bridge.Store(settings)).call('auth.test')
+sender = identity.get('user_id')
+if identity.get('ok') is not True or not isinstance(sender, str) or not re.fullmatch(r'U[A-Z0-9]+', sender):
+    raise SystemExit('Slack publisher sender identity unavailable')
 if path.exists():
     old = json.loads(path.read_text())
     activated = old['activated_at']
-    if old['channel'] != source['channel'] or old.get('user') != source['user']:
+    if old['channel'] != source['channel'] or old.get('bridge_path') != source['bridge_path'] or old.get('user') != sender:
+        # A mismatched legacy sender needs receipt reconciliation, never silent reassignment.
         raise SystemExit('Slack publisher identity changed; reconcile existing receipts first')
 else:
     activated = math.ceil(time.time() / 1800) * 1800
-value = {'activated_at': activated, 'channel': source['channel'], 'user': source['user'],
+value = {'activated_at': activated, 'channel': source['channel'], 'user': sender,
          'bridge_path': source['bridge_path'], 'timing_roots': roots}
 temporary = path.with_suffix('.tmp'); temporary.write_text(json.dumps(value) + '\n')
 temporary.chmod(0o600); os.replace(temporary, path)
@@ -97,6 +109,7 @@ python_bin="$(command -v python3)"
 dispatcher_config="$(python3 - <<'PYCONFIG'
 import html
 import os
+import re
 from pathlib import Path
 home = Path(os.environ.get('FITSY_DISPATCH_HOME', str(Path.home() / '.fitsy-dispatcher'))).expanduser().resolve()
 print(html.escape(str(home / 'config.json')))
