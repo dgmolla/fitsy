@@ -20,10 +20,7 @@ let profileRevision = 0;
 let retryCount = 0;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-/**
- * Fetch the user's profile from the server.
- * Returns null on auth failure or network error.
- */
+/** Returns null on auth failure or network error. */
 export async function fetchProfile(expectedUserId?: string): Promise<ProfileResponse | null> {
   try {
     return await api.get<ProfileResponse>('/api/user/profile?goalSchema=2', true, {}, expectedUserId);
@@ -34,11 +31,7 @@ export async function fetchProfile(expectedUserId?: string): Promise<ProfileResp
   }
 }
 
-/**
- * Push local profile + macro targets to the server.
- * Returns whether the serialized write reached the API. Callers can keep a
- * pending local edit when a transient request fails.
- */
+/** Build daily API targets from the complete local meal allocation. */
 async function buildProfileBody(): Promise<Record<string, unknown>> {
     const [onboarding, macroSnapshot, discoverySnapshot] = await Promise.all([
       getOnboardingData(),
@@ -121,14 +114,25 @@ async function retryPendingProfileSync(scheduleRetry = true): Promise<boolean> {
   const userId = data.session?.user?.id;
   if (!userId) return true;
   const key = pendingKey(userId);
-  const raw = await AsyncStorage.getItem(key);
-  if (!raw) return true;
-  const pending = JSON.parse(raw) as { revision: number; body: Record<string, unknown> };
-  if (await pushProfileToServer(userId, pending.body)) {
+  let sentRaw: string | null = null;
+  // Read inside delivery serialization: an earlier delayed read must never
+  // enqueue a stale body after a later revision has already reached the API.
+  const deliver = async () => {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return true;
+    const pending = JSON.parse(raw) as { revision: number; body: Record<string, unknown> };
+    if (!await performProfilePush(userId, pending.body)) return false;
+    sentRaw = raw;
+    return true;
+  };
+  const delivery = lastPush.then(deliver, deliver);
+  lastPush = delivery;
+  if (await delivery) {
+    if (sentRaw === null) return true;
     // Acknowledgement and durable writes share the same storage queue.
     // Network delivery stays outside it so an offline request cannot block edits.
     const cleanup = async () => {
-      if (await AsyncStorage.getItem(key) === raw) {
+      if (await AsyncStorage.getItem(key) === sentRaw) {
         await AsyncStorage.removeItem(key);
         retryCount = 0;
         if (retryTimer) clearTimeout(retryTimer);

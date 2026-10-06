@@ -47,3 +47,14 @@ it.each([null, { lat: 100, lng: 0 }, { lat: 0, lng: -200 }])('does not fabricate
   expect(result.targets).toBeNull();
   expect(store['@fitsy/onboarding']).toBeUndefined();
 });
+
+
+it('does not offer an independent legacy search filter as saved meal targets', async () => {
+  const filter = { calories: '600', protein: '40', carbs: '60', fat: '20' };
+  store['@fitsy/onboarding'] = JSON.stringify({ goal: 'build_muscle' });
+  store['@fitsy/macro_targets'] = JSON.stringify(filter);
+  const result = await setup();
+  expect(result.targets).toBeNull();
+  expect(result.data.targetMode).toBeUndefined();
+  expect(JSON.parse(store['@fitsy/macro_targets']!)).toEqual(filter);
+});

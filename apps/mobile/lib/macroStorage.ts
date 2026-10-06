@@ -164,22 +164,7 @@ export async function getAnonymousCompleteTarget(): Promise<{ targets: StoredMac
 }
 
 export async function getMacroTargets(): Promise<StoredMacroTargets | null> {
-  const complete = await getMacroTargetSnapshot();
-  if (complete) return complete.targets;
-  // The old shared key has no source tag. Show a coherent version of its
-  // complete grams in profile, while discovery keeps the original independent
-  // search constraints and profile sync leaves the server target alone.
-  const raw = await AsyncStorage.getItem(MACRO_TARGETS_KEY);
-  if (!raw) return null;
-  try {
-    const record = JSON.parse(raw) as StoredMacroTargets & { _mode?: MacroTargetMode; _owner?: string | null };
-    if (record._owner === undefined && await currentUserId()) return null;
-    if (record._mode || (record._owner && record._owner !== await currentUserId())) return null;
-    const { _mode, _owner, ...targets } = record;
-    if ([targets.protein, targets.carbs, targets.fat, targets.calories]
-      .some(value => parseTarget(value) === null || parseTarget(value) === 0)) return null;
-    return normalizeCompleteTarget(targets);
-  } catch { return null; }
+  return (await getMacroTargetSnapshot())?.targets ?? null;
 }
 
 /** Keep ownerless pre-upgrade data until a person explicitly restores it. */

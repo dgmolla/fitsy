@@ -52,7 +52,7 @@ it('preserves ambiguous legacy high protein grams without provenance', async () 
 it('retains legacy independent calories for discovery when profile targets settle', async () => {
   const filter = { protein: '40', carbs: '60', fat: '20', calories: '600' };
   await AsyncStorage.setItem(MACRO_TARGETS_KEY, JSON.stringify(filter));
-  expect(await getMacroTargets()).toEqual({ ...filter, calories: '580' });
+  expect(await getMacroTargets()).toBeNull();
   expect(await getMacroTargetSnapshot()).toBeNull();
   expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: filter, mode: 'search' });
 
@@ -65,16 +65,16 @@ it('retains legacy independent calories for discovery when profile targets settl
 it('preserves a legacy independent calorie constraint even four kcal from macro energy', async () => {
   const filter = { protein: '40', carbs: '64', fat: '20', calories: '600' };
   await AsyncStorage.setItem(MACRO_TARGETS_KEY, JSON.stringify(filter));
-  expect(await getMacroTargets()).toEqual({ ...filter, calories: '596' });
+  expect(await getMacroTargets()).toBeNull();
   expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: filter, mode: 'search' });
   await saveMacroTargets(SAMPLE);
   expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: filter, mode: 'search' });
 });
 
-it('restores legacy profile grams with stale calories while keeping discovery independent', async () => {
+it('keeps unlinked legacy grams with independent calories out of complete targets', async () => {
   const legacy = { protein: '50', carbs: '65', fat: '20', calories: '600' };
   await AsyncStorage.setItem(MACRO_TARGETS_KEY, JSON.stringify(legacy));
-  expect(await getMacroTargets()).toEqual({ ...legacy, calories: '640' });
+  expect(await getMacroTargets()).toBeNull();
   expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: legacy, mode: 'search' });
 });
 
