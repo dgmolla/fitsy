@@ -296,6 +296,28 @@ def preserve(config, path, claim, directory):
             'index_patch': str(index_patch), 'index_patch_sha256': sha(index_patch)}
 
 
+def sync_recovery(config, archive):
+    """Make verified bytes and their recovery directory entries durable before source removal."""
+    manifest = json.loads(Path(archive['manifest']).read_text())
+    files = [Path(archive[name]) for name in ('path', 'manifest', 'index_patch', 'bundle')]
+    files.extend(Path(row['object']) for row in manifest['files'] if 'object' in row)
+    root = Path(config['state_dir'])
+    directories = {root / 'recovery/source-bundles'}
+    for file in files:
+        with file.open('rb') as stream:
+            os.fsync(stream.fileno())
+        parent = file.parent
+        while parent.is_relative_to(root):
+            directories.add(parent)
+            parent = parent.parent
+    for directory in sorted(directories, key=lambda path: len(path.parts), reverse=True):
+        descriptor = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
 def retire(config, state, claim, save):
     records = state.setdefault('cold_retention', {})
     previous = records.get(claim['id'])
@@ -309,7 +331,9 @@ def retire(config, state, claim, save):
         path = guard(config, state, claim)
         identity = source_identity(config, path)
         directory = Path(config['state_dir']) / 'recovery' / claim['id'] / str(time.time_ns())
-        record['archive'] = preserve(config, path, claim, directory)
+        archive = preserve(config, path, claim, directory)
+        sync_recovery(config, archive)
+        record['archive'] = archive
         record['source_identity'] = identity
         record['state'] = 'recovery-verified'; save()
         guard(config, state, claim)

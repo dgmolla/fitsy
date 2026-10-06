@@ -441,6 +441,60 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertEqual(record['state'], 'removal-intent')
         self.assertIn('staged', record['reason'])
 
+    def durable_archive_tick(self, fail_sync=False):
+        # Run the actual idle dispatcher and refuse Git deletion until every recovery inode is synced.
+        script = str(fixture.SCRIPT)
+        code = f"""
+import os, sys, runpy
+from pathlib import Path
+sys.path.insert(0, {str(Path(script).parent)!r})
+import cold_retention as cold
+synced = set()
+original_sync, original_execute = os.fsync, cold.execute
+failed_once = False
+def sync(fd):
+    global failed_once
+    st = os.fstat(fd)
+    synced.add((st.st_dev, st.st_ino))
+    if {fail_sync!r} and not failed_once and list(Path({str(self.c.state / 'recovery')!r}).rglob('files.tar.gz')):
+        failed_once = True
+        raise OSError(5, 'fixture recovery sync failed')
+    return original_sync(fd)
+os.fsync = sync
+def execute(args, **kwargs):
+    if 'worktree' in args and 'remove' in args:
+        recovery = Path({str(self.c.state / 'recovery')!r})
+        required = list(recovery.rglob('files.tar.gz')) + list(recovery.rglob('manifest.json'))
+        required += list(recovery.rglob('index.patch')) + list(recovery.rglob('*.bundle')) + list(recovery.rglob('*.gz'))
+        for path in list(required):
+            parent = path.parent
+            while parent.is_relative_to(recovery):
+                required.append(parent)
+                parent = parent.parent
+        for path in required:
+            st = path.stat()
+            if (st.st_dev, st.st_ino) not in synced:
+                raise RuntimeError('recovery not durable before source deletion: ' + str(path))
+    return original_execute(args, **kwargs)
+cold.execute = execute
+sys.argv = [{script!r}, 'tick', '--config', {str(self.c.config)!r}]
+runpy.run_path({script!r}, run_name='__main__')
+"""
+        return fixture.run(sys.executable, '-c', code, cwd=self.c.base, env=self.c.env)
+
+    def test_recovery_artifacts_and_directories_are_synced_before_actual_git_removal(self):
+        large = self.path / '.evidence/product-build/Build/Products/Fitsy.app/large-binary'
+        large.write_bytes(b'fixture-large-app' * (1024 * 1024))
+        self.durable_archive_tick()
+        self.assertEqual(self.c.state_data()['cold_retention'][self.old['id']]['state'], 'cold-retired')
+        self.assertFalse(self.path.exists())
+
+    def test_failed_recovery_sync_keeps_original_source_and_raw_proof(self):
+        self.durable_archive_tick(fail_sync=True)
+        self.assertTrue((self.path / 'unfinished.txt').exists())
+        self.assertTrue((self.path / '.evidence/raw-review.txt').exists())
+        self.assertEqual(self.c.state_data()['cold_retention'][self.old['id']]['state'], 'deferred')
+
     def limited_archive_tick(self, available=None):
         # Exercise the actual dispatcher against a kernel-enforced file quota, without filling the user's disk.
         script = str(fixture.SCRIPT)
