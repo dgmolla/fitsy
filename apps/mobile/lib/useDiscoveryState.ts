@@ -149,7 +149,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     : 'Tap to refresh.';
   const unlockLabel = `${unlockTitle} tap to refresh`;
   async function handleApplyFilters(newValues: MacroValues, mode: MacroTargetMode = 'complete') {
-    await saveDiscoveryMacroTargets(newValues, mode);
+    if (!await saveDiscoveryMacroTargets(newValues, mode)) throw new Error('Account changed while saving filters');
     if (mode === 'complete') {
       await queueSavedProfileToServer();
       deliverQueuedProfile();

@@ -207,23 +207,24 @@ export function saveMacroTargets(targets: StoredMacroTargets, mode: MacroTargetM
 }
 
 /** Explicitly linking a discovery filter replaces its independent search snapshot. */
-export async function saveDiscoveryMacroTargets(targets: StoredMacroTargets, mode: MacroTargetMode): Promise<void> {
+export async function saveDiscoveryMacroTargets(targets: StoredMacroTargets, mode: MacroTargetMode): Promise<boolean> {
   const requestedOwner = currentUserId();
   const next = discoverySaveQueue.then(async () => {
     const originalOwner = await requestedOwner;
     const activeOwner = await currentUserId();
     // An anonymous preview filter follows the user into their first account.
     // A signed-in account's filter never transfers to a different account.
-    if (originalOwner && activeOwner !== originalOwner) return;
+    if (originalOwner && activeOwner !== originalOwner) return false;
     const owner = originalOwner ?? activeOwner;
     const key = owner ? `${SEARCH_MACRO_TARGETS_KEY}:${owner}` : SEARCH_MACRO_TARGETS_KEY;
-    if (!await saveMacroTargets(targets, mode, 'manual', owner)) return;
-    if (await currentUserId() !== owner) return;
+    if (!await saveMacroTargets(targets, mode, 'manual', owner)) return false;
+    if (await currentUserId() !== owner) return false;
     if (!originalOwner && owner) await AsyncStorage.removeItem(SEARCH_MACRO_TARGETS_KEY);
     if (mode === 'complete') await AsyncStorage.removeItem(key);
+    return await currentUserId() === owner;
   });
-  discoverySaveQueue = next.catch(() => {});
-  await next;
+  discoverySaveQueue = next.then(() => {}, () => {});
+  return next;
 }
 
 let discoverySaveQueue: Promise<void> = Promise.resolve();

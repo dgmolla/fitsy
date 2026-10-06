@@ -113,7 +113,7 @@ it('drops a queued discovery edit when its account changes before the write', as
   const queued = saveDiscoveryMacroTargets({ protein: '55', carbs: '', fat: '', calories: '700' }, 'search');
   mockUserId = 'account-b';
   releaseFirst();
-  await Promise.all([first, queued]);
+  expect(await Promise.all([first, queued])).toEqual([false, false]);
   expect(store[`${SEARCH_MACRO_TARGETS_KEY}:account-b`]).toBeUndefined();
   mockUserId = 'account-a';
   expect((await getDiscoveryMacroTargetSnapshot())?.targets.protein).toBe('40');
