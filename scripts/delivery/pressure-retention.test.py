@@ -258,6 +258,52 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertTrue((self.path / '.evidence/product-build/Build/Products/Fitsy.app/binary').is_file())
         self.assertIn('pin', self.c.state_data()['cold_retention'][self.old['id']]['reason'])
 
+    def test_alias_form_pin_preserves_its_exact_hot_target(self):
+        alias = self.c.base / 'retained-source-alias'; alias.symlink_to(self.path, target_is_directory=True)
+        config = json.loads(self.c.config.read_text()); config['resource_pinned_checkouts'] = [str(alias)]
+        self.c.config.write_text(json.dumps(config)); self.c.tick()
+        self.assertTrue((self.path / 'unfinished.txt').is_file(), 'alias pin must retain the hot checkout')
+        self.assertIn('pin', self.c.state_data()['cold_retention'][self.old['id']]['reason'])
+
+    def test_malformed_old_receipt_does_not_stall_ready_dispatch(self):
+        bad = self.c.state / 'claims' / 'unknown-legacy' / 'receipt.json'; bad.parent.mkdir(); bad.write_text('{broken')
+        self.c.set_board([fixture.item(385)]); self.c.tick()
+        self.assertIsNotNone(self.c.state_data()['active'], 'damaged legacy metadata must not stall unrelated ready work')
+        self.assertTrue(self.path.exists(), 'unknown legacy ownership disables destructive recovery this tick')
+        record = self.c.state_data()['cold_retention_legacy'][str(bad)]
+        self.assertEqual(record['state'], 'deferred')
+        self.assertEqual(bad.read_text(), '{broken', 'original failed receipt must remain unchanged')
+
+    def test_nonobject_old_receipt_does_not_stall_ready_dispatch(self):
+        bad = self.c.state / 'claims' / 'unknown-legacy' / 'receipt.json'; bad.parent.mkdir(); bad.write_text('[]')
+        self.c.set_board([fixture.item(385)]); self.c.tick()
+        self.assertIsNotNone(self.c.state_data()['active'])
+        self.assertTrue(self.path.exists())
+        self.assertEqual(self.c.state_data()['cold_retention_legacy'][str(bad)]['state'], 'deferred')
+        self.assertEqual(bad.read_text(), '[]')
+
+    def test_invalid_owner_path_type_does_not_stall_ready_dispatch(self):
+        bad = self.c.state / 'claims' / 'unknown-legacy' / 'receipt.json'; bad.parent.mkdir()
+        raw = json.dumps({'worktree':['unknown-owner']}); bad.write_text(raw)
+        self.c.set_board([fixture.item(385)]); self.c.tick()
+        self.assertIsNotNone(self.c.state_data()['active'])
+        self.assertTrue(self.path.exists())
+        self.assertEqual(self.c.state_data()['cold_retention_legacy'][str(bad)]['state'], 'deferred')
+        self.assertEqual(bad.read_text(), raw)
+
+    def test_reopened_completed_checkout_keeps_earlier_device_proof_hot(self):
+        self.new['terminal'] = 'verified'
+        (self.c.state / 'claims' / self.new['id'] / 'receipt.json').write_text(json.dumps(self.new))
+        completed = Path(self.new['worktree'])
+        proof = completed / '.evidence/product-build/receipt.json'; proof.parent.mkdir(parents=True)
+        proof.write_text(json.dumps({'simulator':'earlier-accepted-device'}))
+        (self.c.state / 'state.json').write_text(json.dumps(self.state)); self.c.set_board([fixture.item(385)])
+        self.c.tick(); active = self.c.state_data()['active']
+        self.assertNotEqual(Path(active['worktree']).resolve(), completed.resolve(), 'reopened verified source must not be reused and overwrite older device proof')
+        self.assertEqual(json.loads(proof.read_text())['simulator'], 'earlier-accepted-device')
+        self.assertEqual(fixture.run('git', 'rev-parse', 'HEAD', cwd=active['worktree']).stdout,
+                         fixture.run('git', 'rev-parse', 'origin/main', cwd=self.c.repo).stdout)
+
     def test_source_directory_named_pods_is_preserved(self):
         source = self.path / 'Pods'; source.mkdir(); (source / 'source.txt').write_text('real source')
         self.c.tick()

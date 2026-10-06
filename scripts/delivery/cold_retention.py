@@ -94,7 +94,10 @@ def guard(config, state, claim):
         raise RuntimeError('active execution owner')
     if path == Path(config['repo_root']).resolve():
         raise RuntimeError('configured runtime source checkout')
-    if str(path) in config.get('resource_pinned_checkouts', []):
+    pins = config.get('resource_pinned_checkouts', [])
+    if not isinstance(pins, list) or any(not isinstance(pin, str) or not Path(pin).is_absolute() for pin in pins):
+        raise RuntimeError('explicit source/app pins are malformed; retain checkout')
+    if any(Path(pin).resolve() == path for pin in pins):
         raise RuntimeError('explicit retained source/app pin')
     if incoming(config, path):
         raise RuntimeError('incoming dependency or artifact reference')
@@ -376,9 +379,12 @@ def recover(config, state, save, now, completed_verified=None):
     grace = config.get('superseded_checkout_grace_seconds', 3600 if pressure else 86400)
     if not isinstance(grace, int) or isinstance(grace, bool) or grace < 0:
         raise RuntimeError('superseded checkout grace must be nonnegative seconds')
+    from resource_lifecycle import read_claims
+    receipts, uncertain = read_claims(config, state)
+    if uncertain:
+        save(); return  # Unknown ownership disables destructive recovery, not admission of ready work.
     claims, uncertain_paths = {}, set()
-    for receipt in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
-        c = json.loads(receipt.read_text())
+    for receipt, c in receipts:
         if not c.get('worktree'):
             continue  # Legacy shipping receipts without a resource path cannot authorize cleanup.
         if (not c.get('finished_at') or not c.get('terminal') or

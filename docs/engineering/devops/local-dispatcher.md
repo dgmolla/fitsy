@@ -6,7 +6,7 @@ Readiness starts at the label event or first observation when historical event t
 
 One local host holds an exclusive file lock and writes a durable claim before touching the board or starting a worker.
 A claim snapshots the issue acceptance, implementation provider/model/effort, independent reviewer settings, advisory classifier response, and process identity.
-A first claim creates an owned Git worktree; an authorized same-issue successor reuses the latest ended checkout and branch after fresh registration, terminal-receipt, process/group, open-file and source-identity checks.
+A first claim creates an owned Git worktree; an authorized same-issue successor reuses the latest unfinished ended checkout and branch after fresh registration, terminal-receipt, process/group, open-file and source-identity checks.
 Tracked and untracked unfinished work stay in place, and the new claim records its creation claim, predecessor and exact resume identity.
 An uncertain retained checkout parks preparation rather than making a second dependency environment.
 Durable claim receipts preserve discovery after the compact in-memory history rolls over.
@@ -117,6 +117,9 @@ At the existing idle tick, the dispatcher assesses one superseded ended checkout
 Below the high watermark, a superseded checkout has a one-hour release grace by default; without pressure the default is 24 hours.
 Configure cleanup_high_watermark_bytes and superseded_checkout_grace_seconds explicitly when needed; polling never renews owner-use or release clocks.
 The latest unfinished checkout for each issue and resource_pinned_checkouts remain protected, along with active owners, incoming donor/artifact references and uncertain process/open-file ownership.
+Configured pins resolve aliases and normalized absolute paths; malformed pin configuration retains the candidate.
+An unreadable or non-object historical claim receipt records an exact deferred ownership assessment and disables destructive recovery for that tick while allowing otherwise eligible work through ordinary admission.
+Original failed receipt bytes remain unchanged; a known successor still needs its exact valid predecessor receipt before reuse.
 Completed mobile checkouts retain their hot proof paths until the existing issue-bound simulator retirement completes; missing or malformed build receipts alongside mobile evidence defer archival with a concrete reconciliation action.
 The incoming-reference scan traverses nested dependency links without following symlinks and stops after incoming_reference_scan_seconds (30 seconds maximum/default).
 A scan deadline or filesystem error preserves the checkout and records the unresolved assessment and next action; it never authorizes removal.
@@ -134,7 +137,8 @@ This uses the existing dispatcher lock and timer; no additional worker, queue or
 A latest verified completed checkout becomes eligible after its integrated-checkout TTL, default 24 hours, only when the current board and canonical terminal shipping proof still agree.
 A local terminal label alone is insufficient.
 Its simulator proof paths stay hot until the existing device retirement procedure completes; a disconnected or expired device alone cannot waive those gates.
-If that completed issue is later explicitly reopened, the dispatcher validates its retained archive hashes and starts new work from current main; unfinished latest work continues to reuse its original checkout.
+If a completed issue is explicitly reopened, its new owner starts from current main and never overwrites the earlier accepted checkout or device proof.
+An already cold-retired completed source also requires valid retained archive hashes before reopening; unfinished latest work continues to reuse its original checkout.
 This never resets original issue budgets, histories, failures or source-bound approval receipts.
 
 Incoming-reference protection recursively includes all registered Git consumer roots, the managed dependency store and explicit absolute resource_reference_roots.

@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from resource_lifecycle import cleanup_released, resume_checkout, assess_retention, retention
+from resource_lifecycle import cleanup_released, resume_checkout, assess_retention, retention, read_claims
 from cold_retention import recover as recover_pressure
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'sim'))
@@ -537,8 +537,10 @@ def retire_verified_simulator(config, state, state_path):
         return
     verified = state.get('verified') or {}
     identities = {value.get('id'): (number, value) for number, value in verified.items()}
-    for receipt in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
-        claim = read_json(receipt, {})
+    receipts, uncertain = read_claims(config, state)
+    if uncertain:
+        write_json(state_path, state); return
+    for receipt, claim in receipts:
         if (claim.get('terminal') == 'verified' and isinstance(claim.get('issue'), int) and
                 claim.get('finished_at') and claim.get('branch') and receipt.parent.name == claim.get('id')):
             identities.setdefault(claim['id'], (str(claim['issue']), claim))

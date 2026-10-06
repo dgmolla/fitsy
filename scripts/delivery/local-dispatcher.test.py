@@ -372,7 +372,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual((checkout / 'retained-source.txt').read_text(), 'old issue source')
         self.assertEqual(len(list(self.worktrees.iterdir())), 1)
 
-    def test_reopened_verified_issue_reuses_its_retained_checkout(self):
+    def test_reopened_verified_issue_preserves_completed_checkout_and_uses_current_main(self):
         self.tick()
         self.until(lambda: self.state_data()['active'].get('finished_at'))
         old = self.state_data()['active'].copy()
@@ -380,15 +380,20 @@ class DispatcherProcessTest(unittest.TestCase):
         self.tick()
         self.assertEqual(self.state_data()['history'][-1]['terminal'], 'verified')
         checkout = Path(old['worktree'])
+        proof = checkout / '.evidence/earlier-accepted-proof.json'; proof.parent.mkdir(exist_ok=True)
+        proof.write_text('earlier accepted device proof')
         self.set_board([item(385)])
         board = self.board_data(); board['ready_at']['385'] = '2026-09-27T01:00:00Z'
         self.board.write_text(json.dumps(board))
         self.tick()
         self.until(lambda: self.state_data()['active'].get('finished_at'))
         new = self.state_data()['active']
-        self.assertEqual(Path(new['worktree']).resolve(), checkout.resolve())
-        self.assertEqual(new['resumed_from_claim'], old['id'])
-        self.assertEqual(len(list(self.worktrees.iterdir())), 1)
+        self.assertNotEqual(Path(new['worktree']).resolve(), checkout.resolve())
+        self.assertNotIn('resumed_from_claim', new)
+        self.assertEqual(proof.read_text(), 'earlier accepted device proof')
+        self.assertEqual(run('git', 'rev-parse', 'HEAD', cwd=new['worktree']).stdout,
+                         run('git', 'rev-parse', 'origin/main', cwd=self.repo).stdout)
+        self.assertEqual(len(list(self.worktrees.iterdir())), 2)
 
     def test_authorized_resume_reuses_ended_issue_checkout(self):
         self.env['FAKE_WORKER_MODE'] = 'fail'

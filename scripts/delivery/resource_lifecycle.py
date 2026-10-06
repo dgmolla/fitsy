@@ -15,6 +15,29 @@ def execute(args, timeout=30):
     return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
 
 
+def read_claims(config, state):
+    """Retain damaged legacy metadata without turning it into deletion authority."""
+    claims, uncertain = [], False
+    for receipt in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
+        try:
+            claim = json.loads(receipt.read_text())
+            if not isinstance(claim, dict):
+                raise ValueError('durable receipt is not an object')
+            for field in ('id', 'worktree', 'branch', 'terminal', 'finished_at'):
+                if claim.get(field) is not None and not isinstance(claim[field], str):
+                    raise ValueError('durable receipt field is not text: ' + field)
+            if claim.get('issue') is not None and (not isinstance(claim['issue'], int) or isinstance(claim['issue'], bool)):
+                raise ValueError('durable receipt issue is not an integer')
+        except (OSError, ValueError) as error:
+            uncertain = True
+            state.setdefault('cold_retention_legacy', {}).setdefault(str(receipt), {
+                'state': 'deferred', 'reason': 'unreadable durable claim receipt: ' + str(error)[:160],
+                'next_action': 'Backfill exact owner from original task evidence; preserve damaged receipt and skip destructive recovery'})
+            continue
+        claims.append((receipt, claim))
+    return claims, uncertain
+
+
 def owned_checkout(config, claim):
     identity = claim.get('worktree_origin_claim', claim.get('id', ''))
     if not re.fullmatch(r'[0-9a-f-]{36}', identity) or not isinstance(claim.get('issue'), int):
@@ -86,8 +109,7 @@ def resume_checkout(config, state, issue):
     candidates = [entry for entry in state.get('history', []) if entry.get('issue') == issue
                   and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at')]
     # Compact in-memory history is not the durable ownership record.
-    for receipt_path in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
-        entry = json.loads(receipt_path.read_text())
+    for receipt_path, entry in read_claims(config, state)[0]:
         if entry.get('issue') == issue and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at'):
             if receipt_path.parent.name != entry.get('id'):
                 raise RuntimeError('durable claim receipt identity mismatch')
@@ -128,6 +150,9 @@ def resume_checkout(config, state, issue):
     if any(receipt.get(key) != previous.get(key) for key in ('id', 'issue', 'terminal', 'finished_at', 'worktree', 'branch')):
         raise RuntimeError('terminal receipt changed')
     released(config, previous, [path])
+    if previous.get('terminal') == 'verified':
+        # Reopened completed work starts from current main; its accepted source/app/device proof stays hot.
+        return None
     before = source_identity(config, path)
     owned_checkout(config, previous)
     if source_identity(config, path) != before:
