@@ -147,3 +147,7 @@ Legacy archives without verified index recovery remain unreconciled until origin
 Archive preparation budgets incompressible retained files, Git recovery copies, index data and a temporary-write margin before allocation.
 Failed preparation removes only its unpublished attempt and temporary pack/object files while the original checkout remains; verified shared objects, archives and removal intents remain protected.
 An unresolved merge index remains hot until complete Git-state recovery can be proven.
+
+Superseded verified checkouts use the pressure grace, while the latest accepted checkout keeps the integrated-checkout TTL.
+Device retirement walks durable verified claim generations, retaining the exact historical terminal receipt, merged PR and successful main checks plus current Done and owner-release evidence.
+A later acceptance pointer cannot erase an older device retirement route, and current failed or reopened issue evidence still prevents retirement.

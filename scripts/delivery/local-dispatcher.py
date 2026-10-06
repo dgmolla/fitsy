@@ -237,7 +237,7 @@ def historical_verified(config, item):
     return False
 
 
-def terminal_verified(config, item, expected, *, archived=False):
+def terminal_verified(config, item, expected, *, archived=False, historical=False):
     """Board state is only a hint; independently bind acceptance to merged main CI."""
     if not expected or item.get('status') != 'Done' or not item.get('verified at'):
         return False
@@ -260,6 +260,8 @@ def terminal_verified(config, item, expected, *, archived=False):
             continue
         try:
             receipt = json.loads(body.split(marker, 1)[1].strip())
+            if historical and (receipt.get('claim_id') != expected['id'] or receipt.get('branch') != expected['branch']):
+                continue  # A later verified generation does not erase this exact prior acceptance receipt.
             if (receipt.get('acceptance') != 'verified' or receipt.get('issue') != number or
                     receipt.get('claim_id') != expected['id'] or receipt.get('branch') != expected['branch'] or
                     not re.fullmatch(r'[0-9a-f]{40}', receipt['merge_sha'])):
@@ -534,10 +536,16 @@ def retire_verified_simulator(config, state, state_path):
     if state.get('active'):
         return
     verified = state.get('verified') or {}
-    ordered = sorted(verified.items(), key=lambda entry: int(entry[0]))
-    cursor = state.get('simulator_retirement_cursor')
-    if cursor in [number for number, _ in ordered]:
-        index = next(index for index, (number, _) in enumerate(ordered) if number == cursor)
+    identities = {value.get('id'): (number, value) for number, value in verified.items()}
+    for receipt in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
+        claim = read_json(receipt, {})
+        if (claim.get('terminal') == 'verified' and isinstance(claim.get('issue'), int) and
+                claim.get('finished_at') and claim.get('branch') and receipt.parent.name == claim.get('id')):
+            identities.setdefault(claim['id'], (str(claim['issue']), claim))
+    ordered = sorted(identities.values(), key=lambda entry: (int(entry[0]), entry[1].get('id', '')))
+    cursor = state.get('simulator_retirement_claim_cursor')
+    if cursor in [identity.get('id') for _, identity in ordered]:
+        index = next(index for index, (_, identity) in enumerate(ordered) if identity.get('id') == cursor)
         ordered = ordered[index + 1:] + ordered[:index + 1]
     for issue_text, identity in ordered:
         issue = int(issue_text)
@@ -576,10 +584,10 @@ def retire_verified_simulator(config, state, state_path):
                 current = next((entry for entry in board(config) if
                                 entry.get('content', {}).get('number') == issue), None)
                 use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
-                return bool(current and terminal_verified(config, current, identity, archived=True) and
+                return bool(current and terminal_verified(config, current, identity, archived=True, historical=True) and
                             retention(config, 'task_simulator', use, time.time())['state'] == 'assessment-due')
             current = next((entry for entry in board(config) if entry.get('content', {}).get('number') == issue), None)
-            if not current or not terminal_verified(config, current, identity, archived=True):
+            if not current or not terminal_verified(config, current, identity, archived=True, historical=True):
                 raise ValueError('issue is no longer terminal-verified')
             use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
             grace = retention(config, 'task_simulator', use, time.time())
@@ -600,6 +608,7 @@ def retire_verified_simulator(config, state, state_path):
                 'status': 'held',
                 'issue': issue, 'reason': str(error)[:300], 'attemptedAt': utc()}
         state['simulator_retirement_cursor'] = issue_text
+        state['simulator_retirement_claim_cursor'] = claim_id
         write_json(state_path, state)
         return
 
@@ -745,7 +754,7 @@ def tick(config, state, state_path, script):
             return False
         try:
             current = next((item for item in board(config) if item.get('content', {}).get('number') == claim['issue']), None)
-            return bool(current and terminal_verified(config, current, identity, archived=True))
+            return bool(current and terminal_verified(config, current, identity, archived=True, historical=True))
         except Exception:
             return False  # Unavailable live acceptance is uncertainty, never retirement permission.
     recover_pressure(config, state, lambda: write_json(state_path, state), time.time(), completed_recovery_verified)

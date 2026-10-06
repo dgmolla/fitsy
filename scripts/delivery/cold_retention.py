@@ -397,7 +397,7 @@ def recover(config, state, save, now, completed_verified=None):
         prior = records.get(c['id'], {})
         age = elapsed(c['finished_at'], now)
         latest_unfinished = c == newest[c['issue']] and c.get('terminal') != 'verified'
-        minimum_age = config.get('resource_ttl_seconds', {}).get('integrated_checkout', 86400) if c.get('terminal') == 'verified' else grace
+        minimum_age = config.get('resource_ttl_seconds', {}).get('integrated_checkout', 86400) if c == newest[c['issue']] and c.get('terminal') == 'verified' else grace
         if not isinstance(minimum_age, int) or isinstance(minimum_age, bool) or minimum_age < 0:
             raise RuntimeError('checkout TTL must be nonnegative seconds')
         if latest_unfinished or age is None or age < minimum_age or prior.get('state') == 'cold-retired' or prior.get('retry_after', 0) > now:

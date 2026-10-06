@@ -114,6 +114,60 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertFalse(self.path.exists())
         self.assertEqual(self.c.workers(), [])
 
+    def test_pressure_uses_one_hour_grace_for_superseded_verified_checkout(self):
+        from datetime import datetime, timedelta, timezone
+        config = json.loads(self.c.config.read_text()); config.pop('superseded_checkout_grace_seconds')
+        self.c.config.write_text(json.dumps(config))
+        self.old['terminal'] = 'verified'
+        self.old['finished_at'] = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        self.new['finished_at'] = datetime.now(timezone.utc).isoformat()
+        for claim in (self.old, self.new):
+            (self.c.state / 'claims' / claim['id'] / 'receipt.json').write_text(json.dumps(claim))
+        (self.path / '.evidence/product-build/receipt.json').write_text(json.dumps({'simulator': 'ended-device'}))
+        self.state['simulator_retirement'] = {'ended-device': {'status': 'retired', 'issue': 385}}
+        (self.c.state / 'state.json').write_text(json.dumps(self.state))
+        self.c.tick()
+        self.assertFalse(self.path.exists(), 'pressure grace should recover a superseded verified checkout after one hour')
+        self.assertTrue(Path(self.new['worktree']).exists())
+
+    def test_reverified_issue_keeps_old_durable_device_retirement_route(self):
+        self.c.env['HOME'] = str(self.c.base / 'isolated-home')
+        gh = self.c.gh.read_text().replace("if item.get('terminal'): bodies.append({'id':1,'body':item['terminal']})",
+            "bodies.extend({'id':i,'body':body} for i,body in enumerate(item.get('terminal_history',[])))")
+        self.c.gh.write_text(gh)
+        terminals = []
+        for claim in (self.old, self.new):
+            claim.update(terminal='verified', branch='same-reopened-branch')
+            (self.c.state / 'claims' / claim['id'] / 'receipt.json').write_text(json.dumps(claim))
+            terminals.append('<!-- fitsy-dispatch-terminal:v1 -->' + json.dumps({'issue':385,
+                'claim_id':claim['id'], 'branch':claim['branch'], 'pr':389, 'head_sha':'a'*40,
+                'merge_sha':'b'*40, 'verify_run':11, 'deploy_run':12, 'acceptance':'verified'}))
+        item = fixture.item(385, status='Done')
+        item.update(issue_state='CLOSED', **{'verified at':'2026-09-02T00:00:00Z'},
+                    branch='same-reopened-branch', terminal=terminals[-1], terminal_history=terminals)
+        self.c.set_board([item])
+        for claim, device in ((self.old, 'fixture-old-device'), (self.new, 'fixture-new-device')):
+            p = Path(claim['worktree']) / '.evidence/product-build'; p.mkdir(parents=True, exist_ok=True)
+            (p / 'receipt.json').write_text(json.dumps({'simulator':device}))
+        self.state['verified'] = {'385':self.new}
+        self.state['simulator_retirement'] = {'fixture-new-device': {'status':'retired', 'issue':385}}
+        (self.c.state / 'device-owner-uses.json').write_text(json.dumps({'version':1, 'devices':{
+            'fixture-old-device':{'owner':'ended-fixture','last_owner_use':'2026-09-01T00:00:00Z',
+                                  'released_at':'2026-09-01T00:01:00Z'}}}))
+        (self.c.state / 'state.json').write_text(json.dumps(self.state))
+        self.c.tick()
+        result = self.c.state_data().get('simulator_retirement', {}).get('fixture-old-device')
+        self.assertIsNotNone(result, 'overwriting latest verified identity must not orphan old durable device proof')
+        self.assertEqual(result['status'], 'held')
+        self.assertIn('identity invalid', result['reason'])
+        self.assertTrue(self.path.exists(), 'malformed device identity stays protected')
+        self.c.env['FAKE_BAD_CI'] = '1'
+        self.c.tick()
+        result = self.c.state_data()['simulator_retirement']['fixture-old-device']
+        self.assertEqual(result['status'], 'held')
+        self.assertIn('no longer terminal-verified', result['reason'])
+        self.assertTrue(self.path.exists(), 'failed canonical main evidence still protects the older claim')
+
     def test_missing_mobile_build_receipt_retains_hot_device_proof(self):
         self.new['terminal'] = 'verified'
         (self.c.state / 'claims' / self.new['id'] / 'receipt.json').write_text(json.dumps(self.new))
