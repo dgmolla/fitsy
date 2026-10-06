@@ -126,7 +126,8 @@ class LocalReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             state = Path(temporary)
             now = epoch('2026-09-27T04:35:00Z')
-            for claim in ('#999999 shipped.', 'See https://github.com/dgmolla/fitsy/issues/999999.'):
+            for claim in ('#999999 shipped.', 'See https://github.com/dgmolla/fitsy/issues/999999.',
+                          'See https://GitHub.com/dgmolla/fitsy/issues/999999.'):
                 reporter.save(state / 'editorial-update.json', {'authored_at':'2026-09-27T04:30:00Z',
                     'board_bindings':{'388':'Done'},'bullets':[claim,'Second statement.','Third statement.']})
                 report = {'editorialFacts':[{'number':388,'status':'Done','title':'Dispatcher improvements'}]}
