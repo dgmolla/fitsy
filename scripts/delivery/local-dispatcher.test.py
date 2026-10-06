@@ -28,6 +28,10 @@ with lock.open('a') as f:
  d=json.loads(p.read_text()); a=sys.argv[1:]; result=''
  if a[:2]==['api','graphql']:
   d['board_reads']=d.get('board_reads',0)+1
+  if os.environ.get('FAKE_QUEUE_GENERIC_429'):
+   p.write_text(json.dumps(d))
+   print('HTTP/2 429\n\n'+json.dumps({'message':'Too many requests'}))
+   raise SystemExit(1)
   if os.environ.get('FAKE_QUEUE_QUOTA_RESET'):
    p.write_text(json.dumps(d))
    print('HTTP/2 403\nX-Ratelimit-Remaining: 0\nX-Ratelimit-Reset: '+os.environ['FAKE_QUEUE_QUOTA_RESET']+'\n\n'+json.dumps({'errors':[{'message':'API rate limit exceeded'}]}))
@@ -39,7 +43,7 @@ with lock.open('a') as f:
     'repository':{'nameWithOwner':c['repository']},'labels':{'totalCount':len(x['labels']),'nodes':[{'name':n} for n in x['labels']]}}}
    node.update({f'f{i}':({'name':x.get(k)} if k in ('status','priority') else {'text':x.get(k)}) for i,k in enumerate(fields)})
    nodes.append(node)
-  result=json.dumps({'data':{'node':{'items':{'totalCount':len(nodes),'nodes':nodes,'pageInfo':{'hasNextPage':False,'endCursor':None}}},'rateLimit':{'cost':2,'remaining':4998,'resetAt':'2099-01-01T00:00:00Z'}}})
+  result=json.dumps({'data':{'node':{'items':{'totalCount':len(nodes),'nodes':nodes,'pageInfo':{'hasNextPage':False,'endCursor':None}}},'rateLimit':{'cost':2,'remaining':int(os.environ.get('FAKE_QUEUE_REMAINING','4998')),'resetAt':'2099-01-01T00:00:00Z'}}})
  elif a[:2]==['project','item-list']:
   result=json.dumps({'totalCount':len(d['items']),'items':d['items']})
  elif a[:2]==['project','item-edit']:
@@ -202,6 +206,25 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(fake['board_reads'], 1)
         self.assertIsNone(json.loads((self.state / 'state.json').read_text()).get('active'))
         self.assertEqual(fake['items'][0]['status'], 'Queued')
+
+    def test_complete_read_exhaustion_never_claims_or_changes_remote_card(self):
+        self.env['FAKE_QUEUE_REMAINING'] = '0'
+        for _ in range(2):
+            self.assertEqual(self.tick()['state'], 'queue-read-backoff')
+        fake = self.board_data()
+        self.assertEqual(fake['board_reads'], 1)
+        self.assertIsNone(self.state_data().get('active'))
+        self.assertEqual(fake['items'][0]['status'], 'Queued')
+        self.assertNotIn('dispatch-hold', fake['items'][0]['labels'])
+        self.assertFalse(fake.get('comments'))
+
+    def test_generic_http_429_suppresses_second_tick_read_without_claim(self):
+        self.env['FAKE_QUEUE_GENERIC_429'] = '1'
+        for _ in range(2):
+            self.assertEqual(self.tick()['state'], 'queue-read-backoff')
+        self.assertEqual(self.board_data()['board_reads'], 1)
+        self.assertIsNone(self.state_data().get('active'))
+        self.assertEqual(self.board_data()['items'][0]['status'], 'Queued')
 
     def test_installer_pause_after_initial_config_read_prevents_tick_admission(self):
         hooks = self.base / 'pause-hooks'; hooks.mkdir()
@@ -1448,7 +1471,7 @@ class QueueReadTest(unittest.TestCase):
         self.assertIn('after=cursor', transport.call_args.args[0])
 
     def test_incomplete_duplicate_drifting_and_stalled_pages_fail_closed(self):
-        scenarios = [[self.page(['one'], 2)], [self.page(['one', 'one'])],
+        scenarios = [[self.page([], 2, True, 'cursor')], [self.page(['one'], 2)], [self.page(['one', 'one'])],
             [self.page(['one'], 2, True, 'cursor'), self.page(['two'], 3)],
             [self.page(['one'], 3, True, 'cursor'), self.page(['two'], 3, True, 'cursor')]]
         for pages in scenarios:
@@ -1480,6 +1503,20 @@ class QueueReadTest(unittest.TestCase):
         with mock.patch.object(dispatcher.subprocess, 'run', return_value=self.response(self.page(['fresh']))) as transport:
             self.assertEqual(dispatcher.board(self.config)[0]['id'], 'fresh')
         self.assertEqual(transport.call_count, 1)
+
+    def test_retry_after_without_primary_reset_honors_server_delay(self):
+        response = self.response({'message': 'Too many requests'}, 1, 'HTTP/2 429\nRetry-After: 60\n\n')
+        with mock.patch.object(dispatcher.time, 'time', return_value=1000), mock.patch.object(dispatcher.subprocess, 'run', return_value=response):
+            with self.assertRaises(dispatcher.QueueReadBackoff) as raised:
+                dispatcher.board(self.config)
+        self.assertEqual(raised.exception.retry_at, 1061)
+
+    def test_unsupported_field_value_cannot_hide_hold_or_dependency(self):
+        for field in ('f3', 'f4'):
+            page = self.page(['one']); page['data']['node']['items']['nodes'][0][field] = {}
+            with self.subTest(field=field), mock.patch.object(dispatcher.subprocess, 'run', return_value=self.response(page)):
+                with self.assertRaisesRegex(RuntimeError, 'field type unsupported'):
+                    dispatcher.board(self.config)
 
     def test_partial_graphql_errors_never_accept_available_cards(self):
         page = self.page(['one']); page['errors'] = [{'message': 'timeout'}]

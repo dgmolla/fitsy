@@ -236,7 +236,10 @@ def board(config):
         rate = (response.get('data') or {}).get('rateLimit') or {}
         exhausted = headers.get('x-ratelimit-remaining') == '0' or rate.get('remaining') == 0
         errors = response.get('errors') or []
-        throttled = 'rate limit' in (result.stderr + json.dumps(errors)).lower()
+        statuses = re.findall(r'^HTTP/\S+\s+(\d+)', result.stdout[:max(offset, 0)], re.M)
+        message = (result.stderr + json.dumps(errors) + str(response.get('message', ''))).lower()
+        throttled = (bool(statuses) and statuses[-1] == '429') or any(
+            text in message for text in ('rate limit', 'too many requests'))
         retry_at = 0
         if exhausted or throttled or headers.get('retry-after'):
             try:
@@ -245,12 +248,14 @@ def board(config):
                 try:
                     retry_at = datetime.fromisoformat(rate['resetAt'].replace('Z', '+00:00')).timestamp()
                 except (KeyError, TypeError, ValueError):
-                    retry_at = time.time() + 1800
+                    retry_at = 0
             if headers.get('retry-after'):
                 try:
                     retry_at = max(retry_at, time.time() + float(headers['retry-after']))
                 except ValueError:
                     retry_at = max(retry_at, time.time() + 1800)
+            if retry_at <= time.time():
+                retry_at = time.time() + 1800
             retry_at = max(time.time() + 1, retry_at + 1)
         write_json(quota_path, {'observed_at': utc(), 'retry_at': retry_at,
                                'cost': rate.get('cost'), 'remaining': rate.get('remaining'),
@@ -285,15 +290,20 @@ def board(config):
                 if f'f{index}' not in node:
                     raise RuntimeError('GitHub queue field missing; refusing dispatch')
                 value = node[f'f{index}'] or {}
+                if node[f'f{index}'] == {}:
+                    raise RuntimeError('GitHub queue field type unsupported; refusing dispatch')
                 item[name.lower()] = value.get('name', value.get('text', value.get('date')))
             items.append(item)
         page = connection.get('pageInfo') or {}
         if page.get('hasNextPage') is False:
             if len(items) != total:
                 raise RuntimeError('GitHub project pagination incomplete; refusing dispatch')
+            if retry_at:
+                raise QueueReadBackoff(retry_at)
             return items
         cursor = page.get('endCursor')
-        if page.get('hasNextPage') is not True or not cursor or cursor in cursors or len(items) >= total:
+        if (page.get('hasNextPage') is not True or not connection['nodes'] or not cursor
+                or cursor in cursors or len(items) >= total):
             raise RuntimeError('GitHub project pagination did not advance; refusing dispatch')
         cursors.add(cursor)
         if retry_at:
