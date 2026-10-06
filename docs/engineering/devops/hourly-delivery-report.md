@@ -2,12 +2,16 @@
 
 The [Fitsy Delivery project](https://github.com/users/dgmolla/projects/1) is the source for issue progress, ownership, blockers, and status.
 The local [publisher](../../../scripts/delivery/local-report.py) wakes once a minute without a Codex or First Mate session and makes UTC half-hour slots eligible at minute 02 and 32.
-It reads the GitHub board, merged pull requests, exact-main Verify and Deploy runs, writer-authored timing comments, and explicitly registered local phase ledgers.
+It reads the complete GitHub board through the installed dispatcher snapshot and shared quota cooldown, merged pull requests, exact-main Verify and Deploy runs, writer-authored timing comments, and explicitly registered local phase ledgers.
 The [GitHub workflow](../../../.github/workflows/hourly-delivery.yml) is manual, dry-run-only diagnostics and never publishes Slack messages.
-Slack shows the slot and main gate state, then short Shipped, Next, and Blocker lines.
+Slack shows the slot and main gate state, followed by three or four concise free-form editorial bullets.
+The coordinator atomically writes authored_at, bullets and observed board_bindings in the private editorial-update.json under publisher.lock.
+The publisher accepts only fresh compact prose whose issue-status bindings still match the complete current board read.
+Expired or malformed prose falls back to current actionable board facts without a human mention or a fixed backlog-blocker slot.
+Issue numbers supplement product names and outcomes; merged code and an active process do not prove acceptance.
 The JSON artifact retains PR throughput, observed local phase time, timing coverage exceptions, and full evidence.
-Shipped lists at most two Done issues with valid Verified at timestamps from the past 24 hours, ordered by verification time.
-Next lists at most two unblocked In flight issues first, then unblocked queued Now or Next issues; the title is shortened and links to the issue.
+The structured JSON shipped summary lists at most two Done issues with valid Verified at timestamps from the past 24 hours, ordered by verification time.
+The structured JSON next summary lists at most two unblocked In flight issues first, then unblocked queued Now or Next issues; the title is shortened and links to the issue.
 The `Details` link carries a UTC half-hour slot marker, `fitsy-slot:YYYY-MM-DDTHH:00` or `:30`.
 The local publisher holds one process lock, reads Slack history before posting, and saves a confirmed `channel`/`ts` receipt for each slot.
 History pagination advances one page per timer wake through the shared Slack limiter.
@@ -35,6 +39,7 @@ Board counts are cards, which may include both an issue and its linked PR; do no
 ## Activation and failure handling
 
 After the reviewed change merges, confirm `main` no longer has the workflow schedule before installing the local LaunchAgent.
+Install the reviewed canonical dispatcher reader before the publisher runtime; a missing or busy reader defers reporting without sending.
 Run `bash scripts/delivery/install-local-report.sh --check --timing-root /absolute/owned/worktree`, then install with `--install` and the same explicit timing roots.
 The installer copies only the reporter runtime into `~/.fitsy-delivery`, retains receipts across reinstalls, and starts `com.fitsy.local-delivery-report`.
 The timer uses the GitHub CLI keyring token with Projects scope and the existing Fitsy Slack bot credential through the shared local Slack limiter; it does not copy either secret into the repository or timer configuration.

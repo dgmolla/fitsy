@@ -89,6 +89,13 @@ class LocalReportTest(unittest.TestCase):
             self.assertNotIn('waiting on recorded holds or dependencies', message)
             self.assertIn('eligibility', message)
 
+    def test_failed_main_gate_remains_visible_in_editorial_and_fallback_messages(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            report = {'main':{'state':'failed'},'editorialFacts':[]}
+            message = reporter.compose_update(report, state, '2026-09-27T04:30')
+            self.assertIn('main failed', message)
+
     def test_history_pagination_and_legacy_marker_prevent_a_second_post(self):
         class PagedSlack(Slack):
             def call(self, method, params=None, payload=None):

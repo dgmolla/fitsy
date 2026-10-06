@@ -131,7 +131,10 @@ def compose_update(report, state, slot, now=None):
         else:
             lines.append('Fresh coordinator context is unavailable; no new human request is inferred from old backlog blockers.')
     marker = f'https://github.com/users/dgmolla/projects/1#fitsy-slot:{slot}'
-    return f'*Fitsy {slot[11:]} UTC* · <{marker}|Details>\n' + '\n'.join('• ' + line for line in lines)
+    main_state = (report.get('main') or {}).get('state', 'unknown')
+    if main_state not in ('green', 'pending', 'failed'):
+        main_state = 'unknown'
+    return f'*Fitsy {slot[11:]} UTC* · main {main_state} · <{marker}|Details>\n' + '\n'.join('• ' + line for line in lines)
 
 
 class QueueReportDeferred(RuntimeError):
