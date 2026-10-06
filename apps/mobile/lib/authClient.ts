@@ -49,7 +49,7 @@ export async function clearToken(options: { forgetTargets?: boolean } = {}): Pro
   const { data } = await supabase.auth.getSession();
   if (options.forgetTargets && data.session?.user?.id) await forgetPendingProfileSync(data.session.user.id);
   await archiveActiveMacroTargets(data.session?.user?.id ?? null, options.forgetTargets);
-  await clearAccountOnboardingData(data.session?.user?.id ?? null);
+  await clearAccountOnboardingData(data.session?.user?.id ?? null, options.forgetTargets);
   // Supabase's signOut clears its own SecureStore key (the session blob).
   await supabase.auth.signOut().catch(() => {
     // signOut may fail offline — don't let that block local cleanup.

@@ -1,6 +1,7 @@
 jest.unmock('react-native');
 jest.unmock('expo-router');
 import React from 'react';
+import { dailyMacroTarget } from '../lib/profileTargetBody';
 import { Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
@@ -145,7 +146,7 @@ it('allows a coherent zero-protein target through Continue', async () => {
   expect(await getMacroTargets()).toEqual(values);
 });
 
-it('keeps the supported high-calorie performance picker recommendation near its daily budget', async () => {
+it('settles the supported performance picker total to exactly the daily API energy', async () => {
   await saveOnboardingField('goal', 'performance');
   await saveOnboardingField('birthday', '1990-01-01');
   await saveOnboardingField('heightCm', 190);
@@ -153,11 +154,12 @@ it('keeps the supported high-calorie performance picker recommendation near its 
   await saveOnboardingField('activity', 'very_active');
   const screen = renderRouter(routes, { initialUrl: '/macro-setup' });
   await screen.findByText(/We recommend ~3500 kcal\/day/);
-  expect(screen.getByText('3522 kcal')).toBeTruthy();
+  expect(screen.getByText('3530 kcal')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-save')); });
   await waitFor(() => expect(screen.getByText('Search for meals')).toBeTruthy());
   const target = await getMacroTargets();
   expect(target).not.toBeNull();
   expect(Number(target!.protein)).toBeLessThanOrEqual(40);
   expect(Number(target!.calories)).toBe(4 * Number(target!.protein) + 4 * Number(target!.carbs) + 9 * Number(target!.fat));
+  expect(dailyMacroTarget(target!, 'automatic')).toMatchObject({ proteinG: 116, carbsG: 546, fatG: 98, calories: 3530 });
 });

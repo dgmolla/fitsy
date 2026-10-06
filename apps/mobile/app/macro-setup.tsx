@@ -12,6 +12,7 @@ import { calculateDailyMacros, dailyToPerMealMacros, macrosToStored } from '@/li
 import { getOnboardingData, calculateSuggestedCalories, type Goal } from '@/lib/onboardingStorage';
 import { FONTS } from '@/lib/brand';
 import { clearOnboardingResume, hasChosenWelcomeGoal, rememberGoalReturnTo, rememberMacroSetup } from '@/lib/onboardingResume';
+import { settleSetupMacros, settledSetupChoices } from '@/lib/macroSetupSettlement';
 
 interface MacroValues {
   protein: number;
@@ -20,9 +21,9 @@ interface MacroValues {
 }
 
 const PICKER_VALUES = {
-  protein: rangeValues(50, 300, 5),
-  carbs: rangeValues(50, 600, 5),
-  fat: rangeValues(20, 150, 2),
+  protein: settledSetupChoices(rangeValues(50, 300, 5), 'protein'),
+  carbs: settledSetupChoices(rangeValues(50, 600, 5), 'carbs'),
+  fat: settledSetupChoices(rangeValues(20, 150, 2), 'fat'),
 };
 
 type DietStyleId = SuggestionFilter['id'] | 'recommended' | 'custom';
@@ -46,18 +47,18 @@ function computeCalories(v: MacroValues): number {
 // Snap centralized daily recommendations to the editable picker ranges.
 function recommendedSplit(cal: number, goal: Goal): MacroValues {
   const daily = calculateDailyMacros(cal, goal);
-  return {
+  return settleSetupMacros({
     protein: clamp(snapToStep(daily.protein, 5), 50, 300),
     carbs: clamp(snapToStep(daily.carbs, 5), 50, 600),
     fat: clamp(snapToStep(daily.fat, 2), 20, 150),
-  };
+  });
 }
 
 export default function MacroSetupScreen() {
   const { colors } = useTheme();
   const { fromOnboarding } = useLocalSearchParams<{ fromOnboarding?: string }>();
 
-  const [values, setValues] = useState<MacroValues>({ protein: 150, carbs: 200, fat: 66 });
+  const [values, setValues] = useState<MacroValues>(() => settleSetupMacros({ protein: 150, carbs: 200, fat: 66 }));
   const [suggestedCal, setSuggestedCal] = useState(2000);
   const [goal, setGoal] = useState<Goal | null>(null);
   const [activeFilter, setActiveFilter] = useState<DietStyleId>('recommended');
@@ -122,13 +123,13 @@ export default function MacroSetupScreen() {
     const protein = clamp(snapToStep(parseInt(split.protein, 10), 5), 50, 300);
     const carbs = clamp(snapToStep(parseInt(split.carbs, 10), 5), 50, 600);
     const fat = clamp(snapToStep(parseInt(split.fat, 10), 2), 20, 150);
-    setValues({ protein, carbs, fat });
+    setValues(settleSetupMacros({ protein, carbs, fat }));
     setActiveFilter(filterId);
   }
 
   function updateMacro(key: keyof MacroValues, v: number) {
     customizedRef.current = true;
-    setValues((prev) => ({ ...prev, [key]: v }));
+    setValues((prev) => settleSetupMacros({ ...prev, [key]: v }));
     setActiveFilter('custom');
   }
 

@@ -1,5 +1,6 @@
 import { isLegacyGeneratedShape, legacyIndependentFilter } from './legacyMacroTarget';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { forgetLegacyMacroRecords, quarantineLegacyMacroRecord } from './macroLegacyStorage';
 import { macroCalories, normalizeCompleteTarget, parseTarget } from './macroEnergy';
 import { supabase } from './supabase';
 export const MACRO_TARGETS_KEY = '@fitsy/macro_targets';
@@ -31,8 +32,7 @@ async function readSnapshot(key: string): Promise<MacroTargetSnapshot | null> {
       _source?: MacroTargetSource };
     const { _mode, _owner, _source, ...targets } = record;
     if (key === MACRO_TARGETS_KEY && _owner === undefined && await currentUserId()) {
-      await AsyncStorage.setItem(LEGACY_UNOWNED_KEY, raw);
-      await AsyncStorage.removeItem(MACRO_TARGETS_KEY);
+      await quarantineLegacyMacroRecord(raw);
       return null;
     }
     // Explicit anonymous edits stay available to the sign-in claim path, but
@@ -250,6 +250,7 @@ async function performClearActiveMacroTargets(owner: string | null): Promise<voi
 
 /** Preserve an unsynced complete target under its account before sign-out. */
 async function performArchiveActiveMacroTargets(userId: string | null, forget: boolean): Promise<void> {
+  if (forget) await forgetLegacyMacroRecords();
   if (!userId) return;
   if (forget) {
     await clearArchivedMacroTarget(userId);

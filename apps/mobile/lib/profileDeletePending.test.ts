@@ -2,6 +2,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearToken } from './authClient';
 import { queueSavedProfileToServer, replayPendingProfileSync } from './profileSync';
+import { getMacroTargets, getQuarantinedLegacyTarget } from './macroStorage';
+import { getLegacyOnboardingData, replaceAccountOnboardingData } from './onboardingStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 type Session = { access_token: string; user: { id: string } } | null;
@@ -60,4 +62,42 @@ it('a delayed write and stale delivery cannot recreate or send a deleted account
   await replayPendingProfileSync();
   expect(await AsyncStorage.getItem(key)).toBeNull();
   expect(global.fetch).not.toHaveBeenCalled();
+});
+
+it.each([true, false])('deletion purges ambiguous upgrade records while ordinary logout retains explicit recovery (delete=%s)', async deleting => {
+  await AsyncStorage.clear();
+  mockSession = { access_token: 'legacy-token', user: { id: `legacy-${deleting}` } };
+  await AsyncStorage.setItem('@fitsy/onboarding', JSON.stringify({ weightKg: 140 }));
+  await AsyncStorage.setItem('@fitsy/macro_targets', JSON.stringify({ protein: '80', carbs: '75', fat: '21', calories: '809', _mode: 'complete' }));
+  await AsyncStorage.setItem('@fitsy/macro_targets:other-owner', 'preserved other account');
+  await getMacroTargets();
+  await replaceAccountOnboardingData(`legacy-${deleting}`, {});
+  await clearToken({ forgetTargets: deleting });
+  mockSession = { access_token: 'next-token', user: { id: `next-${deleting}` } };
+  expect(Boolean(await getLegacyOnboardingData())).toBe(!deleting);
+  expect(Boolean(await getQuarantinedLegacyTarget())).toBe(!deleting);
+  expect(await AsyncStorage.getItem('@fitsy/macro_targets:other-owner')).toBe('preserved other account');
+});
+
+it('waits for an in-flight quarantine write before purging a deleted account', async () => {
+  await AsyncStorage.clear();
+  mockSession = { access_token: 'race-token', user: { id: 'legacy-delete-race' } };
+  await AsyncStorage.setItem('@fitsy/macro_targets', JSON.stringify({ protein: '80', carbs: '75', fat: '21', calories: '809', _mode: 'complete' }));
+  const originalSet = AsyncStorage.setItem.bind(AsyncStorage);
+  let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  jest.spyOn(AsyncStorage, 'setItem').mockImplementationOnce(async (key, value) => {
+    expect(key).toBe('@fitsy/legacy_unowned_macro_targets');
+    entered(); await gate;
+    return originalSet(key, value);
+  });
+  const read = getMacroTargets();
+  await started;
+  const deletion = clearToken({ forgetTargets: true });
+  release();
+  await Promise.all([read, deletion]);
+  expect(await AsyncStorage.getItem('@fitsy/legacy_unowned_macro_targets')).toBeNull();
+  expect(await AsyncStorage.getItem('@fitsy/macro_targets')).toBeNull();
 });

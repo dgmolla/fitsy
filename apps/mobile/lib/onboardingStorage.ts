@@ -166,10 +166,11 @@ export async function replaceAccountOnboardingData(userId: string, profile: Onbo
 }
 
 /** Logout also retires legacy unowned measurements; another account cannot claim them. */
-export async function clearAccountOnboardingData(userId: string | null): Promise<void> {
+export async function clearAccountOnboardingData(userId: string | null, forgetLegacy = false): Promise<void> {
   await serialize(async () => {
     const record = await readRecord();
-    await retainLegacy(record);
+    if (forgetLegacy) await AsyncStorage.removeItem(LEGACY_KEY);
+    else await retainLegacy(record);
     if (record && (record._owner === userId || record._owner === undefined)) await AsyncStorage.removeItem(KEY);
   });
 }
