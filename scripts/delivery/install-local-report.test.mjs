@@ -15,7 +15,21 @@ test('installer accepts only a clean checkout at the current main commit', () =>
     mkdirSync(repo); mkdirSync(bin);
     mkdirSync(join(home, 'firstmate/config'), { recursive: true });
     mkdirSync(join(root, 'bridge'));
-    writeFileSync(join(root, 'bridge/bridge.py'), '');
+    writeFileSync(join(root, 'bridge/bridge.py'), `
+import os
+def load_env(): pass
+class Config:
+    @staticmethod
+    def from_env():
+        return type('Settings', (), {'channel': 'C1'})()
+class Store:
+    def __init__(self, settings): pass
+class Slack:
+    def __init__(self, store): pass
+    def call(self, method):
+        assert method == 'auth.test'
+        return {'ok': True, 'user_id': os.environ.get('TEST_SLACK_SENDER', 'USENDER')}
+`);
     writeFileSync(join(home, 'firstmate/config/slack-notifications.json'),
       JSON.stringify({ bridge_path: join(root, 'bridge'), channel:'C1', user:'U1' }));
     writeFileSync(join(repo, 'tracked.txt'), 'reviewed source\n');
@@ -40,13 +54,17 @@ test('installer accepts only a clean checkout at the current main commit', () =>
     assert.equal(check().status, 0);
     writeFileSync(join(bin,'launchctl'), '#!/bin/sh\nexit 0\n'); chmodSync(join(bin,'launchctl'),0o755);
     env.FITSY_DISPATCH_HOME = join(root,'custom-dispatcher');
+    const invalidSender = spawnSync('bash',[installer,'--install','--timing-root',repo],
+      {cwd:repo,env:{...env,TEST_SLACK_SENDER:'UHUMAN invalid'},encoding:'utf8'});
+    assert.notEqual(invalidSender.status,0);
+    assert.match(invalidSender.stderr,/sender identity unavailable/);
     const install = spawnSync('bash',[installer,'--install','--timing-root',repo],{cwd:repo,env,encoding:'utf8'});
     assert.equal(install.status,0,install.stderr);
     const plist = readFileSync(join(home,'Library/LaunchAgents/com.fitsy.local-delivery-report.plist'),'utf8');
     assert.match(plist,new RegExp(`<key>FITSY_DISPATCHER_CONFIG</key><string>${realpathSync(root)}/custom-dispatcher/config.json</string>`));
     const configPath = join(home,'.fitsy-delivery/config.json');
     const original = JSON.parse(readFileSync(configPath,'utf8'));
-    original.user = 'USENDER';
+    assert.equal(original.user,'USENDER');
     writeFileSync(configPath,JSON.stringify(original));
     const reinstall = spawnSync('bash',[installer,'--install','--timing-root',repo],{cwd:repo,env,encoding:'utf8'});
     assert.equal(reinstall.status,0,reinstall.stderr);
