@@ -1,7 +1,7 @@
 import { macroCalories, parseTarget } from './macroEnergy';
-import type { StoredMacroTargets } from './macroStorage';
+import type { MacroTextValues } from './macroEnergy';
 
-export function isLegacyGeneratedShape(targets: StoredMacroTargets): boolean {
+export function isLegacyGeneratedShape(targets: MacroTextValues): boolean {
   const calories = parseTarget(targets.calories);
   const protein = parseTarget(targets.protein);
   const carbs = parseTarget(targets.carbs);
@@ -40,7 +40,7 @@ export function isLegacyGeneratedShape(targets: StoredMacroTargets): boolean {
   }
   return false;
 }
-export function legacyIndependentFilter(targets: StoredMacroTargets, generated: boolean): boolean {
+export function legacyIndependentFilter(targets: MacroTextValues, generated: boolean): boolean {
   const calories = parseTarget(targets.calories);
   const protein = parseTarget(targets.protein);
   const carbs = parseTarget(targets.carbs);
