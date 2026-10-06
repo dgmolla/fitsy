@@ -1,7 +1,7 @@
 import { buildProfileBody, dailyMacroTarget } from './profileTargetBody';
 import { api } from './api';
 import { getStoredToken } from './authClient';
-import type { OnboardingData } from './onboardingStorage';
+import { claimAnonymousOnboardingData, replaceAccountOnboardingData, type OnboardingData } from './onboardingStorage';
 import { clearArchivedMacroTarget, getAnonymousCompleteTarget, getArchivedMacroTarget, getDiscoveryMacroTargetSnapshot, getMacroTargetSnapshot, getMacroTargetSource, getQuarantinedLegacyTarget, saveMacroTargets, type StoredMacroTargets } from './macroStorage';
 import { MEALS_PER_DAY } from './macroCalculator';
 import { macroCalories } from './macroEnergy';
@@ -12,7 +12,6 @@ import type { ProfileResponse as ProfileContract, UserGoalV2 } from '@fitsy/shar
 // This client opts into goalSchema=2; legacy clients keep the default contract.
 type ProfileResponse = ProfileContract<UserGoalV2>;
 
-const ONBOARDING_KEY = '@fitsy/onboarding';
 const PENDING_PROFILE_SYNC_KEY = '@fitsy/pending_profile_sync';
 const pendingKey = (userId: string) => `${PENDING_PROFILE_SYNC_KEY}:${userId}`;
 let lastPush: Promise<boolean> = Promise.resolve(true);
@@ -191,10 +190,15 @@ export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
     // An archive is a local cache, not evidence of an unsynced write.
     // Replay the account's durable pending request before reading the server.
     const claimedTarget = anonymousTarget?.targets;
+    const claimedOnboarding = await claimAnonymousOnboardingData(expectedUserId);
+    if (!(await stillCurrent())) return 'account-changed';
     if (claimedTarget) {
       await saveMacroTargets(claimedTarget, 'complete', anonymousTarget!.source, expectedUserId);
       if (!(await stillCurrent())) return 'account-changed';
-      await syncSavedProfileToServer({ macroTarget: dailyMacroTarget(claimedTarget, anonymousTarget!.source) });
+      await syncSavedProfileToServer({ ...(claimedOnboarding ? await buildProfileBody() : {}),
+        macroTarget: dailyMacroTarget(claimedTarget, anonymousTarget!.source) });
+    } else if (claimedOnboarding) {
+      await syncSavedProfileToServer(await buildProfileBody());
     }
     if (!(await retryPendingProfileSync())) return 'unavailable';
     if (!(await stillCurrent())) return 'account-changed';
@@ -212,10 +216,7 @@ export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
     if (profile.user.activityLevel !== null) onboarding.activity = profile.user.activityLevel;
     if (profile.user.goal !== null) onboarding.goal = profile.user.goal;
 
-    if (Object.keys(onboarding).length > 0) {
-      if (!(await stillCurrent())) return 'account-changed';
-      await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify(onboarding));
-    }
+    if (!await replaceAccountOnboardingData(expectedUserId, onboarding)) return 'account-changed';
 
     // Convert daily → per-meal (÷MEALS_PER_DAY) and write to macro storage
     const localSnapshot = await getMacroTargetSnapshot();

@@ -9,6 +9,7 @@ import type {
 } from '@fitsy/shared';
 import { supabase } from './supabase';
 import { archiveActiveMacroTargets, clearActiveMacroTargets } from './macroStorage';
+import { clearAccountOnboardingData } from './onboardingStorage';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 // SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
@@ -46,6 +47,7 @@ export async function storeToken(token: string): Promise<void> {
 export async function clearToken(options: { forgetTargets?: boolean } = {}): Promise<void> {
   const { data } = await supabase.auth.getSession();
   await archiveActiveMacroTargets(data.session?.user?.id ?? null, options.forgetTargets);
+  await clearAccountOnboardingData(data.session?.user?.id ?? null);
   // Supabase's signOut clears its own SecureStore key (the session blob).
   await supabase.auth.signOut().catch(() => {
     // signOut may fail offline — don't let that block local cleanup.

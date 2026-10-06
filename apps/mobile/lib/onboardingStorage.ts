@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculateAge } from '../../../packages/shared/src/utils/dateUtils';
 import { calculateRecommendedCalories } from '../../../packages/shared/src/utils/macroTargets';
 import type { TriedApproach } from './onboardingPersonalization';
+import { supabase } from './supabase';
 
 const KEY = '@fitsy/onboarding';
 
@@ -30,26 +31,86 @@ export interface OnboardingData {
 
 let pendingWrite: Promise<void> = Promise.resolve();
 
+async function currentOwner(): Promise<string | null> {
+  return (await supabase.auth.getSession()).data.session?.user?.id ?? null;
+}
+
+type OwnedOnboarding = OnboardingData & { _owner?: string | null };
+
+async function readRecord(): Promise<OwnedOnboarding | null> {
+  const raw = await AsyncStorage.getItem(KEY);
+  if (!raw) return null;
+  try {
+    const record = JSON.parse(raw) as OwnedOnboarding;
+    return record && typeof record === 'object' && !Array.isArray(record) ? record : null;
+  } catch { return null; }
+}
+
+function ownedData(record: OwnedOnboarding | null, owner: string | null): OnboardingData {
+  if (!record || (record._owner !== owner && !(owner === null && record._owner === undefined))) return {};
+  const { _owner, ...data } = record;
+  return data;
+}
+
+function serialize(write: () => Promise<void>): Promise<void> {
+  const attempt = pendingWrite.then(write, write);
+  pendingWrite = attempt.catch(() => {});
+  return attempt;
+}
+
 export async function saveOnboardingField<K extends keyof OnboardingData>(
   field: K,
   value: OnboardingData[K],
 ): Promise<void> {
-  const write = pendingWrite.catch(() => {}).then(async () => {
-    const existing = await getOnboardingData();
-    await AsyncStorage.setItem(KEY, JSON.stringify({ ...existing, [field]: value }));
+  // Capture the initiating account before waiting behind another storage write.
+  const startingOwner = currentOwner();
+  return serialize(async () => {
+    const owner = await startingOwner;
+    const existing = ownedData(await readRecord(), owner);
+    if (await currentOwner() !== owner) throw new Error('Account changed while saving profile');
+    await AsyncStorage.setItem(KEY, JSON.stringify({ ...existing, [field]: value, _owner: owner }));
+    if (await currentOwner() !== owner) throw new Error('Account changed while saving profile');
   });
-  pendingWrite = write;
-  return write;
 }
 
 export async function getOnboardingData(): Promise<OnboardingData> {
-  const raw = await AsyncStorage.getItem(KEY);
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as OnboardingData;
-  } catch {
-    return {};
-  }
+  const owner = await currentOwner();
+  const data = ownedData(await readRecord(), owner);
+  return await currentOwner() === owner ? data : {};
+}
+
+/** Only explicitly saved anonymous edits may follow the user through sign-in. */
+export async function claimAnonymousOnboardingData(userId: string): Promise<boolean> {
+  let claimed = false;
+  await serialize(async () => {
+    const record = await readRecord();
+    if (record?._owner !== null || await currentOwner() !== userId) return;
+    await AsyncStorage.setItem(KEY, JSON.stringify({ ...record, _owner: userId }));
+    claimed = await currentOwner() === userId;
+  });
+  return claimed;
+}
+
+/** Replace even an empty server profile, retaining only this account's local setup metadata. */
+export async function replaceAccountOnboardingData(userId: string, profile: OnboardingData): Promise<boolean> {
+  let replaced = false;
+  await serialize(async () => {
+    const existing = ownedData(await readRecord(), userId);
+    const { birthday: _birthday, heightCm: _height, weightKg: _weight,
+      sex: _sex, activity: _activity, goal: _goal, ...setup } = existing;
+    if (await currentOwner() !== userId) return;
+    await AsyncStorage.setItem(KEY, JSON.stringify({ ...setup, ...profile, _owner: userId }));
+    replaced = await currentOwner() === userId;
+  });
+  return replaced;
+}
+
+/** Logout also retires legacy unowned measurements; another account cannot claim them. */
+export async function clearAccountOnboardingData(userId: string | null): Promise<void> {
+  await serialize(async () => {
+    const record = await readRecord();
+    if (record && (record._owner === userId || record._owner === undefined)) await AsyncStorage.removeItem(KEY);
+  });
 }
 
 export function calculateSuggestedCalories(data: OnboardingData): number {

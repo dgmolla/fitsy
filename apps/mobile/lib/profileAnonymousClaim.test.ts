@@ -1,6 +1,7 @@
 /** @jest-environment node */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { pullProfileFromServer, syncSavedProfileToServer } from './profileSync';
+import { saveOnboardingField } from './onboardingStorage';
 import { getMacroTargetSource, getMacroTargets, saveMacroTargets } from './macroStorage';
 import { clearToken } from './authClient';
 
@@ -144,7 +145,7 @@ it('never queues an archive as an active target while server reconciliation is u
   await clearToken();
   mockSession = { access_token: 'account-token', user: { id: 'existing-account' } };
   expect(await getMacroTargets()).toBeNull();
-  await AsyncStorage.setItem('@fitsy/onboarding', JSON.stringify({ goal: 'maintain' }));
+  await saveOnboardingField('goal', 'maintain');
   global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
   await pullProfileFromServer();
   await syncSavedProfileToServer();
