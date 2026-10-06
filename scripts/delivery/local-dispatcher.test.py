@@ -36,7 +36,7 @@ with lock.open('a') as f:
    p.write_text(json.dumps(d))
    print('HTTP/2 403\nX-Ratelimit-Remaining: 0\nX-Ratelimit-Reset: '+os.environ['FAKE_QUEUE_QUOTA_RESET']+'\n\n'+json.dumps({'errors':[{'message':'API rate limit exceeded'}]}))
    raise SystemExit(1)
-  fields=['status','priority','progress','blocker','dependencies','next action','verified at','started at']
+  fields=['status','priority','progress','blocker','dependencies','next action','verified at','started at','last progress at']
   nodes=[]
   for x in d['items']:
    c=x['content']; node={'id':x['id'],'content':{**c,'__typename':c['type'],

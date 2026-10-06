@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildReport, deliverySlot, formatReport, loadMainGates, loadMergedPulls, loadProject, postOnce,
-  reportArtifact,
+  reportArtifact, projectFromSnapshot, collect, PROJECT_QUERY,
 } from './hourly-report.mjs';
 
 const board = 'https://github.com/users/dgmolla/projects/1';
@@ -270,4 +270,61 @@ test('summary uses recent verified delivery and actionable board priority with b
   assert.match(lines[3], /2 open.*#7 Blocked now/);
   const visible = lines.map(line => line.replace(/<[^|>]+\|([^>]+)>/g, '$1').replace(/\*/g, ''));
   assert.ok(visible.every(line => line.length <= 110));
+});
+
+ test('canonical complete snapshot suppresses publisher GraphQL and rejects partial or stale data', async () => {
+  const snapshot = {observed_at:now.toISOString(),totalCount:1,items:[{
+    id:'one',content:{type:'Issue',number:443,title:'Feature repair',url:'https://github.com/dgmolla/fitsy/issues/443'},
+    labels:['dispatch-ready'],status:'Queued',priority:'Now',progress:'Repair',blocker:'',
+    dependencies:'','next action':'Review','verified at':null,'started at':null,'last progress at':null,
+  }]};
+  const result = projectFromSnapshot(snapshot, now);
+  assert.equal(result.items[0].fields.Status, 'Queued');
+  assert.equal(result.items[0].content.__typename, 'Issue');
+  assert.throws(() => projectFromSnapshot({...snapshot,totalCount:2}, now), /incomplete/);
+  assert.throws(() => projectFromSnapshot({...snapshot,observed_at:'2026-09-26T17:00:00Z'}, now), /stale/);
+  const incomplete = structuredClone(snapshot); delete incomplete.items[0].status;
+  assert.throws(() => projectFromSnapshot(incomplete, now), /fields incomplete/);
+  let graphql = 0;
+  const fetcher = async url => {
+    if (url.includes('/graphql')) { graphql++; throw new Error('publisher bypassed shared reader'); }
+    const value = url.endsWith('/commits/main') ? {sha:'a'.repeat(40)} :
+      url.includes('/actions/runs') ? {total_count:0,workflow_runs:[]} : [];
+    return {ok:true,status:200,json:async () => value};
+  };
+  await collect(fetcher, 'fixture', 'fixture', now, undefined, [], snapshot);
+  assert.equal(graphql, 0);
+  // Query-shape reproduction only; this is not a measured live GitHub point cost.
+  assert.match(PROJECT_QUERY, /fieldValues\(first: 100\)/);
+ });
+
+test('snapshot retains highlighted last progress timestamp', () => {
+  const snapshot = {observed_at:now.toISOString(),totalCount:1,items:[{
+    id:'one',content:{type:'Issue',number:443,title:'Feature repair'},labels:[],status:'In flight',
+    priority:'Now',progress:'Repair',blocker:'',dependencies:'','next action':'Review',
+    'verified at':null,'started at':null,'last progress at':'2026-09-26T18:10:00Z',
+  }]};
+  const report = buildReport(projectFromSnapshot(snapshot, now), [], {state:'pending'}, now);
+  assert.equal(report.highlights[0].lastProgressAt, '2026-09-26T18:10:00Z');
+});
+
+test('editorial status bindings include observed Done and held cards without calling them ready', () => {
+  const items = [{id:'done',content:{__typename:'Issue',number:388,title:'Dispatcher improvements',repository:'dgmolla/fitsy'},
+    fields:{Status:'Done'},labels:[]},
+    {id:'held',content:{__typename:'Issue',number:443,title:'Macro repair',repository:'dgmolla/fitsy'},
+    fields:{Status:'Queued',Priority:'Later',Blocker:'UI review'},labels:['dispatch-hold']}];
+  const report = buildReport({url:board,items},[],{state:'green'},now);
+  assert.equal(report.editorialFacts.find(item => item.number === 388).status, 'Done');
+  assert.equal(report.editorialFacts.find(item => item.number === 443).held, true);
+  assert.deepEqual(report.summary.next, []);
+});
+
+
+test('editorial bindings exclude foreign issues with matching numbers', () => {
+  const own = {id:'own',content:{__typename:'Issue',number:388,title:'Dispatcher',
+    url:'https://github.com/dgmolla/fitsy/issues/388'},fields:{Status:'Queued'},labels:[]};
+  const foreign = {...own,id:'foreign',content:{...own.content,url:'https://github.com/other/repo/issues/388'},
+    fields:{Status:'Done'}};
+  const report = buildReport({url:board,items:[own,foreign]},[],{state:'green'},now);
+  assert.deepEqual(report.editorialFacts.map(item => [item.number,item.status]), [[388,'Queued']]);
 });

@@ -49,6 +49,20 @@ class PressureRetentionProcessTest(unittest.TestCase):
         (directory / 'receipt.json').write_text(json.dumps(c))
         return c
 
+    def test_pressure_checks_many_latest_claims_with_one_complete_board_read(self):
+        # Actual idle tick: none of these local labels authorizes retirement.
+        for claim, issue in ((self.old, 384), (self.new, 385)):
+            claim.update(issue=issue, terminal='verified')
+            (self.c.state / 'claims' / claim['id'] / 'receipt.json').write_text(json.dumps(claim))
+        self.state['verified'] = {'384': self.old, '385': self.new}
+        (self.c.state / 'state.json').write_text(json.dumps(self.state))
+        self.c.tick()
+        self.assertEqual(self.c.board_data().get('board_reads'), 2,
+                         'one complete pressure assessment plus independent fresh dispatch read')
+        self.assertTrue(self.path.exists())
+        self.assertTrue(Path(self.new['worktree']).exists())
+        self.assertEqual(self.c.workers(), [])
+
     def test_idle_pressure_archives_dirty_superseded_source_app_and_raw_evidence(self):
         self.c.tick()
         self.assertFalse(self.path.exists(), 'idle pressure currently leaves every superseded hot checkout retained')

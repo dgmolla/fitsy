@@ -170,3 +170,11 @@ The private `github-queue-quota.json` stores observed cost and quota reset timin
 Rate exhaustion defers subsequent reads until the server reset, or a bounded 30-minute fallback when GitHub supplies no timing.
 A reset requires a fresh complete read; partial GraphQL results never authorize a claim.
 The existing timer retries after cooldown without an additional dispatcher or schedule.
+
+The sole local publisher invokes this installed `snapshot` command before collecting its REST report details.
+It consumes the complete fresh snapshot instead of running another nested GraphQL project query.
+A dispatcher lock conflict or shared quota cooldown defers the report without a Slack send and preserves the existing slot intent, deduplication, rate limiting and uncertain-send receipts.
+The publisher retains its source-bound editorial freshness and board-binding checks.
+An idle tick shares one complete live board read across pressure eligibility assessments only.
+Device deletion confirmation and final worker launch confirmation still require separate fresh reads under the existing ownership lock.
+This bound reduces repeated reads per recovery candidate; it does not establish which caller consumed prior shared quota or change acceptance proof.

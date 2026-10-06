@@ -94,6 +94,14 @@ temporary.chmod(0o600); os.replace(temporary, path)
 PY
 
 python_bin="$(command -v python3)"
+dispatcher_config="$(python3 - <<'PYCONFIG'
+import html
+import os
+from pathlib import Path
+home = Path(os.environ.get('FITSY_DISPATCH_HOME', str(Path.home() / '.fitsy-dispatcher'))).expanduser().resolve()
+print(html.escape(str(home / 'config.json')))
+PYCONFIG
+)"
 cat > "$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -106,6 +114,7 @@ cat > "$plist" <<PLIST
   <key>RunAtLoad</key><true/>
   <key>EnvironmentVariables</key><dict>
     <key>FITSY_DELIVERY_STATE</key><string>$state</string>
+    <key>FITSY_DISPATCHER_CONFIG</key><string>$dispatcher_config</string>
     <key>PATH</key><string>$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
   <key>StandardOutPath</key><string>$state/launchd.log</string>
