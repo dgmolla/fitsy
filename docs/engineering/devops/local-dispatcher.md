@@ -158,3 +158,15 @@ A later acceptance pointer cannot erase an older device retirement route, and cu
 
 Unreadable durable ownership parks admission when that issue has a retained registered checkout; an older valid receipt for the same path cannot prove a damaged successor finished.
 Already-authorized independent issues without a matching retained checkout remain dispatchable while the owner backfills the damaged metadata.
+
+
+### Complete queue reads and quota cooldown
+
+The canonical `snapshot` mode reads the same complete live GitHub queue as dispatch admission.
+Use `python3 ~/.fitsy-dispatcher/runtime/local-dispatcher.py snapshot --config ~/.fitsy-dispatcher/config.json` for coordination instead of a separate broad project CLI query.
+The transport pages at 100 cards and requests only delivery fields and issue labels; total counts, unique IDs and advancing cursors must agree before dispatch.
+A truncated label connection fails closed so a hold cannot disappear through truncation.
+The private `github-queue-quota.json` stores observed cost and quota reset timing, never board content or launch permission.
+Rate exhaustion defers subsequent reads until the server reset, or a bounded 30-minute fallback when GitHub supplies no timing.
+A reset requires a fresh complete read; partial GraphQL results never authorize a claim.
+The existing timer retries after cooldown without an additional dispatcher or schedule.
