@@ -181,12 +181,123 @@ def gh(config, *args, timeout=30):
     return command([config['gh_bin'], *args], timeout=timeout)
 
 
+BOARD_FIELDS = ('Status', 'Priority', 'Progress', 'Blocker', 'Dependencies', 'Next action',
+                'Verified at', 'Started at')
+BOARD_QUERY = """query($project:ID!, $after:String) {
+  node(id:$project) { ... on ProjectV2 { items(first:100, after:$after) {
+    totalCount pageInfo { hasNextPage endCursor }
+    nodes { id content { __typename
+      ... on Issue { number title url repository { nameWithOwner }
+        labels(first:100) { totalCount nodes { name } } }
+      ... on PullRequest { number title url repository { nameWithOwner } }
+      ... on DraftIssue { title }
+    }
+    FIELDS
+    }
+  } } }
+  rateLimit { cost remaining resetAt }
+}""".replace('FIELDS', '\n'.join(
+    f'f{index}:fieldValueByName(name:{json.dumps(name)}) {{ '
+    '... on ProjectV2ItemFieldSingleSelectValue { name } '
+    '... on ProjectV2ItemFieldTextValue { text } '
+    '... on ProjectV2ItemFieldDateValue { date } }'
+    for index, name in enumerate(BOARD_FIELDS)))
+
+
+class QueueReadBackoff(RuntimeError):
+    def __init__(self, retry_at):
+        self.retry_at = retry_at
+        super().__init__(f'GitHub queue read deferred until {utc(retry_at)}')
+
+
 def board(config):
-    data = json.loads(gh(config, 'project', 'item-list', '1', '--owner', 'dgmolla', '--limit', '10000', '--format', 'json'))
-    items = data.get('items')
-    if not isinstance(items, list) or data.get('totalCount') != len(items):
-        raise RuntimeError('GitHub project pagination incomplete; refusing dispatch')
-    return items
+    """Read the sole queue completely, without CLI's nested 100-field fanout.
+
+    Persist quota timing only, never board content or permission to launch.
+    """
+    quota_path = Path(config['state_dir']) / 'github-queue-quota.json'
+    quota = read_json(quota_path, {})
+    if quota.get('retry_at', 0) > time.time():
+        raise QueueReadBackoff(quota['retry_at'])
+    items, seen, cursors, cursor, total = [], set(), set(), None, None
+    while True:
+        args = [config['gh_bin'], 'api', 'graphql', '--include', '-f', 'query=' + BOARD_QUERY,
+                '-f', 'project=' + PROJECT_ID]
+        if cursor:
+            args.extend(['-f', 'after=' + cursor])
+        result = subprocess.run(args, text=True, capture_output=True, timeout=45)
+        offset = result.stdout.find('{')
+        headers = {key.lower(): value.strip() for key, value in
+                   re.findall(r'^([\w-]+):[ \t]*(.*)$', result.stdout[:max(offset, 0)], re.M)}
+        try:
+            response = json.loads(result.stdout[offset:]) if offset >= 0 else {}
+        except json.JSONDecodeError:
+            response = {}
+        rate = (response.get('data') or {}).get('rateLimit') or {}
+        exhausted = headers.get('x-ratelimit-remaining') == '0' or rate.get('remaining') == 0
+        errors = response.get('errors') or []
+        throttled = 'rate limit' in (result.stderr + json.dumps(errors)).lower()
+        retry_at = 0
+        if exhausted or throttled or headers.get('retry-after'):
+            try:
+                retry_at = float(headers['x-ratelimit-reset'])
+            except (KeyError, ValueError):
+                try:
+                    retry_at = datetime.fromisoformat(rate['resetAt'].replace('Z', '+00:00')).timestamp()
+                except (KeyError, TypeError, ValueError):
+                    retry_at = time.time() + 1800
+            if headers.get('retry-after'):
+                try:
+                    retry_at = max(retry_at, time.time() + float(headers['retry-after']))
+                except ValueError:
+                    retry_at = max(retry_at, time.time() + 1800)
+            retry_at = max(time.time() + 1, retry_at + 1)
+        write_json(quota_path, {'observed_at': utc(), 'retry_at': retry_at,
+                               'cost': rate.get('cost'), 'remaining': rate.get('remaining'),
+                               'reset_at': rate.get('resetAt')})
+        if result.returncode or errors:
+            if retry_at:
+                raise QueueReadBackoff(retry_at)
+            raise RuntimeError('GitHub queue read failed; refusing dispatch')
+        connection = ((response.get('data') or {}).get('node') or {}).get('items')
+        if not isinstance(connection, dict) or not isinstance(connection.get('nodes'), list):
+            raise RuntimeError('GitHub queue response incomplete; refusing dispatch')
+        count = connection.get('totalCount')
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0 or (total is not None and count != total):
+            raise RuntimeError('GitHub project count changed or invalid; refusing dispatch')
+        total = count
+        for node in connection['nodes']:
+            identity = node.get('id')
+            if not identity or identity in seen:
+                raise RuntimeError('GitHub project duplicate or missing item; refusing dispatch')
+            seen.add(identity)
+            content = node.get('content') or {}
+            labels = content.get('labels') if content.get('__typename') == 'Issue' else {'nodes': [], 'totalCount': 0}
+            if not isinstance(labels, dict) or not isinstance(labels.get('nodes'), list):
+                raise RuntimeError('GitHub issue labels missing; refusing dispatch')
+            names = [label['name'] for label in labels['nodes']]
+            if labels.get('totalCount') != len(names):
+                raise RuntimeError('GitHub issue labels incomplete; refusing dispatch')
+            item = {'id': identity, 'title': content.get('title'), 'labels': names,
+                    'content': {**content, 'type': content.get('__typename'),
+                                'repository': (content.get('repository') or {}).get('nameWithOwner')}}
+            for index, name in enumerate(BOARD_FIELDS):
+                if f'f{index}' not in node:
+                    raise RuntimeError('GitHub queue field missing; refusing dispatch')
+                value = node[f'f{index}'] or {}
+                item[name.lower()] = value.get('name', value.get('text', value.get('date')))
+            items.append(item)
+        page = connection.get('pageInfo') or {}
+        if page.get('hasNextPage') is False:
+            if len(items) != total:
+                raise RuntimeError('GitHub project pagination incomplete; refusing dispatch')
+            return items
+        cursor = page.get('endCursor')
+        if page.get('hasNextPage') is not True or not cursor or cursor in cursors or len(items) >= total:
+            raise RuntimeError('GitHub project pagination did not advance; refusing dispatch')
+        cursors.add(cursor)
+        if retry_at:
+            raise QueueReadBackoff(retry_at)
 
 
 def ready_event(config, number):
@@ -960,7 +1071,7 @@ def load_config(path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('tick', 'status', 'worker'))
+    parser.add_argument('mode', choices=('tick', 'status', 'worker', 'snapshot'))
     parser.add_argument('--config', required=True)
     parser.add_argument('--claim-id')
     args = parser.parse_args()
@@ -992,7 +1103,15 @@ def main():
         if Path(config['state_dir']).expanduser().resolve() != state_dir:
             raise RuntimeError('dispatcher state directory changed across the lock boundary')
         state = read_json(state_path, {'version': 1, 'active': None, 'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []})
-        print(json.dumps(tick(config, state, state_path, Path(__file__).resolve())))
+        try:
+            if args.mode == 'snapshot':
+                items = board(config)
+                outcome = {'totalCount': len(items), 'items': items}
+            else:
+                outcome = tick(config, state, state_path, Path(__file__).resolve())
+        except QueueReadBackoff as error:
+            outcome = {'state': 'queue-read-backoff', 'retry_at': utc(error.retry_at)}
+        print(json.dumps(outcome))
 
 
 if __name__ == '__main__':

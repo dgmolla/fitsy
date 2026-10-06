@@ -26,7 +26,16 @@ p=Path(os.environ['FAKE_GH_STATE']); lock=p.with_suffix('.lock')
 with lock.open('a') as f:
  fcntl.flock(f,fcntl.LOCK_EX)
  d=json.loads(p.read_text()); a=sys.argv[1:]; result=''
- if a[:2]==['project','item-list']:
+ if a[:2]==['api','graphql']:
+  fields=['status','priority','progress','blocker','dependencies','next action','verified at','started at']
+  nodes=[]
+  for x in d['items']:
+   c=x['content']; node={'id':x['id'],'content':{**c,'__typename':c['type'],
+    'repository':{'nameWithOwner':c['repository']},'labels':{'totalCount':len(x['labels']),'nodes':[{'name':n} for n in x['labels']]}}}
+   node.update({f'f{i}':({'name':x.get(k)} if k in ('status','priority') else {'text':x.get(k)}) for i,k in enumerate(fields)})
+   nodes.append(node)
+  result=json.dumps({'data':{'node':{'items':{'totalCount':len(nodes),'nodes':nodes,'pageInfo':{'hasNextPage':False,'endCursor':None}}},'rateLimit':{'cost':2,'remaining':4998,'resetAt':'2099-01-01T00:00:00Z'}}})
+ elif a[:2]==['project','item-list']:
   result=json.dumps({'totalCount':len(d['items']),'items':d['items']})
  elif a[:2]==['project','item-edit']:
   item=next(x for x in d['items'] if x['id']==a[a.index('--id')+1]); field=a[a.index('--field-id')+1]
@@ -1382,6 +1391,85 @@ class ClaudeDispatcherProcessTest(DispatcherProcessTest):
             profile.update({'provider': 'claude', 'model': 'configured-claude-model',
                             'executable': str(self.claude)})
         self.config.write_text(json.dumps(config))
+
+
+class QueueReadTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.config = {'state_dir': self.tmp.name, 'gh_bin': '/fixture/gh'}
+
+    def page(self, ids, total=None, next_page=False, cursor=None, remaining=4000):
+        return {'data': {'node': {'items': {'totalCount': len(ids) if total is None else total,
+            'pageInfo': {'hasNextPage': next_page, 'endCursor': cursor},
+            'nodes': [{'id': identity, 'content': {'__typename': 'Issue', 'number': n,
+                'title': 'Product', 'repository': {'nameWithOwner': 'dgmolla/fitsy'},
+                'labels': {'totalCount': 1, 'nodes': [{'name': 'dispatch-ready'}]}},
+                **{f'f{i}': None for i in range(len(dispatcher.BOARD_FIELDS))},
+                'f0': {'name': 'Queued'}, 'f1': {'name': 'Next'}} for n, identity in enumerate(ids)]}},
+            'rateLimit': {'cost': 2, 'remaining': remaining, 'resetAt': '2099-01-01T00:00:00Z'}}}
+
+    def response(self, data, code=0, headers=''):
+        return subprocess.CompletedProcess([], code, headers + json.dumps(data), '')
+
+    def test_live_queue_has_all_76_items_with_scalar_fields_and_one_page(self):
+        with mock.patch.object(dispatcher.subprocess, 'run', return_value=self.response(self.page([str(n) for n in range(76)]))) as transport:
+            rows = dispatcher.board(self.config)
+        self.assertEqual(len(rows), 76)
+        self.assertEqual(rows[0]['status'], 'Queued')
+        self.assertEqual(rows[0]['labels'], ['dispatch-ready'])
+        self.assertEqual(transport.call_count, 1)
+        query = transport.call_args.args[0]
+        self.assertIn('project=' + dispatcher.PROJECT_ID, query)
+        self.assertNotIn('fieldValues(first:100)', dispatcher.BOARD_QUERY)
+        self.assertNotIn('body', dispatcher.BOARD_QUERY)
+
+    def test_more_than_100_cards_paginate_until_complete(self):
+        pages = [self.response(self.page([str(n) for n in range(100)], 101, True, 'cursor')),
+                 self.response(self.page(['last'], 101))]
+        with mock.patch.object(dispatcher.subprocess, 'run', side_effect=pages) as transport:
+            self.assertEqual(len(dispatcher.board(self.config)), 101)
+        self.assertIn('after=cursor', transport.call_args.args[0])
+
+    def test_incomplete_duplicate_drifting_and_stalled_pages_fail_closed(self):
+        scenarios = [[self.page(['one'], 2)], [self.page(['one', 'one'])],
+            [self.page(['one'], 2, True, 'cursor'), self.page(['two'], 3)],
+            [self.page(['one'], 3, True, 'cursor'), self.page(['two'], 3, True, 'cursor')]]
+        for pages in scenarios:
+            with self.subTest(pages=pages), mock.patch.object(dispatcher.subprocess, 'run', side_effect=[self.response(p) for p in pages]):
+                with self.assertRaises(RuntimeError):
+                    dispatcher.board(self.config)
+
+    def test_truncated_labels_cannot_hide_a_dispatch_hold(self):
+        page = self.page(['one']); page['data']['node']['items']['nodes'][0]['content']['labels']['totalCount'] = 2
+        with mock.patch.object(dispatcher.subprocess, 'run', return_value=self.response(page)):
+            with self.assertRaisesRegex(RuntimeError, 'labels incomplete'):
+                dispatcher.board(self.config)
+
+    def test_quota_error_persists_exact_reset_and_no_second_network_read(self):
+        failure = {'errors': [{'message': 'API rate limit exceeded'}]}
+        response = self.response(failure, 1, 'HTTP/2 403\nX-Ratelimit-Remaining: 0\nX-Ratelimit-Reset: 4070908800\n\n')
+        with mock.patch.object(dispatcher.subprocess, 'run', return_value=response) as transport:
+            for _ in range(2):
+                with self.assertRaises(dispatcher.QueueReadBackoff):
+                    dispatcher.board(self.config)
+        self.assertEqual(transport.call_count, 1)
+        receipt = json.loads((Path(self.tmp.name) / 'github-queue-quota.json').read_text())
+        self.assertEqual(receipt['retry_at'], 4070908801)
+        self.assertNotIn('items', receipt)
+        self.assertEqual((Path(self.tmp.name) / 'github-queue-quota.json').stat().st_mode & 0o777, 0o600)
+
+    def test_reset_requires_a_new_live_complete_read(self):
+        dispatcher.write_json(Path(self.tmp.name) / 'github-queue-quota.json', {'retry_at': 1})
+        with mock.patch.object(dispatcher.subprocess, 'run', return_value=self.response(self.page(['fresh']))) as transport:
+            self.assertEqual(dispatcher.board(self.config)[0]['id'], 'fresh')
+        self.assertEqual(transport.call_count, 1)
+
+    def test_partial_graphql_errors_never_accept_available_cards(self):
+        page = self.page(['one']); page['errors'] = [{'message': 'timeout'}]
+        with mock.patch.object(dispatcher.subprocess, 'run', return_value=self.response(page)):
+            with self.assertRaisesRegex(RuntimeError, 'read failed'):
+                dispatcher.board(self.config)
 
 
 if __name__ == '__main__':
