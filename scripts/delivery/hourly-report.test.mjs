@@ -309,12 +309,22 @@ test('snapshot retains highlighted last progress timestamp', () => {
 });
 
 test('editorial status bindings include observed Done and held cards without calling them ready', () => {
-  const items = [{id:'done',content:{__typename:'Issue',number:388,title:'Dispatcher improvements'},
+  const items = [{id:'done',content:{__typename:'Issue',number:388,title:'Dispatcher improvements',repository:'dgmolla/fitsy'},
     fields:{Status:'Done'},labels:[]},
-    {id:'held',content:{__typename:'Issue',number:443,title:'Macro repair'},
+    {id:'held',content:{__typename:'Issue',number:443,title:'Macro repair',repository:'dgmolla/fitsy'},
     fields:{Status:'Queued',Priority:'Later',Blocker:'UI review'},labels:['dispatch-hold']}];
   const report = buildReport({url:board,items},[],{state:'green'},now);
   assert.equal(report.editorialFacts.find(item => item.number === 388).status, 'Done');
   assert.equal(report.editorialFacts.find(item => item.number === 443).held, true);
   assert.deepEqual(report.summary.next, []);
+});
+
+
+test('editorial bindings exclude foreign issues with matching numbers', () => {
+  const own = {id:'own',content:{__typename:'Issue',number:388,title:'Dispatcher',
+    url:'https://github.com/dgmolla/fitsy/issues/388'},fields:{Status:'Queued'},labels:[]};
+  const foreign = {...own,id:'foreign',content:{...own.content,url:'https://github.com/other/repo/issues/388'},
+    fields:{Status:'Done'}};
+  const report = buildReport({url:board,items:[own,foreign]},[],{state:'green'},now);
+  assert.deepEqual(report.editorialFacts.map(item => [item.number,item.status]), [[388,'Queued']]);
 });

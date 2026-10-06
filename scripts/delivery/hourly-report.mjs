@@ -16,7 +16,7 @@ export const PROJECT_QUERY = `query($owner: String!, $number: Int!, $after: Stri
       totalCount pageInfo { hasNextPage endCursor }
       nodes { id content {
         __typename
-        ... on Issue { number title url state createdAt updatedAt labels(first: 100) { nodes { name } pageInfo { hasNextPage } } }
+        ... on Issue { number title url state createdAt updatedAt repository { nameWithOwner } labels(first: 100) { nodes { name } pageInfo { hasNextPage } } }
         ... on PullRequest { number title url state createdAt updatedAt mergedAt labels(first: 100) { nodes { name } pageInfo { hasNextPage } } }
       } fieldValues(first: 100) { pageInfo { hasNextPage } nodes {
         ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2Field { name } } }
@@ -207,7 +207,12 @@ export function buildReport(project, pulls, main, now = new Date(), requestedSlo
     issueCycle: { medianMs: median(cycles), sample: cycles.length, missing: doneIssues.length - cycles.length },
     summary: { shipped, next, blockers: blocked.filter(item => item.content?.__typename === 'Issue')
       .slice(0, 1).map(item => ({ number: item.content.number, title: item.content.title, url: item.content.url })) },
-    editorialFacts: issues.map(item => ({number: item.content.number, title: item.content.title, status: item.fields.Status,
+    editorialFacts: issues.filter(item => {
+      const repository = typeof item.content.repository === 'string' ? item.content.repository :
+        item.content.repository?.nameWithOwner;
+      return repository ? repository === `${OWNER}/${REPO}` :
+        /^https:\/\/github\.com\/dgmolla\/fitsy\/issues\/[1-9][0-9]*$/i.test(item.content.url ?? '');
+    }).map(item => ({number: item.content.number, title: item.content.title, status: item.fields.Status,
         blocker: item.fields.Blocker ?? '', dependencies: item.fields.Dependencies ?? '',
         held: item.labels.includes('dispatch-hold')})),
     wipAge: { oldestMs: ages.length ? Math.max(...ages) : null, sample: ages.length,

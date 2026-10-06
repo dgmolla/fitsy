@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, realpathSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,11 +17,16 @@ test('installer accepts only a clean checkout at the current main commit', () =>
     mkdirSync(join(root, 'bridge'));
     writeFileSync(join(root, 'bridge/bridge.py'), '');
     writeFileSync(join(home, 'firstmate/config/slack-notifications.json'),
-      JSON.stringify({ bridge_path: join(root, 'bridge') }));
+      JSON.stringify({ bridge_path: join(root, 'bridge'), channel:'C1', user:'U1' }));
     writeFileSync(join(repo, 'tracked.txt'), 'reviewed source\n');
+    mkdirSync(join(repo,'scripts/delivery'), {recursive:true});
+    for (const file of ['hourly-report.mjs','phase-report.mjs','phase-events.mjs','improvements.mjs','local-report.py'])
+      writeFileSync(join(repo,'scripts/delivery',file), 'fixture');
+    mkdirSync(join(repo,'.evidence/delivery'), {recursive:true});
+    writeFileSync(join(repo,'.evidence/delivery/binding.json'), '{}');
     execFileSync('git', ['init', '-q', repo]);
     execFileSync('git', ['-C', repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
-      'add', 'tracked.txt']);
+      'add', '.']);
     execFileSync('git', ['-C', repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
       'commit', '-qm', 'fixture']);
     const head = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
@@ -33,6 +38,12 @@ test('installer accepts only a clean checkout at the current main commit', () =>
       TEST_WORKFLOW_BASE64: Buffer.from('name: manual\non:\n  workflow_dispatch:\n').toString('base64') };
     const check = () => spawnSync('bash', [installer, '--check'], { cwd: repo, env, encoding: 'utf8' });
     assert.equal(check().status, 0);
+    writeFileSync(join(bin,'launchctl'), '#!/bin/sh\nexit 0\n'); chmodSync(join(bin,'launchctl'),0o755);
+    env.FITSY_DISPATCH_HOME = join(root,'custom-dispatcher');
+    const install = spawnSync('bash',[installer,'--install','--timing-root',repo],{cwd:repo,env,encoding:'utf8'});
+    assert.equal(install.status,0,install.stderr);
+    const plist = readFileSync(join(home,'Library/LaunchAgents/com.fitsy.local-delivery-report.plist'),'utf8');
+    assert.match(plist,new RegExp(`<key>FITSY_DISPATCHER_CONFIG</key><string>${realpathSync(root)}/custom-dispatcher/config.json</string>`));
     env.TEST_MAIN_SHA = 'f'.repeat(40);
     assert.match(check().stderr, /not the exact current main commit/);
     env.TEST_MAIN_SHA = head;

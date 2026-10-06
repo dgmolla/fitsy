@@ -83,3 +83,6 @@ The reporter counts records only after the fix PR merges into main, both named m
 This verifies shipment and file evidence; the independent review remains responsible for whether the detector and prevention address the finding.
 Counts cover active issues and issues verified in the past 24 hours, with successful gate completion in the same window.
 The issue comment and report artifact retain the detailed evidence; Slack carries only category totals.
+
+The local publisher installer persists the dispatcher config path in its LaunchAgent, including installations using `FITSY_DISPATCH_HOME`.
+Editorial issue bindings are restricted to `dgmolla/fitsy`; a foreign repository card with the same issue number cannot satisfy a binding.
