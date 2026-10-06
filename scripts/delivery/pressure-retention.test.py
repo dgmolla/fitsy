@@ -357,7 +357,38 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertTrue((self.path / 'unfinished.txt').is_file())
         return self.c.state_data()['active']
 
-    def test_older_valid_shared_checkout_receipt_cannot_hide_unreadable_successor(self):
+    def tie_latest_receipts(self):
+        self.new['finished_at'] = self.old['finished_at']
+        (self.c.state / 'claims' / self.new['id'] / 'receipt.json').write_text(json.dumps(self.new))
+        (self.c.state / 'state.json').write_text(json.dumps(self.state))
+        return Path(self.new['worktree'])
+
+    def test_tied_latest_completion_times_keep_both_unfinished_checkouts_hot(self):
+        latest = self.tie_latest_receipts()
+        (latest / 'latest-unfinished.txt').write_text('latest source must stay hot')
+        self.c.tick()
+        self.assertTrue(latest.exists(), 'same-second timestamp must not retire the newer unfinished checkout')
+        self.assertTrue(self.path.exists())
+
+    def test_tied_shared_checkout_owners_cannot_reopen_completed_successor_proof(self):
+        fixture.run('git', 'worktree', 'remove', self.new['worktree'], cwd=self.c.repo)
+        self.new.update(worktree=self.old['worktree'], branch=self.old['branch'],
+                        worktree_origin_claim=self.old['id'], terminal='verified')
+        self.tie_latest_receipts()
+        self.c.set_board([fixture.item(385)])
+        self.c.tick()
+        self.assertIsNone(self.c.state_data()['active'], 'equal timestamps do not prove an older shared owner is current')
+        self.assertTrue(self.path.exists())
+
+    def test_tied_latest_completion_times_do_not_select_an_arbitrary_resume(self):
+        self.tie_latest_receipts()
+        self.c.set_board([fixture.item(385)])
+        self.c.tick()
+        self.assertIsNone(self.c.state_data()['active'], 'ambiguous tied predecessor needs actual owner ordering')
+        self.assertTrue(self.path.exists())
+        self.assertTrue(Path(self.new['worktree']).exists())
+
+    def shared_checkout_damaged_successor_tick(self, raw):
         fixture.run('git', 'worktree', 'remove', self.new['worktree'], cwd=self.c.repo)
         successor = {**self.new, 'worktree': self.old['worktree'], 'branch': self.old['branch'],
                      'worktree_origin_claim': self.old['id'], 'terminal': 'verified'}
@@ -365,7 +396,7 @@ class PressureRetentionProcessTest(unittest.TestCase):
         receipt.write_text(json.dumps(successor))
         proof = self.path / '.evidence/accepted-proof.txt'
         proof.write_text('synthetic completed successor proof must not be reopened')
-        receipt.write_text('{broken')
+        receipt.write_text(raw)
         self.state['history'] = []
         (self.c.state / 'state.json').write_text(json.dumps(self.state))
         self.c.set_board([fixture.item(385)])
@@ -373,6 +404,12 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertIsNone(self.c.state_data()['active'],
                           'older valid same-path owner must not hide unreadable successor')
         self.assertEqual(proof.read_text(), 'synthetic completed successor proof must not be reopened')
+
+    def test_older_valid_shared_checkout_receipt_cannot_hide_unreadable_successor(self):
+        self.shared_checkout_damaged_successor_tick('{broken')
+
+    def test_empty_successor_receipt_cannot_hide_behind_older_checkout_owner(self):
+        self.shared_checkout_damaged_successor_tick('{}')
 
     def test_rolled_out_unreadable_same_issue_owner_blocks_fresh_main_checkout(self):
         self.assertIsNone(self.rollover_uncertain_tick(385),

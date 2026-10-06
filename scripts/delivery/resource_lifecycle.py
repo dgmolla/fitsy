@@ -23,6 +23,9 @@ def read_claims(config, state):
             claim = json.loads(receipt.read_text())
             if not isinstance(claim, dict):
                 raise ValueError('durable receipt is not an object')
+            if (claim.get('id') != receipt.parent.name or not isinstance(claim.get('issue'), int)
+                    or isinstance(claim.get('issue'), bool) or claim['issue'] < 1):
+                raise ValueError('durable claim lacks exact id and issue ownership')
             for field in ('id', 'worktree', 'branch', 'terminal', 'finished_at'):
                 if claim.get(field) is not None and not isinstance(claim[field], str):
                     raise ValueError('durable receipt field is not text: ' + field)
@@ -113,6 +116,17 @@ def source_identity(config, path):
     return {'head': head.stdout.strip(), 'working_sha256': digest.hexdigest()}
 
 
+def latest_claim(candidates):
+    latest = max(candidates, key=lambda claim: claim.get('finished_at') or '', default=None)
+    if latest is None:
+        return None
+    tied = {claim.get('id') for claim in candidates
+            if claim.get('finished_at') == latest.get('finished_at')}
+    if len(tied) > 1:
+        raise RuntimeError('tied latest completion timestamps require actual owner ordering')
+    return latest
+
+
 def resume_checkout(config, state, issue):
     candidates = [entry for entry in state.get('history', []) if entry.get('issue') == issue
                   and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at')]
@@ -136,7 +150,7 @@ def resume_checkout(config, state, issue):
                 raise RuntimeError('durable claim receipt identity mismatch')
             durable[entry['id']] = entry
             candidates.append(entry)
-    previous = max(candidates, key=lambda entry: entry.get('finished_at') or '', default=None)
+    previous = latest_claim(candidates)
     if not previous:
         return None
     receipt = durable.get(previous.get('id'))

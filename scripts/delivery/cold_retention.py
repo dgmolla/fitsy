@@ -9,7 +9,7 @@ import subprocess
 import tarfile
 import time
 
-from resource_lifecycle import elapsed, execute, owned_checkout, released, source_identity
+from resource_lifecycle import elapsed, execute, owned_checkout, released, source_identity, latest_claim
 
 DEPENDENCIES = ('node_modules', 'apps/api/node_modules', 'apps/mobile/node_modules',
                 'packages/shared/node_modules', 'scripts/node_modules', 'apps/mobile/ios/Pods')
@@ -450,15 +450,27 @@ def recover(config, state, save, now, completed_verified=None):
             continue
         if c.get('worktree') and c.get('finished_at') and c.get('terminal'):
             previous = claims.get(c['worktree'])
-            if previous is None or c['finished_at'] > previous['finished_at']:
-                claims[c['worktree']] = c
+            try:
+                claims[c['worktree']] = latest_claim([c] if previous is None else [previous, c])
+            except RuntimeError as error:
+                uncertain_paths.add(c['worktree'])
+                state.setdefault('cold_retention_legacy', {}).setdefault('completion-order:' + c['id'], {
+                    'state': 'deferred', 'issue': c['issue'], 'worktree': c['worktree'],
+                    'reason': str(error), 'next_action': 'Backfill actual successor ordering; preserve all tied owners and raw receipts'})
     newest = {}
-    for c in claims.values():
-        if c['finished_at'] > newest.get(c['issue'], {}).get('finished_at', ''):
-            newest[c['issue']] = c
+    for issue in {claim['issue'] for claim in claims.values()}:
+        entries = [claim for claim in claims.values() if claim['issue'] == issue]
+        try:
+            newest[issue] = latest_claim(entries)
+        except RuntimeError as error:
+            newest[issue] = None
+            for claim in entries:
+                state.setdefault('cold_retention_legacy', {}).setdefault('completion-order:' + claim['id'], {
+                    'state': 'deferred', 'issue': issue, 'worktree': claim['worktree'],
+                    'reason': str(error), 'next_action': 'Backfill actual successor ordering; preserve all tied owners and raw receipts'})
     records = state.setdefault('cold_retention', {})
     for c in sorted(claims.values(), key=lambda row: row['finished_at']):
-        if c['worktree'] in uncertain_paths:
+        if c['worktree'] in uncertain_paths or newest[c['issue']] is None:
             continue
         prior = records.get(c['id'], {})
         age = elapsed(c['finished_at'], now)
