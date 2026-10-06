@@ -8,16 +8,50 @@ import shutil
 import subprocess
 
 
-SCRATCH = ('Intermediates.noindex', 'ModuleCache.noindex', 'CompilationCache.noindex', 'SDKStatCaches.noindex')
+SCRATCH = ('Intermediates.noindex', 'ModuleCache.noindex', 'CompilationCache.noindex', 'SDKStatCaches.noindex', 'Index.noindex')
 
 
 def execute(args, timeout=30):
     return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
 
 
+def read_claims(config, state):
+    """Retain damaged legacy metadata without turning it into deletion authority."""
+    claims, uncertain = [], False
+    for receipt in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
+        try:
+            claim = json.loads(receipt.read_text())
+            if not isinstance(claim, dict):
+                raise ValueError('durable receipt is not an object')
+            if (claim.get('id') != receipt.parent.name or not isinstance(claim.get('issue'), int)
+                    or isinstance(claim.get('issue'), bool) or claim['issue'] < 1):
+                raise ValueError('durable claim lacks exact id and issue ownership')
+            for field in ('id', 'worktree', 'branch', 'terminal', 'finished_at'):
+                if claim.get(field) is not None and not isinstance(claim[field], str):
+                    raise ValueError('durable receipt field is not text: ' + field)
+            if claim.get('issue') is not None and (not isinstance(claim['issue'], int) or isinstance(claim['issue'], bool)):
+                raise ValueError('durable receipt issue is not an integer')
+            if 'worktree_origin_claim' in claim and not isinstance(claim['worktree_origin_claim'], str):
+                raise ValueError('durable origin claim is not text')
+            for field in ('pid', 'launcher_pid', 'worker_pgid'):
+                value = claim.get(field)
+                if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value <= 0):
+                    raise ValueError('durable process identity is not a positive integer: ' + field)
+            if 'worktree_creation_intent' in claim and not isinstance(claim['worktree_creation_intent'], bool):
+                raise ValueError('durable creation intent is not boolean')
+        except (OSError, ValueError) as error:
+            uncertain = True
+            state.setdefault('cold_retention_legacy', {}).setdefault(str(receipt), {
+                'state': 'deferred', 'reason': 'unreadable durable claim receipt: ' + str(error)[:160],
+                'next_action': 'Backfill exact owner from original task evidence; preserve damaged receipt and skip destructive recovery'})
+            continue
+        claims.append((receipt, claim))
+    return claims, uncertain
+
+
 def owned_checkout(config, claim):
     identity = claim.get('worktree_origin_claim', claim.get('id', ''))
-    if not re.fullmatch(r'[0-9a-f-]{36}', identity) or not isinstance(claim.get('issue'), int):
+    if not isinstance(identity, str) or not re.fullmatch(r'[0-9a-f-]{36}', identity) or not isinstance(claim.get('issue'), int):
         raise RuntimeError('missing creation claim identity')
     root = Path(config['worktree_root']).resolve()
     expected = root / f"fitsy-issue-{claim['issue']}-{identity[:8]}"
@@ -82,19 +116,49 @@ def source_identity(config, path):
     return {'head': head.stdout.strip(), 'working_sha256': digest.hexdigest()}
 
 
+def latest_claim(candidates):
+    latest = max(candidates, key=lambda claim: claim.get('finished_at') or '', default=None)
+    if latest is None:
+        return None
+    tied = {claim.get('id') for claim in candidates
+            if claim.get('finished_at') == latest.get('finished_at')}
+    if len(tied) > 1:
+        raise RuntimeError('tied latest completion timestamps require actual owner ordering')
+    return latest
+
+
 def resume_checkout(config, state, issue):
     candidates = [entry for entry in state.get('history', []) if entry.get('issue') == issue
                   and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at')]
     # Compact in-memory history is not the durable ownership record.
-    for receipt_path in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
-        entry = json.loads(receipt_path.read_text())
+    durable = {}
+    receipts, uncertain = read_claims(config, state)
+    if uncertain:
+        registered = execute([config['git_bin'], '-C', config['repo_root'], 'worktree', 'list', '--porcelain', '-z'])
+        if registered.returncode:
+            raise RuntimeError('uncertain ownership cannot inventory retained same-issue checkouts')
+        root = Path(config['worktree_root']).resolve()
+        for line in registered.stdout.split('\0'):
+            if not line.startswith('worktree '):
+                continue
+            path = Path(line[9:]).resolve()
+            if path.parent == root and re.fullmatch(r'fitsy-issue-' + str(issue) + r'-[0-9a-f]{8}', path.name):
+                raise RuntimeError('unreadable durable ownership for retained same-issue checkout: ' + str(path))
+    for receipt_path, entry in receipts:
         if entry.get('issue') == issue and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at'):
             if receipt_path.parent.name != entry.get('id'):
                 raise RuntimeError('durable claim receipt identity mismatch')
+            durable[entry['id']] = entry
             candidates.append(entry)
-    previous = max(candidates, key=lambda entry: entry.get('finished_at') or '', default=None)
+    previous = latest_claim(candidates)
     if not previous:
         return None
+    receipt = durable.get(previous.get('id'))
+    fields = ('id', 'issue', 'terminal', 'finished_at', 'worktree', 'branch',
+              'worktree_origin_claim', 'worktree_creation_intent', 'pid', 'launcher_pid', 'worker_pgid')
+    if receipt is None or any(receipt.get(key) != previous.get(key) for key in fields):
+        raise RuntimeError('latest predecessor lacks matching valid durable ownership receipt')
+    previous = receipt
     intended = Path(previous.get('worktree', ''))
     if previous.get('worktree_creation_intent') and not intended.exists():
         origin = previous.get('worktree_origin_claim', previous['id'])
@@ -106,11 +170,30 @@ def resume_checkout(config, state, issue):
                 f'worktree {expected}\n' not in registered.stdout and branch.returncode == 1:
             released(config, previous, [])
             return None  # The durable creation intent never produced any source checkout.
+    cold = state.get('cold_retention', {}).get(previous['id'], {})
+    if previous.get('terminal') == 'verified' and cold.get('state') == 'cold-retired' and not intended.exists():
+        archive = cold.get('archive', {})
+        from cold_retention import sha
+        if not archive.get('index_patch') or not archive.get('index_patch_sha256'):
+            raise RuntimeError('completed-source staged recovery is unproven; reconcile legacy archive first')
+        archive_hashes = [('path', 'sha256'), ('manifest', 'manifest_sha256'), ('bundle', 'bundle_sha256')]
+        archive_hashes.append(('index_patch', 'index_patch_sha256'))
+        if cold.get('worktree') != str(intended) or cold.get('claim') != previous['id'] or any(
+                not Path(archive.get(key, '')).is_file() or sha(Path(archive[key])) != archive.get(digest)
+                for key, digest in archive_hashes):
+            raise RuntimeError('completed-source cold recovery is unavailable or changed')
+        from cold_retention import verify_objects
+        verify_objects(json.loads(Path(archive['manifest']).read_text()))
+        # A completed, verified issue reopened later starts on current main; its old source/evidence stays recoverable.
+        return None
     path = owned_checkout(config, previous)
     receipt_path = Path(config['state_dir']) / 'claims' / previous['id'] / 'receipt.json'
     receipt = json.loads(receipt_path.read_text())
     if any(receipt.get(key) != previous.get(key) for key in ('id', 'issue', 'terminal', 'finished_at', 'worktree', 'branch')):
         raise RuntimeError('terminal receipt changed')
+    if previous.get('terminal') == 'verified':
+        # Exact terminal receipt is trusted; this no-op preserves old files and starts separately on main.
+        return None
     released(config, previous, [path])
     before = source_identity(config, path)
     owned_checkout(config, previous)

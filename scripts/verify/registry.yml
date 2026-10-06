@@ -153,8 +153,8 @@ checks:
     runs: [scheduled, local]
     paths: ["apps/mobile/**"]
     why: >
-      Optional broad smoke. Its skip/pass cannot satisfy the blocking local
-      product-flow evidence gate. Cloud execution remains experimental.
+      Legacy native smoke diagnostic only. Source-bound product-flow owns
+      native execution; this skip cannot satisfy its blocking evidence gate.
 
   - name: dev-drift
     script: dev-drift.sh
