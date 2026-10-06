@@ -46,10 +46,15 @@ def incoming(config, target):
     registered = execute([config['git_bin'], '-C', config['repo_root'], 'worktree', 'list', '--porcelain', '-z'], timeout=budget)
     if registered.returncode:
         raise RuntimeError('consumer worktree inventory unavailable; retain checkout')
+    registered_roots = [Path(entry[9:]) for entry in registered.stdout.split('\0') if entry.startswith('worktree ')]
+    for root in registered_roots:
+        resolved = root.resolve()
+        if resolved != target and resolved.is_relative_to(target):
+            raise RuntimeError('registered nested worktree requires its own owner: ' + str(root))
     extra = config.get('resource_reference_roots', [])
     if not isinstance(extra, list) or any(not isinstance(root, str) or not Path(root).is_absolute() for root in extra):
         raise RuntimeError('invalid explicit consumer roots; retain checkout')
-    declared = [Path(config['worktree_root']), *(Path(entry[9:]) for entry in registered.stdout.split('\0') if entry.startswith('worktree ')),
+    declared = [Path(config['worktree_root']), *registered_roots,
                 *(Path(root) for root in extra)]
     dependencies = Path(config['state_dir']) / 'dependencies'
     if dependencies.exists():

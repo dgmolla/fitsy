@@ -581,6 +581,19 @@ runpy.run_path({script!r}, run_name='__main__')
         self.assertIn('archive capacity needs', record['reason'])
         self.assertFalse((self.c.state / 'recovery' / self.old['id']).exists())
 
+    def test_separately_registered_nested_checkout_keeps_parent_and_child(self):
+        (self.path / '.gitignore').write_text('.evidence/\n')
+        nested = self.path / '.evidence/repair-checkout'
+        fixture.run('git', 'worktree', 'add', '-b', 'nested-repair', str(nested), 'main', cwd=self.c.repo)
+        (nested / 'pending-repair.txt').write_text('unfinished child task must remain hot\n')
+        self.c.tick()
+        self.assertTrue(self.path.exists(), 'parent retirement must not remove a separate registered task')
+        self.assertEqual((nested / 'pending-repair.txt').read_text(), 'unfinished child task must remain hot\n')
+        record = self.c.state_data()['cold_retention'][self.old['id']]
+        self.assertEqual(record['state'], 'deferred')
+        self.assertIn('nested', record['reason'])
+        self.assertIn(str(nested), fixture.run('git', 'worktree', 'list', '--porcelain', cwd=self.c.repo).stdout)
+
     def test_registered_consumer_outside_worker_root_keeps_donor(self):
         consumer = self.c.base / 'external-consumer'
         fixture.run('git', 'worktree', 'add', '-b', 'external-consumer', str(consumer), 'main', cwd=self.c.repo)
