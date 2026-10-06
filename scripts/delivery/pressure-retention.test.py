@@ -328,6 +328,23 @@ class PressureRetentionProcessTest(unittest.TestCase):
         finally:
             owner.terminate(); owner.wait(); owner.stdout.close()
 
+    def test_completed_noop_reopen_is_not_blocked_by_reused_worker_ids(self):
+        self.new.update(pid=os.getpid(), launcher_pid=os.getpid(), worker_pgid=os.getpgrp(),
+                        pid_started='obsolete-worker-identity', launcher_started='obsolete-launcher-identity')
+        self.test_reopened_completed_task_starts_main_while_old_proof_is_open()
+
+    def test_malformed_origin_claim_retains_receipt_and_admits_independent_work(self):
+        damaged = {**self.old, 'worktree_origin_claim': []}
+        receipt = self.c.state / 'claims' / self.old['id'] / 'receipt.json'
+        raw = json.dumps(damaged); receipt.write_text(raw)
+        self.c.set_board([fixture.item(386)]); self.c.tick()
+        active = self.c.state_data()['active']
+        self.assertIsNotNone(active, 'bad historical origin must not crash independent admission')
+        self.assertEqual(active['issue'], 386)
+        self.assertEqual(receipt.read_text(), raw)
+        self.assertTrue(self.path.exists())
+        self.assertEqual(self.c.state_data()['cold_retention_legacy'][str(receipt)]['state'], 'deferred')
+
     def test_source_directory_named_pods_is_preserved(self):
         source = self.path / 'Pods'; source.mkdir(); (source / 'source.txt').write_text('real source')
         self.c.tick()

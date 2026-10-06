@@ -28,6 +28,14 @@ def read_claims(config, state):
                     raise ValueError('durable receipt field is not text: ' + field)
             if claim.get('issue') is not None and (not isinstance(claim['issue'], int) or isinstance(claim['issue'], bool)):
                 raise ValueError('durable receipt issue is not an integer')
+            if 'worktree_origin_claim' in claim and not isinstance(claim['worktree_origin_claim'], str):
+                raise ValueError('durable origin claim is not text')
+            for field in ('pid', 'launcher_pid', 'worker_pgid'):
+                value = claim.get(field)
+                if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value <= 0):
+                    raise ValueError('durable process identity is not a positive integer: ' + field)
+            if 'worktree_creation_intent' in claim and not isinstance(claim['worktree_creation_intent'], bool):
+                raise ValueError('durable creation intent is not boolean')
         except (OSError, ValueError) as error:
             uncertain = True
             state.setdefault('cold_retention_legacy', {}).setdefault(str(receipt), {
@@ -40,7 +48,7 @@ def read_claims(config, state):
 
 def owned_checkout(config, claim):
     identity = claim.get('worktree_origin_claim', claim.get('id', ''))
-    if not re.fullmatch(r'[0-9a-f-]{36}', identity) or not isinstance(claim.get('issue'), int):
+    if not isinstance(identity, str) or not re.fullmatch(r'[0-9a-f-]{36}', identity) or not isinstance(claim.get('issue'), int):
         raise RuntimeError('missing creation claim identity')
     root = Path(config['worktree_root']).resolve()
     expected = root / f"fitsy-issue-{claim['issue']}-{identity[:8]}"
@@ -150,8 +158,7 @@ def resume_checkout(config, state, issue):
     if any(receipt.get(key) != previous.get(key) for key in ('id', 'issue', 'terminal', 'finished_at', 'worktree', 'branch')):
         raise RuntimeError('terminal receipt changed')
     if previous.get('terminal') == 'verified':
-        # No retained files are modified: only the predecessor worker must have released execution.
-        released(config, previous, [])
+        # Exact terminal receipt is trusted; this no-op preserves old files and starts separately on main.
         return None
     released(config, previous, [path])
     before = source_identity(config, path)
