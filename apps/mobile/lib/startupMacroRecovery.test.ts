@@ -87,3 +87,23 @@ it('does not refetch or prompt for a current account target', async () => {
   expect(confirm).not.toHaveBeenCalled();
   expect(global.fetch).not.toHaveBeenCalled();
 });
+
+it('claims an intentional anonymous edit before accepting it as a signed-in target', async () => {
+  const manual = { calories: '640', protein: '50', carbs: '65', fat: '20' };
+  await AsyncStorage.setItem('@fitsy/macro_targets', JSON.stringify({ ...manual,
+    _mode: 'complete', _owner: null, _source: 'manual' }));
+  expect(await getMacroTargets()).toBeNull();
+  expect(await AsyncStorage.getItem('@fitsy/macro_targets')).not.toBeNull();
+  global.fetch = jest.fn().mockResolvedValue(response({ user, macroTarget: {
+    calories: 2242, proteinG: 175, carbsG: 228, fatG: 70, source: 'manual',
+  } }));
+  const confirm = jest.fn();
+  expect(await recoverStartupMealTargets(confirm)).toBe(true);
+  expect(confirm).not.toHaveBeenCalled();
+  expect(await getMacroTargets()).toEqual(manual);
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/user/profile'),
+    expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ macroTarget: {
+      proteinG: 175, carbsG: 228, fatG: 70, source: 'manual', calories: 2242,
+    } }) }));
+  expect(JSON.parse((await AsyncStorage.getItem('@fitsy/macro_targets'))!)._owner).toBe('buyer');
+});

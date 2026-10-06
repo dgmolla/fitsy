@@ -84,6 +84,9 @@ async function readSnapshot(key: string): Promise<MacroTargetSnapshot | null> {
       await AsyncStorage.removeItem(MACRO_TARGETS_KEY);
       return null;
     }
+    // Explicit anonymous edits stay available to the sign-in claim path, but
+    // cannot become an account target before profile reconciliation finishes.
+    if (key === MACRO_TARGETS_KEY && _owner === null && await currentUserId()) return null;
     if (key === MACRO_TARGETS_KEY && _owner && _owner !== await currentUserId()) return null;
     const generated = _mode === undefined && isLegacyGeneratedShape(targets);
     const parsed = [targets.protein, targets.carbs, targets.fat].map(parseTarget);

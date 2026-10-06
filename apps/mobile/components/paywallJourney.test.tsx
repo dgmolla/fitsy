@@ -11,11 +11,13 @@ import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 import { saveMacroTargets, clearMacroTargets } from '../lib/macroStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+let mockSession: { access_token: string; user: { id: string } } | null = null;
+const originalFetch = global.fetch;
 jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: {
-  getSession: async () => ({ data: { session: null } }),
+  getSession: async () => ({ data: { session: mockSession } }),
   startAutoRefresh: () => undefined,
   stopAutoRefresh: () => undefined,
   } }) };
@@ -90,6 +92,7 @@ function Journey() {
   ] }}><Root.Navigator><Root.Screen name="__root" component={AppScreens} /></Root.Navigator></NavigationContainer>;
 }
 beforeEach(async () => {
+  mockSession = null;
   await AsyncStorage.clear();
   await saveMacroTargets({ calories: '700', protein: '40', carbs: '80', fat: '20' });
   paymentRenders = 0;
@@ -158,4 +161,22 @@ it('continues the preview craving in the real search tab after purchase', async 
   await waitFor(() => expect(screen.getByText('Meal search: chicken')).toBeTruthy());
   expect(await getPaywallIntent()).toBeNull();
   expect(screen.queryByText('Decline subscription')).toBeNull();
+});
+
+afterEach(() => { mockSession = null; global.fetch = originalFetch; });
+
+it('hydrates a paid account target before the shared purchase/restore/late redirect', async () => {
+  action = 'resubscribe';
+  await clearMacroTargets();
+  mockSession = { access_token: 'buyer-token', user: { id: 'buyer' } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+    macroTarget: { calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' },
+  }) });
+  await rememberPaywallIntent({ action: 'menu', restaurantId: 'varilla',
+    restaurantName: 'Varilla', menuItemId: 'meal-1', query: 'pizza' });
+  const screen = render(<Journey />);
+  await waitFor(() => expect(screen.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy());
+  expect(screen.queryByText('Set macro targets')).toBeNull();
+  expect(await getPaywallIntent()).toBeNull();
 });

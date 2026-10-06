@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Redirect, useNavigation } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,6 +15,7 @@ import { EDITORIAL, FONTS } from '@/lib/brand';
 import { openPurchasedDestination } from '@/lib/paywallJourney';
 import { replayPendingProfileSync } from '@/lib/profileSync';
 import { recoverStartupMealTargets } from '@/lib/startupMacroRecovery';
+import { confirmLegacyMacroRecovery } from '@/lib/macroRecoveryPrompt';
 
 export default function Index() {
   const navigation = useNavigation();
@@ -39,14 +40,7 @@ export default function Index() {
         let hasTargets = targets;
         if (token && purchasesReady && entitled === true && !hasTargets) {
           if (targetRecovery.current?.token !== token) {
-            targetRecovery.current = { token, pending: recoverStartupMealTargets(mode => new Promise(resolveChoice => {
-              const kind = mode === 'search' ? 'search filter' : 'meal target';
-              Alert.alert(`Restore older ${kind}?`,
-                `This device has an older ${kind} without an account label. Restore it to this account?`, [
-                  { text: 'Set new targets', style: 'cancel', onPress: () => resolveChoice(false) },
-                  { text: 'Restore', onPress: () => resolveChoice(true) },
-                ], { cancelable: false });
-            })) };
+            targetRecovery.current = { token, pending: recoverStartupMealTargets(confirmLegacyMacroRecovery) };
           }
           hasTargets = await targetRecovery.current.pending;
           if (!current) return;
