@@ -7,6 +7,7 @@ The [GitHub workflow](../../../.github/workflows/hourly-delivery.yml) is manual,
 Slack shows the slot and main gate state, followed by three or four concise free-form editorial bullets.
 The coordinator atomically writes authored_at, bullets and observed board_bindings in the private editorial-update.json under publisher.lock.
 The publisher accepts only fresh compact prose whose issue-status bindings still match the complete current board read.
+Explicit issue-number or Fitsy issue-URL references in a bullet must have a current binding as well.
 Expired or malformed prose falls back to current actionable board facts without a human mention or a fixed backlog-blocker slot.
 Issue numbers supplement product names and outcomes; merged code and an active process do not prove acceptance.
 The JSON artifact retains PR throughput, observed local phase time, timing coverage exceptions, and full evidence.

@@ -122,6 +122,18 @@ class LocalReportTest(unittest.TestCase):
             self.assertEqual(report['editorial']['state'], 'fallback')
             self.assertNotIn('Missing issue shipped', message)
 
+    def test_explicit_issue_references_require_current_bindings(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T04:35:00Z')
+            for claim in ('#999999 shipped.', 'See https://github.com/dgmolla/fitsy/issues/999999.'):
+                reporter.save(state / 'editorial-update.json', {'authored_at':'2026-09-27T04:30:00Z',
+                    'board_bindings':{'388':'Done'},'bullets':[claim,'Second statement.','Third statement.']})
+                report = {'editorialFacts':[{'number':388,'status':'Done','title':'Dispatcher improvements'}]}
+                message = reporter.compose_update(report, state, '2026-09-27T04:30', now)
+                self.assertEqual(report['editorial']['state'], 'fallback')
+                self.assertNotIn(claim, message)
+
     def test_history_pagination_and_legacy_marker_prevent_a_second_post(self):
         class PagedSlack(Slack):
             def call(self, method, params=None, payload=None):

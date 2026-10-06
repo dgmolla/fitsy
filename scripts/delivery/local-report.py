@@ -3,6 +3,7 @@
 import fcntl
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -105,6 +106,11 @@ def compose_update(report, state, slot, now=None):
                 str(number) not in current or status not in ('Queued', 'In flight', 'Done') or
                 current[str(number)] != status for number, status in bindings.items()):
             raise ValueError('editorial evidence no longer matches board')
+        references = {number for line in bullets for pair in re.findall(
+            r'#([1-9][0-9]*)\b|https://github\.com/dgmolla/fitsy/issues/([1-9][0-9]*)\b', line)
+            for number in pair if number}
+        if not references.issubset({str(number) for number in bindings}):
+            raise ValueError('editorial issue reference has no current binding')
         report['editorial'] = {'authored_at': update['authored_at'], 'board_bindings': bindings,
                                'state': 'fresh', 'bullets': bullets}
         lines = bullets
