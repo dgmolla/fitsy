@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadTimings } from './phase-report.mjs';
@@ -62,6 +62,27 @@ export async function loadProject(graphql) {
     throw new Error(`Incomplete project read: ${items.length} of ${total} cards`);
   }
   return { url, items };
+}
+
+export function projectFromSnapshot(snapshot, now = new Date()) {
+  const observed = Date.parse(snapshot?.observed_at ?? '');
+  const items = snapshot?.items;
+  if (!Number.isFinite(observed) || observed > +now || +now - observed > 300000 ||
+      !Number.isSafeInteger(snapshot?.totalCount) || snapshot.totalCount < 0 ||
+      !Array.isArray(items) || items.length !== snapshot.totalCount ||
+      items.some(item => !item?.id) || new Set(items.map(item => item.id)).size !== items.length) {
+    throw new Error('Canonical report snapshot incomplete or stale');
+  }
+  const names = ['Status', 'Priority', 'Progress', 'Blocker', 'Dependencies', 'Next action',
+    'Verified at', 'Started at'];
+  return { url: BOARD_URL, items: items.map(item => {
+    if (names.some(name => !Object.hasOwn(item, name.toLowerCase())) || !Array.isArray(item.labels)) {
+      throw new Error('Canonical report fields incomplete');
+    }
+    return { id: item.id, content: { ...item.content, __typename: item.content?.type },
+      fields: Object.fromEntries(names.map(name => [name, item[name.toLowerCase()] ?? ''])),
+      labels: item.labels };
+  }) };
 }
 
 export async function loadMergedPulls(rest, now) {
@@ -186,6 +207,12 @@ export function buildReport(project, pulls, main, now = new Date(), requestedSlo
     issueCycle: { medianMs: median(cycles), sample: cycles.length, missing: doneIssues.length - cycles.length },
     summary: { shipped, next, blockers: blocked.filter(item => item.content?.__typename === 'Issue')
       .slice(0, 1).map(item => ({ number: item.content.number, title: item.content.title, url: item.content.url })) },
+    editorialFacts: issues.filter(item => item.fields.Status !== 'Done' &&
+      (item.fields.Status === 'In flight' ||
+       (['Now', 'Next'].includes(item.fields.Priority) && item.labels.includes('dispatch-ready'))))
+      .map(item => ({number: item.content.number, title: item.content.title, status: item.fields.Status,
+        blocker: item.fields.Blocker ?? '', dependencies: item.fields.Dependencies ?? '',
+        held: item.labels.includes('dispatch-hold')})),
     wipAge: { oldestMs: ages.length ? Math.max(...ages) : null, sample: ages.length,
       missing: activeIssues.length - ages.length }, main, highlights };
 }
@@ -229,12 +256,13 @@ async function api(fetchImpl, url, token, options = {}) {
 }
 
 export async function collect(fetchImpl, projectToken, actionsToken, now = new Date(), requestedSlot,
-  localRoots = []) {
+  localRoots = [], snapshot) {
   const graphql = (query, variables) => api(fetchImpl, 'https://api.github.com/graphql', projectToken,
     { method: 'POST', body: JSON.stringify({ query, variables }) }).then(data => data.data);
   const rest = url => api(fetchImpl, url, actionsToken);
   const [project, pulls, main] = await Promise.all([
-    loadProject(graphql), loadMergedPulls(rest, now), loadMainGates(rest),
+    snapshot ? projectFromSnapshot(snapshot, now) : loadProject(graphql),
+    loadMergedPulls(rest, now), loadMainGates(rest),
   ]);
   const local = await loadTimings(rest, project.items, now, localRoots);
   return { ...buildReport(project, pulls, main, now, requestedSlot), local };
@@ -300,8 +328,10 @@ async function main() {
   if (!process.env.DELIVERY_GITHUB_TOKEN || !process.env.GITHUB_TOKEN) {
     throw new Error('DELIVERY_GITHUB_TOKEN and GITHUB_TOKEN are required');
   }
+  const snapshotPath = args.find(arg => arg.startsWith('--project-snapshot='))?.slice('--project-snapshot='.length);
+  const snapshot = snapshotPath ? JSON.parse(await readFile(snapshotPath, 'utf8')) : undefined;
   const report = await collect(fetch, process.env.DELIVERY_GITHUB_TOKEN, process.env.GITHUB_TOKEN,
-    now, requestedSlot, localRoots);
+    now, requestedSlot, localRoots, snapshot);
   const message = formatReport(report);
   await writeFile(resolve(output, 'report.txt'), `${message}\n`);
   let delivery = { posted: false, dryRun: true };

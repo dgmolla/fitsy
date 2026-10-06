@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import os
+from unittest.mock import patch
 from pathlib import Path
 import tempfile
 import unittest
@@ -31,6 +33,42 @@ class Slack:
 
 
 class LocalReportTest(unittest.TestCase):
+    def test_actual_canonical_snapshot_command_defers_publisher_without_second_slot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime = root / 'runtime'; runtime.mkdir()
+            counter = root / 'calls'
+            (runtime / 'local-dispatcher.py').write_text(
+                "from pathlib import Path\nimport json,sys\n"
+                f"Path({str(counter)!r}).write_text('snapshot')\n"
+                "assert sys.argv[1] == 'snapshot'\n"
+                "print(json.dumps({'state':'queue-read-backoff','retry_at':'2026-09-27T05:00:00Z'}))\n")
+            now = epoch('2026-09-27T04:35:00Z')
+            config = {'channel':'C123','user':'U123','activated_at':now-3600}
+            slack = Slack()
+            with patch.dict(os.environ, {'FITSY_DISPATCHER_CONFIG':str(root / 'config.json')}):
+                reporter.run_once(config, root, slack, now=now)
+            self.assertEqual(counter.read_text(), 'snapshot')
+            receipts = list((root / 'slots').glob('*.json'))
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(json.loads(receipts[0].read_text())['next_attempt'], epoch('2026-09-27T05:00:00Z'))
+            self.assertEqual(slack.posts, [])
+
+    def test_editorial_bindings_still_require_current_status_and_fresh_authorship(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T04:35:00Z')
+            update = {'authored_at':'2026-09-27T04:30:00Z',
+                      'bullets':['Feature repair underway.', 'Acceptance pending.', 'Next: exact source review.'],
+                      'board_bindings':{'443':'In flight'}}
+            reporter.save(state / 'editorial-update.json', update)
+            report = {'editorialFacts':[{'number':443,'status':'In flight','title':'Feature repair'}]}
+            reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fresh')
+            report['editorialFacts'][0]['status'] = 'Queued'
+            reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fallback')
+
     def test_history_pagination_and_legacy_marker_prevent_a_second_post(self):
         class PagedSlack(Slack):
             def call(self, method, params=None, payload=None):

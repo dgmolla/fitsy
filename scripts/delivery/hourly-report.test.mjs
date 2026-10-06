@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildReport, deliverySlot, formatReport, loadMainGates, loadMergedPulls, loadProject, postOnce,
-  reportArtifact,
+  reportArtifact, projectFromSnapshot, collect, PROJECT_QUERY,
 } from './hourly-report.mjs';
 
 const board = 'https://github.com/users/dgmolla/projects/1';
@@ -271,3 +271,29 @@ test('summary uses recent verified delivery and actionable board priority with b
   const visible = lines.map(line => line.replace(/<[^|>]+\|([^>]+)>/g, '$1').replace(/\*/g, ''));
   assert.ok(visible.every(line => line.length <= 110));
 });
+
+ test('canonical complete snapshot suppresses publisher GraphQL and rejects partial or stale data', async () => {
+  const snapshot = {observed_at:now.toISOString(),totalCount:1,items:[{
+    id:'one',content:{type:'Issue',number:443,title:'Feature repair',url:'https://github.com/dgmolla/fitsy/issues/443'},
+    labels:['dispatch-ready'],status:'Queued',priority:'Now',progress:'Repair',blocker:'',
+    dependencies:'','next action':'Review','verified at':null,'started at':null,
+  }]};
+  const result = projectFromSnapshot(snapshot, now);
+  assert.equal(result.items[0].fields.Status, 'Queued');
+  assert.equal(result.items[0].content.__typename, 'Issue');
+  assert.throws(() => projectFromSnapshot({...snapshot,totalCount:2}, now), /incomplete/);
+  assert.throws(() => projectFromSnapshot({...snapshot,observed_at:'2026-09-26T17:00:00Z'}, now), /stale/);
+  const incomplete = structuredClone(snapshot); delete incomplete.items[0].status;
+  assert.throws(() => projectFromSnapshot(incomplete, now), /fields incomplete/);
+  let graphql = 0;
+  const fetcher = async url => {
+    if (url.includes('/graphql')) { graphql++; throw new Error('publisher bypassed shared reader'); }
+    const value = url.endsWith('/commits/main') ? {sha:'a'.repeat(40)} :
+      url.includes('/actions/runs') ? {total_count:0,workflow_runs:[]} : [];
+    return {ok:true,status:200,json:async () => value};
+  };
+  await collect(fetcher, 'fixture', 'fixture', now, undefined, [], snapshot);
+  assert.equal(graphql, 0);
+  // Query-shape reproduction only; this is not a measured live GitHub point cost.
+  assert.match(PROJECT_QUERY, /fieldValues\(first: 100\)/);
+ });

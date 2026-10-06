@@ -655,7 +655,7 @@ def archive(state, claim, status, state_path):
     state['active'] = None
 
 
-def retire_verified_simulator(config, state, state_path):
+def retire_verified_simulator(config, state, state_path, assessment_board=None):
     """One exact terminal claim per tick, before the next disk admission."""
     if state.get('active'):
         return
@@ -712,7 +712,8 @@ def retire_verified_simulator(config, state, state_path):
                 use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
                 return bool(current and terminal_verified(config, current, identity, archived=True, historical=True) and
                             retention(config, 'task_simulator', use, time.time())['state'] == 'assessment-due')
-            current = next((entry for entry in board(config) if entry.get('content', {}).get('number') == issue), None)
+            current = next((entry for entry in (assessment_board or (lambda: board(config)))()
+                            if entry.get('content', {}).get('number') == issue), None)
             if not current or not terminal_verified(config, current, identity, archived=True, historical=True):
                 raise ValueError('issue is no longer terminal-verified')
             use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
@@ -874,17 +875,29 @@ def tick(config, state, state_path, script):
     assess_retention(config, state, time.time())
     write_json(state_path, state)
     cleanup_released(config, state, lambda: write_json(state_path, state))
+    assessment = {}
+    def recovery_board():
+        # Only assessment shares this live, complete read inside this locked tick.
+        # Destructive confirmation and final dispatch confirmation remain independent.
+        if not assessment:
+            try:
+                assessment['items'] = board(config)
+            except Exception as error:
+                assessment['error'] = error
+        if 'error' in assessment:
+            raise assessment['error']
+        return assessment['items']
     def completed_recovery_verified(claim):
         identity = (state.get('verified') or {}).get(str(claim['issue']))
         if not identity or identity.get('id') != claim['id']:
             return False
         try:
-            current = next((item for item in board(config) if item.get('content', {}).get('number') == claim['issue']), None)
+            current = next((item for item in recovery_board() if item.get('content', {}).get('number') == claim['issue']), None)
             return bool(current and terminal_verified(config, current, identity, archived=True, historical=True))
         except Exception:
             return False  # Unavailable live acceptance is uncertainty, never retirement permission.
     recover_pressure(config, state, lambda: write_json(state_path, state), time.time(), completed_recovery_verified)
-    retire_verified_simulator(config, state, state_path)
+    retire_verified_simulator(config, state, state_path, recovery_board)
     floor = config.get('min_free_bytes', 8 * 1024**3)
     reserve = config.get('scratch_reserve_bytes', 4 * 1024**3)
     if not isinstance(reserve, int) or isinstance(reserve, bool) or reserve < 0:
