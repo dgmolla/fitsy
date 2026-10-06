@@ -144,4 +144,6 @@ An ambiguous Git removal preserves its durable intent, checks all recovery ident
 Cold recovery preserves a private binary index.patch separately from working files and validates actual staged-source reconstruction before removal.
 Restore that patch with git apply --cached at the retained source head before restoring working files; this retains independently staged and unstaged versions.
 Legacy archives without verified index recovery remain unreconciled until original index state or explicit original clean-index proof is recovered; neither an absent path nor a valid working-file archive proves staged-source preservation.
+Archive preparation budgets incompressible retained files, Git recovery copies, index data and a temporary-write margin before allocation.
+Failed preparation removes only its unpublished attempt and temporary pack/object files while the original checkout remains; verified shared objects, archives and removal intents remain protected.
 An unresolved merge index remains hot until complete Git-state recovery can be proven.

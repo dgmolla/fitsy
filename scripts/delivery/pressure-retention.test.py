@@ -300,6 +300,43 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertEqual(record['state'], 'removal-intent')
         self.assertIn('staged', record['reason'])
 
+    def limited_archive_tick(self, available=None):
+        # Exercise the actual dispatcher against a kernel-enforced file quota, without filling the user's disk.
+        script = str(fixture.SCRIPT)
+        code = ("import resource,signal,runpy,sys;"
+                "resource.setrlimit(resource.RLIMIT_FSIZE,(65536,65536));"
+                "signal.signal(signal.SIGXFSZ,signal.SIG_IGN);"
+                f"sys.path.insert(0,{str(Path(script).parent)!r});"
+                f"sys.argv=[{script!r},'tick','--config',{str(self.c.config)!r}];"
+                + (f"import shutil,collections;shutil.disk_usage=lambda p:collections.namedtuple('usage','total used free')(999999999,0,{available});" if available is not None else '')
+                + f"runpy.run_path({script!r},run_name='__main__')")
+        return fixture.run(sys.executable, '-c', code, cwd=self.c.base, env=self.c.env)
+
+    def test_failed_archive_write_keeps_source_and_removes_partial_attempt(self):
+        raw = self.path / '.evidence/incompressible.raw'
+        raw.write_bytes(os.urandom(1024 * 1024))
+        self.limited_archive_tick()
+        self.assertTrue(raw.exists())
+        self.assertEqual(self.c.state_data()['cold_retention'][self.old['id']]['state'], 'deferred')
+        self.assertEqual(list((self.c.state / 'recovery' / self.old['id']).glob('*/files.tar.gz')), [])
+
+    def test_failed_app_object_write_removes_only_unpublished_temporary_object(self):
+        raw = self.path / '.evidence/product-build/Build/Products/Fitsy.app/large-binary'
+        raw.write_bytes(os.urandom(9 * 1024 * 1024))
+        self.limited_archive_tick()
+        self.assertTrue(raw.exists())
+        self.assertEqual(self.c.state_data()['cold_retention'][self.old['id']]['state'], 'deferred')
+        self.assertEqual(list((self.c.state / 'recovery/file-objects').glob('*.tmp')), [])
+
+    def test_insufficient_archive_capacity_defers_before_allocating_attempt(self):
+        (self.path / '.evidence/incompressible.raw').write_bytes(os.urandom(2 * 1024 * 1024))
+        self.limited_archive_tick(1024 * 1024)
+        self.assertTrue(self.path.exists())
+        record = self.c.state_data()['cold_retention'][self.old['id']]
+        self.assertEqual(record['state'], 'deferred')
+        self.assertIn('archive capacity needs', record['reason'])
+        self.assertFalse((self.c.state / 'recovery' / self.old['id']).exists())
+
     def test_registered_consumer_outside_worker_root_keeps_donor(self):
         consumer = self.c.base / 'external-consumer'
         fixture.run('git', 'worktree', 'add', '-b', 'external-consumer', str(consumer), 'main', cwd=self.c.repo)

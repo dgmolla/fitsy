@@ -11,6 +11,9 @@ import time
 
 from resource_lifecycle import elapsed, execute, owned_checkout, released, source_identity
 
+DEPENDENCIES = ('node_modules', 'apps/api/node_modules', 'apps/mobile/node_modules',
+                'packages/shared/node_modules', 'scripts/node_modules', 'apps/mobile/ios/Pods')
+
 
 def sha(path):
     h = hashlib.sha256()
@@ -111,12 +114,15 @@ def shared_bundle(config, path, head, directory):
         if heads.returncode == 0 and head in [line.split()[0] for line in heads.stdout.splitlines()]:
             shared = candidate; break
     if shared is None:
-        temporary = store / 'source-pack.tmp'
-        result = execute([config['git_bin'], '-C', str(path), 'bundle', 'create', str(temporary), '--all'], timeout=180)
-        if result.returncode:
-            raise RuntimeError('source bundle creation failed')
-        temporary.chmod(0o600)
-        shared = store / (sha(temporary) + '.bundle'); os.replace(temporary, shared)
+        temporary = store / ('source-pack-' + str(time.time_ns()) + '.tmp')
+        try:
+            result = execute([config['git_bin'], '-C', str(path), 'bundle', 'create', str(temporary), '--all'], timeout=180)
+            if result.returncode:
+                raise RuntimeError('source bundle creation failed')
+            temporary.chmod(0o600)
+            shared = store / (sha(temporary) + '.bundle'); os.replace(temporary, shared)
+        finally:
+            temporary.unlink(missing_ok=True)  # Only this unpublished attempt, never a shared verified pack.
     bundle = directory / 'source.bundle'
     os.link(shared, bundle)
     return bundle
@@ -139,13 +145,16 @@ def app_object(config, file, digest):
         raise RuntimeError('recovery app object is a redirected link')
     if not target.exists():
         temporary = store / ('object-' + str(time.time_ns()) + '.tmp')
-        with temporary.open('xb') as raw:
-            temporary.chmod(0o600)
-            with gzip.GzipFile(fileobj=raw, mode='wb', mtime=0) as compressed, file.open('rb') as source:
-                shutil.copyfileobj(source, compressed, 1024 * 1024)
-        if object_identity(temporary) != digest:
-            raise RuntimeError('app recovery bytes changed during preservation')
-        os.replace(temporary, target)
+        try:
+            with temporary.open('xb') as raw:
+                temporary.chmod(0o600)
+                with gzip.GzipFile(fileobj=raw, mode='wb', mtime=0) as compressed, file.open('rb') as source:
+                    shutil.copyfileobj(source, compressed, 1024 * 1024)
+            if object_identity(temporary) != digest:
+                raise RuntimeError('app recovery bytes changed during preservation')
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
     if object_identity(target) != digest:
         raise RuntimeError('retained app recovery object changed')
     return {'object': str(target), 'object_sha256': sha(target), 'object_bytes': target.stat().st_size}
@@ -159,12 +168,36 @@ def verify_objects(manifest):
                 raise RuntimeError('retained app recovery object identity changed')
 
 
+def reserve_recovery_space(config, path, index_data):
+    """Plan for incompressible retained files and Git recovery before allocating any attempt bytes."""
+    files = members = 0
+    excluded = {path / relative for relative in DEPENDENCIES}
+    for current, dirs, names in os.walk(path, followlinks=False):
+        dirs[:] = [name for name in dirs if Path(current) / name not in excluded or (Path(current) / name).is_symlink()]
+        members += len(dirs) + len(names)
+        files += sum((Path(current) / name).lstat().st_size for name in names if not (Path(current) / name).is_symlink())
+    objects = execute([config['git_bin'], '-C', str(path), 'rev-list', '--objects', '--all'])
+    if objects.returncode:
+        raise RuntimeError('Git recovery capacity inventory unavailable')
+    sizes = subprocess.run([config['git_bin'], '-C', str(path), 'cat-file', '--batch-check=%(objectsize)'],
+                           input='\n'.join(line.split()[0] for line in objects.stdout.splitlines()),
+                           capture_output=True, text=True, timeout=60)
+    if sizes.returncode or any(not line.isdigit() for line in sizes.stdout.splitlines()):
+        raise RuntimeError('Git recovery capacity sizes unavailable')
+    # Three copies allow bundle staging, recovery clone and pack/index overhead; compression is not assumed.
+    needed = files + files // 100 + members * 2048 + 3 * sum(map(int, sizes.stdout.splitlines())) + 2 * len(index_data) + 64 * 1024**2
+    available = shutil.disk_usage(config['state_dir']).free
+    if available < needed:
+        raise RuntimeError(f'archive capacity needs {needed} bytes, available {available}; retain source and recover a smaller candidate first')
+
+
 def preserve(config, path, claim, directory):
     """Verify every source/env/app/raw-evidence member and a recoverable branch bundle."""
-    directory.mkdir(parents=True, exist_ok=True)
-    directory.chmod(0o700)
     head = source_identity(config, path)['head']
     index_data = index_snapshot(config, path)
+    reserve_recovery_space(config, path, index_data)
+    directory.mkdir(parents=True, exist_ok=True)
+    directory.chmod(0o700)
     index_patch = directory / 'index.patch'; index_patch.write_bytes(index_data); index_patch.chmod(0o600)
     bundle = shared_bundle(config, path, head, directory)
     recovered = directory / 'recovery-test.git'
@@ -194,9 +227,7 @@ def preserve(config, path, claim, directory):
             dirs.sort(); names.sort()
             for name in list(dirs):
                 file = Path(current) / name
-                rebuildable = file in {path / relative for relative in (
-                    'node_modules', 'apps/api/node_modules', 'apps/mobile/node_modules',
-                    'packages/shared/node_modules', 'scripts/node_modules', 'apps/mobile/ios/Pods')}
+                rebuildable = file in {path / relative for relative in DEPENDENCIES}
                 if rebuildable and not file.is_symlink():
                     # Only rebuildable dependency directories, never source, apps or raw proof.
                     if any(file.rglob('*.app')):
@@ -263,6 +294,7 @@ def retire(config, state, claim, save):
     if previous:
         record['previous_attempt'] = previous
     records[claim['id']] = record; save()
+    directory = None
     try:
         path = guard(config, state, claim)
         identity = source_identity(config, path)
@@ -313,6 +345,11 @@ def retire(config, state, claim, save):
             # Keep the intent even when Git failed after removing the path; never delete again on that uncertainty.
             record.update(reason=str(error)[:240], next_action='Reconcile absent path against verified recovery before reopening; if source remains, recheck ownership before another removal')
         else:
+            if directory and directory.exists() and 'archive' not in record and Path(claim['worktree']).is_dir():
+                before = shutil.disk_usage(config['state_dir']).free
+                shutil.rmtree(directory)  # Unpublished partial attempt only; source and shared verified objects remain.
+                record['partial_attempt_cleanup'] = {'path': str(directory), 'free_before': before,
+                                                     'free_after': shutil.disk_usage(config['state_dir']).free}
             record.update(state='deferred', reason=str(error)[:240], retry_after=time.time() + 1800,
                           next_action='Resolve exact owner/reference/source/recovery uncertainty before retry; source and original receipts remain retained')
     save()
