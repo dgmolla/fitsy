@@ -91,6 +91,30 @@ class PressureRetentionProcessTest(unittest.TestCase):
         from resource_lifecycle import resume_checkout
         self.assertIsNone(resume_checkout(config, self.state, self.new['issue']))
 
+    def test_missing_mobile_build_receipt_retains_hot_device_proof(self):
+        self.new['terminal'] = 'verified'
+        (self.c.state / 'claims' / self.new['id'] / 'receipt.json').write_text(json.dumps(self.new))
+        flow = Path(self.new['worktree']) / '.evidence/product-flow'; flow.mkdir(parents=True)
+        (flow / 'report.json').write_text(json.dumps({'simulator': 'fixture-device'}))
+        from cold_retention import recover
+        config = json.loads(self.c.config.read_text())
+        self.state['cold_retention'] = {self.old['id']: {'state': 'cold-retired'}}
+        recover(config, self.state, lambda: None, 1900000000, lambda _: True)
+        self.assertTrue(Path(self.new['worktree']).exists())
+        record = self.state['cold_retention'][self.new['id']]
+        self.assertEqual(record['state'], 'deferred')
+        self.assertIn('device proof', record['reason'])
+        self.assertIn('next_action', record)
+        product = Path(self.new['worktree']) / '.evidence/product-build'; product.mkdir()
+        for content in ('not json', '{}', '[]'):
+            (product / 'receipt.json').write_text(content)
+            recover(config, self.state, lambda: None, 1900000000, lambda _: True)
+            self.assertTrue(Path(self.new['worktree']).exists())
+        (product / 'receipt.json').write_text(json.dumps({'simulator': 'fixture-device'}))
+        self.state['simulator_retirement'] = {'fixture-device': {'status': 'retired'}}
+        recover(config, self.state, lambda: None, 1900000000, lambda _: True)
+        self.assertFalse(Path(self.new['worktree']).exists())
+
     def large_app_pair(self):
         self.third = self.claim('fedcbafe-1234-1234-1234-123456789abc', '2026-09-03T00:00:00Z')
         self.state['history'].append(self.third)

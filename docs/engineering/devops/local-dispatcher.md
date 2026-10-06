@@ -117,6 +117,7 @@ At the existing idle tick, the dispatcher assesses one superseded ended checkout
 Below the high watermark, a superseded checkout has a one-hour release grace by default; without pressure the default is 24 hours.
 Configure cleanup_high_watermark_bytes and superseded_checkout_grace_seconds explicitly when needed; polling never renews owner-use or release clocks.
 The latest unfinished checkout for each issue and resource_pinned_checkouts remain protected, along with active owners, incoming donor/artifact references and uncertain process/open-file ownership.
+Completed mobile checkouts retain their hot proof paths until the existing issue-bound simulator retirement completes; missing or malformed build receipts alongside mobile evidence defer archival with a concrete reconciliation action.
 The incoming-reference scan traverses nested dependency links without following symlinks and stops after incoming_reference_scan_seconds (30 seconds maximum/default).
 A scan deadline or filesystem error preserves the checkout and records the unresolved assessment and next action; it never authorizes removal.
 Before normal Git removal, private Gitbundle recovery and every source/environment/app/raw-evidence archive member must pass exact content verification.
