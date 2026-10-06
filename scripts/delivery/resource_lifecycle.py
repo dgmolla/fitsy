@@ -149,10 +149,11 @@ def resume_checkout(config, state, issue):
     receipt = json.loads(receipt_path.read_text())
     if any(receipt.get(key) != previous.get(key) for key in ('id', 'issue', 'terminal', 'finished_at', 'worktree', 'branch')):
         raise RuntimeError('terminal receipt changed')
-    released(config, previous, [path])
     if previous.get('terminal') == 'verified':
-        # Reopened completed work starts from current main; its accepted source/app/device proof stays hot.
+        # No retained files are modified: only the predecessor worker must have released execution.
+        released(config, previous, [])
         return None
+    released(config, previous, [path])
     before = source_identity(config, path)
     owned_checkout(config, previous)
     if source_identity(config, path) != before:

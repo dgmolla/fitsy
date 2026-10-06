@@ -304,6 +304,30 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertEqual(fixture.run('git', 'rev-parse', 'HEAD', cwd=active['worktree']).stdout,
                          fixture.run('git', 'rev-parse', 'origin/main', cwd=self.c.repo).stdout)
 
+    def test_reopened_completed_task_starts_main_while_old_proof_is_open(self):
+        self.new['terminal'] = 'verified'
+        (self.c.state / 'claims' / self.new['id'] / 'receipt.json').write_text(json.dumps(self.new))
+        completed = Path(self.new['worktree'])
+        proof = completed / '.evidence/accepted-proof.txt'; proof.parent.mkdir(parents=True)
+        proof.write_text('retained accepted evidence')
+        owner = subprocess.Popen([sys.executable, '-c',
+            'import sys,time; f=open(sys.argv[1]); print("ready",flush=True); time.sleep(30)',
+            str(proof)], stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(owner.stdout.readline().strip(), 'ready')
+            config = json.loads(self.c.config.read_text()); config['lsof_bin'] = shutil.which('lsof')
+            self.c.config.write_text(json.dumps(config))
+            (self.c.state / 'state.json').write_text(json.dumps(self.state))
+            self.c.set_board([fixture.item(385)]); self.c.tick()
+            active = self.c.state_data()['active']
+            self.assertIsNotNone(active, 'an unrelated reader of retained proof must not hold a new checkout')
+            self.assertNotEqual(Path(active['worktree']).resolve(), completed.resolve())
+            self.assertEqual(proof.read_text(), 'retained accepted evidence')
+            self.assertEqual(fixture.run('git', 'rev-parse', 'HEAD', cwd=active['worktree']).stdout,
+                             fixture.run('git', 'rev-parse', 'origin/main', cwd=self.c.repo).stdout)
+        finally:
+            owner.terminate(); owner.wait(); owner.stdout.close()
+
     def test_source_directory_named_pods_is_preserved(self):
         source = self.path / 'Pods'; source.mkdir(); (source / 'source.txt').write_text('real source')
         self.c.tick()
