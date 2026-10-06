@@ -207,10 +207,7 @@ export function buildReport(project, pulls, main, now = new Date(), requestedSlo
     issueCycle: { medianMs: median(cycles), sample: cycles.length, missing: doneIssues.length - cycles.length },
     summary: { shipped, next, blockers: blocked.filter(item => item.content?.__typename === 'Issue')
       .slice(0, 1).map(item => ({ number: item.content.number, title: item.content.title, url: item.content.url })) },
-    editorialFacts: issues.filter(item => item.fields.Status !== 'Done' &&
-      (item.fields.Status === 'In flight' ||
-       (['Now', 'Next'].includes(item.fields.Priority) && item.labels.includes('dispatch-ready'))))
-      .map(item => ({number: item.content.number, title: item.content.title, status: item.fields.Status,
+    editorialFacts: issues.map(item => ({number: item.content.number, title: item.content.title, status: item.fields.Status,
         blocker: item.fields.Blocker ?? '', dependencies: item.fields.Dependencies ?? '',
         held: item.labels.includes('dispatch-hold')})),
     wipAge: { oldestMs: ages.length ? Math.max(...ages) : null, sample: ages.length,

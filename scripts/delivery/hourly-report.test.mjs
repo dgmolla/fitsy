@@ -307,3 +307,14 @@ test('snapshot retains highlighted last progress timestamp', () => {
   const report = buildReport(projectFromSnapshot(snapshot, now), [], {state:'pending'}, now);
   assert.equal(report.highlights[0].lastProgressAt, '2026-09-26T18:10:00Z');
 });
+
+test('editorial status bindings include observed Done and held cards without calling them ready', () => {
+  const items = [{id:'done',content:{__typename:'Issue',number:388,title:'Dispatcher improvements'},
+    fields:{Status:'Done'},labels:[]},
+    {id:'held',content:{__typename:'Issue',number:443,title:'Macro repair'},
+    fields:{Status:'Queued',Priority:'Later',Blocker:'UI review'},labels:['dispatch-hold']}];
+  const report = buildReport({url:board,items},[],{state:'green'},now);
+  assert.equal(report.editorialFacts.find(item => item.number === 388).status, 'Done');
+  assert.equal(report.editorialFacts.find(item => item.number === 443).held, true);
+  assert.deepEqual(report.summary.next, []);
+});

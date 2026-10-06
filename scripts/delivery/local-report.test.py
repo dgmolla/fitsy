@@ -96,6 +96,20 @@ class LocalReportTest(unittest.TestCase):
             message = reporter.compose_update(report, state, '2026-09-27T04:30')
             self.assertIn('main failed', message)
 
+    def test_done_status_binding_is_fresh_but_changed_status_still_falls_back(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T04:35:00Z')
+            reporter.save(state / 'editorial-update.json', {'authored_at':'2026-09-27T04:30:00Z',
+                'board_bindings':{'388':'Done'},'bullets':['Dispatcher improvements shipped.',
+                'Feature repair is executing.','Next: source-bound acceptance.']})
+            report = {'editorialFacts':[{'number':388,'status':'Done','title':'Dispatcher improvements'}]}
+            reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fresh')
+            report['editorialFacts'][0]['status'] = 'Queued'
+            reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fallback')
+
     def test_history_pagination_and_legacy_marker_prevent_a_second_post(self):
         class PagedSlack(Slack):
             def call(self, method, params=None, payload=None):
