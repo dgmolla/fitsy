@@ -1,9 +1,10 @@
+import { buildProfileBody, dailyMacroTarget } from './profileTargetBody';
 import { api } from './api';
 import { getStoredToken } from './authClient';
-import { getOnboardingData, type OnboardingData } from './onboardingStorage';
+import type { OnboardingData } from './onboardingStorage';
 import { clearArchivedMacroTarget, getAnonymousCompleteTarget, getArchivedMacroTarget, getDiscoveryMacroTargetSnapshot, getMacroTargetSnapshot, getMacroTargetSource, getQuarantinedLegacyTarget, saveMacroTargets, type StoredMacroTargets } from './macroStorage';
 import { MEALS_PER_DAY } from './macroCalculator';
-import { macroCalories, parseTarget } from './macroEnergy';
+import { macroCalories } from './macroEnergy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import type { ProfileResponse as ProfileContract, UserGoalV2 } from '@fitsy/shared';
@@ -29,51 +30,6 @@ export async function fetchProfile(expectedUserId?: string): Promise<ProfileResp
     console.warn('[profileSync] fetchProfile failed:', err);
     return null;
   }
-}
-
-/** Build daily API targets from the complete local meal allocation. */
-async function buildProfileBody(): Promise<Record<string, unknown>> {
-    const [onboarding, macroSnapshot, discoverySnapshot] = await Promise.all([
-      getOnboardingData(),
-      getMacroTargetSnapshot(),
-      getDiscoveryMacroTargetSnapshot(),
-    ]);
-    const macros = macroSnapshot?.targets;
-    const partialFilter = !macros && discoverySnapshot?.mode === 'search';
-    const userId = (await supabase.auth.getSession()).data.session?.user?.id;
-    const unreconciledArchive = !macros && userId && await getArchivedMacroTarget(userId);
-
-    const body: Record<string, unknown> = {};
-
-    if (onboarding.birthday) body.birthday = onboarding.birthday;
-    if (onboarding.heightCm) body.heightCm = onboarding.heightCm;
-    if (onboarding.weightKg) body.weightKg = onboarding.weightKg;
-    if (onboarding.sex) body.sex = onboarding.sex;
-    if (onboarding.activity) body.activityLevel = onboarding.activity;
-    if (onboarding.goal) body.goal = onboarding.goal;
-
-    // Convert per-meal → daily (×MEALS_PER_DAY)
-    if (partialFilter || unreconciledArchive) body.preserveMacroTarget = true;
-    if (macros && !partialFilter) {
-      const p = parseTarget(macros.protein);
-      const c = parseTarget(macros.carbs);
-      const f = parseTarget(macros.fat);
-      const cal = parseTarget(macros.calories);
-      if (p !== null && c !== null && f !== null && cal !== null)
-        body.macroTarget = dailyMacroTarget(macros, await getMacroTargetSource());
-    }
-
-    return body;
-}
-
-function dailyMacroTarget(macros: StoredMacroTargets, source: 'automatic' | 'manual') {
-  const daily = {
-    proteinG: Math.round(Number(macros.protein) * MEALS_PER_DAY),
-    carbsG: Math.round(Number(macros.carbs) * MEALS_PER_DAY),
-    fatG: Math.round(Number(macros.fat) * MEALS_PER_DAY),
-  };
-  return { ...daily, source, calories: macroCalories({ protein: daily.proteinG,
-    carbs: daily.carbsG, fat: daily.fatG }) };
 }
 
 async function performProfilePush(expectedUserId: string, savedBody?: Record<string, unknown>): Promise<boolean> {
