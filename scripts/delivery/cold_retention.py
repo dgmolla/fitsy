@@ -318,13 +318,37 @@ def sync_recovery(config, archive):
             os.close(descriptor)
 
 
+def retain_attempts(config, claim, previous):
+    """Keep raw prior outcomes outside bounded dispatcher state, including legacy nested attempts."""
+    history = Path(config['state_dir']) / 'recovery' / claim['id'] / 'attempts.jsonl'
+    history.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    rows, current = [], previous
+    while current:
+        rows.append({key: value for key, value in current.items() if key != 'previous_attempt'})
+        current = current.get('previous_attempt')
+    with history.open('a') as stream:
+        os.fchmod(stream.fileno(), 0o600)
+        for row in reversed(rows):
+            stream.write(json.dumps(row, sort_keys=True) + '\n')
+        stream.flush()
+        os.fsync(stream.fileno())
+    for directory in (history.parent, history.parent.parent):
+        descriptor = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    return str(history)
+
+
 def retire(config, state, claim, save):
     records = state.setdefault('cold_retention', {})
     previous = records.get(claim['id'])
     record = {'issue': claim['issue'], 'claim': claim['id'], 'worktree': claim['worktree'],
               'state': 'preservation-intent', 'free_before': shutil.disk_usage(config['worktree_root']).free}
     if previous:
-        record['previous_attempt'] = previous
+        record['attempt_history'] = retain_attempts(config, claim, previous)
+        record['attempt_count'] = previous.get('attempt_count', 1) + 1
     records[claim['id']] = record; save()
     directory = None
     try:

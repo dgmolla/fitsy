@@ -345,6 +345,55 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertTrue(self.path.exists())
         self.assertEqual(self.c.state_data()['cold_retention_legacy'][str(receipt)]['state'], 'deferred')
 
+    def test_same_issue_compact_history_cannot_bypass_malformed_durable_origin(self):
+        damaged = {**self.new, 'worktree_origin_claim': []}
+        receipt = self.c.state / 'claims' / self.new['id'] / 'receipt.json'
+        raw = json.dumps(damaged)
+        receipt.write_text(raw)
+        self.c.set_board([fixture.item(385)])
+        self.c.tick()
+        self.assertIsNone(self.c.state_data()['active'], 'history must not authorize reuse rejected by durable receipt validation')
+        self.assertTrue(Path(self.new['worktree']).exists())
+        self.assertEqual(receipt.read_text(), raw)
+
+    def test_repeated_unchanged_recovery_deferrals_do_not_block_admission(self):
+        config = json.loads(self.c.config.read_text())
+        config['resource_pinned_checkouts'] = [str(self.path)]
+        self.c.config.write_text(json.dumps(config))
+        self.c.tick()  # Establish the real pinned ownership failure before compressing the unchanged retry clock.
+        script = str(fixture.SCRIPT)
+        code = f"""
+import importlib.util, json, sys
+from pathlib import Path
+sys.path.insert(0, {str(Path(script).parent)!r})
+import cold_retention as cold
+spec=importlib.util.spec_from_file_location('retry_dispatcher', {script!r})
+dispatcher=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(dispatcher)
+config=json.loads(Path({str(self.c.config)!r}).read_text())
+state=json.loads(Path({str(self.c.state / 'state.json')!r}).read_text())
+claim=json.loads(Path({str(self.c.state / 'claims' / self.old['id'] / 'receipt.json')!r}).read_text())
+def unchanged_pin(*args):
+    raise RuntimeError('explicit retained source/app pin')
+cold.guard=unchanged_pin
+sys.setrecursionlimit(100)
+for attempt in range(120):
+    cold.retire(config, state, claim, lambda: dispatcher.write_json(Path({str(self.c.state / 'state.json')!r}), state))
+"""
+        result = subprocess.run([sys.executable, '-c', code], cwd=self.c.base, env=self.c.env,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr[-2000:])
+        self.c.set_board([fixture.item(386)])
+        self.c.tick()
+        self.assertEqual(self.c.state_data()['active']['issue'], 386)
+        self.assertTrue((self.path / 'unfinished.txt').exists())
+        record = self.c.state_data()['cold_retention'][self.old['id']]
+        self.assertNotIn('previous_attempt', record)
+        archive = Path(record['attempt_history'])
+        rows = [json.loads(line) for line in archive.read_text().splitlines()]
+        self.assertGreaterEqual(len(rows), 120)
+        self.assertEqual(rows[0]['reason'], 'explicit retained source/app pin')
+
     def test_source_directory_named_pods_is_preserved(self):
         source = self.path / 'Pods'; source.mkdir(); (source / 'source.txt').write_text('real source')
         self.c.tick()

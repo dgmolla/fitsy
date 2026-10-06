@@ -117,14 +117,22 @@ def resume_checkout(config, state, issue):
     candidates = [entry for entry in state.get('history', []) if entry.get('issue') == issue
                   and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at')]
     # Compact in-memory history is not the durable ownership record.
+    durable = {}
     for receipt_path, entry in read_claims(config, state)[0]:
         if entry.get('issue') == issue and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at'):
             if receipt_path.parent.name != entry.get('id'):
                 raise RuntimeError('durable claim receipt identity mismatch')
+            durable[entry['id']] = entry
             candidates.append(entry)
     previous = max(candidates, key=lambda entry: entry.get('finished_at') or '', default=None)
     if not previous:
         return None
+    receipt = durable.get(previous.get('id'))
+    fields = ('id', 'issue', 'terminal', 'finished_at', 'worktree', 'branch',
+              'worktree_origin_claim', 'worktree_creation_intent', 'pid', 'launcher_pid', 'worker_pgid')
+    if receipt is None or any(receipt.get(key) != previous.get(key) for key in fields):
+        raise RuntimeError('latest predecessor lacks matching valid durable ownership receipt')
+    previous = receipt
     intended = Path(previous.get('worktree', ''))
     if previous.get('worktree_creation_intent') and not intended.exists():
         origin = previous.get('worktree_origin_claim', previous['id'])
