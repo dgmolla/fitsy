@@ -6,7 +6,7 @@ Readiness starts at the label event or first observation when historical event t
 
 One local host holds an exclusive file lock and writes a durable claim before touching the board or starting a worker.
 A claim snapshots the issue acceptance, implementation provider/model/effort, independent reviewer settings, advisory classifier response, and process identity.
-A first claim creates an owned Git worktree; an authorized same-issue successor reuses the latest ended checkout and branch after fresh registration, terminal-receipt, process/group, open-file and source-identity checks.
+A first claim creates an owned Git worktree; an authorized same-issue successor reuses the latest unfinished ended checkout and branch after fresh registration, terminal-receipt, process/group, open-file and source-identity checks.
 Tracked and untracked unfinished work stay in place, and the new claim records its creation claim, predecessor and exact resume identity.
 An uncertain retained checkout parks preparation rather than making a second dependency environment.
 Durable claim receipts preserve discovery after the compact in-memory history rolls over.
@@ -108,3 +108,53 @@ The coordinator preserves its raw bytes, checks live task ownership and command 
 
 Tick admission rereads and validates the installed configuration inside dispatcher.lock, so a completed installer pause wins over an earlier enabled snapshot.
 Device completion consumes one outstanding owner-bound intent; retries without another actual action cannot renew its use clock.
+
+## Pressure recovery and cold checkout retirement
+
+The cleanup high watermark defaults to 20 GiB and never falls below the worker floor plus scratch reserve.
+The unchanged 8 GiB floor plus 4 GiB reserve controls worker admission; the 20 GiB target begins recovery early rather than admitting marginal workers.
+At the existing idle tick, the dispatcher assesses one superseded ended checkout before returning any resource hold.
+Below the high watermark, a superseded checkout has a one-hour release grace by default; without pressure the default is 24 hours.
+Configure cleanup_high_watermark_bytes and superseded_checkout_grace_seconds explicitly when needed; polling never renews owner-use or release clocks.
+The latest unfinished checkout for each issue and resource_pinned_checkouts remain protected, along with active owners, incoming donor/artifact references and uncertain process/open-file ownership.
+Configured pins resolve aliases and normalized absolute paths; malformed pin configuration retains the candidate.
+An unreadable or non-object historical claim receipt records an exact deferred ownership assessment and disables destructive recovery for that tick while allowing otherwise eligible work through ordinary admission.
+Original failed receipt bytes remain unchanged; a known successor still needs its exact valid predecessor receipt before reuse.
+Completed mobile checkouts retain their hot proof paths until the existing issue-bound simulator retirement completes; missing or malformed build receipts alongside mobile evidence defer archival with a concrete reconciliation action.
+The incoming-reference scan traverses nested dependency links without following symlinks and stops after incoming_reference_scan_seconds (30 seconds maximum/default).
+A scan deadline or filesystem error preserves the checkout and records the unresolved assessment and next action; it never authorizes removal.
+Before normal Git removal, private Gitbundle recovery and every source/environment/app/raw-evidence archive member must pass exact content verification.
+Dirty or untracked source is retained in that verified archive; no original branch, terminal receipt, failure, review budget or UI approval is deleted or reset.
+One immutable content-addressed source bundle serves covered recoveries instead of copying repository history into every archive.
+Identical app files of at least 8 MiB use one private compressed recovery object with compressed and decoded hashes recorded in each manifest.
+Restore those objects to their exact manifest paths and recorded file modes, then verify decoded hashes; a damaged object retains the next hot source and cannot satisfy completed-source recovery.
+Original app binaries, screenshots and raw proof remain retrievable; only rebuildable Node/Pods are excluded from file archives.
+Immediate ended-owner compiler cleanup now includes exact Index.noindex roots alongside compiler intermediates/module caches and API build cache.
+Unknown ownership or unresolved file use persists a concrete deferred action; a retry never manufactures a removal or reclaimed-byte receipt.
+Measured free bytes and archive overhead are recorded separately from APFS logical sizes.
+This uses the existing dispatcher lock and timer; no additional worker, queue or reporting loop is created.
+
+A latest verified completed checkout becomes eligible after its integrated-checkout TTL, default 24 hours, only when the current board and canonical terminal shipping proof still agree.
+A local terminal label alone is insufficient.
+Its simulator proof paths stay hot until the existing device retirement procedure completes; a disconnected or expired device alone cannot waive those gates.
+If a completed issue is explicitly reopened, its new owner starts from current main and never overwrites the earlier accepted checkout or device proof.
+An already cold-retired completed source also requires valid retained archive hashes before reopening; unfinished latest work continues to reuse its original checkout.
+This never resets original issue budgets, histories, failures or source-bound approval receipts.
+
+Incoming-reference protection recursively includes all registered Git consumer roots, the managed dependency store and explicit absolute resource_reference_roots.
+Unavailable roots and scan deadlines preserve the candidate with an owned next action.
+An ambiguous Git removal preserves its durable intent, checks all recovery identities and archived objects, and reconciles absence without another deletion or a new byte-gain claim.
+
+Cold recovery preserves a private binary index.patch separately from working files and validates actual staged-source reconstruction before removal.
+Restore that patch with git apply --cached at the retained source head before restoring working files; this retains independently staged and unstaged versions.
+Legacy archives without verified index recovery remain unreconciled until original index state or explicit original clean-index proof is recovered; neither an absent path nor a valid working-file archive proves staged-source preservation.
+Archive preparation budgets incompressible retained files, Git recovery copies, index data and a temporary-write margin before allocation.
+Failed preparation removes only its unpublished attempt and temporary pack/object files while the original checkout remains; verified shared objects, archives and removal intents remain protected.
+An unresolved merge index remains hot until complete Git-state recovery can be proven.
+
+Superseded verified checkouts use the pressure grace, while the latest accepted checkout keeps the integrated-checkout TTL.
+Device retirement walks durable verified claim generations, retaining the exact historical terminal receipt, merged PR and successful main checks plus current Done and owner-release evidence.
+A later acceptance pointer cannot erase an older device retirement route, and current failed or reopened issue evidence still prevents retirement.
+
+Unreadable durable ownership parks admission when that issue has a retained registered checkout; an older valid receipt for the same path cannot prove a damaged successor finished.
+Already-authorized independent issues without a matching retained checkout remain dispatchable while the owner backfills the damaged metadata.
