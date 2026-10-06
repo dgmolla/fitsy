@@ -174,11 +174,11 @@ export async function getQuarantinedLegacyTarget(): Promise<MacroTargetSnapshot 
   return readSnapshot(LEGACY_UNOWNED_KEY);
 }
 
-export async function restoreQuarantinedLegacyTarget(): Promise<MacroTargetSnapshot | null> {
+export async function restoreQuarantinedLegacyTarget(expectedUserId?: string): Promise<MacroTargetSnapshot | null> {
   const userId = await currentUserId();
-  if (!userId) return null;
+  if (!userId || (expectedUserId !== undefined && userId !== expectedUserId)) return null;
   const snapshot = await getQuarantinedLegacyTarget();
-  if (!snapshot) return null;
+  if (!snapshot || await currentUserId() !== userId) return null;
   await saveMacroTargets(snapshot.targets, snapshot.mode, 'manual', userId);
   if (await currentUserId() !== userId) return null;
   await AsyncStorage.removeItem(LEGACY_UNOWNED_KEY);

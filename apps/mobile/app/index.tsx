@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Redirect, useNavigation } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,10 +14,12 @@ import { onboardingEntry, type EntryDestination } from '@/lib/onboardingEntry';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { openPurchasedDestination } from '@/lib/paywallJourney';
 import { replayPendingProfileSync } from '@/lib/profileSync';
+import { recoverStartupMealTargets } from '@/lib/startupMacroRecovery';
 
 export default function Index() {
   const navigation = useNavigation();
   const [destination, setDestination] = useState<EntryDestination>(null);
+  const targetRecovery = useRef<{ token: string; pending: Promise<boolean> } | null>(null);
   const { ready: purchasesReady, entitled, isLapsed, isUnknown, offering } = usePurchases();
 
   useEffect(() => {
@@ -34,13 +36,28 @@ export default function Index() {
           setDestination('/welcome/subscription-check');
           return;
         }
-        if (token && purchasesReady && entitled === true && targets) {
+        let hasTargets = targets;
+        if (token && purchasesReady && entitled === true && !hasTargets) {
+          if (targetRecovery.current?.token !== token) {
+            targetRecovery.current = { token, pending: recoverStartupMealTargets(mode => new Promise(resolveChoice => {
+              const kind = mode === 'search' ? 'search filter' : 'meal target';
+              Alert.alert(`Restore older ${kind}?`,
+                `This device has an older ${kind} without an account label. Restore it to this account?`, [
+                  { text: 'Set new targets', style: 'cancel', onPress: () => resolveChoice(false) },
+                  { text: 'Restore', onPress: () => resolveChoice(true) },
+                ], { cancelable: false });
+            })) };
+          }
+          hasTargets = await targetRecovery.current.pending;
+          if (!current) return;
+        }
+        if (token && purchasesReady && entitled === true && hasTargets) {
           const resumed = await openPurchasedDestination(navigation, { resumeOnly: true, isCurrent: () => current });
           if (!current || resumed) return;
         }
         setDestination(onboardingEntry({
           signedIn: !!token, resume, declined, completed: completed === 'true',
-          hasTargets: !!targets, purchasesReady, entitled, isLapsed, onboardingPreviewEntry,
+          hasTargets: !!hasTargets, purchasesReady, entitled, isLapsed, onboardingPreviewEntry,
           access: paywallVariants(offering?.metadata).access,
         }));
       } catch {

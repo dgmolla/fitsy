@@ -17,7 +17,7 @@ export function installAccountProfile(userId: string, initialTarget: { calories:
         macroTarget: target,
       }));
     }
-    return Promise.resolve(response({ active: true, status: 'active', expiresAt: null }));
+    return Promise.resolve(response({ verdict: 'active', active: true, status: 'active', expiresAt: null }));
   });
   return () => target;
 }

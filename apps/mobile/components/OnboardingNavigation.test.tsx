@@ -109,7 +109,7 @@ beforeEach(async () => {
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
   global.fetch = jest.fn().mockImplementation((url: string) => Promise.resolve(response(
-    String(url).includes('/api/user/profile') ? emptyProfile : { active: true, status: 'active', expiresAt: null },
+    String(url).includes('/api/user/profile') ? emptyProfile : { verdict: 'active', active: true, status: 'active', expiresAt: null },
   )));
 });
 
