@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, chmodSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 test.each([undefined, '54503F5C-8A3C-4699-8401-2E1D32890A24'])(
   'legacy shadow smoke cannot launch an unscoped or parallel native driver (owned UDID %s)',
@@ -17,7 +17,7 @@ test.each([undefined, '54503F5C-8A3C-4699-8401-2E1D32890A24'])(
       const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${dir}:${process.env.PATH}`, NATIVE_COMMAND_RECEIPT: touched };
       if (udid) env.FITSY_XCTEST_SIM_UDID = udid;
       else delete env.FITSY_XCTEST_SIM_UDID;
-      const result = spawnSync('bash', ['scripts/verify/mobile-e2e.sh'], { env, encoding: 'utf8' });
+      const result = spawnSync('bash', [resolve(__dirname, 'mobile-e2e.sh')], { env, encoding: 'utf8' });
       expect(result.status).toBe(2);
       expect(existsSync(touched)).toBe(false);
       const receipt = JSON.parse(result.stdout);
