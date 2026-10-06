@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { recoverStartupMealTargets } from './startupMacroRecovery';
 import { getDiscoveryMacroTargetSnapshot, getMacroTargets, getQuarantinedLegacyTarget,
   restoreQuarantinedLegacyTarget, saveMacroTargets } from './macroStorage';
-import { replayPendingProfileSync } from './profileSync';
+import { replayPendingProfileSync, requireProfileFromServer } from './profileSync';
 import { onboardingEntry } from './onboardingEntry';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
@@ -29,7 +29,8 @@ afterEach(() => { global.fetch = originalFetch; mockSession = null; });
 
 it('restores an upgraded independent filter before the existing startup routing decision', async () => {
   const confirm = jest.fn().mockResolvedValue(true);
-  const hasTargets = await recoverStartupMealTargets(confirm);
+  const recovery = await recoverStartupMealTargets(confirm);
+  const hasTargets = recovery === 'restored';
   expect(confirm).toHaveBeenCalledWith('search');
   expect(hasTargets).toBe(true);
   expect(await getMacroTargets()).toBeNull();
@@ -45,14 +46,14 @@ it('hydrates the current server allocation without offering ownerless device dat
   global.fetch = jest.fn().mockResolvedValue(response({ user,
     macroTarget: { calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' } }));
   const confirm = jest.fn();
-  expect(await recoverStartupMealTargets(confirm)).toBe(true);
+  expect(await recoverStartupMealTargets(confirm)).toBe('restored');
   expect(confirm).not.toHaveBeenCalled();
   expect(await getMacroTargets()).toEqual({ calories: '740', protein: '60', carbs: '80', fat: '20' });
   expect((await getQuarantinedLegacyTarget())?.targets).toEqual(legacy);
 });
 
 it('retains a declined legacy filter for later explicit recovery', async () => {
-  expect(await recoverStartupMealTargets(async () => false)).toBe(false);
+  expect(await recoverStartupMealTargets(async () => false)).toBe('absent');
   expect(await getDiscoveryMacroTargetSnapshot()).toBeNull();
   expect((await getQuarantinedLegacyTarget())?.targets).toEqual(legacy);
 });
@@ -61,7 +62,7 @@ it('does not transfer the confirmed filter when the account changes during the c
   expect(await recoverStartupMealTargets(async () => {
     mockSession = { access_token: 'other-token', user: { id: 'other' } };
     return true;
-  })).toBe(false);
+  })).toBe('account-changed');
   expect(await getDiscoveryMacroTargetSnapshot()).toBeNull();
   expect((await getQuarantinedLegacyTarget())?.targets).toEqual(legacy);
   expect(await restoreQuarantinedLegacyTarget('buyer')).toBeNull();
@@ -70,7 +71,7 @@ it('does not transfer the confirmed filter when the account changes during the c
 it('restores complete legacy grams with their settled energy and queues the daily API target', async () => {
   await AsyncStorage.setItem('@fitsy/macro_targets', JSON.stringify({ calories: '640', protein: '50', carbs: '65', fat: '20' }));
   const confirm = jest.fn().mockResolvedValue(true);
-  expect(await recoverStartupMealTargets(confirm)).toBe(true);
+  expect(await recoverStartupMealTargets(confirm)).toBe('restored');
   expect(confirm).toHaveBeenCalledWith('complete');
   expect(await getMacroTargets()).toEqual({ calories: '640', protein: '50', carbs: '65', fat: '20' });
   await replayPendingProfileSync();
@@ -83,7 +84,7 @@ it('restores complete legacy grams with their settled energy and queues the dail
 it('does not refetch or prompt for a current account target', async () => {
   await saveMacroTargets({ calories: '780', protein: '85', carbs: '65', fat: '20' });
   const confirm = jest.fn();
-  expect(await recoverStartupMealTargets(confirm)).toBe(true);
+  expect(await recoverStartupMealTargets(confirm)).toBe('restored');
   expect(confirm).not.toHaveBeenCalled();
   expect(global.fetch).not.toHaveBeenCalled();
 });
@@ -98,7 +99,7 @@ it('claims an intentional anonymous edit before accepting it as a signed-in targ
     calories: 2242, proteinG: 175, carbsG: 228, fatG: 70, source: 'manual',
   } }));
   const confirm = jest.fn();
-  expect(await recoverStartupMealTargets(confirm)).toBe(true);
+  expect(await recoverStartupMealTargets(confirm)).toBe('restored');
   expect(confirm).not.toHaveBeenCalled();
   expect(await getMacroTargets()).toEqual(manual);
   expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/user/profile'),
@@ -106,4 +107,25 @@ it('claims an intentional anonymous edit before accepting it as a signed-in targ
       proteinG: 175, carbsG: 228, fatG: 70, source: 'manual', calories: 2242,
     } }) }));
   expect(JSON.parse((await AsyncStorage.getItem('@fitsy/macro_targets'))!)._owner).toBe('buyer');
+});
+
+it('distinguishes an unavailable profile from confirmed absence without prompting or replacing data', async () => {
+  global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+  const confirm = jest.fn();
+  expect(await recoverStartupMealTargets(confirm)).toBe('unavailable');
+  expect(confirm).not.toHaveBeenCalled();
+  expect(await getMacroTargets()).toBeNull();
+  expect((await getQuarantinedLegacyTarget())?.targets).toEqual(legacy);
+  global.fetch = jest.fn().mockResolvedValue(response({ user, macroTarget: {
+    calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual',
+  } }));
+  expect(await recoverStartupMealTargets(confirm)).toBe('restored');
+  expect(await getMacroTargets()).toEqual({ calories: '740', protein: '60', carbs: '80', fat: '20' });
+  expect(confirm).not.toHaveBeenCalled();
+});
+
+it('prevents sign-in completion from treating a failed profile pull as a settled account', async () => {
+  global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+  await expect(requireProfileFromServer()).rejects.toThrow('Could not load your account targets');
+  expect(await getMacroTargets()).toBeNull();
 });

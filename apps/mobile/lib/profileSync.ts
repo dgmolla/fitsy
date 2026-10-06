@@ -218,31 +218,34 @@ export async function replayPendingProfileSync(): Promise<void> {
  * Pull the user's profile from the server and populate AsyncStorage.
  * Call after login to restore data on a new device.
  */
-export async function pullProfileFromServer(): Promise<void> {
+export type ProfileReconciliation = 'restored' | 'absent' | 'unavailable' | 'account-changed';
+
+export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
   try {
     const { data: startingAuth } = await supabase.auth.getSession();
     const expectedUserId = startingAuth.session?.user?.id;
-    if (!expectedUserId) return;
+    if (!expectedUserId) return 'account-changed';
     const stillCurrent = async () =>
       (await supabase.auth.getSession()).data.session?.user?.id === expectedUserId;
     await savedSyncQueue;
     await getQuarantinedLegacyTarget();
     const anonymousTarget = await getAnonymousCompleteTarget();
     const archivedTarget = anonymousTarget ? null : await getArchivedMacroTarget(expectedUserId);
-    if (!(await stillCurrent())) return;
+    if (!(await stillCurrent())) return 'account-changed';
     // An archive is a local cache, not evidence of an unsynced write.
     // Replay the account's durable pending request before reading the server.
     const claimedTarget = anonymousTarget?.targets;
     if (claimedTarget) {
       await saveMacroTargets(claimedTarget, 'complete', anonymousTarget!.source, expectedUserId);
-      if (!(await stillCurrent())) return;
+      if (!(await stillCurrent())) return 'account-changed';
       await syncSavedProfileToServer({ macroTarget: dailyMacroTarget(claimedTarget, anonymousTarget!.source) });
     }
-    if (!(await retryPendingProfileSync())) return;
-    if (!(await stillCurrent())) return;
+    if (!(await retryPendingProfileSync())) return 'unavailable';
+    if (!(await stillCurrent())) return 'account-changed';
     const revision = profileRevision;
     const profile = await fetchProfile(expectedUserId);
-    if (!profile || !(await stillCurrent()) || profileRevision !== revision) return;
+    if (!(await stillCurrent())) return 'account-changed';
+    if (!profile || profileRevision !== revision) return 'unavailable';
 
     // Write body stats to onboarding storage
     const onboarding: OnboardingData = {};
@@ -254,14 +257,14 @@ export async function pullProfileFromServer(): Promise<void> {
     if (profile.user.goal !== null) onboarding.goal = profile.user.goal;
 
     if (Object.keys(onboarding).length > 0) {
-      if (!(await stillCurrent())) return;
+      if (!(await stillCurrent())) return 'account-changed';
       await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify(onboarding));
     }
 
     // Convert daily → per-meal (÷MEALS_PER_DAY) and write to macro storage
     const localSnapshot = await getMacroTargetSnapshot();
     const discoverySnapshot = await getDiscoveryMacroTargetSnapshot();
-    if (!(await stillCurrent())) return;
+    if (!(await stillCurrent())) return 'account-changed';
     if (!localSnapshot && discoverySnapshot?.mode === 'search')
       await saveMacroTargets(discoverySnapshot.targets, 'search', 'manual', expectedUserId);
     if (profile.macroTarget) {
@@ -285,15 +288,25 @@ export async function pullProfileFromServer(): Promise<void> {
       // No server target exists. Recover the same account's local target
       // without replacing a newer remote allocation.
       await saveMacroTargets(archivedTarget.targets, 'complete', archivedTarget.source, expectedUserId);
-      if (!(await stillCurrent())) return;
+      if (!(await stillCurrent())) return 'account-changed';
       await syncSavedProfileToServer({ macroTarget: dailyMacroTarget(archivedTarget.targets, archivedTarget.source) });
       if (await stillCurrent() && !(await AsyncStorage.getItem(pendingKey(expectedUserId))))
         await clearArchivedMacroTarget(expectedUserId);
     }
+    if (!(await stillCurrent())) return 'account-changed';
+    return profile.macroTarget || archivedTarget ? 'restored' : 'absent';
   } catch (err) {
     // Use whatever is in local storage; surface in dev console so we can spot
     // post-login profile-pull regressions instead of silently falling back.
     // eslint-disable-next-line no-console
     console.warn('[profileSync] pullProfileFromServer failed:', err);
+    return 'unavailable';
   }
+}
+
+/** Authentication must not continue to completion on an unknown account profile. */
+export async function requireProfileFromServer(): Promise<void> {
+  const result = await pullProfileFromServer();
+  if (result === 'unavailable') throw new Error('Could not load your account targets. Try again when you are connected.');
+  if (result === 'account-changed') throw new Error('Account changed while loading targets.');
 }

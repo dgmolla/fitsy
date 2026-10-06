@@ -182,7 +182,7 @@ export async function restoreQuarantinedLegacyTarget(expectedUserId?: string): P
   if (!userId || (expectedUserId !== undefined && userId !== expectedUserId)) return null;
   const snapshot = await getQuarantinedLegacyTarget();
   if (!snapshot || await currentUserId() !== userId) return null;
-  await saveMacroTargets(snapshot.targets, snapshot.mode, 'manual', userId);
+  if (!await saveMacroTargets(snapshot.targets, snapshot.mode, 'manual', userId)) return null;
   if (await currentUserId() !== userId) return null;
   await AsyncStorage.removeItem(LEGACY_UNOWNED_KEY);
   return snapshot;
@@ -215,23 +215,44 @@ export async function getDiscoveryMacroTargets(): Promise<StoredMacroTargets | n
   return (await getDiscoveryMacroTargetSnapshot())?.targets ?? null;
 }
 
-export async function saveMacroTargets(targets: StoredMacroTargets, mode: MacroTargetMode = 'complete',
-  source: MacroTargetSource = 'manual', expectedUserId?: string | null): Promise<void> {
-  if (expectedUserId !== undefined && await currentUserId() !== expectedUserId) return;
-  const settled = mode === 'complete' ? normalizeCompleteTarget(targets) : targets;
-  const owner = expectedUserId !== undefined ? expectedUserId : await currentUserId();
-  const key = owner ? `${SEARCH_MACRO_TARGETS_KEY}:${owner}` : SEARCH_MACRO_TARGETS_KEY;
-  if (mode === 'complete' && !(await AsyncStorage.getItem(key))) {
-    const legacySearch = await readSnapshot(MACRO_TARGETS_KEY);
-    if (legacySearch?.mode === 'search') {
-      await AsyncStorage.setItem(key,
-        JSON.stringify({ ...legacySearch.targets, _mode: 'search' }));
+let targetMutationQueue: Promise<void> = Promise.resolve();
+
+function mutateTargets<T>(work: () => Promise<T>): Promise<T> {
+  const next = targetMutationQueue.then(work, work);
+  targetMutationQueue = next.then(() => {}, () => {});
+  return next;
+}
+
+/** Capture ownership at invocation, including ordinary UI saves. */
+export function saveMacroTargets(targets: StoredMacroTargets, mode: MacroTargetMode = 'complete',
+  source: MacroTargetSource = 'manual', expectedUserId?: string | null): Promise<boolean> {
+  const requestedOwner = currentUserId();
+  const settled = mode === 'complete' ? normalizeCompleteTarget(targets) : { ...targets };
+  return mutateTargets(async () => {
+    const owner = await requestedOwner;
+    if ((expectedUserId !== undefined && owner !== expectedUserId) || await currentUserId() !== owner) return false;
+    const key = owner ? `${SEARCH_MACRO_TARGETS_KEY}:${owner}` : SEARCH_MACRO_TARGETS_KEY;
+    if (mode === 'complete' && !(await AsyncStorage.getItem(key))) {
+      const legacySearch = await readSnapshot(MACRO_TARGETS_KEY);
+      if (await currentUserId() !== owner) return false;
+      if (legacySearch?.mode === 'search') {
+        await AsyncStorage.setItem(key,
+          JSON.stringify({ ...legacySearch.targets, _mode: 'search' }));
+      }
     }
-  }
-  if (expectedUserId !== undefined && await currentUserId() !== expectedUserId) return;
-  await AsyncStorage.setItem(mode === 'search' ? key : MACRO_TARGETS_KEY,
-    JSON.stringify({ ...settled, _mode: mode,
-      ...(mode === 'complete' ? { _owner: owner, _source: source } : {}) }));
+    if (await currentUserId() !== owner) return false;
+    const record = JSON.stringify({ ...settled, _mode: mode,
+      ...(mode === 'complete' ? { _owner: owner, _source: source } : {}) });
+    await AsyncStorage.setItem(mode === 'search' ? key : MACRO_TARGETS_KEY, record);
+    // Account cleanup and later saves wait for this write. If auth changes
+    // during native IO, remove only this obsolete shared active record.
+    if (await currentUserId() !== owner) {
+      if (mode === 'complete' && await AsyncStorage.getItem(MACRO_TARGETS_KEY) === record)
+        await AsyncStorage.removeItem(MACRO_TARGETS_KEY);
+      return false;
+    }
+    return true;
+  });
 }
 
 /** Explicitly linking a discovery filter replaces its independent search snapshot. */
@@ -245,7 +266,7 @@ export async function saveDiscoveryMacroTargets(targets: StoredMacroTargets, mod
     if (originalOwner && activeOwner !== originalOwner) return;
     const owner = originalOwner ?? activeOwner;
     const key = owner ? `${SEARCH_MACRO_TARGETS_KEY}:${owner}` : SEARCH_MACRO_TARGETS_KEY;
-    await saveMacroTargets(targets, mode, 'manual', owner);
+    if (!await saveMacroTargets(targets, mode, 'manual', owner)) return;
     if (await currentUserId() !== owner) return;
     if (!originalOwner && owner) await AsyncStorage.removeItem(SEARCH_MACRO_TARGETS_KEY);
     if (mode === 'complete') await AsyncStorage.removeItem(key);
@@ -256,20 +277,27 @@ export async function saveDiscoveryMacroTargets(targets: StoredMacroTargets, mod
 
 let discoverySaveQueue: Promise<void> = Promise.resolve();
 
-export async function clearMacroTargets(): Promise<void> {
+async function performClearMacroTargets(): Promise<void> {
   await AsyncStorage.removeItem(MACRO_TARGETS_KEY);
   await AsyncStorage.removeItem(await searchKey());
   await AsyncStorage.removeItem(SEARCH_MACRO_TARGETS_KEY);
 }
 
 /** Clear active local targets when the account leaves this device. */
-export async function clearActiveMacroTargets(): Promise<void> {
-  await AsyncStorage.removeItem(MACRO_TARGETS_KEY);
+async function performClearActiveMacroTargets(owner: string | null): Promise<void> {
+  const raw = await AsyncStorage.getItem(MACRO_TARGETS_KEY);
+  if (raw) {
+    try {
+      const saved = JSON.parse(raw) as { _owner?: string | null };
+      if (saved._owner === undefined || saved._owner === owner)
+        await AsyncStorage.removeItem(MACRO_TARGETS_KEY);
+    } catch { await AsyncStorage.removeItem(MACRO_TARGETS_KEY); }
+  }
   await AsyncStorage.removeItem(SEARCH_MACRO_TARGETS_KEY);
 }
 
 /** Preserve an unsynced complete target under its account before sign-out. */
-export async function archiveActiveMacroTargets(userId: string | null, forget = false): Promise<void> {
+async function performArchiveActiveMacroTargets(userId: string | null, forget: boolean): Promise<void> {
   if (!userId) return;
   if (forget) {
     await clearArchivedMacroTarget(userId);
@@ -283,4 +311,17 @@ export async function archiveActiveMacroTargets(userId: string | null, forget = 
     if (record._mode === 'complete' && (record._owner === userId || record._owner === null))
       await AsyncStorage.setItem(ownedTargetKey(userId), raw);
   } catch { /* Invalid local data cannot be replayed. */ }
+}
+
+export function clearMacroTargets(): Promise<void> {
+  return mutateTargets(performClearMacroTargets);
+}
+
+export function clearActiveMacroTargets(expectedOwner?: string | null): Promise<void> {
+  const owner = expectedOwner === undefined ? currentUserId() : Promise.resolve(expectedOwner);
+  return mutateTargets(async () => performClearActiveMacroTargets(await owner));
+}
+
+export function archiveActiveMacroTargets(userId: string | null, forget = false): Promise<void> {
+  return mutateTargets(() => performArchiveActiveMacroTargets(userId, forget));
 }

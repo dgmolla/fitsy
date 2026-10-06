@@ -4,7 +4,7 @@ import React from 'react';
 import { Alert, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { act, renderRouter, waitFor } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import Index from '../app/index';
 import { PurchasesProvider } from '../lib/usePurchases';
 import { getDiscoveryMacroTargetSnapshot, getMacroTargets } from '../lib/macroStorage';
@@ -83,4 +83,28 @@ it('hydrates a server target at startup while retaining the purchased selected-m
   expect(screen.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy();
   expect(await getMacroTargets()).toEqual({ calories: '740', protein: '60', carbs: '80', fat: '20' });
   expect(alert).not.toHaveBeenCalled();
+});
+
+it('holds replacement setup during a profile outage and retries the real startup recovery', async () => {
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  await AsyncStorage.setItem('onboardingComplete', 'true');
+  let offline = true;
+  global.fetch = jest.fn().mockImplementation((url: string) => {
+    if (String(url).includes('/api/user/profile')) {
+      if (offline) return Promise.reject(new Error('offline'));
+      return Promise.resolve(response({ ...emptyProfile, macroTarget: {
+        calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual',
+      } }));
+    }
+    return Promise.resolve(response({ verdict: 'active', active: true, expiresAt: null }));
+  });
+  const screen = renderJourney('/');
+  await waitFor(() => expect(screen.getByTestId('target-recovery-retry')).toBeTruthy());
+  expect(screen.getPathname()).toBe('/');
+  expect(await getMacroTargets()).toBeNull();
+  expect(screen.queryByText('Set your macro targets')).toBeNull();
+  offline = false;
+  fireEvent.press(screen.getByTestId('target-recovery-retry'));
+  await waitFor(() => expect(screen.getPathname()).toBe('/search'));
+  expect(await getMacroTargets()).toEqual({ calories: '740', protein: '60', carbs: '80', fat: '20' });
 });

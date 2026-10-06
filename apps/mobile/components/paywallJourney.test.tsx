@@ -75,6 +75,7 @@ function Meal() {
   return <Text>{JSON.stringify(route.params)}</Text>;
 }
 function MacroSetup() { return <Text>Set macro targets</Text>; }
+function Entry() { return <Text>Retry account recovery</Text>; }
 function WelcomeScreens() {
   return <Welcome.Navigator><Welcome.Screen name="payment" component={Payment} /><Welcome.Screen name="preview" component={Preview} /><Welcome.Screen name="notification-permission" component={Notifications} /></Welcome.Navigator>;
 }
@@ -82,7 +83,7 @@ function TabScreens() {
   return <Tabs.Navigator><Tabs.Screen name="saved" component={Saved} /><Tabs.Screen name="search" component={Search} /></Tabs.Navigator>;
 }
 function AppScreens() {
-  return <App.Navigator><App.Screen name="welcome" component={WelcomeScreens} /><App.Screen name="(tabs)" component={TabScreens} /><App.Screen name="restaurant/[id]" component={Meal} /><App.Screen name="macro-setup" component={MacroSetup} /></App.Navigator>;
+  return <App.Navigator><App.Screen name="welcome" component={WelcomeScreens} /><App.Screen name="(tabs)" component={TabScreens} /><App.Screen name="restaurant/[id]" component={Meal} /><App.Screen name="macro-setup" component={MacroSetup} /><App.Screen name="index" component={Entry} /></App.Navigator>;
 }
 function Journey() {
   // Expo wraps the app and carries deep-link destination params on its parent.
@@ -102,6 +103,10 @@ beforeEach(async () => {
 it('routes a restored account with no local targets through macro setup', async () => {
   action = 'resubscribe';
   await clearMacroTargets();
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null }, macroTarget: null,
+  }) });
   const screen = render(<Journey />);
   await waitFor(() => expect(screen.getByText('Set macro targets')).toBeTruthy());
   expect(screen.queryByText('Meal search')).toBeNull();
@@ -179,4 +184,17 @@ it('hydrates a paid account target before the shared purchase/restore/late redir
   await waitFor(() => expect(screen.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy());
   expect(screen.queryByText('Set macro targets')).toBeNull();
   expect(await getPaywallIntent()).toBeNull();
+});
+
+it('sends unavailable purchased recovery to the entry retry without consuming a selected meal', async () => {
+  action = 'resubscribe';
+  await clearMacroTargets();
+  mockSession = { access_token: 'buyer-token', user: { id: 'buyer' } };
+  await rememberPaywallIntent({ action: 'menu', restaurantId: 'varilla', menuItemId: 'meal-1' });
+  global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+  const screen = render(<Journey />);
+  await waitFor(() => expect(screen.getByText('Retry account recovery')).toBeTruthy());
+  expect(screen.queryByText('Set macro targets')).toBeNull();
+  expect(screen.queryByText('Meal search')).toBeNull();
+  expect((await getPaywallIntent())?.menuItemId).toBe('meal-1');
 });

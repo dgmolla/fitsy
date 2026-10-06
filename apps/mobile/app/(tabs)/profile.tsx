@@ -397,7 +397,7 @@ export default function ProfileScreen() {
       mode="complete"
       goal={profile.goal}
       onApply={async (updated) => {
-        await saveMacroTargets(updated);
+        if (!await saveMacroTargets(updated)) throw new Error('Account changed while saving targets');
         await queueSavedProfileToServer();
         deliverQueuedProfile();
         setFilterVisible(false);

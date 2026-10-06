@@ -54,10 +54,14 @@ export async function openPurchasedDestination(navigation: Navigation, options?:
   const resume = options && 'resumeOnly' in options;
   const intent = resume ? await getPurchasedContinuation() : await getPaywallIntent();
   if (resume && (!intent || !options.isCurrent())) return false;
-  if (options && 'requireTargets' in options && !(await hasSavedMealTargets())
-    && !(await recoverStartupMealTargets(confirmLegacyMacroRecovery))) {
-    resetJourney(navigation, { index: 0, routes: [{ name: 'macro-setup' }] });
-    return true;
+  if (options && 'requireTargets' in options && !(await hasSavedMealTargets())) {
+    const recovery = await recoverStartupMealTargets(confirmLegacyMacroRecovery);
+    if (recovery !== 'restored') {
+      // The entry resolver owns retry for unavailable account data. Only a
+      // confirmed absent allocation may offer replacement target setup.
+      resetJourney(navigation, { index: 0, routes: [{ name: recovery === 'absent' ? 'macro-setup' : 'index' }] });
+      return true;
+    }
   }
   const routes = [nestedRoute('(tabs)', { index: 0, routes: [{ name: 'search', ...(intent?.query ? { params: { query: intent.query } } : {}) }] }),
     ...(intent?.restaurantId ? [{ name: 'restaurant/[id]', params: {

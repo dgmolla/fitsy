@@ -137,7 +137,7 @@ export default function MacroSetupScreen() {
     try {
       const cal = computeCalories(values);
       const mealTargets = macrosToStored(dailyToPerMealMacros({ ...values, calories: cal }));
-      await saveMacroTargets(mealTargets, 'complete', activeFilter === 'recommended' && !customizedRef.current ? 'automatic' : 'manual');
+      if (!await saveMacroTargets(mealTargets, 'complete', activeFilter === 'recommended' && !customizedRef.current ? 'automatic' : 'manual')) throw new Error('Account changed while saving targets');
       if (!fromOnboarding) {
         await clearOnboardingResume();
         await queueSavedProfileToServer();

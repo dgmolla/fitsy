@@ -78,7 +78,7 @@ function PlanReadyScreen() {
     const isCurrent = begin();
     setBusy(true);
     try {
-      await saveMacroTargets(settled, 'complete', data.targetMode === 'known' || manuallyEdited.current ? 'manual' : 'automatic');
+      if (!await saveMacroTargets(settled, 'complete', data.targetMode === 'known' || manuallyEdited.current ? 'manual' : 'automatic')) throw new Error('Account changed while saving targets');
       await saveOnboardingField('targetBasis', basisOf(data));
       await saveOnboardingField('targetChoiceInProgress', false);
       if (!isCurrent()) return;

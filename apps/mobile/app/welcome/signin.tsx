@@ -6,7 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
 import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
-import { pullProfileFromServer } from '@/lib/profileSync';
+import { requireProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { OnboardingAccountSummary } from '@/components/OnboardingAccountSummary';
 import { WelcomeAuthActions } from '@/components/WelcomeAuthActions';
@@ -79,7 +79,7 @@ export default function SignInScreen() {
     await claimPaywallIntent(r.user.id);
     // Reconcile account targets before completion can queue a profile write.
     // The selected-meal intent still owns the destination, not target freshness.
-    if (outOfArea !== '1' && isCurrent()) await pullProfileFromServer();
+    if (outOfArea !== '1' && isCurrent()) await requireProfileFromServer();
     await captureIdentity(r.user.id, r.user.email);
     if (!isCurrent()) return;
     await navigateAfterAuth(r.isNewUser, isCurrent);

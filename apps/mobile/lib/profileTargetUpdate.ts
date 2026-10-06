@@ -9,7 +9,7 @@ export async function updateProfileFieldAndTargets<K extends keyof OnboardingDat
   const profile = await getOnboardingData();
   if (await getMacroTargetSource() === 'automatic') {
     const targets = macrosToStored(calculateMacros(profile));
-    await saveMacroTargets(targets, 'complete', 'automatic');
+    if (!await saveMacroTargets(targets, 'complete', 'automatic')) throw new Error('Account changed while saving targets');
     return { profile, targets };
   }
   return { profile, targets: await getMacroTargets() };

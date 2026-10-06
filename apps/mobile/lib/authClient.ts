@@ -51,7 +51,7 @@ export async function clearToken(options: { forgetTargets?: boolean } = {}): Pro
     // signOut may fail offline — don't let that block local cleanup.
   });
   await SecureStore.deleteItemAsync(TOKEN_KEY);
-  await clearActiveMacroTargets();
+  await clearActiveMacroTargets(data.session?.user?.id ?? null);
 }
 
 /**

@@ -7,7 +7,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable } from 'react-native';
 import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
-import { pullProfileFromServer } from '@/lib/profileSync';
+import { requireProfileFromServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { BRAND, EDITORIAL, FONTS } from '@/lib/brand';
 import { getMacroTargets } from '@/lib/macroStorage';
@@ -54,7 +54,7 @@ export default function LoginScreen() {
           .then(async (result) => {
             trackAuthSuccess({ provider: 'google', is_new_user: result.isNewUser });
             await captureIdentity(result.user.id, result.user.email);
-            await pullProfileFromServer();
+            await requireProfileFromServer();
             setGoogleLoading(false);
             router.replace('/(tabs)/search');
           })
@@ -76,7 +76,7 @@ export default function LoginScreen() {
       const result = await appleSignIn();
       trackAuthSuccess({ provider: 'apple', is_new_user: result.isNewUser });
       await captureIdentity(result.user.id, result.user.email);
-      if (!result.isNewUser) await pullProfileFromServer();
+      if (!result.isNewUser) await requireProfileFromServer();
       router.replace('/(tabs)/search');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
@@ -105,7 +105,7 @@ export default function LoginScreen() {
       const r = await devLogin();
       trackAuthSuccess({ provider: 'dev', is_new_user: false });
       await captureIdentity(r.user.id, r.user.email);
-      await pullProfileFromServer();
+      await requireProfileFromServer();
       router.replace('/(tabs)/search');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Dev login failed';
