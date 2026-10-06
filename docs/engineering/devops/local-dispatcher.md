@@ -155,3 +155,6 @@ An unresolved merge index remains hot until complete Git-state recovery can be p
 Superseded verified checkouts use the pressure grace, while the latest accepted checkout keeps the integrated-checkout TTL.
 Device retirement walks durable verified claim generations, retaining the exact historical terminal receipt, merged PR and successful main checks plus current Done and owner-release evidence.
 A later acceptance pointer cannot erase an older device retirement route, and current failed or reopened issue evidence still prevents retirement.
+
+Unreadable durable ownership parks admission when that issue has a retained registered checkout; an older valid receipt for the same path cannot prove a damaged successor finished.
+Already-authorized independent issues without a matching retained checkout remain dispatchable while the owner backfills the damaged metadata.

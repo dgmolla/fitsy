@@ -267,7 +267,7 @@ class PressureRetentionProcessTest(unittest.TestCase):
 
     def test_malformed_old_receipt_does_not_stall_ready_dispatch(self):
         bad = self.c.state / 'claims' / 'unknown-legacy' / 'receipt.json'; bad.parent.mkdir(); bad.write_text('{broken')
-        self.c.set_board([fixture.item(385)]); self.c.tick()
+        self.c.set_board([fixture.item(386)]); self.c.tick()
         self.assertIsNotNone(self.c.state_data()['active'], 'damaged legacy metadata must not stall unrelated ready work')
         self.assertTrue(self.path.exists(), 'unknown legacy ownership disables destructive recovery this tick')
         record = self.c.state_data()['cold_retention_legacy'][str(bad)]
@@ -276,8 +276,9 @@ class PressureRetentionProcessTest(unittest.TestCase):
 
     def test_nonobject_old_receipt_does_not_stall_ready_dispatch(self):
         bad = self.c.state / 'claims' / 'unknown-legacy' / 'receipt.json'; bad.parent.mkdir(); bad.write_text('[]')
-        self.c.set_board([fixture.item(385)]); self.c.tick()
+        self.c.set_board([fixture.item(386)]); self.c.tick()
         self.assertIsNotNone(self.c.state_data()['active'])
+        self.assertEqual(self.c.state_data()['active']['issue'], 386)
         self.assertTrue(self.path.exists())
         self.assertEqual(self.c.state_data()['cold_retention_legacy'][str(bad)]['state'], 'deferred')
         self.assertEqual(bad.read_text(), '[]')
@@ -285,8 +286,9 @@ class PressureRetentionProcessTest(unittest.TestCase):
     def test_invalid_owner_path_type_does_not_stall_ready_dispatch(self):
         bad = self.c.state / 'claims' / 'unknown-legacy' / 'receipt.json'; bad.parent.mkdir()
         raw = json.dumps({'worktree':['unknown-owner']}); bad.write_text(raw)
-        self.c.set_board([fixture.item(385)]); self.c.tick()
+        self.c.set_board([fixture.item(386)]); self.c.tick()
         self.assertIsNotNone(self.c.state_data()['active'])
+        self.assertEqual(self.c.state_data()['active']['issue'], 386)
         self.assertTrue(self.path.exists())
         self.assertEqual(self.c.state_data()['cold_retention_legacy'][str(bad)]['state'], 'deferred')
         self.assertEqual(bad.read_text(), raw)
@@ -354,6 +356,23 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.c.tick()
         self.assertTrue((self.path / 'unfinished.txt').is_file())
         return self.c.state_data()['active']
+
+    def test_older_valid_shared_checkout_receipt_cannot_hide_unreadable_successor(self):
+        fixture.run('git', 'worktree', 'remove', self.new['worktree'], cwd=self.c.repo)
+        successor = {**self.new, 'worktree': self.old['worktree'], 'branch': self.old['branch'],
+                     'worktree_origin_claim': self.old['id'], 'terminal': 'verified'}
+        receipt = self.c.state / 'claims' / self.new['id'] / 'receipt.json'
+        receipt.write_text(json.dumps(successor))
+        proof = self.path / '.evidence/accepted-proof.txt'
+        proof.write_text('synthetic completed successor proof must not be reopened')
+        receipt.write_text('{broken')
+        self.state['history'] = []
+        (self.c.state / 'state.json').write_text(json.dumps(self.state))
+        self.c.set_board([fixture.item(385)])
+        self.c.tick()
+        self.assertIsNone(self.c.state_data()['active'],
+                          'older valid same-path owner must not hide unreadable successor')
+        self.assertEqual(proof.read_text(), 'synthetic completed successor proof must not be reopened')
 
     def test_rolled_out_unreadable_same_issue_owner_blocks_fresh_main_checkout(self):
         self.assertIsNone(self.rollover_uncertain_tick(385),

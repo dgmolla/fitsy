@@ -124,14 +124,11 @@ def resume_checkout(config, state, issue):
         if registered.returncode:
             raise RuntimeError('uncertain ownership cannot inventory retained same-issue checkouts')
         root = Path(config['worktree_root']).resolve()
-        known = {Path(entry['worktree']).resolve() for _, entry in receipts
-                 if entry.get('issue') == issue and entry.get('worktree') and
-                 entry.get('terminal') and entry.get('finished_at')}
         for line in registered.stdout.split('\0'):
             if not line.startswith('worktree '):
                 continue
             path = Path(line[9:]).resolve()
-            if path.parent == root and re.fullmatch(r'fitsy-issue-' + str(issue) + r'-[0-9a-f]{8}', path.name) and path not in known:
+            if path.parent == root and re.fullmatch(r'fitsy-issue-' + str(issue) + r'-[0-9a-f]{8}', path.name):
                 raise RuntimeError('unreadable durable ownership for retained same-issue checkout: ' + str(path))
     for receipt_path, entry in receipts:
         if entry.get('issue') == issue and entry.get('worktree') and entry.get('terminal') and entry.get('finished_at'):
