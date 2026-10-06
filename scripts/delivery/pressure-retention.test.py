@@ -400,6 +400,25 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertTrue((consumer / 'node_modules').exists())
         self.assertEqual(self.c.state_data()['cold_retention'][self.old['id']]['state'], 'deferred')
 
+    def test_external_declared_alias_root_keeps_its_checkout_target(self):
+        alias = self.c.base / 'external-reference-alias'
+        alias.symlink_to(self.path, target_is_directory=True)
+        config = json.loads(self.c.config.read_text()); config['resource_reference_roots'] = [str(alias)]
+        self.c.config.write_text(json.dumps(config))
+        self.c.tick()
+        self.assertTrue(self.path.exists(), 'a declared external alias must not be resolved away before owner retirement')
+        self.assertEqual((alias / 'unfinished.txt').read_text(), 'retained unfinished source\n')
+        self.assertEqual(self.c.state_data()['cold_retention'][self.old['id']]['state'], 'deferred')
+
+    def test_declared_root_below_external_alias_keeps_its_checkout_target(self):
+        child = self.path / 'retained-source'; child.mkdir(); (child / 'data').write_text('source under alias')
+        alias = self.c.base / 'external-reference-parent'; alias.symlink_to(self.path, target_is_directory=True)
+        config = json.loads(self.c.config.read_text()); config['resource_reference_roots'] = [str(alias / 'retained-source')]
+        self.c.config.write_text(json.dumps(config))
+        self.c.tick()
+        self.assertTrue(self.path.exists())
+        self.assertEqual((alias / 'retained-source/data').read_text(), 'source under alias')
+
     def test_ambiguous_git_removal_keeps_intent_and_reconciles_reopened_work(self):
         from cold_retention import recover
         from resource_lifecycle import resume_checkout

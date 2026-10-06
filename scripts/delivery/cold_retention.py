@@ -49,12 +49,19 @@ def incoming(config, target):
     extra = config.get('resource_reference_roots', [])
     if not isinstance(extra, list) or any(not isinstance(root, str) or not Path(root).is_absolute() for root in extra):
         raise RuntimeError('invalid explicit consumer roots; retain checkout')
-    roots = {Path(config['worktree_root']).resolve()}
-    roots.update(Path(entry[9:]).resolve() for entry in registered.stdout.split('\0') if entry.startswith('worktree '))
-    roots.update(Path(root).resolve() for root in extra)
+    declared = [Path(config['worktree_root']), *(Path(entry[9:]) for entry in registered.stdout.split('\0') if entry.startswith('worktree ')),
+                *(Path(root) for root in extra)]
     dependencies = Path(config['state_dir']) / 'dependencies'
     if dependencies.exists():
-        roots.add(dependencies.resolve())
+        declared.append(dependencies)
+    roots = set()
+    for root in declared:
+        if time.monotonic() >= deadline:
+            raise RuntimeError('incoming-reference scan deadline; retain uncertain checkout')
+        resolved = root.resolve()
+        if resolved.is_relative_to(target) and any(part.is_symlink() for part in (root, *root.parents)):
+            return [str(root)]  # Preserve the declared alias before normalization hides its incoming reference.
+        roots.add(resolved)
     if any(not root.is_dir() for root in roots):
         raise RuntimeError('registered or declared consumer root unavailable; retain checkout')
     pending = [str(root) for root in roots if not any(other != root and root.is_relative_to(other) for other in roots)]
