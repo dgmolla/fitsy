@@ -182,7 +182,7 @@ def gh(config, *args, timeout=30):
 
 
 BOARD_FIELDS = ('Status', 'Priority', 'Progress', 'Blocker', 'Dependencies', 'Next action',
-                'Verified at', 'Started at')
+                'Verified at', 'Started at', 'Last progress at')
 BOARD_QUERY = """query($project:ID!, $after:String) {
   node(id:$project) { ... on ProjectV2 { items(first:100, after:$after) {
     totalCount pageInfo { hasNextPage endCursor }

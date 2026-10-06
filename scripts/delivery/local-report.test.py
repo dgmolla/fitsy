@@ -69,6 +69,26 @@ class LocalReportTest(unittest.TestCase):
             reporter.compose_update(report, state, '2026-09-27T04:30', now)
             self.assertEqual(report['editorial']['state'], 'fallback')
 
+    def test_malformed_optional_editorial_still_delivers_fallback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T04:35:00Z')
+            for malformed in ({'authored_at':0}, {'authored_at':'2026-09-27T04:30:00Z',
+                    'bullets':['One.','Two.','Three.'],'board_bindings':[]}):
+                reporter.save(state / 'editorial-update.json', malformed)
+                report = {'editorialFacts':[]}
+                message = reporter.compose_update(report, state, '2026-09-27T04:30', now)
+                self.assertEqual(report['editorial']['state'], 'fallback')
+                self.assertIn('No delivery worker', message)
+
+    def test_dependency_fallback_does_not_claim_completed_dependencies_block_work(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report = {'editorialFacts':[{'number':443,'status':'Queued','title':'Feature repair',
+                       'dependencies':'#442','blocker':'','held':False}]}
+            message = reporter.compose_update(report, Path(temporary), '2026-09-27T04:30')
+            self.assertNotIn('waiting on recorded holds or dependencies', message)
+            self.assertIn('eligibility', message)
+
     def test_history_pagination_and_legacy_marker_prevent_a_second_post(self):
         class PagedSlack(Slack):
             def call(self, method, params=None, payload=None):

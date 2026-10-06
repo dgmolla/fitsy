@@ -87,6 +87,8 @@ def compose_update(report, state, slot, now=None):
     path = state / 'editorial-update.json'
     try:
         update = json.loads(path.read_text())
+        if not isinstance(update, dict) or not isinstance(update.get('authored_at'), str):
+            raise ValueError('editorial timestamp must be a UTC string')
         authored = datetime.fromisoformat(update['authored_at'].replace('Z', '+00:00')).timestamp()
         bullets = update['bullets']
         if not 0 <= now - authored <= 45 * 60:
@@ -99,7 +101,8 @@ def compose_update(report, state, slot, now=None):
             raise ValueError('editorial update exceeds compact notification bounds')
         current = {str(item['number']): item['status'] for item in report.get('editorialFacts', [])}
         bindings = update.get('board_bindings', {})
-        if not bindings or any(current.get(str(number)) != status for number, status in bindings.items()):
+        if not isinstance(bindings, dict) or not bindings or any(
+                current.get(str(number)) != status for number, status in bindings.items()):
             raise ValueError('editorial evidence no longer matches board')
         report['editorial'] = {'authored_at': update['authored_at'], 'board_bindings': bindings,
                                'state': 'fresh', 'bullets': bullets}
@@ -115,11 +118,11 @@ def compose_update(report, state, slot, now=None):
             lines.append('Underway: ' + safe_copy(active[0]['title'], 120) + '. Acceptance is still pending.')
         else:
             lines.append('No delivery worker is marked active on the board; execution needs reconciliation.'
-                         if ready else 'No delivery worker is marked active; queued work is waiting on recorded holds or dependencies.')
+                         if ready else 'No delivery worker is marked active; queued eligibility needs reconciliation.')
         if report.get('summary', {}).get('shipped'):
             lines.append('Recently verified: ' + safe_copy(report['summary']['shipped'][0]['title'], 120) + '.')
         elif ready:
-            lines.append('Ready behind the current owner: ' + safe_copy(ready[0]['title'], 120) + '.')
+            lines.append('Queued without a recorded hold: ' + safe_copy(ready[0]['title'], 120) + '. Eligibility still needs confirmation.')
         else:
             lines.append('No new verified shipment in the last 24 hours.')
         blockers = [item for item in facts if item.get('blocker') and item['status'] == 'In flight']

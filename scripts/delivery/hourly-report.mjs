@@ -74,7 +74,7 @@ export function projectFromSnapshot(snapshot, now = new Date()) {
     throw new Error('Canonical report snapshot incomplete or stale');
   }
   const names = ['Status', 'Priority', 'Progress', 'Blocker', 'Dependencies', 'Next action',
-    'Verified at', 'Started at'];
+    'Verified at', 'Started at', 'Last progress at'];
   return { url: BOARD_URL, items: items.map(item => {
     if (names.some(name => !Object.hasOwn(item, name.toLowerCase())) || !Array.isArray(item.labels)) {
       throw new Error('Canonical report fields incomplete');

@@ -276,7 +276,7 @@ test('summary uses recent verified delivery and actionable board priority with b
   const snapshot = {observed_at:now.toISOString(),totalCount:1,items:[{
     id:'one',content:{type:'Issue',number:443,title:'Feature repair',url:'https://github.com/dgmolla/fitsy/issues/443'},
     labels:['dispatch-ready'],status:'Queued',priority:'Now',progress:'Repair',blocker:'',
-    dependencies:'','next action':'Review','verified at':null,'started at':null,
+    dependencies:'','next action':'Review','verified at':null,'started at':null,'last progress at':null,
   }]};
   const result = projectFromSnapshot(snapshot, now);
   assert.equal(result.items[0].fields.Status, 'Queued');
@@ -297,3 +297,13 @@ test('summary uses recent verified delivery and actionable board priority with b
   // Query-shape reproduction only; this is not a measured live GitHub point cost.
   assert.match(PROJECT_QUERY, /fieldValues\(first: 100\)/);
  });
+
+test('snapshot retains highlighted last progress timestamp', () => {
+  const snapshot = {observed_at:now.toISOString(),totalCount:1,items:[{
+    id:'one',content:{type:'Issue',number:443,title:'Feature repair'},labels:[],status:'In flight',
+    priority:'Now',progress:'Repair',blocker:'',dependencies:'','next action':'Review',
+    'verified at':null,'started at':null,'last progress at':'2026-09-26T18:10:00Z',
+  }]};
+  const report = buildReport(projectFromSnapshot(snapshot, now), [], {state:'pending'}, now);
+  assert.equal(report.highlights[0].lastProgressAt, '2026-09-26T18:10:00Z');
+});
