@@ -78,3 +78,15 @@ it('keeps unlinked legacy grams with independent calories out of complete target
   expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: legacy, mode: 'search' });
 });
 
+
+it.each([
+  { protein: '43', carbs: '79', fat: '10', calories: '573' },
+  { protein: '57', carbs: '47', fat: '17', calories: '571' },
+  { protein: '50', carbs: '14', fat: '35', calories: '571' },
+])('recognizes the retired diet picker output %j as a complete target', async legacy => {
+  await AsyncStorage.setItem(MACRO_TARGETS_KEY, JSON.stringify(legacy));
+  const restored = await getMacroTargetSnapshot();
+  expect(restored?.mode).toBe('complete');
+  expect(restored?.targets).toEqual({ ...legacy,
+    calories: String(Number(legacy.protein) * 4 + Number(legacy.carbs) * 4 + Number(legacy.fat) * 9) });
+});

@@ -241,7 +241,7 @@ async function performClearActiveMacroTargets(owner: string | null): Promise<voi
   if (raw) {
     try {
       const saved = JSON.parse(raw) as { _owner?: string | null };
-      if (saved._owner === undefined || saved._owner === owner)
+      if (saved._owner === undefined || saved._owner === null || saved._owner === owner)
         await AsyncStorage.removeItem(MACRO_TARGETS_KEY);
     } catch { await AsyncStorage.removeItem(MACRO_TARGETS_KEY); }
   }

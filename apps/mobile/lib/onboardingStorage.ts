@@ -171,7 +171,8 @@ export async function clearAccountOnboardingData(userId: string | null, forgetLe
     const record = await readRecord();
     if (forgetLegacy) await AsyncStorage.removeItem(LEGACY_KEY);
     else await retainLegacy(record);
-    if (record && (record._owner === userId || record._owner === undefined)) await AsyncStorage.removeItem(KEY);
+    if (record && (record._owner === userId || record._owner === undefined || record._owner === null))
+      await AsyncStorage.removeItem(KEY);
   });
 }
 

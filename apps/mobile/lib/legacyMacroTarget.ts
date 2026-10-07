@@ -27,10 +27,20 @@ export function isLegacyGeneratedShape(targets: MacroTextValues): boolean {
   const snap = (value: number, step: number, min: number, max: number) =>
     Math.max(min, Math.min(max, Math.round(value / step) * step));
   for (let daily = 1200; daily <= 3500; daily += 25) {
-    if (ratios.some(([p, c, f]) => {
-      const dailyProtein = snap(daily * p / 4, 5, 50, 300);
-      const dailyCarbs = snap(daily * c / 4, 5, 50, 500);
-      const dailyFat = snap(daily * f / 9, 2, 20, 150);
+    // These reproduce retired picker outputs for migration only. Their weights
+    // and old picker limits never constrain current recommendations or edits.
+    const denseProtein = Math.round(daily * 0.1);
+    const denseRemaining = daily - denseProtein * 4;
+    const historicalSplits: readonly (readonly [number, number, number])[] = [
+      ...ratios.map(([p, c, f]) => [daily * p / 4, daily * c / 4, daily * f / 9] as const),
+      [denseProtein, Math.round(denseRemaining * 0.55 / 4), Math.round(denseRemaining * 0.45 / 9)],
+      [Math.round(daily * 0.35 / 4), Math.round(daily * 0.10 / 4), Math.round(daily * 0.55 / 9)],
+      [Math.round(daily * 0.30 / 4), Math.round(daily * 0.55 / 4), Math.round(daily * 0.15 / 9)],
+    ];
+    if (historicalSplits.some(([p, c, f]) => {
+      const dailyProtein = snap(p, 5, 50, 300);
+      const dailyCarbs = snap(c, 5, 50, 500);
+      const dailyFat = snap(f, 2, 20, 150);
       return protein === Math.round(dailyProtein / mealSplit)
         && carbs === Math.round(dailyCarbs / mealSplit)
         && fat === Math.round(dailyFat / mealSplit)
@@ -50,4 +60,3 @@ export function legacyIndependentFilter(targets: MacroTextValues, generated: boo
   // Without an explicit mode, even a small mismatch may be intentional.
   return !generated && calories !== macroCalories({ protein, carbs, fat });
 }
-

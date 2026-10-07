@@ -230,3 +230,36 @@ it('never claims an automatic recommendation into a different account after a de
   mockSession = null;
   expect(await getMacroTargets()).toEqual(recommended);
 });
+
+it('keeps interrupted anonymous edits private to the first signed-in account after logout', async () => {
+  await AsyncStorage.clear();
+  mockSession = null;
+  const edited = { calories: '829', protein: '85', carbs: '75', fat: '21' };
+  await saveOnboardingField('weightKg', 140);
+  await saveMacroTargets(edited, 'complete', 'manual');
+  mockSession = { access_token: 'a-token', user: { id: 'a' } };
+  // Auth succeeded but reconciliation has not claimed the anonymous records.
+  await clearToken();
+  expect(await AsyncStorage.getItem('@fitsy/onboarding')).toBeNull();
+  expect(await AsyncStorage.getItem('@fitsy/macro_targets')).toBeNull();
+  expect(await AsyncStorage.getItem('@fitsy/macro_targets:a')).not.toBeNull();
+  mockSession = { access_token: 'b-token', user: { id: 'b' } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+    macroTarget: null,
+  }) });
+  expect(await pullProfileFromServer()).toBe('absent');
+  expect(await getMacroTargets()).toBeNull();
+  expect((global.fetch as jest.Mock).mock.calls.every(call => !call[1]?.method)).toBe(true);
+  mockSession = { access_token: 'a-token', user: { id: 'a' } };
+  let target: unknown = null;
+  global.fetch = jest.fn().mockImplementation((_url, init?: RequestInit) => {
+    if (init?.method === 'PATCH') target = JSON.parse(String(init.body)).macroTarget;
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({
+      user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+      macroTarget: target,
+    }) });
+  });
+  expect(await pullProfileFromServer()).toBe('restored');
+  expect(await getMacroTargets()).toEqual(edited);
+});
