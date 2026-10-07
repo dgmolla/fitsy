@@ -36,17 +36,21 @@ case "$SURFACE" in
     # explicitly for anything beyond the first rollback:
     #   rollback.sh mobile [group-id]
     EXPLICIT="${2:-}"
-    npx eas-cli@18 update:list --branch production --limit 5 --json --non-interactive > /tmp/eas-updates.json
-    python3 -c 'import json
-u=json.load(open("/tmp/eas-updates.json"))
+    mkdir -p ../../.evidence/ota
+    UPDATE_LIST="$(mktemp ../../.evidence/ota/rollback-list.XXXXXX)"
+    npx eas-cli@18 update:list --branch production --limit 5 --json --non-interactive > "$UPDATE_LIST"
+    python3 -c 'import json,sys
+u=json.load(open(sys.argv[1]))
 u=u.get("currentPage") or u.get("updates") or u
 for i,x in enumerate(u):
-    print("  [%d] %s %s" % (i, x["group"], x.get("message","")[:60]))'
+    print("  [%d] %s %s" % (i, x["group"], x.get("message","")[:60]))' "$UPDATE_LIST"
     if [ -n "$EXPLICIT" ]; then PREV_GROUP="$EXPLICIT"; else
-      PREV_GROUP="$(python3 -c 'import json;u=json.load(open("/tmp/eas-updates.json"));u=u.get("currentPage") or u.get("updates") or u;print(u[1]["group"] if len(u)>1 else "")')"
+      PREV_GROUP="$(python3 -c 'import json,sys;u=json.load(open(sys.argv[1]));u=u.get("currentPage") or u.get("updates") or u;print(u[1]["group"] if len(u)>1 else "")' "$UPDATE_LIST")"
     fi
     : "${PREV_GROUP:?no previous update group on the production branch}"
-    npx eas-cli@18 update:republish --group "$PREV_GROUP" --message "rollback: republish $PREV_GROUP" --non-interactive
+    # Match the verified production release surface; no Android binary is
+    # established by the iOS compatibility receipt.
+    npx eas-cli@18 update:republish --platform ios --group "$PREV_GROUP" --message "rollback: republish $PREV_GROUP" --non-interactive
     echo "republished group $PREV_GROUP; verify, then open an incident issue"
     ;;
   *) echo "usage: rollback.sh api|mobile" >&2; exit 1 ;;

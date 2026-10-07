@@ -10,8 +10,18 @@
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT/apps/mobile"
 MSG="${1:-$(git log -1 --format='%h: %s')}"
-npx eas-cli@18 update --branch production --environment production --non-interactive --message "$MSG" --json > /tmp/ota-result.json
-GROUP="$(python3 -c 'import json;d=json.load(open("/tmp/ota-result.json"));d=d[0] if isinstance(d,list) else d;print(d.get("group") or d.get("id",""))')"
+# Source checks run before export. Production env checks also compare the
+# environment-dependent Google scheme to the actual processed iOS binary.
+[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || { echo "Publish only integrated origin/main" >&2; exit 1; }
+[ -z "$(git status --porcelain)" ] || { echo "Publish only a clean checkout" >&2; exit 1; }
+node "$REPO_ROOT/scripts/deploy/native-compatibility.mjs"
+npx eas-cli@18 env:exec production 'node ../../scripts/deploy/native-compatibility.mjs --production-env' --non-interactive
+# No Android production binary has been verified. Never publish Android using
+# the iOS proof or infer safety merely from an unchanged appVersion runtime.
+mkdir -p "$REPO_ROOT/.evidence/ota"
+RESULT="$(mktemp "$REPO_ROOT/.evidence/ota/result.XXXXXX")"
+npx eas-cli@18 update --platform ios --branch production --environment production --non-interactive --message "$MSG" --json > "$RESULT"
+GROUP="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));d=d[0] if isinstance(d,list) else d;print(d.get("group") or d.get("id",""))' "$RESULT")"
 [ -n "$GROUP" ] || { echo "eas update returned no group id" >&2; exit 1; }
 echo "update group: $GROUP"
 # Verify: the newest update on the production branch must be OUR group.

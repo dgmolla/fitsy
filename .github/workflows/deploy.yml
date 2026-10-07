@@ -51,7 +51,7 @@ jobs:
           echo "$CHANGED"
           {
             echo "migrations=$(echo "$CHANGED" | grep -q '^prisma/migrations/' && echo true || echo false)"
-            echo "mobile=$(echo "$CHANGED" | grep -qE '^(apps/mobile/|packages/shared/)' && echo true || echo false)"
+            echo "mobile=$(echo "$CHANGED" | grep -qE '^(apps/mobile/|packages/shared/|scripts/deploy/(native-compatibility\.mjs|ios-binary-baseline\.json|ota\.sh)$)' && echo true || echo false)"
             echo "api=$(echo "$CHANGED" | grep -qE '^(apps/api/|packages/|prisma/|scripts/|vercel\.json|package\.json|package-lock\.json)' && echo true || echo false)"
           } >> "$GITHUB_OUTPUT"
 
@@ -141,18 +141,12 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [ -n "$EXPO_TOKEN" ]; then echo "has=true" >> "$GITHUB_OUTPUT"; else echo "has=false" >> "$GITHUB_OUTPUT"; fi
-      - name: Native change since the last release tag? OTA is unsafe
+      - name: Compare native inputs to the verified production iOS binary
         id: nativecheck
         run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
-          if [ -z "$LAST_TAG" ]; then
-            echo "no v* release tag; failing safe (no OTA)"
+          if ! node scripts/deploy/native-compatibility.mjs; then
             echo "unsafe=true" >> "$GITHUB_OUTPUT"
-            echo "reason=no v* release tag exists, so the shipped runtime cannot be established; tag the current App Store binary's commit (git tag vX.Y.Z <sha>) to enable OTA" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$LAST_TAG"..HEAD | grep -qE '^(apps/mobile/(app\.config\.ts|package\.json|eas\.json|ios/|android/)|package\.json$)'; then
-            echo "native changes since $LAST_TAG; users' binaries lack this runtime"
-            echo "unsafe=true" >> "$GITHUB_OUTPUT"
-            echo "reason=native files changed since $LAST_TAG; ship a binary via eas-build (tag) before any OTA" >> "$GITHUB_OUTPUT"
+            echo "reason=native inputs differ from the verified iOS binary or its baseline is unavailable; ship and verify a binary before any OTA" >> "$GITHUB_OUTPUT"
           else
             echo "unsafe=false" >> "$GITHUB_OUTPUT"
           fi
