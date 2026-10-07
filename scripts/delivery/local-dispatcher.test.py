@@ -433,6 +433,21 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(result['state'], 'deferred')
         self.assertEqual(result['retry_after'] - result['attempted_at'], 900)
 
+    def test_pruned_interrupted_deletion_intent_reconciles_absence(self):
+        state, old, scratch = self.deferred_scratch()
+        scratch = scratch.resolve()
+        shutil.rmtree(scratch)
+        state['history'] = [{'id': 'later-%s' % n, 'issue': 999, 'terminal': 'verified'} for n in range(100)]
+        state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
+            'removed': [], 'removal_intent': str(scratch)}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertEqual(result['state'], 'released', result)
+        self.assertEqual(result['reconciled_absent'], [str(scratch)])
+        self.assertEqual(result['removed'], [])
+        self.assertNotIn('removal_intent', result)
+
     @unittest.skipUnless(shutil.which('lsof'), 'real process open-file fixture requires lsof')
     def test_open_source_process_protects_scratch_before_first_release_assessment(self):
         state, old, checkout = self.ended_checkout()

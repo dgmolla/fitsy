@@ -227,9 +227,7 @@ def safe_scratch(path):
     return sorted(entry for entry in owned if not any(parent in owned for parent in entry.parents))
 
 
-def release_due(entry, assessment, now):
-    if not (entry.get('finished_at') and entry.get('terminal') and entry.get('worktree')):
-        return False
+def assessment_due(assessment, now):
     if assessment is None:
         return True
     if assessment.get('state') != 'deferred':
@@ -240,6 +238,11 @@ def release_due(entry, assessment, now):
                                 not isinstance(deadline, bool) and math.isfinite(deadline) and deadline <= now)
 
 
+def release_due(entry, assessment, now):
+    return bool(entry.get('finished_at') and entry.get('terminal') and entry.get('worktree')
+                and assessment_due(assessment, now))
+
+
 def cleanup_released(config, state, save):
     """Assess one ended claim per tick, preserving original claim and failure receipts."""
     if state.get('active'):
@@ -248,14 +251,14 @@ def cleanup_released(config, state, save):
     now = time.time()
     candidates = list(reversed(state.get('history', [])))
     retained = {entry.get('id') for entry in candidates}
-    # Retry retained failures even after their original claim leaves compact history.
-    if any(identity not in retained and result.get('state') == 'deferred'
-           for identity, result in assessed.items()):
+    # Retry failures and reconcile interrupted intents after compact history rollover.
+    pending = {identity for identity, result in assessed.items()
+               if identity not in retained and assessment_due(result, now)}
+    if pending:
         receipts, uncertain = read_claims(config, state)
         if uncertain:
             save()  # Preserve exact damaged receipts; they never become cleanup candidates.
-        candidates.extend(entry for _, entry in receipts if entry['id'] not in retained
-                          and assessed.get(entry['id'], {}).get('state') == 'deferred')
+        candidates.extend(entry for _, entry in receipts if entry['id'] in pending)
     eligible = [entry for entry in candidates
                 if release_due(entry, assessed.get(entry.get('id')), now)]
     # New releases and uncertain deletion intents precede due retries; then oldest due first.
