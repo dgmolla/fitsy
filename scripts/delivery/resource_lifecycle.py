@@ -251,13 +251,10 @@ def cleanup_released(config, state, save):
     now = time.time()
     candidates = list(reversed(state.get('history', [])))
     retained = {entry.get('id') for entry in candidates}
-    # Retry failures and reconcile interrupted intents after compact history rollover.
-    pending = {identity for identity, result in assessed.items()
-               if identity not in retained and assessment_due(result, now)}
-    receipts, uncertain = [], False
-    if pending or any(release_due(entry, assessed.get(entry.get('id')), now) for entry in candidates):
-        receipts, uncertain = read_claims(config, state)
-        candidates.extend(entry for _, entry in receipts if entry['id'] in pending)
+    # Durable ownership covers unassessed releases, retries and interrupted intents alike.
+    receipts, uncertain = read_claims(config, state)
+    durable = {entry['id']: entry for _, entry in receipts}
+    candidates.extend(entry for _, entry in receipts if entry['id'] not in retained)
     eligible = [entry for entry in candidates
                 if release_due(entry, assessed.get(entry.get('id')), now)]
     # New releases and uncertain deletion intents precede due retries; then oldest due first.
@@ -282,6 +279,17 @@ def cleanup_released(config, state, save):
         if uncertain:
             raise RuntimeError('durable ownership is uncertain; backfill damaged receipts before release')
         path = owned_checkout(config, previous)
+        fields = ('id', 'issue', 'terminal', 'finished_at', 'worktree', 'branch',
+                  'worktree_origin_claim', 'worktree_creation_intent', 'pid', 'launcher_pid', 'worker_pgid')
+        for known in candidates:
+            if not known.get('worktree'):
+                continue
+            if not isinstance(known['worktree'], str):
+                raise RuntimeError('known checkout owner has an unreadable resource path')
+            if Path(known['worktree']).resolve() == path:
+                receipt = durable.get(known.get('id'))
+                if receipt is None or any(receipt.get(key) != known.get(key) for key in fields):
+                    raise RuntimeError('known checkout owner terminal receipt is missing or changed')
         owners = [entry for _, entry in receipts if entry.get('worktree')
                   and Path(entry['worktree']).resolve() == path]
         if any(not entry.get('finished_at') or not entry.get('terminal') for entry in owners):

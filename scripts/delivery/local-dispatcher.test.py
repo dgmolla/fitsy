@@ -458,6 +458,25 @@ class DispatcherProcessTest(unittest.TestCase):
         self.tick()
         self.assertTrue(scratch.exists(), 'a successor requires its own terminal release proof')
 
+    def test_missing_successor_receipt_never_authorizes_older_release(self):
+        state, old, scratch = self.deferred_scratch()
+        successor = {**old, 'id': '00000000-0000-0000-0000-000000000789',
+                     'worktree_origin_claim': old['id'],
+                     'finished_at': (datetime.fromisoformat(old['finished_at'].replace('Z', '+00:00')) +
+                                     timedelta(seconds=1)).isoformat()}
+        state['history'].append(successor)
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick(); self.tick()
+        self.assertTrue(scratch.exists(), 'a missing known successor receipt cannot promote an older owner')
+
+    def test_unassessed_durable_release_survives_history_rollover(self):
+        state, old, scratch = self.deferred_scratch()
+        state['resource_releases'].pop(old['id'])
+        state['history'] = [{'id': 'later-%s' % n, 'issue': 999, 'terminal': 'verified'} for n in range(100)]
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertFalse(scratch.exists(), 'a valid unassessed durable release remains discoverable')
+
     def test_pruned_release_rechecks_current_open_holder(self):
         state, old, scratch = self.deferred_scratch()
         state['history'] = []
