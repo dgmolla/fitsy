@@ -188,7 +188,19 @@ export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
     if (!(await stillCurrent())) return 'account-changed';
     // An archive is a local cache, not evidence of an unsynced write.
     // Replay the account's durable pending request before reading the server.
-    const claimedTarget = anonymousTarget?.targets;
+    let claimedTarget = anonymousTarget?.targets;
+    // A recommendation is not an intentional replacement of account targets.
+    // Reconcile before claiming it, leaving anonymous data intact on failure.
+    const automaticClaim = anonymousTarget?.source === 'automatic';
+    if (automaticClaim) {
+      if (!(await retryPendingProfileSync())) return 'unavailable';
+      if (!(await stillCurrent())) return 'account-changed';
+      const revision = profileRevision;
+      const existing = await fetchProfile(expectedUserId);
+      if (!(await stillCurrent())) return 'account-changed';
+      if (!existing || profileRevision !== revision) return 'unavailable';
+      if (existing.macroTarget) claimedTarget = undefined;
+    }
     const claimedOnboarding = await claimAnonymousOnboardingData(expectedUserId);
     if (!(await stillCurrent())) return 'account-changed';
     if (claimedTarget) {
@@ -197,7 +209,8 @@ export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
       await syncSavedProfileToServer({ ...(claimedOnboarding ? await buildProfileBody() : {}),
         macroTarget: dailyMacroTarget(claimedTarget, anonymousTarget!.source) });
     } else if (claimedOnboarding) {
-      await syncSavedProfileToServer(await buildProfileBody());
+      await syncSavedProfileToServer({ ...await buildProfileBody(),
+        ...(automaticClaim ? { preserveMacroTarget: true } : {}) });
     }
     if (!(await retryPendingProfileSync())) return 'unavailable';
     if (!(await stillCurrent())) return 'account-changed';

@@ -153,3 +153,80 @@ it('never queues an archive as an active target while server reconciliation is u
   expect(pending.body).toEqual({ goal: 'maintain', preserveMacroTarget: true });
   expect(await AsyncStorage.getItem('@fitsy/macro_targets:existing-account')).not.toBeNull();
 });
+
+it.each(['manual', 'automatic'])('reads the account before an anonymous recommendation and preserves its %s target', async source => {
+  await AsyncStorage.clear();
+  mockSession = null;
+  await saveOnboardingField('goal', 'build_muscle');
+  await saveMacroTargets({ calories: '993', protein: '37', carbs: '137', fat: '33' }, 'complete', 'automatic');
+  mockSession = { access_token: 'account-token', user: { id: 'existing-account' } };
+  const target = { calories: 2910, proteinG: 298, carbsG: 263, fatG: 74, source };
+  const requests: string[] = [];
+  global.fetch = jest.fn().mockImplementation((_url: string, init?: RequestInit) => {
+    requests.push(init?.method ?? 'GET');
+    if (init?.method === 'PATCH') {
+      expect(JSON.parse(String(init.body))).toEqual({ goal: 'build_muscle', preserveMacroTarget: true });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({
+      user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: 'build_muscle' },
+      macroTarget: target,
+    }) });
+  });
+  expect(await pullProfileFromServer()).toBe('restored');
+  expect(requests).toEqual(['GET', 'PATCH', 'GET']);
+  expect(await getMacroTargets()).toEqual({ calories: '829', protein: '85', carbs: '75', fat: '21' });
+  expect(await getMacroTargetSource()).toBe(source);
+});
+
+it('claims an anonymous recommendation only after observing an account without a target', async () => {
+  await AsyncStorage.clear();
+  mockSession = null;
+  const recommended = { calories: '993', protein: '37', carbs: '137', fat: '33' };
+  await saveMacroTargets(recommended, 'complete', 'automatic');
+  mockSession = { access_token: 'account-token', user: { id: 'existing-account' } };
+  let target: unknown = null;
+  const requests: string[] = [];
+  global.fetch = jest.fn().mockImplementation((_url: string, init?: RequestInit) => {
+    requests.push(init?.method ?? 'GET');
+    if (init?.method === 'PATCH') target = JSON.parse(String(init.body)).macroTarget;
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({
+      user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+      macroTarget: target,
+    }) });
+  });
+  expect(await pullProfileFromServer()).toBe('restored');
+  expect(requests).toEqual(['GET', 'PATCH', 'GET']);
+  expect(target).toEqual({ proteinG: 130, carbsG: 480, fatG: 116, calories: 3484, source: 'automatic' });
+  expect(await getMacroTargets()).toEqual(recommended);
+});
+
+it('retains an anonymous recommendation without writes when the account read fails', async () => {
+  await AsyncStorage.clear();
+  mockSession = null;
+  const recommended = { calories: '993', protein: '37', carbs: '137', fat: '33' };
+  await saveMacroTargets(recommended, 'complete', 'automatic');
+  mockSession = { access_token: 'account-token', user: { id: 'existing-account' } };
+  global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+  expect(await pullProfileFromServer()).toBe('unavailable');
+  expect((global.fetch as jest.Mock).mock.calls.every(call => !call[1]?.method)).toBe(true);
+  expect(await AsyncStorage.getItem('@fitsy/pending_profile_sync:existing-account')).toBeNull();
+  mockSession = null;
+  expect(await getMacroTargets()).toEqual(recommended);
+});
+
+it('never claims an automatic recommendation into a different account after a delayed GET', async () => {
+  await AsyncStorage.clear();
+  mockSession = null;
+  const recommended = { calories: '993', protein: '37', carbs: '137', fat: '33' };
+  await saveMacroTargets(recommended, 'complete', 'automatic');
+  mockSession = { access_token: 'account-token', user: { id: 'existing-account' } };
+  global.fetch = jest.fn().mockImplementation(async () => {
+    mockSession = { access_token: 'other-token', user: { id: 'other-account' } };
+    return { ok: true, status: 200, json: async () => ({ user: {}, macroTarget: null }) };
+  });
+  expect(await pullProfileFromServer()).toBe('account-changed');
+  expect((global.fetch as jest.Mock).mock.calls).toHaveLength(1);
+  expect(await AsyncStorage.getItem('@fitsy/pending_profile_sync:other-account')).toBeNull();
+  mockSession = null;
+  expect(await getMacroTargets()).toEqual(recommended);
+});
