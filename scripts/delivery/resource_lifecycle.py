@@ -235,7 +235,8 @@ def assessment_due(assessment, now):
     deadline = assessment.get('retry_after')
     # Legacy failures get one guarded assessment, not a fabricated old-use timestamp.
     return deadline is None or (isinstance(deadline, (int, float)) and
-                                not isinstance(deadline, bool) and math.isfinite(deadline) and deadline <= now)
+                                not isinstance(deadline, bool) and
+                                (isinstance(deadline, int) or math.isfinite(deadline)) and deadline <= now)
 
 
 def release_due(entry, assessment, now):

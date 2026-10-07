@@ -369,7 +369,7 @@ class DispatcherProcessTest(unittest.TestCase):
 
     def test_malformed_retry_deadline_does_not_authorize_cleanup(self):
         state, old, scratch = self.deferred_scratch()
-        for bad in ['yesterday', True, float('inf')]:
+        for bad in ['yesterday', True, float('inf'), 10**1000]:
             with self.subTest(deadline=bad):
                 state['resource_releases'][old['id']]['retry_after'] = bad
                 (self.state / 'state.json').write_text(json.dumps(state))
