@@ -1,6 +1,7 @@
 """Process-level dispatcher checks with a disposable Git repository and fake transports."""
 
 import json
+from datetime import datetime, timedelta
 import importlib.util
 import os
 from pathlib import Path
@@ -306,6 +307,243 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertTrue(scratch.exists())
         self.assertEqual(self.state_data()['resource_releases'][old['id']]['state'], 'deferred')
         self.assertIn('ownership', self.state_data()['resource_releases'][old['id']]['reason'])
+
+    def test_deferred_release_retries_after_holder_ends_with_failure_history(self):
+        state, old, checkout = self.ended_checkout()
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
+        scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
+        state['resource_releases'].pop(old['id'])
+        (self.state / 'state.json').write_text(json.dumps(state))
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\necho owned-open-file\nexit 0\n')
+        self.tick()
+        deferred = self.state_data()
+        prior = deferred['resource_releases'][old['id']].copy()
+        self.assertEqual(prior['state'], 'deferred')
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\nexit 1\n')
+        deferred['resource_releases'][old['id']]['retry_after'] = time.time() - 1
+        (self.state / 'state.json').write_text(json.dumps(deferred))
+        self.tick()
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertFalse(scratch.exists(), 'ended open-file failure must be reconsidered')
+        self.assertEqual(result['state'], 'released')
+        self.assertTrue(any(x['reason'] == prior['reason'] for x in result['attempts']))
+        self.assertEqual(result['attempts'][0]['removed'], [])
+        self.assertEqual(self.state_data()['history'][-1]['exit_code'], 7)
+
+    def deferred_scratch(self):
+        state, old, checkout = self.ended_checkout()
+        scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
+        scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
+        state['resource_releases'][old['id']] = {
+            'issue': old['issue'], 'claim': old['id'], 'state': 'deferred', 'removed': [],
+            'reason': 'open files or uncertain file ownership'}
+        return state, old, scratch
+
+    def test_deferred_release_honors_backoff_without_repeated_assessment(self):
+        state, old, scratch = self.deferred_scratch()
+        state['resource_releases'][old['id']]['retry_after'] = time.time() + 3600
+        (self.state / 'state.json').write_text(json.dumps(state))
+        before = state['resource_releases'][old['id']].copy()
+        self.tick()
+        self.assertTrue(scratch.exists())
+        self.assertEqual(self.state_data()['resource_releases'][old['id']], before)
+
+    def test_legacy_deferred_release_rechecks_live_holder_and_backs_off(self):
+        state, old, scratch = self.deferred_scratch()
+        (self.state / 'state.json').write_text(json.dumps(state))
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\necho still-open\nexit 0\n')
+        self.tick()
+        first = self.state_data()['resource_releases'][old['id']]
+        self.assertTrue(scratch.exists())
+        self.assertEqual(first['state'], 'deferred')
+        self.assertGreaterEqual(first['retry_after'] - first['attempted_at'], 900)
+        state = self.state_data(); state['resource_releases'][old['id']]['retry_after'] = time.time() - 1
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        second = self.state_data()['resource_releases'][old['id']]
+        self.assertTrue(scratch.exists())
+        self.assertEqual(second['attempt_count'], 2)
+        self.assertEqual(second['retry_after'] - second['attempted_at'], 1800)
+        self.assertEqual(second['attempts'][0]['reason'], 'open files or uncertain file ownership')
+        self.assertEqual(second['attempts'][1]['reason'], first['reason'])
+
+    def test_malformed_retry_deadline_does_not_authorize_cleanup(self):
+        state, old, scratch = self.deferred_scratch()
+        for bad in ['yesterday', True, float('inf'), 10**1000]:
+            with self.subTest(deadline=bad):
+                state['resource_releases'][old['id']]['retry_after'] = bad
+                (self.state / 'state.json').write_text(json.dumps(state))
+                self.tick()
+                self.assertTrue(scratch.exists())
+                self.assertNotIn('attempt_count', self.state_data()['resource_releases'][old['id']])
+
+    def test_new_ended_claim_precedes_due_retry_without_erasing_old_failure(self):
+        state, old, scratch = self.deferred_scratch()
+        state['resource_releases'][old['id']]['retry_after'] = time.time() - 1
+        new = {**old, 'id': '00000000-0000-0000-0000-000000000123',
+               'worktree_origin_claim': old['id'],
+               'finished_at': (datetime.fromisoformat(old['finished_at'].replace('Z', '+00:00')) +
+                               timedelta(seconds=1)).isoformat()}
+        directory = self.state / 'claims' / new['id']; directory.mkdir()
+        (directory / 'receipt.json').write_text(json.dumps(new))
+        state['history'].append(new)
+        (self.state / 'state.json').write_text(json.dumps(state))
+        prior = state['resource_releases'][old['id']].copy()
+        self.tick()
+        result = self.state_data()
+        self.assertFalse(scratch.exists())
+        self.assertEqual(result['resource_releases'][new['id']]['state'], 'released')
+        self.assertEqual(result['resource_releases'][old['id']], prior)
+
+    def test_deferred_deletion_intent_honors_backoff(self):
+        state, old, scratch = self.deferred_scratch()
+        prior = state['resource_releases'][old['id']]
+        prior.update({'removal_intent': str(scratch), 'retry_after': time.time() + 900})
+        (self.state / 'state.json').write_text(json.dumps(state))
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\necho still-open\nexit 0\n')
+        self.tick(); self.tick()
+        self.assertEqual(self.state_data()['resource_releases'][old['id']], prior)
+        self.assertTrue(scratch.exists())
+
+    def test_deferred_release_uses_durable_receipt_after_history_rollover(self):
+        state, old, scratch = self.deferred_scratch()
+        state['history'] = [{'id': 'later-%s' % n, 'issue': 999, 'terminal': 'verified'} for n in range(100)]
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertFalse(scratch.exists(), 'durable ended receipt must survive compact history rollover')
+        self.assertEqual(self.state_data()['resource_releases'][old['id']]['state'], 'released')
+
+    def test_pruned_release_preserves_damaged_durable_receipt_and_scratch(self):
+        state, old, scratch = self.deferred_scratch()
+        state['history'] = []
+        receipt = self.state / 'claims' / old['id'] / 'receipt.json'
+        receipt.write_text('[]')
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists())
+        self.assertEqual(receipt.read_text(), '[]')
+        self.assertEqual(self.state_data()['resource_releases'][old['id']], state['resource_releases'][old['id']])
+        self.assertIn(str(receipt), self.state_data()['cold_retention_legacy'])
+
+    def test_pruned_release_cannot_use_older_owner_when_newer_receipt_is_damaged(self):
+        state, old, scratch = self.deferred_scratch()
+        state['history'] = []
+        newer = self.state / 'claims/newer-unresolved'; newer.mkdir()
+        receipt = newer / 'receipt.json'; receipt.write_text('[]')
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists(), 'unreadable newer ownership cannot authorize an older release')
+        self.assertEqual(receipt.read_text(), '[]')
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertEqual(result['state'], 'deferred')
+        self.assertEqual(result['attempts'][0], state['resource_releases'][old['id']])
+        self.assertIn(str(receipt), self.state_data()['cold_retention_legacy'])
+
+    def test_retained_release_cannot_use_older_owner_when_newer_receipt_is_damaged(self):
+        state, old, scratch = self.deferred_scratch()
+        newer = self.state / 'claims/newer-unresolved'; newer.mkdir()
+        receipt = newer / 'receipt.json'; receipt.write_text('[]')
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists(), 'compact history cannot bypass uncertain durable ownership')
+        self.assertEqual(receipt.read_text(), '[]')
+
+    def test_retained_release_preserves_valid_successor_without_terminal_release(self):
+        state, old, scratch = self.deferred_scratch()
+        successor = {**old, 'id': '00000000-0000-0000-0000-000000000456',
+                     'worktree_origin_claim': old['id'], 'terminal': None, 'finished_at': None}
+        directory = self.state / 'claims' / successor['id']; directory.mkdir()
+        (directory / 'receipt.json').write_text(json.dumps(successor))
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists(), 'a successor requires its own terminal release proof')
+
+    def test_missing_successor_receipt_never_authorizes_older_release(self):
+        state, old, scratch = self.deferred_scratch()
+        successor = {**old, 'id': '00000000-0000-0000-0000-000000000789',
+                     'worktree_origin_claim': old['id'],
+                     'finished_at': (datetime.fromisoformat(old['finished_at'].replace('Z', '+00:00')) +
+                                     timedelta(seconds=1)).isoformat()}
+        state['history'].append(successor)
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick(); self.tick()
+        self.assertTrue(scratch.exists(), 'a missing known successor receipt cannot promote an older owner')
+
+    def test_pruned_missing_successor_receipt_preserves_scratch(self):
+        state, old, scratch = self.deferred_scratch()
+        (self.state / 'claims/00000000-0000-0000-0000-000000000789').mkdir()
+        state['history'] = []
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists(), 'missing successor receipt survives compact history rollover')
+
+    def test_superseded_retry_settles_after_latest_owner_release(self):
+        state, old, scratch = self.deferred_scratch()
+        successor = {**old, 'id': '00000000-0000-0000-0000-000000000789',
+                     'worktree_origin_claim': old['id'],
+                     'finished_at': (datetime.fromisoformat(old['finished_at'].replace('Z', '+00:00')) +
+                                     timedelta(seconds=1)).isoformat()}
+        directory = self.state / 'claims' / successor['id']; directory.mkdir()
+        (directory / 'receipt.json').write_text(json.dumps(successor))
+        state['history'].append(successor)
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()  # Latest owner releases its scratch first.
+        self.assertFalse(scratch.exists())
+        self.tick()
+        settled = self.state_data()['resource_releases'][old['id']]
+        self.assertEqual(settled['state'], 'superseded', settled)
+        self.assertEqual(settled['superseded_by'], successor['id'])
+        self.assertEqual(settled['removed'], [])
+        self.assertEqual(settled['attempts'][0]['reason'], 'open files or uncertain file ownership')
+        self.tick()
+        self.assertEqual(self.state_data()['resource_releases'][old['id']], settled)
+
+    def test_pathless_same_generation_successor_preserves_scratch(self):
+        state, old, scratch = self.deferred_scratch()
+        successor = {**old, 'id': '00000000-0000-0000-0000-000000000abc',
+                     'worktree_origin_claim': old['id'], 'worktree': None,
+                     'finished_at': (datetime.fromisoformat(old['finished_at'].replace('Z', '+00:00')) +
+                                     timedelta(seconds=1)).isoformat()}
+        directory = self.state / 'claims' / successor['id']; directory.mkdir()
+        (directory / 'receipt.json').write_text(json.dumps(successor))
+        state['history'] = []
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists(), 'an explicitly linked successor without a path is unresolved ownership')
+
+    def test_unassessed_durable_release_survives_history_rollover(self):
+        state, old, scratch = self.deferred_scratch()
+        state['resource_releases'].pop(old['id'])
+        state['history'] = [{'id': 'later-%s' % n, 'issue': 999, 'terminal': 'verified'} for n in range(100)]
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertFalse(scratch.exists(), 'a valid unassessed durable release remains discoverable')
+
+    def test_pruned_release_rechecks_current_open_holder(self):
+        state, old, scratch = self.deferred_scratch()
+        state['history'] = []
+        (self.state / 'state.json').write_text(json.dumps(state))
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\necho still-open\nexit 0\n')
+        self.tick()
+        self.assertTrue(scratch.exists())
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertEqual(result['state'], 'deferred')
+        self.assertEqual(result['retry_after'] - result['attempted_at'], 900)
+
+    def test_pruned_interrupted_deletion_intent_reconciles_absence(self):
+        state, old, scratch = self.deferred_scratch()
+        scratch = scratch.resolve()
+        shutil.rmtree(scratch)
+        state['history'] = [{'id': 'later-%s' % n, 'issue': 999, 'terminal': 'verified'} for n in range(100)]
+        state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
+            'removed': [], 'removal_intent': str(scratch)}
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertEqual(result['state'], 'released', result)
+        self.assertEqual(result['reconciled_absent'], [str(scratch)])
+        self.assertEqual(result['removed'], [])
+        self.assertNotIn('removal_intent', result)
 
     @unittest.skipUnless(shutil.which('lsof'), 'real process open-file fixture requires lsof')
     def test_open_source_process_protects_scratch_before_first_release_assessment(self):
