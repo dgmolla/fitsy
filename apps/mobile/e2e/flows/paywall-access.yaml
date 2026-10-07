@@ -82,3 +82,15 @@ tags: [billing, discovery, onboarding, changed-journey]
     timeout: 15000
 # The post-decline preview and cold-resume route are exercised after an
 # observed paywall decline in onboarding-returning-preview.yaml.
+# A notification deep link cannot complete onboarding without entitlement.
+- openLink: com.fitsy.mobile://welcome/notification-permission
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible: "Continue with Apple"
+    timeout: 15000
+- assertNotVisible:
+    id: notification-skip
+- assertNotVisible:
+    id: paywall-logo

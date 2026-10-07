@@ -1,4 +1,5 @@
-import { mockState, selected, response, deferred, installEligibleTrialOffer, renderJourney, Alert, AsyncStorage, ExpoNotifications, NotificationHelpers, act, fireEvent, waitFor, readReminderPreferences, getPaywallIntent, rememberPaywallIntent } from './OnboardingNavigationHarness';
+import { mockState, selected, response, deferred, installEligibleTrialOffer, installPurchasedAccount, routes, renderJourney, Alert, AsyncStorage, ExpoNotifications, NotificationHelpers, act, fireEvent, waitFor, readReminderPreferences, getPaywallIntent, rememberPaywallIntent } from './OnboardingNavigationHarness';
+import Payment from '../app/welcome/payment';
 
 it('asks an anonymous trial reminder opt-in to sign in before permission, then returns to the choice', async () => {
   installEligibleTrialOffer();
@@ -81,7 +82,7 @@ it('does not sign out account B for account A push registration returning 401 la
 });
 
 it('shows only explicit notification choices after purchase resets earlier history', async () => {
-  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  await installPurchasedAccount();
   await rememberPaywallIntent(selected);
   const screen = renderJourney('/welcome/complete');
   await act(async () => { fireEvent.press(screen.getByText('Complete purchased onboarding')); });
@@ -90,10 +91,21 @@ it('shows only explicit notification choices after purchase resets earlier histo
   expect(screen.queryByTestId('welcome-back')).toBeNull();
 });
 
+it('rejects anonymous notification entry without completing or clearing onboarding', async () => {
+  await AsyncStorage.setItem('@fitsy/onboardingStep', 'signin');
+  await rememberPaywallIntent(selected);
+  const screen = renderJourney('/welcome/notification-permission', { ...routes, 'welcome/payment': () => <Payment /> });
+  expect(screen.queryByTestId('notification-skip')).toBeNull();
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
+  expect(await AsyncStorage.getItem('onboardingComplete')).toBeNull();
+  expect(await AsyncStorage.getItem('@fitsy/onboardingStep')).toBe('signin');
+});
+
 it('keeps Not now as the explicit route to the purchased restaurant and selected dish', async () => {
-  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  await installPurchasedAccount();
   await rememberPaywallIntent(selected);
   const screen = renderJourney('/welcome/notification-permission');
+  await screen.findByTestId('notification-skip');
   await act(async () => { fireEvent.press(screen.getByTestId('notification-skip')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/restaurant/varilla'));
   expect(screen.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy();

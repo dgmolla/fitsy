@@ -1,5 +1,33 @@
 import { mockState, selected, response, deferred, routes, installEligibleTrialOffer, renderJourney, Alert, AsyncStorage, act, fireEvent, waitFor, MacroSetup, getPaywallIntent, rememberPaywallIntent, getStoredToken, saveMacroTargets, saveOnboardingField, hasPaymentSignInContinuation, rememberPaymentSignInContinuation, hasPendingMealClaim, rememberPendingMealClaim } from './OnboardingNavigationHarness';
 import { installHardwareBackFixture } from './hardwareBackHarness';
+import { BOOT_VERDICT_CAP_MS } from '../lib/usePurchases';
+import { storeToken } from '../lib/authClient';
+import Purchases from 'react-native-purchases';
+
+it('offers retry without consuming checkout when a cold-start session read stalls', async () => {
+  await storeToken('test-token');
+  await rememberPaywallIntent(selected);
+  await rememberPaymentSignInContinuation();
+  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  jest.spyOn(Purchases, 'getAppUserID').mockResolvedValue('buyer');
+  jest.spyOn(Purchases, 'isAnonymous').mockResolvedValue(false);
+  const stalled = deferred<{ data: { session: typeof mockState.session } }>();
+  mockState.sessionRead = jest.fn().mockResolvedValueOnce({ data: { session: mockState.session } })
+    .mockImplementation(() => stalled.promise);
+  global.fetch = jest.fn().mockResolvedValue(response({ active: false, verdict: 'never_subscribed',
+    synced: true, lastRcVerifiedAt: new Date().toISOString(), stale: false }));
+  const screen = renderJourney('/');
+  await waitFor(() => expect((mockState.sessionRead as jest.Mock).mock.calls.length).toBeGreaterThan(1));
+  await act(async () => { await jest.advanceTimersByTimeAsync(BOOT_VERDICT_CAP_MS + 100); });
+  // Settled provider state can restart the root attempt with its own deadline.
+  await act(async () => { await jest.advanceTimersByTimeAsync(BOOT_VERDICT_CAP_MS + 100); });
+  expect(screen.getByTestId('purchase-identity-retry')).toBeTruthy();
+  expect(await hasPaymentSignInContinuation()).toBe(true);
+  mockState.sessionRead = async () => ({ data: { session: mockState.session } });
+  await act(async () => { fireEvent.press(screen.getByTestId('purchase-identity-retry')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(await getPaywallIntent()).toEqual(selected);
+});
 
 it('clears an anonymous locked-meal checkout on native hardware Back before cold launch', async () => {
   const back = installHardwareBackFixture();

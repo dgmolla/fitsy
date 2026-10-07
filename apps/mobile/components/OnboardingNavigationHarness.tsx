@@ -19,17 +19,18 @@ import Location from '../app/welcome/location-permission';
 import WelcomeLayout from '../app/welcome/_layout';
 import { PurchasesProvider } from '../lib/usePurchases';
 import * as PurchasesHooks from '../lib/usePurchases';
+import Purchases, { type CustomerInfo } from 'react-native-purchases';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 import { recordOnboardingComplete } from '../lib/onboardingCompletion';
 import { resetWelcomeJourney } from '../lib/paywallJourney';
-import { getStoredToken } from '../lib/authClient';
+import { getStoredToken, storeToken } from '../lib/authClient';
 import { saveMacroTargets } from '../lib/macroStorage';
 import { saveOnboardingField } from '../lib/onboardingStorage';
 import { hasPaymentSignInContinuation, rememberPaymentSignInContinuation } from '../lib/paymentSignInContinuation';
 import { hasPendingMealClaim, rememberPendingMealClaim } from '../lib/pendingMealClaim';
 
 type Session = { access_token: string; user: { id: string } } | null;
-export const mockState: { session: Session } = { session: null };
+export const mockState: { session: Session; sessionRead?: () => Promise<{ data: { session: Session } }> } = { session: null };
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('posthog-react-native', () => {
@@ -40,7 +41,7 @@ jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: {
-    getSession: async () => ({ data: { session: mockState.session } }),
+    getSession: async () => mockState.sessionRead ? mockState.sessionRead() : ({ data: { session: mockState.session } }),
     signOut: async () => { mockState.session = null; return { error: null }; },
     setSession: async () => { mockState.session = { access_token: 'test-token', user: { id: 'buyer' } }; return { data: { session: mockState.session } }; },
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
@@ -109,6 +110,7 @@ beforeEach(async () => {
   await AsyncStorage.clear();
   await SecureStore.deleteItemAsync('fitsy_authToken');
   mockState.session = null;
+  mockState.sessionRead = undefined;
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
@@ -122,6 +124,18 @@ export function installEligibleTrialOffer() {
   jest.spyOn(PurchasesHooks, 'usePurchases').mockReturnValue({ ready: true, entitled: false, offering,
     introEligibility: { annual: true }, introEligibilityReady: true, refreshOffering: jest.fn(),
   } as never);
+}
+export async function installPurchasedAccount() {
+  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  await storeToken('test-token');
+  const pro = { isActive: true, periodType: 'NORMAL', willRenew: true };
+  const info = { entitlements: { active: { pro }, all: { pro } } } as unknown as CustomerInfo;
+  jest.spyOn(Purchases, 'logIn').mockResolvedValue({ customerInfo: info, created: false });
+  jest.spyOn(Purchases, 'getAppUserID').mockResolvedValue('buyer');
+  jest.spyOn(Purchases, 'isAnonymous').mockResolvedValue(false);
+  jest.spyOn(Purchases, 'getCustomerInfo').mockResolvedValue(info);
+  global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', verdict: 'active',
+    synced: true, stale: false, lastRcVerifiedAt: new Date().toISOString(), expiresAt: '2030-01-08T12:00:00Z' }));
 }
 afterEach(() => { global.fetch = originalFetch; jest.restoreAllMocks(); });
 

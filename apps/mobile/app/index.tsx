@@ -10,28 +10,44 @@ import { getStoredToken } from '@/lib/authClient';
 import { supabase } from '@/lib/supabase';
 import { getMacroTargets } from '@/lib/macroStorage';
 import { readOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
-import { usePurchases } from '@/lib/usePurchases';
+import { BOOT_VERDICT_CAP_MS, usePurchases } from '@/lib/usePurchases';
 import { onboardingEntry, type EntryDestination } from '@/lib/onboardingEntry';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { openPurchasedDestination } from '@/lib/paywallJourney';
 import { bindPaymentSignInContinuation, clearPaymentSignInContinuation, hasPaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
 import { claimPaywallIntent, clearPaywallIntent, markPurchasedContinuation } from '@/lib/paywallIntent';
 import { clearPendingMealClaim, hasPendingMealClaim } from '@/lib/pendingMealClaim';
+import { withinMs } from '@/lib/async';
+import { PurchaseIdentityRecovery } from '@/components/PurchaseIdentityRecovery';
 
 export default function Index() {
   const navigation = useNavigation();
   const [destination, setDestination] = useState<EntryDestination>(null);
+  const [identityUnavailable, setIdentityUnavailable] = useState(false);
+  const [identityAttempt, setIdentityAttempt] = useState(0);
   const { ready: purchasesReady, entitled, isLapsed, isUnknown, offering } = usePurchases();
 
   useEffect(() => {
     let current = true;
+    setIdentityUnavailable(false);
     async function resolve() {
       try {
-        const [token, resume, declined, completed, targets, onboardingPreviewEntry, savedPaymentContinuation, pendingMealClaim] = await Promise.all([
+        const startupRead = Promise.all([
           getStoredToken(), getOnboardingResume(), readPaywallDecline(),
           AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY), getMacroTargets(), readOnboardingPreviewEntry(),
           hasPaymentSignInContinuation(), hasPendingMealClaim(),
         ]);
+        let startup = await withinMs(startupRead, BOOT_VERDICT_CAP_MS);
+        if (!current) return;
+        if (!startup) {
+          // getStoredToken also reads the SDK session. Bound the entire
+          // persisted-state prerequisite, not only the later identity claim.
+          setIdentityUnavailable(true);
+          startup = await startupRead;
+          if (!current) return;
+          setIdentityUnavailable(false);
+        }
+        const [token, resume, declined, completed, targets, onboardingPreviewEntry, savedPaymentContinuation, pendingMealClaim] = startup;
         if (!current) return;
         if (resume === '/welcome/out-of-area') {
           // A prior checkout cannot replace a waitlist signup, including
@@ -46,7 +62,18 @@ export default function Index() {
         if (token && (paymentSignInContinuation || pendingMealClaim)) {
           // Authentication can persist its session before sign-in claims the
           // anonymous meal. Recover that handoff before routing a cold start.
-          const { data } = await supabase.auth.getSession();
+          const sessionRead = supabase.auth.getSession();
+          let result = await withinMs(sessionRead, BOOT_VERDICT_CAP_MS);
+          if (!current) return;
+          if (!result) {
+            setIdentityUnavailable(true);
+            // Keep the claim intact for retry; an eventual answer may recover
+            // this attempt only while it is still the current root journey.
+            result = await sessionRead;
+            if (!current) return;
+            setIdentityUnavailable(false);
+          }
+          const { data } = result;
           if (!current) return;
           if (data.session?.user.id) {
             const userId = data.session.user.id;
@@ -94,7 +121,9 @@ export default function Index() {
     }
     void resolve();
     return () => { current = false; };
-  }, [purchasesReady, entitled, isLapsed, isUnknown, offering, navigation]);
+  }, [purchasesReady, entitled, isLapsed, isUnknown, offering, navigation, identityAttempt]);
+
+  if (identityUnavailable) return <PurchaseIdentityRecovery onRetry={() => setIdentityAttempt(attempt => attempt + 1)} />;
 
   if (!destination) {
     return (
