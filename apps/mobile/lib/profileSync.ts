@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { acknowledgePendingMacroTarget, getPendingMacroTarget } from './macroTargetSync';
 import { buildProfileBody, dailyMacroTarget } from './profileTargetBody';
 import { api } from './api';
@@ -9,7 +10,7 @@ import { macroCalories } from './macroEnergy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import type { ProfileResponse as ProfileContract, UserGoalV2 } from '@fitsy/shared';
-import { PENDING_PROFILE_SYNC_KEY, isProfileSyncForgotten, queueProfileStorage,
+import { PENDING_PROFILE_SYNC_KEY, isProfileSyncForgotten, profileWriteWasAcknowledged, recordProfileAcknowledgement, queueProfileStorage,
   waitForProfileStorage } from './profileSyncStorage';
 
 // This client opts into goalSchema=2; legacy clients keep the default contract.
@@ -85,7 +86,11 @@ async function retryPendingProfileSync(scheduleRetry = true): Promise<boolean> {
       macroTarget: dailyMacroTarget(targetIntent.targets, targetIntent.source),
     } : {}) };
     if (body.macroTarget) delete body.preserveMacroTarget;
-    if (!await performProfilePush(userId, body)) return false;
+    if (!await profileWriteWasAcknowledged(userId, raw, targetIntent?.raw ?? null)) {
+      if (!await performProfilePush(userId, body)) return false;
+      await recordProfileAcknowledgement(userId, raw, targetIntent?.raw ?? null);
+    }
+    if (isProfileSyncForgotten(userId)) return true;
     if (targetIntent) await acknowledgePendingMacroTarget(targetIntent);
     sentRaw = raw;
     return true;
@@ -143,7 +148,7 @@ async function performSavedProfileSync(revision: number,
   if (body.macroTarget) delete body.preserveMacroTarget;
   if ((await supabase.auth.getSession()).data.session?.user?.id !== userId || isProfileSyncForgotten(userId)) return;
   await AsyncStorage.setItem(pendingKey(userId),
-    JSON.stringify({ revision, body }));
+    JSON.stringify({ revision, operationId: Crypto.randomUUID(), body }));
 }
 
 export function queueSavedProfileToServer(bodyOverride?: Record<string, unknown>): Promise<void> {

@@ -263,3 +263,28 @@ it('keeps interrupted anonymous edits private to the first signed-in account aft
   expect(await pullProfileFromServer()).toBe('restored');
   expect(await getMacroTargets()).toEqual(edited);
 });
+
+
+it('replays an interrupted anonymous manual claim before accepting an older server target', async () => {
+  await AsyncStorage.clear();
+  mockSession = null;
+  const edited = { calories: '869', protein: '95', carbs: '75', fat: '21' };
+  await saveMacroTargets(edited, 'complete', 'manual');
+  mockSession = { access_token: 'a-token', user: { id: 'a' } };
+  await clearToken();
+  const archive = JSON.parse((await AsyncStorage.getItem('@fitsy/macro_targets:a'))!);
+  expect(archive._owner).toBe('a');
+  expect(archive._pendingSync).toBe(true);
+  mockSession = { access_token: 'a-token', user: { id: 'a' } };
+  let target = { calories: 2910, proteinG: 298, carbsG: 263, fatG: 74, source: 'manual' };
+  global.fetch = jest.fn().mockImplementation((_url, init?: RequestInit) => {
+    if (init?.method === 'PATCH') target = JSON.parse(String(init.body)).macroTarget;
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({
+      user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+      macroTarget: target,
+    }) });
+  });
+  expect(await pullProfileFromServer()).toBe('restored');
+  expect((global.fetch as jest.Mock).mock.calls[0][1].method).toBe('PATCH');
+  expect(await getMacroTargets()).toEqual(edited);
+});

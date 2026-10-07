@@ -2,7 +2,7 @@ import { acknowledgePendingMacroTarget, getPendingMacroTarget } from './macroTar
 /** @jest-environment node */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMacroTargets, saveMacroTargets } from './macroStorage';
-import { pullProfileFromServer, replayPendingProfileSync, syncSavedProfileToServer } from './profileSync';
+import { pullProfileFromServer, replayPendingProfileSync, queueSavedProfileToServer, syncSavedProfileToServer } from './profileSync';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('@supabase/supabase-js', () => {
@@ -74,4 +74,35 @@ it('does not replay an old dirty archive over an acknowledged active allocation'
   await saveMacroTargets({ calories: '849', protein: '90', carbs: '75', fat: '21' });
   await acknowledgePendingMacroTarget((await getPendingMacroTarget('test-user'))!);
   expect(await getPendingMacroTarget('test-user')).toBeNull();
+});
+
+
+it('recovers interrupted acknowledgement cleanup without overwriting a newer remote target', async () => {
+  await AsyncStorage.clear();
+  await saveMacroTargets({ calories: '829', protein: '85', carbs: '75', fat: '21' });
+  await queueSavedProfileToServer();
+  const key = '@fitsy/pending_profile_sync:test-user';
+  const pending = (await AsyncStorage.getItem(key))!;
+  let target = { proteinG: 298, carbsG: 263, fatG: 74, calories: 2910, source: 'manual' };
+  global.fetch = jest.fn().mockImplementation((_url: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') target = JSON.parse(String(init.body)).macroTarget;
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({
+      user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+      macroTarget: target,
+    }) });
+  });
+  await replayPendingProfileSync();
+  // External storage state represents a crash after durable acknowledgement,
+  // before cleanup; the real delivery and acknowledgement already completed.
+  await AsyncStorage.setItem(key, pending);
+  target = { proteinG: 315, carbsG: 263, fatG: 74, calories: 2978, source: 'manual' };
+  jest.mocked(global.fetch).mockClear();
+  await replayPendingProfileSync();
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect(await pullProfileFromServer()).toBe('restored');
+  expect((await getMacroTargets())?.protein).toBe('90');
+  // An intentional later edit with the old grams is a distinct operation.
+  await saveMacroTargets({ calories: '829', protein: '85', carbs: '75', fat: '21' });
+  await replayPendingProfileSync();
+  expect(target.proteinG).toBe(298);
 });

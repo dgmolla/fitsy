@@ -8,7 +8,7 @@ import { StackActions, StackRouter, TabRouter } from '@react-navigation/routers'
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { openPurchasedDestination, resetWelcomeJourney } from '../lib/paywallJourney';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
-import { saveMacroTargets, clearMacroTargets } from '../lib/macroStorage';
+import { saveMacroTargets, clearMacroTargets, getMacroTargets, getDiscoveryMacroTargetSnapshot } from '../lib/macroStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 let mockSession: { access_token: string; user: { id: string } } | null = null;
@@ -115,6 +115,10 @@ it('routes a restored account with no local targets through macro setup', async 
 it('resumes search with a saved partial filter after purchase', async () => {
   action = 'resubscribe';
   await clearMacroTargets();
+  mockSession = { access_token: 'buyer-token', user: { id: 'buyer' } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null }, macroTarget: null,
+  }) });
   await saveMacroTargets({ calories: '600', protein: '', carbs: '64', fat: '20' }, 'search');
   const screen = render(<Journey />);
   await waitFor(() => expect(screen.getByText('Meal search')).toBeTruthy());
@@ -197,4 +201,21 @@ it('sends unavailable purchased recovery to the entry retry without consuming a 
   expect(screen.queryByText('Set macro targets')).toBeNull();
   expect(screen.queryByText('Meal search')).toBeNull();
   expect((await getPaywallIntent())?.menuItemId).toBe('meal-1');
+});
+
+
+it('hydrates complete account targets at purchase while retaining an intentional partial filter', async () => {
+  action = 'resubscribe';
+  await clearMacroTargets();
+  mockSession = { access_token: 'buyer-token', user: { id: 'buyer' } };
+  const partial = { protein: '65', carbs: '', fat: '', calories: '' };
+  await saveMacroTargets(partial, 'search');
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+    macroTarget: { calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' },
+  }) });
+  const screen = render(<Journey />);
+  await waitFor(() => expect(screen.getByText('Meal search')).toBeTruthy());
+  expect(await getMacroTargets()).toEqual({ calories: '740', protein: '60', carbs: '80', fat: '20' });
+  expect((await getDiscoveryMacroTargetSnapshot())?.targets).toEqual(partial);
 });

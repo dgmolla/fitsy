@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { mutateTargets } from './macroStorageQueue';
 import { isLegacyGeneratedShape, legacyIndependentFilter } from './legacyMacroTarget';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30,8 +31,8 @@ async function readSnapshot(key: string): Promise<MacroTargetSnapshot | null> {
   if (!raw) return null;
   try {
     const record = JSON.parse(raw) as StoredMacroTargets & { _mode?: MacroTargetMode; _owner?: string | null;
-      _source?: MacroTargetSource; _pendingSync?: boolean };
-    const { _mode, _owner, _source, _pendingSync, ...targets } = record;
+      _source?: MacroTargetSource; _pendingSync?: boolean; _syncId?: string };
+    const { _mode, _owner, _source, _pendingSync, _syncId, ...targets } = record;
     if (key === MACRO_TARGETS_KEY && _owner === undefined && await currentUserId()) {
       await quarantineLegacyMacroRecord(raw);
       return null;
@@ -111,9 +112,9 @@ export async function getAnonymousCompleteTarget(): Promise<{ targets: StoredMac
   if (!raw) return null;
   try {
     const record = JSON.parse(raw) as StoredMacroTargets & { _mode?: MacroTargetMode;
-      _owner?: string | null; _source?: MacroTargetSource; _pendingSync?: boolean };
+      _owner?: string | null; _source?: MacroTargetSource; _pendingSync?: boolean; _syncId?: string };
     if (record._mode !== 'complete' || record._owner !== null) return null;
-    const { _mode, _owner, _source, _pendingSync, ...targets } = record;
+    const { _mode, _owner, _source, _pendingSync, _syncId, ...targets } = record;
     return { targets: normalizeCompleteTarget(targets), source: _source ?? 'manual' };
   } catch { return null; }
 }
@@ -187,7 +188,7 @@ export function saveMacroTargets(targets: StoredMacroTargets, mode: MacroTargetM
     }
     if (await currentUserId() !== owner) return false;
     const record = JSON.stringify({ ...settled, _mode: mode,
-      ...(mode === 'complete' ? { _owner: owner, _source: source, ...(owner && pendingSync ? { _pendingSync: true } : {}) } : {}) });
+      ...(mode === 'complete' ? { _owner: owner, _source: source, ...(owner && pendingSync ? { _pendingSync: true, _syncId: Crypto.randomUUID() } : {}) } : {}) });
     await AsyncStorage.setItem(mode === 'search' ? key : MACRO_TARGETS_KEY, record);
     // Account cleanup and later saves wait for this write. If auth changes
     // during native IO, remove only this obsolete shared active record.
@@ -254,9 +255,11 @@ async function performArchiveActiveMacroTargets(userId: string | null, forget: b
   const raw = await AsyncStorage.getItem(MACRO_TARGETS_KEY);
   if (!raw) return;
   try {
-    const record = JSON.parse(raw) as { _owner?: string | null; _mode?: MacroTargetMode };
+    const record = JSON.parse(raw) as { _owner?: string | null; _mode?: MacroTargetMode; _source?: MacroTargetSource;
+      _pendingSync?: boolean; _syncId?: string };
     if (record._mode === 'complete' && (record._owner === userId || record._owner === null))
-      await AsyncStorage.setItem(ownedTargetKey(userId), raw);
+      await AsyncStorage.setItem(ownedTargetKey(userId), record._owner === null && record._source !== 'automatic'
+        ? JSON.stringify({ ...record, _owner: userId, _pendingSync: true, _syncId: Crypto.randomUUID() }) : raw);
   } catch { /* Invalid local data cannot be replayed. */ }
 }
 

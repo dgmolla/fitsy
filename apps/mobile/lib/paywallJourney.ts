@@ -1,6 +1,6 @@
 import { StackRouter, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { clearPaywallIntent, getPaywallIntent, getPurchasedContinuation } from './paywallIntent';
-import { hasSavedMealTargets } from './macroStorage';
+import { getMacroTargets, hasSavedMealTargets } from './macroStorage';
 import { recoverStartupMealTargets } from './startupMacroRecovery';
 import { confirmLegacyMacroRecovery } from './macroRecoveryPrompt';
 
@@ -54,9 +54,9 @@ export async function openPurchasedDestination(navigation: Navigation, options?:
   const resume = options && 'resumeOnly' in options;
   const intent = resume ? await getPurchasedContinuation() : await getPaywallIntent();
   if (resume && (!intent || !options.isCurrent())) return false;
-  if (options && 'requireTargets' in options && !(await hasSavedMealTargets())) {
+  if (options && 'requireTargets' in options && !(await getMacroTargets())) {
     const recovery = await recoverStartupMealTargets(confirmLegacyMacroRecovery);
-    if (recovery !== 'restored') {
+    if (recovery !== 'restored' && !(recovery === 'unavailable' && await hasSavedMealTargets())) {
       // The entry resolver owns retry for unavailable account data. Only a
       // confirmed absent allocation may offer replacement target setup.
       resetJourney(navigation, { index: 0, routes: [{ name: recovery === 'absent' ? 'macro-setup' : 'index' }] });
