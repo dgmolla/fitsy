@@ -18,6 +18,11 @@ MSG="${1:-$(git log -1 --format='%h: %s')}"
 HEAD_SHA="$(git rev-parse HEAD)"
 git rev-list --first-parent origin/main | python3 -c 'import sys; sys.exit(0 if sys.argv[1] in sys.stdin.read().splitlines() else 1)' "$HEAD_SHA" || { echo "Publish only an integrated main-line commit" >&2; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "Publish only a clean checkout" >&2; exit 1; }
+# A rollback holds both local and CI publication until explicit release approval.
+HOLD_STATUS=0
+bash "$REPO_ROOT/scripts/deploy/ota-hold.sh" check || HOLD_STATUS=$?
+if [ "$HOLD_STATUS" -eq 2 ]; then echo "OTA skipped: rollback recovery hold"; exit 0; fi
+[ "$HOLD_STATUS" -eq 0 ] || exit "$HOLD_STATUS"
 node "$REPO_ROOT/scripts/deploy/native-compatibility.mjs"
 npx eas-cli@18 env:exec production 'node ../../scripts/deploy/native-compatibility.mjs --production-env' --non-interactive
 # No Android production binary has been verified. Never publish Android using

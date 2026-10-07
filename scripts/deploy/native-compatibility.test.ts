@@ -95,11 +95,15 @@ test('uses the real Deploy step to deny an incompatible binary', () => {
 
 test('actual production helper prevents unsafe publication and exports only verified iOS', () => {
   copyFileSync(join(repo, 'scripts/deploy/ota.sh'), join(root, 'scripts/deploy/ota.sh'));
+  copyFileSync(join(repo, 'scripts/deploy/ota-hold.sh'), join(root, 'scripts/deploy/ota-hold.sh'));
   write('.gitignore', '.evidence/\n');
   git('add', '.'); git('commit', '-qm', 'helper');
   git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
   const bin = join(root, '.git/bin'); mkdirSync(bin);
   const log = join(root, '.git/eas-calls');
+  const holdState = join(root, '.git/hold-state');
+  writeFileSync(holdState, '[[]]');
+  writeFileSync(join(bin, 'gh'), `#!/bin/bash\nset -eu\ncase "$1" in\napi) cat '${holdState}' ;;\nissue) printf '[[{"number":99,"title":"release: iOS OTA rollback hold"}]]' > '${holdState}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nenv:exec) bash -c "$4" ;;\nupdate) printf '[{"group":"test-group"}]' ;;\nupdate:list) printf '{"currentPage":[{"group":"test-group"}]}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
   const run = (google: string) => spawnSync('bash', ['scripts/deploy/ota.sh', 'test release'], {
@@ -168,6 +172,18 @@ test('actual production helper prevents unsafe publication and exports only veri
   const smokeDecision = spawnSync('bash', ['-c', `[[ ${smokeCondition} ]]`], { cwd: root });
   expect(smokeDecision.status).toBe(0);
   expect(runSurvivor('success', 'success').stdout).toContain('verified: production branch serves group test-group');
+  // A durable operator rollback hold suppresses every surviving publication.
+  const beforeHold = readFileSync(log, 'utf8');
+  writeFileSync(holdState, '[[{"number":99,"title":"release: iOS OTA rollback hold"}]]');
+  const held = runSurvivor('success', 'success');
+  expect(held.status).toBe(0);
+  expect(held.stdout).toContain('OTA skipped: rollback recovery hold');
+  expect(readFileSync(log, 'utf8')).toBe(beforeHold);
+  // Read failure must not silently drop the hold.
+  writeFileSync(holdState, 'invalid JSON');
+  expect(runSurvivor('success', 'success').status).not.toBe(0);
+  expect(readFileSync(log, 'utf8')).toBe(beforeHold);
+  writeFileSync(holdState, '[[]]');
   git('checkout', '-q', '--detach', mobileHead);
   write('apps/mobile/app/index.tsx', 'dirty JS');
   const before = readFileSync(log, 'utf8');
@@ -190,14 +206,33 @@ test('actual production helper prevents unsafe publication and exports only veri
 
 test('actual rollback helper keeps a dual-platform prior group on iOS only', () => {
   copyFileSync(join(repo, 'scripts/deploy/rollback.sh'), join(root, 'scripts/deploy/rollback.sh'));
+  copyFileSync(join(repo, 'scripts/deploy/ota-hold.sh'), join(root, 'scripts/deploy/ota-hold.sh'));
   const bin = join(root, '.git/bin'); mkdirSync(bin);
   const log = join(root, '.git/eas-calls');
+  const holdState = join(root, '.git/hold-state');
+  writeFileSync(holdState, '[[]]');
+  writeFileSync(join(bin, 'gh'), `#!/bin/bash\nset -eu\ncase "$1" in\napi) cat '${holdState}' ;;\nissue) printf '[[{"number":99,"title":"release: iOS OTA rollback hold"}]]' > '${holdState}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nupdate:list) printf '{"currentPage":[{"group":"current","message":"now"},{"group":"prior","message":"before","platforms":"android, ios"}]}' ;;\nupdate:republish) exit 0 ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
   const result = spawnSync('bash', ['scripts/deploy/rollback.sh', 'mobile', 'prior'], {
     cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}` },
   });
   expect(result.status).toBe(0);
+  expect(readFileSync(holdState, 'utf8')).toContain('release: iOS OTA rollback hold');
   expect(readFileSync(log, 'utf8')).toContain('update:republish --platform ios --group prior');
+  // Exercise the confirmed P1 end to end: real rollback creates the hold,
+  // then an unrelated integrated push reaches the real publication helper.
+  copyFileSync(join(repo, 'scripts/deploy/ota.sh'), join(root, 'scripts/deploy/ota.sh'));
+  write('.gitignore', '.evidence/\n');
+  write('apps/api/unrelated.ts', 'API-only follow-up');
+  git('add', '.'); git('commit', '-qm', 'unrelated main push after rollback');
+  git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
+  const callsAfterRollback = readFileSync(log, 'utf8');
+  const publish = spawnSync('bash', ['scripts/deploy/ota.sh', 'unrelated main push'], {
+    cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}` },
+  });
+  expect(publish.status).toBe(0);
+  expect(publish.stdout).toContain('OTA skipped: rollback recovery hold');
+  expect(readFileSync(log, 'utf8')).toBe(callsAfterRollback);
 });
 
 test('the native guard checks its checkout despite inherited Git hook metadata', () => {

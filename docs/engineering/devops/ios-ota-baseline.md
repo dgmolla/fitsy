@@ -54,6 +54,11 @@ GitHub concurrency can replace a pending run even with cancellation of active ru
 The surviving push publishes its current main-line source and includes any mobile changes from replaced pending pushes.
 Every surviving push runs production API smoke, including docs-only pushes that may incorporate replaced API changes.
 Successful migration and successful smoke remain prerequisites, followed by the native/source/environment gates.
+Before republishing, the rollback helper creates or reuses an open `release: iOS OTA rollback hold` issue.
+CI and local publication read all open release issues through the GitHub API and skip publication while a hold exists.
+Failure to read or establish the hold fails closed.
+Close the hold only after repaired mobile source passes required checks and independent review and receives explicit production approval.
+Unrelated main pushes never clear the hold.
 The mobile rollback helper also republishes iOS only, including when the previous group contains both platforms.
 There is no verified Android production binary, so this proof grants no Android publication authority.
 Replacing the baseline requires actual EAS/Apple binary evidence and independent workflow-security review; a tag alone is insufficient.

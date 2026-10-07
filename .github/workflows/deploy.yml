@@ -169,6 +169,7 @@ jobs:
         if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'true'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm ci
           bash scripts/deploy/ota.sh "$(git log -1 --format='%h: %s')"

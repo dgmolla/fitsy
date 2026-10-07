@@ -48,6 +48,9 @@ for i,x in enumerate(u):
       PREV_GROUP="$(python3 -c 'import json,sys;u=json.load(open(sys.argv[1]));u=u.get("currentPage") or u.get("updates") or u;print(u[1]["group"] if len(u)>1 else "")' "$UPDATE_LIST")"
     fi
     : "${PREV_GROUP:?no previous update group on the production branch}"
+    # Persist the hold BEFORE republishing, so later unrelated pushes cannot
+    # restore the bad source. Failure to establish durable state fails closed.
+    bash ../../scripts/deploy/ota-hold.sh open "$PREV_GROUP"
     # Match the verified production release surface; no Android binary is
     # established by the iOS compatibility receipt.
     npx eas-cli@18 update:republish --platform ios --group "$PREV_GROUP" --message "rollback: republish $PREV_GROUP" --non-interactive
