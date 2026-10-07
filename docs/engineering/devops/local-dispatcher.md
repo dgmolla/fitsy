@@ -137,6 +137,7 @@ New releases take priority over due retries, with at most one ended claim assess
 Legacy deferred receipts without a retry clock receive one guarded assessment, while malformed clocks remain retained for reconciliation.
 Deferred deletion intents honor the same backoff; interrupted intents without a deferred outcome still reconcile immediately.
 Validated durable claim receipts keep pending releases discoverable after compact history rolls over; damaged receipts remain preserved without deletion authority.
+Uncertain durable ownership defers that release assessment entirely because a damaged newer receipt may invalidate an older checkout owner.
 Measured free bytes and archive overhead are recorded separately from APFS logical sizes.
 This uses the existing dispatcher lock and timer; no additional worker, queue or reporting loop is created.
 

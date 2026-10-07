@@ -422,6 +422,18 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.state_data()['resource_releases'][old['id']], state['resource_releases'][old['id']])
         self.assertIn(str(receipt), self.state_data()['cold_retention_legacy'])
 
+    def test_pruned_release_cannot_use_older_owner_when_newer_receipt_is_damaged(self):
+        state, old, scratch = self.deferred_scratch()
+        state['history'] = []
+        newer = self.state / 'claims/newer-unresolved'; newer.mkdir()
+        receipt = newer / 'receipt.json'; receipt.write_text('[]')
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists(), 'unreadable newer ownership cannot authorize an older release')
+        self.assertEqual(receipt.read_text(), '[]')
+        self.assertEqual(self.state_data()['resource_releases'][old['id']], state['resource_releases'][old['id']])
+        self.assertIn(str(receipt), self.state_data()['cold_retention_legacy'])
+
     def test_pruned_release_rechecks_current_open_holder(self):
         state, old, scratch = self.deferred_scratch()
         state['history'] = []

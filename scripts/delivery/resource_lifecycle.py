@@ -257,7 +257,8 @@ def cleanup_released(config, state, save):
     if pending:
         receipts, uncertain = read_claims(config, state)
         if uncertain:
-            save()  # Preserve exact damaged receipts; they never become cleanup candidates.
+            save()  # Unreadable newer ownership can also invalidate an older release.
+            return
         candidates.extend(entry for _, entry in receipts if entry['id'] in pending)
     eligible = [entry for entry in candidates
                 if release_due(entry, assessed.get(entry.get('id')), now)]
