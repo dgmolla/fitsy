@@ -134,9 +134,16 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
 # The locked choice survives interruption at sign-in, without a paywall flash.
 - stopApp
 - launchApp
-- extendedWaitUntil:
-    visible: "Continue with Apple"
-    timeout: 30000
+# XCTest can observe the terminated PID on its first hierarchy request.
+# Retry only relaunch observation, retaining the required sign-in assertion.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible: "Continue with Apple"
+          timeout: 30000
 - assertNotVisible:
     id: paywall-logo
 # A direct preview link after the locked choice cannot reuse the old entry.
@@ -210,8 +217,13 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     id: paywall-offer-paid
 - stopApp
 - launchApp
-- extendedWaitUntil:
-    visible:
-      id: paywall-offer-paid
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: paywall-offer-paid
+          timeout: 30000
 - assertNotVisible: "Continue with Apple"

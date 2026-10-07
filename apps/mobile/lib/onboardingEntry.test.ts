@@ -6,11 +6,18 @@ const baseline: State = {
   completed: false, declined: false, resume: null, hasTargets: false, access: 'hard',
   onboardingPreviewEntry: false,
   paymentSignInContinuation: false,
+  pendingMealClaim: false,
 };
 const resolve = (state: Partial<State>) => onboardingEntry({ ...baseline, ...state });
 
 it('shows a fresh welcome without waiting for store pricing', () => {
   expect(resolve({})).toBe('/welcome/problem');
+});
+it('resumes a pending anonymous meal before sign-in saved a checkpoint', () => {
+  expect(resolve({ pendingMealClaim: true })).toBe('/welcome/signin');
+  expect(resolve({ pendingMealClaim: true, resume: '/welcome/preview' })).toBe('/welcome/signin');
+  expect(resolve({ pendingMealClaim: true, paymentSignInContinuation: true })).toBe('/welcome/signin?returnTo=payment');
+  expect(resolve({ pendingMealClaim: true, resume: '/welcome/out-of-area' })).toBe('/welcome/out-of-area');
 });
 it('resumes unfinished anonymous setup', () => {
   expect(resolve({ resume: '/welcome/tuning' })).toBe('/welcome/tuning');

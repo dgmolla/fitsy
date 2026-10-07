@@ -86,7 +86,7 @@ export default function Index() {
         setDestination(onboardingEntry({
           signedIn: !!token, resume, declined, completed: completed === 'true',
           hasTargets: !!targets, purchasesReady, entitled, isLapsed, onboardingPreviewEntry,
-          access: paywallVariants(offering?.metadata).access, paymentSignInContinuation,
+          access: paywallVariants(offering?.metadata).access, paymentSignInContinuation, pendingMealClaim: mealClaim,
         }));
       } catch {
         if (current) setDestination('/welcome/problem');

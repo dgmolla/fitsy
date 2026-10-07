@@ -14,6 +14,7 @@ interface EntryState {
   access: 'hard' | 'preview';
   onboardingPreviewEntry: boolean;
   paymentSignInContinuation: boolean;
+  pendingMealClaim: boolean;
 }
 
 /** Resolve persisted onboarding and settled account access in one precedence order. */
@@ -30,6 +31,8 @@ export function onboardingEntry(state: EntryState): EntryDestination {
   // A saved payment checkpoint is stronger than an anonymous preview cohort.
   if (!state.signedIn && state.resume === '/welcome/payment') return '/welcome/signin?returnTo=payment';
   if (!state.signedIn && state.paymentSignInContinuation) return '/welcome/signin?returnTo=payment';
+  // The meal can persist before sign-in focus saves its navigation checkpoint.
+  if (!state.signedIn && state.pendingMealClaim) return '/welcome/signin';
   if (state.signedIn && state.resume === '/welcome/payment' && !state.isLapsed && state.entitled !== true) return '/welcome/payment';
   if (!state.isLapsed && !state.completed && state.resume &&
     (!state.declined || (state.resume === '/welcome/preview' && state.onboardingPreviewEntry)) && state.entitled !== true) {

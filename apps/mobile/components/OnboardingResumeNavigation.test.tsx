@@ -1,5 +1,23 @@
 import { mockState, selected, response, deferred, routes, installEligibleTrialOffer, renderJourney, Alert, AsyncStorage, act, fireEvent, waitFor, MacroSetup, getPaywallIntent, rememberPaywallIntent, getStoredToken, saveMacroTargets, saveOnboardingField, hasPaymentSignInContinuation, rememberPaymentSignInContinuation, hasPendingMealClaim, rememberPendingMealClaim } from './OnboardingNavigationHarness';
 
+it('restores and can cancel an anonymous meal saved before the sign-in checkpoint', async () => {
+  await rememberPaywallIntent(selected);
+  await rememberPendingMealClaim();
+  expect(await AsyncStorage.getItem('@fitsy/onboardingStep')).toBeNull();
+  const screen = renderJourney('/');
+  expect(await screen.findByText('Varilla')).toBeTruthy();
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
+  expect(screen.queryByText('Payment plans')).toBeNull();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/problem'));
+  expect(await hasPendingMealClaim()).toBe(false);
+  expect(await getPaywallIntent()).toBeNull();
+  screen.unmount();
+  const restarted = renderJourney('/');
+  await waitFor(() => expect(restarted.getPathname()).toBe('/welcome/problem'));
+  expect(restarted.queryByText('Payment plans')).toBeNull();
+});
+
 it('claims an anonymous meal when checkout restarts after the session is saved', async () => {
   await rememberPaywallIntent(selected);
   await rememberPaymentSignInContinuation();
