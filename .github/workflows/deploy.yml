@@ -84,7 +84,8 @@ jobs:
 
   smoke:
     needs: [changes, migrate]
-    if: always() && needs.changes.outputs.api == 'true' && needs.migrate.result == 'success' 
+    # Replaced pending pushes can contain API changes absent from this push's diff.
+    if: always() && needs.migrate.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -125,9 +126,8 @@ jobs:
 
   ota:
     needs: [changes, migrate, smoke]
-    # never OTA over a failed migration or failed smoke: skipped smoke is only
-    # acceptable when nothing upstream failed (lens finding, 2026-09-07)
-    if: always() && needs.migrate.result == 'success' && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped')
+    # Every surviving source must pass migration and production API smoke.
+    if: always() && needs.migrate.result == 'success' && needs.smoke.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

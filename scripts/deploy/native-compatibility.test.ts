@@ -55,6 +55,16 @@ test.each(['package-lock.json', 'apps/mobile/app.config.ts', 'apps/mobile/eas.js
 test.each(['apps/mobile/app.config.ts', 'apps/mobile/ios/untracked.m'])('blocks dirty or untracked native input %s', path => {
   write(path, 'uncommitted native input'); expect(check().status).toBe(1);
 });
+test('blocks ignored iOS native inputs under the real repository ignore rules', () => {
+  write('.gitignore', readFileSync(join(repo, '.gitignore'), 'utf8'));
+  git('add', '.gitignore'); git('commit', '-qm', 'repository ignores');
+  write('apps/mobile/ios/untracked.m', 'native method unavailable in build 5');
+  expect(git('status', '--porcelain')).toBe('');
+  const result = check();
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('ship and verify a binary');
+});
+
 test('blocks missing baseline ancestry, malformed receipts and changed production scheme', () => {
   expect(check(true, 'different.apps.googleusercontent.com').status).toBe(1);
   expect(check(true, '').status).toBe(1);
@@ -111,7 +121,7 @@ test('actual production helper prevents unsafe publication and exports only veri
   git('update-ref', 'refs/remotes/origin/main', apiHead);
   git('checkout', '-q', '--detach', mobileHead);
   const yaml = require('js-yaml') as { load: (input: string) => {
-    jobs: { changes: { steps: { id?: string; run?: string }[] }; ota: { if: string } } } };
+    jobs: { changes: { steps: { id?: string; run?: string }[] }; ota: { if: string }; smoke: { if: string } } } };
   const workflow = yaml.load(readFileSync(join(repo, '.github/workflows/deploy.yml'), 'utf8'));
   const changes = workflow.jobs.changes.steps.find(step => step.id === 'f')!.run!
     .replaceAll('${{ github.event.before }}', mobileHead).replaceAll('${{ github.sha }}', apiHead);
@@ -144,11 +154,20 @@ test('actual production helper prevents unsafe publication and exports only veri
   expect(survivingPublication.stdout).toContain(`"source_sha":"${apiHead}"`);
   expect(survivingPublication.stdout).toContain('verified: production branch serves group test-group');
   const safeCalls = readFileSync(log, 'utf8');
-  const blockedStates: Array<[string, string]> = [['failure', 'skipped'], ['cancelled', 'skipped'], ['success', 'failure'], ['success', 'cancelled']];
+  const blockedStates: Array<[string, string]> = [['failure', 'skipped'], ['cancelled', 'skipped'], ['success', 'failure'], ['success', 'cancelled'], ['success', 'skipped']];
   for (const [migration, smoke] of blockedStates) {
     expect(runSurvivor(migration, smoke).status).toBe(0);
     expect(readFileSync(log, 'utf8')).toBe(safeCalls);
   }
+  // A later docs-only survivor includes B's API change but has api=false.
+  write('docs/queue.md', 'docs-only push C'); git('add', '.'); git('commit', '-qm', 'docs-only push C');
+  git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
+  const smokeCondition = workflow.jobs.smoke.if.replaceAll('always()', 'true')
+    .replaceAll('needs.changes.outputs.api', "'false'")
+    .replaceAll('needs.migrate.result', "'success'");
+  const smokeDecision = spawnSync('bash', ['-c', `[[ ${smokeCondition} ]]`], { cwd: root });
+  expect(smokeDecision.status).toBe(0);
+  expect(runSurvivor('success', 'success').stdout).toContain('verified: production branch serves group test-group');
   git('checkout', '-q', '--detach', mobileHead);
   write('apps/mobile/app/index.tsx', 'dirty JS');
   const before = readFileSync(log, 'utf8');

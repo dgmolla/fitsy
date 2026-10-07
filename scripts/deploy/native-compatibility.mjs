@@ -32,7 +32,7 @@ export function checkCompatibility(root, { productionEnv = false, env = process.
   const head = git(['rev-parse', 'HEAD']);
   git(['cat-file', '-e', `${baseline.source_sha}^{commit}`]);
   const changed = git(['diff', '--name-only', baseline.source_sha, head, '--', ...nativePaths]);
-  const dirty = git(['status', '--porcelain', '--untracked-files=all', '--', ...nativePaths]);
+  const dirty = git(['status', '--porcelain', '--untracked-files=all', '--ignored', '--', ...nativePaths]);
   if (changed || dirty) throw new Error(`iOS native inputs differ from build ${baseline.build_number}; ship and verify a binary before OTA:\n${changed}\n${dirty}`.trim());
   if (productionEnv && env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID !== baseline.google_ios_client_id)
     throw new Error('Production Google iOS URL scheme differs from the verified binary; OTA cannot register a native scheme');

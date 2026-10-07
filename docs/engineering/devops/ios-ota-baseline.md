@@ -39,6 +39,7 @@ The app config's other environment variables affect JavaScript configuration rat
 Dirty or untracked native inputs also fail.
 This intentionally blocks some compatible JS-only lockfile edits until their baseline is independently verified.
 Missing ancestry or a missing or malformed receipt fails closed.
+Ignored native files also block publication, including locally generated iOS directories.
 
 The sole excluded asset is `apps/mobile/assets/app-screenshot.png`, added after build 5 and required by `TrialArtwork.tsx` as a JavaScript bundle image.
 It is not referenced by the unchanged app configuration or its native plugins.
@@ -51,7 +52,8 @@ Unmerged feature-branch parents of a merge are excluded from that main-line hist
 Every surviving main Deploy attempts guarded iOS publication, including API-only pushes.
 GitHub concurrency can replace a pending run even with cancellation of active runs disabled, so a per-push mobile filter cannot establish delivery.
 The surviving push publishes its current main-line source and includes any mobile changes from replaced pending pushes.
-Successful migration and successful or legitimately skipped smoke remain prerequisites, followed by the native/source/environment gates.
+Every surviving push runs production API smoke, including docs-only pushes that may incorporate replaced API changes.
+Successful migration and successful smoke remain prerequisites, followed by the native/source/environment gates.
 The mobile rollback helper also republishes iOS only, including when the previous group contains both platforms.
 There is no verified Android production binary, so this proof grants no Android publication authority.
 Replacing the baseline requires actual EAS/Apple binary evidence and independent workflow-security review; a tag alone is insufficient.
