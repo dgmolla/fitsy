@@ -5,23 +5,14 @@ import { router, usePathname } from 'expo-router';
 import { supabase } from './supabase';
 import { trackReminderAction } from './analytics';
 import { usePurchases } from './usePurchases';
-import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, planReminders, trialReminderDate, type ReminderPreferences } from './notificationPlan';
+import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, planReminders, type ReminderPreferences } from './notificationPlan';
 import { readReminderPreferences, readScheduledReminders, reconcileReminderOwnership, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from './devTrialReminderProbe';
-import type { PurchasesEntitlementInfo } from 'react-native-purchases';
+import { explainMissedTrialReminder, missedTrialReminderWindow } from './trialReminderFeedback';
 
 interface ReminderContextValue { userId: string | null; preferences: ReminderPreferences; scheduled: { kind: string; date: string }[]; save: (value: ReminderPreferences) => Promise<void> }
 const ReminderContext = createContext<ReminderContextValue | null>(null);
 const reportFailure = (error: unknown) => console.warn('[reminders]', error instanceof Error ? error.message : error);
-const missedTrialReminderWindow = (subscription: PurchasesEntitlementInfo | undefined, now: number) => {
-  const expiration = Date.parse(subscription?.expirationDate ?? '');
-  const start = Date.parse(subscription?.latestPurchaseDate ?? '');
-  return !!subscription?.isActive && subscription.periodType === 'TRIAL' && subscription.willRenew &&
-    Number.isFinite(expiration) && Number.isFinite(start) && expiration - start > 2 * 24 * 3_600_000 &&
-    expiration > now && trialReminderDate(new Date(expiration)).getTime() <= now;
-};
-const explainMissedTrialReminder = () => Alert.alert('Trial reminder time passed',
-  'The 48-hour reminder time for this trial has passed, so Fitsy cannot schedule it now. Check your trial end date and renewal in subscription settings.');
 
 export function ReminderProvider({ children }: { children: React.ReactNode }) {
   const { entitled, customerInfo, ready, refresh } = usePurchases();
@@ -90,11 +81,8 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     const trial = userId ? plan.find(item => item.kind === 'trial') : undefined;
     if (!preferences.trial) failedTrialNoticeRef.current = null;
     const expiry = Date.parse(subscription?.expirationDate ?? '');
-    const start = Date.parse(subscription?.latestPurchaseDate ?? '');
     const legacyExpiry = userId && !trial && entitled === true && preferences.trial && subscription?.isActive &&
-      subscription.periodType === 'TRIAL' && subscription.willRenew && Number.isFinite(expiry) &&
-      Number.isFinite(start) && expiry - start > 2 * 24 * 3_600_000 && expiry > now.getTime() &&
-      trialReminderDate(new Date(expiry)).getTime() <= now.getTime() ? expiry : undefined;
+      missedTrialReminderWindow(subscription, now.getTime()) ? expiry : undefined;
     const notifyUnconfirmedTrial = () => {
       if (!live || (!trial && !legacyExpiry)) return;
       const key = `${account.id}:${trial?.identifier ?? `${REMINDER_PREFIX}trial.${legacyExpiry}`}`;

@@ -2,37 +2,12 @@ import React, { useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { canOfferTrialReminder, trialReminderDate } from '@/lib/notificationPlan';
+import { trialPresentation, elapsedCalendarDays } from '@/lib/trialPresentation';
+export { projectedChargeDate } from '@/lib/trialPresentation';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
 
 type Terms = ReturnType<typeof purchaseTerms>;
 export type ReminderAvailability = 'enabled' | 'opt-in' | 'permission-off' | 'unavailable';
-
-/** Calendar-aware projected first charge, conditional on starting today. */
-export function projectedChargeDate(terms: Terms, now: Date): Date | null {
-  const match = /^P([1-9]\d*)([DWMY])$/.exec(terms?.trialPeriod ?? '');
-  if (!terms?.trial || !match || !terms.trialCycles || !Number.isInteger(terms.trialCycles)) return null;
-  const count = Number(match[1]) * terms.trialCycles;
-  const date = new Date(now);
-  if (match[2] === 'D') date.setDate(date.getDate() + count);
-  if (match[2] === 'W') date.setDate(date.getDate() + count * 7);
-  if (match[2] === 'M' || match[2] === 'Y') {
-    const day = date.getDate();
-    // Store calendar periods end on the last day of a short destination month.
-    // setMonth/setFullYear alone roll January 31 into March.
-    date.setDate(1);
-    if (match[2] === 'M') date.setMonth(date.getMonth() + count);
-    else date.setFullYear(date.getFullYear() + count);
-    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-    date.setDate(Math.min(day, lastDay));
-  }
-  return Number.isFinite(date.getTime()) ? date : null;
-}
-
-function elapsedCalendarDays(now: Date, date: Date): number {
-  const day = (value: Date) => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate());
-  return Math.max(0, Math.round((day(date) - day(now)) / 86_400_000));
-}
 
 export const PAYWALL_BENEFITS = [
   'Discover meals in Los Angeles',
@@ -55,7 +30,8 @@ function Step({ icon, title, detail, last = false, testID, onTop }: {
 export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unavailable', onFirstStepTop }: {
   terms: Terms; now: Date; reminderAvailability?: ReminderAvailability; onFirstStepTop?: (top: number) => void;
 }) {
-  const chargeDate = projectedChargeDate(terms, now);
+  const presentation = trialPresentation(terms, now);
+  const chargeDate = presentation.projectedChargeDate;
   if (!terms?.trial || !chargeDate) {
     return <View style={s.benefits} testID="paywall-offer-paid">
       {PAYWALL_BENEFITS.map(benefit => <View key={benefit} style={s.benefitRow}>
@@ -65,14 +41,14 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
     </View>;
   }
 
-  const reminderDate = canOfferTrialReminder(terms) ? trialReminderDate(chargeDate) : null;
-  const usefulReminder = reminderDate && reminderDate > now && reminderDate < chargeDate;
+  const reminderDate = presentation.reminderDate;
+  const usefulReminder = !!reminderDate;
   const chargeDay = elapsedCalendarDays(now, chargeDate);
   // Quiet hours can move delivery to an earlier calendar day than the
   // nominal 48-hour lead, so label the date the scheduler actually chose.
-  const reminderDay = usefulReminder && reminderDate ? elapsedCalendarDays(now, reminderDate) : null;
+  const reminderDay = presentation.reminderDay;
   const reminderCopy = reminderAvailability === 'enabled' && usefulReminder
-    ? "We'll send you a reminder that your trial is ending soon"
+    ? "We'll send you a reminder that your trial is ending soon if the store confirms this trial end after purchase."
     : reminderAvailability === 'permission-off'
       ? 'Notifications off. Enable them in settings.'
       : reminderAvailability === 'opt-in'
@@ -86,7 +62,7 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
       title={usefulReminder ? `In ${reminderDay} days` : 'Reminder unavailable'}
       detail={reminderCopy} testID="paywall-step-reminder" />
     <Step icon="calendar-outline" title={`In ${chargeDay} days`}
-      detail={`You'll be charged on ${chargeDateLabel}`}
+      detail={`Estimated first charge: ${chargeDateLabel}, if you start today. The store confirms your actual date after purchase.`}
       last testID="paywall-step-charge" />
   </View>;
 }

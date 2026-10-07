@@ -135,8 +135,9 @@ test('Back follows the selected paid plan when another plan has a trial', async 
   });
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
+  await waitFor(() => expect(screen.getByTestId('paywall-plan-yearly').props.accessibilityState.disabled).toBe(false));
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-yearly')); });
-  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel.includes('free trial')).toBe(false));
+  await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children.includes('free')).toBe(false));
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   expect(screen.getByTestId('paywall-back-to-plans')).toBeTruthy();
   expect(screen.getPathname()).toBe('/welcome/payment');
@@ -169,11 +170,65 @@ test('an explicit paid plan choice overrides the monthly trial and remains the p
   });
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(false));
+  await waitFor(() => expect(mockCapture).toHaveBeenCalledWith('trial_catalog_mismatch',
+    expect.objectContaining({ product_id: 'monthly', actual_days: 7, desired_days: 14 })));
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-yearly')); });
   expect(screen.getByTestId('paywall-plan-yearly').props.accessibilityState.checked).toBe(true);
+  expect(mockCapture.mock.calls.filter(([event]) => event === 'trial_catalog_mismatch')).toHaveLength(1);
   expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).not.toContain('free trial');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(Purchases.purchasePackage).toHaveBeenCalledWith(annual);
+});
+
+test('a matching two-week selected offer does not report a catalog mismatch', async () => {
+  const twoWeekMonthly = { ...monthly, product: { ...monthly.product,
+    introPrice: { price: 0, priceString: '$0', period: 'P2W', cycles: 1 } } };
+  const both = { ...offering, annual, monthly: twoWeekMonthly, availablePackages: [annual, twoWeekMonthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children).toContain('14 days free'));
+  expect(mockCapture.mock.calls.filter(([event]) => event === 'trial_catalog_mismatch')).toHaveLength(0);
+});
+
+test('an eligible calendar-month offer reports its actual period without assuming a fixed day count', async () => {
+  const monthMonthly = { ...monthly, product: { ...monthly.product,
+    introPrice: { price: 0, priceString: '$0', period: 'P1M', cycles: 1 } } };
+  const both = { ...offering, annual, monthly: monthMonthly, availablePackages: [annual, monthMonthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' },
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children).toContain('1 month free'));
+  await waitFor(() => expect(mockCapture).toHaveBeenCalledWith('trial_catalog_mismatch', expect.objectContaining({
+    product_id: 'monthly', actual_days: null, actual_period: '1 month', desired_days: 14,
+  })));
+});
+
+test('a short annual offer defaults to the schedulable monthly trial and plan switches keep the purchase target', async () => {
+  const shortAnnual = { ...annual, product: { ...annual.product,
+    introPrice: { price: 0, priceString: '$0', period: 'P2D', cycles: 1 } } };
+  const twoWeekMonthly = { ...monthly, product: { ...monthly.product,
+    introPrice: { price: 0, priceString: '$0', period: 'P2W', cycles: 1 } } };
+  const both = { ...offering, annual: shortAnnual, monthly: twoWeekMonthly,
+    availablePackages: [shortAnnual, twoWeekMonthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    annual: { status: 2, description: 'Eligible' }, monthly: { status: 2, description: 'Eligible' },
+  });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children).toContain('14 days free'));
+  expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-yearly')); });
+  expect(screen.getByTestId('paywall-terms').props.children).toContain('2 days free');
+  await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
+  expect(screen.getByTestId('paywall-terms').props.children).toContain('14 days free');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(twoWeekMonthly);
 });
 
 test('eligibility changes on the paywall update its selection and purchase target', async () => {
@@ -203,7 +258,7 @@ test('a CustomerInfo refresh cannot switch a monthly trial to a paid annual purc
   }).mockImplementationOnce(() => new Promise(resolve => { settleEligibility = resolve; }));
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true));
-  expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('free trial');
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityLabel).toContain('free trial'));
 
   const updatedInfo = { ...noSubscription } as CustomerInfo;
   (Purchases.getCustomerInfo as jest.Mock).mockResolvedValue(updatedInfo);

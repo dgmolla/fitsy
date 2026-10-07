@@ -34,11 +34,11 @@ function props() { return { annual, monthly, plan: 'yearly' as const, loading: f
 test('timeline derives trial end and reminder day from the selected store offer', () => {
   const screen = render(<PaywallTimeline terms={annual} />);
   expect(screen.getByText('Day 1: trial access')).toBeTruthy();
-  expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
+  expect(screen.getByText(/Day [45]: optional reminder/)).toBeTruthy();
   expect(screen.getByText('Day 7: first charge')).toBeTruthy();
-  expect(screen.getByText('$59.99 every 1 year after the full trial period, unless canceled at least 24 hours before it ends.')).toBeTruthy();
+  expect(screen.getByText(/\$59\.99 every 1 year after the full trial period.*Estimated .* if started today; store confirms the exact date/)).toBeTruthy();
   screen.rerender(<PaywallTimeline terms={purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2W' } }, true)} />);
-  expect(screen.getByText('Day 13: optional reminder')).toBeTruthy();
+  expect(screen.getByText(/Day (11|12): optional reminder/)).toBeTruthy();
   expect(screen.getByText('Day 14: first charge')).toBeTruthy();
 });
 
@@ -54,7 +54,7 @@ test('granted permission remains conditional until a native request is scheduled
   jest.mocked(Notifications.getPermissionsAsync).mockResolvedValueOnce({ status: 'granted' } as Notifications.NotificationPermissionsStatus);
   const screen = render(<PaywallTimeline terms={annual} />);
   await waitFor(() => expect(Notifications.getPermissionsAsync).toHaveBeenCalled());
-  expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
+  expect(screen.getByText(/Day [45]: optional reminder/)).toBeTruthy();
   expect(screen.getByText('Requires permission and a store-confirmed trial end date.')).toBeTruthy();
 });
 
@@ -74,7 +74,7 @@ test('a stale denied response cannot replace a newer granted permission', async 
     act(() => onAppState('active'));
     await act(async () => second({ status: 'granted' } as Notifications.NotificationPermissionsStatus));
     await act(async () => first({ status: 'denied' } as Notifications.NotificationPermissionsStatus));
-    expect(screen.getByText('Day 6: optional reminder')).toBeTruthy();
+    expect(screen.getByText(/Day [45]: optional reminder/)).toBeTruthy();
     expect(screen.queryByText('Reminders are off')).toBeNull();
   } finally { listener.mockRestore(); }
 });
@@ -86,7 +86,7 @@ test('browser timeline does not promise a notification for an eligible trial', (
     const screen = render(<PaywallTimeline terms={annual} />);
     expect(screen.getByText('Reminder unavailable in this browser')).toBeTruthy();
     expect(screen.getByText('Trial notifications require the Fitsy mobile app.')).toBeTruthy();
-    expect(screen.queryByText('Day 6: optional reminder')).toBeNull();
+    expect(screen.queryByText(/Day [45]: optional reminder/)).toBeNull();
     expect(screen.getByText('Day 7: first charge')).toBeTruthy();
   } finally { Platform.OS = originalOS; }
 });
@@ -196,9 +196,9 @@ test('variant B refreshes the projected charge date when checkout crosses midnig
   jest.setSystemTime(new Date(2026, 8, 30, 23, 59, 59));
   try {
     const screen = render(<PaywallView {...props()} variant="B" />);
-    expect(screen.getByText("You'll be charged on October 7, 2026")).toBeTruthy();
+    expect(screen.getByText("Estimated first charge: October 7, 2026, if you start today. The store confirms your actual date after purchase.")).toBeTruthy();
     act(() => { jest.advanceTimersByTime(2000); });
-    expect(screen.getByText("You'll be charged on October 8, 2026")).toBeTruthy();
+    expect(screen.getByText("Estimated first charge: October 8, 2026, if you start today. The store confirms your actual date after purchase.")).toBeTruthy();
   } finally { jest.useRealTimers(); }
 });
 

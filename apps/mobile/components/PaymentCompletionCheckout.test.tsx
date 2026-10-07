@@ -187,7 +187,7 @@ test('monthly-only trial routes through reminder to monthly checkout and purchas
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
   jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({ annual: { status: 1, description: 'Ineligible' }, monthly: { status: 2, description: 'Eligible' } });
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
-  await waitFor(() => expect(screen.getByText('Try Fitsy free')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Try Fitsy')).toBeTruthy());
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
   await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-skip')); });

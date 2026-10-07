@@ -1,6 +1,6 @@
 import s from "@/app/landing-sections.module.css";
 import { WaitlistForm } from "@/components/landing/WaitlistForm";
-import type { DisplayPricing } from "@/lib/pricing";
+import { priceAnswer, type DisplayPricing } from "@/lib/pricing";
 import { LAUNCH_CITY, LAUNCH_DATE_ISO, LAUNCH_DATE_LABEL } from "@/lib/launch";
 
 /**
@@ -122,18 +122,6 @@ export function Trust() {
       </div>
     </section>
   );
-}
-
-/** Formats verified terms, or directs visitors to the app when ASC is unavailable. */
-function priceAnswer(p: DisplayPricing | null): string {
-  if (!p) {
-    return "See current subscription prices and any available introductory offer in the app before you subscribe.";
-  }
-  const plans = `${p.monthly} a month or ${p.annual} a year`;
-  if (p.trialDays > 0) {
-    return `${plans}. A ${p.trialDays}-day free trial may be available if you are eligible. Check the app's purchase screen for your offer and first charge before you subscribe. Cancel anytime.`;
-  }
-  return `${plans}. Cancel anytime.`;
 }
 
 function faqItems(pricing: DisplayPricing | null): Array<{ q: string; a: string }> {
