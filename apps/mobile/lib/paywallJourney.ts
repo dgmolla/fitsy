@@ -46,7 +46,7 @@ function resetJourney(navigation: Navigation, state: JourneyState): void {
 }
 
 /** These are completion actions, never Back actions. Reset the entire stack. */
-export function resetWelcomeJourney(navigation: Navigation, screen: 'payment' | 'preview' | 'notification-permission'): void {
+export function resetWelcomeJourney(navigation: Navigation, screen: 'payment' | 'resubscribe' | 'problem' | 'preview' | 'notification-permission'): void {
   resetJourney(navigation, { index: 0, routes: [nestedRoute('welcome', { index: 0, routes: [{ name: screen }] })] });
 }
 export async function openPurchasedDestination(navigation: Navigation, options?: { resumeOnly: true; isCurrent: () => boolean } | { requireTargets: true; isCurrent?: () => boolean }): Promise<boolean> {

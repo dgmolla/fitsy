@@ -19,7 +19,7 @@ import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { bindPaymentSignInContinuation, clearPaymentSignInContinuation, hasPaymentSignInContinuation, preparePaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
 import { clearPendingMealClaim } from '@/lib/pendingMealClaim';
 import { syncPaywallVerdictForCheckout } from '@/lib/teaserGate';
-import { openPurchasedDestination } from '@/lib/paywallJourney';
+import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
 import { withinMs } from '@/lib/async';
 import { BOOT_VERDICT_CAP_MS } from '@/lib/usePurchases';
 
@@ -101,7 +101,7 @@ export default function SignInScreen() {
         await clearPendingMealClaim();
         if (!isCurrent()) return;
         await clearPaymentSignInContinuation();
-        if (isCurrent()) router.dismissTo('/welcome/resubscribe');
+        if (isCurrent()) resetWelcomeJourney(navigation, 'resubscribe');
       } else {
         await clearPendingMealClaim();
         if (!isCurrent()) return;
@@ -119,7 +119,7 @@ export default function SignInScreen() {
       if (verdict === 'active') {
         await openPurchasedDestination(navigation, { requireTargets: true, isCurrent });
       } else if (verdict === 'expired') {
-        router.replace('/welcome/resubscribe');
+        resetWelcomeJourney(navigation, 'resubscribe');
       } else if (verdict === 'never_subscribed') {
         router.replace('/welcome/payment');
       } else {
@@ -143,7 +143,8 @@ export default function SignInScreen() {
         return;
       }
       if (verdict === 'expired') {
-        router.replace('/welcome/resubscribe');
+        await clearPendingMealClaim();
+        if (isCurrent()) resetWelcomeJourney(navigation, 'resubscribe');
         return;
       }
       if (verdict === 'unknown') {

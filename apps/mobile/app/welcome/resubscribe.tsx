@@ -19,6 +19,10 @@ import { purchaseTerms } from '@/lib/purchaseTerms';
 import { supabase } from '@/lib/supabase';
 import { BOOT_VERDICT_CAP_MS } from '@/lib/usePurchases';
 import { withinMs } from '@/lib/async';
+import { clearOnboardingResume } from '@/lib/onboardingResume';
+import { clearPaywallIntent } from '@/lib/paywallIntent';
+import { clearPendingMealClaim } from '@/lib/pendingMealClaim';
+import { clearPaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
 
 /**
  * Shown instead of the search tab when a signed-in user's Fitsy Pro
@@ -100,6 +104,17 @@ export default function ResubscribeScreen() {
 
   const terms = purchaseTerms(offering?.annual?.product, introEligibility[offering?.annual?.product.identifier ?? '']);
 
+  async function exitPlans() {
+    if (loading || restoring) return;
+    try {
+      await Promise.all([clearPaywallIntent(), clearPendingMealClaim(),
+        clearPaymentSignInContinuation(), clearOnboardingResume()]);
+      if (navigation.isFocused()) resetWelcomeJourney(navigation, 'problem');
+    } catch {
+      Alert.alert('Could not leave plans', 'Please try again.');
+    }
+  }
+
   async function handleResubscribe() {
     if (identity !== 'signed-in' || !ready || !isLapsed) return;
     const annual = offering?.annual ?? (await refreshOffering())?.annual;
@@ -158,6 +173,7 @@ export default function ResubscribeScreen() {
           .catch(() => Alert.alert('Could not save your choice', 'Please try again.'));
       } : undefined}
       showBack
+      onBack={() => { void exitPlans(); }}
     >
       {(teaserLoading || restaurants.length > 0) && (
         <View style={s.teaserWrap}>

@@ -1,6 +1,30 @@
 import { mockState, selected, response, deferred, routes, renderJourney, AsyncStorage, router, act, fireEvent, waitFor, MacroSetup, getPaywallIntent, rememberPaywallIntent, saveMacroTargets, saveOnboardingField, hasPaymentSignInContinuation, rememberPaymentSignInContinuation } from './OnboardingNavigationHarness';
 import Resubscribe from '../app/welcome/resubscribe';
 
+it('exits a lapsed locked-meal checkout without returning to its spent preview', async () => {
+  // Synthetic expired server verdict, not an Apple purchase receipt.
+  await rememberPaywallIntent(selected);
+  global.fetch = jest.fn((url: RequestInfo | URL) => Promise.resolve(String(url).endsWith('/api/auth/login')
+    ? response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false })
+    : response({ active: false, status: 'expired', verdict: 'expired', expiresAt: null,
+      lastRcVerifiedAt: new Date().toISOString(), stale: false, synced: true })));
+  const screen = renderJourney('/welcome/preview', { ...routes, 'welcome/resubscribe': () => <Resubscribe /> });
+  await act(async () => { fireEvent.press(screen.getByText('Open selected menu')); });
+  expect(await screen.findByText('Varilla')).toBeTruthy();
+  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/resubscribe'));
+  expect(await getPaywallIntent()).toEqual(selected);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/problem'));
+  expect(screen.queryByText('Discovery preview')).toBeNull();
+  expect(await getPaywallIntent()).toBeNull();
+  screen.unmount();
+  const restarted = renderJourney('/');
+  // A later cold launch still applies the signed-in lapsed-account guard.
+  await waitFor(() => expect(restarted.getPathname()).toBe('/welcome/resubscribe'));
+});
+
 it('does not render an anonymous resubscribe deep link before sign-in', async () => {
   const screen = renderJourney('/welcome/resubscribe', { ...routes, 'welcome/resubscribe': () => <Resubscribe /> });
   expect(screen.queryByText('Welcome back.')).toBeNull();
