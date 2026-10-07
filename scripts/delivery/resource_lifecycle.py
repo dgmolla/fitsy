@@ -230,10 +230,10 @@ def safe_scratch(path):
 def release_due(entry, assessment, now):
     if not (entry.get('finished_at') and entry.get('terminal') and entry.get('worktree')):
         return False
-    if assessment is None or assessment.get('removal_intent'):
+    if assessment is None:
         return True
     if assessment.get('state') != 'deferred':
-        return False
+        return bool(assessment.get('removal_intent'))
     deadline = assessment.get('retry_after')
     # Legacy failures get one guarded assessment, not a fabricated old-use timestamp.
     return deadline is None or (isinstance(deadline, (int, float)) and
@@ -246,7 +246,17 @@ def cleanup_released(config, state, save):
         return
     assessed = state.setdefault('resource_releases', {})
     now = time.time()
-    eligible = [entry for entry in reversed(state.get('history', []))
+    candidates = list(reversed(state.get('history', [])))
+    retained = {entry.get('id') for entry in candidates}
+    # Retry retained failures even after their original claim leaves compact history.
+    if any(identity not in retained and result.get('state') == 'deferred'
+           for identity, result in assessed.items()):
+        receipts, uncertain = read_claims(config, state)
+        if uncertain:
+            save()  # Preserve exact damaged receipts; they never become cleanup candidates.
+        candidates.extend(entry for _, entry in receipts if entry['id'] not in retained
+                          and assessed.get(entry['id'], {}).get('state') == 'deferred')
+    eligible = [entry for entry in candidates
                 if release_due(entry, assessed.get(entry.get('id')), now)]
     # New releases and uncertain deletion intents precede due retries; then oldest due first.
     eligible.sort(key=lambda entry: (0 if entry['id'] not in assessed or

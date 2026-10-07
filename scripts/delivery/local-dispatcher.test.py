@@ -392,6 +392,47 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(result['resource_releases'][new['id']]['state'], 'released')
         self.assertEqual(result['resource_releases'][old['id']], prior)
 
+    def test_deferred_deletion_intent_honors_backoff(self):
+        state, old, scratch = self.deferred_scratch()
+        prior = state['resource_releases'][old['id']]
+        prior.update({'removal_intent': str(scratch), 'retry_after': time.time() + 900})
+        (self.state / 'state.json').write_text(json.dumps(state))
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\necho still-open\nexit 0\n')
+        self.tick(); self.tick()
+        self.assertEqual(self.state_data()['resource_releases'][old['id']], prior)
+        self.assertTrue(scratch.exists())
+
+    def test_deferred_release_uses_durable_receipt_after_history_rollover(self):
+        state, old, scratch = self.deferred_scratch()
+        state['history'] = [{'id': 'later-%s' % n, 'issue': 999, 'terminal': 'verified'} for n in range(100)]
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertFalse(scratch.exists(), 'durable ended receipt must survive compact history rollover')
+        self.assertEqual(self.state_data()['resource_releases'][old['id']]['state'], 'released')
+
+    def test_pruned_release_preserves_damaged_durable_receipt_and_scratch(self):
+        state, old, scratch = self.deferred_scratch()
+        state['history'] = []
+        receipt = self.state / 'claims' / old['id'] / 'receipt.json'
+        receipt.write_text('[]')
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists())
+        self.assertEqual(receipt.read_text(), '[]')
+        self.assertEqual(self.state_data()['resource_releases'][old['id']], state['resource_releases'][old['id']])
+        self.assertIn(str(receipt), self.state_data()['cold_retention_legacy'])
+
+    def test_pruned_release_rechecks_current_open_holder(self):
+        state, old, scratch = self.deferred_scratch()
+        state['history'] = []
+        (self.state / 'state.json').write_text(json.dumps(state))
+        (self.base / 'fake-lsof').write_text('#!/bin/sh\necho still-open\nexit 0\n')
+        self.tick()
+        self.assertTrue(scratch.exists())
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertEqual(result['state'], 'deferred')
+        self.assertEqual(result['retry_after'] - result['attempted_at'], 900)
+
     @unittest.skipUnless(shutil.which('lsof'), 'real process open-file fixture requires lsof')
     def test_open_source_process_protects_scratch_before_first_release_assessment(self):
         state, old, checkout = self.ended_checkout()
