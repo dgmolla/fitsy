@@ -12,6 +12,7 @@ import { ONBOARDING_COMPLETE_KEY } from '../lib/onboardingCompletion';
 import { BOOT_VERDICT_CAP_MS } from '../lib/usePurchases';
 import { saveReminderPreferences } from '../lib/notificationSchedule';
 import { paymentCompletionRoutes } from './paymentCompletionRoutes';
+import { installHardwareBackFixture } from './hardwareBackHarness';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -98,6 +99,7 @@ test('a lapsed account opening payment directly reaches resubscribe before first
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/resubscribe'));
   expect(screen.queryByTestId('paywall-logo')).toBeNull();
+  expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed' || name === 'paywall_shown')).toHaveLength(0);
 });
 
 test('authenticated payment retains checkout through the purchase, then clears it', async () => {
@@ -109,12 +111,13 @@ test('authenticated payment retains checkout through the purchase, then clears i
   await waitFor(async () => expect(await hasPaymentSignInContinuation()).toBe(false));
 });
 
-test('Paywall Back keeps a completed checkout off its spent preview', async () => {
+test.each(['visible', 'hardware'])('Paywall %s Back keeps a completed checkout off its spent preview', async kind => {
+  const back = kind === 'hardware' ? installHardwareBackFixture() : null;
   await rememberPaymentSignInContinuation();
   const screen = renderRouter({ ...routes, 'welcome/preview': () => null }, { initialUrl: '/welcome/preview' });
   await act(async () => { router.push('/welcome/payment'); });
   await waitFor(() => expect(screen.getByTestId('paywall-price-yearly')).toBeTruthy());
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await act(async () => { if (back) back(); else fireEvent.press(screen.getByTestId('welcome-back')); });
   expect(screen.getPathname()).toBe('/welcome/payment');
   expect(screen.getByTestId('paywall-decline')).toBeTruthy();
 });

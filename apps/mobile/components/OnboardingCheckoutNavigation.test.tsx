@@ -1,7 +1,9 @@
 import { mockState, selected, response, deferred, routes, renderJourney, AsyncStorage, router, act, fireEvent, waitFor, MacroSetup, getPaywallIntent, rememberPaywallIntent, saveMacroTargets, saveOnboardingField, hasPaymentSignInContinuation, rememberPaymentSignInContinuation } from './OnboardingNavigationHarness';
 import Resubscribe from '../app/welcome/resubscribe';
+import { installHardwareBackFixture } from './hardwareBackHarness';
 
-it('exits a lapsed locked-meal checkout without returning to its spent preview', async () => {
+it.each(['visible', 'hardware'])('exits a lapsed locked-meal checkout through %s Back without spent preview', async kind => {
+  const back = kind === 'hardware' ? installHardwareBackFixture() : null;
   // Synthetic expired server verdict, not an Apple purchase receipt.
   await rememberPaywallIntent(selected);
   global.fetch = jest.fn((url: RequestInfo | URL) => Promise.resolve(String(url).endsWith('/api/auth/login')
@@ -15,7 +17,7 @@ it('exits a lapsed locked-meal checkout without returning to its spent preview',
   await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/resubscribe'));
   expect(await getPaywallIntent()).toEqual(selected);
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await act(async () => { if (back) back(); else fireEvent.press(screen.getByTestId('welcome-back')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/problem'));
   expect(screen.queryByText('Discovery preview')).toBeNull();
   expect(await getPaywallIntent()).toBeNull();

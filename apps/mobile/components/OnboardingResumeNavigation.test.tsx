@@ -1,4 +1,22 @@
 import { mockState, selected, response, deferred, routes, installEligibleTrialOffer, renderJourney, Alert, AsyncStorage, act, fireEvent, waitFor, MacroSetup, getPaywallIntent, rememberPaywallIntent, getStoredToken, saveMacroTargets, saveOnboardingField, hasPaymentSignInContinuation, rememberPaymentSignInContinuation, hasPendingMealClaim, rememberPendingMealClaim } from './OnboardingNavigationHarness';
+import { installHardwareBackFixture } from './hardwareBackHarness';
+
+it('clears an anonymous locked-meal checkout on native hardware Back before cold launch', async () => {
+  const back = installHardwareBackFixture();
+  await rememberPaywallIntent(selected);
+  await rememberPendingMealClaim();
+  await rememberPaymentSignInContinuation();
+  const screen = renderJourney('/welcome/signin?returnTo=payment');
+  expect(await screen.findByText('Varilla')).toBeTruthy();
+  await act(async () => { back(); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/problem'));
+  expect(await hasPendingMealClaim()).toBe(false);
+  expect(await hasPaymentSignInContinuation()).toBe(false);
+  expect(await getPaywallIntent()).toBeNull();
+  screen.unmount();
+  const restarted = renderJourney('/');
+  await waitFor(() => expect(restarted.getPathname()).toBe('/welcome/problem'));
+});
 
 it('restores and can cancel an anonymous meal saved before the sign-in checkpoint', async () => {
   await rememberPaywallIntent(selected);

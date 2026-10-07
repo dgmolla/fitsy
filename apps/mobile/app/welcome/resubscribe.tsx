@@ -23,6 +23,7 @@ import { clearOnboardingResume } from '@/lib/onboardingResume';
 import { clearPaywallIntent } from '@/lib/paywallIntent';
 import { clearPendingMealClaim } from '@/lib/pendingMealClaim';
 import { clearPaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
+import { useOwnedHardwareBack } from '@/lib/useOwnedHardwareBack';
 
 /**
  * Shown instead of the search tab when a signed-in user's Fitsy Pro
@@ -114,6 +115,7 @@ export default function ResubscribeScreen() {
       Alert.alert('Could not leave plans', 'Please try again.');
     }
   }
+  useOwnedHardwareBack(() => { void exitPlans(); });
 
   async function handleResubscribe() {
     if (identity !== 'signed-in' || !ready || !isLapsed) return;

@@ -22,6 +22,7 @@ import { syncPaywallVerdictForCheckout } from '@/lib/teaserGate';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
 import { withinMs } from '@/lib/async';
 import { BOOT_VERDICT_CAP_MS } from '@/lib/usePurchases';
+import { useOwnedHardwareBack } from '@/lib/useOwnedHardwareBack';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -258,24 +259,26 @@ export default function SignInScreen() {
 
   const busy = appleLoading || googleLoading || devLoading;
 
+  const onBack = useOwnedHardwareBack(() => {
+    cancel();
+    void (async () => {
+      // A cold resume loses query parameters, so read the durable checkout
+      // marker before clearing it. Never Back into a retained paywall.
+      const paymentReturn = returnTo === 'payment' || returnTo === 'resubscribe' ||
+        await hasPaymentSignInContinuation().catch(() => true);
+      await Promise.allSettled([clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(), clearOnboardingResume()]);
+      if (!navigation.isFocused()) return;
+      if (paymentReturn || !navigation.canGoBack()) router.replace('/welcome/problem');
+      else if (navigation.canGoBack()) router.back();
+    })();
+  });
+
   const hasIntent = outOfArea !== '1' && !!selection.intent;
   return <WelcomeScreen progress={0.82}
     title={hasIntent ? "Keep this\nrestaurant in reach." : 'Create an account'}
     subtitle={hasIntent ? 'Keep your pick, then choose a plan to open its full menu.' : outOfArea === '1' ? 'Sign in for updates when more menus arrive in your area.' : 'Keep your meal picks and targets with one sign-in.'}
     onContinue={() => {}} canContinue={false} hideFooter
-    onBack={() => {
-      cancel();
-      void (async () => {
-        // A cold resume loses query parameters, so read the durable checkout
-        // marker before clearing it. Never Back into a retained paywall.
-        const paymentReturn = returnTo === 'payment' || returnTo === 'resubscribe' ||
-          await hasPaymentSignInContinuation().catch(() => true);
-        await Promise.allSettled([clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(), clearOnboardingResume()]);
-        if (!navigation.isFocused()) return;
-        if (paymentReturn || !navigation.canGoBack()) router.replace('/welcome/problem');
-        else if (navigation.canGoBack()) router.back();
-      })();
-    }}
+    onBack={onBack}
     footerContent={<>
       <WelcomeAuthActions busy={busy} appleLoading={appleLoading} googleLoading={googleLoading} devLoading={devLoading}
         onApple={handleApple} onGoogle={handleGoogle} onDev={handleDevLogin} />

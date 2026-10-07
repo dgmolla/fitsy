@@ -24,6 +24,7 @@ import { supabase } from '@/lib/supabase';
 import { readReminderPreferences } from '@/lib/notificationSchedule';
 import { getNotificationPermission } from '@/lib/useNotifications';
 import { clearPaymentSignInContinuation, navigateBackFromPayment } from '@/lib/paymentSignInContinuation';
+import { useOwnedHardwareBack } from '@/lib/useOwnedHardwareBack';
 import type { ReminderAvailability } from '@/components/PaywallOfferTimeline';
 
 type PlanId = 'monthly' | 'yearly';
@@ -136,17 +137,20 @@ export default function PaymentScreen() {
   const heldPlan = settledDefaultPlan.current;
   const automaticPlan = checkingPlans && heldPlan && (heldPlan === 'yearly' ? annualTerms : monthlyTerms) ? heldPlan : defaultPlan;
   const plan = chosenPlan && (chosenPlan === 'yearly' ? annualTerms : monthlyTerms) ? chosenPlan : automaticPlan;
-  const discountedAnnual =
-    offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
+  const discountedAnnual = offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
   const selected = plan === 'yearly' ? offering?.annual : offering?.monthly;
   const terms = purchaseTerms(selected?.product, selected ? introEligibility[selected.product.identifier] : false);
   const discountTerms = purchaseTerms(discountedAnnual?.product, discountedAnnual ? introEligibility[discountedAnnual.product.identifier] : false);
   const discountPercent = savingPercent(offering?.annual?.product, discountedAnnual?.product);
-  const annualPercent = annualSavingPercent(shownOffering?.annual?.product, shownOffering?.monthly?.product);
+  const onBack = useOwnedHardwareBack(() => {
+    void navigateBackFromPayment(navigation.canGoBack(), userId ?? undefined,
+      () => router.back(), () => setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'));
+  });
+  const paywallVisible = focused && identityReady && !!userId && purchasesReady && !isUnknown && !isLapsed && entitled !== true && !visualRequested;
 
   useEffect(() => {
-    if (focused && identityReady && userId && !visualRequested) trackOnboardingScreenView('payment');
-  }, [focused, identityReady, userId, visualRequested]);
+    if (paywallVisible) trackOnboardingScreenView('payment');
+  }, [paywallVisible, userId]);
 
   // The boot-time offering fetch can fail (offline at launch, StoreKit hiccup).
   // Retry when this screen opens without one so the CTA isn't dead on arrival.
@@ -156,14 +160,14 @@ export default function PaymentScreen() {
 
   useEffect(() => {
     if (!focused) { exposure.current = ''; return; }
-    if (!offering || visualRequested || !userId || !identityReady || !identityResolvedForFocus.current) return;
+    if (!offering || !paywallVisible || !identityResolvedForFocus.current) return;
     const key = `${userId}:${offering.identifier}:${variants.access}:${paywallVariant}:${variantConfig.version}:${!!testerOverride}`;
     if (exposure.current === key) return;
     exposure.current = key;
     const attribution = { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride };
     trackPaywallShown({ source: 'onboarding', ...attribution });
     trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: paywallVariant === 'A' ? 'meal' : 'none', layout_variant: paywallVariant === 'A' ? 'mosaic_benefits' : 'trial_timeline', ...attribution });
-  }, [offering, variants.access, visualRequested, userId, focused, identityReady, paywallVariant, variantConfig.version, testerOverride]);
+  }, [offering, variants.access, paywallVisible, userId, focused, paywallVariant, variantConfig.version, testerOverride]);
 
   async function declineSubscription() {
     try {
@@ -262,7 +266,7 @@ export default function PaymentScreen() {
         plan={plan}
         annual={annualTerms}
         monthly={monthlyTerms}
-        annualSavingPercent={annualPercent}
+        annualSavingPercent={annualSavingPercent(shownOffering?.annual?.product, shownOffering?.monthly?.product)}
         discovery={discovery}
         variant={paywallVariant}
         reminderAvailability={simulatedReminder ? 'enabled' : reminderAvailability}
@@ -272,10 +276,7 @@ export default function PaymentScreen() {
         visualPreview={visual ? (devTrialVisual === '14' ? 14 : 7) : undefined}
         visualReminderSimulated={simulatedReminder}
         onSelect={setChosenPlan}
-        onBack={() => {
-          void navigateBackFromPayment(navigation.canGoBack(), userId ?? undefined,
-            () => router.back(), () => setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'));
-        }}
+        onBack={onBack}
         onRestore={() => { void handleRestore(); }}
         onManage={() => { void showManageSubscriptions(); }}
         onRetry={() => { void refreshOffering(); }}
