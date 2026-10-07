@@ -176,7 +176,14 @@ export default function RestaurantDetailScreen() {
     // bookmark is really asking to unlock, not save - send them there instead
     // of letting the request 401.
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { void routeToPaywall(); return; }
+    if (!session) {
+      const item = menu?.menuItems.find(candidate => candidate.id === menuItemId);
+      void routeToPaywall({ intent: {
+        action: 'save', restaurantId: id, menuItemId,
+        mealName: item?.name, restaurantName: menu?.restaurantName,
+      } });
+      return;
+    }
     const existingId = savedMap.get(menuItemId);
     if (existingId) {
       const ok = await unsaveItem(existingId);
@@ -197,7 +204,7 @@ export default function RestaurantDetailScreen() {
         trackSaveFailed({ menu_item_id: menuItemId, restaurant_id: id ?? '', action: 'save', entry_point: 'restaurant_detail' });
       }
     }
-  }, [savedMap, id]);
+  }, [savedMap, id, menu]);
 
   const scored = useMemo(() => {
     if (!menu) return [];
@@ -334,7 +341,10 @@ export default function RestaurantDetailScreen() {
                   restaurant_id: id ?? '',
                   position: index,
                 });
-                if (isLocked) void routeToPaywall();
+                if (isLocked) void routeToPaywall({ intent: {
+                  action: 'menu', restaurantId: id, menuItemId: scoredItem.item.id,
+                  mealName: scoredItem.item.name, restaurantName,
+                } });
               }}
               onToggleSave={() => handleToggleSave(scoredItem.item.id)}
             />

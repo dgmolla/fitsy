@@ -1,4 +1,4 @@
-import { useOnboardingStep } from '@/lib/onboardingResume';
+import { clearOnboardingResume, useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect, useNavigation } from 'expo-router';
@@ -10,17 +10,29 @@ import { pullProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { OnboardingAccountSummary } from '@/components/OnboardingAccountSummary';
 import { WelcomeAuthActions } from '@/components/WelcomeAuthActions';
-import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent, type PaywallIntent } from '@/lib/paywallIntent';
+import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent, markPurchasedContinuation, type PaywallIntent } from '@/lib/paywallIntent';
 import { getMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
 import { getOnboardingData } from '@/lib/onboardingStorage';
 import { identifyUser, trackAuthFailure, trackAuthSuccess, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
+import { bindPaymentSignInContinuation, clearPaymentSignInContinuation, hasPaymentSignInContinuation, preparePaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
+import { clearPendingMealClaim } from '@/lib/pendingMealClaim';
+import { syncPaywallVerdictForCheckout } from '@/lib/teaserGate';
+import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
+import { withinMs } from '@/lib/async';
+import { BOOT_VERDICT_CAP_MS } from '@/lib/usePurchases';
+import { useOwnedHardwareBack } from '@/lib/useOwnedHardwareBack';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+
+async function checkoutVerdict() {
+  try { return await withinMs(syncPaywallVerdictForCheckout(), BOOT_VERDICT_CAP_MS) ?? 'unknown'; }
+  catch { return 'unknown'; }
+}
 
 async function captureIdentity(userId: string, email?: string | null): Promise<void> {
   const [mt, od] = await Promise.all([getMacroTargets(), getOnboardingData()]);
@@ -53,35 +65,121 @@ export default function SignInScreen() {
   // New accounts see live trial terms and optional reminders before plans.
   // Skip onboarding review; existing in-app prompts use lib/ratingPrompt.ts.
   const { outOfArea, returnTo } = useLocalSearchParams<{ outOfArea?: string; returnTo?: string }>();
+  useEffect(() => {
+    if (returnTo === 'payment') void preparePaymentSignInContinuation();
+  }, [returnTo]);
+  useEffect(() => {
+    if (outOfArea === '1') void Promise.allSettled([
+      clearPaymentSignInContinuation(), clearPendingMealClaim(), clearPaywallIntent(),
+    ]);
+  }, [outOfArea]);
   // A cold launch cannot recover this screen's query parameters. Keep the
   // waitlist checkpoint so interrupted signup never resumes toward a paywall.
   useOnboardingStep(outOfArea === '1' ? 'out-of-area' : 'signin');
 
-  const navigateAfterAuth = useCallback(async (isNewUser: boolean, isCurrent: () => boolean) => {
+  const navigateAfterAuth = useCallback(async (isNewUser: boolean, userId: string, ownedCheckout: boolean | null, isCurrent: () => boolean) => {
     if (!isCurrent()) return;
     if (outOfArea === '1') {
-      router.dismissTo('/welcome/out-of-area');
+      await clearPaymentSignInContinuation();
+      await clearPendingMealClaim();
+      if (isCurrent()) router.dismissTo('/welcome/out-of-area');
       return;
     }
-    if (returnTo === 'payment' || returnTo === 'resubscribe' || returnTo === 'trial-reminder') {
-      router.dismissTo(`/welcome/${returnTo}`);
+    if (ownedCheckout !== null) {
+      const verdict = await checkoutVerdict();
+      if (!isCurrent()) return;
+      if (verdict === 'active') {
+        // Keep the selected meal durable before consuming the sign-in marker.
+        // A process exit here must still reopen the owned meal on next launch.
+        await markPurchasedContinuation();
+        if (!isCurrent()) return;
+        await clearPendingMealClaim();
+        if (!isCurrent()) return;
+        await clearPaymentSignInContinuation();
+        if (!isCurrent()) return;
+        await openPurchasedDestination(navigation, { requireTargets: true, isCurrent });
+      } else if (verdict === 'expired') {
+        await clearPendingMealClaim();
+        if (!isCurrent()) return;
+        await clearPaymentSignInContinuation();
+        if (isCurrent()) resetWelcomeJourney(navigation, 'resubscribe');
+      } else {
+        await clearPendingMealClaim();
+        if (!isCurrent()) return;
+        router.replace(verdict === 'never_subscribed'
+          ? ownedCheckout ? '/welcome/payment' : '/welcome/trial'
+          : '/welcome/subscription-check');
+      }
       return;
     }
-    const destination = isNewUser || await getPaywallIntent() ? '/welcome/trial' : '/(tabs)/search';
+    if (returnTo === 'resubscribe') {
+      const verdict = await checkoutVerdict();
+      if (!isCurrent()) return;
+      await clearPaymentSignInContinuation();
+      if (!isCurrent()) return;
+      if (verdict === 'active') {
+        await openPurchasedDestination(navigation, { requireTargets: true, isCurrent });
+      } else if (verdict === 'expired') {
+        resetWelcomeJourney(navigation, 'resubscribe');
+      } else if (verdict === 'never_subscribed') {
+        router.replace('/welcome/payment');
+      } else {
+        router.dismissTo('/welcome/subscription-check');
+      }
+      return;
+    }
+    if (returnTo === 'trial-reminder') {
+      await clearPaymentSignInContinuation();
+      await clearPendingMealClaim();
+      if (isCurrent()) router.dismissTo(`/welcome/${returnTo}`);
+      return;
+    }
+    const intent = await getPaywallIntent();
+    if (!isCurrent()) return;
+    if (intent) {
+      const verdict = await checkoutVerdict();
+      if (!isCurrent()) return;
+      if (verdict === 'active') {
+        await openPurchasedDestination(navigation, { requireTargets: true, isCurrent });
+        return;
+      }
+      if (verdict === 'expired') {
+        await clearPendingMealClaim();
+        if (isCurrent()) resetWelcomeJourney(navigation, 'resubscribe');
+        return;
+      }
+      if (verdict === 'unknown') {
+        router.replace('/welcome/subscription-check');
+        return;
+      }
+    }
+    const destination = isNewUser || intent ? '/welcome/trial' : '/(tabs)/search';
     if (isCurrent()) router.replace(destination);
-  }, [outOfArea, returnTo]);
+    await clearPendingMealClaim();
+  }, [navigation, outOfArea, returnTo]);
 
   const finishAuth = useCallback(async (r: Awaited<ReturnType<typeof appleSignIn>>, provider: 'apple' | 'google' | 'dev', isCurrent: () => boolean) => {
     trackAuthSuccess({ provider, is_new_user: provider === 'dev' ? false : r.isNewUser });
     // The SDK retains the completed session even if this route was left.
     // A stale continuation must not claim a newer preview's selected meal.
     if (!isCurrent()) return;
-    await claimPaywallIntent(r.user.id);
+    const checkoutRequested = returnTo === 'payment' || (!returnTo && await hasPaymentSignInContinuation());
+    if (!isCurrent()) return;
+    let ownedCheckout: boolean | null = null;
+    if (checkoutRequested) {
+      if (returnTo === 'payment') await preparePaymentSignInContinuation();
+      if (!isCurrent()) return;
+      ownedCheckout = await bindPaymentSignInContinuation(r.user.id);
+      if (!isCurrent()) return;
+      if (ownedCheckout) await claimPaywallIntent(r.user.id);
+      else await Promise.all([clearPaywallIntent(), clearPendingMealClaim()]);
+    } else await claimPaywallIntent(r.user.id);
+    if (!isCurrent()) return;
     await captureIdentity(r.user.id, r.user.email);
     if (!isCurrent()) return;
     if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent()) && isCurrent()) await pullProfileFromServer();
-    await navigateAfterAuth(r.isNewUser, isCurrent);
-  }, [navigateAfterAuth, outOfArea]);
+    await navigateAfterAuth(r.isNewUser, r.user.id, ownedCheckout, isCurrent);
+  }, [navigateAfterAuth, outOfArea, returnTo]);
 
   const [, response, promptGoogleAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID ?? 'not-configured',
@@ -161,16 +259,26 @@ export default function SignInScreen() {
 
   const busy = appleLoading || googleLoading || devLoading;
 
+  const onBack = useOwnedHardwareBack(() => {
+    cancel();
+    void (async () => {
+      // A cold resume loses query parameters, so read the durable checkout
+      // marker before clearing it. Never Back into a retained paywall.
+      const paymentReturn = returnTo === 'payment' || returnTo === 'resubscribe' ||
+        await hasPaymentSignInContinuation().catch(() => true);
+      await Promise.allSettled([clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(), clearOnboardingResume()]);
+      if (!navigation.isFocused()) return;
+      if (paymentReturn || !navigation.canGoBack()) router.replace('/welcome/problem');
+      else if (navigation.canGoBack()) router.back();
+    })();
+  });
+
   const hasIntent = outOfArea !== '1' && !!selection.intent;
   return <WelcomeScreen progress={0.82}
     title={hasIntent ? "Keep this\nrestaurant in reach." : 'Create an account'}
     subtitle={hasIntent ? 'Keep your pick, then choose a plan to open its full menu.' : outOfArea === '1' ? 'Sign in for updates when more menus arrive in your area.' : 'Keep your meal picks and targets with one sign-in.'}
     onContinue={() => {}} canContinue={false} hideFooter
-    onBack={navigation.canGoBack() ? () => {
-      cancel();
-      const goBack = () => { if (navigation.isFocused() && navigation.canGoBack()) router.back(); };
-      void clearPaywallIntent().then(goBack, goBack);
-    } : undefined}
+    onBack={onBack}
     footerContent={<>
       <WelcomeAuthActions busy={busy} appleLoading={appleLoading} googleLoading={googleLoading} devLoading={devLoading}
         onApple={handleApple} onGoogle={handleGoogle} onDev={handleDevLogin} />

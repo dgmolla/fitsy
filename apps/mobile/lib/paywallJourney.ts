@@ -1,6 +1,7 @@
 import { StackRouter, type NavigationProp, type ParamListBase } from '@react-navigation/native';
-import { clearPaywallIntent, getPaywallIntent, getPurchasedContinuation } from './paywallIntent';
+import { clearPaywallIntent, getPaywallIntent, getPurchasedContinuation, markPurchasedContinuation } from './paywallIntent';
 import { getMacroTargets } from './macroStorage';
+import { recordOnboardingComplete } from './onboardingCompletion';
 
 type Navigation = Pick<NavigationProp<ParamListBase>, 'reset' | 'getParent'> & {
   getState: () => ReturnType<NavigationProp<ParamListBase>['getState']> | undefined;
@@ -45,14 +46,20 @@ function resetJourney(navigation: Navigation, state: JourneyState): void {
 }
 
 /** These are completion actions, never Back actions. Reset the entire stack. */
-export function resetWelcomeJourney(navigation: Navigation, screen: 'payment' | 'preview' | 'notification-permission'): void {
+export function resetWelcomeJourney(navigation: Navigation, screen: 'payment' | 'resubscribe' | 'problem' | 'preview' | 'notification-permission'): void {
   resetJourney(navigation, { index: 0, routes: [nestedRoute('welcome', { index: 0, routes: [{ name: screen }] })] });
 }
-export async function openPurchasedDestination(navigation: Navigation, options?: { resumeOnly: true; isCurrent: () => boolean } | { requireTargets: true }): Promise<boolean> {
+export async function openPurchasedDestination(navigation: Navigation, options?: { resumeOnly: true; isCurrent: () => boolean } | { requireTargets: true; isCurrent?: () => boolean }): Promise<boolean> {
   const resume = options && 'resumeOnly' in options;
+  const isCurrent = options?.isCurrent ?? (() => true);
   const intent = resume ? await getPurchasedContinuation() : await getPaywallIntent();
-  if (resume && (!intent || !options.isCurrent())) return false;
+  if (!isCurrent() || (resume && !intent)) return false;
   if (options && 'requireTargets' in options && !(await getMacroTargets())) {
+    if (!isCurrent()) return false;
+    // An entitled account may need targets before opening the selected meal.
+    // Persist the owned selection for that final setup step and cold resumes.
+    await markPurchasedContinuation();
+    if (!isCurrent()) return false;
     resetJourney(navigation, { index: 0, routes: [{ name: 'macro-setup' }] });
     return true;
   }
@@ -63,6 +70,11 @@ export async function openPurchasedDestination(navigation: Navigation, options?:
       ...(intent.action === 'save' ? { saveSelected: '1' } : {}),
     } }] : []),
   ];
+  if (!isCurrent()) return false;
+  // Every active-account route that opens a purchased destination completes
+  // onboarding, including sign-in and cold-resume paths that skip the paywall.
+  await recordOnboardingComplete(false);
+  if (!isCurrent()) return false;
   resetJourney(navigation, { index: routes.length - 1, routes });
   await clearPaywallIntent();
   return true;

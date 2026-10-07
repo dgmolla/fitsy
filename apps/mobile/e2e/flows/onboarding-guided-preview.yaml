@@ -319,43 +319,8 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - assertVisible:
     id: preview-guide
 - assertVisible: "pizza"
-# A standalone paywall shows live store terms and retains the current search.
-- openLink: com.fitsy.mobile://welcome/payment
-# A fresh simulator can require system confirmation for an app link.
-- tapOn:
-    text: "^Open$"
-    optional: true
-- assertNotVisible: "Discover more meals like your pick.*"
-- extendedWaitUntil:
-    visible:
-      id: welcome-continue
-      enabled: true
-    timeout: 15000
-- assertVisible:
-    id: paywall-offer-paid
-- copyTextFrom:
-    id: paywall-price-yearly
-- evalScript: ${output.annualPrice = maestro.copiedText}
-- assertTrue: ${output.annualPrice !== 'Loading…' && output.annualPrice.length > 0}
-- scrollUntilVisible:
-    element:
-      id: paywall-terms
-    direction: DOWN
-- copyTextFrom:
-    id: paywall-terms
-- assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically') && maestro.copiedText.includes('24 hours')}
-- tapOn:
-    id: welcome-back
-- assertVisible:
-    id: preview-back
-# Back preserves the user's list position; scroll to inspect the retained query.
-- scrollUntilVisible:
-    element:
-      id: preview-guide
-    direction: UP
-- assertVisible:
-    id: preview-guide
-- assertVisible: "pizza"
+# The locked choice above reached sign-in before any plans. Continue from
+# preview and use its selected-pick sign-in for the live terms assertion below.
 # Sign in through the real dev auth seam and preserve the tapped third pick.
 # This never purchases on the shared dev account.
 - scrollUntilVisible:
@@ -396,6 +361,9 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: welcome-back
 - assertVisible:
     id: preview-back
+# This fresh preview has no prior decline or owned payment continuation.
+# Its Back path returns to preview; the owned checkout exit-modal branch is
+# covered separately in onboarding-returning-preview.yaml.
 # Back preserves the user's list position; scroll to inspect the retained query.
 - scrollUntilVisible:
     element:

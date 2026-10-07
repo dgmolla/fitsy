@@ -127,6 +127,26 @@ describe('routeToPaywall', () => {
     expect(g.replace).toHaveBeenLastCalledWith('/welcome/payment');
   });
 
+  it('keeps a declined anonymous selection for sign-in before the first paywall', async () => {
+    const g = await load();
+    store.set('@fitsy/paywallDeclined', '1');
+    g.getSession.mockResolvedValue({ data: { session: null } });
+    await g.routeToPaywall({ replace: true, intent: { action: 'menu', restaurantId: 'r1', menuItemId: 'm1' } });
+    expect(g.replace).toHaveBeenCalledWith('/welcome/signin?returnTo=payment');
+    expect(g.push).not.toHaveBeenCalled();
+    expect(store.get('@fitsy/paywallIntent')).toContain('"menuItemId":"m1"');
+    expect(store.get('@fitsy/paymentSignInContinuation')).toBe('1');
+  });
+
+  it('saves a meal claim for first-time anonymous sign-in without selecting payment', async () => {
+    const g = await load();
+    g.getSession.mockResolvedValue({ data: { session: null } });
+    await g.routeToPaywall({ intent: { action: 'menu', restaurantId: 'r1', menuItemId: 'm1' } });
+    expect(g.push).toHaveBeenCalledWith('/welcome/signin');
+    expect(store.get('@fitsy/pendingMealClaim')).toBe('1');
+    expect(store.has('@fitsy/paymentSignInContinuation')).toBe(false);
+  });
+
   it('sends a signed-in *lapsed* subscriber to the win-back screen, not the free-trial paywall', async () => {
     const g = await load();
     g.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'u1' } } } });

@@ -5,11 +5,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-native-purchases';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
+import { router } from 'expo-router';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
+import { hasPaymentSignInContinuation, rememberPaymentSignInContinuation } from '../lib/paymentSignInContinuation';
 import { ONBOARDING_COMPLETE_KEY } from '../lib/onboardingCompletion';
 import { BOOT_VERDICT_CAP_MS } from '../lib/usePurchases';
 import { saveReminderPreferences } from '../lib/notificationSchedule';
 import { paymentCompletionRoutes } from './paymentCompletionRoutes';
+import { installHardwareBackFixture } from './hardwareBackHarness';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -80,17 +83,46 @@ async function openPayment() {
   return screen;
 }
 
-test('an anonymous paywall view is attributed once across plan changes', async () => {
+test('an anonymous payment entry goes to sign-in without exposing a paywall', async () => {
   mockAuthSession = null;
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
-  await waitFor(() => expect(screen.getByTestId('paywall-price-yearly')).toBeTruthy());
-  await waitFor(() => expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ paywall_variant: 'B', layout_variant: 'trial_timeline' })));
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
+  expect(screen.queryByTestId('paywall-price-yearly')).toBeNull();
+  expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(0);
   expect((global.fetch as jest.Mock).mock.calls.some(([url]) => String(url).includes('/restaurants/preview'))).toBe(false);
-  await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
-  expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
 });
 
-test('a stalled initial session read reveals the paywall and accepts a late identity', async () => {
+test('a lapsed account opening payment directly reaches resubscribe before first-time plans', async () => {
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    active: false, synced: true, verdict: 'expired', lastRcVerifiedAt: new Date().toISOString(), stale: false,
+  }) });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/resubscribe'));
+  expect(screen.queryByTestId('paywall-logo')).toBeNull();
+  expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed' || name === 'paywall_shown')).toHaveLength(0);
+});
+
+test('authenticated payment retains checkout through the purchase, then clears it', async () => {
+  await rememberPaymentSignInContinuation();
+  const screen = await openPayment();
+  expect(screen.getPathname()).toBe('/welcome/payment');
+  expect(await hasPaymentSignInContinuation()).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(async () => expect(await hasPaymentSignInContinuation()).toBe(false));
+});
+
+test.each(['visible', 'hardware'])('Paywall %s Back keeps a completed checkout off its spent preview', async kind => {
+  const back = kind === 'hardware' ? installHardwareBackFixture() : null;
+  await rememberPaymentSignInContinuation();
+  const screen = renderRouter({ ...routes, 'welcome/preview': () => null }, { initialUrl: '/welcome/preview' });
+  await act(async () => { router.push('/welcome/payment'); });
+  await waitFor(() => expect(screen.getByTestId('paywall-price-yearly')).toBeTruthy());
+  await act(async () => { if (back) back(); else fireEvent.press(screen.getByTestId('welcome-back')); });
+  expect(screen.getPathname()).toBe('/welcome/payment');
+  expect(screen.getByTestId('paywall-decline')).toBeTruthy();
+});
+
+test('a stalled session read does not reveal the paywall before identity resolves', async () => {
   jest.useFakeTimers();
   let resolveSession!: (value: { data: { session: typeof mockAuthSession } }) => void;
   const pending = new Promise<{ data: { session: typeof mockAuthSession } }>(resolve => { resolveSession = resolve; });
@@ -99,10 +131,15 @@ test('a stalled initial session read reveals the paywall and accepts a late iden
     const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
     expect(screen.queryByTestId('paywall-logo')).toBeNull();
     await act(async () => { jest.advanceTimersByTime(BOOT_VERDICT_CAP_MS + 100); });
-    expect(screen.getByTestId('paywall-logo')).toBeTruthy();
+    expect(screen.getPathname()).toBe('/welcome/payment');
+    expect(screen.queryByTestId('paywall-logo')).toBeNull();
+    expect(screen.getByTestId('purchase-identity-retry')).toBeTruthy();
+    expect(screen.queryByText('Sign in before plans')).toBeNull();
     await act(async () => resolveSession({ data: { session: mockAuthSession } }));
-    expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(2);
-    expect(screen.getByTestId('welcome-continue')).toBeTruthy();
+    jest.useRealTimers();
+    await waitFor(() => expect(screen.getByTestId('welcome-continue')).toBeTruthy());
+    expect(screen.queryByTestId('purchase-identity-retry')).toBeNull();
+    expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
   } finally {
     resolveSession({ data: { session: mockAuthSession } });
     jest.useRealTimers();
@@ -133,15 +170,10 @@ test('a stale granted permission read cannot restore a reminder promise after fo
   expect(screen.queryByText("We'll send you a reminder that your trial is ending soon")).toBeNull();
 });
 
-test('signing in while payment is focused records the authenticated exposure once', async () => {
-  mockAuthSession = null;
-  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
-  await waitFor(() => expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1));
-  mockAuthSession = { access_token: 'test-token', user: { id: 'buyer' } };
-  await act(async () => { for (const listener of mockAuthListeners) listener('SIGNED_IN', mockAuthSession); });
-  await waitFor(() => expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(2));
+test('an authenticated payment view is exposed once across plan changes', async () => {
+  const screen = await openPayment();
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
-  expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(2);
+  expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
 });
 
 test('development visual trial uses live price but never enters checkout or restore', async () => {
