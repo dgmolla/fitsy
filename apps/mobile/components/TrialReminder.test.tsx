@@ -66,6 +66,13 @@ test('a previously denied permission does not promise or request a trial reminde
   expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
 });
 
+test('opt-in explains timing relative to a future store-confirmed trial end', async () => {
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  await waitFor(() => expect(screen.getByText('Get a trial reminder')).toBeTruthy());
+  expect(screen.getByText(/about 2 days before your store-confirmed free trial of 7 days ends/)).toBeTruthy();
+  expect(screen.queryByText(/in about 5 days/)).toBeNull();
+});
+
 test('browser trial copy explains why a reminder cannot be scheduled', async () => {
   const originalOS = Platform.OS;
   Platform.OS = 'web';
@@ -118,12 +125,15 @@ test('a two-day trial does not offer an unschedulable reminder', async () => {
   expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
 });
 
-test('an eligible longer trial can offer a reminder when another plan has only two days', async () => {
+test('a short annual trial selects a schedulable monthly offer for reminder opt-in', async () => {
   mockOffering = { annual: shortAnnual, monthly };
   mockEligibility = { annual: true, monthly: true };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
   await waitFor(() => expect(screen.getByText('Get a trial reminder')).toBeTruthy());
   expect(screen.getByTestId('trial-reminder-skip')).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(await readReminderPreferences('trial-buyer')).toEqual({ meals: false, trial: true });
   expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
 });
 

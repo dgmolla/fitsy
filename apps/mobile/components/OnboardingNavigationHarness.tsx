@@ -55,7 +55,7 @@ jest.mock('expo-secure-store', () => {
     deleteItemAsync: async (key: string) => { delete values[key]; } };
 });
 jest.mock('expo-apple-authentication', () => ({ AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
-  signInAsync: async () => ({ identityToken: 'apple-token', authorizationCode: 'apple-code' }) }));
+  signInAsync: jest.fn(async () => ({ identityToken: 'apple-token', authorizationCode: 'apple-code' })) }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'nonce', digestStringAsync: async () => 'hashed', CryptoDigestAlgorithm: { SHA256: 'SHA256' } }));
 jest.mock('expo-auth-session/providers/google', () => {
   process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID = 'test-google-client';

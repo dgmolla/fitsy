@@ -6,7 +6,7 @@ import { EDITORIAL, TEXT } from '@/lib/brand';
 import { useReminders } from '@/lib/useReminders';
 import { usePurchases } from '@/lib/usePurchases';
 import { getNotificationPermission, requestPermissionsAsync } from '@/lib/useNotifications';
-import { clearDevTrialReminder, scheduleDevTrialReminder } from '@/lib/devTrialReminderProbe';
+import { clearDevTrialReminder, scheduleDevTrialReminder, showDevMissedTrialReminder } from '@/lib/devTrialReminderProbe';
 
 export default function NotificationSettingsScreen() {
   const { userId, preferences, scheduled, save } = useReminders();
@@ -54,7 +54,7 @@ export default function NotificationSettingsScreen() {
     })}
     {__DEV__ && <View style={s.card}>
       <Text style={s.title}>Development reminder probe</Text>
-      <Text style={s.body}>Synthetic seven-day trial dates; does not change your subscription. {userId ? '' : 'Sign in to use this probe.'}</Text>
+      <Text style={s.body}>Synthetic trial dates for reminder testing; does not change your subscription. {userId ? '' : 'Sign in to use this probe.'}</Text>
       <Pressable style={s.action} disabled={busy || !userId} onPress={() => { void scheduleDevTrialReminder(userId)
         .then(value => setProbe(`Native pending: ${value.count}; trial: ${value.scheduledFor ?? 'none'}`))
         .catch(error => setProbe(String(error))); }} accessibilityRole="button" testID="dev-reminder-schedule">
@@ -66,6 +66,16 @@ export default function NotificationSettingsScreen() {
         <Text style={s.link}>Clear test reminders</Text>
       </Pressable>
       {probe && <Text style={s.body} testID="dev-reminder-result">{probe}</Text>}
+      <Pressable style={s.action} disabled={busy || !userId} onPress={() => showDevMissedTrialReminder(userId)}
+        accessibilityRole="button" testID="dev-reminder-missed-window">
+        <Text style={s.link}>Show late opt-in alert (synthetic)</Text>
+      </Pressable>
+      <Pressable style={s.action} disabled={busy || !userId} onPress={() => {
+        try { showDevMissedTrialReminder(userId, new Date(2026, 9, 30)); }
+        catch (error) { setProbe(String(error)); }
+      }} accessibilityRole="button" testID="dev-reminder-missed-dst">
+        <Text style={s.link}>Show DST late opt-in alert (synthetic)</Text>
+      </Pressable>
     </View>}
     <Pressable style={s.action} onPress={() => { void showManageSubscriptions(); }} accessibilityRole="button" testID="reminders-manage-subscription"><Text style={s.link}>Manage subscription</Text></Pressable>
   </ScrollView></SafeAreaView>;

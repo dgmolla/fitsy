@@ -1,6 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import { planReminders, trialReminderDate, TRIAL_REMINDER_LEAD_HOURS } from './notificationPlan';
+import { TRIAL_CATALOG_POLICY } from '../../../packages/shared/src/contracts/trialPolicy';
 import { prepareReminderChannel, scheduleNativeReminder } from './notificationSchedule';
+import { explainMissedTrialReminder, missedTrialReminderWindow } from './trialReminderFeedback';
+import { devLateTrialReminderFixture } from './devLateTrialReminderFixture';
 
 const DEV_PREFIX = 'fitsy.dev-trial-reminder.';
 let queue: Promise<unknown> = Promise.resolve();
@@ -18,6 +21,14 @@ function requireDevelopment(userId: string | null): asserts userId is string {
   if (!__DEV__ || !userId) throw new Error('Development sign-in required');
 }
 
+/** Actual production alert with controlled dates; no entitlement or preference writes. */
+export function showDevMissedTrialReminder(userId: string | null, anchor = new Date()) {
+  requireDevelopment(userId);
+  const { trial, now } = devLateTrialReminderFixture(anchor);
+  if (!missedTrialReminderWindow(trial, now.getTime())) throw new Error('Controlled late opt-in did not miss its adjusted target');
+  explainMissedTrialReminder();
+}
+
 function nextAllowedTime(now: Date): Date {
   const target = new Date(now.getTime() + 5 * 60_000);
   if (target.getHours() < 9) target.setHours(9, 5, 0, 0);
@@ -33,7 +44,7 @@ export async function scheduleDevTrialReminder(userId: string | null, now = new 
   return enqueue(async revision => {
     const due = nextAllowedTime(now);
     const expiration = new Date(due.getTime() + TRIAL_REMINDER_LEAD_HOURS * 3_600_000);
-    const trialStart = new Date(expiration.getTime() - 7 * 24 * 3_600_000);
+    const trialStart = new Date(expiration.getTime() - TRIAL_CATALOG_POLICY.desiredDays * 24 * 3_600_000);
     const plan = planReminders({
       now, userId, entitled: true, preferences: { meals: false, trial: true },
       subscription: { isActive: true, periodType: 'TRIAL', willRenew: true,
