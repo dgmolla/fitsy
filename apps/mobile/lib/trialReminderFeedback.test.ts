@@ -1,6 +1,7 @@
 import { Alert } from 'react-native';
 import { explainMissedTrialReminder, missedTrialReminderWindow } from './trialReminderFeedback';
 import { TRIAL_CATALOG_POLICY, trialReminderDate } from '../../../packages/shared/src/contracts/trialPolicy';
+import { devLateTrialReminderFixture } from './devLateTrialReminderFixture';
 
 const expiry = new Date(2026, 9, 21, 8);
 const now = new Date(2026, 9, 18, 20);
@@ -39,4 +40,16 @@ test.each([
 
 test('an expired entitlement does not report a missed trial reminder', () => {
   expect(missedTrialReminderWindow(trial, expiry.getTime())).toBe(false);
+});
+
+test.each([
+  new Date(2026, 9, 29), new Date(2026, 9, 30), new Date(2026, 9, 31),
+  new Date(2026, 2, 6), new Date(2026, 2, 7),
+])('controlled late opt-in stays between adjusted and nominal targets across DST: %s', anchor => {
+  const fixture = devLateTrialReminderFixture(anchor);
+  const expiration = new Date(fixture.trial.expirationDate);
+  const nominal = expiration.getTime() - TRIAL_CATALOG_POLICY.reminderLeadHours * 3_600_000;
+  expect(trialReminderDate(expiration).getTime()).toBeLessThan(fixture.now.getTime());
+  expect(nominal).toBeGreaterThan(fixture.now.getTime());
+  expect(missedTrialReminderWindow(fixture.trial, fixture.now.getTime())).toBe(true);
 });

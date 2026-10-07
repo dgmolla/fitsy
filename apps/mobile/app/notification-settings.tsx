@@ -70,6 +70,12 @@ export default function NotificationSettingsScreen() {
         accessibilityRole="button" testID="dev-reminder-missed-window">
         <Text style={s.link}>Show late opt-in alert (synthetic)</Text>
       </Pressable>
+      <Pressable style={s.action} disabled={busy || !userId} onPress={() => {
+        try { showDevMissedTrialReminder(userId, new Date(2026, 9, 30)); }
+        catch (error) { setProbe(String(error)); }
+      }} accessibilityRole="button" testID="dev-reminder-missed-dst">
+        <Text style={s.link}>Show DST late opt-in alert (synthetic)</Text>
+      </Pressable>
     </View>}
     <Pressable style={s.action} onPress={() => { void showManageSubscriptions(); }} accessibilityRole="button" testID="reminders-manage-subscription"><Text style={s.link}>Manage subscription</Text></Pressable>
   </ScrollView></SafeAreaView>;
