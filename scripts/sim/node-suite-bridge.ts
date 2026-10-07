@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
 
-export function requireNodeSuite(file: string, expectedTests?: number) {
+export function requireNodeSuite(file: string, expectedTests?: number, timeoutMs = 60_000) {
   let output: string;
   try {
     output = execFileSync(process.execPath, ['--test', '--test-reporter=tap', file],
-      { encoding: 'utf8', timeout: 60_000, env: { ...process.env, NODE_OPTIONS: '' } });
+      { encoding: 'utf8', timeout: timeoutMs, env: { ...process.env, NODE_OPTIONS: '' } });
   } catch (error) {
     const failure = error as Error & { stdout?: string; stderr?: string; status?: number; signal?: string };
     throw new Error(`Node suite process failed (${failure.status ?? failure.signal ?? 'unknown'}): ${file}\n${failure.stdout || ''}\n${failure.stderr || ''}`);

@@ -15,7 +15,10 @@ import unittest
 
 INSTALLER = Path(__file__).with_name('install-local-dispatcher.sh')
 RUNTIME = Path(__file__).with_name('local-dispatcher.py')
+RESOURCE = Path(__file__).with_name('resource_lifecycle.py')
+COLD = Path(__file__).with_name('cold_retention.py')
 RETIREMENT = Path(__file__).parents[1] / 'sim/retire_task_device.py'
+USES = Path(__file__).parents[1] / 'sim/sim_resource_uses.py'
 
 
 class InstallTest(unittest.TestCase):
@@ -28,17 +31,22 @@ class InstallTest(unittest.TestCase):
                 path.mkdir(parents=True, exist_ok=True)
             shutil.copy2(INSTALLER, repo / 'scripts/delivery/install-local-dispatcher.sh')
             shutil.copy2(RUNTIME, repo / 'scripts/delivery/local-dispatcher.py')
+            shutil.copy2(RESOURCE, repo / 'scripts/delivery/resource_lifecycle.py')
+            shutil.copy2(COLD, repo / 'scripts/delivery/cold_retention.py')
             shutil.copy2(RETIREMENT, repo / 'scripts/sim/retire_task_device.py')
+            shutil.copy2(USES, repo / 'scripts/sim/sim_resource_uses.py')
             (home / 'firstmate/config/slack-notifications.json').write_text(json.dumps({
                 'channel': 'CCHANNEL', 'user': 'UHUMAN', 'bridge_path': str(base / 'bridge')}))
             (home / '.fitsy-delivery/config.json').write_text(json.dumps({
                 'channel': 'CCHANNEL', 'user': 'USENDER', 'bridge_path': str(base / 'bridge')}))
             gh = tools / 'gh'
             gh.write_text('#!/bin/sh\nif [ "$1" = api ]; then git rev-parse HEAD; '
-                          'else sha=$(git rev-parse HEAD); printf \'[{"workflowName":"Verify","headSha":"%s","status":"completed","conclusion":"success"},{"workflowName":"Deploy","headSha":"%s","status":"completed","conclusion":"success"}]\\n\' "$sha" "$sha"; fi\n')
-            for name in ('gh', 'codex', 'launchctl'):
+                          'elif echo "$*" | /usr/bin/grep -q -- "--repo dgmolla/fitsy --commit"; then sha=$(git rev-parse HEAD); printf \'[{"workflowName":"Verify","headSha":"%s","status":"completed","conclusion":"success"},{"workflowName":"Deploy","headSha":"%s","status":"completed","conclusion":"success"}]\\n\' "$sha" "$sha"; else echo []; fi\n')
+            for name in ('gh', 'codex', 'launchctl', 'lsof'):
                 path = tools / name
-                if name == 'launchctl':
+                if name == 'lsof':
+                    path.write_text('#!/bin/sh\nif [ \"${FAKE_LSOF_UNCERTAIN:-0}\" = 1 ]; then echo ownership-uncertain >&2; fi\nexit 1\n')
+                elif name == 'launchctl':
                     path.write_text('#!/bin/sh\nif [ "$1" = print ] && [ "${FAKE_LAUNCH_LOADED:-0}" != 1 ]; '
                                     'then exit 1; fi\nexit 0\n')
                 elif name != 'gh': path.write_text('#!/bin/sh\nexit 0\n')
@@ -76,6 +84,35 @@ class InstallTest(unittest.TestCase):
             config_path = home / '.fitsy-dispatcher/config.json'
             config = json.loads(config_path.read_text())
             self.assertFalse(config['enabled'])
+            self.assertEqual(config['scratch_reserve_bytes'], 4 * 1024**3)
+            self.assertEqual((home / '.fitsy-dispatcher/runtime/resource_lifecycle.py').read_bytes(), RESOURCE.read_bytes())
+            # Installed recovery must resolve ownership tools under the timer's narrow PATH.
+            self.assertTrue(Path(config['lsof_bin']).is_absolute())
+            empty = base / 'released-scratch'; empty.mkdir()
+            claim = {'id': 'released-fixture', 'terminal': 'waiting', 'finished_at': '2026-10-05T00:00:00Z'}
+            receipt = home / '.fitsy-dispatcher/claims/released-fixture/receipt.json'
+            receipt.parent.mkdir(parents=True); receipt.write_text(json.dumps(claim))
+            command(sys.executable, '-c',
+                    "import os,sys,json; os.environ['PATH']='/usr/bin:/bin'; sys.path.insert(0,sys.argv[1]); import resource_lifecycle as r; "
+                    'r.released(json.load(open(sys.argv[2])),json.loads(sys.argv[3]),[sys.argv[4]])',
+                    str(installed_runtime.parent), str(config_path), json.dumps(claim), str(empty))
+            # Container-level lsof warnings are uncertainty, not permission to release.
+            uncertain_env = {**env, 'FAKE_LSOF_UNCERTAIN': '1'}
+            rejected_release = subprocess.run([sys.executable, '-c',
+                    "import os,sys,json; os.environ['PATH']='/usr/bin:/bin'; sys.path.insert(0,sys.argv[1]); import resource_lifecycle as r; "
+                    'r.released(json.load(open(sys.argv[2])),json.loads(sys.argv[3]),[sys.argv[4]])',
+                    str(installed_runtime.parent), str(config_path), json.dumps(claim), str(empty)],
+                    cwd=repo, env=uncertain_env, text=True, capture_output=True, timeout=15)
+            self.assertNotEqual(rejected_release.returncode, 0)
+            self.assertIn('uncertain file ownership', rejected_release.stderr)
+            # A mixed runtime must never be enabled using the published source identity.
+            original_runtime = installed_runtime.read_bytes()
+            installed_runtime.write_bytes(original_runtime + b'\n# interrupted update fixture\n')
+            rejected = subprocess.run(['bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable'],
+                                      cwd=repo, env=env, text=True, capture_output=True, timeout=15)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn('runtime content', rejected.stderr)
+            installed_runtime.write_bytes(original_runtime)
             self.assertFalse(config['jev_enabled'])
             self.assertIsNone(config['jev_key_file'])
             self.assertEqual(config['worker_timeout_seconds'], 90 * 60)
@@ -106,6 +143,19 @@ class InstallTest(unittest.TestCase):
             reinstalled = json.loads(config_path.read_text())
             self.assertFalse(reinstalled['enabled'])
             self.assertEqual(reinstalled['profiles']['standard']['provider'], 'claude')
+            # Paused recovery code installs during a hold but cannot admit another owner.
+            reinstalled['min_free_bytes'] = 10**18
+            config_path.write_text(json.dumps(reinstalled))
+            result = command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--install',
+                             '--worktree-root', str(roots))
+            self.assertIn('"worker_admission": "resource-hold"', result)
+            self.assertFalse(json.loads(config_path.read_text())['enabled'])
+            command('bash', 'scripts/delivery/install-local-dispatcher.sh', '--enable')
+            tick = command('python3', str(home / '.fitsy-dispatcher/runtime/local-dispatcher.py'),
+                           'tick', '--config', str(config_path))
+            self.assertEqual(json.loads(tick)['state'], 'resource-hold')
+            self.assertIsNone(json.loads((home / '.fitsy-dispatcher/state.json').read_text())['active'])
+            self.assertEqual(config_path.stat().st_mode & 0o077, 0)
             lock = (home / '.fitsy-dispatcher/dispatcher.lock').open('a')
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX)

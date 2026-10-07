@@ -18,8 +18,13 @@ from datetime import datetime, timezone
 import urllib.request
 import uuid
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from resource_lifecycle import cleanup_released, resume_checkout, assess_retention, retention, read_claims
+from cold_retention import recover as recover_pressure
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'sim'))
 from retire_task_device import retire as retire_task_device
+from sim_resource_uses import owner_release
 
 
 def incident(state, claim, reason):
@@ -176,12 +181,136 @@ def gh(config, *args, timeout=30):
     return command([config['gh_bin'], *args], timeout=timeout)
 
 
+BOARD_FIELDS = ('Status', 'Priority', 'Progress', 'Blocker', 'Dependencies', 'Next action',
+                'Verified at', 'Started at', 'Last progress at')
+BOARD_QUERY = """query($project:ID!, $after:String) {
+  node(id:$project) { ... on ProjectV2 { items(first:100, after:$after) {
+    totalCount pageInfo { hasNextPage endCursor }
+    nodes { id content { __typename
+      ... on Issue { number title url repository { nameWithOwner }
+        labels(first:100) { totalCount nodes { name } } }
+      ... on PullRequest { number title url repository { nameWithOwner } }
+      ... on DraftIssue { title }
+    }
+    FIELDS
+    }
+  } } }
+  rateLimit { cost remaining resetAt }
+}""".replace('FIELDS', '\n'.join(
+    f'f{index}:fieldValueByName(name:{json.dumps(name)}) {{ '
+    '... on ProjectV2ItemFieldSingleSelectValue { name } '
+    '... on ProjectV2ItemFieldTextValue { text } '
+    '... on ProjectV2ItemFieldDateValue { date } }'
+    for index, name in enumerate(BOARD_FIELDS)))
+
+
+class QueueReadBackoff(RuntimeError):
+    def __init__(self, retry_at):
+        self.retry_at = retry_at
+        super().__init__(f'GitHub queue read deferred until {utc(retry_at)}')
+
+
 def board(config):
-    data = json.loads(gh(config, 'project', 'item-list', '1', '--owner', 'dgmolla', '--limit', '10000', '--format', 'json'))
-    items = data.get('items')
-    if not isinstance(items, list) or data.get('totalCount') != len(items):
-        raise RuntimeError('GitHub project pagination incomplete; refusing dispatch')
-    return items
+    """Read the sole queue completely, without CLI's nested 100-field fanout.
+
+    Persist quota timing only, never board content or permission to launch.
+    """
+    quota_path = Path(config['state_dir']) / 'github-queue-quota.json'
+    quota = read_json(quota_path, {})
+    if quota.get('retry_at', 0) > time.time():
+        raise QueueReadBackoff(quota['retry_at'])
+    items, seen, cursors, cursor, total = [], set(), set(), None, None
+    while True:
+        args = [config['gh_bin'], 'api', 'graphql', '--include', '-f', 'query=' + BOARD_QUERY,
+                '-f', 'project=' + PROJECT_ID]
+        if cursor:
+            args.extend(['-f', 'after=' + cursor])
+        result = subprocess.run(args, text=True, capture_output=True, timeout=45)
+        offset = result.stdout.find('{')
+        header_text = result.stdout[:offset] if offset >= 0 else result.stdout.split('\n\n', 1)[0]
+        headers = {key.lower(): value.strip() for key, value in
+                   re.findall(r'^([\w-]+):[ \t]*(.*)$', header_text, re.M)}
+        try:
+            response = json.loads(result.stdout[offset:]) if offset >= 0 else {}
+        except json.JSONDecodeError:
+            response = {}
+        rate = (response.get('data') or {}).get('rateLimit') or {}
+        exhausted = headers.get('x-ratelimit-remaining') == '0' or rate.get('remaining') == 0
+        errors = response.get('errors') or []
+        statuses = re.findall(r'^HTTP/\S+\s+(\d+)', header_text, re.M)
+        message = (result.stderr + json.dumps(errors) + str(response.get('message', ''))).lower()
+        throttled = (bool(statuses) and statuses[-1] == '429') or any(
+            text in message for text in ('rate limit', 'too many requests'))
+        primary_limited = exhausted or ('api rate limit exceeded' in message and 'secondary' not in message)
+        retry_at = 0
+        if exhausted or throttled or headers.get('retry-after'):
+            if primary_limited:
+                try:
+                    retry_at = float(headers['x-ratelimit-reset'])
+                except (KeyError, ValueError):
+                    try:
+                        retry_at = datetime.fromisoformat(rate['resetAt'].replace('Z', '+00:00')).timestamp()
+                    except (KeyError, TypeError, ValueError):
+                        retry_at = 0
+            if headers.get('retry-after'):
+                try:
+                    retry_at = max(retry_at, time.time() + float(headers['retry-after']))
+                except ValueError:
+                    retry_at = max(retry_at, time.time() + 1800)
+            if retry_at <= time.time():
+                retry_at = time.time() + 1800
+            retry_at = max(time.time() + 1, retry_at + 1)
+        write_json(quota_path, {'observed_at': utc(), 'retry_at': retry_at,
+                               'cost': rate.get('cost'), 'remaining': rate.get('remaining'),
+                               'reset_at': rate.get('resetAt')})
+        if result.returncode or errors:
+            if retry_at:
+                raise QueueReadBackoff(retry_at)
+            raise RuntimeError('GitHub queue read failed; refusing dispatch')
+        connection = ((response.get('data') or {}).get('node') or {}).get('items')
+        if not isinstance(connection, dict) or not isinstance(connection.get('nodes'), list):
+            raise RuntimeError('GitHub queue response incomplete; refusing dispatch')
+        count = connection.get('totalCount')
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0 or (total is not None and count != total):
+            raise RuntimeError('GitHub project count changed or invalid; refusing dispatch')
+        total = count
+        for node in connection['nodes']:
+            identity = node.get('id')
+            if not identity or identity in seen:
+                raise RuntimeError('GitHub project duplicate or missing item; refusing dispatch')
+            seen.add(identity)
+            content = node.get('content') or {}
+            labels = content.get('labels') if content.get('__typename') == 'Issue' else {'nodes': [], 'totalCount': 0}
+            if not isinstance(labels, dict) or not isinstance(labels.get('nodes'), list):
+                raise RuntimeError('GitHub issue labels missing; refusing dispatch')
+            names = [label['name'] for label in labels['nodes']]
+            if type(labels.get('totalCount')) is not int or labels['totalCount'] != len(names):
+                raise RuntimeError('GitHub issue labels incomplete; refusing dispatch')
+            item = {'id': identity, 'title': content.get('title'), 'labels': names,
+                    'content': {**content, 'type': content.get('__typename'),
+                                'repository': (content.get('repository') or {}).get('nameWithOwner')}}
+            for index, name in enumerate(BOARD_FIELDS):
+                if f'f{index}' not in node:
+                    raise RuntimeError('GitHub queue field missing; refusing dispatch')
+                value = node[f'f{index}'] or {}
+                if node[f'f{index}'] == {}:
+                    raise RuntimeError('GitHub queue field type unsupported; refusing dispatch')
+                item[name.lower()] = value.get('name', value.get('text', value.get('date')))
+            items.append(item)
+        page = connection.get('pageInfo') or {}
+        if page.get('hasNextPage') is False:
+            if len(items) != total:
+                raise RuntimeError('GitHub project pagination incomplete; refusing dispatch')
+            if retry_at:
+                raise QueueReadBackoff(retry_at)
+            return items
+        cursor = page.get('endCursor')
+        if (page.get('hasNextPage') is not True or not connection['nodes'] or not cursor
+                or cursor in cursors or len(items) >= total):
+            raise RuntimeError('GitHub project pagination did not advance; refusing dispatch')
+        cursors.add(cursor)
+        if retry_at:
+            raise QueueReadBackoff(retry_at)
 
 
 def ready_event(config, number):
@@ -232,7 +361,7 @@ def historical_verified(config, item):
     return False
 
 
-def terminal_verified(config, item, expected, *, archived=False):
+def terminal_verified(config, item, expected, *, archived=False, historical=False):
     """Board state is only a hint; independently bind acceptance to merged main CI."""
     if not expected or item.get('status') != 'Done' or not item.get('verified at'):
         return False
@@ -255,6 +384,8 @@ def terminal_verified(config, item, expected, *, archived=False):
             continue
         try:
             receipt = json.loads(body.split(marker, 1)[1].strip())
+            if historical and (receipt.get('claim_id') != expected['id'] or receipt.get('branch') != expected['branch']):
+                continue  # A later verified generation does not erase this exact prior acceptance receipt.
             if (receipt.get('acceptance') != 'verified' or receipt.get('issue') != number or
                     receipt.get('claim_id') != expected['id'] or receipt.get('branch') != expected['branch'] or
                     not re.fullmatch(r'[0-9a-f]{40}', receipt['merge_sha'])):
@@ -524,15 +655,23 @@ def archive(state, claim, status, state_path):
     state['active'] = None
 
 
-def retire_verified_simulator(config, state, state_path):
+def retire_verified_simulator(config, state, state_path, assessment_board=None):
     """One exact terminal claim per tick, before the next disk admission."""
     if state.get('active'):
         return
     verified = state.get('verified') or {}
-    ordered = sorted(verified.items(), key=lambda entry: int(entry[0]))
-    cursor = state.get('simulator_retirement_cursor')
-    if cursor in [number for number, _ in ordered]:
-        index = next(index for index, (number, _) in enumerate(ordered) if number == cursor)
+    identities = {value.get('id'): (number, value) for number, value in verified.items()}
+    receipts, uncertain = read_claims(config, state)
+    if uncertain:
+        write_json(state_path, state); return
+    for receipt, claim in receipts:
+        if (claim.get('terminal') == 'verified' and isinstance(claim.get('issue'), int) and
+                claim.get('finished_at') and claim.get('branch') and receipt.parent.name == claim.get('id')):
+            identities.setdefault(claim['id'], (str(claim['issue']), claim))
+    ordered = sorted(identities.values(), key=lambda entry: (int(entry[0]), entry[1].get('id', '')))
+    cursor = state.get('simulator_retirement_claim_cursor')
+    if cursor in [identity.get('id') for _, identity in ordered]:
+        index = next(index for index, (_, identity) in enumerate(ordered) if identity.get('id') == cursor)
         ordered = ordered[index + 1:] + ordered[:index + 1]
     for issue_text, identity in ordered:
         issue = int(issue_text)
@@ -550,7 +689,10 @@ def retire_verified_simulator(config, state, state_path):
                 claim.get('id') != claim_id or claim.get('branch') != identity.get('branch')):
             continue
         worktree = Path(claim.get('worktree', '')).resolve()
-        expected = Path(config['worktree_root']).resolve() / f'fitsy-issue-{issue}-{claim_id[:8]}'
+        origin_claim = claim.get('worktree_origin_claim', claim_id)
+        if not re.fullmatch(r'[0-9a-f-]{36}', origin_claim):
+            continue
+        expected = Path(config['worktree_root']).resolve() / f'fitsy-issue-{issue}-{origin_claim[:8]}'
         if worktree != expected:
             continue
         receipt_file = worktree / '.evidence/product-build/receipt.json'
@@ -567,9 +709,17 @@ def retire_verified_simulator(config, state, state_path):
             def still_verified():
                 current = next((entry for entry in board(config) if
                                 entry.get('content', {}).get('number') == issue), None)
-                return bool(current and terminal_verified(config, current, identity, archived=True))
-            if not still_verified():
+                use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
+                return bool(current and terminal_verified(config, current, identity, archived=True, historical=True) and
+                            retention(config, 'task_simulator', use, time.time())['state'] == 'assessment-due')
+            current = next((entry for entry in (assessment_board or (lambda: board(config)))()
+                            if entry.get('content', {}).get('number') == issue), None)
+            if not current or not terminal_verified(config, current, identity, archived=True, historical=True):
                 raise ValueError('issue is no longer terminal-verified')
+            use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
+            grace = retention(config, 'task_simulator', use, time.time())
+            if grace['state'] != 'assessment-due':
+                raise ValueError(grace['reason'])
             result = retire_task_device(
                 issue=issue, udid=udid, worktree=worktree,
                 archive_root=Path(config['state_dir']) / 'retired-simulator-evidence',
@@ -585,6 +735,7 @@ def retire_verified_simulator(config, state, state_path):
                 'status': 'held',
                 'issue': issue, 'reason': str(error)[:300], 'attemptedAt': utc()}
         state['simulator_retirement_cursor'] = issue_text
+        state['simulator_retirement_claim_cursor'] = claim_id
         write_json(state_path, state)
         return
 
@@ -679,6 +830,7 @@ def tick(config, state, state_path, script):
             edit_item(config, item['id'], BLOCKER_FIELD, text=reason)
             state.setdefault('parked', {})[str(active['issue'])] = active['ready_at']
             incident(state, active, reason)
+            active['finished_at'] = utc()
             archive(state, active, 'parked-prelaunch', state_path)
             write_json(state_path, state)
             try:
@@ -720,9 +872,41 @@ def tick(config, state, state_path, script):
         pass  # A notification fault never changes claim ownership or queue decisions.
     if not config.get('enabled'):
         return {'state': 'disabled'}
-    retire_verified_simulator(config, state, state_path)
-    if shutil.disk_usage(config['worktree_root']).free < config.get('min_free_bytes', 8 * 1024**3):
-        return {'state': 'resource-hold', 'reason': 'disk below configured minimum'}
+    assess_retention(config, state, time.time())
+    write_json(state_path, state)
+    cleanup_released(config, state, lambda: write_json(state_path, state))
+    assessment = {}
+    def recovery_board():
+        # Only assessment shares this live, complete read inside this locked tick.
+        # Destructive confirmation and final dispatch confirmation remain independent.
+        if not assessment:
+            try:
+                assessment['items'] = board(config)
+            except Exception as error:
+                assessment['error'] = error
+        if 'error' in assessment:
+            raise assessment['error']
+        return assessment['items']
+    def completed_recovery_verified(claim):
+        identity = (state.get('verified') or {}).get(str(claim['issue']))
+        if not identity or identity.get('id') != claim['id']:
+            return False
+        try:
+            current = next((item for item in recovery_board() if item.get('content', {}).get('number') == claim['issue']), None)
+            return bool(current and terminal_verified(config, current, identity, archived=True, historical=True))
+        except Exception:
+            return False  # Unavailable live acceptance is uncertainty, never retirement permission.
+    recover_pressure(config, state, lambda: write_json(state_path, state), time.time(), completed_recovery_verified)
+    retire_verified_simulator(config, state, state_path, recovery_board)
+    floor = config.get('min_free_bytes', 8 * 1024**3)
+    reserve = config.get('scratch_reserve_bytes', 4 * 1024**3)
+    if not isinstance(reserve, int) or isinstance(reserve, bool) or reserve < 0:
+        raise RuntimeError('scratch reserve must be nonnegative bytes')
+    required = floor + reserve
+    available = shutil.disk_usage(config['worktree_root']).free
+    if available < required:
+        return {'state': 'resource-hold', 'reason': 'disk below floor plus scratch reserve',
+                'free_bytes': available, 'required_free_bytes': required}
     items = board(config)
     candidates = eligible(items, state.setdefault('readiness', {}), state.setdefault('readiness_source', {}),
                           config, state.setdefault('verified', {}))
@@ -766,7 +950,16 @@ def tick(config, state, state_path, script):
         branch = f'codex/issue-{number}-{claim_id[:8]}'
         try:
             command([config['git_bin'], '-C', config['repo_root'], 'fetch', 'origin', 'main'], timeout=60)
-            command([config['git_bin'], '-C', config['repo_root'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'], timeout=60)
+            reused = resume_checkout(config, state, number)
+            if reused:
+                worktree, branch = Path(reused['worktree']), reused['branch']
+                claim.update(reused)
+            else:
+                claim.update({'worktree': str(worktree), 'branch': branch,
+                              'worktree_origin_claim': claim_id, 'worktree_creation_intent': True})
+                write_json(state_path, state)
+                command([config['git_bin'], '-C', config['repo_root'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'], timeout=60)
+                claim['worktree_creation_intent'] = False
         except Exception as error:
             reason = f"Worktree preparation failed ({type(error).__name__}); inspect claim {claim_id}"
             gh(config, 'issue', 'edit', str(number), '-R', 'dgmolla/fitsy', '--add-label', 'dispatch-hold')
@@ -774,6 +967,7 @@ def tick(config, state, state_path, script):
             edit_item(config, item['id'], BLOCKER_FIELD, text=reason)
             state.setdefault('parked', {})[str(number)] = claim['ready_at']
             incident(state, claim, reason)
+            claim['finished_at'] = utc()
             archive(state, claim, 'parked-setup-failure', state_path)
             write_json(state_path, state)
             try:
@@ -833,7 +1027,8 @@ def worker(config, state_path, lock_path, claim_id):
     environment = {**os.environ, 'FITSY_REVIEW_PROVIDER': review['provider'],
                    'FITSY_REVIEW_MODEL': review['model'], 'FITSY_REVIEW_REASONING_EFFORT': review['effort'],
                    'FITSY_DISPATCH_CLAIM_ID': claim_id, 'FITSY_DISPATCH_BRANCH': claim['branch'],
-                   'FITSY_DISPATCH_ISSUE': str(claim['issue'])}
+                   'FITSY_DISPATCH_ISSUE': str(claim['issue']),
+                   'FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS': str(config.get('worker_timeout_seconds', 90 * 60))}
     with open(claim['prompt_path']) as prompt, open(claim['output_path'], 'a') as output:
         child = subprocess.Popen(args, stdin=prompt, stdout=output, stderr=subprocess.STDOUT, cwd=worktree,
                                  env=environment)
@@ -881,13 +1076,7 @@ def worker(config, state_path, lock_path, claim_id):
             write_json(state_path, state)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=('tick', 'status', 'worker'))
-    parser.add_argument('--config', required=True)
-    parser.add_argument('--claim-id')
-    args = parser.parse_args()
-    path = Path(args.config).expanduser().resolve()
+def load_config(path):
     if path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
         raise RuntimeError('dispatcher config must be owned and private')
     config = json.loads(path.read_text())
@@ -903,6 +1092,17 @@ def main():
     if not isinstance(review, dict) or review.get('provider') not in ('codex', 'claude') or not isinstance(review.get('model'), str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}', review['model']) or review.get('effort') not in ('low', 'medium', 'high', 'xhigh'):
         raise RuntimeError('invalid independent reviewer configuration')
     config['_path'] = str(path)
+    return config
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('mode', choices=('tick', 'status', 'worker', 'snapshot'))
+    parser.add_argument('--config', required=True)
+    parser.add_argument('--claim-id')
+    args = parser.parse_args()
+    path = Path(args.config).expanduser().resolve()
+    config = load_config(path)
     state_dir = Path(config['state_dir']).expanduser().resolve()
     state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     state_path = state_dir / 'state.json'
@@ -925,8 +1125,19 @@ def main():
         except BlockingIOError:
             print(json.dumps({'state': 'busy'}))
             return
+        config = load_config(path)  # Installer pause/replacement must win before admission.
+        if Path(config['state_dir']).expanduser().resolve() != state_dir:
+            raise RuntimeError('dispatcher state directory changed across the lock boundary')
         state = read_json(state_path, {'version': 1, 'active': None, 'readiness': {}, 'classifications': {}, 'parked': {}, 'history': []})
-        print(json.dumps(tick(config, state, state_path, Path(__file__).resolve())))
+        try:
+            if args.mode == 'snapshot':
+                items = board(config)
+                outcome = {'totalCount': len(items), 'items': items}
+            else:
+                outcome = tick(config, state, state_path, Path(__file__).resolve())
+        except QueueReadBackoff as error:
+            outcome = {'state': 'queue-read-backoff', 'retry_at': utc(error.retry_at)}
+        print(json.dumps(outcome))
 
 
 if __name__ == '__main__':

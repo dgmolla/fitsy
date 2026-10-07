@@ -1,7 +1,10 @@
 import importlib.util
 import json
+import os
+from unittest.mock import patch
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from datetime import datetime, timezone
 
@@ -31,6 +34,124 @@ class Slack:
 
 
 class LocalReportTest(unittest.TestCase):
+    def test_actual_canonical_snapshot_command_defers_publisher_without_second_slot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime = root / 'runtime'; runtime.mkdir()
+            counter = root / 'calls'
+            (runtime / 'local-dispatcher.py').write_text(
+                "from pathlib import Path\nimport json,sys\n"
+                f"Path({str(counter)!r}).write_text('snapshot')\n"
+                "assert sys.argv[1] == 'snapshot'\n"
+                "print(json.dumps({'state':'queue-read-backoff','retry_at':'2026-09-27T05:00:00Z'}))\n")
+            now = epoch('2026-09-27T04:35:00Z')
+            config = {'channel':'C123','user':'U123','activated_at':now-3600}
+            slack = Slack()
+            with patch.dict(os.environ, {'FITSY_DISPATCHER_CONFIG':str(root / 'config.json')}):
+                reporter.run_once(config, root, slack, now=now)
+            self.assertEqual(counter.read_text(), 'snapshot')
+            receipts = list((root / 'slots').glob('*.json'))
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(json.loads(receipts[0].read_text())['next_attempt'], epoch('2026-09-27T05:00:00Z'))
+            self.assertEqual(slack.posts, [])
+
+    def test_editorial_bindings_still_require_current_status_and_fresh_authorship(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T04:35:00Z')
+            update = {'authored_at':'2026-09-27T04:30:00Z',
+                      'bullets':['Feature repair underway.', 'Acceptance pending.', 'Next: exact source review.'],
+                      'board_bindings':{'443':'In flight'}}
+            reporter.save(state / 'editorial-update.json', update)
+            report = {'editorialFacts':[{'number':443,'status':'In flight','title':'Feature repair'}]}
+            reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fresh')
+            report['editorialFacts'][0]['status'] = 'Queued'
+            reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fallback')
+
+    def test_timezone_free_editorial_is_rejected_on_non_utc_host(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T11:35:00Z')
+            reporter.save(state / 'editorial-update.json', {'authored_at':'2026-09-27T04:30:00',
+                'bullets':['Feature underway.', 'Acceptance pending.', 'Next: source review.'],
+                'board_bindings':{'443':'In flight'}})
+            report = {'editorialFacts':[{'number':443,'status':'In flight','title':'Feature'}]}
+            try:
+                with patch.dict(os.environ, {'TZ':'America/Los_Angeles'}):
+                    time.tzset()
+                    reporter.compose_update(report, state, '2026-09-27T11:30', now)
+            finally:
+                time.tzset()
+            self.assertEqual(report['editorial']['state'], 'fallback')
+
+    def test_malformed_optional_editorial_still_delivers_fallback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T04:35:00Z')
+            for malformed in ({'authored_at':0}, {'authored_at':'2026-09-27T04:30:00Z',
+                    'bullets':['One.','Two.','Three.'],'board_bindings':[]}):
+                reporter.save(state / 'editorial-update.json', malformed)
+                report = {'editorialFacts':[]}
+                message = reporter.compose_update(report, state, '2026-09-27T04:30', now)
+                self.assertEqual(report['editorial']['state'], 'fallback')
+                self.assertIn('No delivery worker', message)
+
+    def test_dependency_fallback_does_not_claim_completed_dependencies_block_work(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report = {'editorialFacts':[{'number':443,'status':'Queued','title':'Feature repair',
+                       'dependencies':'#442','blocker':'','held':False}]}
+            message = reporter.compose_update(report, Path(temporary), '2026-09-27T04:30')
+            self.assertNotIn('waiting on recorded holds or dependencies', message)
+            self.assertIn('eligibility', message)
+
+    def test_failed_main_gate_remains_visible_in_editorial_and_fallback_messages(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            report = {'main':{'state':'failed'},'editorialFacts':[]}
+            message = reporter.compose_update(report, state, '2026-09-27T04:30')
+            self.assertIn('main failed', message)
+
+    def test_done_status_binding_is_fresh_but_changed_status_still_falls_back(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T04:35:00Z')
+            reporter.save(state / 'editorial-update.json', {'authored_at':'2026-09-27T04:30:00Z',
+                'board_bindings':{'388':'Done'},'bullets':['Dispatcher improvements shipped.',
+                'Feature repair is executing.','Next: source-bound acceptance.']})
+            report = {'editorialFacts':[{'number':388,'status':'Done','title':'Dispatcher improvements'}]}
+            reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fresh')
+            report['editorialFacts'][0]['status'] = 'Queued'
+            reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fallback')
+
+    def test_missing_issue_null_binding_cannot_publish_authored_status(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T04:35:00Z')
+            reporter.save(state / 'editorial-update.json', {'authored_at':'2026-09-27T04:30:00Z',
+                'board_bindings':{'999999':None},'bullets':['Missing issue shipped.',
+                'Second statement.','Third statement.']})
+            report = {'editorialFacts':[]}
+            message = reporter.compose_update(report, state, '2026-09-27T04:30', now)
+            self.assertEqual(report['editorial']['state'], 'fallback')
+            self.assertNotIn('Missing issue shipped', message)
+
+    def test_explicit_issue_references_require_current_bindings(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            now = epoch('2026-09-27T04:35:00Z')
+            for claim in ('#999999 shipped.', 'See https://github.com/dgmolla/fitsy/issues/999999.',
+                          'See https://GitHub.com/dgmolla/fitsy/issues/999999.'):
+                reporter.save(state / 'editorial-update.json', {'authored_at':'2026-09-27T04:30:00Z',
+                    'board_bindings':{'388':'Done'},'bullets':[claim,'Second statement.','Third statement.']})
+                report = {'editorialFacts':[{'number':388,'status':'Done','title':'Dispatcher improvements'}]}
+                message = reporter.compose_update(report, state, '2026-09-27T04:30', now)
+                self.assertEqual(report['editorial']['state'], 'fallback')
+                self.assertNotIn(claim, message)
+
     def test_history_pagination_and_legacy_marker_prevent_a_second_post(self):
         class PagedSlack(Slack):
             def call(self, method, params=None, payload=None):

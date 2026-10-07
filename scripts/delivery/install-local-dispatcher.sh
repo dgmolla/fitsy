@@ -44,7 +44,7 @@ fi
 [[ "$mode" == --check || "$mode" == --install || "$mode" == --enable || "$mode" == --pause ]] || { echo 'unknown mode' >&2; exit 2; }
 
 python3 - "$mode" "$repo" "$state" "$worktree_root" <<'PY'
-import fcntl, json, os, re, shutil, subprocess, sys, tempfile
+import fcntl, hashlib, json, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 mode, repo, state_name, root_name = sys.argv[1:]
@@ -78,8 +78,12 @@ if mode == 'install':
     root = Path(root_name).expanduser().resolve()
     if not root.is_dir():
         raise SystemExit('worktree root must exist')
-    if shutil.disk_usage(root).free < 8 * 1024**3:
-        raise SystemExit('disk below 8 GiB admission minimum')
+    # Installing paused recovery code does not admit a worker or native build.
+    runtime_sources = [repo / 'scripts/delivery/cold_retention.py', repo / 'scripts/delivery/resource_lifecycle.py', repo / 'scripts/delivery/local-dispatcher.py',
+                       repo / 'scripts/sim/retire_task_device.py', repo / 'scripts/sim/sim_resource_uses.py']
+    required_update_bytes = sum(path.stat().st_size for path in runtime_sources) + 1024**2
+    if shutil.disk_usage(state).free < required_update_bytes:
+        raise SystemExit(f'insufficient bytes for paused atomic runtime update: need {required_update_bytes}')
     previous = json.loads(config_path.read_text()) if config_path.exists() else None
     active = json.loads((state / 'state.json').read_text()).get('active') if (state / 'state.json').exists() else None
     if active:
@@ -117,11 +121,37 @@ if mode == 'install':
                           'gh_bin': shutil.which('gh'), 'git_bin': shutil.which('git'),
                           'profiles': profiles, 'review': {'provider': 'codex', 'model': 'gpt-6-sol', 'effort': 'high'},
                           'min_free_bytes': 8 * 1024**3, 'worker_timeout_seconds': 90 * 60}
+    config.setdefault('scratch_reserve_bytes', 4 * 1024**3)
+    config.setdefault('cleanup_high_watermark_bytes', 20 * 1024**3)
+    config.setdefault('resource_reference_roots', [])
+    lsof = shutil.which('lsof') or ('/usr/sbin/lsof' if os.access('/usr/sbin/lsof', os.X_OK) else None)
+    if not lsof:
+        raise SystemExit('open-file ownership tool unavailable for installed recovery')
+    config['lsof_bin'] = str(Path(lsof).resolve())
     config.update({'enabled': False, 'source_sha': head, 'jev_enabled': jev_enabled,
                    'jev_key_file': str(key_file) if jev_enabled else None,
                    'repo_root': str(repo), 'worktree_root': str(root), 'slack': slack})
+    targets = [state / 'runtime/cold_retention.py', state / 'runtime/resource_lifecycle.py', state / 'runtime/local-dispatcher.py',
+               state / 'sim/retire_task_device.py', state / 'sim/sim_resource_uses.py']
+    # Pause the old identity before touching any runtime, then publish the new
+    # identity only after every installed byte has been verified under the lock.
+    if previous:
+        paused = dict(previous); paused['enabled'] = False
+        save(config_path, json.dumps(paused, sort_keys=True) + '\n')
+    digests = {}
+    for source, target in zip(runtime_sources, targets):
+        content = source.read_text()
+        save(target, content); target.chmod(0o700)
+        expected = hashlib.sha256(content.encode()).hexdigest()
+        if hashlib.sha256(target.read_bytes()).hexdigest() != expected:
+            raise SystemExit('installed runtime content verification failed')
+        digests[str(target.relative_to(state))] = expected
+    config['runtime_sha256'] = digests
     save(config_path, json.dumps(config, sort_keys=True) + '\n')
-    print(json.dumps({'installed_paused': True, 'jev_enabled': jev_enabled,
+    available = shutil.disk_usage(root).free
+    required = config['min_free_bytes'] + config['scratch_reserve_bytes']
+    print(json.dumps({'installed_paused': True, 'worker_admission': 'ready' if available >= required else 'resource-hold',
+                      'available_free_bytes': available, 'required_worker_free_bytes': required, 'jev_enabled': jev_enabled,
                       'credential_private': key_file.stat().st_mode & 0o077 == 0 if jev_enabled else None,
                       'worker_provider': config['profiles']['standard']['provider']}))
 if mode in ('enable', 'pause'):
@@ -132,7 +162,14 @@ if mode in ('enable', 'pause'):
         current = output('gh', 'api', 'repos/dgmolla/fitsy/commits/main', '--jq', '.sha')
         if config['source_sha'] != current:
             raise SystemExit('installed dispatcher runtime does not match current main')
-        runs = json.loads(output('gh', 'run', 'list', '--branch', 'main', '--limit', '30', '--json',
+        expected_paths = {'runtime/cold_retention.py', 'runtime/resource_lifecycle.py', 'runtime/local-dispatcher.py', 'sim/retire_task_device.py', 'sim/sim_resource_uses.py'}
+        digests = config.get('runtime_sha256', {})
+        if set(digests) != expected_paths or any(
+                not (state / path).is_file() or (state / path).is_symlink() or
+                hashlib.sha256((state / path).read_bytes()).hexdigest() != digest
+                for path, digest in digests.items()):
+            raise SystemExit('installed runtime content does not match published source identity')
+        runs = json.loads(output('gh', 'run', 'list', '--repo', 'dgmolla/fitsy', '--commit', current, '--branch', 'main', '--limit', '30', '--json',
                                  'workflowName,headSha,status,conclusion'))
         if not all(any(run['workflowName'] == name and run['headSha'] == current and
                        run['status'] == 'completed' and run['conclusion'] == 'success' for run in runs)
@@ -143,15 +180,17 @@ if mode in ('enable', 'pause'):
             raise SystemExit('an active dispatcher claim must be reconciled before enabling')
     config['enabled'] = mode == 'enable'
     save(config_path, json.dumps(config, sort_keys=True) + '\n')
-    print(json.dumps({'enabled': config['enabled'], 'source_sha': config['source_sha']}))
+    available = shutil.disk_usage(config['worktree_root']).free
+    required = config.get('min_free_bytes', 8 * 1024**3) + config.get('scratch_reserve_bytes', 4 * 1024**3)
+    print(json.dumps({'enabled': config['enabled'], 'source_sha': config['source_sha'],
+                      'worker_admission': 'ready' if available >= required else 'resource-hold',
+                      'available_free_bytes': available, 'required_worker_free_bytes': required}))
 PY
 
 if [[ "$mode" == --check ]]; then exit 0; fi
 if [[ "$mode" == --install ]]; then
   mkdir -p "$state/runtime" "$state/sim" "$state/credentials" "$HOME/Library/LaunchAgents"
   chmod 700 "$state" "$state/runtime" "$state/sim" "$state/credentials"
-  install -m 0700 "$repo/scripts/delivery/local-dispatcher.py" "$state/runtime/local-dispatcher.py"
-  install -m 0700 "$repo/scripts/sim/retire_task_device.py" "$state/sim/retire_task_device.py"
   python_bin="$(command -v python3)"
   cat > "$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -165,7 +204,7 @@ if [[ "$mode" == --install ]]; then
   <key>StartInterval</key><integer>60</integer>
   <key>RunAtLoad</key><true/>
   <key>EnvironmentVariables</key><dict>
-    <key>PATH</key><string>$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>PATH</key><string>$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
   <key>StandardOutPath</key><string>$state/launchd.log</string>
   <key>StandardErrorPath</key><string>$state/launchd.log</string>

@@ -3,6 +3,7 @@
 import fcntl
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -76,22 +77,129 @@ def post_once(slack, channel, slot, message, publisher_user, cursor='', seen=(),
             'ts': result['ts'], 'marker': marker}
 
 
+def safe_copy(value, limit):
+    text = ' '.join(str(value or '').split())[:limit]
+    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
+def compose_update(report, state, slot, now=None):
+    """Fresh coordinator prose, through the existing sole publisher."""
+    now = time.time() if now is None else now
+    path = state / 'editorial-update.json'
+    try:
+        update = json.loads(path.read_text())
+        if not isinstance(update, dict) or not isinstance(update.get('authored_at'), str):
+            raise ValueError('editorial timestamp must be a UTC string')
+        authored_time = datetime.fromisoformat(update['authored_at'].replace('Z', '+00:00'))
+        if authored_time.tzinfo is None or authored_time.utcoffset().total_seconds() != 0:
+            raise ValueError('editorial timestamp must explicitly identify UTC')
+        authored = authored_time.timestamp()
+        bullets = update['bullets']
+        if not 0 <= now - authored <= 45 * 60:
+            raise ValueError('editorial update expired')
+        if not isinstance(bullets, list) or not 3 <= len(bullets) <= 4:
+            raise ValueError('expected three or four bullets')
+        if any(not isinstance(line, str) or not line.strip() or len(line) > 220 or
+               any(char in line for char in ('\n', '\r')) or '<@' in line or '<!' in line
+               for line in bullets) or sum(map(len, bullets)) > 650:
+            raise ValueError('editorial update exceeds compact notification bounds')
+        current = {str(item['number']): item['status'] for item in report.get('editorialFacts', [])}
+        bindings = update.get('board_bindings', {})
+        if not isinstance(bindings, dict) or not bindings or any(
+                str(number) not in current or status not in ('Queued', 'In flight', 'Done') or
+                current[str(number)] != status for number, status in bindings.items()):
+            raise ValueError('editorial evidence no longer matches board')
+        references = {number for line in bullets for pair in re.findall(
+            r'#([1-9][0-9]*)\b|https://github\.com/dgmolla/fitsy/issues/([1-9][0-9]*)\b',
+            line, flags=re.IGNORECASE)
+            for number in pair if number}
+        if not references.issubset({str(number) for number in bindings}):
+            raise ValueError('editorial issue reference has no current binding')
+        report['editorial'] = {'authored_at': update['authored_at'], 'board_bindings': bindings,
+                               'state': 'fresh', 'bullets': bullets}
+        lines = bullets
+    except (OSError, KeyError, ValueError, TypeError):
+        report['editorial'] = {'state': 'fallback'}
+        facts = report.get('editorialFacts', [])
+        active = [item for item in facts if item['status'] == 'In flight']
+        ready = [item for item in facts if item['status'] == 'Queued' and not item.get('blocker')
+                 and not item.get('dependencies') and not item.get('held')]
+        lines = []
+        if active:
+            lines.append('Underway: ' + safe_copy(active[0]['title'], 120) + '. Acceptance is still pending.')
+        else:
+            lines.append('No delivery worker is marked active on the board; execution needs reconciliation.'
+                         if ready else 'No delivery worker is marked active; queued eligibility needs reconciliation.')
+        if report.get('summary', {}).get('shipped'):
+            lines.append('Recently verified: ' + safe_copy(report['summary']['shipped'][0]['title'], 120) + '.')
+        elif ready:
+            lines.append('Queued without a recorded hold: ' + safe_copy(ready[0]['title'], 120) + '. Eligibility still needs confirmation.')
+        else:
+            lines.append('No new verified shipment in the last 24 hours.')
+        blockers = [item for item in facts if item.get('blocker') and item['status'] == 'In flight']
+        if blockers:
+            lines.append('Current execution obstacle: ' + safe_copy(blockers[0]['blocker'], 150))
+        else:
+            lines.append('Fresh coordinator context is unavailable; no new human request is inferred from old backlog blockers.')
+    marker = f'https://github.com/users/dgmolla/projects/1#fitsy-slot:{slot}'
+    main_state = (report.get('main') or {}).get('state', 'unknown')
+    if main_state not in ('green', 'pending', 'failed'):
+        main_state = 'unknown'
+    return f'*Fitsy {slot[11:]} UTC* · main {main_state} · <{marker}|Details>\n' + '\n'.join('• ' + line for line in lines)
+
+
+class QueueReportDeferred(RuntimeError):
+    def __init__(self, retry_at, reason):
+        self.retry_at = retry_at
+        super().__init__(reason)
+
+
+def project_snapshot():
+    """The sole publisher uses the dispatcher's complete reader and shared cooldown."""
+    config = Path(os.environ.get('FITSY_DISPATCHER_CONFIG',
+                                 str(Path.home() / '.fitsy-dispatcher/config.json'))).expanduser()
+    runtime = config.parent / 'runtime/local-dispatcher.py'
+    result = subprocess.run([sys.executable, str(runtime), 'snapshot', '--config', str(config)],
+                            capture_output=True, text=True, timeout=300)
+    if result.returncode:
+        raise RuntimeError('canonical report queue snapshot failed')
+    value = json.loads(result.stdout)
+    if value.get('state') == 'queue-read-backoff':
+        retry = datetime.fromisoformat(value['retry_at'].replace('Z', '+00:00')).timestamp()
+        raise QueueReportDeferred(retry, 'GitHub report deferred by shared queue cooldown')
+    if value.get('state') == 'busy':
+        raise QueueReportDeferred(time.time() + 60, 'Dispatcher owns queue reader; report deferred')
+    items = value.get('items')
+    total = value.get('totalCount')
+    if (type(total) is not int or not isinstance(items, list) or len(items) != total or
+            any(not isinstance(item, dict) or not item.get('id') for item in items) or
+            len({item['id'] for item in items}) != total):
+        raise RuntimeError('canonical report queue snapshot incomplete')
+    return {**value, 'observed_at': datetime.now(timezone.utc).isoformat()}
+
+
 def generate_report(runtime, state, slot, timing_roots):
+    snapshot = project_snapshot()
     token = subprocess.check_output(['gh', 'auth', 'token'], text=True, timeout=30).strip()
     if not token:
         raise RuntimeError('GitHub token unavailable')
     output = state / 'reports' / slot.replace(':', '-')
+    save(output / 'project-snapshot.json', snapshot)
     environment = {**os.environ, 'GITHUB_TOKEN': token, 'DELIVERY_GITHUB_TOKEN': token,
                    'FITSY_LOCAL_TIMING_ROOTS': json.dumps(timing_roots)}
     result = subprocess.run(['node', str(runtime / 'hourly-report.mjs'), '--output-dir', str(output),
-                             f'--slot={slot}', '--dry-run'], env=environment, text=True,
+                             f'--slot={slot}', '--dry-run',
+                             f'--project-snapshot={output / "project-snapshot.json"}'], env=environment, text=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
     if result.returncode:
         raise RuntimeError(f'report collection failed: {result.stderr.strip()[:300]}')
     report = json.loads((output / 'report.json').read_text())
     if report.get('slotKey') != slot:
         raise RuntimeError('report slot identity mismatch')
-    return (output / 'report.txt').read_text().strip()
+    message = compose_update(report, state, slot)
+    save(output / 'report.json', report)
+    (output / 'report.txt').write_text(message + '\n')
+    return message
 
 
 def run_once(config, state, slack, now=None, generator=generate_report):
