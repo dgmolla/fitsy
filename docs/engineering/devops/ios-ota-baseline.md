@@ -45,7 +45,10 @@ It is not referenced by the unchanged app configuration or its native plugins.
 Other asset additions, modifications and deletions continue to block publication.
 A change in how that image is consumed by native code requires updating and reviewing the native baseline.
 
-The canonical production helper requires clean integrated main, verifies source and production environment, and exports iOS only.
+The canonical production helper requires a clean commit on main's first-parent history, verifies source and production environment, and exports iOS only.
+An integrated mobile commit remains publishable when a subsequent API-only commit advances main before its queued Deploy publishes.
+Unmerged feature-branch parents of a merge are excluded from that main-line history.
+Deploy serialization preserves publication order when the subsequent push also changes mobile.
 The mobile rollback helper also republishes iOS only, including when the previous group contains both platforms.
 There is no verified Android production binary, so this proof grants no Android publication authority.
 Replacing the baseline requires actual EAS/Apple binary evidence and independent workflow-security review; a tag alone is insufficient.

@@ -12,7 +12,11 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT/apps/mobile"
 MSG="${1:-$(git log -1 --format='%h: %s')}"
 # Source checks run before export. Production env checks also compare the
 # environment-dependent Google scheme to the actual processed iOS binary.
-[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || { echo "Publish only integrated origin/main" >&2; exit 1; }
+# A queued mobile push remains publishable when a later API-only push advances
+# main. Require a main-line commit, excluding unmerged feature-branch parents,
+# rather than equality with a remote ref that can advance during deployment.
+HEAD_SHA="$(git rev-parse HEAD)"
+git rev-list --first-parent origin/main | python3 -c 'import sys; sys.exit(0 if sys.argv[1] in sys.stdin.read().splitlines() else 1)' "$HEAD_SHA" || { echo "Publish only an integrated main-line commit" >&2; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "Publish only a clean checkout" >&2; exit 1; }
 node "$REPO_ROOT/scripts/deploy/native-compatibility.mjs"
 npx eas-cli@18 env:exec production 'node ../../scripts/deploy/native-compatibility.mjs --production-env' --non-interactive

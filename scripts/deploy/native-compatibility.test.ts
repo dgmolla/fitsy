@@ -102,12 +102,44 @@ test('actual production helper prevents unsafe publication and exports only veri
   expect(accepted.status).toBe(0);
   expect(accepted.stdout).toContain('verified: production branch serves group test-group');
   expect(readFileSync(log, 'utf8')).toContain('update --platform ios --branch production --environment production');
+  // Actual two-push race: A has the pending mobile JS, then API-only B moves
+  // origin/main before A's serialized Deploy reaches the publication helper.
+  const mobileHead = git('rev-parse', 'HEAD');
+  write('apps/api/app/api/health/route.ts', 'later API-only change');
+  git('add', '.'); git('commit', '-qm', 'API-only push B');
+  const apiHead = git('rev-parse', 'HEAD');
+  git('update-ref', 'refs/remotes/origin/main', apiHead);
+  git('checkout', '-q', '--detach', mobileHead);
+  const yaml = require('js-yaml') as { load: (input: string) => {
+    jobs: { changes: { steps: { id?: string; run?: string }[] } } } };
+  const workflow = yaml.load(readFileSync(join(repo, '.github/workflows/deploy.yml'), 'utf8'));
+  const changes = workflow.jobs.changes.steps.find(step => step.id === 'f')!.run!
+    .replaceAll('${{ github.event.before }}', mobileHead).replaceAll('${{ github.sha }}', apiHead);
+  const output = join(root, '.git/change-outputs');
+  const classified = spawnSync('bash', ['-e', '-c', changes], { cwd: root,
+    env: { ...cleanEnv, GITHUB_OUTPUT: output } });
+  expect(classified.status).toBe(0);
+  expect(readFileSync(output, 'utf8')).toContain('mobile=false');
+  const queuedPublication = run('expected.apps.googleusercontent.com');
+  expect(queuedPublication.status).toBe(0);
+  expect(queuedPublication.stdout).toContain('verified: production branch serves group test-group');
+  // B has no new mobile JS, so successful publication of integrated A serves
+  // the current mobile contents without requiring B to retry A's missing OTA.
   write('apps/mobile/app/index.tsx', 'dirty JS');
   const before = readFileSync(log, 'utf8');
   expect(run('expected.apps.googleusercontent.com').status).toBe(1);
   expect(readFileSync(log, 'utf8')).toBe(before);
   rmSync(join(root, 'apps/mobile/app/index.tsx'));
   write('new.txt', 'candidate'); git('add', '.'); git('commit', '-qm', 'unmerged candidate');
+  expect(run('expected.apps.googleusercontent.com').status).toBe(1);
+  expect(readFileSync(log, 'utf8')).toBe(before);
+  const featureHead = git('rev-parse', 'HEAD');
+  git('checkout', '-q', '--detach', apiHead);
+  git('merge', '-q', '--no-ff', '--no-edit', featureHead);
+  git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
+  git('checkout', '-q', '--detach', featureHead);
+  // A feature parent is integrated by a merge but is not itself the main
+  // release commit. It must not substitute for publishing that merged head.
   expect(run('expected.apps.googleusercontent.com').status).toBe(1);
   expect(readFileSync(log, 'utf8')).toBe(before);
 });
