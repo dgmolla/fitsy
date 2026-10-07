@@ -1,11 +1,13 @@
 """Owned scratch release and source-preserving checkout reuse under dispatcher.lock."""
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import time
 
 
 SCRATCH = ('Intermediates.noindex', 'ModuleCache.noindex', 'CompilationCache.noindex', 'SDKStatCaches.noindex', 'Index.noindex')
@@ -225,18 +227,43 @@ def safe_scratch(path):
     return sorted(entry for entry in owned if not any(parent in owned for parent in entry.parents))
 
 
+def release_due(entry, assessment, now):
+    if not (entry.get('finished_at') and entry.get('terminal') and entry.get('worktree')):
+        return False
+    if assessment is None or assessment.get('removal_intent'):
+        return True
+    if assessment.get('state') != 'deferred':
+        return False
+    deadline = assessment.get('retry_after')
+    # Legacy failures get one guarded assessment, not a fabricated old-use timestamp.
+    return deadline is None or (isinstance(deadline, (int, float)) and
+                                not isinstance(deadline, bool) and math.isfinite(deadline) and deadline <= now)
+
+
 def cleanup_released(config, state, save):
     """Assess one ended claim per tick, preserving original claim and failure receipts."""
     if state.get('active'):
         return
     assessed = state.setdefault('resource_releases', {})
-    previous = next((entry for entry in reversed(state.get('history', []))
-                     if entry.get('finished_at') and entry.get('terminal') and entry.get('worktree')
-                     and (entry.get('id') not in assessed or assessed[entry['id']].get('removal_intent'))), None)
+    now = time.time()
+    eligible = [entry for entry in reversed(state.get('history', []))
+                if release_due(entry, assessed.get(entry.get('id')), now)]
+    # New releases and uncertain deletion intents precede due retries; then oldest due first.
+    eligible.sort(key=lambda entry: (0 if entry['id'] not in assessed or
+                                     assessed[entry['id']].get('removal_intent') else 1,
+                                     assessed.get(entry['id'], {}).get('retry_after') or 0))
+    previous = eligible[0] if eligible else None
     if not previous:
         return
-    result = dict(assessed.get(previous['id']) or
-                  {'issue': previous['issue'], 'claim': previous['id'], 'removed': []})
+    result = json.loads(json.dumps(assessed.get(previous['id']) or
+                                  {'issue': previous['issue'], 'claim': previous['id'], 'removed': []}))
+    prior = assessed.get(previous['id'])
+    if prior:
+        result.setdefault('attempts', []).append({key: value for key, value in prior.items()
+                                                 if key != 'attempts'})
+    count = result.get('attempt_count', 0)
+    result['attempt_count'] = (count if isinstance(count, int) and not isinstance(count, bool) and count >= 0 else 0) + 1
+    result['attempted_at'] = now
     try:
         path = owned_checkout(config, previous)
         intent = Path(result['removal_intent']) if result.get('removal_intent') else None
@@ -252,7 +279,7 @@ def cleanup_released(config, state, save):
                 save()
         candidates = safe_scratch(path)
         released(config, previous, [path, *candidates])
-        result.setdefault('free_before', shutil.disk_usage(path).free)
+        result['free_before'] = shutil.disk_usage(path).free
         for candidate in candidates:
             owned_checkout(config, previous)
             released(config, previous, [path, candidate])
@@ -268,9 +295,12 @@ def cleanup_released(config, state, save):
             result.pop('removal_intent', None)
         result['free_after'] = shutil.disk_usage(path).free
         result['state'] = 'released'
+        for field in ('reason', 'next_action', 'retry_after'):
+            result.pop(field, None)
     except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as error:
-        result.update({'state': 'deferred', 'reason': str(error)[:240],
-                       'next_action': 'Recheck exact ended owner, terminal receipt and open-file ownership before retry'})
+        delay = min(21600, 900 * (2 ** min(result['attempt_count'] - 1, 5)))
+        result.update({'state': 'deferred', 'reason': str(error)[:240], 'retry_after': now + delay,
+                       'next_action': 'Retry after backoff with fresh terminal, process and open-file ownership guards'})
     assessed[previous['id']] = result
     save()
 
