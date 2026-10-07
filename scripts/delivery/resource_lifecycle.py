@@ -254,11 +254,9 @@ def cleanup_released(config, state, save):
     # Retry failures and reconcile interrupted intents after compact history rollover.
     pending = {identity for identity, result in assessed.items()
                if identity not in retained and assessment_due(result, now)}
-    if pending:
+    receipts, uncertain = [], False
+    if pending or any(release_due(entry, assessed.get(entry.get('id')), now) for entry in candidates):
         receipts, uncertain = read_claims(config, state)
-        if uncertain:
-            save()  # Unreadable newer ownership can also invalidate an older release.
-            return
         candidates.extend(entry for _, entry in receipts if entry['id'] in pending)
     eligible = [entry for entry in candidates
                 if release_due(entry, assessed.get(entry.get('id')), now)]
@@ -268,6 +266,8 @@ def cleanup_released(config, state, save):
                                      assessed.get(entry['id'], {}).get('retry_after') or 0))
     previous = eligible[0] if eligible else None
     if not previous:
+        if uncertain:
+            save()
         return
     result = json.loads(json.dumps(assessed.get(previous['id']) or
                                   {'issue': previous['issue'], 'claim': previous['id'], 'removed': []}))
@@ -279,7 +279,16 @@ def cleanup_released(config, state, save):
     result['attempt_count'] = (count if isinstance(count, int) and not isinstance(count, bool) and count >= 0 else 0) + 1
     result['attempted_at'] = now
     try:
+        if uncertain:
+            raise RuntimeError('durable ownership is uncertain; backfill damaged receipts before release')
         path = owned_checkout(config, previous)
+        owners = [entry for _, entry in receipts if entry.get('worktree')
+                  and Path(entry['worktree']).resolve() == path]
+        if any(not entry.get('finished_at') or not entry.get('terminal') for entry in owners):
+            raise RuntimeError('checkout successor lacks terminal release proof')
+        latest = latest_claim(owners)
+        if latest is None or latest['id'] != previous['id']:
+            raise RuntimeError('checkout release requires its latest durable owner')
         intent = Path(result['removal_intent']) if result.get('removal_intent') else None
         if intent:
             if not owned_scratch(path, intent):

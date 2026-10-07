@@ -138,6 +138,7 @@ Legacy deferred receipts without a retry clock receive one guarded assessment, w
 Deferred deletion intents honor the same backoff; interrupted intents without a deferred outcome still reconcile immediately.
 Validated durable claim receipts keep pending releases discoverable after compact history rolls over; damaged receipts remain preserved without deletion authority.
 Uncertain durable ownership defers that release assessment entirely because a damaged newer receipt may invalidate an older checkout owner.
+Every selected release checks durable ownership, including claims still in compact history, and requires the latest terminal owner of that checkout.
 Measured free bytes and archive overhead are recorded separately from APFS logical sizes.
 This uses the existing dispatcher lock and timer; no additional worker, queue or reporting loop is created.
 

@@ -1,6 +1,7 @@
 """Process-level dispatcher checks with a disposable Git repository and fake transports."""
 
 import json
+from datetime import datetime, timedelta
 import importlib.util
 import os
 from pathlib import Path
@@ -380,7 +381,9 @@ class DispatcherProcessTest(unittest.TestCase):
         state, old, scratch = self.deferred_scratch()
         state['resource_releases'][old['id']]['retry_after'] = time.time() - 1
         new = {**old, 'id': '00000000-0000-0000-0000-000000000123',
-               'worktree_origin_claim': old['id']}
+               'worktree_origin_claim': old['id'],
+               'finished_at': (datetime.fromisoformat(old['finished_at'].replace('Z', '+00:00')) +
+                               timedelta(seconds=1)).isoformat()}
         directory = self.state / 'claims' / new['id']; directory.mkdir()
         (directory / 'receipt.json').write_text(json.dumps(new))
         state['history'].append(new)
@@ -431,8 +434,29 @@ class DispatcherProcessTest(unittest.TestCase):
         self.tick()
         self.assertTrue(scratch.exists(), 'unreadable newer ownership cannot authorize an older release')
         self.assertEqual(receipt.read_text(), '[]')
-        self.assertEqual(self.state_data()['resource_releases'][old['id']], state['resource_releases'][old['id']])
+        result = self.state_data()['resource_releases'][old['id']]
+        self.assertEqual(result['state'], 'deferred')
+        self.assertEqual(result['attempts'][0], state['resource_releases'][old['id']])
         self.assertIn(str(receipt), self.state_data()['cold_retention_legacy'])
+
+    def test_retained_release_cannot_use_older_owner_when_newer_receipt_is_damaged(self):
+        state, old, scratch = self.deferred_scratch()
+        newer = self.state / 'claims/newer-unresolved'; newer.mkdir()
+        receipt = newer / 'receipt.json'; receipt.write_text('[]')
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists(), 'compact history cannot bypass uncertain durable ownership')
+        self.assertEqual(receipt.read_text(), '[]')
+
+    def test_retained_release_preserves_valid_successor_without_terminal_release(self):
+        state, old, scratch = self.deferred_scratch()
+        successor = {**old, 'id': '00000000-0000-0000-0000-000000000456',
+                     'worktree_origin_claim': old['id'], 'terminal': None, 'finished_at': None}
+        directory = self.state / 'claims' / successor['id']; directory.mkdir()
+        (directory / 'receipt.json').write_text(json.dumps(successor))
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists(), 'a successor requires its own terminal release proof')
 
     def test_pruned_release_rechecks_current_open_holder(self):
         state, old, scratch = self.deferred_scratch()
