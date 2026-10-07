@@ -203,6 +203,18 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
       id: paywall-offer-paid
     timeout: 30000
 - assertNotVisible: "Continue with Apple"
+# Native Back must not pop into the spent preview and bounce into checkout.
+# The visible Back control below remains the owned cancellation path.
+- swipe:
+    start: "1%,50%"
+    end: "95%,50%"
+    duration: 500
+- waitForAnimationToEnd
+- assertVisible:
+    id: paywall-offer-paid
+- assertNotVisible:
+    id: preview-guide
+- assertNotVisible: "Continue with Apple"
 - tapOn:
     id: welcome-back
 - extendedWaitUntil:

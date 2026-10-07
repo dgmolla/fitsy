@@ -12,6 +12,9 @@ export default function WelcomeLayout() {
       <Stack.Screen name="preview" options={{ gestureEnabled: false }} />
       {/* Sign-in Back clears a pending checkout; the swipe gesture cannot. */}
       <Stack.Screen name="signin" options={{ gestureEnabled: false }} />
+      {/* Checkout Back owns the exit dialog; native pop bypasses that recovery. */}
+      <Stack.Screen name="payment" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="resubscribe" options={{ gestureEnabled: false }} />
     </Stack>
   );
 }
