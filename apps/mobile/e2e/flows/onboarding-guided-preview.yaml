@@ -361,6 +361,9 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: welcome-back
 - assertVisible:
     id: preview-back
+# This fresh preview has no prior decline or owned payment continuation.
+# Its Back path returns to preview; the owned checkout exit-modal branch is
+# covered separately in onboarding-returning-preview.yaml.
 # Back preserves the user's list position; scroll to inspect the retained query.
 - scrollUntilVisible:
     element:

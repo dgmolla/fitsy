@@ -149,3 +149,69 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     timeout: 15000
 - assertNotVisible:
     id: preview-guide
+# Cancel the resumed checkout and retry from the retained meal targets.
+# Cancellation must not reveal the old paywall or bounce back into sign-in.
+- tapOn:
+    id: welcome-back
+- extendedWaitUntil:
+    visible:
+      id: welcome-start
+    timeout: 15000
+- assertNotVisible:
+    id: paywall-logo
+- assertNotVisible: "Continue with Apple"
+- openLink: com.fitsy.mobile://welcome/how-it-works
+- tapOn:
+    text: "^Open$"
+    optional: true
+# The first tap after a route transition can precede its native hit target.
+# Reacquire the same control and require a changed screen before selecting.
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: welcome-continue
+      - extendedWaitUntil:
+          visible:
+            id: preview-guide
+          timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- tapOn:
+    id: discovery-hero
+- extendedWaitUntil:
+    visible:
+      id: signup-selected-restaurant
+    timeout: 15000
+- assertVisible: "Continue with Apple"
+- assertNotVisible:
+    id: paywall-logo
+# Real dev authentication completes the owned no-trial continuation once.
+# No purchase is made on this shared dev account.
+- tapOn: "Dev login"
+- extendedWaitUntil:
+    visible:
+      id: paywall-offer-paid
+    timeout: 30000
+- assertNotVisible: "Continue with Apple"
+- tapOn:
+    id: welcome-back
+- extendedWaitUntil:
+    visible:
+      id: paywall-back-to-plans
+    timeout: 15000
+- assertNotVisible:
+    id: preview-back
+- tapOn:
+    id: paywall-back-to-plans
+- assertVisible:
+    id: paywall-offer-paid
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: paywall-offer-paid
+    timeout: 30000
+- assertNotVisible: "Continue with Apple"

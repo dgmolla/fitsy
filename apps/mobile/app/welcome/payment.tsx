@@ -23,7 +23,7 @@ import { paywallVariantConfig, resolvePaywallVariant, type PaywallVariant } from
 import { supabase } from '@/lib/supabase';
 import { readReminderPreferences } from '@/lib/notificationSchedule';
 import { getNotificationPermission } from '@/lib/useNotifications';
-import { clearPaymentSignInContinuation, hasPaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
+import { clearPaymentSignInContinuation, navigateBackFromPayment } from '@/lib/paymentSignInContinuation';
 import type { ReminderAvailability } from '@/components/PaywallOfferTimeline';
 
 type PlanId = 'monthly' | 'yearly';
@@ -248,12 +248,9 @@ export default function PaymentScreen() {
       setRestoring(false);
     }
   }
-
   if (!identityReady) return identityUnavailable
     ? <PurchaseIdentityRecovery onRetry={() => setIdentityAttempt(attempt => attempt + 1)} /> : null;
-  // Deep links, old onboarding checkpoints, and a session lost while this
-  // screen is open must never expose a purchase screen before authentication.
-  // The existing dev-only visual fixture has no purchase or restore action.
+  // Anonymous deep links and resumes authenticate first; visual fixtures cannot purchase or restore.
   if (!userId && !visualRequested) return <Redirect href="/welcome/signin?returnTo=payment" />;
   if (userId && !purchasesReady) return null;
   if (userId && isUnknown) return <Redirect href="/welcome/subscription-check" />;
@@ -276,14 +273,8 @@ export default function PaymentScreen() {
         visualReminderSimulated={simulatedReminder}
         onSelect={setChosenPlan}
         onBack={() => {
-          const exit = () => setModal(discountTerms && discountPercent ? 'discount' : 'goodbye');
-          if (!navigation.canGoBack()) { exit(); return; }
-          void hasPaymentSignInContinuation(userId ?? undefined).then(checkout => {
-            // A consumed guided preview redirects straight back here. Use the
-            // paywall exit instead of bouncing through that spent screen.
-            if (checkout) exit();
-            else router.back();
-          }).catch(exit);
+          void navigateBackFromPayment(navigation.canGoBack(), userId ?? undefined,
+            () => router.back(), () => setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'));
         }}
         onRestore={() => { void handleRestore(); }}
         onManage={() => { void showManageSubscriptions(); }}
@@ -291,7 +282,6 @@ export default function PaymentScreen() {
         onPurchase={() => { void handleStart(false); }}
         onDecline={() => { if (!loading && !restoring) setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'); }}
       />
-
       <PaywallExitModals
         modal={modal}
         discountPercent={discountPercent}

@@ -42,3 +42,14 @@ export async function bindPaymentSignInContinuation(userId: string): Promise<boo
 export async function clearPaymentSignInContinuation(): Promise<void> {
   await write(() => AsyncStorage.removeItem(KEY));
 }
+
+/** A spent checkout preview must exit through the paywall instead of looping. */
+export async function navigateBackFromPayment(
+  canGoBack: boolean, userId: string | undefined, back: () => void, exit: () => void,
+): Promise<void> {
+  if (!canGoBack) { exit(); return; }
+  try {
+    if (await hasPaymentSignInContinuation(userId)) exit();
+    else back();
+  } catch { exit(); }
+}
