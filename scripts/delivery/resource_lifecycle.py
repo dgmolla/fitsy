@@ -20,7 +20,10 @@ def execute(args, timeout=30):
 def read_claims(config, state):
     """Retain damaged legacy metadata without turning it into deletion authority."""
     claims, uncertain = [], False
-    for receipt in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
+    for directory in (Path(config['state_dir']) / 'claims').glob('*'):
+        if not directory.is_dir():
+            continue
+        receipt = directory / 'receipt.json'
         try:
             claim = json.loads(receipt.read_text())
             if not isinstance(claim, dict):
@@ -304,7 +307,20 @@ def cleanup_released(config, state, save):
         if any(not entry.get('finished_at') or not entry.get('terminal') for entry in owners):
             raise RuntimeError('checkout successor lacks terminal release proof')
         latest = latest_claim(owners)
-        if latest is None or latest['id'] != previous['id']:
+        if latest is None:
+            raise RuntimeError('checkout release requires its latest durable owner')
+        if latest['id'] != previous['id']:
+            completed = assessed.get(latest['id'], {})
+            if (not result.get('removal_intent') and completed.get('state') == 'released'
+                    and completed.get('claim') == latest['id'] and completed.get('issue') == latest['issue']
+                    and not completed.get('removal_intent')):
+                # Settle the obsolete assessment, not its files; the fresh durable owner already released.
+                result.update({'state': 'superseded', 'superseded_by': latest['id']})
+                for field in ('reason', 'next_action', 'retry_after'):
+                    result.pop(field, None)
+                assessed[previous['id']] = result
+                save()
+                return
             raise RuntimeError('checkout release requires its latest durable owner')
         intent = Path(result['removal_intent']) if result.get('removal_intent') else None
         if intent:

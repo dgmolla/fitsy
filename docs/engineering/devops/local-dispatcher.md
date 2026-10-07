@@ -136,9 +136,10 @@ Each retry checks terminal ownership and current process/open-file use again, an
 New releases take priority over due retries, with at most one ended claim assessed per tick; an active worker prevents release cleanup.
 Legacy deferred receipts without a retry clock receive one guarded assessment, while malformed clocks remain retained for reconciliation.
 Deferred deletion intents honor the same backoff; interrupted intents without a deferred outcome still reconcile immediately.
-Validated durable claim receipts keep unassessed releases, deferred retries and interrupted intents discoverable after compact history rolls over; damaged receipts remain preserved without deletion authority.
+Validated durable claim receipts keep unassessed releases, deferred retries and interrupted intents discoverable after compact history rolls over; missing and damaged receipts remain preserved without deletion authority.
 Uncertain durable ownership defers that release assessment entirely because a damaged newer receipt may invalidate an older checkout owner.
 Every selected release checks durable ownership, including claims still in compact history, and requires the latest terminal owner of that checkout.
+An older assessment settles as superseded only after the latest durable owner has a completed release receipt; prior failures remain retained and settlement deletes no files.
 An explicitly linked checkout generation with a missing or mismatched resource path remains unresolved ownership and protects that checkout's scratch.
 Measured free bytes and archive overhead are recorded separately from APFS logical sizes.
 This uses the existing dispatcher lock and timer; no additional worker, queue or reporting loop is created.

@@ -469,6 +469,35 @@ class DispatcherProcessTest(unittest.TestCase):
         self.tick(); self.tick()
         self.assertTrue(scratch.exists(), 'a missing known successor receipt cannot promote an older owner')
 
+    def test_pruned_missing_successor_receipt_preserves_scratch(self):
+        state, old, scratch = self.deferred_scratch()
+        (self.state / 'claims/00000000-0000-0000-0000-000000000789').mkdir()
+        state['history'] = []
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists(), 'missing successor receipt survives compact history rollover')
+
+    def test_superseded_retry_settles_after_latest_owner_release(self):
+        state, old, scratch = self.deferred_scratch()
+        successor = {**old, 'id': '00000000-0000-0000-0000-000000000789',
+                     'worktree_origin_claim': old['id'],
+                     'finished_at': (datetime.fromisoformat(old['finished_at'].replace('Z', '+00:00')) +
+                                     timedelta(seconds=1)).isoformat()}
+        directory = self.state / 'claims' / successor['id']; directory.mkdir()
+        (directory / 'receipt.json').write_text(json.dumps(successor))
+        state['history'].append(successor)
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()  # Latest owner releases its scratch first.
+        self.assertFalse(scratch.exists())
+        self.tick()
+        settled = self.state_data()['resource_releases'][old['id']]
+        self.assertEqual(settled['state'], 'superseded', settled)
+        self.assertEqual(settled['superseded_by'], successor['id'])
+        self.assertEqual(settled['removed'], [])
+        self.assertEqual(settled['attempts'][0]['reason'], 'open files or uncertain file ownership')
+        self.tick()
+        self.assertEqual(self.state_data()['resource_releases'][old['id']], settled)
+
     def test_pathless_same_generation_successor_preserves_scratch(self):
         state, old, scratch = self.deferred_scratch()
         successor = {**old, 'id': '00000000-0000-0000-0000-000000000abc',
