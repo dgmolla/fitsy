@@ -111,7 +111,7 @@ test('actual production helper prevents unsafe publication and exports only veri
   git('update-ref', 'refs/remotes/origin/main', apiHead);
   git('checkout', '-q', '--detach', mobileHead);
   const yaml = require('js-yaml') as { load: (input: string) => {
-    jobs: { changes: { steps: { id?: string; run?: string }[] } } } };
+    jobs: { changes: { steps: { id?: string; run?: string }[] }; ota: { if: string } } } };
   const workflow = yaml.load(readFileSync(join(repo, '.github/workflows/deploy.yml'), 'utf8'));
   const changes = workflow.jobs.changes.steps.find(step => step.id === 'f')!.run!
     .replaceAll('${{ github.event.before }}', mobileHead).replaceAll('${{ github.sha }}', apiHead);
@@ -125,6 +125,31 @@ test('actual production helper prevents unsafe publication and exports only veri
   expect(queuedPublication.stdout).toContain('verified: production branch serves group test-group');
   // B has no new mobile JS, so successful publication of integrated A serves
   // the current mobile contents without requiring B to retry A's missing OTA.
+  // GitHub may replace pending A entirely while another Deploy is active.
+  // Evaluate the actual surviving B job guard and run the actual helper: its
+  // API-only classification must not suppress publication of A's mobile JS.
+  git('checkout', '-q', '--detach', apiHead);
+  const runSurvivor = (migration: string, smoke: string) => {
+    const condition = workflow.jobs.ota.if.replaceAll('always()', 'true')
+      .replaceAll('needs.changes.outputs.mobile', "'false'")
+      .replaceAll('needs.migrate.result', `'${migration}'`)
+      .replaceAll('needs.smoke.result', `'${smoke}'`);
+    return spawnSync('bash', ['-e', '-c', `if [[ ${condition} ]]; then bash scripts/deploy/ota.sh 'surviving API push'; fi`], {
+      cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}`,
+        EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 'expected.apps.googleusercontent.com' },
+    });
+  };
+  const survivingPublication = runSurvivor('success', 'success');
+  expect(survivingPublication.status).toBe(0);
+  expect(survivingPublication.stdout).toContain(`"source_sha":"${apiHead}"`);
+  expect(survivingPublication.stdout).toContain('verified: production branch serves group test-group');
+  const safeCalls = readFileSync(log, 'utf8');
+  const blockedStates: Array<[string, string]> = [['failure', 'skipped'], ['cancelled', 'skipped'], ['success', 'failure'], ['success', 'cancelled']];
+  for (const [migration, smoke] of blockedStates) {
+    expect(runSurvivor(migration, smoke).status).toBe(0);
+    expect(readFileSync(log, 'utf8')).toBe(safeCalls);
+  }
+  git('checkout', '-q', '--detach', mobileHead);
   write('apps/mobile/app/index.tsx', 'dirty JS');
   const before = readFileSync(log, 'utf8');
   expect(run('expected.apps.googleusercontent.com').status).toBe(1);

@@ -10,15 +10,16 @@
 #   smoke    - waits for Vercel's production deployment of this commit, then
 #              runs the prod-safe API smoke; failure files an incident issue.
 #              Rollback is one local command: scripts/deploy/rollback.sh api
-#   ota      - publishes the mobile OTA when mobile/shared changed, no native
-#              changes, and EXPO_TOKEN exists; otherwise leaves a reminder
-#              issue to run scripts/deploy/ota.sh locally.
+#   ota      - attempts guarded iOS publication on every surviving main push,
+#              since concurrency can replace a pending mobile push with an
+#              API-only push; native drift still blocks publication.
 name: Deploy
 on:
   push:
     branches: [main]
 
-# serialize deploys in push order; a stale run must not publish after a newer one
+# Serialize active deploys. GitHub can replace a pending run, so each surviving
+# run reconciles mobile delivery regardless of its individual push range.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -126,7 +127,7 @@ jobs:
     needs: [changes, migrate, smoke]
     # never OTA over a failed migration or failed smoke: skipped smoke is only
     # acceptable when nothing upstream failed (lens finding, 2026-09-07)
-    if: always() && needs.changes.outputs.mobile == 'true' && needs.migrate.result != 'failure' && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped')
+    if: always() && needs.migrate.result == 'success' && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
