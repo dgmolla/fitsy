@@ -469,6 +469,19 @@ class DispatcherProcessTest(unittest.TestCase):
         self.tick(); self.tick()
         self.assertTrue(scratch.exists(), 'a missing known successor receipt cannot promote an older owner')
 
+    def test_pathless_same_generation_successor_preserves_scratch(self):
+        state, old, scratch = self.deferred_scratch()
+        successor = {**old, 'id': '00000000-0000-0000-0000-000000000abc',
+                     'worktree_origin_claim': old['id'], 'worktree': None,
+                     'finished_at': (datetime.fromisoformat(old['finished_at'].replace('Z', '+00:00')) +
+                                     timedelta(seconds=1)).isoformat()}
+        directory = self.state / 'claims' / successor['id']; directory.mkdir()
+        (directory / 'receipt.json').write_text(json.dumps(successor))
+        state['history'] = []
+        (self.state / 'state.json').write_text(json.dumps(state))
+        self.tick()
+        self.assertTrue(scratch.exists(), 'an explicitly linked successor without a path is unresolved ownership')
+
     def test_unassessed_durable_release_survives_history_rollover(self):
         state, old, scratch = self.deferred_scratch()
         state['resource_releases'].pop(old['id'])

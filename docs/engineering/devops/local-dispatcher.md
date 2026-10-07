@@ -139,6 +139,7 @@ Deferred deletion intents honor the same backoff; interrupted intents without a 
 Validated durable claim receipts keep unassessed releases, deferred retries and interrupted intents discoverable after compact history rolls over; damaged receipts remain preserved without deletion authority.
 Uncertain durable ownership defers that release assessment entirely because a damaged newer receipt may invalidate an older checkout owner.
 Every selected release checks durable ownership, including claims still in compact history, and requires the latest terminal owner of that checkout.
+An explicitly linked checkout generation with a missing or mismatched resource path remains unresolved ownership and protects that checkout's scratch.
 Measured free bytes and archive overhead are recorded separately from APFS logical sizes.
 This uses the existing dispatcher lock and timer; no additional worker, queue or reporting loop is created.
 

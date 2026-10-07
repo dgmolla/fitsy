@@ -279,14 +279,22 @@ def cleanup_released(config, state, save):
         if uncertain:
             raise RuntimeError('durable ownership is uncertain; backfill damaged receipts before release')
         path = owned_checkout(config, previous)
+        origin = previous.get('worktree_origin_claim', previous['id'])
         fields = ('id', 'issue', 'terminal', 'finished_at', 'worktree', 'branch',
                   'worktree_origin_claim', 'worktree_creation_intent', 'pid', 'launcher_pid', 'worker_pgid')
         for known in candidates:
+            same_generation = (known.get('issue') == previous['issue'] and
+                               known.get('worktree_origin_claim', known.get('id')) == origin)
             if not known.get('worktree'):
+                if same_generation:
+                    raise RuntimeError('known checkout generation owner lacks a resource path')
                 continue
             if not isinstance(known['worktree'], str):
                 raise RuntimeError('known checkout owner has an unreadable resource path')
-            if Path(known['worktree']).resolve() == path:
+            same_path = Path(known['worktree']).resolve() == path
+            if same_generation and not same_path:
+                raise RuntimeError('known checkout generation owner has a mismatched resource path')
+            if same_path:
                 receipt = durable.get(known.get('id'))
                 if receipt is None or any(receipt.get(key) != known.get(key) for key in fields):
                     raise RuntimeError('known checkout owner terminal receipt is missing or changed')
