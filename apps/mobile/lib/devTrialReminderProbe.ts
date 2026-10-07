@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { planReminders, trialReminderDate, TRIAL_REMINDER_LEAD_HOURS } from './notificationPlan';
 import { TRIAL_CATALOG_POLICY } from '../../../packages/shared/src/contracts/trialPolicy';
 import { prepareReminderChannel, scheduleNativeReminder } from './notificationSchedule';
+import { explainMissedTrialReminder, missedTrialReminderWindow } from './trialReminderFeedback';
 
 const DEV_PREFIX = 'fitsy.dev-trial-reminder.';
 let queue: Promise<unknown> = Promise.resolve();
@@ -17,6 +18,18 @@ function enqueue<T>(work: (revision: number) => Promise<T>): Promise<T> {
 // account, or stored reminder preferences used by the real provider.
 function requireDevelopment(userId: string | null): asserts userId is string {
   if (!__DEV__ || !userId) throw new Error('Development sign-in required');
+}
+
+/** Actual production alert with controlled dates; no entitlement or preference writes. */
+export function showDevMissedTrialReminder(userId: string | null) {
+  requireDevelopment(userId);
+  const now = new Date(); now.setHours(20, 0, 0, 0);
+  const expiration = new Date(now); expiration.setDate(expiration.getDate() + 3); expiration.setHours(8, 0, 0, 0);
+  const start = new Date(expiration.getTime() - TRIAL_CATALOG_POLICY.desiredDays * 86_400_000);
+  const trial = { isActive: true, periodType: 'TRIAL', willRenew: true,
+    latestPurchaseDate: start.toISOString(), expirationDate: expiration.toISOString() };
+  if (!missedTrialReminderWindow(trial, now.getTime())) throw new Error('Controlled late opt-in did not miss its adjusted target');
+  explainMissedTrialReminder();
 }
 
 function nextAllowedTime(now: Date): Date {
