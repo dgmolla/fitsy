@@ -129,3 +129,17 @@ it('prevents sign-in completion from treating a failed profile pull as a settled
   await expect(requireProfileFromServer()).rejects.toThrow('Could not load your account targets');
   expect(await getMacroTargets()).toBeNull();
 });
+
+
+it('hydrates the account complete target while preserving its intentional partial filter', async () => {
+  await AsyncStorage.removeItem('@fitsy/macro_targets');
+  const filter = { protein: '65', carbs: '', fat: '', calories: '' };
+  await saveMacroTargets(filter, 'search');
+  global.fetch = jest.fn().mockResolvedValue(response({ user,
+    macroTarget: { calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' } }));
+  const confirm = jest.fn();
+  expect(await recoverStartupMealTargets(confirm)).toBe('restored');
+  expect(await getMacroTargets()).toEqual({ calories: '740', protein: '60', carbs: '80', fat: '20' });
+  expect((await getDiscoveryMacroTargetSnapshot())?.targets).toEqual(filter);
+  expect(confirm).not.toHaveBeenCalled();
+});

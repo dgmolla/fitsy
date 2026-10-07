@@ -1,7 +1,8 @@
+import { acknowledgePendingMacroTarget, getPendingMacroTarget } from './macroTargetSync';
 /** @jest-environment node */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { saveMacroTargets } from './macroStorage';
-import { syncSavedProfileToServer } from './profileSync';
+import { getMacroTargets, saveMacroTargets } from './macroStorage';
+import { pullProfileFromServer, replayPendingProfileSync, syncSavedProfileToServer } from './profileSync';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('@supabase/supabase-js', () => {
@@ -33,4 +34,44 @@ it('keeps retrying a pending target after the initial outage window', async () =
   for (const delay of [1000, 5000, 15000, 60000]) await jest.advanceTimersByTimeAsync(delay);
   expect(global.fetch).toHaveBeenCalledTimes(5);
   expect(await AsyncStorage.getItem('@fitsy/pending_profile_sync:test-user')).toBeNull();
+});
+
+
+it('replays the target record after interruption before any separate API queue write', async () => {
+  await AsyncStorage.clear();
+  const edited = { calories: '849', protein: '90', carbs: '75', fat: '21' };
+  await saveMacroTargets(edited);
+  expect(await AsyncStorage.getItem('@fitsy/pending_profile_sync:test-user')).toBeNull();
+  let target = { proteinG: 298, carbsG: 263, fatG: 74, calories: 2910, source: 'manual' };
+  global.fetch = jest.fn().mockImplementation((_url: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') target = JSON.parse(String(init.body)).macroTarget;
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({
+      user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+      macroTarget: target,
+    }) });
+  });
+  await replayPendingProfileSync();
+  expect(target).toEqual({ proteinG: 315, carbsG: 263, fatG: 74, calories: 2978, source: 'manual' });
+  expect(await getPendingMacroTarget('test-user')).toBeNull();
+  expect(await pullProfileFromServer()).toBe('restored');
+  expect(await getMacroTargets()).toEqual(edited);
+});
+
+it('keeps a newer target intent when an older target acknowledgement finishes', async () => {
+  await AsyncStorage.clear();
+  await saveMacroTargets({ calories: '829', protein: '85', carbs: '75', fat: '21' });
+  const old = (await getPendingMacroTarget('test-user'))!;
+  await saveMacroTargets({ calories: '849', protein: '90', carbs: '75', fat: '21' });
+  await acknowledgePendingMacroTarget(old);
+  expect((await getPendingMacroTarget('test-user'))?.targets.protein).toBe('90');
+});
+
+it('does not replay an old dirty archive over an acknowledged active allocation', async () => {
+  await AsyncStorage.clear();
+  await saveMacroTargets({ calories: '829', protein: '85', carbs: '75', fat: '21' });
+  const old = await AsyncStorage.getItem('@fitsy/macro_targets');
+  await AsyncStorage.setItem('@fitsy/macro_targets:test-user', old!);
+  await saveMacroTargets({ calories: '849', protein: '90', carbs: '75', fat: '21' });
+  await acknowledgePendingMacroTarget((await getPendingMacroTarget('test-user'))!);
+  expect(await getPendingMacroTarget('test-user')).toBeNull();
 });

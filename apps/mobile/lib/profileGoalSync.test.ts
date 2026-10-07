@@ -267,12 +267,18 @@ it('keeps an offline edit for its account while another account signs in', async
     mockCurrentSession = { access_token: 'other-token', user: { id: 'other-user' } };
     await saveMacroTargets({ calories: '500', protein: '25', carbs: '55', fat: '20' });
     await replayPendingProfileSync();
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    // The new account's independently saved intent is recoverable too.
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    const other = (global.fetch as jest.Mock).mock.calls[1][1];
+    expect(other.headers.Authorization).toBe('Bearer other-token');
+    expect(JSON.parse(other.body).macroTarget.proteinG).toBe(88);
     expect(await AsyncStorage.getItem('@fitsy/pending_profile_sync:test-user')).not.toBeNull();
     mockCurrentSession = { access_token: 'synthetic-token', user: { id: 'test-user' } };
     await replayPendingProfileSync();
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-    expect(JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body).macroTarget.proteinG).toBe(175);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    const original = (global.fetch as jest.Mock).mock.calls[2][1];
+    expect(original.headers.Authorization).toBe('Bearer synthetic-token');
+    expect(JSON.parse(original.body).macroTarget.proteinG).toBe(175);
     expect(await AsyncStorage.getItem('@fitsy/pending_profile_sync:test-user')).toBeNull();
   } finally {
     jest.clearAllTimers();

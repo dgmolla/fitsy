@@ -7,7 +7,7 @@ import { getOnboardingResume } from '@/lib/onboardingResume';
 import { paywallVariants, readPaywallDecline } from '@/lib/paywallAccess';
 import { ONBOARDING_COMPLETE_KEY } from '@/lib/onboardingCompletion';
 import { getStoredToken } from '@/lib/authClient';
-import { hasSavedMealTargets } from '@/lib/macroStorage';
+import { getMacroTargets, hasSavedMealTargets } from '@/lib/macroStorage';
 import { readOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
 import { usePurchases } from '@/lib/usePurchases';
 import { onboardingEntry, type EntryDestination } from '@/lib/onboardingEntry';
@@ -41,17 +41,18 @@ export default function Index() {
           return;
         }
         let hasTargets = targets;
-        if (token && purchasesReady && entitled === true && !hasTargets) {
+        if (token && purchasesReady && entitled === true && !await getMacroTargets()) {
           if (targetRecovery.current?.token !== token) {
             targetRecovery.current = { token, pending: recoverStartupMealTargets(confirmLegacyMacroRecovery) };
           }
           const recovery = await targetRecovery.current.pending;
           if (!current) return;
-          if (recovery === 'unavailable' || recovery === 'account-changed') {
+          if (recovery === 'account-changed') return;
+          if (recovery === 'unavailable' && !targets) {
             setRecoveryUnavailable(true);
             return;
           }
-          hasTargets = recovery === 'restored';
+          hasTargets = targets || recovery === 'restored';
         }
         if (token && purchasesReady && entitled === true && hasTargets) {
           const resumed = await openPurchasedDestination(navigation, { resumeOnly: true, isCurrent: () => current });

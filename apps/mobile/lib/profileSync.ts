@@ -1,8 +1,9 @@
+import { acknowledgePendingMacroTarget, getPendingMacroTarget } from './macroTargetSync';
 import { buildProfileBody, dailyMacroTarget } from './profileTargetBody';
 import { api } from './api';
 import { getStoredToken } from './authClient';
 import { claimAnonymousOnboardingData, replaceAccountOnboardingData, type OnboardingData } from './onboardingStorage';
-import { clearArchivedMacroTarget, getAnonymousCompleteTarget, getArchivedMacroTarget, getDiscoveryMacroTargetSnapshot, getMacroTargetSnapshot, getMacroTargetSource, getQuarantinedLegacyTarget, saveMacroTargets, type StoredMacroTargets } from './macroStorage';
+import { MACRO_TARGETS_KEY, clearArchivedMacroTarget, getAnonymousCompleteTarget, getArchivedMacroTarget, getDiscoveryMacroTargetSnapshot, getMacroTargetSnapshot, getMacroTargetSource, getQuarantinedLegacyTarget, saveMacroTargets, type StoredMacroTargets } from './macroStorage';
 import { MEALS_PER_DAY } from './macroCalculator';
 import { macroCalories } from './macroEnergy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -77,9 +78,15 @@ async function retryPendingProfileSync(scheduleRetry = true): Promise<boolean> {
   // enqueue a stale body after a later revision has already reached the API.
   const deliver = async () => {
     const raw = await AsyncStorage.getItem(key);
-    if (!raw) return true;
-    const pending = JSON.parse(raw) as { revision: number; body: Record<string, unknown> };
-    if (!await performProfilePush(userId, pending.body)) return false;
+    const targetIntent = await getPendingMacroTarget(userId);
+    if (!raw && !targetIntent) return true;
+    const pending = raw ? JSON.parse(raw) as { revision: number; body: Record<string, unknown> } : null;
+    const body: Record<string, unknown> = { ...pending?.body, ...(targetIntent ? {
+      macroTarget: dailyMacroTarget(targetIntent.targets, targetIntent.source),
+    } : {}) };
+    if (body.macroTarget) delete body.preserveMacroTarget;
+    if (!await performProfilePush(userId, body)) return false;
+    if (targetIntent) await acknowledgePendingMacroTarget(targetIntent);
     sentRaw = raw;
     return true;
   };
@@ -147,8 +154,11 @@ export function queueSavedProfileToServer(bodyOverride?: Record<string, unknown>
 
 /** Persist before acknowledging an edit; network delivery never owns the storage queue. */
 export async function syncSavedProfileToServer(bodyOverride?: Record<string, unknown>): Promise<void> {
+  const session = supabase.auth.getSession();
   await queueSavedProfileToServer(bodyOverride);
-  await retryPendingProfileSync();
+  const owner = (await session).data.session?.user?.id;
+  if (owner && (await supabase.auth.getSession()).data.session?.user?.id === owner)
+    await retryPendingProfileSync();
 }
 
 export function deliverQueuedProfile(): void {
@@ -215,9 +225,10 @@ export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
     if (!(await retryPendingProfileSync())) return 'unavailable';
     if (!(await stillCurrent())) return 'account-changed';
     const revision = profileRevision;
+    const targetBeforePull = await AsyncStorage.getItem(MACRO_TARGETS_KEY);
     const profile = await fetchProfile(expectedUserId);
     if (!(await stillCurrent())) return 'account-changed';
-    if (!profile || profileRevision !== revision) return 'unavailable';
+    if (!profile || profileRevision !== revision || await getPendingMacroTarget(expectedUserId)) return 'unavailable';
 
     // Write body stats to onboarding storage
     const onboarding: OnboardingData = {};
@@ -251,7 +262,8 @@ export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
         (profile.macroTarget.source === undefined && source === 'automatic' && localSnapshot
         && (['protein', 'carbs', 'fat', 'calories'] as const)
           .every(field => localSnapshot.targets[field] === perMeal[field]));
-      await saveMacroTargets(perMeal, 'complete', keepAutomatic ? 'automatic' : 'manual', expectedUserId);
+      if (!await saveMacroTargets(perMeal, 'complete', keepAutomatic ? 'automatic' : 'manual',
+        expectedUserId, false, targetBeforePull)) return 'unavailable';
       if (archivedTarget && await stillCurrent()) await clearArchivedMacroTarget(expectedUserId);
     } else if (archivedTarget && await stillCurrent()) {
       // No server target exists. Recover the same account's local target

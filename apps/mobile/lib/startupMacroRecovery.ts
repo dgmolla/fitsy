@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { getQuarantinedLegacyTarget, hasSavedMealTargets, restoreQuarantinedLegacyTarget,
+import { getMacroTargets, getQuarantinedLegacyTarget, hasSavedMealTargets, restoreQuarantinedLegacyTarget,
   type MacroTargetMode } from './macroStorage';
 import { deliverQueuedProfile, pullProfileFromServer, queueSavedProfileToServer } from './profileSync';
 
@@ -11,7 +11,7 @@ export async function recoverStartupMealTargets(confirm: (mode: MacroTargetMode)
   if (!expectedUserId) return 'account-changed';
   const stillCurrent = async () =>
     (await supabase.auth.getSession()).data.session?.user?.id === expectedUserId;
-  if (await hasSavedMealTargets()) return await stillCurrent() ? 'restored' : 'account-changed';
+  if (await getMacroTargets()) return await stillCurrent() ? 'restored' : 'account-changed';
   // Prefer the current account's server allocation over ownerless device data.
   const reconciliation = await pullProfileFromServer();
   if (!await stillCurrent()) return 'account-changed';
