@@ -123,11 +123,10 @@ test("bound acceptance reaches reviewer and changes only when its substance chan
   expect(run().status).toBe(0);
   expect(runPr().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
-  writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior also handles retries.\n</details>\n");
+  writeFileSync(join(root, "issue-body"), `Goal: Preserve the required release behavior.\n${"Background context. ".repeat(400)}\n<details>\nAcceptance: changed behavior also handles retries.\nAcceptance: later requirement must be seen.\nStatus: required release state must persist.\n</details>\n`);
   expect(run().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
-  writeFileSync(join(root, "issue-body"), `Goal: Preserve the required release behavior.\n${"Background context. ".repeat(400)}\n<details>\nAcceptance: later requirement must be seen.\nStatus: required release state must persist.\n</details>\n`);
-  expect(run().status).toBe(0);
+  expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Acceptance: changed behavior also handles retries.");
   expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Acceptance: later requirement must be seen.");
   expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Status: required release state must persist.");
 });
