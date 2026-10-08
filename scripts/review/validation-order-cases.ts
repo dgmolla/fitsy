@@ -1,3 +1,4 @@
+import { runPrFixture } from './round-runner-cases';
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -94,6 +95,27 @@ export function validationOrderCases(f: Fixture) {
     expect(callCount()).toBe(1);
     expect(f.run().status).toBe(0); expect(callCount()).toBe(2);
     expect(verify().status).toBe(0);
+  });
+  test.each([['local', 'tracked edit'], ['local', 'committed head change'], ['local', 'focused selection change'], ['PR', 'tracked edit']])('reviewer-window source drift blocks caching and full acceptance: %s %s', (mode, drift) => {
+    setup();
+    const root = f.root();
+    const provider = join(root, 'bin/claude');
+    const mutation = drift === 'focused selection change'
+      ? `pathlib.Path(${JSON.stringify(join(root, '.evidence/verify'))}).mkdir(parents=True,exist_ok=True)\npathlib.Path(${JSON.stringify(join(root, '.evidence/verify/focused-tests.json'))}).write_text('{"version":1,"tests":["changed.test.ts"]}')`
+      : `pathlib.Path(${JSON.stringify(join(root, 'app.ts'))}).write_text('export const value = 99;\\n')`;
+    const commit = drift === 'committed head change'
+      ? `\nimport subprocess\nsubprocess.run(['git','add','app.ts'],cwd=${JSON.stringify(root)},check=True)\nsubprocess.run(['git','commit','-qm','reviewer-window edit'],cwd=${JSON.stringify(root)},check=True)` : '';
+    writeFileSync(provider, readFileSync(provider, 'utf8').replace('prompt=sys.stdin.read()', 'prompt=sys.stdin.read()\n' + mutation + commit));
+    f.git('add', '-A'); f.git('commit', '-qm', 'reviewer-window mutation fixture');
+    const result = mode === 'local' ? f.run() : runPrFixture(root, f.env());
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('candidate changed during independent review');
+    expect(callCount()).toBe(1);
+    expect(readdirSync(join(root, 'cache')).filter(name => name.endsWith('.json'))).toHaveLength(0);
+    const history = readFileSync(join(root, 'budgets/issue-355.jsonl'), 'utf8');
+    expect(history).toContain('"event": "finish"');
+    expect(verify().status).toBe(1);
+    expect(order()).not.toContain('full');
   });
   test('uncommitted candidate stops local review before cheap checks or budget admission', () => {
     setup(); writeFileSync(join(f.root(), 'app.ts'), 'export const value = 9;\n');

@@ -24,11 +24,18 @@ if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
   exit 1
 fi
 
-# Bind local checks and review to one committed candidate before spending budget.
-if [ "$TARGET" = --local ] && [ "$PROBE" = 0 ]; then
+source_identity() {
+  node --input-type=module -e "import { sourceIdentity } from './scripts/verify/receipt-cache.mjs'; console.log(sourceIdentity(process.cwd()));"
+}
+FROZEN_SOURCE=""
+FROZEN_HEAD=""
+# Bind every executing/projecting review to one committed candidate before spending budget.
+if [ "$PROBE" = 0 ]; then
   [ -z "$(git status --porcelain --untracked-files=all)" ] || {
     echo '[run-review] candidate source is not frozen and committed' >&2; exit 1;
   }
+  FROZEN_HEAD="$(git rev-parse HEAD)"
+  FROZEN_SOURCE="$(source_identity)"
 fi
 
 # Local execution always completes canonical cheap/focused checks first.
@@ -194,7 +201,8 @@ CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=js
 # Focused selection is ignored task evidence, so bind it explicitly alongside
 # the semantic passing receipt. Volatile duration/time fields do not invalidate
 # otherwise unchanged canonical reuse.
-FOCUSED_CONTEXT="$(python3 -I - "$REPO_ROOT" <<'PYFOCUSED'
+focused_context() {
+python3 -I - "$REPO_ROOT" <<'PYFOCUSED'
 import json,pathlib,sys
 root=pathlib.Path(sys.argv[1])/'.evidence/verify'
 def read(path):
@@ -205,7 +213,16 @@ bound=None if receipt is None else {key:receipt.get(key) for key in ('version','
 if bound is not None: bound['status']=receipt.get('result',{}).get('status')
 print(json.dumps({'selection':selection,'passing_receipt':bound},sort_keys=True))
 PYFOCUSED
-)"
+}
+FOCUSED_CONTEXT="$(focused_context)"
+require_stable_candidate() {
+  if { [ "$(git rev-parse HEAD)" != "$FROZEN_HEAD" ] ||
+      [ -n "$(git status --porcelain --untracked-files=all)" ] ||
+      [ "$(source_identity)" != "$FROZEN_SOURCE" ] || [ "$(focused_context)" != "$FOCUSED_CONTEXT" ]; }; then
+    echo '[run-review] candidate changed during independent review; raw attempt retained, revalidate cheap checks and review' >&2
+    return 1
+  fi
+}
 
 # Key on reviewed content and the bound release brief. PR title/body can change
 # without altering acceptance, while an issue acceptance edit must rerun review.
@@ -305,6 +322,7 @@ import json,sys
 result=json.load(sys.stdin)
 result["reviewer"]=json.loads(sys.argv[1])
 print(json.dumps(result))' "$IDENTITY")"
+  require_stable_candidate
   # Never cache incomplete reviews or historical runner findings. Both are
   # transient infrastructure failures, not reusable independent verdicts.
   if [ "$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" != "incomplete" ] && \
@@ -315,6 +333,7 @@ print(json.dumps(result))' "$IDENTITY")"
   fi
 fi
 
+require_stable_candidate
 VERDICT="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import sys,json;print(json.load(sys.stdin)["verdict"])')"
 N_FINDINGS="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import sys,json;print(len(json.load(sys.stdin)["findings"]))')"
 ROUND_GATE=pass
@@ -342,6 +361,7 @@ if [ "$TARGET" != --local ]; then
 fi
 # Persist source provenance without converting raw adverse findings to passes.
 RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["source"]={"head_sha":sys.argv[1],"base_sha":sys.argv[4],"diff_sha256":sys.argv[2],"cache_key":sys.argv[3]}; print(json.dumps(d))' "$HEAD_SHA" "$DIFF_SHA256" "$KEY" "$BASE_SHA")"
+require_stable_candidate
 echo "$RESULT_JSON"
 if [ "$TARGET" != --local ] && [ "$CACHED_ONLY" = 0 ] && { [ "$N_FINDINGS" -gt 0 ] || [ "$VERDICT" = incomplete ]; }; then
   COMMENT="$(printf '%s' "$RESULT_JSON" | python3 -I scripts/review/format-comment.py)"
