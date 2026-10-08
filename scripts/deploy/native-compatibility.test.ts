@@ -100,6 +100,7 @@ test('actual production helper prevents unsafe publication and exports only veri
   copyFileSync(join(repo, 'scripts/deploy/ota.sh'), join(root, 'scripts/deploy/ota.sh'));
   copyFileSync(join(repo, 'scripts/deploy/ota-hold.sh'), join(root, 'scripts/deploy/ota-hold.sh'));
   copyFileSync(join(repo, 'scripts/deploy/ota-lock.sh'), join(root, 'scripts/deploy/ota-lock.sh'));
+  copyFileSync(join(repo, 'scripts/deploy/ota-bundle-identity.py'), join(root, 'scripts/deploy/ota-bundle-identity.py'));
   write('.gitignore', '.evidence/\n');
   git('add', '.'); git('commit', '-qm', 'helper');
   git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
@@ -109,7 +110,8 @@ test('actual production helper prevents unsafe publication and exports only veri
   writeFileSync(holdState, '[[]]');
   const leaseState = join(root, '.git/lease-state');
   installGithubFixture(bin, holdState, leaseState);
-  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\n[ -z "\${GH_TOKEN:-}" ] && [ -z "\${GITHUB_TOKEN:-}" ] || exit 88\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nenv:exec) bash -c "$4" ;;\nupdate) [ ! -f '${log}.fail' ] || exit 7; printf '[{"group":"test-group"}]' ;;\nupdate:list) printf '{"currentPage":[{"group":"test-group"}]}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
+  writeFileSync(join(bin, 'curl'), "#!/bin/bash\nprintf '%s' '{\"runtimeVersion\":\"1.0.0\",\"launchAsset\":{\"hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"contentType\":\"application/javascript\"},\"assets\":[],\"extra\":{}}'\n", { mode: 0o755 });
+  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\n[ -z "\${GH_TOKEN:-}" ] && [ -z "\${GITHUB_TOKEN:-}" ] || exit 88\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nenv:exec) bash -c "$4" ;;\nupdate:view) printf '[{"group":"%s","platform":"ios","runtimeVersion":"1.0.0","manifestPermalink":"https://u.expo.dev/update/11111111-1111-1111-1111-111111111111"}]' "$3" ;;\nupdate) [ ! -f '${log}.fail' ] || exit 7; printf '[{"group":"test-group"}]' ;;\nupdate:list) printf '{"currentPage":[{"group":"test-group"}]}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
   const run = (google: string) => spawnSync('bash', ['scripts/deploy/ota.sh', 'test release'], {
     cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}`,
@@ -230,12 +232,14 @@ test('actual rollback helper keeps a dual-platform prior group on iOS only', () 
   copyFileSync(join(repo, 'scripts/deploy/rollback.sh'), join(root, 'scripts/deploy/rollback.sh'));
   copyFileSync(join(repo, 'scripts/deploy/ota-hold.sh'), join(root, 'scripts/deploy/ota-hold.sh'));
   copyFileSync(join(repo, 'scripts/deploy/ota-lock.sh'), join(root, 'scripts/deploy/ota-lock.sh'));
+  copyFileSync(join(repo, 'scripts/deploy/ota-bundle-identity.py'), join(root, 'scripts/deploy/ota-bundle-identity.py'));
   const bin = join(root, '.git/bin'); mkdirSync(bin);
   const log = join(root, '.git/eas-calls');
   const holdState = join(root, '.git/hold-state');
   writeFileSync(holdState, '[[]]');
   const leaseState = join(root, '.git/lease-state');
   installGithubFixture(bin, holdState, leaseState);
+  writeFileSync(join(bin, 'curl'), "#!/bin/bash\nprintf '%s' '{\"runtimeVersion\":\"1.0.0\",\"launchAsset\":{\"hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"contentType\":\"application/javascript\"},\"assets\":[],\"extra\":{}}'\n", { mode: 0o755 });
   writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\n[ -z "\${GH_TOKEN:-}" ] && [ -z "\${GITHUB_TOKEN:-}" ] || exit 88\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nupdate:list) if [ -f '${log}.recovered' ]; then printf '{"currentPage":[{"group":"recovery-group"}]}'; exit 0; fi; printf '{"currentPage":[{"group":"current","message":"now"},{"group":"prior","message":"before","platforms":"android, ios"}]}' ;;\nupdate:republish) [ -f '${leaseState}' ]; [ "$(cat '${leaseState}')" != "$(printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')" ]; touch '${log}.recovered'; printf '[{"group":"recovery-group"}]' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
   writeFileSync(leaseState, 'a'.repeat(40));
   writeFileSync(join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });

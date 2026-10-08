@@ -70,6 +70,11 @@ CI and local publication read all open release issues through the GitHub API and
 Failure to read or establish the hold fails closed.
 Close the hold only after repaired mobile source passes required checks and independent review and receives explicit production approval.
 Unrelated main pushes never clear the hold.
+Each publication retains an identity receipt derived from the immutable iOS manifest’s launch hash, asset hashes, runtime and configuration.
+Group IDs, timestamps and download URLs are excluded so duplicate publications and republishing preserve bundle identity.
+Default rollback scans the latest 20 groups under its lease, skips Android-only groups and identical iOS bundles, and chooses the first verified distinct earlier iOS bundle.
+Missing or malformed manifest evidence and an exhausted duplicate history fail closed with the hold still open.
+Supply an explicit known-good group when automatic selection cannot establish a distinct prior bundle.
 The mobile rollback helper also republishes iOS only, including when the previous group contains both platforms.
 There is no verified Android production binary, so this proof grants no Android publication authority.
 Replacing the baseline requires actual EAS/Apple binary evidence and independent workflow-security review; a tag alone is insufficient.

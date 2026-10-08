@@ -46,5 +46,7 @@ if [ "$LATEST" != "$GROUP" ]; then
   echo "VERIFY FAILED: newest production update is $LATEST, expected $GROUP" >&2
   exit 1
 fi
+BUNDLE_RECEIPT="$(mktemp "$REPO_ROOT/.evidence/ota/bundle.XXXXXX")"
+python3 "$REPO_ROOT/scripts/deploy/ota-bundle-identity.py" "$GROUP" > "$BUNDLE_RECEIPT"
 OTA_MUTATION_IN_PROGRESS=0
 echo "verified: production branch serves group $GROUP. Roll back with: scripts/deploy/rollback.sh mobile"
