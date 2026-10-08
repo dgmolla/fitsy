@@ -203,3 +203,11 @@ test("cache-only revalidation cannot execute a missing independent result", () =
 });
 
 }
+
+// Model the existing external trusted checkout without changing candidate refs.
+export function seedManagedFixture(root: string, git: (...args: string[]) => string) {
+  const managed = join(root, "old-poller/repo");
+  git("clone", "--quiet", "--shared", "--no-checkout", root, managed);
+  git("-C", managed, "update-ref", "refs/remotes/origin/main", git("rev-parse", "HEAD").trim());
+  git("-C", managed, "remote", "set-url", "origin", "https://github.com/dgmolla/fitsy.git");
+}

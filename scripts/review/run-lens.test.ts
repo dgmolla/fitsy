@@ -1,5 +1,5 @@
 import { validationOrderCases } from "./validation-order-cases";
-import { roundRunnerCases, normalizeFixtureResponse, runPrFixture } from "./round-runner-cases";
+import { roundRunnerCases, normalizeFixtureResponse, runPrFixture, seedManagedFixture } from "./round-runner-cases";
 import { executionFailureCases } from "./execution-failure-cases";
 import { policyRunnerCases } from "./policy-runner-cases";
 import { deliveryTimingCases } from "./delivery-timing-cases";
@@ -88,10 +88,7 @@ sys.exit(int(pathlib.Path(${JSON.stringify(join(root, 'exit'))}).read_text()))
     REVIEW_TEST_CALLS: calls, REVIEW_TEST_VERDICT: verdict };
   git("init", "-q"); git("config", "user.name", "Review fixture"); git("config", "user.email", "fixture@example.test");
   git("add", "."); git("commit", "-qm", "base"); git("update-ref", "refs/remotes/origin/main", "HEAD");
-  const managed = join(root, "old-poller/repo");
-  git("clone", "--quiet", "--shared", "--no-checkout", root, managed);
-  git("-C", managed, "update-ref", "refs/remotes/origin/main", git("rev-parse", "HEAD").trim());
-  git("-C", managed, "remote", "set-url", "origin", "https://github.com/dgmolla/fitsy.git");
+  seedManagedFixture(root, git);
   writeFileSync(join(root, "app.ts"), "export const value = 2;\n"); git("add", "app.ts"); git("commit", "-qm", "change");
   mkdirSync(join(root, ".evidence/delivery"), { recursive: true });
   writeFileSync(join(root, ".evidence/delivery/binding.json"), JSON.stringify({ issue: 355 }));
