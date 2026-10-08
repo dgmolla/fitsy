@@ -140,24 +140,6 @@ test("issue fetch failure cannot reuse or publish a review without acceptance", 
   expect(pr.status).toBe(1);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
 });
-test("nonzero external execution cannot publish or cache a partial pass", () => {
-  writeFileSync(join(root, "exit"), "1");
-  const result = run();
-  expect(result.status).toBe(1);
-  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "process_error" } });
-  expect(JSON.parse(readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8").trim().split("\n").at(-1)!)).toMatchObject({ event: "finish", outcome: "fail", verdict: "incomplete" });
-  expect(readdirSync(cache).filter(name => name.endsWith(".json"))).toHaveLength(0);
-  const posted = runPr();
-  expect(posted.status).toBe(1);
-  expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("state=error");
-  writeFileSync(join(root, "exit"), "0");
-  const retained = readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8");
-  const exhausted = run();
-  expect(exhausted.status).toBe(1);
-  expect(exhausted.stderr).toContain("issue execution limit exhausted");
-  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
-  expect(readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8")).toBe(retained);
-});
 test("invalid reviewer response is incomplete and cannot publish advisory success", () => {
   writeFileSync(join(root, ".claude/lenses/docs-sanity.md"), "Review documentation.\n");
   writeFileSync(join(root, "verdict"), '{"lens":"docs-sanity","verdict":"pass"');

@@ -6,6 +6,27 @@ type Fixture = { root: () => string; env: () => NodeJS.ProcessEnv; setEnv: (valu
   git: (...args: string[]) => string;
   runPr: (lens?: string, body?: string, provider?: string) => SpawnSyncReturns<string> };
 export function executionFailureCases(f: Fixture) {
+test("nonzero external execution cannot publish or cache a partial pass", () => {
+  const root = f.root(), cache = String(f.env().FITSY_REVIEW_CACHE), calls = join(root, "calls");
+  const run = f.run, runPr = f.runPr;
+  writeFileSync(join(root, "exit"), "1");
+  const result = run();
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "process_error" } });
+  expect(JSON.parse(readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8").trim().split("\n").at(-1)!)).toMatchObject({ event: "finish", outcome: "fail", verdict: "incomplete" });
+  expect(readdirSync(cache).filter(name => name.endsWith(".json"))).toHaveLength(0);
+  const posted = runPr();
+  expect(posted.status).toBe(1);
+  expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("state=error");
+  writeFileSync(join(root, "exit"), "0");
+  const retained = readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8");
+  const exhausted = run();
+  expect(exhausted.status).toBe(1);
+  expect(exhausted.stderr).toContain("issue execution limit exhausted");
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+  expect(readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8")).toBe(retained);
+});
+
 test("invalid reviewer preflight publishes configuration failure without starting a model", () => {
   f.setEnv({ ...f.env(), FITSY_REVIEW_REASONING_EFFORT: "invalid" });
   const failed = f.runPr("correctness", "Delivery-Issue: #355\n", "codex");
