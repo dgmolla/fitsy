@@ -47,6 +47,7 @@ Other asset additions, modifications and deletions continue to block publication
 A change in how that image is consumed by native code requires updating and reviewing the native baseline.
 
 The canonical production helper requires a clean commit on main's first-parent history, verifies source and production environment, and exports iOS only.
+The helper fetches main under the release lease and rejects older commits whose bundle inputs differ from current main.
 An integrated mobile commit remains publishable when a subsequent API-only commit advances main before its queued Deploy publishes.
 Unmerged feature-branch parents of a merge are excluded from that main-line history.
 Every surviving main Deploy attempts guarded iOS publication, including API-only pushes.
@@ -54,6 +55,13 @@ GitHub concurrency can replace a pending run even with cancellation of active ru
 The surviving push publishes its current main-line source and includes any mobile changes from replaced pending pushes.
 Every surviving push runs production API smoke, including docs-only pushes that may incorporate replaced API changes.
 Successful migration and successful smoke remain prerequisites, followed by the native/source/environment gates.
+Both local and CI publication share an atomic GitHub ref lease at `refs/tags/fitsy-ios-ota-lock` with rollback.
+A unique commit identifies each owner; only that owner deletes the lease.
+Rollback opens its hold, waits for an active publisher to finish, then republishes and verifies its recovery group is newest while still holding the lease.
+A waiting publisher sees the durable hold after acquiring the lease and skips publication.
+Interrupted or uncertain EAS mutations retain the lease and fail closed.
+For an abandoned lease, first verify the owner process and EAS mutation are finished and reconcile the served production group, then delete that exact lease ref before retrying recovery.
+The release job needs contents-write permission only to coordinate this trusted main release lease.
 Before republishing, the rollback helper creates or reuses an open `release: iOS OTA rollback hold` issue.
 CI and local publication read all open release issues through the GitHub API and skip publication while a hold exists.
 Failure to read or establish the hold fails closed.

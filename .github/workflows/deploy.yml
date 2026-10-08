@@ -125,6 +125,11 @@ jobs:
             --body "Post-deploy smoke failed for $GITHUB_SHA (see the Deploy workflow logs). ROLL BACK FIRST: \`scripts/deploy/rollback.sh api\`, diagnose second. Closing PR must add fix + detector + constraint."
 
   ota:
+    # Trusted main release jobs coordinate with local rollback through a Git ref.
+    permissions:
+      contents: write
+      issues: write
+      statuses: read
     needs: [changes, migrate, smoke]
     # Every surviving source must pass migration and production API smoke.
     if: always() && needs.migrate.result == 'success' && needs.smoke.result == 'success'

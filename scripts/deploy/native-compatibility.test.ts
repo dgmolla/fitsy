@@ -1,3 +1,4 @@
+import { installGithubFixture } from './ota-test-fixtures';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,6 +8,8 @@ const repo = resolve(__dirname, '../..');
 let root: string;
 const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
 function git(...args: string[]) {
+  if (args[0] === 'update-ref' && args[1] === 'refs/remotes/origin/main')
+    execFileSync('git', ['update-ref', 'refs/heads/main', args[2]!], { cwd: root, env: cleanEnv });
   return execFileSync('git', args, { cwd: root, env: cleanEnv, encoding: 'utf8' }).trim();
 }
 function write(path: string, value: string) {
@@ -19,7 +22,7 @@ function check(production = false, google = 'expected.apps.googleusercontent.com
 }
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'fitsy-ota-'));
-  git('init', '-q'); git('config', 'user.name', 'Fitsy test'); git('config', 'user.email', 'test@fitsy.invalid');
+  git('init', '-q'); git('remote', 'add', 'origin', root); git('config', 'user.name', 'Fitsy test'); git('config', 'user.email', 'test@fitsy.invalid');
   write('apps/mobile/app.config.ts', 'native configuration');
   write('package-lock.json', '{}');
   write('apps/mobile/assets/icon.png', 'icon');
@@ -96,6 +99,7 @@ test('uses the real Deploy step to deny an incompatible binary', () => {
 test('actual production helper prevents unsafe publication and exports only verified iOS', () => {
   copyFileSync(join(repo, 'scripts/deploy/ota.sh'), join(root, 'scripts/deploy/ota.sh'));
   copyFileSync(join(repo, 'scripts/deploy/ota-hold.sh'), join(root, 'scripts/deploy/ota-hold.sh'));
+  copyFileSync(join(repo, 'scripts/deploy/ota-lock.sh'), join(root, 'scripts/deploy/ota-lock.sh'));
   write('.gitignore', '.evidence/\n');
   git('add', '.'); git('commit', '-qm', 'helper');
   git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
@@ -103,8 +107,9 @@ test('actual production helper prevents unsafe publication and exports only veri
   const log = join(root, '.git/eas-calls');
   const holdState = join(root, '.git/hold-state');
   writeFileSync(holdState, '[[]]');
-  writeFileSync(join(bin, 'gh'), `#!/bin/bash\nset -eu\ncase "$1" in\napi) cat '${holdState}' ;;\nissue) printf '[[{"number":99,"title":"release: iOS OTA rollback hold"}]]' > '${holdState}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
-  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nenv:exec) bash -c "$4" ;;\nupdate) printf '[{"group":"test-group"}]' ;;\nupdate:list) printf '{"currentPage":[{"group":"test-group"}]}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
+  const leaseState = join(root, '.git/lease-state');
+  installGithubFixture(bin, holdState, leaseState);
+  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nenv:exec) bash -c "$4" ;;\nupdate) [ ! -f '${log}.fail' ] || exit 7; printf '[{"group":"test-group"}]' ;;\nupdate:list) printf '{"currentPage":[{"group":"test-group"}]}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
   const run = (google: string) => spawnSync('bash', ['scripts/deploy/ota.sh', 'test release'], {
     cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}`,
@@ -202,21 +207,44 @@ test('actual production helper prevents unsafe publication and exports only veri
   // release commit. It must not substitute for publishing that merged head.
   expect(run('expected.apps.googleusercontent.com').status).toBe(1);
   expect(readFileSync(log, 'utf8')).toBe(before);
+  git('checkout', '-q', '--detach', apiHead);
+  write('apps/mobile/app/index.tsx', 'approved newer mobile repair');
+  git('add', '.'); git('commit', '-qm', 'mobile repair');
+  git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
+  git('checkout', '-q', '--detach', mobileHead);
+  const stale = run('expected.apps.googleusercontent.com');
+  expect(stale.status).toBe(1);
+  expect(stale.stderr).toContain('Newer mobile inputs');
+  expect(readFileSync(log, 'utf8')).toBe(before);
+  // An uncertain external publication failure keeps the shared lease durable.
+  git('checkout', '-q', '--detach', apiHead);
+  git('update-ref', 'refs/remotes/origin/main', apiHead);
+  writeFileSync(`${log}.fail`, 'network failure during EAS mutation');
+  const uncertain = run('expected.apps.googleusercontent.com');
+  expect(uncertain.status).not.toBe(0);
+  expect(uncertain.stderr).toContain('Release lease retained');
+  expect(readFileSync(leaseState, 'utf8')).toMatch(/^[a-f0-9]{40}$/);
 });
 
 test('actual rollback helper keeps a dual-platform prior group on iOS only', () => {
   copyFileSync(join(repo, 'scripts/deploy/rollback.sh'), join(root, 'scripts/deploy/rollback.sh'));
   copyFileSync(join(repo, 'scripts/deploy/ota-hold.sh'), join(root, 'scripts/deploy/ota-hold.sh'));
+  copyFileSync(join(repo, 'scripts/deploy/ota-lock.sh'), join(root, 'scripts/deploy/ota-lock.sh'));
   const bin = join(root, '.git/bin'); mkdirSync(bin);
   const log = join(root, '.git/eas-calls');
   const holdState = join(root, '.git/hold-state');
   writeFileSync(holdState, '[[]]');
-  writeFileSync(join(bin, 'gh'), `#!/bin/bash\nset -eu\ncase "$1" in\napi) cat '${holdState}' ;;\nissue) printf '[[{"number":99,"title":"release: iOS OTA rollback hold"}]]' > '${holdState}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
-  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nupdate:list) printf '{"currentPage":[{"group":"current","message":"now"},{"group":"prior","message":"before","platforms":"android, ios"}]}' ;;\nupdate:republish) exit 0 ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
+  const leaseState = join(root, '.git/lease-state');
+  installGithubFixture(bin, holdState, leaseState);
+  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nupdate:list) if [ -f '${log}.recovered' ]; then printf '{"currentPage":[{"group":"recovery-group"}]}'; exit 0; fi; printf '{"currentPage":[{"group":"current","message":"now"},{"group":"prior","message":"before","platforms":"android, ios"}]}' ;;\nupdate:republish) [ -f '${leaseState}' ]; [ "$(cat '${leaseState}')" != "$(printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')" ]; touch '${log}.recovered'; printf '[{"group":"recovery-group"}]' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
+  writeFileSync(leaseState, 'a'.repeat(40));
+  writeFileSync(join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
   const result = spawnSync('bash', ['scripts/deploy/rollback.sh', 'mobile', 'prior'], {
     cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}` },
   });
   expect(result.status).toBe(0);
+  expect(result.stdout).toContain('Waiting for active iOS release lease');
+  expect(() => readFileSync(leaseState)).toThrow();
   expect(readFileSync(holdState, 'utf8')).toContain('release: iOS OTA rollback hold');
   expect(readFileSync(log, 'utf8')).toContain('update:republish --platform ios --group prior');
   // Exercise the confirmed P1 end to end: real rollback creates the hold,

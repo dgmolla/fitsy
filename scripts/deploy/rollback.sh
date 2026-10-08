@@ -51,9 +51,18 @@ for i,x in enumerate(u):
     # Persist the hold BEFORE republishing, so later unrelated pushes cannot
     # restore the bad source. Failure to establish durable state fails closed.
     bash ../../scripts/deploy/ota-hold.sh open "$PREV_GROUP"
+    # Wait for any publisher already exporting before we supersede its group.
+    source ../../scripts/deploy/ota-lock.sh
+    acquire_ota_lock
+    OTA_MUTATION_IN_PROGRESS=1
+    RESULT="$(mktemp ../../.evidence/ota/rollback-result.XXXXXX)"
     # Match the verified production release surface; no Android binary is
     # established by the iOS compatibility receipt.
-    npx eas-cli@18 update:republish --platform ios --group "$PREV_GROUP" --message "rollback: republish $PREV_GROUP" --non-interactive
+    npx eas-cli@18 update:republish --platform ios --group "$PREV_GROUP" --message "rollback: republish $PREV_GROUP" --json --non-interactive > "$RESULT"
+    RECOVERY_GROUP="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));d=d[0] if isinstance(d,list) else d;print(d["group"])' "$RESULT")"
+    LATEST="$(npx eas-cli@18 update:list --branch production --limit 1 --json --non-interactive | python3 -c 'import json,sys;d=json.load(sys.stdin);u=d.get("currentPage") or d.get("updates") or d;print(u[0]["group"])')"
+    [ "$LATEST" = "$RECOVERY_GROUP" ] || { echo 'Recovery group is not newest; release lease retained' >&2; exit 1; }
+    OTA_MUTATION_IN_PROGRESS=0
     echo "republished group $PREV_GROUP; verify, then open an incident issue"
     ;;
   *) echo "usage: rollback.sh api|mobile" >&2; exit 1 ;;
