@@ -33,7 +33,7 @@ candidate_clean() {
   [ "$FITSY_REVIEW_TRUSTED_HARNESS_SHA" = "$(git rev-parse origin/main)" ] || return 1
   python3 -I - "$FITSY_REVIEW_TRUSTED_HARNESS_SHA" <<'PYOVERLAY'
 import subprocess,sys
-paths=['scripts/review','scripts/delivery/phase-events.mjs','scripts/verify/risk-tiers.yml','REVIEW.md','.claude/lenses']
+paths=['scripts/review','scripts/delivery/phase-events.mjs','scripts/verify/risk-tiers.yml','scripts/verify/receipt-cache.mjs','scripts/verify/impact-plan.mjs','REVIEW.md','.claude/lenses']
 def git(*args): return subprocess.check_output(['git',*args])
 changed=git('diff','--name-only','HEAD','-z').split(b'\0')+git('ls-files','--others','--exclude-standard','-z').split(b'\0')
 for raw in filter(None,changed):
@@ -247,7 +247,7 @@ require_stable_candidate() {
 
 # Key on reviewed content and the bound release brief. PR title/body can change
 # without altering acceptance, while an issue acceptance edit must rerun review.
-KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" <(printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF") <(printf '%s' "$FOCUSED_CONTEXT") | shasum -a 256 | cut -d' ' -f1)"
+KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" "$REPO_ROOT/scripts/verify/receipt-cache.mjs" "$REPO_ROOT/scripts/verify/impact-plan.mjs" <(printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF") <(printf '%s' "$FOCUSED_CONTEXT") | shasum -a 256 | cut -d' ' -f1)"
 DIFF_SHA256="$(printf '%s' "$DIFF" | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
 if [ "$PROBE" = 1 ]; then

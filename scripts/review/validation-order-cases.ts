@@ -205,7 +205,7 @@ test('trusted poller overlay permits only exact main harness restoration', () =>
   const runPr = () => runPrFixture(root, env);
   writeFileSync(join(root, 'REVIEW.md'), 'Candidate review rules\n');
   git('add', 'REVIEW.md'); git('commit', '-qm', 'review rules candidate');
-  git('restore', '--source=origin/main', '--staged', '--worktree', '--', 'scripts/review', 'REVIEW.md', '.claude/lenses');
+  git('restore', '--source=origin/main', '--staged', '--worktree', '--', 'scripts/review', 'scripts/verify/receipt-cache.mjs', 'scripts/verify/impact-plan.mjs', 'REVIEW.md', '.claude/lenses');
   env = { ...env, FITSY_REVIEW_TRUSTED_HARNESS_SHA: git('rev-parse', 'origin/main').trim() };
   const result = runPr();
   expect(result.status).toBe(0);

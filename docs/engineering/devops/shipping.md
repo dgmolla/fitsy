@@ -185,6 +185,7 @@ Local review stores its focused context in the private canonical cache, bound to
 Missing or changed projection evidence fails closed for coordinator validation rather than starting a duplicate provider round.
 Only the existing classified incomplete-execution retry may execute automatically.
 The poller permits its trusted-main harness overlay only when every changed path belongs to the restored harness and both index and worktree exactly match the trusted main snapshot.
+Source identity and its transitive import also come from that trusted snapshot, so PR-owned modules never execute in the authenticated poller.
 Before reusing a completed same-head status, a nonexecuting identity probe checks current acceptance, routing, instructions, provider and patch inputs.
 A changed identity requires one new complete round; identity failure withdraws reuse, and a retained needs-coordinator failure still requires diagnosis.
 Existing `lens/<domain>` statuses are derived only from one complete independent result.

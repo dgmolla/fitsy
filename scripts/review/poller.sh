@@ -60,7 +60,7 @@ while read -r NUM SHA; do
   fi
   # Overlay the review harness from origin/main: the PR must not be able to
   # edit its own reviewer (T12), and old branches may predate the harness.
-  if ! (git restore --source=origin/main --staged --worktree --no-overlay -- scripts/review scripts/delivery/phase-events.mjs scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses &&
+  if ! (git restore --source=origin/main --staged --worktree --no-overlay -- scripts/review scripts/delivery/phase-events.mjs scripts/verify/risk-tiers.yml scripts/verify/receipt-cache.mjs scripts/verify/impact-plan.mjs REVIEW.md .claude/lenses &&
         git clean -qfdx -- scripts/review .claude/lenses); then
     echo "[poller] PR #$NUM: trusted harness restoration failed; skipping this tick"
     continue
