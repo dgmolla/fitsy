@@ -151,8 +151,12 @@ test("nonzero external execution cannot publish or cache a partial pass", () => 
   expect(posted.status).toBe(1);
   expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("state=error");
   writeFileSync(join(root, "exit"), "0");
-  expect(run().status).toBe(0);
-  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(3);
+  const retained = readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8");
+  const exhausted = run();
+  expect(exhausted.status).toBe(1);
+  expect(exhausted.stderr).toContain("issue execution limit exhausted");
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+  expect(readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8")).toBe(retained);
 });
 test("invalid reviewer response is incomplete and cannot publish advisory success", () => {
   writeFileSync(join(root, ".claude/lenses/docs-sanity.md"), "Review documentation.\n");

@@ -163,7 +163,7 @@ test("PR patch comes from exact immutable commits rather than a separately fetch
 });
 
 test("manual added coverage survives default PR replacement after source changes", () => {
-  writeFileSync(join(root, ".claude/lenses/workflow-security.md"), "Review controls.\n");
+  writeFileSync(join(root, ".claude/lenses/workflow-security.md"), "Review manually requested controls.\n");
   git("add", ".claude/lenses/workflow-security.md"); git("commit", "-qm", "domain instructions");
   git("update-ref", "refs/remotes/origin/main", "HEAD");
   writeFileSync(join(root, "app.ts"), "export const value = 3;\n");
