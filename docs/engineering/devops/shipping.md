@@ -40,9 +40,8 @@ export FITSY_REVIEW_MODEL=gpt-6-sol
 export FITSY_REVIEW_REASONING_EFFORT=high
 bash scripts/review/run-review.sh --local
 # Only after a passing review on this frozen candidate:
-npm run verify
 # Required production build plus full local shipping acceptance:
-npm run verify -- --layer=0-3
+npm run verify -- --layer=0-3 --reuse
 ```
 
 Replace the example focused test with the tests that reproduce and protect this issue's behavior.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the same local gate, reusing only successful source-bound L2 receipts.
+# Run the same local gate, reusing only successful source-bound acceptance receipts.
 # Size and domain checks still run on every push.
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
