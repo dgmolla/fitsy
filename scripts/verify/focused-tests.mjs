@@ -22,6 +22,11 @@ async function run(paths, pattern) {
     if (typeof pattern !== 'string' || !pattern.trim() || pattern.length > 500) throw new Error('invalid Jest test-name pattern');
     new RegExp(pattern);
   }
+  // API database ownership follows the selected path, including Node/Python.
+  if (paths.some(path => path.startsWith('apps/api/'))) {
+    const { assertOwnedDatabase } = await import('./local-db.mjs');
+    assertOwnedDatabase();
+  }
   const groups = new Map();
   for (const path of paths) {
     let key;
@@ -32,10 +37,6 @@ async function run(paths, pattern) {
     const entries = groups.get(key) ?? []; entries.push(path); groups.set(key, entries);
   }
   for (const [key, tests] of groups) {
-    if (key === 'apps/api') {
-      const { assertOwnedDatabase } = await import('./local-db.mjs');
-      assertOwnedDatabase();
-    }
     const report = join(repository, `.evidence/verify/focused-history/jest-${Date.now()}-${process.pid}.json`);
     const commands = key === 'node' ? [[process.execPath, ['--test', '--test-reporter=' + join(repository, 'scripts/verify/node-focused-reporter.mjs'), '--test-reporter-destination=' + report, ...tests]]]
       : key === 'python' ? tests.map((test, index) => ['python3', [join(repository, 'scripts/verify/python-focused.py'), test, report + '.' + index]])

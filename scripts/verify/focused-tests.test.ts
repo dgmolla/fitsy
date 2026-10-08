@@ -60,6 +60,19 @@ test.each([undefined, 'postgresql://external.example/prod'])('direct API focused
   expect(result.stderr).not.toContain('must not execute');
 });
 
+test.each(['mjs', 'py'])('direct API focused %s rejects an external database before loading the file', extension => {
+  mkdirSync(join(root, 'apps/api'), { recursive: true });
+  const path = `apps/api/fixture.test.${extension}`;
+  const content = extension === 'mjs'
+    ? "import fs from 'node:fs'; import { test } from 'node:test'; fs.writeFileSync('.evidence/api-executed', 'unsafe'); test('outcome', () => {});\n"
+    : "import pathlib, unittest\npathlib.Path('.evidence/api-executed').write_text('unsafe')\nclass Outcome(unittest.TestCase):\n def test_value(self): pass\n";
+  writeFileSync(join(root, path), content);
+  expect(cli('--set', path).status).toBe(0);
+  const result = spawnSync(process.execPath, ['scripts/verify/focused-tests.mjs'], { cwd: root, encoding: 'utf8', env: { ...env, FITSY_VERIFY_OWNED_DB: '', POSTGRES_PRISMA_URL: 'postgresql://external.example/prod', POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' } });
+  expect(existsSync(join(root, '.evidence/api-executed'))).toBe(false);
+  expect(result.status).toBe(1);
+});
+
 test.each(['', "import { test } from 'node:test'; test('skip', {skip:true}, () => {});\n", "import { describe } from 'node:test'; describe('empty suite', () => {});\n"])('focused Node selection rejects empty or unexecuted cases', content => {
   writeFileSync(join(root, 'scripts/fixture.test.mjs'), content);
   expect(cli('--set', 'scripts/fixture.test.mjs').status).toBe(0);
