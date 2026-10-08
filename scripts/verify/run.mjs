@@ -156,6 +156,7 @@ function runCheck(c) {
   return new Promise((resolve) => {
     const t0 = Date.now();
     const checkEnv = { ...process.env, FITSY_RUNS: runsCtx,
+      ...(c.name === 'focused-tests' ? { FITSY_VERIFY_FOCUSED_RECIPE: c.selection ?? '' } : {}),
       FITSY_VERIFY_NEEDS_NATIVE: plan.native ? '1' : '0',
       FITSY_VERIFY_NEEDS_TEST_DEPS: selected.some(check => check.name === 'test') ? '1' : '0',
       ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
@@ -214,7 +215,7 @@ async function runChecks(checks) {
       return prior || runCheck(c);
     }));
     if (cache) {
-      if (cache.unchanged()) {
+      if (cache.unchanged() && sourceStable()) {
         for (const check of cacheable) {
           const result = completed.find(r => r.name === check.name);
           if (!result.cached) cache.write(check, result);

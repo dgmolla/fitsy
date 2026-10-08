@@ -83,7 +83,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         process.exitCode = 2;
       }
       else {
-        const config = JSON.parse(readFileSync(file, 'utf8'));
+        // The canonical runner passes the exact recipe bound to its receipt.
+        const config = JSON.parse(process.env.FITSY_VERIFY_FOCUSED_RECIPE ?? readFileSync(file, 'utf8'));
         if (config.version !== 1) throw new Error('unsupported focused selection version');
         mkdirSync(join(repository, '.evidence/verify/focused-history'), { recursive: true });
         await run(selection(config.tests), config.pattern);

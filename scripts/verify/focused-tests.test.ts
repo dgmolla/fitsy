@@ -106,3 +106,47 @@ test.each(['ts', 'mjs', 'py'])('direct script focused %s rejects an external dat
   expect(existsSync(join(root, '.evidence/script-executed'))).toBe(false);
   expect(result.status).toBe(1);
 });
+
+test.each(['before execution', 'during execution'])('recipe drift %s cannot leave reusable evidence for unexecuted tests', drift => {
+  for (const name of ['run.mjs', 'receipt-cache.mjs', 'focused-tests.sh']) {
+    copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
+  }
+  const recipe = '.evidence/verify/focused-tests.json';
+  const original = JSON.stringify({ version: 1, tests: ['scripts/a.test.mjs'] });
+  const replacement = JSON.stringify({ version: 1, tests: ['scripts/b.test.mjs'] });
+  writeFileSync(join(root, 'scripts/verify/registry.yml'), `checks:
+  - {name: structural, script: cheap.sh, layer: 0, blocking: true}
+  - {name: focused-tests, script: focused-tests.sh, layer: 1, cache: true, blocking: true}
+  - {name: review-admission, script: unused.sh, layer: 0, stage: acceptance, preflight: true, blocking: true}
+`);
+  writeFileSync(join(root, 'scripts/verify/cheap.sh'), drift === 'before execution'
+    ? `if [ ! -f .evidence/stable ]; then echo '${replacement}' > ${recipe}; fi\necho '{"summary":"cheap"}'\n`
+    : 'echo \'{"summary":"cheap"}\'\n');
+  const mutation = drift === 'during execution'
+    ? `if (!fs.existsSync('.evidence/stable')) fs.writeFileSync('${recipe}', ${JSON.stringify(replacement)});`
+    : "throw Error('A must fail');";
+  writeFileSync(join(root, 'scripts/a.test.mjs'), `import {test} from 'node:test'; import fs from 'node:fs'; test('original outcome', () => {
+    fs.appendFileSync('.evidence/a-executed', 'A'); ${mutation}
+  });\n`);
+  writeFileSync(join(root, 'scripts/b.test.mjs'), "import {test} from 'node:test'; import fs from 'node:fs'; test('replacement outcome', () => fs.writeFileSync('.evidence/b-executed', 'B'));\n");
+  git('add', '.'); git('commit', '-qm', 'recipe drift fixture');
+  mkdirSync(join(root, '.evidence/verify'), { recursive: true });
+  writeFileSync(join(root, recipe), original);
+  const verify = () => spawnSync(process.execPath, ['scripts/verify/run.mjs', '--stage=cheap', '--layer=0-2', '--runs=local', '--reuse'], { cwd: root, env, encoding: 'utf8', timeout: 30000 });
+  const first = verify();
+  expect(first.status).toBe(1);
+  expect(first.stdout).toContain('source-stability');
+  expect(readFileSync(join(root, '.evidence/a-executed'), 'utf8')).toBe('A');
+  expect(existsSync(join(root, '.evidence/b-executed'))).toBe(false);
+  expect(existsSync(join(root, '.evidence/verify/check-cache/focused-tests.json'))).toBe(false);
+  writeFileSync(join(root, recipe), original);
+  writeFileSync(join(root, '.evidence/stable'), 'yes');
+  const second = verify();
+  expect(second.status).toBe(drift === 'before execution' ? 1 : 0);
+  expect(second.stdout).not.toContain('"cached":true');
+  expect(readFileSync(join(root, '.evidence/a-executed'), 'utf8')).toBe('AA');
+  if (drift === 'during execution') {
+    expect(verify().stdout).toContain('"cached":true');
+    expect(readFileSync(join(root, '.evidence/a-executed'), 'utf8')).toBe('AA');
+  }
+});
