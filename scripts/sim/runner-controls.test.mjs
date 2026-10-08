@@ -291,8 +291,10 @@ test('bound product-flow CLI records failure but excludes nested test-harness at
     for (const args of [['init', '-q'], ['config', 'user.name', 'Fixture'], ['config', 'user.email', 'fixture@example.test'],
       ['add', 'scripts', '.gitignore'], ['commit', '-qm', 'fixture']]) execFileSync('git', args, { cwd: dir });
     execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'], { cwd: dir });
+    const fixtureEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+      !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|POSTGRES_)/.test(key)));
     const invoke = context => spawnSync(process.execPath, ['scripts/sim/product-flow.mjs', 'run', 'invalid-udid', '--mode=final-candidate'],
-      { cwd: dir, env: { ...process.env, NODE_TEST_CONTEXT: context, JEST_WORKER_ID: '' }, encoding: 'utf8', timeout: 10000 });
+      { cwd: dir, env: { ...fixtureEnv, NODE_TEST_CONTEXT: context, JEST_WORKER_ID: '' }, encoding: 'utf8', timeout: 10000 });
     assert.equal(invoke('').status, 1);
     const events = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
       { cwd: dir, encoding: 'utf8' })).events;
