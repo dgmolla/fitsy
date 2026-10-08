@@ -1157,12 +1157,12 @@ for (const signal of ['SIGINT', 'SIGTERM']) test(`${signal} reaps owned flow gro
   let descendantPid = null;
   const moduleUrl = new URL('./runner-controls.mjs', import.meta.url).href;
   const stubborn = "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)";
-  const maestroScript = `const fs=require('fs'),cp=require('child_process');const child=cp.spawn(process.execPath,['-e',${JSON.stringify(stubborn)}],{stdio:'ignore'});fs.writeFileSync(process.argv[1],String(child.pid));process.on('SIGTERM',()=>process.exit(0));setInterval(()=>{},1000)`;
+  const maestroScript = `setTimeout(()=>{const fs=require('fs'),cp=require('child_process');const child=cp.spawn(process.execPath,['-e',${JSON.stringify(stubborn)}],{stdio:'ignore'});fs.writeFileSync(process.argv[1],String(child.pid));process.on('SIGTERM',()=>process.exit(0));setInterval(()=>{},1000)},250)`;
   writeFileSync(fixture, `import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runRecordedFlow } from ${JSON.stringify(moduleUrl)};
 const dir = process.argv[2];
-const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});setInterval(()=>{},1000)";
+const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});require('fs').writeFileSync(process.argv[1]+'.ready','ready');setInterval(()=>{},1000)";
 const result = await runRecordedFlow({ recordVideo: true, recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, join(dir,'video.mp4')],
   maestroCommand: process.execPath, maestroArgs: ['-e', ${JSON.stringify(maestroScript)}, join(dir,'descendant.pid')], udid: 'fixture', video: join(dir,'video.mp4'),
   recorderLog: join(dir,'recorder.log'), cwd: dir, env: process.env, dir, timeline: join(dir,'events.jsonl'), flow: '',
@@ -1172,9 +1172,11 @@ writeFileSync(join(dir,'result.json'), JSON.stringify({ reason: result.result.re
   try {
     const timeline = join(dir, 'events.jsonl');
     const deadline = Date.now() + 5000;
-    while ((!existsSync(timeline) || !readFileSync(timeline, 'utf8').includes('maestro-start')) && Date.now() < deadline)
-      await new Promise(resolve => setTimeout(resolve, 20));
-    assert.ok(existsSync(timeline) && readFileSync(timeline, 'utf8').includes('maestro-start'), 'fixture reached active flow');
+    const ready = () => existsSync(timeline) && readFileSync(timeline, 'utf8').includes('maestro-start') &&
+      existsSync(join(dir, 'descendant.pid')) && existsSync(join(dir, 'video.mp4.ready'));
+    while (!ready() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+    assert.ok(ready(), 'fixture processes reached active flow');
+    descendantPid = Number(readFileSync(join(dir, 'descendant.pid'), 'utf8'));
     child.kill(signal);
     const exit = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(Error('fixture cleanup exceeded 5 s')), 5000);
