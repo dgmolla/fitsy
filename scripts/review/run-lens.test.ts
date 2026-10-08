@@ -296,3 +296,25 @@ executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env
 roundRunnerCases({ root: () => root, calls: () => calls, env: () => env, run, runPr, git });
 
 validationOrderCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, source, run, git, calls: () => calls });
+
+test('trusted poller overlay permits only exact main harness restoration', () => {
+  writeFileSync(join(root, 'REVIEW.md'), 'Candidate review rules\n');
+  git('add', 'REVIEW.md'); git('commit', '-qm', 'review rules candidate');
+  git('restore', '--source=origin/main', '--staged', '--worktree', '--', 'scripts/review', 'REVIEW.md', '.claude/lenses');
+  env = { ...env, FITSY_REVIEW_TRUSTED_HARNESS_SHA: git('rev-parse', 'origin/main').trim() };
+  const result = runPr();
+  expect(result.status).toBe(0);
+  writeFileSync(join(root, 'app.ts'), 'uncommitted candidate edit\n');
+  expect(runPr().status).toBe(1);
+  expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1);
+});
+
+test('PR clone canonically reuses local focused context without a second reviewer', () => {
+  mkdirSync(join(root, '.evidence/verify/check-cache'), { recursive: true });
+  writeFileSync(join(root, '.evidence/verify/focused-tests.json'), JSON.stringify({ version: 1, tests: ['fixture.test.ts'] }));
+  writeFileSync(join(root, '.evidence/verify/check-cache/focused-tests.json'), JSON.stringify({ version: 1, source: 'fixture-source', selection: 'fixture-selection', definition: 'fixture-definition', result: { status: 'pass' } }));
+  expect(run().status).toBe(0);
+  rmSync(join(root, '.evidence/verify'), { recursive: true });
+  expect(runPr().status).toBe(0);
+  expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1);
+});

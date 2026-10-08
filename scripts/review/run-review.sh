@@ -27,11 +27,27 @@ fi
 source_identity() {
   node --input-type=module -e "import { sourceIdentity } from './scripts/verify/receipt-cache.mjs'; console.log(sourceIdentity(process.cwd()));"
 }
+candidate_clean() {
+  [ -n "$(git status --porcelain --untracked-files=all)" ] || return 0
+  [ "$TARGET" != --local ] && [[ "${FITSY_REVIEW_TRUSTED_HARNESS_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || return 1
+  [ "$FITSY_REVIEW_TRUSTED_HARNESS_SHA" = "$(git rev-parse origin/main)" ] || return 1
+  python3 -I - "$FITSY_REVIEW_TRUSTED_HARNESS_SHA" <<'PYOVERLAY'
+import subprocess,sys
+paths=['scripts/review','scripts/delivery/phase-events.mjs','scripts/verify/risk-tiers.yml','REVIEW.md','.claude/lenses']
+def git(*args): return subprocess.check_output(['git',*args])
+changed=git('diff','--name-only','HEAD','-z').split(b'\0')+git('ls-files','--others','--exclude-standard','-z').split(b'\0')
+for raw in filter(None,changed):
+ path=raw.decode()
+ if not any(path==allowed or path.startswith(allowed+'/') for allowed in paths): sys.exit(1)
+for args in [('diff','--quiet',sys.argv[1],'--',*paths),('diff','--cached','--quiet',sys.argv[1],'--',*paths)]:
+ if subprocess.run(['git',*args]).returncode: sys.exit(1)
+PYOVERLAY
+}
 FROZEN_SOURCE=""
 FROZEN_HEAD=""
 # Bind every executing/projecting review to one committed candidate before spending budget.
 if [ "$PROBE" = 0 ]; then
-  [ -z "$(git status --porcelain --untracked-files=all)" ] || {
+  candidate_clean || {
     echo '[run-review] candidate source is not frozen and committed' >&2; exit 1;
   }
   FROZEN_HEAD="$(git rev-parse HEAD)"
@@ -202,12 +218,17 @@ CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=js
 # the semantic passing receipt. Volatile duration/time fields do not invalidate
 # otherwise unchanged canonical reuse.
 focused_context() {
-python3 -I - "$REPO_ROOT" <<'PYFOCUSED'
+python3 -I - "$REPO_ROOT" "$CACHE_DIR/focused-$HEAD_SHA-$BASE_SHA.json" "$TARGET" "$HEAD_SHA" "$BASE_SHA" <<'PYFOCUSED'
 import json,pathlib,sys
 root=pathlib.Path(sys.argv[1])/'.evidence/verify'
 def read(path):
     return json.loads(path.read_text()) if path.exists() else None
 selection=read(root/'focused-tests.json')
+shared=pathlib.Path(sys.argv[2])
+if selection is None and sys.argv[3] != '--local' and shared.exists():
+ saved=read(shared)
+ if saved.get('head_sha')!=sys.argv[4] or saved.get('base_sha')!=sys.argv[5]: raise ValueError('focused context source mismatch')
+ print(json.dumps(saved['context'],sort_keys=True)); sys.exit(0)
 receipt=read(root/'check-cache/focused-tests.json')
 bound=None if receipt is None else {key:receipt.get(key) for key in ('version','source','selection','definition')}
 if bound is not None: bound['status']=receipt.get('result',{}).get('status')
@@ -217,7 +238,7 @@ PYFOCUSED
 FOCUSED_CONTEXT="$(focused_context)"
 require_stable_candidate() {
   if { [ "$(git rev-parse HEAD)" != "$FROZEN_HEAD" ] ||
-      [ -n "$(git status --porcelain --untracked-files=all)" ] ||
+      ! candidate_clean ||
       [ "$(source_identity)" != "$FROZEN_SOURCE" ] || [ "$(focused_context)" != "$FOCUSED_CONTEXT" ]; }; then
     echo '[run-review] candidate changed during independent review; raw attempt retained, revalidate cheap checks and review' >&2
     return 1
@@ -334,6 +355,19 @@ print(json.dumps(result))' "$IDENTITY")"
 fi
 
 require_stable_candidate
+if [ "$TARGET" = --local ]; then
+  python3 -I - "$CACHE_DIR/focused-$HEAD_SHA-$BASE_SHA.json" "$HEAD_SHA" "$BASE_SHA" "$FOCUSED_CONTEXT" <<'PYSAVEFOCUSED'
+import json,os,pathlib,sys,tempfile,uuid
+path=pathlib.Path(sys.argv[1])
+if path.exists():
+ history=path.parent/"focused-history"; history.mkdir(exist_ok=True)
+ old=json.loads(path.read_text())
+ if old.get("context")!=json.loads(sys.argv[4]): os.replace(path,history/(path.name+"."+str(uuid.uuid4())))
+fd,tmp=tempfile.mkstemp(dir=path.parent,prefix=path.name+'.')
+with os.fdopen(fd,'w') as file: json.dump({'head_sha':sys.argv[2],'base_sha':sys.argv[3],'context':json.loads(sys.argv[4])},file)
+os.replace(tmp,path)
+PYSAVEFOCUSED
+fi
 VERDICT="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import sys,json;print(json.load(sys.stdin)["verdict"])')"
 N_FINDINGS="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import sys,json;print(len(json.load(sys.stdin)["findings"]))')"
 ROUND_GATE=pass

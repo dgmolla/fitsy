@@ -61,7 +61,7 @@ test("installed launcher retains trusted main outside a PR-mutated clone", () =>
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("poller launches an ordinary PR round with no optional arguments", () => {
+test("poller projects a PR round without launching a duplicate reviewer", () => {
   const root = mkdtempSync(join(tmpdir(), "fitsy-poller-empty-args-"));
   const home = join(root, "review"), repo = join(home, "repo"), bin = join(root, "bin"), marker = join(root, "review-called");
   mkdirSync(join(repo, ".git"), { recursive: true });
@@ -73,6 +73,6 @@ test("poller launches an ordinary PR round with no optional arguments", () => {
   const env = { ...process.env, FITSY_REVIEW_HOME: home, FITSY_GH_BIN: join(bin, "gh"), REVIEW_TEST_MARKER: marker, PATH: `${bin}:${process.env.PATH}` };
   try {
     execFileSync("bash", [join(__dirname, "poller.sh")], { cwd: root, env, stdio: "pipe" });
-    expect(readFileSync(marker, "utf8").trim()).toBe("269");
+    expect(readFileSync(marker, "utf8").trim()).toBe("269 --cached-only");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
