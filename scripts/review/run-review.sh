@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One independent review round, all required domains, one budget attempt.
 set -euo pipefail
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 HARNESS_ROOT="$REPO_ROOT"
 REPO_ROOT="${FITSY_REVIEW_CANDIDATE_ROOT:-$REPO_ROOT}"
 cd "$REPO_ROOT"
