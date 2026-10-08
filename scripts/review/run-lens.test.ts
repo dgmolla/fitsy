@@ -1,4 +1,4 @@
-import { installFixtureHarness } from "./trusted-fixture";
+import { installFixtureHarness, prepareTrustedFixture, fixtureGit } from "./trusted-fixture";
 import { validationOrderCases } from "./validation-order-cases";
 import { roundRunnerCases, normalizeFixtureResponse, runPrFixture } from "./round-runner-cases";
 import { executionFailureCases } from "./execution-failure-cases";
@@ -22,9 +22,8 @@ let calls: string;
 let cache: string;
 let env: NodeJS.ProcessEnv;
 const verdict = JSON.stringify({ lens: "correctness", verdict: "pass", findings: [] });
-function git(...args: string[]) {
-  return execFileSync("git", args, { cwd: root, env: isolatedEnv(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-}
+const git = (...args: string[]) => fixtureGit(root, isolatedEnv(), args);
+
 function run(model = "fixture-model", provider = "claude", lens = "correctness") {
   return spawnSync("bash", ["scripts/review/run-lens.sh", "--local", lens], {
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: model, FITSY_REVIEW_PROVIDER: provider }, timeout: 15000,
@@ -86,6 +85,7 @@ sys.exit(int(pathlib.Path(${JSON.stringify(join(root, 'exit'))}).read_text()))
   for (const name of ["claude", "codex"]) writeFileSync(join(root, "bin", name), cli, { mode: 0o755 });
   env = { ...isolatedEnv(), PATH: join(root, "bin") + ":" + process.env.PATH, FITSY_REVIEW_CACHE: cache, FITSY_REVIEW_HOME: join(root, "old-poller"), FITSY_REVIEW_BUDGET_HOME: join(root, "budgets"),
     REVIEW_TEST_CALLS: calls, REVIEW_TEST_VERDICT: verdict };
+  prepareTrustedFixture(root, source);
   git("init", "-q"); git("config", "user.name", "Review fixture"); git("config", "user.email", "fixture@example.test");
   git("add", "."); git("commit", "-qm", "base"); git("update-ref", "refs/remotes/origin/main", "HEAD");
   writeFileSync(join(root, "app.ts"), "export const value = 2;\n"); git("add", "app.ts"); git("commit", "-qm", "change");
