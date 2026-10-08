@@ -53,7 +53,7 @@ beforeEach(() => {
   for (const name of ["run.mjs", "impact-plan.mjs", "receipt-cache.mjs"]) cpSync(join(source, "scripts/verify", name), join(root, "scripts/verify", name));
   symlinkSync(join(source, "node_modules"), join(root, "node_modules"));
   writeFileSync(join(root, "scripts/verify/registry.yml"), "checks: []\n");
-  writeFileSync(join(root, ".gitignore"), "node_modules\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nbin/gh-fixture\npr-body\npr-diff\nrace-head\nissue-body\n");
+  writeFileSync(join(root, ".gitignore"), "node_modules\nold-poller/\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nbin/gh-fixture\npr-body\npr-diff\nrace-head\nissue-body\n");
   mkdirSync(join(root, "scripts/delivery"), { recursive: true });
   cpSync(join(source, "scripts/delivery/phase-events.mjs"), join(root, "scripts/delivery/phase-events.mjs"));
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
@@ -88,6 +88,10 @@ sys.exit(int(pathlib.Path(${JSON.stringify(join(root, 'exit'))}).read_text()))
     REVIEW_TEST_CALLS: calls, REVIEW_TEST_VERDICT: verdict };
   git("init", "-q"); git("config", "user.name", "Review fixture"); git("config", "user.email", "fixture@example.test");
   git("add", "."); git("commit", "-qm", "base"); git("update-ref", "refs/remotes/origin/main", "HEAD");
+  const managed = join(root, "old-poller/repo");
+  git("clone", "--quiet", "--shared", "--no-checkout", root, managed);
+  git("-C", managed, "update-ref", "refs/remotes/origin/main", git("rev-parse", "HEAD").trim());
+  git("-C", managed, "remote", "set-url", "origin", "https://github.com/dgmolla/fitsy.git");
   writeFileSync(join(root, "app.ts"), "export const value = 2;\n"); git("add", "app.ts"); git("commit", "-qm", "change");
   mkdirSync(join(root, ".evidence/delivery"), { recursive: true });
   writeFileSync(join(root, ".evidence/delivery/binding.json"), JSON.stringify({ issue: 355 }));

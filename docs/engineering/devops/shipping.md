@@ -49,7 +49,7 @@ It is explicit task evidence, not automatic proof of scenario relevance; correct
 Documentation-only candidates record focused tests as not applicable.
 Repair confirmed findings together, commit the repair, rerun affected cheap/focused checks, and obtain a current passing review before launching full acceptance.
 `npm run verify`, `verify:all`, pre-push, and direct local layer/`--only` acceptance calls enforce the cheap barrier and fresh canonical review admission.
-Admission checks out the committed candidate in a disposable task-owned directory and restores reviewer controls from immutable main, following the established poller procedure.
+Admission checks out the committed candidate in a disposable task-owned directory and restores reviewer controls from the existing external managed review repository main, following the established poller procedure.
 It invokes one canonical `scripts/review/run-review.sh` round covering all required domains, using a new execution directory and the original issue budget.
 A candidate-generated cache cannot satisfy admission.
 No candidate controls are installed as trusted, and no saved verdict is projected into a new shipping pass.

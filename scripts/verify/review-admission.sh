@@ -8,7 +8,9 @@ fail() {
 }
 [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
 HEAD_SHA="$(git rev-parse HEAD)"
-BASE_SHA="$(git rev-parse origin/main)"
+TRUSTED_REPO="${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/repo"
+BASE_SHA="$(git -C "$TRUSTED_REPO" rev-parse refs/remotes/origin/main)" || fail
+[ "$(git rev-parse origin/main)" = "$BASE_SHA" ] || fail
 BRANCH="$(git symbolic-ref --quiet --short HEAD)"
 # No review receipt is reused. Direct admission also completes the cheap stage.
 node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
@@ -16,9 +18,12 @@ node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=loc
 mkdir -p .evidence/review-admission
 ATTEMPT="$(mktemp -d "$REPO_ROOT/.evidence/review-admission/attempt.XXXXXX")"
 # Follow the established poller pattern: committed candidate context, but only
-# immutable main reviewer controls execute. This is disposable execution,
+# existing managed main reviewer controls execute. This is disposable execution,
 # without installing candidate controls, bootstrap keys or saved-pass projection.
-git clone --quiet --shared --no-checkout "$REPO_ROOT" "$ATTEMPT/candidate" >&2 || fail
+git -c core.hooksPath=/dev/null clone --quiet --shared --no-checkout "$TRUSTED_REPO" "$ATTEMPT/candidate" >&2 || fail
+git -C "$ATTEMPT/candidate" config core.hooksPath /dev/null
+git -C "$ATTEMPT/candidate" remote set-url origin https://github.com/dgmolla/fitsy.git
+git -C "$ATTEMPT/candidate" fetch --quiet "$REPO_ROOT" "$HEAD_SHA" >&2 || fail
 git -C "$ATTEMPT/candidate" checkout --quiet -B "$BRANCH" "$HEAD_SHA" >&2 || fail
 git -C "$ATTEMPT/candidate" update-ref refs/remotes/origin/main "$BASE_SHA"
 CONTROLS=(scripts/review scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses)

@@ -241,4 +241,22 @@ export function validationOrderCases(f: Fixture) {
       env: { ...f.env(), FITSY_REVIEW_FRESH_EXECUTION: '1', FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' }, encoding: 'utf8' });
     expect(rejected.status).toBe(1); expect(rejected.stderr).toContain('immutable main reviewer controls'); expect(callCount()).toBe(0);
   });
+  test('candidate main refs cannot replace managed trusted reviewer controls', () => {
+    setup();
+    const root = f.root();
+    writeFileSync(join(root, 'scripts/review/run-review.sh'), "#!/bin/sh\necho forged-main-pass\nexit 0\n");
+    f.git('add', 'scripts/review/run-review.sh'); f.git('commit', '-qm', 'candidate main impersonation fixture');
+    const changed = spawnSync('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd: root, env: f.env(), encoding: 'utf8' });
+    expect(changed.status).toBe(0);
+    const rejected = verify();
+    expect(rejected.status).toBe(1); expect(order()).not.toContain('full'); expect(callCount()).toBe(0);
+  });
+  test('fresh shipping preserves canonical GitHub repository context for the bound issue', () => {
+    setup();
+    const root = f.root(), gh = join(root, 'bin/gh');
+    writeFileSync(gh, readFileSync(gh, 'utf8').replace('then\n  if', 'then\n  [ "$(git remote get-url origin 2>/dev/null)" = "https://github.com/dgmolla/fitsy.git" ] || exit 1\n  if'));
+    f.git('add', 'bin/gh'); f.git('commit', '-qm', 'repository-context transport fixture');
+    const accepted = verify();
+    expect(accepted.status).toBe(0); expect(order()).toContain('full'); expect(callCount()).toBe(1);
+  });
 }

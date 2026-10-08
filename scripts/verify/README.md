@@ -57,7 +57,7 @@ The owned PostGIS admission and migration steps still run before local database 
 Set the selection with `node scripts/verify/focused-tests.mjs --set <test paths>`.
 Use optional `--jest-pattern=<test name regex>` to select focused Jest scenarios; a selection with no passing tests fails.
 Focused selections run fresh before review and full acceptance.
-Shipping admission completes the cheap stage, restores immutable main reviewer controls in a disposable committed-candidate checkout, and executes a fresh canonical round with all required domains and the retained issue budget.
+Shipping admission completes the cheap stage, restores main reviewer controls from the existing external managed review repository in a disposable committed-candidate checkout, and executes a fresh canonical round with all required domains and the retained issue budget.
 Repair findings and repeat cheap checks and review on the committed repair.
 Only then run `npm run verify` or applicable `verify:all` and final product-flow acceptance.
 
