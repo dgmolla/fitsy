@@ -233,6 +233,11 @@ if ! IDENTITY="$(python3 -I scripts/review/execute-review.py --identity "$PROVID
 # A completed verdict remains reusable as remaining budget shrinks. Runtime
 # deadlines stay in its provenance, not the semantic reviewer/cache identity.
 CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d.pop("timeout_seconds"); print(json.dumps(d,sort_keys=True))')"
+if [ "$TARGET" != --local ] && [ -n "${FITSY_REVIEW_TRUSTED_HARNESS_SHA:-}" ]; then
+  # Hash candidate adapter bytes as data; the projection executes only main's adapter.
+  CANDIDATE_EXECUTOR_SHA="$(git show "$HEAD_SHA:scripts/review/execute-review.py" | shasum -a 256 | cut -d' ' -f1)"
+  CACHE_IDENTITY="$(printf '%s' "$CACHE_IDENTITY" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["executor_sha256"]=sys.argv[1]; print(json.dumps(d,sort_keys=True))' "$CANDIDATE_EXECUTOR_SHA")"
+fi
 
 # Focused selection is ignored task evidence, so bind it explicitly alongside
 # the semantic passing receipt. Volatile duration/time fields do not invalidate
@@ -267,7 +272,17 @@ require_stable_candidate() {
 
 # Key on reviewed content and the bound release brief. PR title/body can change
 # without altering acceptance, while an issue acceptance edit must rerun review.
-KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" "$REPO_ROOT/scripts/verify/receipt-cache.mjs" "$REPO_ROOT/scripts/verify/impact-plan.mjs" <(printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF") <(printf '%s' "$FOCUSED_CONTEXT") | shasum -a 256 | cut -d' ' -f1)"
+KEY="$( {
+  printf '%s' "$DIFF"
+  # Immutable blobs preserve local/projection identity across a trusted overlay.
+  # Never execute candidate-owned harness modules in the authenticated poller.
+  for PATH_INPUT in "${DOMAIN_FILES[@]}" REVIEW.md scripts/review/run-review.sh scripts/review/review-domains.py scripts/review/review-round.py scripts/review/execute-review.py scripts/review/extract-verdict.py scripts/review/review-gate.py scripts/review/review-budget.py scripts/verify/receipt-cache.mjs scripts/verify/impact-plan.mjs; do
+    git show "$HEAD_SHA:$PATH_INPUT" || exit 1
+  done
+  printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY"
+  printf '%s' "$ISSUE:$ISSUE_BRIEF"
+  printf '%s' "$FOCUSED_CONTEXT"
+} | shasum -a 256 | cut -d' ' -f1)"
 DIFF_SHA256="$(printf '%s' "$DIFF" | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
 if [ "$PROBE" = 1 ]; then

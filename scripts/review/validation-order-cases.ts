@@ -233,4 +233,19 @@ test('default Codex poller reuses source-bound Claude worker profile without ano
   expect(runPrFixture(root, env, 'correctness', 'Delivery-Issue: #355\n', 'codex').status).toBe(0);
   expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1);
 });
+
+test('trusted poller projects a harness-changing PR from its frozen local round', () => {
+  const root = f.root();
+  for (const path of ['scripts/review/run-review.sh', 'scripts/review/execute-review.py', 'scripts/verify/receipt-cache.mjs', 'REVIEW.md']) {
+    const file = join(root, path);
+    writeFileSync(file, readFileSync(file, 'utf8') + '\n# Candidate harness identity\n'.replace('#', path.endsWith('.mjs') ? '//' : '#'));
+  }
+  f.git('add', '-A'); f.git('commit', '-qm', 'harness-changing candidate');
+  expect(f.run().status).toBe(0);
+  f.git('restore', '--source=origin/main', '--staged', '--worktree', '--', 'scripts/review', 'scripts/verify/receipt-cache.mjs', 'scripts/verify/impact-plan.mjs', 'REVIEW.md', '.claude/lenses');
+  const result = runPrFixture(root, { ...f.env(), FITSY_REVIEW_TRUSTED_HARNESS_SHA: f.git('rev-parse', 'origin/main').trim() });
+  if (result.status !== 0) throw new Error(String(result.stderr));
+  expect(result.stdout).toContain('"verdict": "pass"');
+  expect(readFileSync(f.calls(), 'utf8').trim().split('\n')).toHaveLength(1);
+});
 }
