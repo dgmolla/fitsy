@@ -24,6 +24,13 @@ if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
   exit 1
 fi
 
+# Bind local checks and review to one committed candidate before spending budget.
+if [ "$TARGET" = --local ] && [ "$PROBE" = 0 ]; then
+  [ -z "$(git status --porcelain --untracked-files=all)" ] || {
+    echo '[run-review] candidate source is not frozen and committed' >&2; exit 1;
+  }
+fi
+
 # Local execution always completes canonical cheap/focused checks first.
 # Cached projections and identity probes never launch tests or a reviewer.
 if [ "$TARGET" = --local ] && [ "$PROBE" = 0 ] && [ "$CACHED_ONLY" = 0 ]; then

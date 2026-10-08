@@ -67,6 +67,12 @@ export function validationOrderCases(f: Fixture) {
     const result = spawnSync('npm', ['run', 'verify'], { cwd: f.root(), env: f.env(), encoding: 'utf8', timeout: 15000 });
     expect(result.status).toBe(0); expect(order()).toContain('full'); expect(callCount()).toBe(1);
   });
+  test('uncommitted candidate stops local review before cheap checks or budget admission', () => {
+    setup(); writeFileSync(join(f.root(), 'app.ts'), 'export const value = 9;\n');
+    const result = f.run(); expect(result.status).toBe(1); expect(result.stderr).toContain('not frozen and committed');
+    expect(callCount()).toBe(0); expect(existsSync(join(f.root(), '.evidence/order'))).toBe(false);
+    expect(existsSync(join(f.root(), 'budgets/issue-355.jsonl'))).toBe(false);
+  });
   test('cheap failure prevents actual reviewer, full suites and pre-push', () => {
     setup(); writeFileSync(join(f.root(), '.evidence/cheap-fail'), 'fail');
     expect(f.run().status).toBe(1); expect(callCount()).toBe(0);

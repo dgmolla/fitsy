@@ -137,6 +137,7 @@ test("signal stops reviewer before releasing its reservation", async () => {
   // Reproduce slow CLI startup before the reviewer publishes its ready PID.
   const cli = join(root, "bin/claude");
   writeFileSync(cli, readFileSync(cli, "utf8").replace("if '--version' in sys.argv:", "if '--version' in sys.argv: time.sleep(2.2)\nif '--version' in sys.argv:"), { mode: 0o755 });
+  git("add", "bin/claude"); git("commit", "-qm", "slow external CLI fixture");
   const child = spawn("bash", ["scripts/review/run-lens.sh", "--local", "correctness"], {
     cwd: root, env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude" }, stdio: "ignore",
   });
