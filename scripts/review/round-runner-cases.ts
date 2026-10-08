@@ -1,5 +1,5 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const normalizeFixtureResponse = `try:
@@ -188,7 +188,7 @@ test.each(["binary", "mode"])("%s-only sensitive changes route and execute one r
   git("add", "."); git("commit", "-qm", "control baseline");
   git("update-ref", "refs/remotes/origin/main", "HEAD");
   if (kind === "binary") writeFileSync(join(root, "scripts/review/change.sh"), Buffer.from([0,3,4]));
-  else git("update-index", "--chmod=+x", "scripts/review/change.sh");
+  else { chmodSync(join(root, "scripts/review/change.sh"), 0o755); git("update-index", "--chmod=+x", "scripts/review/change.sh"); }
   if (kind === "binary") git("add", "scripts/review/change.sh");
   git("commit", "-qm", "control metadata change");
   expect(JSON.parse(run().stdout).domains).toEqual({ correctness: "pass", "workflow-security": "pass" });

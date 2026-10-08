@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { SpawnSyncReturns } from "node:child_process";
 type Fixture = { root: () => string; env: () => NodeJS.ProcessEnv; setEnv: (value: NodeJS.ProcessEnv) => void;
   run: (model?: string, provider?: string) => SpawnSyncReturns<string>;
+  git: (...args: string[]) => string;
   runPr: (lens?: string, body?: string, provider?: string) => SpawnSyncReturns<string> };
 export function executionFailureCases(f: Fixture) {
 test("invalid reviewer preflight publishes configuration failure without starting a model", () => {
@@ -15,6 +16,7 @@ test("invalid reviewer preflight publishes configuration failure without startin
 
 test("missing final response is invalid output instead of completed execution", () => {
   writeFileSync(join(f.root(), "bin/codex"), "#!/bin/sh\nif [ \"$1\" = --version ]; then echo fake-cli; fi\nexit 0\n", { mode: 0o755 });
+  f.git("add", "bin/codex"); f.git("commit", "-qm", "invalid output fixture");
   const result = f.run("fixture-model", "codex");
   expect(result.status).toBe(1);
   expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", error: { kind: "invalid_output" } });
@@ -26,7 +28,9 @@ test("missing final response is invalid output instead of completed execution", 
       writeFileSync(join(f.root(), "bin/claude"), `#!/bin/sh
 if [ "$1" = --version ]; then echo fixture-cli; else printf '%s' '${envelope}'; fi
 `, { mode: 0o755 });
-      const result = f.run();
+      f.git("add", "bin/claude"); f.git("commit", "-qm", "outer CLI failure fixture");
+      f.git("add", "json.py"); f.git("commit", "-qm", "hostile module fixture");
+    const result = f.run();
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", error: { kind } });
     });

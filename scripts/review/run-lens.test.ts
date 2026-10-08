@@ -53,10 +53,11 @@ beforeEach(() => {
   for (const name of ["run.mjs", "impact-plan.mjs", "receipt-cache.mjs"]) cpSync(join(source, "scripts/verify", name), join(root, "scripts/verify", name));
   symlinkSync(join(source, "node_modules"), join(root, "node_modules"));
   writeFileSync(join(root, "scripts/verify/registry.yml"), "checks: []\n");
-  writeFileSync(join(root, ".gitignore"), "node_modules\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nbin/gh-fixture\npr-body\npr-diff\nrace-head\n");
+  writeFileSync(join(root, ".gitignore"), "node_modules\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nbin/gh-fixture\npr-body\npr-diff\nrace-head\nissue-body\n");
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
   writeFileSync(join(root, "REVIEW.md"), "Review rules\n");
   writeFileSync(join(root, ".claude/lenses/correctness.md"), "Review correctness.\n");
+  for (const domain of ["workflow-security", "danger-zone", "docs-sanity"]) writeFileSync(join(root, `.claude/lenses/${domain}.md`), domain === "docs-sanity" ? "Review documentation.\n" : "Review controls.\n");
   writeFileSync(join(root, "app.ts"), "export const value = 1;\n");
   writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: In flight\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
   writeFileSync(join(root, "bin/gh"), `#!/bin/sh\nif [ "$1" = issue ] && [ "$2" = view ]; then\n  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi\n  cat ${JSON.stringify(join(root, 'issue-body'))}; exit\nfi\nexit 1\n`, { mode: 0o755 });
@@ -265,6 +266,7 @@ test("stale source-bound receipt and changed review inputs cannot reuse a pass",
   writeFileSync(join(root, ".evidence/review-dispositions/correctness.json"), JSON.stringify(disposition));
   expect(run().stderr).toContain("failed or stale required test");
   writeFileSync(join(root, "REVIEW.md"), "Changed review policy\n");
+  git("add", "REVIEW.md"); git("commit", "-qm", "changed review policy");
   expect(run().status).toBe(1);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
 });
@@ -286,7 +288,7 @@ deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git 
 
 policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: () => env, setEnv: value => { env = value; },
   calls: () => calls, cache: () => cache, run, runPr, git, isolatedEnv });
-executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr });
+executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr, git });
 
 roundRunnerCases({ root: () => root, calls: () => calls, env: () => env, run, runPr, git });
 
