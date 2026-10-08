@@ -54,6 +54,8 @@ beforeEach(() => {
   symlinkSync(join(source, "node_modules"), join(root, "node_modules"));
   writeFileSync(join(root, "scripts/verify/registry.yml"), "checks: []\n");
   writeFileSync(join(root, ".gitignore"), "node_modules\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nbin/gh-fixture\npr-body\npr-diff\nrace-head\nissue-body\n");
+  mkdirSync(join(root, "scripts/delivery"), { recursive: true });
+  cpSync(join(source, "scripts/delivery/phase-events.mjs"), join(root, "scripts/delivery/phase-events.mjs"));
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
   writeFileSync(join(root, "REVIEW.md"), "Review rules\n");
   writeFileSync(join(root, ".claude/lenses/correctness.md"), "Review correctness.\n");

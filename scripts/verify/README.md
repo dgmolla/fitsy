@@ -57,14 +57,15 @@ The owned PostGIS admission and migration steps still run before local database 
 Set the selection with `node scripts/verify/focused-tests.mjs --set <test paths>`.
 Use optional `--jest-pattern=<test name regex>` to select focused Jest scenarios; a selection with no passing tests fails.
 Focused selections run fresh before review and full acceptance.
-The canonical local review runner repeats this cheap stage before executing one independent round with all required domains and the retained issue budget.
+Shipping admission completes the cheap stage, restores immutable main reviewer controls in a disposable committed-candidate checkout, and executes a fresh canonical round with all required domains and the retained issue budget.
 Repair findings and repeat cheap checks and review on the committed repair.
 Only then run `npm run verify` or applicable `verify:all` and final product-flow acceptance.
 
 The registry marks product-flow as `stage: acceptance`; layers 2 and above also belong to acceptance.
 `review-admission` is mandatory for any selected local acceptance check, including `--only` and layer-only calls.
-The runner completes cheap static checks before focused tests, admits API and pipeline database selections, plus any selection with caller database URLs, through the owned disposable database, then completes all cheap checks before review admission or full-suite database setup, and admission uses `run-review.sh --local --cached-only` on clean committed source.
-No provider executes during admission.
+The runner completes cheap static checks before focused tests, admits API and pipeline database selections, plus any selection with caller database URLs, through the owned disposable database, then completes all cheap checks before review admission or full-suite database setup.
+Admission executes the canonical main `run-review.sh --local` in a new execution directory on the frozen committed head.
+Candidate caches never satisfy shipping admission, and raw attempts remain under `.evidence/review-admission/`.
 CI remains an independent full gate without local review execution.
 
 Every production local invocation retains stage, source identity, timestamps and raw check results under `.evidence/verify/attempts/`.

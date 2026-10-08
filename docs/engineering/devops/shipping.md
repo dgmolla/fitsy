@@ -30,7 +30,7 @@ Do not use a feature-branch mobile publication as a substitute for integrating t
 Finish implementation and commit the frozen candidate before review.
 Select meaningful focused reproduction and regression tests for the changed behavior.
 Run applicable structural, lint, type and safety checks plus that focused selection before independent review.
-The local review entry point enforces these cheap checks before any reviewer execution.
+Local shipping admission enforces cheap checks before a fresh canonical reviewer execution.
 
 ```sh
 node scripts/verify/focused-tests.mjs --set scripts/verify/impact-plan.test.ts
@@ -38,9 +38,8 @@ npm run verify -- --stage=cheap
 export FITSY_REVIEW_PROVIDER=codex
 export FITSY_REVIEW_MODEL=gpt-6-sol
 export FITSY_REVIEW_REASONING_EFFORT=high
-bash scripts/review/run-review.sh --local
-# Only after a passing review on this frozen candidate:
-# Required production build plus full local shipping acceptance:
+# The runner completes cheap checks, then fresh independent review, then
+# every required full suite and production build on the stable candidate:
 npm run verify -- --layer=0-3 --reuse
 ```
 
@@ -49,8 +48,14 @@ The selection supports Jest in `apps/api`, `apps/mobile` and `scripts` for `.tes
 It is explicit task evidence, not automatic proof of scenario relevance; correctness review still judges coverage.
 Documentation-only candidates record focused tests as not applicable.
 Repair confirmed findings together, commit the repair, rerun affected cheap/focused checks, and obtain a current passing review before launching full acceptance.
-`npm run verify`, `verify:all`, pre-push, and direct local layer/`--only` acceptance calls enforce the cheap barrier and canonical `--cached-only` review admission.
-A missing, failed, incomplete or invalidated review stops acceptance without starting another provider process.
+`npm run verify`, `verify:all`, pre-push, and direct local layer/`--only` acceptance calls enforce the cheap barrier and fresh canonical review admission.
+Admission checks out the committed candidate in a disposable task-owned directory and restores reviewer controls from immutable main, following the established poller procedure.
+It invokes one canonical `scripts/review/run-review.sh` round covering all required domains, using a new execution directory and the original issue budget.
+A candidate-generated cache cannot satisfy admission.
+No candidate controls are installed as trusted, and no saved verdict is projected into a new shipping pass.
+Failed, incomplete or invalidated fresh reviews stop full acceptance.
+Raw verdicts, logs and failure attempts remain under `.evidence/review-admission/`.
+Source changes during admission require another cheap stage and fresh review.
 `--stage=cheap` excludes full suites and product-flow acceptance; it cannot satisfy shipping.
 Hosted checks retain their independent required full suites and do not execute a local reviewer.
 
@@ -59,7 +64,7 @@ Source drift fails the run, and later source changes require current cheap check
 Reuse unchanged receipts only through the canonical runners; review-budget attempts and raw failure history never reset.
 Verification retains each stage attempt under `.evidence/verify/attempts/` and archives retired test receipts under `check-cache/history/`.
 UI signoff and development walkthroughs precede final UI acceptance.
-The publishable `final-candidate` simulator entry point requires the same passing canonical review before native journeys.
+The publishable `final-candidate` simulator entry point requires fresh canonical review before native journeys.
 Apple account, legal and submission approvals, required product-flow status, pre-push, PR, main Verify, Deploy and actual release acceptance remain required.
 
 The pre-push hook runs layers 0-3, including the required source-bound production build, plus size/domain checks.
@@ -135,11 +140,11 @@ Main requires `product-flow/local` on the exact head. Republish before merge; co
 For a backend change before its first push, deploy a clean committed checkout with `vercel deploy --target=preview`, then assign the ready preview to dev during a coordinated test window.
 The gate accepts Vercel's CLI `meta.gitCommitSha` identity as well as a Git deployment's `gitSource.sha`, rejects dirty CLI uploads, and still compares candidate backend contents and pins the deployment across the test and publication.
 
-Commit the tested change locally before reviewing it with the local review runner; `--local` reviews committed `origin/main...HEAD`, not uncommitted edits.
+Commit the tested change locally before shipping admission; `--local` reviews committed `origin/main...HEAD`, not uncommitted edits.
 Fetch the base first and ensure the branch contains the current review definitions.
 If it predates the harness, rebase/update it deliberately in its own worktree before review; do not silently skip missing lenses.
 
-Run one independent reviewer round with the same required domains as the trusted-main poller:
+Fresh shipping admission invokes one independent reviewer round with the same required domains as the trusted-main poller:
 
 | Changed surface | Required review domains |
 |---|---|
@@ -152,9 +157,9 @@ If the changed behavior exposes a sensitive control outside those paths, add the
 An `incident` label, `Spec:` line or test file does not by itself add a separate lens; correctness still checks the named acceptance and relevant tests.
 
 ```sh
-bash scripts/review/run-review.sh --local
-# Explicit sensitive behavior outside path routing: --add-domain workflow-security
-# Overrides only add coverage; they never remove required domains.
+bash scripts/verify/review-admission.sh
+# Fresh shipping admission invokes the canonical main run-review.sh --local round.
+# Required domain coverage and issue-wide budget history remain canonical.
 ```
 
 Group material defects and mandatory acceptance failures into one repair pass, while preserving bounded P2 debt as owned, source-bound follow-ups.
@@ -166,7 +171,7 @@ The runner supports `claude` and `codex` adapters; choose an authenticated provi
 Set `FITSY_REVIEW_MODEL` to the intended model; Codex defaults to `gpt-6-sol`, while explicitly selected Claude installations retain their tier-based defaults.
 Use a model appropriate to the change's risk and keep the required lenses unchanged.
 Export `FITSY_REVIEW_PROVIDER`, `FITSY_REVIEW_MODEL`, and `FITSY_REVIEW_REASONING_EFFORT` in the shipping shell before review.
-Keep those exports for full verification, pre-push and direct PR projection so admission resolves the same source-bound provider/model receipt.
+Keep those exports for full verification and pre-push so every fresh admission uses the snapshotted reviewer profile.
 A supported Claude profile uses the same persistent-export contract.
 Provider-specific credentials remain in the provider's normal local credential store and must never enter the repository or evidence.
 The adapters run an independent review process with read-only tools, disabled integrations and bounded execution time.
@@ -178,7 +183,8 @@ A supported alternative may resolve a provider outage, but never switch provider
 The runner records provider, model and execution identity with the verdict, and includes that identity and adapter/parser contents in its cache key.
 An existing status from another provider still satisfies the same lens; a cache entry is reused only for its matching execution identity.
 The implementing agent must not author its own independent review verdict.
-A matching post-PR pass reuses the complete local round rather than invoking the provider again.
+Existing post-PR compatibility callers may reuse a matching canonical round.
+Local shipping admission requires fresh execution and never consumes that cache.
 The cache binds every required domain and instruction, provider identity, acceptance brief and patch; only optional hunk-heading labels are normalized.
 The trusted main poller invokes the reviewer once and publishes `review/round` with its complete input identity after all required compatibility statuses.
 Before reusing a completed same-head status, a nonexecuting identity probe checks current acceptance, routing, instructions, provider and patch inputs.
