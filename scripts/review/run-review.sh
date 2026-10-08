@@ -24,6 +24,12 @@ if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
   exit 1
 fi
 
+# Local execution always completes canonical cheap/focused checks first.
+# Cached projections and identity probes never launch tests or a reviewer.
+if [ "$TARGET" = --local ] && [ "$PROBE" = 0 ] && [ "$CACHED_ONLY" = 0 ]; then
+  node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local --reuse >&2
+fi
+
 if [ "$TARGET" = "--local" ]; then
   HEAD_SHA="$(git rev-parse HEAD)"
   BASE_SHA="$(git rev-parse origin/main)"

@@ -15,6 +15,23 @@ checks:
     runs: [local]
     why: Check dependencies and disk before local verification.
 
+  - name: review-admission
+    script: review-admission.sh
+    layer: 0
+    stage: acceptance
+    blocking: true
+    preflight: true
+    runs: [local]
+    why: Require a clean source-bound passing canonical review before full acceptance.
+
+  - name: focused-tests
+    cache: true
+    script: focused-tests.sh
+    layer: 1
+    blocking: true
+    runs: [local]
+    why: Meaningful selected reproduction and regression tests before independent review.
+
   - name: structural
     script: structural.sh
     layer: 0
@@ -44,6 +61,7 @@ checks:
     why: tsc --noEmit per workspace (api, mobile, shared, scripts).
 
   - name: product-flow
+    stage: acceptance
     script: product-flow.sh
     layer: 1
     blocking: true

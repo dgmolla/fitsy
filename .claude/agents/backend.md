@@ -61,14 +61,17 @@ Review backend code and specs that touch your domain. Check:
 
 ## Before Opening a PR
 
-Run the full pre-PR gate locally. Fix all failures in your session.
+Follow [canonical shipping](../../docs/engineering/devops/shipping.md): freeze and commit source, select meaningful focused regressions, run `npm run verify:cheap`, and complete one passing independent review before full suites and affected E2E acceptance.
+Repair findings and revalidate affected cheap checks and review before full acceptance.
+Preserve UI signoff, release approvals, source identity and the retained issue review budget.
+Run every required full gate before push; fix all failures in your session.
 
 1. `bash scripts/structural-tests.sh`
 2. `npx tsc --noEmit`
 3. `npm test`
 4. `npm run build`
 5. **Mobile E2E**: Use the mobile MCP (`@mobilenext/mobile-mcp`) to run smoke
-   tests against the Expo Go simulator before requesting review.
+   development reproduction and UI signoff before review, then final candidate acceptance after a passing review.
 
 ## After Pushing a PR
 

@@ -75,7 +75,8 @@ test("local timing records pass, cached reuse, and failed independent reviews", 
   expect(run("failing-model").status).toBe(1);
   const events = readFileSync(join(root, ".evidence/delivery/events.jsonl"), "utf8")
     .trim().split("\n").map(line => JSON.parse(line));
-  const terminal = events.filter(event => event.status !== "running");
+  const terminal = events.filter(event => event.status !== "running" && event.phase === "review");
+  expect(events.some(event => event.phase === "verification" && event.status === "pass")).toBe(true);
   expect(terminal.map(event => event.status)).toEqual(["pass", "cached", "fail"]);
   expect(terminal.every(event => event.issue === 355 && event.phase === "review" && event.lens === "review-round")).toBe(true);
   expect(terminal[1].duration_ms).toBe(0);

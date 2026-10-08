@@ -6,9 +6,11 @@ The executable checks remain in `scripts/verify/registry.yml`, `scripts/verify/r
 
 ```mermaid
 flowchart LR
-    A[Implement in owned worktree] --> B[Local checks and product evidence]
-    B --> C[One local review round]
-    C --> D[PR checks and reusable lens verdicts]
+    A[Implement and freeze candidate] --> B[Cheap canonical checks and focused regressions]
+    B --> C[One source-bound independent review]
+    C -->|Repair findings| A
+    C -->|Pass| T[Full suites and affected E2E acceptance]
+    T --> D[Pre-push and PR checks with canonical reuse]
     D --> E[Authorized merge and deploy]
     E --> F[Main Verify plus Deploy plus product smoke]
 ```
@@ -25,13 +27,38 @@ The domain and 600-line checks report scope for review; neither imposes an autom
 Use a fresh checkout for integration/deployment when the primary checkout is occupied.
 Do not use a feature-branch mobile publication as a substitute for integrating the intended release commit.
 
-Run the following on the branch to be submitted:
+Finish implementation and commit the frozen candidate before review.
+Select meaningful focused reproduction and regression tests for the changed behavior.
+Run applicable structural, lint, type and safety checks plus that focused selection before independent review.
+The local review entry point enforces these cheap checks before any reviewer execution.
 
 ```sh
+node scripts/verify/focused-tests.mjs --set scripts/verify/impact-plan.test.ts
+npm run verify:cheap
+FITSY_REVIEW_PROVIDER=codex FITSY_REVIEW_MODEL=gpt-6-sol FITSY_REVIEW_REASONING_EFFORT=high bash scripts/review/run-review.sh --local
+# Only after a passing review on this frozen candidate:
 npm run verify
 # For changed production build behavior or required build evidence:
 npm run verify:all
 ```
+
+Replace the example focused test with the tests that reproduce and protect this issue's behavior.
+The selection supports workspace Jest `.test.ts`/`.test.tsx` and `.spec.ts`/`.spec.tsx` files, Node `.test.mjs`, and Python `.test.py` files.
+It is explicit task evidence, not automatic proof of scenario relevance; correctness review still judges coverage.
+Documentation-only candidates record focused tests as not applicable.
+Repair confirmed findings together, commit the repair, rerun affected cheap/focused checks, and obtain a current passing review before launching full acceptance.
+`npm run verify`, `verify:all`, pre-push, and direct local layer/`--only` acceptance calls enforce the cheap barrier and canonical `--cached-only` review admission.
+A missing, failed, incomplete or invalidated review stops acceptance without starting another provider process.
+`--stage=cheap` excludes full suites and product-flow acceptance; it cannot satisfy shipping.
+Hosted checks retain their independent required full suites and do not execute a local reviewer.
+
+Keep source frozen throughout checks, review and acceptance.
+Source drift fails the run, and later source changes require current cheap checks, review and affected full acceptance.
+Reuse unchanged receipts only through the canonical runners; review-budget attempts and raw failure history never reset.
+Verification retains each stage attempt under `.evidence/verify/attempts/` and archives retired test receipts under `check-cache/history/`.
+UI signoff and development walkthroughs precede final UI acceptance.
+The publishable `final-candidate` simulator entry point requires the same passing canonical review before native journeys.
+Apple account, legal and submission approvals, required product-flow status, pre-push, PR, main Verify, Deploy and actual release acceptance remain required.
 
 The pre-push hook runs layers 0–2 plus size/domain checks.
 A hook pass does not replace the applicable product-flow verification or independent review.
@@ -130,7 +157,7 @@ bash scripts/review/run-review.sh --local
 
 Group material defects and mandatory acceptance failures into one repair pass, while preserving bounded P2 debt as owned, source-bound follow-ups.
 After repair, review the affected behavior and its consequences against the current source; do not reopen unrelated adjudicated questions without new evidence.
-Freeze source before expensive canonical checks, run applicable verification once, and reuse only receipts whose source, environment and test identity still match.
+After cheap/focused checks and a passing independent review, run every required full suite and affected E2E flow on stable source, and reuse only receipts whose source, environment and test identity still match.
 Rerun invalidated checks and lenses after a source change; never reuse an old-head verdict as a fresh pass.
 Review requirements are independent of the implementing agent, model vendor and subscription.
 The runner supports `claude` and `codex` adapters; choose an authenticated provider explicitly with `FITSY_REVIEW_PROVIDER`.

@@ -422,6 +422,9 @@ async function execute(udid, names, mode) {
     try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
   }
+  // Development walkthroughs remain available for reproduction and UI signoff.
+  // Publishable full acceptance requires the canonical reviewed candidate.
+  if (mode.publishable) run('bash', ['scripts/verify/review-admission.sh'], { timeout: 60000 });
   const r = receipt(udid), identity = device(udid), server = backend();
   const embedded = embeddedBundleCompatibility(r, inputHash(root, 'js'), environment().configHash);
   assert(embedded.compatible,

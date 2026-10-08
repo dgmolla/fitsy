@@ -45,7 +45,7 @@ test('a test-only split retains product acceptance while a flow edit invalidates
   expect(afterJs.acceptance).not.toBe(afterFlow.acceptance);
 });
 
-test('the real local registry blocks missing evidence but permits explicit non-product applicability', () => {
+test('the canonical product-flow check blocks missing evidence but permits explicit non-product applicability', () => {
   const verify = join(dir, 'scripts/verify'); mkdirSync(verify, { recursive: true });
   for (const name of ['run.mjs', 'impact-plan.mjs', 'product-flow.mjs', 'product-flow.sh', 'registry.yml']) {
     copyFileSync(join(__dirname, name), join(verify, name));
@@ -56,7 +56,7 @@ test('the real local registry blocks missing evidence but permits explicit non-p
   fixtureGit(['-C', dir, 'add', '.']);
   fixtureGit(['-C', dir, '-c', 'user.name=Gate Test', '-c', 'user.email=gate@example.invalid', 'commit', '-qm', 'baseline']);
   fixtureGit(['-C', dir, 'update-ref', 'refs/remotes/origin/main', 'HEAD']);
-  const check = () => spawnSync(process.execPath, [join(verify, 'run.mjs'), '--only=product-flow', '--runs=local'], {
+  const check = () => spawnSync('bash', [join(verify, 'product-flow.sh')], {
     cwd: dir, encoding: 'utf8', env: { ...fixtureEnv(), CI: '', FITSY_DIFF_BASE: '' },
   });
   writeFileSync(join(dir, 'notes.md'), 'Documentation change');
@@ -69,7 +69,10 @@ test('the real local registry blocks missing evidence but permits explicit non-p
   writeFileSync(join(dir, 'apps/mobile/app/welcome/payment.tsx'), 'changed paywall');
   result = check();
   expect(result.status).toBe(1); expect(result.stdout).toContain('"status":"fail"');
-  expect(result.stdout).toContain('"blocking":true'); expect(result.stdout).not.toContain('"status":"skipped"');
+  expect(result.stdout).not.toContain('"status":"skipped"');
+  const registry = readFileSync(join(verify, 'registry.yml'), 'utf8');
+  expect(registry).toMatch(/name: product-flow\n\s+stage: acceptance/);
+  expect(registry).toMatch(/name: review-admission[\s\S]*?blocking: true/);
 });
 
 test('temporary repositories stay isolated when invoked from a Git hook', () => {

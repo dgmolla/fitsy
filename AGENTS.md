@@ -140,11 +140,14 @@ Follow [model routing and delegation](docs/engineering/devops/agent-model-routin
 
 Follow `docs/engineering/devops/shipping.md` for the canonical shipping procedure and review dispositions.
 
-CI is a safety net, not a first pass. Run everything locally BEFORE
-committing. Fix all failures in your session. Do not open a PR that
+CI is a safety net, not a first pass.
+Run cheap checks and meaningful focused regressions, commit the frozen candidate, and obtain a passing independent review before expensive full acceptance.
+Run all required acceptance locally before push. Fix all failures in your session. Do not open a PR that
 you haven't verified passes locally.
 
 ```bash
+npm run verify:cheap   # structural, safety, lint, types and selected focused tests before review
+# Freeze/commit and run the canonical independent review, then full acceptance:
 npm run verify         # layers 0-2 on your changes (structural, secrets, lint, types, tests)
 npm run verify:all     # everything, including the production build
 # E2E: use mobile MCP tools to verify critical flows in the simulator

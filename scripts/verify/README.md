@@ -46,7 +46,27 @@ Callers: `.githooks/pre-push` (layers 0-2, changed scope), `npm run verify` (0-2
 
 The local pre-push hook still runs size and domain checks on every push.
 For the L2 test check, `--reuse` accepts a successful local receipt no older than six hours only when source files, the selected diff, local configuration, environment, dependency lock, runtime and check definition still match.
-A fresh failure invalidates an older pass, and a source change during verification fails the run and retires the receipt.
+A fresh failure invalidates an older pass, and a source change during verification fails the run and archives the retired receipt.
 The receipt saves repeated local test work; it is not an independent review or product-flow attestation.
 Hosted CI runs applicable checks independently.
 The owned PostGIS admission and migration steps still run before local database tests, including a cached L2 result.
+
+## Candidate validation order
+
+`npm run verify:cheap` selects the applicable canonical checks before full acceptance, including the explicit focused test selection.
+Set the selection with `node scripts/verify/focused-tests.mjs --set <test paths>`.
+Use optional `--jest-pattern=<test name regex>` to select focused Jest scenarios; a selection with no passing tests fails.
+The persisted recipe participates in the canonical receipt identity, and matching focused receipts may reuse with `--reuse`.
+The canonical local review runner repeats this cheap stage before executing one independent round with all required domains and the retained issue budget.
+Repair findings and repeat cheap checks and review on the committed repair.
+Only then run `npm run verify` or applicable `verify:all` and final product-flow acceptance.
+
+The registry marks product-flow as `stage: acceptance`; layers 2 and above also belong to acceptance.
+`review-admission` is mandatory for any selected local acceptance check, including `--only` and layer-only calls.
+The runner completes cheap checks before admission or database setup, and admission uses `run-review.sh --local --cached-only` on clean committed source.
+No provider executes during admission.
+CI remains an independent full gate without local review execution.
+
+Every production local invocation retains stage, source identity, timestamps and raw check results under `.evidence/verify/attempts/`.
+Retired cache receipts move to `check-cache/history/` rather than being deleted.
+A cheap stage, a review pass and a cached test receipt each prove their own stage; none replaces required final full acceptance or shipping gates.

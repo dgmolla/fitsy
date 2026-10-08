@@ -1,10 +1,11 @@
+import { validationOrderCases } from "./validation-order-cases";
 import { roundRunnerCases, normalizeFixtureResponse, runPrFixture } from "./round-runner-cases";
 import { executionFailureCases } from "./execution-failure-cases";
 import { policyRunnerCases } from "./policy-runner-cases";
 import { deliveryTimingCases } from "./delivery-timing-cases";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 const source = resolve(__dirname, "../..");
@@ -13,7 +14,7 @@ let guard: string;
 let guardHead: string;
 let inheritedGit: NodeJS.ProcessEnv;
 function isolatedEnv() {
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_)/.test(key)));
 }
 let calls: string;
 let cache: string;
@@ -49,7 +50,11 @@ beforeEach(() => {
   for (const name of ["run-lens.sh", "run-review.sh", "review-round.py", "review-domains.py", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
     cpSync(join(source, "scripts/review", name), join(root, "scripts/review", name));
   }
+  for (const name of ["run.mjs", "impact-plan.mjs"]) cpSync(join(source, "scripts/verify", name), join(root, "scripts/verify", name));
+  symlinkSync(join(source, "node_modules"), join(root, "node_modules"));
+  writeFileSync(join(root, "scripts/verify/registry.yml"), "checks: []\n");
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
+  writeFileSync(join(root, ".gitignore"), "node_modules\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nold-poller/\n");
   writeFileSync(join(root, "REVIEW.md"), "Review rules\n");
   writeFileSync(join(root, ".claude/lenses/correctness.md"), "Review correctness.\n");
   writeFileSync(join(root, "app.ts"), "export const value = 1;\n");
@@ -284,3 +289,5 @@ policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: 
 executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr });
 
 roundRunnerCases({ root: () => root, calls: () => calls, env: () => env, run, runPr, git });
+
+validationOrderCases({ root: () => root, env: () => env, source, run, git, calls: () => calls });
