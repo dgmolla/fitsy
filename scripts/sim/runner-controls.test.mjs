@@ -295,11 +295,14 @@ test('bound product-flow CLI records failure but excludes nested test-harness at
       !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|POSTGRES_)/.test(key)));
     const invoke = context => spawnSync(process.execPath, ['scripts/sim/product-flow.mjs', 'run', 'invalid-udid', '--mode=final-candidate'],
       { cwd: dir, env: { ...fixtureEnv, NODE_TEST_CONTEXT: context, JEST_WORKER_ID: '' }, encoding: 'utf8', timeout: 10000 });
-    assert.equal(invoke('').status, 1);
+    const standalone = invoke('');
+    assert.equal(standalone.status, 1);
+    assert.match(standalone.stderr, /run final acceptance inside .*shipping-session/);
     const events = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
       { cwd: dir, encoding: 'utf8' })).events;
     assert.deepEqual(events.filter(event => event.phase === 'e2e').map(event => [event.phase, event.check, event.status]), [['e2e', 'run', 'fail']]);
-    assert.ok(events.some(event => event.phase === 'verification' && event.check === 'whole' && event.status === 'fail'));
+    assert.equal(events.filter(event => event.phase === 'verification').length, 0);
+    assert.equal(existsSync(join(dir, '.evidence/review-admission')), false);
     assert.equal(invoke('child-v8').status, 1);
     const after = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
       { cwd: dir, encoding: 'utf8' })).events;
