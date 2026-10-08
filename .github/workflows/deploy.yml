@@ -10,15 +10,16 @@
 #   smoke    - waits for Vercel's production deployment of this commit, then
 #              runs the prod-safe API smoke; failure files an incident issue.
 #              Rollback is one local command: scripts/deploy/rollback.sh api
-#   ota      - publishes the mobile OTA when mobile/shared changed, no native
-#              changes, and EXPO_TOKEN exists; otherwise leaves a reminder
-#              issue to run scripts/deploy/ota.sh locally.
+#   ota      - attempts guarded iOS publication on every surviving main push,
+#              since concurrency can replace a pending mobile push with an
+#              API-only push; native drift still blocks publication.
 name: Deploy
 on:
   push:
     branches: [main]
 
-# serialize deploys in push order; a stale run must not publish after a newer one
+# Serialize active deploys. GitHub can replace a pending run, so each surviving
+# run reconciles mobile delivery regardless of its individual push range.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -51,7 +52,7 @@ jobs:
           echo "$CHANGED"
           {
             echo "migrations=$(echo "$CHANGED" | grep -q '^prisma/migrations/' && echo true || echo false)"
-            echo "mobile=$(echo "$CHANGED" | grep -qE '^(apps/mobile/|packages/shared/)' && echo true || echo false)"
+            echo "mobile=$(echo "$CHANGED" | grep -qE '^(apps/mobile/|packages/shared/|scripts/deploy/(native-compatibility\.mjs|ios-binary-baseline\.json|ota\.sh)$)' && echo true || echo false)"
             echo "api=$(echo "$CHANGED" | grep -qE '^(apps/api/|packages/|prisma/|scripts/|vercel\.json|package\.json|package-lock\.json)' && echo true || echo false)"
           } >> "$GITHUB_OUTPUT"
 
@@ -83,7 +84,8 @@ jobs:
 
   smoke:
     needs: [changes, migrate]
-    if: always() && needs.changes.outputs.api == 'true' && needs.migrate.result == 'success' 
+    # Replaced pending pushes can contain API changes absent from this push's diff.
+    if: always() && needs.migrate.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -123,15 +125,20 @@ jobs:
             --body "Post-deploy smoke failed for $GITHUB_SHA (see the Deploy workflow logs). ROLL BACK FIRST: \`scripts/deploy/rollback.sh api\`, diagnose second. Closing PR must add fix + detector + constraint."
 
   ota:
+    # Trusted main release jobs coordinate with local rollback through a Git ref.
+    permissions:
+      contents: write
+      issues: write
+      statuses: read
     needs: [changes, migrate, smoke]
-    # never OTA over a failed migration or failed smoke: skipped smoke is only
-    # acceptable when nothing upstream failed (lens finding, 2026-09-07)
-    if: always() && needs.changes.outputs.mobile == 'true' && needs.migrate.result != 'failure' && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped')
+    # Every surviving source must pass migration and production API smoke.
+    if: always() && needs.migrate.result == 'success' && needs.smoke.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -141,18 +148,12 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [ -n "$EXPO_TOKEN" ]; then echo "has=true" >> "$GITHUB_OUTPUT"; else echo "has=false" >> "$GITHUB_OUTPUT"; fi
-      - name: Native change since the last release tag? OTA is unsafe
+      - name: Compare native inputs to the verified production iOS binary
         id: nativecheck
         run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
-          if [ -z "$LAST_TAG" ]; then
-            echo "no v* release tag; failing safe (no OTA)"
+          if ! node scripts/deploy/native-compatibility.mjs; then
             echo "unsafe=true" >> "$GITHUB_OUTPUT"
-            echo "reason=no v* release tag exists, so the shipped runtime cannot be established; tag the current App Store binary's commit (git tag vX.Y.Z <sha>) to enable OTA" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$LAST_TAG"..HEAD | grep -qE '^(apps/mobile/(app\.config\.ts|package\.json|eas\.json|ios/|android/)|package\.json$)'; then
-            echo "native changes since $LAST_TAG; users' binaries lack this runtime"
-            echo "unsafe=true" >> "$GITHUB_OUTPUT"
-            echo "reason=native files changed since $LAST_TAG; ship a binary via eas-build (tag) before any OTA" >> "$GITHUB_OUTPUT"
+            echo "reason=native inputs differ from the verified iOS binary or its baseline is unavailable; ship and verify a binary before any OTA" >> "$GITHUB_OUTPUT"
           else
             echo "unsafe=false" >> "$GITHUB_OUTPUT"
           fi
@@ -170,12 +171,17 @@ jobs:
               --body "OTA skipped: ${REASON}. Do NOT eas update until resolved." || true
           fi
           echo "OTA unsafe: ${REASON}"
+      - name: Install release dependencies without release credentials
+        if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'true'
+        run: |
+          npm ci
+          npx --yes eas-cli@18 --version
       - name: Publish OTA
         if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'true'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm ci
           bash scripts/deploy/ota.sh "$(git log -1 --format='%h: %s')"
       - name: No EXPO_TOKEN — remind to publish locally
         if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'false'

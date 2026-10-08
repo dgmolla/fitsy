@@ -36,17 +36,43 @@ case "$SURFACE" in
     # explicitly for anything beyond the first rollback:
     #   rollback.sh mobile [group-id]
     EXPLICIT="${2:-}"
-    npx eas-cli@18 update:list --branch production --limit 5 --json --non-interactive > /tmp/eas-updates.json
-    python3 -c 'import json
-u=json.load(open("/tmp/eas-updates.json"))
+    mkdir -p ../../.evidence/ota
+    UPDATE_LIST="$(mktemp ../../.evidence/ota/rollback-list.XXXXXX)"
+    env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:list --branch production --limit 20 --json --non-interactive > "$UPDATE_LIST"
+    python3 -c 'import json,sys
+u=json.load(open(sys.argv[1]))
 u=u.get("currentPage") or u.get("updates") or u
 for i,x in enumerate(u):
-    print("  [%d] %s %s" % (i, x["group"], x.get("message","")[:60]))'
-    if [ -n "$EXPLICIT" ]; then PREV_GROUP="$EXPLICIT"; else
-      PREV_GROUP="$(python3 -c 'import json;u=json.load(open("/tmp/eas-updates.json"));u=u.get("currentPage") or u.get("updates") or u;print(u[1]["group"] if len(u)>1 else "")')"
+    print("  [%d] %s %s" % (i, x["group"], x.get("message","")[:60]))' "$UPDATE_LIST"
+    PREV_GROUP="$EXPLICIT"
+    # Establish the hold before waiting; selection occurs under the shared lease.
+    bash ../../scripts/deploy/ota-hold.sh open "${PREV_GROUP:-automatic distinct iOS bundle selection}"
+    source ../../scripts/deploy/ota-lock.sh
+    acquire_ota_lock
+    if [ -z "$PREV_GROUP" ]; then
+      env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:list --branch production --limit 20 --json --non-interactive > "$UPDATE_LIST"
+      IOS_GROUP_IDS="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));u=d.get("currentPage") or d.get("updates") or d
+for x in u:
+    if "ios" in x.get("platforms", "").lower() and not x.get("isRollBackToEmbedded"):
+        print(x["group"])' "$UPDATE_LIST")"
+      CURRENT_IDENTITY=""
+      while IFS= read -r GROUP; do
+        [ -n "$GROUP" ] || continue
+        IDENTITY="$(python3 ../../scripts/deploy/ota-bundle-identity.py "$GROUP" --identity-only)"
+        if [ -z "$CURRENT_IDENTITY" ]; then CURRENT_IDENTITY="$IDENTITY"; continue; fi
+        if [ "$IDENTITY" != "$CURRENT_IDENTITY" ]; then PREV_GROUP="$GROUP"; break; fi
+      done <<< "$IOS_GROUP_IDS"
+      : "${PREV_GROUP:?no verified distinct prior iOS bundle; keep hold open and supply an explicit known-good group}"
     fi
-    : "${PREV_GROUP:?no previous update group on the production branch}"
-    npx eas-cli@18 update:republish --group "$PREV_GROUP" --message "rollback: republish $PREV_GROUP" --non-interactive
+    OTA_MUTATION_IN_PROGRESS=1
+    RESULT="$(mktemp ../../.evidence/ota/rollback-result.XXXXXX)"
+    # Match the verified production release surface; no Android binary is
+    # established by the iOS compatibility receipt.
+    env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:republish --platform ios --group "$PREV_GROUP" --message "rollback: republish $PREV_GROUP" --json --non-interactive > "$RESULT"
+    RECOVERY_GROUP="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));d=d[0] if isinstance(d,list) else d;print(d["group"])' "$RESULT")"
+    LATEST="$(env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:list --branch production --limit 1 --json --non-interactive | python3 -c 'import json,sys;d=json.load(sys.stdin);u=d.get("currentPage") or d.get("updates") or d;print(u[0]["group"])')"
+    [ "$LATEST" = "$RECOVERY_GROUP" ] || { echo 'Recovery group is not newest; release lease retained' >&2; exit 1; }
+    OTA_MUTATION_IN_PROGRESS=0
     echo "republished group $PREV_GROUP; verify, then open an incident issue"
     ;;
   *) echo "usage: rollback.sh api|mobile" >&2; exit 1 ;;
