@@ -67,6 +67,19 @@ export function validationOrderCases(f: Fixture) {
     const result = spawnSync('npm', ['run', 'verify'], { cwd: f.root(), env: f.env(), encoding: 'utf8', timeout: 15000 });
     expect(result.status).toBe(0); expect(order()).toContain('full'); expect(callCount()).toBe(1);
   });
+  test('focused selection changes invalidate review before full acceptance', () => {
+    setup();
+    const recipe = join(f.root(), '.evidence/verify/focused-tests.json');
+    mkdirSync(join(f.root(), '.evidence/verify'), { recursive: true });
+    writeFileSync(recipe, JSON.stringify({ version: 1, tests: ['relevant.test.ts'] }));
+    expect(f.run().status).toBe(0); expect(verify().status).toBe(0);
+    const before = order().split('full').length;
+    writeFileSync(recipe, JSON.stringify({ version: 1, tests: ['unrelated.test.ts'] }));
+    expect(verify().status).toBe(1); expect(order().split('full').length).toBe(before);
+    expect(callCount()).toBe(1);
+    expect(f.run().status).toBe(0); expect(callCount()).toBe(2);
+    expect(verify().status).toBe(0);
+  });
   test('uncommitted candidate stops local review before cheap checks or budget admission', () => {
     setup(); writeFileSync(join(f.root(), 'app.ts'), 'export const value = 9;\n');
     const result = f.run(); expect(result.status).toBe(1); expect(result.stderr).toContain('not frozen and committed');
