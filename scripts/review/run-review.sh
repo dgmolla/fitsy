@@ -375,7 +375,7 @@ print(json.dumps(result))' "$IDENTITY")"
 fi
 
 require_stable_candidate
-if [ "$TARGET" = --local ]; then
+if [ "$TARGET" = --local ] && [ "$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" != incomplete ]; then
   python3 -I - "$CACHE_DIR/focused-$HEAD_SHA-$BASE_SHA.json" "$HEAD_SHA" "$BASE_SHA" "$FOCUSED_CONTEXT" "$CACHE_IDENTITY" <<'PYSAVEFOCUSED'
 import json,os,pathlib,sys,tempfile,uuid
 path=pathlib.Path(sys.argv[1])

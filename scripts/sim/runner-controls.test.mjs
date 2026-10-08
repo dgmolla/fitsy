@@ -872,10 +872,36 @@ test('recorder exit observed by keeper before stop fails even when IPC delivery 
 test('recorder exit inside startup wait retains partial proof and captures diagnostics', async () => {
   const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
   try {
-    const recorderScript = "require('fs').writeFileSync(process.argv[1],'partial');setTimeout(()=>process.exit(0),40)";
+    const recorderScript = "const fs=require('fs');fs.writeFileSync(process.argv[1],'partial');const wait=()=>fs.existsSync(process.argv[1]+'.startup-ack')?process.exit(0):setTimeout(wait,5);wait()";
+    // Start the real startup interval after the recorder writes its partial proof,
+    // so host process-launch latency cannot turn this into an after-startup exit.
+    const readyRecorderSpawn = (command, args, options) => {
+      const child = spawn(command, args, options), emit = child.emit;
+      let heldStart, timer;
+      const releaseStart = () => {
+        if (timer) clearTimeout(timer);
+        if (heldStart) {
+          const values = heldStart; heldStart = null; emit.call(child, 'message', ...values);
+          setImmediate(() => writeFileSync(video + '.startup-ack', 'started'));
+        }
+      };
+      child.emit = function (name, ...values) {
+        const message = name === 'message' ? values[0] : null;
+        if (message?.type === 'command-start') {
+          heldStart = values;
+          const ready = () => { if (existsSync(video)) releaseStart(); else timer = setTimeout(ready, 5); };
+          ready(); return true;
+        }
+        if (message?.type === 'command-exit') {
+          releaseStart(); setImmediate(() => emit.call(child, 'message', ...values)); return true;
+        }
+        return emit.call(this, name, ...values);
+      };
+      return child;
+    };
     const diagnostics = [];
     const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({ recordVideo: true,
-      recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
+      recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video], recorderSpawnImpl: readyRecorderSpawn,
       maestroCommand: process.execPath, maestroArgs: ['-e', 'setTimeout(()=>process.exit(0),1000)'],
       udid: 'test-device', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env,
       dir, timeline, flow: '', diagnostic: async reason => { diagnostics.push(reason); await new Promise(resolve => setTimeout(resolve, 200)); }, quietMs: 3000, wallMs: 3000, pollMs: 20,
