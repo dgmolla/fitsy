@@ -6,6 +6,7 @@ HARNESS_ROOT="$REPO_ROOT"
 REPO_ROOT="${FITSY_REVIEW_CANDIDATE_ROOT:-$REPO_ROOT}"
 cd "$REPO_ROOT"
 TARGET="${1:?pr number or --local}"; shift
+REQUEST_ARGS=("$@")
 DOMAIN_ARGS=()
 PROBE=0
 CACHED_ONLY=0
@@ -16,10 +17,10 @@ while [ "$#" -gt 0 ]; do
   DOMAIN_ARGS+=(--add-domain "$2"); shift 2
 done
 # The candidate entry point can request review, but cannot create trusted verdicts.
-if [ "$TARGET" = --local ] && [ "$PROBE" = 0 ] && [ "$CACHED_ONLY" = 0 ] && [ "$HARNESS_ROOT" = "$REPO_ROOT" ]; then
+if [ "$PROBE" = 0 ] && [ "$HARNESS_ROOT" = "$REPO_ROOT" ] && [ -z "${FITSY_REVIEW_TRUSTED_HARNESS_SHA:-}" ]; then
   TRUSTED_RUNNER="${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/trusted-local/scripts/review/run-review.sh"
   [ -f "$TRUSTED_RUNNER" ] || { echo '[run-review] trusted external local harness missing; coordinator bootstrap required' >&2; exit 1; }
-  exec env FITSY_REVIEW_CANDIDATE_ROOT="$REPO_ROOT" bash "$TRUSTED_RUNNER" "$TARGET" "${DOMAIN_ARGS[@]}"
+  exec env FITSY_REVIEW_CANDIDATE_ROOT="$REPO_ROOT" bash "$TRUSTED_RUNNER" "$TARGET" "${REQUEST_ARGS[@]}"
 fi
 LENS=review-round
 CACHE_DIR="${FITSY_REVIEW_CACHE:-$HOME/.cache/fitsy-review}"
