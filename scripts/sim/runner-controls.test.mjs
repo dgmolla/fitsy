@@ -1563,3 +1563,12 @@ test('failed current cheap checks stop direct final simulator admission before r
   }), /focused selection failed/);
   assert.equal(calls.length, 1); assert.ok(calls[0][1].includes('--stage=cheap'));
 });
+
+test('final candidate admission preserves canonical reviewer timeout and closeout', async () => {
+  const { admitFinalCandidate } = await import('./product-flow.mjs');
+  const calls = [];
+  admitFinalCandidate({ publishable: true }, (command, args, options) => calls.push({ command, args, options }));
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].command, 'bash');
+  assert.equal(calls[1].options?.timeout, undefined);
+});

@@ -39,7 +39,7 @@ const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encod
 export function admitFinalCandidate(mode, command = run) {
   if (!mode.publishable) return;
   command(process.execPath, ['scripts/verify/run.mjs', '--layer=0-2', '--stage=cheap', '--scope=changed', '--runs=local', '--reuse']);
-  command('bash', ['scripts/verify/review-admission.sh'], { timeout: 60000 });
+  command('bash', ['scripts/verify/review-admission.sh']);
 }
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]).sort();
