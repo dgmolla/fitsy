@@ -15,6 +15,7 @@ test("PR timing isolates issue ownership and refuses ambiguous or changed bindin
   const root = fixture.root(), env = fixture.env();
   mkdirSync(join(root, "scripts/delivery"), { recursive: true });
   cpSync(join(source, "scripts/delivery/phase-events.mjs"), join(root, "scripts/delivery/phase-events.mjs"));
+  git("add", "scripts/delivery/phase-events.mjs"); git("commit", "-qm", "delivery timing fixture");
   unlinkSync(join(root, ".evidence/delivery/binding.json"));
   const bind = spawnSync(process.execPath, ["scripts/delivery/phase-events.mjs", "bind", "--issue", "999"],
     { cwd: root, env, encoding: "utf8" });
@@ -66,6 +67,7 @@ test("local timing records pass, cached reuse, and failed independent reviews", 
   const root = fixture.root(), env = fixture.env();
   mkdirSync(join(root, "scripts/delivery"), { recursive: true });
   cpSync(join(source, "scripts/delivery/phase-events.mjs"), join(root, "scripts/delivery/phase-events.mjs"));
+  git("add", "scripts/delivery/phase-events.mjs"); git("commit", "-qm", "delivery timing fixture");
   unlinkSync(join(root, ".evidence/delivery/binding.json"));
   expect(spawnSync(process.execPath, ["scripts/delivery/phase-events.mjs", "bind", "--issue", "355"],
     { cwd: root, env, encoding: "utf8" }).status).toBe(0);

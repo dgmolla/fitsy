@@ -54,13 +54,13 @@ beforeEach(() => {
   symlinkSync(join(source, "node_modules"), join(root, "node_modules"));
   writeFileSync(join(root, "scripts/verify/registry.yml"), "checks: []\n");
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
-  writeFileSync(join(root, ".gitignore"), "node_modules\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nold-poller/\n");
+  writeFileSync(join(root, ".gitignore"), "node_modules\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nold-poller/\nbin/gh-fixture\npr-body\npr-diff\nrace-head\n");
   writeFileSync(join(root, "REVIEW.md"), "Review rules\n");
   writeFileSync(join(root, ".claude/lenses/correctness.md"), "Review correctness.\n");
   writeFileSync(join(root, ".claude/lenses/workflow-security.md"), "Review shipping controls.\n");
   writeFileSync(join(root, "app.ts"), "export const value = 1;\n");
   writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: In flight\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
-  writeFileSync(join(root, "bin/gh"), `#!/bin/sh\nif [ "$1" = issue ] && [ "$2" = view ]; then\n  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi\n  cat ${JSON.stringify(join(root, 'issue-body'))}; exit\nfi\nexit 1\n`, { mode: 0o755 });
+  writeFileSync(join(root, "bin/gh"), `#!/bin/sh\nif [ "$1" = issue ] && [ "$2" = view ]; then\n  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi\n  if [ -f ${JSON.stringify(join(root, '.evidence/issue-body'))} ]; then cat ${JSON.stringify(join(root, '.evidence/issue-body'))}; else cat ${JSON.stringify(join(root, 'issue-body'))}; fi; exit\nfi\nexit 1\n`, { mode: 0o755 });
   const cli = `#!/usr/bin/env python3
 import json,os,pathlib,sys,time
 if '--version' in sys.argv:
@@ -116,14 +116,14 @@ test("local caller runs independent CLI, records identity, and reuses only match
 test("bound acceptance reaches reviewer and changes only when its substance changes", () => {
   expect(run().status).toBe(0);
   expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Acceptance: changed behavior is verified.");
-  writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
+  writeFileSync(join(root, ".evidence/issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
   expect(run().status).toBe(0);
   expect(runPr().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
-  writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior also handles retries.\n</details>\n");
+  writeFileSync(join(root, ".evidence/issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior also handles retries.\n</details>\n");
   expect(run().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
-  writeFileSync(join(root, "issue-body"), `Goal: Preserve the required release behavior.\n${"Background context. ".repeat(400)}\n<details>\nAcceptance: later requirement must be seen.\nStatus: required release state must persist.\n</details>\n`);
+  writeFileSync(join(root, ".evidence/issue-body"), `Goal: Preserve the required release behavior.\n${"Background context. ".repeat(400)}\n<details>\nAcceptance: later requirement must be seen.\nStatus: required release state must persist.\n</details>\n`);
   expect(run().status).toBe(0);
   expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Acceptance: later requirement must be seen.");
   expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Status: required release state must persist.");
