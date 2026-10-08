@@ -66,9 +66,8 @@ export function validationOrderCases(f: Fixture) {
   test('persistently exported Claude profile runs fresh review before normal full verification', () => {
     setup();
     f.setEnv({ ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' });
-    expect(f.run().status).toBe(0);
     const result = spawnSync('npm', ['run', 'verify'], { cwd: f.root(), env: f.env(), encoding: 'utf8', timeout: 15000 });
-    expect(result.status).toBe(0); expect(order()).toContain('full'); expect(callCount()).toBe(2);
+    expect(result.status).toBe(0); expect(order()).toContain('full'); expect(callCount()).toBe(1);
   });
   test('missing workflow lint tools block independent review and full acceptance', () => {
     setup();
@@ -122,12 +121,26 @@ export function validationOrderCases(f: Fixture) {
     writeFileSync(join(root, 'verdict'), failingVerdict);
     expect(full().status).toBe(1); expect(order()).not.toContain('build');
     writeFileSync(join(root, 'verdict'), passingVerdict);
-    expect(f.run().status).toBe(0);
     writeFileSync(join(root, '.evidence/build-fail'), 'fail');
     const broken = full(); expect(broken.status).toBe(1); expect(order()).toContain('build');
     expect(broken.stdout.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ name: "build", status: "fail" }));
-    expect(verify([], true).status).toBe(1);
-    rmSync(join(root, '.evidence/build-fail')); expect(full().status).toBe(0); expect(verify([], true).status).toBe(0);
+    expect(callCount()).toBe(2);
+    expect(order()).not.toContain('full');
+  });
+  test('broken production build blocks pre-push and one repair permits full acceptance', () => {
+    setup();
+    const root = f.root();
+    writeFileSync(join(root, 'scripts/verify/registry.yml'), readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8') + '  - name: build\n    script: build.sh\n    layer: 3\n    blocking: true\n    runs: [local, ci]\n');
+    writeFileSync(join(root, 'scripts/verify/build.sh'), "echo build >> .evidence/order\n[ ! -f .evidence/build-fail ]\n");
+    f.git('add', '-A'); f.git('commit', '-qm', 'pre-push build fixture');
+    writeFileSync(join(root, '.evidence/build-fail'), 'fail');
+    const broken = verify([], true);
+    expect(broken.status).toBe(1); expect(order()).toContain('build'); expect(order()).not.toContain('full');
+    expect(callCount()).toBe(1);
+    rmSync(join(root, '.evidence/build-fail'));
+    expect(verify([], true).status).toBe(0);
+    expect(order().split('\n').filter(line => line === 'full')).toHaveLength(1);
+    expect(callCount()).toBe(2);
   });
   test('cheap failure prevents actual reviewer, full suites and pre-push', () => {
     setup(); writeFileSync(join(f.root(), '.evidence/cheap-fail'), 'fail');
@@ -139,24 +152,27 @@ export function validationOrderCases(f: Fixture) {
   test('failed review then repair defers full acceptance and retains all attempts and budget', () => {
     setup();
     writeFileSync(join(f.root(), 'verdict'), JSON.stringify({ lens: 'correctness', verdict: 'fail', findings: [{ severity: 'CONFIRMED', priority: 'P1', impact: 'shipping skips acceptance', file: 'app.ts', line: 1, summary: 'regression', scenario: 'bad candidate', fix: 'repair' }] }));
-    const failed = f.run();
+    const failed = verify();
     expect(failed.status).toBe(1);
-    if (!existsSync(join(f.root(), 'budgets/issue-355.jsonl'))) throw new Error(String(failed.stderr));
-    expect(verify().status).toBe(1); expect(order()).not.toContain('full');
-    const ledger = join(f.root(), 'budgets/issue-355.jsonl'); const failedHistory = readFileSync(ledger, 'utf8');
+    expect(order()).not.toContain('full'); expect(callCount()).toBe(1);
+    const ledger = join(f.root(), 'budgets/issue-355.jsonl');
+    if (!existsSync(ledger)) throw new Error(String(failed.stderr));
+    const failedHistory = readFileSync(ledger, 'utf8');
     writeFileSync(join(f.root(), 'app.ts'), 'export const value = 3;\n');
     f.git('add', 'app.ts'); f.git('commit', '-qm', 'repair');
-    writeFileSync(join(f.root(), 'verdict'), JSON.stringify({ lens: 'correctness', verdict: 'pass', findings: [] }));
-    expect(f.run().status).toBe(0); expect(verify().status).toBe(0);
-    expect(order()).toContain('full'); expect(callCount()).toBe(4);
+    writeFileSync(join(f.root(), 'verdict'), passingVerdict);
+    // The repaired shipping entry point performs review and full acceptance once.
+    expect(verify([], true).status).toBe(0);
+    expect(order()).toContain('full'); expect(callCount()).toBe(2);
     expect(readFileSync(ledger, 'utf8').startsWith(failedHistory)).toBe(true);
     expect(readFileSync(ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ verdict: 'fail' }));
-    expect(readdirSync(join(f.root(), '.evidence/verify/attempts')).length).toBeGreaterThan(2);
-    const repeated = verify(['--reuse']); expect(repeated.status).toBe(0); expect(repeated.stdout).toContain('"cached":true');
+    expect(readdirSync(join(f.root(), '.evidence/verify/attempts')).length).toBeGreaterThanOrEqual(2);
+    const retained = readFileSync(ledger, 'utf8');
+    // Neither acceptance reuse nor another hook invocation grants a third review.
+    expect(verify(['--reuse']).status).toBe(1);
+    expect(callCount()).toBe(2);
+    expect(readFileSync(ledger, 'utf8')).toBe(retained);
     expect(order().split('\n').filter(line => line === 'full')).toHaveLength(1);
-    expect(callCount()).toBe(5);
-    expect(verify([], true).status).toBe(0);
-    expect(callCount()).toBe(6);
   });
   test('source drift and changed heads require fresh review before full acceptance', () => {
     setup(); const review = f.run();
@@ -172,11 +188,10 @@ export function validationOrderCases(f: Fixture) {
     expect(verify().status).toBe(1); expect(order()).not.toContain('full'); expect(callCount()).toBe(2);
   });
   test('failed full acceptance blocks the actual pre-push entry point', () => {
-    setup(); const review = f.run();
-    if (review.status !== 0) throw new Error(String(review.stderr));
+    setup();
     writeFileSync(join(f.root(), '.evidence/full-fail'), 'fail');
     const result = verify([], true); expect(result.status).toBe(1); expect(order()).toContain('full');
-    expect(result.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ name: 'test', status: 'fail' })); expect(callCount()).toBe(2);
+    expect(result.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ name: 'test', status: 'fail' })); expect(callCount()).toBe(1);
   });
 
   test('PR source stability never imports candidate-owned modules in authenticated controls', () => {
@@ -193,9 +208,8 @@ export function validationOrderCases(f: Fixture) {
     const absent = verify(['--only=review-admission']);
     expect(absent.status).toBe(1); expect(order()).not.toContain('full'); expect(callCount()).toBe(1);
     writeFileSync(join(f.root(), 'verdict'), passingVerdict);
-    expect(f.run().status).toBe(0);
     const reviewed = verify(['--only=review-admission']);
-    expect(reviewed.status).toBe(0); expect(reviewed.stdout).toContain('review-admission'); expect(order()).not.toContain('full');
+    expect(reviewed.status).toBe(0); expect(reviewed.stdout).toContain('review-admission'); expect(order()).not.toContain('full'); expect(callCount()).toBe(2);
   });
   test('candidate-generated cached pass cannot satisfy fresh shipping review admission', () => {
     setup();
