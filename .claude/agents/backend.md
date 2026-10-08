@@ -61,7 +61,7 @@ Review backend code and specs that touch your domain. Check:
 
 ## Before Opening a PR
 
-Follow [canonical shipping](../../docs/engineering/devops/shipping.md): freeze and commit source, select meaningful focused regressions, run `npm run verify:cheap`, and complete one passing independent review before full suites and affected E2E acceptance.
+Follow [canonical shipping](../../docs/engineering/devops/shipping.md): freeze and commit source, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, and complete one passing independent review before full suites and affected E2E acceptance.
 Repair findings and revalidate affected cheap checks and review before full acceptance.
 Preserve UI signoff, release approvals, source identity and the retained issue review budget.
 Run every required full gate before push; fix all failures in your session.

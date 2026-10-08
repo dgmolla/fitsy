@@ -53,7 +53,7 @@ The owned PostGIS admission and migration steps still run before local database 
 
 ## Candidate validation order
 
-`npm run verify:cheap` selects the applicable canonical checks before full acceptance, including the explicit focused test selection.
+`npm run verify -- --stage=cheap` selects the applicable canonical checks before full acceptance, including the explicit focused test selection.
 Set the selection with `node scripts/verify/focused-tests.mjs --set <test paths>`.
 Use optional `--jest-pattern=<test name regex>` to select focused Jest scenarios; a selection with no passing tests fails.
 The persisted recipe participates in the canonical receipt identity, and matching focused receipts may reuse with `--reuse`.

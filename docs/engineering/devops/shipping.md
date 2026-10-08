@@ -34,7 +34,7 @@ The local review entry point enforces these cheap checks before any reviewer exe
 
 ```sh
 node scripts/verify/focused-tests.mjs --set scripts/verify/impact-plan.test.ts
-npm run verify:cheap
+npm run verify -- --stage=cheap
 FITSY_REVIEW_PROVIDER=codex FITSY_REVIEW_MODEL=gpt-6-sol FITSY_REVIEW_REASONING_EFFORT=high bash scripts/review/run-review.sh --local
 # Only after a passing review on this frozen candidate:
 npm run verify

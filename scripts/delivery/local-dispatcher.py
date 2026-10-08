@@ -639,7 +639,7 @@ def make_prompt(claim):
             'missing evidence does not satisfy dependencies. '
             'if blocked, add dispatch-hold with a concrete reason and stop. '
             'Freeze and commit the candidate, select meaningful focused tests with scripts/verify/focused-tests.mjs --set, '
-            'run npm run verify:cheap, then one canonical independent review round before npm run verify and affected full E2E acceptance. '
+            'run npm run verify -- --stage=cheap, then one canonical independent review round before npm run verify and affected full E2E acceptance. '
             'Repair review findings and rerun cheap/focused checks and source-bound review before expensive acceptance; preserve UI signoff and all release approvals. '
             'Before expensive checks, confirm both root and workspace-local dependencies match the lockfile and generated schema; '
             'reuse only a verified matching seed and never mutate shared dependencies. '

@@ -146,7 +146,7 @@ Run all required acceptance locally before push. Fix all failures in your sessio
 you haven't verified passes locally.
 
 ```bash
-npm run verify:cheap   # structural, safety, lint, types and selected focused tests before review
+npm run verify -- --stage=cheap   # structural, safety, lint, types and selected focused tests before review
 # Freeze/commit and run the canonical independent review, then full acceptance:
 npm run verify         # layers 0-2 on your changes (structural, secrets, lint, types, tests)
 npm run verify:all     # everything, including the production build

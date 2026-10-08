@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -36,4 +36,12 @@ test('missing or skipped focused selections cannot satisfy the cheap gate', () =
 });
 test.each(['../outside.test.ts', '--runInBand', 'scripts/missing.test.ts'])('rejects unsupported or escaping test path %s', path => {
   expect(cli('--set', path).status).toBe(1);
+});
+
+test('focused Python imports preserve the frozen source without bytecode artifacts', () => {
+  writeFileSync(join(root, 'scripts/focused_library.py'), 'value = 7\n');
+  writeFileSync(join(root, 'scripts/fixture.test.py'), "import unittest\nimport focused_library\nclass Outcome(unittest.TestCase):\n def test_value(self): self.assertEqual(focused_library.value, 7)\nif __name__ == '__main__': unittest.main()\n");
+  expect(cli('--set', 'scripts/fixture.test.py').status).toBe(0);
+  expect(cli().status).toBe(0);
+  expect(existsSync(join(root, 'scripts/__pycache__'))).toBe(false);
 });

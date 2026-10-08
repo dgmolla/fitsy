@@ -37,7 +37,7 @@ function run(paths, pattern) {
       : key === 'python' ? tests.map(test => ['python3', [test, '-q']])
       : [['npm', ['test', '--workspace=' + key, '--', '--runInBand', '--runTestsByPath', ...tests.map(test => resolve(repository, test)), '--json', '--outputFile=' + report, ...(pattern === undefined ? [] : ['--testNamePattern=' + pattern])]]];
     for (const [command, args] of commands) {
-      const result = spawnSync(command, args, { cwd: repository, stdio: ['ignore', 'inherit', 'inherit'], env: process.env });
+      const result = spawnSync(command, args, { cwd: repository, stdio: ['ignore', 'inherit', 'inherit'], env: key === 'python' ? { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } : process.env });
       if (result.error || result.status !== 0) throw new Error(`focused tests failed: ${tests.join(', ')}`);
       if (!['node', 'python'].includes(key)) {
         const outcomes = JSON.parse(readFileSync(report, 'utf8'));

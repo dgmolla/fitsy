@@ -24,7 +24,6 @@
     "dev:env": "bash scripts/dev/write-local-env.sh",
     "dev:reset": "tsx scripts/dev/reset.ts",
     "dev:snapshot": "tsx scripts/dev/snapshot.ts",
-    "verify:cheap": "node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed",
     "verify": "node scripts/verify/run.mjs --layer=0-2 --scope=changed",
     "verify:all": "node scripts/verify/run.mjs --layer=all --scope=all",
     "verify:dev-drift": "bash scripts/verify/dev-drift.sh",
