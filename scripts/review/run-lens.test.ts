@@ -14,7 +14,8 @@ let guard: string;
 let guardHead: string;
 let inheritedGit: NodeJS.ProcessEnv;
 function isolatedEnv() {
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|POSTGRES_)/.test(key)));
+  // Synthetic checkouts must establish their own shipping session ownership.
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|FITSY_SHIPPING_(SOCKET|TOKEN)$|POSTGRES_)/.test(key)));
 }
 let calls: string;
 let cache: string;

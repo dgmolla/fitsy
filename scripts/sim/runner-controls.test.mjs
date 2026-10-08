@@ -292,7 +292,7 @@ test('bound product-flow CLI records failure but excludes nested test-harness at
       ['add', 'scripts', '.gitignore'], ['commit', '-qm', 'fixture']]) execFileSync('git', args, { cwd: dir });
     execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'], { cwd: dir });
     const fixtureEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-      !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|POSTGRES_)/.test(key)));
+      !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|FITSY_SHIPPING_(SOCKET|TOKEN)$|POSTGRES_)/.test(key)));
     const invoke = context => spawnSync(process.execPath, ['scripts/sim/product-flow.mjs', 'run', 'invalid-udid', '--mode=final-candidate'],
       { cwd: dir, env: { ...fixtureEnv, NODE_TEST_CONTEXT: context, JEST_WORKER_ID: '' }, encoding: 'utf8', timeout: 10000 });
     const standalone = invoke('');
