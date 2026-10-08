@@ -45,7 +45,7 @@ npm run verify -- --layer=0-3 --reuse
 ```
 
 Replace the example focused test with the tests that reproduce and protect this issue's behavior.
-The selection supports workspace Jest `.test.ts`/`.test.tsx` and `.spec.ts`/`.spec.tsx` files, Node `.test.mjs`, and Python `.test.py` files.
+The selection supports Jest in `apps/api`, `apps/mobile` and `scripts` for `.test.ts`/`.test.tsx` and `.spec.ts`/`.spec.tsx` files, Node `.test.mjs`, and Python `.test.py` files.
 It is explicit task evidence, not automatic proof of scenario relevance; correctness review still judges coverage.
 Documentation-only candidates record focused tests as not applicable.
 Repair confirmed findings together, commit the repair, rerun affected cheap/focused checks, and obtain a current passing review before launching full acceptance.

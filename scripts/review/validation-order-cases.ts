@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 interface Fixture {
@@ -66,6 +66,21 @@ export function validationOrderCases(f: Fixture) {
     expect(f.run().status).toBe(0);
     const result = spawnSync('npm', ['run', 'verify'], { cwd: f.root(), env: f.env(), encoding: 'utf8', timeout: 15000 });
     expect(result.status).toBe(0); expect(order()).toContain('full'); expect(callCount()).toBe(1);
+  });
+  test('missing workflow lint tools block independent review and full acceptance', () => {
+    setup();
+    const root = f.root();
+    mkdirSync(join(root, '.evidence/missing-tools'), { recursive: true });
+    symlinkSync('/usr/bin/dirname', join(root, '.evidence/missing-tools/dirname'));
+    copyFileSync(join(f.source, 'scripts/verify/actionlint.sh'), join(root, 'scripts/verify/actionlint.sh'));
+    writeFileSync(join(root, 'scripts/verify/cheap.sh'), 'PATH="$PWD/.evidence/missing-tools" /bin/bash scripts/verify/actionlint.sh\n');
+    f.git('add', '-A'); f.git('commit', '-qm', 'required workflow tool fixture');
+    expect(f.run().status).toBe(1);
+    expect(callCount()).toBe(0);
+    const result = verify();
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('required before verification');
+    expect(existsSync(join(root, '.evidence/order'))).toBe(false);
   });
   test('focused selection changes invalidate review before full acceptance', () => {
     setup();

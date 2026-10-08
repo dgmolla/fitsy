@@ -643,10 +643,15 @@ def make_prompt(claim):
             'Repair review findings and rerun cheap/focused checks and source-bound review before expensive acceptance; preserve UI signoff and all release approvals. '
             'Before expensive checks, confirm both root and workspace-local dependencies match the lockfile and generated schema; '
             'reuse only a verified matching seed and never mutate shared dependencies. '
-            'The user authorizes the existing 1800-second cumulative independent-review budget plus at most one durable '
-            '900-second extension through the shipped budget tool when required; retain every historical attempt. '
-            'Do not ask again for that extension or waive a required domain. Never invoke separate routine reviewers per domain. '
-            'If the authorized total cannot finish mandatory review, park with evidence and release the lane.\n')
+            'The ordinary review budget and one-time extension remain, but the human relaxed-review policy effective '
+            '2026-10-04 supersedes the old 2700-second ceiling for current and future authorized delivery issues. '
+            'Honor existing issue-bound authorized grants from the private external manifest at '
+            '/Users/dawitmolla/.fitsy-dispatcher/authorizations/review-policy-human-relaxed-20261004.json. '
+            'Up to 14400 cumulative supplemental authorized-grant seconds per issue are preauthorized; top up only the '
+            'difference through the trusted grant-authorized operator with no unfinished reservation. '
+            'Retain every historical attempt and required review domain. Never reset the ledger or infer review acceptance. '
+            'Do not ask the human for the superseded short allowance while preauthorized capacity remains. '
+            'If the actual authorized ceiling is exhausted, park with evidence and release the lane.\n')
 
 
 def archive(state, claim, status, state_path):

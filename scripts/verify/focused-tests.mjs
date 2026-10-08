@@ -14,6 +14,9 @@ function selection(paths) {
         !/\.(?:test\.(?:ts|tsx|mjs|py)|spec\.(?:ts|tsx))$/.test(path) || !existsSync(resolve(repository, path))) {
       throw new Error(`invalid focused test path: ${path}`);
     }
+    if (/\.(?:ts|tsx)$/.test(path) && !['apps/api', 'apps/mobile', 'scripts'].some(workspace => path.startsWith(workspace + '/'))) {
+      throw new Error(`unsupported focused test workspace: ${path}`);
+    }
     return path;
   });
 }
@@ -32,7 +35,7 @@ async function run(paths, pattern) {
     let key;
     if (path.endsWith('.mjs')) key = 'node';
     else if (path.endsWith('.py')) key = 'python';
-    else key = ['apps/api', 'apps/mobile', 'packages/shared', 'scripts'].find(workspace => path.startsWith(workspace + '/'));
+    else key = ['apps/api', 'apps/mobile', 'scripts'].find(workspace => path.startsWith(workspace + '/'));
     if (!key) throw new Error(`unsupported focused test workspace: ${path}`);
     const entries = groups.get(key) ?? []; entries.push(path); groups.set(key, entries);
   }

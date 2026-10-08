@@ -83,3 +83,12 @@ test('focused Node selection retains counted real passing cases', () => {
   expect(cli('--set', 'scripts/fixture.test.mjs').status).toBe(0);
   expect(cli().status).toBe(0);
 });
+
+test('unsupported shared Jest selection is rejected before persisting a broken recipe', () => {
+  mkdirSync(join(root, 'packages/shared/src'), { recursive: true });
+  writeFileSync(join(root, 'packages/shared/src/fixture.test.ts'), "test('shared outcome', () => {});\n");
+  const result = cli('--set', 'packages/shared/src/fixture.test.ts');
+  expect(result.status).toBe(1);
+  expect(result.stdout).toContain('unsupported focused test workspace');
+  expect(existsSync(join(root, '.evidence/verify/focused-tests.json'))).toBe(false);
+});

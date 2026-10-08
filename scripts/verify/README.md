@@ -30,7 +30,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `product-flow.sh` | 1 (local, blocking) | fresh candidate-bound simulator and affected-journey evidence; see `docs/engineering/devops/shipping.md` |
 | `boundaries.sh` | 1 | imports respect the layer graph in `.dependency-cruiser.cjs` (T3) |
 | `size-check.sh` | 1 | reports counted review size above or below the 600-line signal without imposing a hard cap |
-| `actionlint.sh` | 1 | workflow files lint clean; CI requires pinned actionlint and ShellCheck |
+| `actionlint.sh` | 1 | workflow files lint clean; actionlint and ShellCheck are required locally and in CI |
 | `domain-check.sh` | 1 | reports routed domains; unavailable comparison or routing still fails |
 | `context-freshness.sh` | 1 | CLAUDE.md/FEATURE_MAP commands and paths actually exist (T14) |
 | `migration-safety.sh` | 1 | destructive migrations carry a down.sql (T9) |
