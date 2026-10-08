@@ -46,7 +46,7 @@ test('focused Python imports preserve the frozen source without bytecode artifac
   expect(existsSync(join(root, 'scripts/__pycache__'))).toBe(false);
 });
 
-test.each(['value = 7\n', "import unittest\n@unittest.skip('fixture')\nclass Outcome(unittest.TestCase):\n def test_value(self): pass\n"])('focused Python selection rejects zero executed passing tests', content => {
+test.each(["import unittest\nclass Outcome(unittest.TestCase):\n @unittest.expectedFailure\n def test_value(self): self.fail('known failure')\n", 'value = 7\n', "import unittest\n@unittest.skip('fixture')\nclass Outcome(unittest.TestCase):\n def test_value(self): pass\n"])('focused Python selection rejects zero executed passing tests', content => {
   writeFileSync(join(root, 'scripts/fixture.test.py'), content);
   expect(cli('--set', 'scripts/fixture.test.py').status).toBe(0);
   expect(cli().status).toBe(1);

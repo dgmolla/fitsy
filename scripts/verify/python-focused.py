@@ -14,8 +14,9 @@ sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 suite = unittest.defaultTestLoader.loadTestsFromModule(module)
 result = unittest.TextTestRunner(verbosity=1).run(suite)
-outcome = {'tests_run': result.testsRun, 'skipped': len(result.skipped),
+passing = result.testsRun - len(result.skipped) - len(result.expectedFailures) - len(result.unexpectedSuccesses) - len(result.failures) - len(result.errors)
+outcome = {'passing_tests': passing, 'expected_failures': len(result.expectedFailures), 'tests_run': result.testsRun, 'skipped': len(result.skipped),
            'failures': len(result.failures), 'errors': len(result.errors),
-           'success': result.wasSuccessful() and result.testsRun > len(result.skipped)}
+           'success': result.wasSuccessful() and passing > 0}
 Path(sys.argv[2]).write_text(json.dumps(outcome) + '\n')
 sys.exit(0 if outcome['success'] else 1)

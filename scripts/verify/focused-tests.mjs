@@ -49,7 +49,7 @@ async function run(paths, pattern) {
       }
       if (key === 'python') {
         const outcomes = JSON.parse(readFileSync(args.at(-1), 'utf8'));
-        if (!outcomes.success || !(outcomes.tests_run > outcomes.skipped)) throw new Error('focused Python selection executed no passing tests');
+        if (!outcomes.success || !(outcomes.passing_tests > 0)) throw new Error('focused Python selection executed no passing tests');
       }
       if (!['node', 'python'].includes(key)) {
         const outcomes = JSON.parse(readFileSync(report, 'utf8'));

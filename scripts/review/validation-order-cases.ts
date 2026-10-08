@@ -40,7 +40,7 @@ export function validationOrderCases(f: Fixture) {
     writeFileSync(join(root, 'scripts/verify/cheap.sh'), `echo cheap >> .evidence/order\nif [ -f .evidence/cheap-fail ]; then exit 1; fi\nif [ -f .evidence/drift ]; then echo '// drift' >> app.ts; fi\necho '{"summary":"cheap checks"}'\n`);
     writeFileSync(join(root, 'scripts/verify/focused.sh'), `echo focused >> .evidence/order\necho '{"summary":"focused tests"}'\n`);
     writeFileSync(join(root, 'scripts/verify/full.sh'), `echo full >> .evidence/order\nif [ -f .evidence/full-fail ]; then exit 1; fi\necho '{"summary":"full tests"}'\n`);
-    writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed' } }));
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed', 'verify:all': 'node scripts/verify/run.mjs --layer=all --scope=all' } }));
     copyFileSync(join(f.source, '.githooks/pre-push'), join(root, '.evidence/pre-push'));
     // The actual hook keeps its issue binding and timing publication contracts.
     mkdirSync(join(root, 'scripts/delivery'), { recursive: true });
@@ -72,6 +72,20 @@ export function validationOrderCases(f: Fixture) {
     const result = f.run(); expect(result.status).toBe(1); expect(result.stderr).toContain('not frozen and committed');
     expect(callCount()).toBe(0); expect(existsSync(join(f.root(), '.evidence/order'))).toBe(false);
     expect(existsSync(join(f.root(), 'budgets/issue-355.jsonl'))).toBe(false);
+  });
+  test('verify:all admits the local production build only after review and fails on a broken build', () => {
+    setup();
+    const root = f.root();
+    writeFileSync(join(root, 'scripts/verify/registry.yml'), readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8') + '  - name: build\n    script: build.sh\n    layer: 3\n    blocking: true\n    runs: [local, ci]\n');
+    writeFileSync(join(root, 'scripts/verify/build.sh'), "echo build >> .evidence/order\n[ ! -f .evidence/build-fail ]\n");
+    f.git('add', '-A'); f.git('commit', '-qm', 'local build acceptance fixture');
+    const full = () => spawnSync('npm', ['run', 'verify:all'], { cwd: root, env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' }, encoding: 'utf8', timeout: 15000 });
+    expect(full().status).toBe(1); expect(order()).not.toContain('build');
+    expect(f.run().status).toBe(0);
+    writeFileSync(join(root, '.evidence/build-fail'), 'fail');
+    const broken = full(); expect(broken.status).toBe(1); expect(order()).toContain('build');
+    expect(broken.stdout.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ name: "build", status: "fail" }));
+    rmSync(join(root, '.evidence/build-fail')); expect(full().status).toBe(0);
   });
   test('cheap failure prevents actual reviewer, full suites and pre-push', () => {
     setup(); writeFileSync(join(f.root(), '.evidence/cheap-fail'), 'fail');
