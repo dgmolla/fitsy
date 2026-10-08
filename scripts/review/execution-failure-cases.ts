@@ -29,8 +29,7 @@ test("missing final response is invalid output instead of completed execution", 
 if [ "$1" = --version ]; then echo fixture-cli; else printf '%s' '${envelope}'; fi
 `, { mode: 0o755 });
       f.git("add", "bin/claude"); f.git("commit", "-qm", "outer CLI failure fixture");
-      f.git("add", "json.py"); f.git("commit", "-qm", "hostile module fixture");
-    const result = f.run();
+      const result = f.run();
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", error: { kind } });
     });
@@ -42,6 +41,7 @@ if [ "$1" = --version ]; then echo fixture-cli; else printf '%s' '${envelope}'; 
   });
   test("PR root Python modules cannot execute inside trusted runner helpers", () => {
     writeFileSync(join(f.root(), "json.py"), "from pathlib import Path\nPath('candidate-import-marker').write_text('executed')\nraise RuntimeError('PR-owned Python module')\n");
+    f.git("add", "json.py"); f.git("commit", "-qm", "hostile module fixture");
     const result = f.run();
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "pass" });
