@@ -1,7 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Fixture } from './validation-order-cases';
+interface Fixture {
+  root(): string; env(): NodeJS.ProcessEnv; setEnv(value: NodeJS.ProcessEnv): void;
+  git(...args: string[]): string; source: string;
+}
 
 export function shippingSessionCases(f: Fixture, setup: () => void,
   verify: () => ReturnType<typeof spawnSync>, order: () => string,

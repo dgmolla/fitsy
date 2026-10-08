@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export interface Fixture {
+interface Fixture {
   root(): string;
   env(): NodeJS.ProcessEnv;
   setEnv(value: NodeJS.ProcessEnv): void;
