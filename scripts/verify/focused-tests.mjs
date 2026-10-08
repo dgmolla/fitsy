@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { spawnSync } from 'node:child_process';
 import { resolve, relative, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { impactPlan, repository } from './impact-plan.mjs';
+import { impactPlan, repository, focusedDatabaseRequired } from './impact-plan.mjs';
 
 const file = join(repository, '.evidence/verify/focused-tests.json');
 function selection(paths) {
@@ -25,8 +25,8 @@ async function run(paths, pattern) {
     if (typeof pattern !== 'string' || !pattern.trim() || pattern.length > 500) throw new Error('invalid Jest test-name pattern');
     new RegExp(pattern);
   }
-  // API database ownership follows the selected path, including Node/Python.
-  if (paths.some(path => path.startsWith('apps/api/'))) {
+  // Never expose a caller database to any selected test without owned admission.
+  if (focusedDatabaseRequired(paths)) {
     const { assertOwnedDatabase } = await import('./local-db.mjs');
     assertOwnedDatabase();
   }

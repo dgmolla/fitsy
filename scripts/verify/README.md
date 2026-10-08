@@ -64,7 +64,7 @@ Only then run `npm run verify` or applicable `verify:all` and final product-flow
 
 The registry marks product-flow as `stage: acceptance`; layers 2 and above also belong to acceptance.
 `review-admission` is mandatory for any selected local acceptance check, including `--only` and layer-only calls.
-The runner completes cheap static checks before focused tests, admits API-focused selections through the owned disposable database, then completes all cheap checks before review admission or full-suite database setup, and admission uses `run-review.sh --local --cached-only` on clean committed source.
+The runner completes cheap static checks before focused tests, admits API and pipeline database selections, plus any selection with caller database URLs, through the owned disposable database, then completes all cheap checks before review admission or full-suite database setup, and admission uses `run-review.sh --local --cached-only` on clean committed source.
 No provider executes during admission.
 CI remains an independent full gate without local review execution.
 

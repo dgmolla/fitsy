@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 
 const source = resolve(__dirname, '../..');
 let root: string;
-const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_)/.test(key)));
+const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|FITSY_LOCAL_DB$|FITSY_VERIFY_|POSTGRES_)/.test(key)));
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, env, stdio: 'ignore' });
 const cli = (...args: string[]) => spawnSync(process.execPath, ['scripts/verify/focused-tests.mjs', ...args], { cwd: root, env, encoding: 'utf8', timeout: 30000 });
 beforeEach(() => {
@@ -91,4 +91,18 @@ test('unsupported shared Jest selection is rejected before persisting a broken r
   expect(result.status).toBe(1);
   expect(result.stdout).toContain('unsupported focused test workspace');
   expect(existsSync(join(root, '.evidence/verify/focused-tests.json'))).toBe(false);
+});
+
+test.each(['ts', 'mjs', 'py'])('direct script focused %s rejects an external database before loading tests', extension => {
+  const path = `scripts/fixture.test.${extension}`;
+  const content = extension === 'py'
+    ? "import pathlib, unittest\npathlib.Path('.evidence/script-executed').write_text('unsafe')\nclass Outcome(unittest.TestCase):\n def test_value(self): pass\n"
+    : extension === 'mjs'
+      ? "import fs from 'node:fs'; import { test } from 'node:test'; fs.writeFileSync('.evidence/script-executed', 'unsafe'); test('outcome', () => {});\n"
+      : "require('node:fs').writeFileSync('.evidence/script-executed', 'unsafe'); test('outcome', () => {});\n";
+  writeFileSync(join(root, path), content);
+  expect(cli('--set', path).status).toBe(0);
+  const result = spawnSync(process.execPath, ['scripts/verify/focused-tests.mjs'], { cwd: root, encoding: 'utf8', env: { ...env, FITSY_VERIFY_OWNED_DB: '', POSTGRES_PRISMA_URL: 'postgresql://external.example/prod', POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' } });
+  expect(existsSync(join(root, '.evidence/script-executed'))).toBe(false);
+  expect(result.status).toBe(1);
 });

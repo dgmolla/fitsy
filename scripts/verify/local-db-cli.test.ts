@@ -6,6 +6,8 @@ import { dirname, join, resolve } from 'node:path';
 
 const source = resolve(__dirname, '../..');
 test.each([
+  { name: 'focused script without caller URL', scriptFocused: true, focused: true, missing: true, hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
+  { name: 'focused script with caller URL', scriptFocused: true, focused: true, missing: false, hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   { name: 'focused API with caller URL', focused: true, missing: false, hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   { name: 'focused API without caller URL', focused: true, missing: true, hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   { name: 'healthy', hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
@@ -14,7 +16,7 @@ test.each([
   { name: 'without OS lock', hijack: false, deny: false, unlocked: true, checkFailure: false, devDrift: false },
   { name: 'failing database check', hijack: false, deny: false, unlocked: false, checkFailure: true, devDrift: false },
   { name: 'dev drift retains caller URL', hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: true },
-])('local database runner $name owns admission, URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift, focused = false, missing = false }) => {
+])('local database runner $name owns admission, URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift, focused = false, missing = false, scriptFocused = false }) => {
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-db-cli-'));
   const write = (path: string, value: string) => {
     const target = join(directory, path); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, value);
@@ -42,7 +44,7 @@ test.each([
     write('scripts/verify/registry.yml', 'checks:\n  - name: admission\n    script: admission.sh\n    layer: 0\n    blocking: true\n    preflight: true\n  - name: db-fixture\n    script: fixture.sh\n    layer: 2\n    blocking: true\n    database: true\n');
     if (focused) {
       write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8').replace('name: db-fixture', 'name: focused-tests').replace('layer: 2', 'layer: 1'));
-      write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: ['apps/api/fixture.test.ts'] }));
+      write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: [scriptFocused ? 'scripts/hex-resume.test.ts' : 'apps/api/fixture.test.ts'] }));
     }
     if (devDrift) {
       write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +

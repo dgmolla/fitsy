@@ -20,7 +20,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
-import { impactPlan, git } from "./impact-plan.mjs";
+import { impactPlan, git, focusedDatabaseRequired } from "./impact-plan.mjs";
 
 const VERIFY_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(VERIFY_DIR, "..", "..");
@@ -79,7 +79,7 @@ const files = scope === "changed" ? plan.files : null;
 const focusedSelection = () => existsSync(join(REPO_ROOT, '.evidence/verify/focused-tests.json')) ? readFileSync(join(REPO_ROOT, '.evidence/verify/focused-tests.json'), 'utf8') : null;
 const frozenSelection = focusedSelection();
 function focusedDatabase() {
-  try { return JSON.parse(frozenSelection ?? '{}').tests?.some(path => typeof path === 'string' && path.startsWith('apps/api/')) ?? false; }
+  try { return focusedDatabaseRequired(JSON.parse(frozenSelection ?? '{}').tests ?? [], {}); }
   catch { return false; } // The focused check reports malformed recipes as blocking failures.
 }
 const selected = [];
@@ -237,7 +237,7 @@ if (!results.some(r => r.status === 'fail' && r.blocking)) {
   const focused = cheap.filter(c => c.name === 'focused-tests');
   results.push(...await runChecks(cheap.filter(c => c.name !== 'focused-tests')));
   if (!results.some(r => r.status === 'fail' && r.blocking)) {
-    if (runsCtx === 'local' && focused.some(c => c.database)) {
+    if (runsCtx === 'local' && (focused.some(c => c.database) || (focused.length && focusedDatabaseRequired([])))) {
       const { runWithLocalDatabase, assertOwnedDatabase } = await import('./local-db.mjs');
       try {
         if (process.env.FITSY_VERIFY_OWNED_DB) {
