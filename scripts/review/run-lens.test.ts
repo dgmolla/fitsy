@@ -290,4 +290,4 @@ executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env
 
 roundRunnerCases({ root: () => root, calls: () => calls, env: () => env, run, runPr, git });
 
-validationOrderCases({ root: () => root, env: () => env, source, run, git, calls: () => calls });
+validationOrderCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, source, run, git, calls: () => calls });

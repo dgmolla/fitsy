@@ -78,6 +78,10 @@ const files = scope === "changed" ? plan.files : null;
 
 const focusedSelection = () => existsSync(join(REPO_ROOT, '.evidence/verify/focused-tests.json')) ? readFileSync(join(REPO_ROOT, '.evidence/verify/focused-tests.json'), 'utf8') : null;
 const frozenSelection = focusedSelection();
+function focusedDatabase() {
+  try { return JSON.parse(frozenSelection ?? '{}').tests?.some(path => typeof path === 'string' && path.startsWith('apps/api/')) ?? false; }
+  catch { return false; } // The focused check reports malformed recipes as blocking failures.
+}
 const selected = [];
 const skipped = [];
 for (let c of registry.checks) {
@@ -103,7 +107,7 @@ for (let c of registry.checks) {
     selected.push({ ...c, missing: true });
     continue;
   }
-  if (c.name === 'focused-tests') c = { ...c, selection: frozenSelection };
+  if (c.name === 'focused-tests') c = { ...c, selection: frozenSelection, database: focusedDatabase() };
   selected.push(c);
 }
 const acceptance = selected.filter(c => isAcceptance(c) && !c.preflight);
@@ -112,7 +116,7 @@ if (runsCtx === 'local' && acceptance.length) {
   const gate = registry.checks.find(c => c.name === 'review-admission');
   if (gate) {
     for (let c of registry.checks.filter(c => !c.standalone && c.name !== 'review-admission' && !isAcceptance(c) && (!c.runs || c.runs.includes(runsCtx)))) {
-      if (c.name === 'focused-tests') c = { ...c, selection: frozenSelection };
+      if (c.name === 'focused-tests') c = { ...c, selection: frozenSelection, database: focusedDatabase() };
       if (!selected.some(existing => existing.name === c.name)) selected.push({ ...c, missing: !existsSync(join(VERIFY_DIR, c.script)) });
     }
     selected.push({ ...gate, missing: !existsSync(join(VERIFY_DIR, gate.script)) });
@@ -228,7 +232,26 @@ const preflight = await Promise.all(selected.filter(c => c.preflight && c.name !
 const results = [...preflight];
 // Cheap failures stop expensive work in local and combined CI invocations.
 if (!results.some(r => r.status === 'fail' && r.blocking)) {
-  results.push(...await runChecks(cheap));
+  const focused = cheap.filter(c => c.name === 'focused-tests');
+  results.push(...await runChecks(cheap.filter(c => c.name !== 'focused-tests')));
+  if (!results.some(r => r.status === 'fail' && r.blocking)) {
+    if (runsCtx === 'local' && focused.some(c => c.database)) {
+      const { runWithLocalDatabase, assertOwnedDatabase } = await import('./local-db.mjs');
+      try {
+        if (process.env.FITSY_VERIFY_OWNED_DB) {
+          assertOwnedDatabase();
+          results.push(...await runChecks(focused));
+        } else {
+          const forwarded = process.argv.slice(2).filter(arg => !/^--(?:only|layer|stage)(?:=|$)/.test(arg));
+          const status = runWithLocalDatabase([...forwarded, '--only=focused-tests', '--stage=cheap', '--layer=0-2']);
+          results.push({ name: 'focused-database', status: status === 0 ? 'pass' : 'fail', blocking: true,
+            summary: 'focused database tests executed through owned disposable database admission' });
+        }
+      } catch (error) {
+        results.push({ name: 'focused-database', status: 'fail', blocking: true, summary: error.message });
+      }
+    } else results.push(...await runChecks(focused));
+  } else skipped.push(...focused.map(c => ({ name: c.name, status: 'skipped', summary: 'cheap checks failed' })));
 } else {
   skipped.push(...cheap.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
 }

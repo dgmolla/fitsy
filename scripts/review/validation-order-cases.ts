@@ -5,6 +5,7 @@ import { join } from 'node:path';
 interface Fixture {
   root(): string;
   env(): NodeJS.ProcessEnv;
+  setEnv(value: NodeJS.ProcessEnv): void;
   source: string;
   run(): ReturnType<typeof spawnSync>;
   git(...args: string[]): string;
@@ -59,6 +60,13 @@ export function validationOrderCases(f: Fixture) {
   const order = () => readFileSync(join(f.root(), '.evidence/order'), 'utf8');
   const callCount = () => existsSync(f.calls()) ? readFileSync(f.calls(), 'utf8').trim().split('\n').length : 0;
 
+  test('persistently exported Claude profile admits normal full verification without another reviewer', () => {
+    setup();
+    f.setEnv({ ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' });
+    expect(f.run().status).toBe(0);
+    const result = spawnSync('npm', ['run', 'verify'], { cwd: f.root(), env: f.env(), encoding: 'utf8', timeout: 15000 });
+    expect(result.status).toBe(0); expect(order()).toContain('full'); expect(callCount()).toBe(1);
+  });
   test('cheap failure prevents actual reviewer, full suites and pre-push', () => {
     setup(); writeFileSync(join(f.root(), '.evidence/cheap-fail'), 'fail');
     expect(f.run().status).toBe(1); expect(callCount()).toBe(0);

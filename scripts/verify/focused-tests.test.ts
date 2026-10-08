@@ -11,7 +11,7 @@ const cli = (...args: string[]) => spawnSync(process.execPath, ['scripts/verify/
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'fitsy-focused-'));
   mkdirSync(join(root, 'scripts/verify'), { recursive: true });
-  for (const name of ['focused-tests.mjs', 'impact-plan.mjs']) copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
+  for (const name of ['focused-tests.mjs', 'impact-plan.mjs', 'python-focused.py', 'local-db.mjs']) copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
   symlinkSync(join(source, 'node_modules'), join(root, 'node_modules'));
   writeFileSync(join(root, '.gitignore'), 'node_modules\n.evidence/\n');
   writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts'] }));
@@ -40,8 +40,22 @@ test.each(['../outside.test.ts', '--runInBand', 'scripts/missing.test.ts'])('rej
 
 test('focused Python imports preserve the frozen source without bytecode artifacts', () => {
   writeFileSync(join(root, 'scripts/focused_library.py'), 'value = 7\n');
-  writeFileSync(join(root, 'scripts/fixture.test.py'), "import unittest\nimport focused_library\nclass Outcome(unittest.TestCase):\n def test_value(self): self.assertEqual(focused_library.value, 7)\nif __name__ == '__main__': unittest.main()\n");
+  writeFileSync(join(root, 'scripts/fixture.test.py'), "import unittest\nimport focused_library\nclass Outcome(unittest.TestCase):\n def test_value(self): self.assertEqual(focused_library.value, 7)\n");
   expect(cli('--set', 'scripts/fixture.test.py').status).toBe(0);
   expect(cli().status).toBe(0);
   expect(existsSync(join(root, 'scripts/__pycache__'))).toBe(false);
+});
+
+test.each(['value = 7\n', "import unittest\n@unittest.skip('fixture')\nclass Outcome(unittest.TestCase):\n def test_value(self): pass\n"])('focused Python selection rejects zero executed passing tests', content => {
+  writeFileSync(join(root, 'scripts/fixture.test.py'), content);
+  expect(cli('--set', 'scripts/fixture.test.py').status).toBe(0);
+  expect(cli().status).toBe(1);
+});
+test.each([undefined, 'postgresql://external.example/prod'])('direct API focused selection rejects unowned database %s', url => {
+  mkdirSync(join(root, 'apps/api'), { recursive: true });
+  writeFileSync(join(root, 'apps/api/fixture.test.ts'), "throw new Error('must not execute');\n");
+  expect(cli('--set', 'apps/api/fixture.test.ts').status).toBe(0);
+  const result = spawnSync(process.execPath, ['scripts/verify/focused-tests.mjs'], { cwd: root, encoding: 'utf8', env: { ...env, FITSY_VERIFY_OWNED_DB: '', POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url } });
+  expect(result.status).toBe(1);
+  expect(result.stderr).not.toContain('must not execute');
 });

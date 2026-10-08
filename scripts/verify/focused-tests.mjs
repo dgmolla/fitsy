@@ -17,7 +17,7 @@ function selection(paths) {
     return path;
   });
 }
-function run(paths, pattern) {
+async function run(paths, pattern) {
   if (pattern !== undefined) {
     if (typeof pattern !== 'string' || !pattern.trim() || pattern.length > 500) throw new Error('invalid Jest test-name pattern');
     new RegExp(pattern);
@@ -32,13 +32,21 @@ function run(paths, pattern) {
     const entries = groups.get(key) ?? []; entries.push(path); groups.set(key, entries);
   }
   for (const [key, tests] of groups) {
+    if (key === 'apps/api') {
+      const { assertOwnedDatabase } = await import('./local-db.mjs');
+      assertOwnedDatabase();
+    }
     const report = join(repository, `.evidence/verify/focused-history/jest-${Date.now()}-${process.pid}.json`);
     const commands = key === 'node' ? [[process.execPath, ['--test', ...tests]]]
-      : key === 'python' ? tests.map(test => ['python3', [test, '-q']])
+      : key === 'python' ? tests.map((test, index) => ['python3', [join(repository, 'scripts/verify/python-focused.py'), test, report + '.' + index]])
       : [['npm', ['test', '--workspace=' + key, '--', '--runInBand', '--runTestsByPath', ...tests.map(test => resolve(repository, test)), '--json', '--outputFile=' + report, ...(pattern === undefined ? [] : ['--testNamePattern=' + pattern])]]];
     for (const [command, args] of commands) {
       const result = spawnSync(command, args, { cwd: repository, stdio: ['ignore', 'inherit', 'inherit'], env: key === 'python' ? { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } : process.env });
       if (result.error || result.status !== 0) throw new Error(`focused tests failed: ${tests.join(', ')}`);
+      if (key === 'python') {
+        const outcomes = JSON.parse(readFileSync(args.at(-1), 'utf8'));
+        if (!outcomes.success || !(outcomes.tests_run > outcomes.skipped)) throw new Error('focused Python selection executed no passing tests');
+      }
       if (!['node', 'python'].includes(key)) {
         const outcomes = JSON.parse(readFileSync(report, 'utf8'));
         if (!outcomes.success || !(outcomes.numPassedTests > 0)) throw new Error('focused Jest selection executed no passing tests');
@@ -70,7 +78,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         const config = JSON.parse(readFileSync(file, 'utf8'));
         if (config.version !== 1) throw new Error('unsupported focused selection version');
         mkdirSync(join(repository, '.evidence/verify/focused-history'), { recursive: true });
-        run(selection(config.tests), config.pattern);
+        await run(selection(config.tests), config.pattern);
         console.log(JSON.stringify({ name: 'focused-tests', status: 'pass', summary: 'selected reproduction/regression tests pass' }));
       }
     }

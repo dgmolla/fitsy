@@ -6,13 +6,15 @@ import { dirname, join, resolve } from 'node:path';
 
 const source = resolve(__dirname, '../..');
 test.each([
+  { name: 'focused API with caller URL', focused: true, missing: false, hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
+  { name: 'focused API without caller URL', focused: true, missing: true, hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   { name: 'healthy', hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   { name: 'owner changed', hijack: true, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   { name: 'preflight failed', hijack: false, deny: true, unlocked: false, checkFailure: false, devDrift: false },
   { name: 'without OS lock', hijack: false, deny: false, unlocked: true, checkFailure: false, devDrift: false },
   { name: 'failing database check', hijack: false, deny: false, unlocked: false, checkFailure: true, devDrift: false },
   { name: 'dev drift retains caller URL', hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: true },
-])('local database runner $name owns admission, URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift }) => {
+])('local database runner $name owns admission, URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift, focused = false, missing = false }) => {
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-db-cli-'));
   const write = (path: string, value: string) => {
     const target = join(directory, path); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, value);
@@ -30,6 +32,7 @@ test.each([
     FITSY_TEST_DENY: deny ? '1' : '0', FITSY_TEST_CHECK_FAIL: checkFailure ? '1' : '0', FITSY_TEST_DEV_URL: devUrl,
     POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
     POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' });
+  if (missing) { delete env.POSTGRES_PRISMA_URL; delete env.POSTGRES_URL_NON_POOLING; }
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env, encoding: 'utf8' }).trim();
   try {
     for (const file of ['run.mjs', 'impact-plan.mjs', 'local-db.mjs', 'db-lock.py']) {
@@ -37,6 +40,10 @@ test.each([
       write(target, readFileSync(join(source, target), 'utf8'));
     }
     write('scripts/verify/registry.yml', 'checks:\n  - name: admission\n    script: admission.sh\n    layer: 0\n    blocking: true\n    preflight: true\n  - name: db-fixture\n    script: fixture.sh\n    layer: 2\n    blocking: true\n    database: true\n');
+    if (focused) {
+      write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8').replace('name: db-fixture', 'name: focused-tests').replace('layer: 2', 'layer: 1'));
+      write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: ['apps/api/fixture.test.ts'] }));
+    }
     if (devDrift) {
       write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
         '  - name: dev-drift\n    script: dev-drift.sh\n    layer: 3\n    blocking: shadow\n');
@@ -75,7 +82,7 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
     git('add', '-A'); git('commit', '-qm', 'fixture'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
     const result = spawnSync(process.execPath, unlocked
       ? ['scripts/verify/local-db.mjs', '--locked-run', '--only=admission,db-fixture', '--runs=local']
-      : ['scripts/verify/run.mjs', `--only=admission,db-fixture${devDrift ? ',dev-drift' : ''}`, '--runs=local'],
+      : ['scripts/verify/run.mjs', `--only=admission,${focused ? 'focused-tests' : 'db-fixture'}${devDrift ? ',dev-drift' : ''}`, '--runs=local'],
       { cwd: directory, env, encoding: 'utf8', timeout: 15000 });
     expect(result.status).toBe(hijack || deny || unlocked || checkFailure ? 1 : 0);
     if (unlocked) {
