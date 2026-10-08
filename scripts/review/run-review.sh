@@ -301,7 +301,13 @@ KEY="$( {
   # Immutable blobs preserve local/projection identity across a trusted overlay.
   # Never execute candidate-owned harness modules in the authenticated poller.
   for PATH_INPUT in "${DOMAIN_FILES[@]}" REVIEW.md scripts/review/run-review.sh scripts/review/review-domains.py scripts/review/review-round.py scripts/review/execute-review.py scripts/review/extract-verdict.py scripts/review/review-gate.py scripts/review/review-budget.py scripts/verify/receipt-cache.mjs scripts/verify/impact-plan.mjs; do
-    git show "$HEAD_SHA:$PATH_INPUT" || exit 1
+    if git cat-file -e "$HEAD_SHA:$PATH_INPUT" 2>/dev/null; then
+      git show "$HEAD_SHA:$PATH_INPUT" || exit 1
+    else
+      # Older heads can predate a control installed by the trusted overlay.
+      # Missing candidate bytes bind to immutable trusted bytes, never omission.
+      git show "$TRUSTED_SHA:$PATH_INPUT" || exit 1
+    fi
   done
   printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY"
   printf '%s' "$ISSUE:$ISSUE_BRIEF"

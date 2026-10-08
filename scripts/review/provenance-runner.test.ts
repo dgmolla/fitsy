@@ -156,3 +156,22 @@ test("missing external bootstrap stops before provider execution", () => {
   expect(result.stderr).toContain("bootstrap");
   expect(readdirSync(root)).not.toContain("calls");
 });
+
+test("older PR head reuses trusted controls absent from its immutable tree", () => {
+  const originalMain = git("rev-parse", "origin/main").trim();
+  git("checkout", "-B", "legacy-base", "origin/main");
+  git("rm", "scripts/verify/receipt-cache.mjs"); git("commit", "-qm", "legacy baseline without receipt identity");
+  git("checkout", "-b", "legacy-candidate");
+  writeFileSync(join(root, "app.ts"), "export const value = 3;\n"); git("add", "app.ts"); git("commit", "-qm", "legacy candidate");
+  git("checkout", "legacy-base");
+  git("restore", "--source="+originalMain, "--staged", "--worktree", "scripts/verify/receipt-cache.mjs");
+  git("commit", "-qm", "main introduces source identity"); git("update-ref", "refs/remotes/origin/main", "HEAD");
+  git("checkout", "legacy-candidate");
+  installFixtureHarness(root, isolatedEnv(), join(root, "external-home"));
+  const first=runPrFixture(root, env);
+  expect(first.status).toBe(0);
+  expect(JSON.parse(first.stdout).verdict).toBe("pass");
+  const repeated=runPrFixture(root, env);
+  expect(repeated.status).toBe(0);
+  expect(readFileSync(calls,"utf8").trim().split("\n")).toHaveLength(1);
+},30000);
