@@ -260,15 +260,12 @@ if (!results.some(r => r.status === 'fail' && r.blocking)) {
 }
 if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
   summary: 'candidate changed during cheap checks', fix: 'freeze candidate source and rerun cheap/focused checks and review' });
-if (!results.some(r => r.status === 'fail' && r.blocking)) {
-  results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
-  if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
-    summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
-}
+// Enter the owned disposable DB context before review admission. The wrapper
+// invokes this same public runner; reviewing in the parent would charge a second
+// fresh round when the child starts its required acceptance checks.
 let delegated = false;
-if (results.some(result => result.status === 'fail' && result.blocking)) {
-  skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
-} else if (runsCtx === 'local' && remaining.some(c => c.database) && !process.env.FITSY_VERIFY_OWNED_DB) {
+if (!results.some(result => result.status === 'fail' && result.blocking) &&
+    runsCtx === 'local' && remaining.some(c => c.database) && !process.env.FITSY_VERIFY_OWNED_DB) {
   const { runWithLocalDatabase } = await import('./local-db.mjs');
   delegated = true;
   try { process.exitCode = runWithLocalDatabase(process.argv.slice(2)); }
@@ -277,6 +274,16 @@ if (results.some(result => result.status === 'fail' && result.blocking)) {
       fix: 'repair this worktree\'s owned disposable database and rerun verification' }));
     process.exitCode = 1;
   }
+}
+if (!delegated && !results.some(r => r.status === 'fail' && r.blocking)) {
+  results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
+  if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
+    summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
+}
+if (delegated) {
+  // The owned child runs review, full acceptance and reports its actual status.
+} else if (results.some(result => result.status === 'fail' && result.blocking)) {
+  skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
 } else {
   if (runsCtx === 'local' && remaining.some(c => c.database)) {
     try {
