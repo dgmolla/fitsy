@@ -7,7 +7,7 @@ A failed raw verdict remains visible when an owned P2 follow-up satisfies the ga
 Reviewer execution failure, timeout, authentication failure or invalid output produces `verdict: "incomplete"`, `findings: []` and an `error.kind` of `execution_error` or `invalid_output`.
 An incomplete review has no product priority, cannot be disposed, is never cached and fails the gate even for an advisory lens.
 Its PR commit status is `error`, while a completed review with a blocking code finding reports `failure`.
-The poller treats the latest `error` as incomplete and may retry it within the existing review budget.
+The poller treats the latest `error` as incomplete and may retry it only within the remaining issue time and round allowance.
 Historical `(runner)` findings remain blocking if encountered in earlier review records.
 This review gate does not replace `npm run verify`, product-flow evidence, source identity or release approval.
 
@@ -80,7 +80,11 @@ For a P0 or P1 entry, set `disposition: "block"` and provide the five impact fie
 ## Review budget
 
 The runner allows at most 1,800 seconds of cumulative independent reviewer execution for one delivery issue across every source head, lens, provider, local invocation and PR invocation.
-There is no source-round limit.
+The default permits at most two combined rounds of at most 900 seconds each: one initial review and one affected rereview after a consolidated repair.
+Execution failures consume the same time and round allowance.
+At the boundary, stop with retained evidence and a concrete disposition; never turn exhaustion into acceptance.
+No automatic extension is permitted under this default.
+Explicit human-approved issue-specific exceptions retain their boundary, while a newer narrower human instruction supersedes older capacity grants.
 Successful, failed, invalid-output, interrupted and timed-out executions all consume time; a retry, rebase, changed head, worker restart or provider change does not reset history.
 A valid cached verdict spends no new reviewer time and retains its original execution provenance.
 New ledger finishes record reviewer execution `outcome` separately from the parsed `verdict`.
@@ -100,13 +104,13 @@ Copies of the same events count once, while conflicting copies fail closed.
 The old exception/adoption/closeout permits do not extend the cumulative cap.
 Do not point a resumed candidate at an empty budget location or omit known prior ledgers.
 
-Before reviewer launch, a file lock atomically reserves its granted timeout plus five seconds for process closeout.
-The grant is no larger than the requested timeout or the remaining unreserved capacity.
-For a required combined round, admission needs at least 900 seconds plus the five-second closeout reserve.
-The floor rises to 125% of the longest of the latest three completed executions of that same reviewer lens when that exceeds 900 seconds.
-If the available deadline is shorter, the runner reports the capacity and recent runtimes without starting or charging an execution.
-The canonical runner requests that observed window by default; an explicit timeout below it is refused by admission.
-The trusted PR poller marks its timeout as a floor-aware request, so ordinary and retry rounds use the larger of its requested deadline and the observed window.
+Before reviewer launch, a file lock atomically reserves its granted reviewer timeout plus five seconds for process closeout.
+The default reserves up to 900 reviewer seconds plus five closeout seconds per combined round; only actual reviewer execution is charged against the 1,800-second issue allowance.
+Historical observed runtimes cannot inflate the bounded deadline above 900 seconds.
+If remaining unreserved capacity cannot cover the bounded round and closeout, admission stops without launching or charging another execution.
+The default bound starts with the issue's first reviewer execution and spans every source head, provider and worker.
+For a historical issue receiving a newer prospective bound, retain the prior ledger and explicitly bind the observed baseline, remaining additional time and round allowance; never infer a fresh pool from a restart.
+An explicitly authorized issue-specific exception supplies its own deadline within its remaining allowance.
 The adapter receives that exact deadline and records it in the verdict's execution identity.
 A completed verdict's cache key binds content, provider, model, CLI, security policy and executor definition; changing remaining time alone does not invalidate it.
 Concurrent lenses cannot each spend the same remaining capacity.
@@ -161,15 +165,14 @@ Changing the time policy does not turn an old failed verdict into a pass or prov
 ### Execution recovery and explicit authorization
 
 Per-attempt wall time, cumulative reviewer execution and delivery-worker lifetime are separate constraints.
-The default independent attempt is 900 seconds; one classified timeout/transient retry on the same head may double that deadline, capped at 3600 seconds and the remaining reserved issue allowance.
+The default independent attempt is capped at 900 seconds; any classified same-head retry must fit the remaining issue time and round allowance.
 A later poller tick supplies backoff; authentication, configuration, invalid output and unknown failures receive no blind automatic retry.
 Private per-attempt execution receipts retain stdout/stderr, failure kind, elapsed seconds and observed stream activity.
 Stream activity is transport evidence, not semantic progress or a verdict; repeated output never grants more time inside an attempt.
 A hard deadline still kills the process group and rejects any partial pass.
 
-One issue-wide infrastructure recovery extension supplies 1800 seconds after the ordinary 900-second extension is used, only for a retained failed same-head/lens timeout or transient provider error.
-The ordinary maximum is 4500 cumulative seconds across all heads and lenses, with atomic reservations and all failed cost retained.
-Human-authorized grants retain their separate explicit ceiling and suppress automatic recovery expansion.
+Historical automatic extensions and authorized grants remain in the append-only ledger; they do not authorize automatic expansion under the current default.
+A newer narrower issue-bound instruction takes precedence without deleting previous receipts or granting a fresh pool.
 
 To avoid editing review-control code for each approval, a trusted coordinator may use `python3 -I /absolute/trusted/review-budget.py grant-authorized --authorization-file /absolute/private/approval.json` with the original issue ledger, candidate and issue arguments.
 Use the independently reviewed, committed operator installation from the trusted main branch, never the candidate checkout or its Python import files.

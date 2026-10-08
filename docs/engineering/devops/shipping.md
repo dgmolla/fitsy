@@ -27,6 +27,9 @@ The domain and 600-line checks report scope for review; neither imposes an autom
 Use a fresh checkout for integration/deployment when the primary checkout is occupied.
 Do not use a feature-branch mobile publication as a substitute for integrating the intended release commit.
 
+Freeze the accepted outcome and non-goals when validation starts.
+Optional hardening and preferred abstractions remain owned follow-ups unless a reachable failure invalidates required acceptance.
+A substantive new human requirement changes scope explicitly; acknowledge it and refreeze the candidate before continuing.
 Finish implementation and commit the frozen candidate before review.
 Select meaningful focused reproduction and regression tests for the changed behavior.
 Run applicable structural, lint, type and safety checks plus that focused selection before independent review.
@@ -207,12 +210,14 @@ The implementer cannot supply that assessment, and a required sensitive speciali
 Every finding has a separate impact priority, and raw reviewer verdicts remain unchanged.
 The canonical runner accepts an owned, source-bound P2 follow-up only through the disposition and required-test contract in [review-dispositions.md](review-dispositions.md).
 P0/P1 impacts, malformed dispositions, stale receipts and missing required tests remain blocking.
-New independent review execution has one cumulative 30-minute budget across all candidate heads and lenses, including failed and timed-out attempts and historical exceptions.
-There is no source-round limit or history reset.
-Required normal/protected reviews retain the existing one-time 900-second extension.
-A retained same-head round timeout or transient provider failure may receive one issue-wide 1800-second infrastructure recovery allowance, with an ordinary cumulative ceiling of 4500 seconds.
-Every failed second remains charged; the allowance is recorded separately and cannot repeat, overlap an unreconciled attempt or relax product findings.
-An existing human-authorized grant retains its explicit boundary and disables further automatic recovery grants.
+New independent review execution defaults to at most two combined rounds, each capped at 900 seconds, and 1,800 cumulative reviewer execution seconds per issue.
+Use one initial round and at most one consolidated repair and affected rereview; failed, interrupted and timed-out attempts consume the same allowance.
+Each round reserves up to 900 reviewer seconds plus five closeout seconds; actual reviewer execution counts toward the 1,800-second total and historical runtime floors cannot increase the deadline.
+Start the default bound at the first issue review; applying a newer prospective bound to historical work requires an explicit retained-ledger baseline and remaining allowance.
+Do not expand automatically, reopen unrelated adjudicated findings without new evidence, or reset history on a new head or worker.
+An explicit human-approved issue-specific exception retains its boundary, but a newer narrower human instruction takes precedence over older capacity grants.
+At the boundary, retain the concrete finding or execution failure and its next action; exhaustion is neither approval nor a passing verdict.
+After passing review, proceed directly through required acceptance and authorized shipping without optional additional review.
 Use the shared issue-bound ledger, atomic reservations and migration procedure in [review-dispositions.md](review-dispositions.md#review-budget).
 P3 findings remain advisory; confirmed P0/P1, required tests and essential acceptance continue to block independently.
 The Jev review-triage evaluation is a later shadow experiment under issue #372, with no gate or merge authority.

@@ -71,7 +71,9 @@ Missing domain results, inconsistent verdicts, or incomplete output cannot publi
 
 ## Convergence
 
+A defect is a demonstrated violation of intended behavior or a required contract with a reachable trigger, evidence and concrete consequence.
 A CONFIRMED finding must demonstrate wrong behavior against the change's required contract.
+A confirmed defect blocks only according to its impact priority or an independently required acceptance gate; confidence alone is insufficient.
 A documented tradeoff provides context for urgency; it does not excuse an unmet essential acceptance criterion or proven high-impact failure.
 General hardening opportunities and preferred abstractions belong in proportionate owned follow-ups or advisory comments, not invented blockers.
 Depth-of-review is bounded: report what a strong reviewer would insist on before merge, not everything imaginable.
@@ -82,3 +84,7 @@ Depth-of-review is bounded: report what a strong reviewer would insist on before
 - For abnormal failures, state the realistic trigger, affected users, supported recovery and remaining risk before asking this release to cover a wider contract.
 - Treat prior source-bound dispositions as history, not approval. Reopen an adjudicated finding only when changed behavior or new evidence defeats its recorded reasoning, while retaining genuine material or mandatory-acceptance blockers.
 - Group related findings by the smallest affected behavior and propose one repair covering its real callers or control entrypoints; put bounded extra hardening in an owned follow-up.
+
+Consolidate the initial actionable findings into one repair list.
+On rereview, inspect the repair and affected consequences; reopen unrelated adjudicated behavior only when new evidence defeats its recorded reasoning.
+Honor the two-round, 900-second-per-round default in shipping.md and any newer explicit issue-specific human boundary.
