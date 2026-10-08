@@ -13,8 +13,9 @@ let root: string;
 let guard: string;
 let guardHead: string;
 let inheritedGit: NodeJS.ProcessEnv;
+// Disposable reviewer fixtures own their source, database and timing context.
 function isolatedEnv() {
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$)/.test(key)));
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|POSTGRES_)/.test(key)));
 }
 let calls: string;
 let cache: string;
