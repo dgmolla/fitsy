@@ -192,6 +192,7 @@ test("confirmed P1 blocks even an otherwise advisory docs lens", () => {
     severity: "CONFIRMED", priority: "P1", impact: "Published operational instructions erase production data", file: "REVIEW.md", line: 1,
     summary: "Instructions target production", scenario: "Follow the procedure -> production data is removed", fix: "Require a disposable database",
   }] }));
+  git("add", ".claude/lenses/docs-sanity.md"); git("commit", "-qm", "advisory docs lens fixture");
   const result = runPr("docs-sanity");
   expect(result.status).toBe(1);
   expect(result.stderr).toContain("P0/P1 finding blocks");

@@ -23,7 +23,7 @@ test("PR timing isolates issue ownership and refuses ambiguous or changed bindin
   // External GitHub transport only; all binding/event/publishing code is real.
   writeFileSync(join(root, "bin/gh"), `#!/usr/bin/env python3
 import json,pathlib,sys
-store=pathlib.Path(${JSON.stringify(join(root, 'timing-comments'))})
+store=pathlib.Path(${JSON.stringify(join(root, '.evidence/timing-comments'))})
 comments=json.loads(store.read_text()) if store.exists() else []
 method,path=sys.argv[3:5]
 if path=='user': print(json.dumps({'login':'fixture'}))
@@ -36,6 +36,7 @@ elif method=='PATCH':
  comment['body']=data['body']; store.write_text(json.dumps(comments)); print(json.dumps(comment))
 else: sys.exit(1)
 `, { mode: 0o755 });
+  git("add", "bin/gh"); git("commit", "-qm", "external timing transport fixture");
   const result = runPr("correctness", "Delivery-Issue: #355\n");
   expect(result.status).toBe(0);
   const caller = JSON.parse(readFileSync(join(root, ".evidence/delivery/binding.json"), "utf8"));
@@ -48,7 +49,7 @@ else: sys.exit(1)
     expect.objectContaining({ issue: 355, phase: "review", status: "running" }),
     expect.objectContaining({ issue: 355, phase: "review", status: "pass" }),
   ]);
-  const published = JSON.parse(readFileSync(join(root, "timing-comments"), "utf8"));
+  const published = JSON.parse(readFileSync(join(root, ".evidence/timing-comments"), "utf8"));
   expect(published).toHaveLength(1);
   expect(published[0].path).toBe("repos/dgmolla/fitsy/issues/355/comments");
   const payload = JSON.parse(published[0].body.match(/```json\s*([\s\S]*?)\s*```/)[1]);
