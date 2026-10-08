@@ -173,4 +173,20 @@ export function validationOrderCases(f: Fixture) {
     expect(result.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ name: 'test', status: 'fail' })); expect(callCount()).toBe(1);
   });
 
+  test('PR source stability never imports candidate-owned modules in authenticated controls', () => {
+    const root = f.root();
+    writeFileSync(join(root, 'scripts/verify/receipt-cache.mjs'), "import fs from 'node:fs'; fs.writeFileSync('candidate-import-marker', 'executed'); throw Error('candidate module executed');\n");
+    f.git('add', 'scripts/verify/receipt-cache.mjs'); f.git('commit', '-qm', 'hostile source helper fixture');
+    const result = runPrFixture(root, f.env());
+    expect(result.status).toBe(0);
+    expect(existsSync(join(root, 'candidate-import-marker'))).toBe(false);
+  });
+  test('explicit review-admission runs the real gate and fails until review passes', () => {
+    setup();
+    const absent = verify(['--only=review-admission']);
+    expect(absent.status).toBe(1); expect(order()).not.toContain('full'); expect(callCount()).toBe(0);
+    expect(f.run().status).toBe(0);
+    const reviewed = verify(['--only=review-admission']);
+    expect(reviewed.status).toBe(0); expect(reviewed.stdout).toContain('review-admission'); expect(order()).not.toContain('full');
+  });
 }

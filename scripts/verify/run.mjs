@@ -112,7 +112,7 @@ for (let c of registry.checks) {
 }
 const acceptance = selected.filter(c => isAcceptance(c) && !c.preflight);
 // Admission remains mandatory even for --only=test or a layer-only caller.
-if (runsCtx === 'local' && acceptance.length) {
+if (runsCtx === 'local' && (acceptance.length || (stage === 'full' && only?.has('review-admission')))) {
   const gate = registry.checks.find(c => c.name === 'review-admission');
   if (gate) {
     for (let c of registry.checks.filter(c => !c.standalone && c.name !== 'review-admission' && !isAcceptance(c) && (!c.runs || c.runs.includes(runsCtx)))) {

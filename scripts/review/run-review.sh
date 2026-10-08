@@ -25,7 +25,26 @@ if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
 fi
 
 source_identity() {
-  node --input-type=module -e "import { sourceIdentity } from './scripts/verify/receipt-cache.mjs'; console.log(sourceIdentity(process.cwd()));"
+  # Authenticated PR controls must not import modules from the candidate tree.
+  python3 -I - <<'PYSOURCE'
+import hashlib,os,pathlib,stat,subprocess
+paths=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','-z']).split(b'\0')
+hash=hashlib.sha256()
+for raw in sorted(set(filter(None,paths))):
+    name=os.fsdecode(raw)
+    if name.startswith('.evidence/'): continue
+    path=pathlib.Path(name)
+    hash.update(raw+b'\0')
+    try:
+        mode=path.lstat().st_mode
+        hash.update(str(mode).encode()+b'\0')
+        if stat.S_ISLNK(mode): hash.update(os.fsencode(os.readlink(path)))
+        elif stat.S_ISREG(mode): hash.update(path.read_bytes())
+        else: raise ValueError('unsupported source input: '+name)
+    except FileNotFoundError: hash.update(b'<deleted>')
+    hash.update(b'\0')
+print(hash.hexdigest())
+PYSOURCE
 }
 FROZEN_SOURCE=""
 FROZEN_HEAD=""
