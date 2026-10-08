@@ -36,6 +36,11 @@ export function readPreviousReportForReuse(file) {
 const save = (file, value) => writeFileSync(file, JSON.stringify(value, null, 2) + '\n');
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 32 * 1024 * 1024, ...opts })?.trim() || '';
+export function admitFinalCandidate(mode, command = run) {
+  if (!mode.publishable) return;
+  command(process.execPath, ['scripts/verify/run.mjs', '--layer=0-2', '--stage=cheap', '--scope=changed', '--runs=local', '--reuse']);
+  command('bash', ['scripts/verify/review-admission.sh'], { timeout: 60000 });
+}
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]).sort();
 }
@@ -424,7 +429,7 @@ async function execute(udid, names, mode) {
   }
   // Development walkthroughs remain available for reproduction and UI signoff.
   // Publishable full acceptance requires the canonical reviewed candidate.
-  if (mode.publishable) run('bash', ['scripts/verify/review-admission.sh'], { timeout: 60000 });
+  admitFinalCandidate(mode);
   const r = receipt(udid), identity = device(udid), server = backend();
   const embedded = embeddedBundleCompatibility(r, inputHash(root, 'js'), environment().configHash);
   assert(embedded.compatible,

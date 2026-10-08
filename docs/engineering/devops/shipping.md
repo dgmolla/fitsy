@@ -41,8 +41,8 @@ export FITSY_REVIEW_REASONING_EFFORT=high
 bash scripts/review/run-review.sh --local
 # Only after a passing review on this frozen candidate:
 npm run verify
-# For changed production build behavior or required build evidence:
-npm run verify:all
+# Required production build plus full local shipping acceptance:
+npm run verify -- --layer=0-3
 ```
 
 Replace the example focused test with the tests that reproduce and protect this issue's behavior.
@@ -63,7 +63,7 @@ UI signoff and development walkthroughs precede final UI acceptance.
 The publishable `final-candidate` simulator entry point requires the same passing canonical review before native journeys.
 Apple account, legal and submission approvals, required product-flow status, pre-push, PR, main Verify, Deploy and actual release acceptance remain required.
 
-The pre-push hook runs layers 0–2 plus size/domain checks.
+The pre-push hook runs layers 0-3, including the required source-bound production build, plus size/domain checks.
 A hook pass does not replace the applicable product-flow verification or independent review.
 The registry determines which checks apply and whether a check is blocking or shadow.
 Removing obsolete structural exceptions belongs to the changed product domain only when every removed entry names a file in the same diff.

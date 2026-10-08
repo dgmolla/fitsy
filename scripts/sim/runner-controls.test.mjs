@@ -296,11 +296,12 @@ test('bound product-flow CLI records failure but excludes nested test-harness at
     assert.equal(invoke('').status, 1);
     const events = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
       { cwd: dir, encoding: 'utf8' })).events;
-    assert.deepEqual(events.map(event => [event.phase, event.check, event.status]), [['e2e', 'run', 'fail']]);
+    assert.deepEqual(events.filter(event => event.phase === 'e2e').map(event => [event.phase, event.check, event.status]), [['e2e', 'run', 'fail']]);
+    assert.ok(events.some(event => event.phase === 'verification' && event.check === 'whole' && event.status === 'fail'));
     assert.equal(invoke('child-v8').status, 1);
     const after = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
       { cwd: dir, encoding: 'utf8' })).events;
-    assert.equal(after.length, 1);
+    assert.deepEqual(after.filter(event => event.phase === 'e2e'), events.filter(event => event.phase === 'e2e'));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -1510,4 +1511,25 @@ test('required assertion and app identity preflight fails before walkthrough', (
   assert.equal(flowFailureReason(result, [config, { ...assertion, metadata: { status: 'SKIPPED' } }], recorder, 'welcome'), 'missing-or-failed-required-assertions');
   assert.equal(flowFailureReason(result, [config, assertion], recorder, 'another-flow'), 'wrong-app-or-flow-receipt');
   assert.equal(flowFailureReason(result, [config, assertion], recorder, 'welcome'), null);
+});
+
+test('final simulator admission runs cheap checks before review while development preserves UI signoff', async () => {
+  const { admitFinalCandidate } = await import('./product-flow.mjs');
+  const calls = [];
+  const command = (cmd, args) => calls.push([cmd, args]);
+  admitFinalCandidate(runSelection(['fixture', '--mode=final-candidate']).mode, command);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0][0], process.execPath); assert.ok(calls[0][1].includes('--stage=cheap'));
+  assert.deepEqual(calls[1], ['bash', ['scripts/verify/review-admission.sh']]);
+  calls.length = 0;
+  admitFinalCandidate(runSelection(['fixture', '--mode=development']).mode, command);
+  assert.equal(calls.length, 0);
+});
+test('failed current cheap checks stop direct final simulator admission before review or native acceptance', async () => {
+  const { admitFinalCandidate } = await import('./product-flow.mjs');
+  const calls = [];
+  assert.throws(() => admitFinalCandidate(runSelection(['fixture', '--mode=final-candidate']).mode, (cmd, args) => {
+    calls.push([cmd, args]); throw new Error('focused selection failed');
+  }), /focused selection failed/);
+  assert.equal(calls.length, 1); assert.ok(calls[0][1].includes('--stage=cheap'));
 });

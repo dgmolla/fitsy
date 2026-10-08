@@ -87,7 +87,7 @@ Environments: ephemeral (CI + `prisma/seed.ts`), **dev** (`fitsy-dev` Supabase: 
 git config core.hooksPath .githooks
 ```
 `npm install` wires this automatically (the `prepare` script). The hook runs
-layers 0-1 of `scripts/verify/` on your changes before every push — a quick
+layers 0-3 of `scripts/verify/` on your changes before every push — a quick
 filter, not a substitute for `npm run verify`.
 
 ### Environment Variables

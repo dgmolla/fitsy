@@ -287,7 +287,11 @@ if (results.some(result => result.status === 'fail' && result.blocking)) {
   if (results.some(result => result.status === 'fail' && result.blocking)) {
     skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'local database admission failed' })));
   } else {
-    results.push(...await runChecks(remaining));
+    // Build and tests share the API workspace; compile first rather than race its outputs.
+    const builds = remaining.filter(c => c.name === 'build');
+    results.push(...await runChecks(builds));
+    if (!results.some(r => r.status === 'fail' && r.blocking)) results.push(...await runChecks(remaining.filter(c => c.name !== 'build')));
+    else skipped.push(...remaining.filter(c => c.name !== 'build').map(c => ({ name: c.name, status: 'skipped', summary: 'production build failed' })));
   }
 }
 if (!sourceStable()) {

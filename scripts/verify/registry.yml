@@ -136,6 +136,7 @@ checks:
     why: Real decoder, attachment and opt-in recording integration tests for changed simulator or product-flow controls; missing local tools fail.
 
   - name: build
+    cache: true
     script: build.sh
     layer: 3
     blocking: true

@@ -85,7 +85,8 @@ export function validationOrderCases(f: Fixture) {
     writeFileSync(join(root, '.evidence/build-fail'), 'fail');
     const broken = full(); expect(broken.status).toBe(1); expect(order()).toContain('build');
     expect(broken.stdout.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ name: "build", status: "fail" }));
-    rmSync(join(root, '.evidence/build-fail')); expect(full().status).toBe(0);
+    expect(verify([], true).status).toBe(1);
+    rmSync(join(root, '.evidence/build-fail')); expect(full().status).toBe(0); expect(verify([], true).status).toBe(0);
   });
   test('cheap failure prevents actual reviewer, full suites and pre-push', () => {
     setup(); writeFileSync(join(f.root(), '.evidence/cheap-fail'), 'fail');
