@@ -45,7 +45,6 @@ A check without a registry entry, or an entry without a script, is itself a fail
 Callers: `.githooks/pre-push` (layers 0-3, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
 
 The local pre-push hook requires layers 0-3, including production build acceptance, and still runs size and domain checks on every push.
-The local build uses the same canonical source/environment/definition cache contract as focused tests and the full test lane.
 For the L2 test check, `--reuse` accepts a successful local receipt no older than six hours only when source files, the selected diff, local configuration, environment, dependency lock, runtime and check definition still match.
 A fresh failure invalidates an older pass, and a source change during verification fails the run and archives the retired receipt.
 The receipt saves repeated local test work; it is not an independent review or product-flow attestation.
@@ -57,7 +56,7 @@ The owned PostGIS admission and migration steps still run before local database 
 `npm run verify -- --stage=cheap` selects the applicable canonical checks before full acceptance, including the explicit focused test selection.
 Set the selection with `node scripts/verify/focused-tests.mjs --set <test paths>`.
 Use optional `--jest-pattern=<test name regex>` to select focused Jest scenarios; a selection with no passing tests fails.
-The persisted recipe participates in the canonical receipt identity, and matching focused receipts may reuse with `--reuse`.
+Focused selections run fresh before review and full acceptance.
 The canonical local review runner repeats this cheap stage before executing one independent round with all required domains and the retained issue budget.
 Repair findings and repeat cheap checks and review on the committed repair.
 Only then run `npm run verify` or applicable `verify:all` and final product-flow acceptance.

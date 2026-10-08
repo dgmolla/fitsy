@@ -31,14 +31,6 @@ Finish implementation and commit the frozen candidate before review.
 Select meaningful focused reproduction and regression tests for the changed behavior.
 Run applicable structural, lint, type and safety checks plus that focused selection before independent review.
 The local review entry point enforces these cheap checks before any reviewer execution.
-Local review delegates to the coordinator-installed committed-main harness under `~/.fitsy-review/trusted-local`, outside the candidate checkout.
-The external runner verifies its artifacts against the immutable current main snapshot before executing reviewer controls.
-The operator's existing `install-poller.sh --refresh-runtime` procedure installs that snapshot and retains its private provenance key outside candidates.
-Cached verdicts require a signature binding their bytes, candidate head, base, cache identity and trusted harness SHA before any successful status projection.
-Missing, forged or stale provenance fails closed and preserves the existing raw verdict and budget attempts.
-Repository writers and the host administrator remain trusted; this protects the canonical runner against candidate-owned review control changes, not a hostile local administrator.
-For a bootstrap changing these controls, independently evaluate the frozen change with committed-main artifacts outside the candidate and retain compatibility limitations.
-The coordinator deliberately installs independently reviewed controls; a worker never installs its candidate as trusted or treats bootstrap review as final acceptance when identities differ.
 
 ```sh
 node scripts/verify/focused-tests.mjs --set scripts/verify/impact-plan.test.ts
@@ -175,7 +167,6 @@ Set `FITSY_REVIEW_MODEL` to the intended model; Codex defaults to `gpt-6-sol`, w
 Use a model appropriate to the change's risk and keep the required lenses unchanged.
 Export `FITSY_REVIEW_PROVIDER`, `FITSY_REVIEW_MODEL`, and `FITSY_REVIEW_REASONING_EFFORT` in the shipping shell before review.
 Keep those exports for full verification, pre-push and direct PR projection so admission resolves the same source-bound provider/model receipt.
-The trusted poller service resolves its projection profile from private canonical head/base-bound review evidence; it does not inherit worker shell exports.
 A supported Claude profile uses the same persistent-export contract.
 Provider-specific credentials remain in the provider's normal local credential store and must never enter the repository or evidence.
 The adapters run an independent review process with read-only tools, disabled integrations and bounded execution time.
@@ -189,12 +180,7 @@ An existing status from another provider still satisfies the same lens; a cache 
 The implementing agent must not author its own independent review verdict.
 A matching post-PR pass reuses the complete local round rather than invoking the provider again.
 The cache binds every required domain and instruction, provider identity, acceptance brief and patch; only optional hunk-heading labels are normalized.
-The trusted main poller projects the source-bound canonical round and publishes `review/round` with its complete input identity after all required compatibility statuses.
-Local review stores its focused context in the private canonical cache, bound to head and base, so the poller clone can reuse the identical review identity.
-Missing or changed projection evidence fails closed for coordinator validation rather than starting a duplicate provider round.
-Only the existing classified incomplete-execution retry may execute automatically.
-The poller permits its trusted-main harness overlay only when every changed path belongs to the restored harness and both index and worktree exactly match the trusted main snapshot.
-Source identity and its transitive import also come from that trusted snapshot, so PR-owned modules never execute in the authenticated poller.
+The trusted main poller invokes the reviewer once and publishes `review/round` with its complete input identity after all required compatibility statuses.
 Before reusing a completed same-head status, a nonexecuting identity probe checks current acceptance, routing, instructions, provider and patch inputs.
 A changed identity requires one new complete round; identity failure withdraws reuse, and a retained needs-coordinator failure still requires diagnosis.
 Existing `lens/<domain>` statuses are derived only from one complete independent result.

@@ -25,7 +25,6 @@ checks:
     why: Require a clean source-bound passing canonical review before full acceptance.
 
   - name: focused-tests
-    cache: true
     script: focused-tests.sh
     layer: 1
     blocking: true
@@ -136,7 +135,6 @@ checks:
     why: Real decoder, attachment and opt-in recording integration tests for changed simulator or product-flow controls; missing local tools fail.
 
   - name: build
-    cache: true
     script: build.sh
     layer: 3
     blocking: true

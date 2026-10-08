@@ -36,7 +36,7 @@ while read -r NUM SHA; do
   if [ "$STATE" = failure ]; then
     case "$PRIOR_DESCRIPTION" in needs-coordinator:*) continue ;; esac
   fi
-  ROUND_MODE=cached
+  ROUND_MODE=normal
   ATTEMPT_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-900}"
   if [ "$STATE" = error ]; then
     ERRORS="$(printf '%s' "$STATUS_ROWS" | jq '[.[] | select(.context == "review/round" and .state == "error")] | length')"
@@ -48,7 +48,6 @@ while read -r NUM SHA; do
       echo "[poller] PR #$NUM: needs-coordinator; raw incomplete attempts retained"
       continue
     fi
-    ROUND_MODE=normal
     ATTEMPT_TIMEOUT="$(python3 -I -c 'import sys; n=int(sys.argv[1]); assert 1<=n<=3600; print(min(3600,n*2))' "$ATTEMPT_TIMEOUT")"
   fi
   echo "[poller] reviewing complete round PR #$NUM at ${SHA:0:7}"
@@ -60,12 +59,11 @@ while read -r NUM SHA; do
   fi
   # Overlay the review harness from origin/main: the PR must not be able to
   # edit its own reviewer (T12), and old branches may predate the harness.
-  if ! (git restore --source=origin/main --staged --worktree --no-overlay -- scripts/review scripts/delivery/phase-events.mjs scripts/verify/risk-tiers.yml scripts/verify/receipt-cache.mjs scripts/verify/impact-plan.mjs REVIEW.md .claude/lenses &&
+  if ! (git restore --source=origin/main --staged --worktree --no-overlay -- scripts/review scripts/delivery/phase-events.mjs scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses &&
         git clean -qfdx -- scripts/review .claude/lenses); then
     echo "[poller] PR #$NUM: trusted harness restoration failed; skipping this tick"
     continue
   fi
-  export FITSY_REVIEW_TRUSTED_HARNESS_SHA="$(git rev-parse origin/main)"
   case "$STATE" in success|failure)
     if ! CURRENT_IDENTITY="$(bash scripts/review/run-review.sh "$NUM" --identity)"; then
       echo "[poller] PR #$NUM: current review-input identity unavailable; no verdict reuse"
@@ -83,9 +81,9 @@ while read -r NUM SHA; do
     *)
     CURRENT_DOMAINS="$(printf '%s' "$CURRENT_IDENTITY" | python3 -I -c 'import json,sys; print(" ".join(json.load(sys.stdin)["domains"]))')" || continue
     for CONTEXT in $(printf 'lens/%s\n' $CURRENT_DOMAINS) review/round; do
-      "$GH_BIN" api "repos/{owner}/{repo}/statuses/$SHA" -f state=pending -f context="$CONTEXT" -f description='review inputs changed: coordinator validation required' >/dev/null || continue 2
+      "$GH_BIN" api "repos/{owner}/{repo}/statuses/$SHA" -f state=pending -f context="$CONTEXT" -f description='review inputs changed: replacement complete round required' >/dev/null || continue 2
     done
-    echo "[poller] PR #$NUM: review inputs changed; cached projection only, coordinator must validate" ;;
+    echo "[poller] PR #$NUM: review inputs changed; one complete round required" ;;
     esac ;;
   esac
   if [ "$ROUND_MODE" = cached ]; then

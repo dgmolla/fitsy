@@ -12,7 +12,7 @@ test("trusted poller restoration removes PR-owned and untracked Python import si
     git("init", "-q"); git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.test");
     for (const dir of ["scripts/review", "scripts/delivery", "scripts/verify", ".claude/lenses"]) mkdirSync(join(root, dir), { recursive: true });
     writeFileSync(join(root, "scripts/review/probe.py"), "import json\n");
-    for (const path of ["scripts/delivery/phase-events.mjs", "scripts/verify/risk-tiers.yml", "scripts/verify/receipt-cache.mjs", "scripts/verify/impact-plan.mjs", "REVIEW.md", ".claude/lenses/correctness.md"]) writeFileSync(join(root, path), "trusted\n");
+    for (const path of ["scripts/delivery/phase-events.mjs", "scripts/verify/risk-tiers.yml", "REVIEW.md", ".claude/lenses/correctness.md"]) writeFileSync(join(root, path), "trusted\n");
     git("add", "."); git("commit", "-qm", "trusted main"); git("update-ref", "refs/remotes/origin/main", "HEAD");
     writeFileSync(join(root, "scripts/review/json.py"), "from pathlib import Path\nPath('import-marker').write_text('candidate executed')\n");
     git("add", "."); git("commit", "-qm", "PR-only import");
@@ -44,10 +44,6 @@ test("installed launcher retains trusted main outside a PR-mutated clone", () =>
     git("init", "-q"); git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.test");
     mkdirSync(join(repo, "scripts/review"), { recursive: true });
     writeFileSync(join(repo, "scripts/review/poller.sh"), "#!/bin/bash\necho trusted-launcher\n");
-    for (const name of ["scripts/delivery/phase-events.mjs", "scripts/verify/risk-tiers.yml", "scripts/verify/receipt-cache.mjs", "scripts/verify/impact-plan.mjs", "REVIEW.md", ".claude/lenses/correctness.md"]) {
-      mkdirSync(join(repo, name, ".."), { recursive: true }); writeFileSync(join(repo, name), "fixture trusted artifact\n");
-    }
-
     git("add", "."); git("commit", "-qm", "main"); git("branch", "-M", "main"); git("remote", "add", "origin", repo);
     writeFileSync(join(bin, "launchctl"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     execFileSync("bash", [join(__dirname, "install-poller.sh")], { env, stdio: "pipe" });
@@ -65,7 +61,7 @@ test("installed launcher retains trusted main outside a PR-mutated clone", () =>
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("poller projects a PR round without launching a duplicate reviewer", () => {
+test("poller launches an ordinary PR round with no optional arguments", () => {
   const root = mkdtempSync(join(tmpdir(), "fitsy-poller-empty-args-"));
   const home = join(root, "review"), repo = join(home, "repo"), bin = join(root, "bin"), marker = join(root, "review-called");
   mkdirSync(join(repo, ".git"), { recursive: true });
@@ -77,30 +73,6 @@ test("poller projects a PR round without launching a duplicate reviewer", () => 
   const env = { ...process.env, FITSY_REVIEW_HOME: home, FITSY_GH_BIN: join(bin, "gh"), REVIEW_TEST_MARKER: marker, PATH: `${bin}:${process.env.PATH}` };
   try {
     execFileSync("bash", [join(__dirname, "poller.sh")], { cwd: root, env, stdio: "pipe" });
-    expect(readFileSync(marker, "utf8").trim()).toBe("269 --cached-only");
-  } finally { rmSync(root, { recursive: true, force: true }); }
-});
-
-test.each(['receipt-cache.mjs', 'impact-plan.mjs'])('trusted poller source identity never executes PR-owned %s', module => {
-  const root = mkdtempSync(join(tmpdir(), 'fitsy-identity-overlay-'));
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
-  const run = (command: string, args: string[]) => execFileSync(command, args, { cwd: root, env, stdio: 'pipe' });
-  const git = (...args: string[]) => run('git', args);
-  try {
-    git('init', '-q'); git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.test');
-    for (const dir of ['scripts/review', 'scripts/delivery', 'scripts/verify', '.claude/lenses']) mkdirSync(join(root, dir), { recursive: true });
-    for (const path of ['scripts/review/probe', 'scripts/delivery/phase-events.mjs', 'scripts/verify/risk-tiers.yml', 'REVIEW.md', '.claude/lenses/correctness.md']) writeFileSync(join(root, path), 'trusted\n');
-    writeFileSync(join(root, 'scripts/verify/impact-plan.mjs'), 'export const git = () => "trusted";\n');
-    writeFileSync(join(root, 'scripts/verify/receipt-cache.mjs'), "import { git } from './impact-plan.mjs'; export const sourceIdentity = () => git();\n");
-    git('add', '.'); git('commit', '-qm', 'trusted main'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-    const path = join(root, 'scripts/verify', module);
-    writeFileSync(path, "import fs from 'node:fs'; fs.writeFileSync('execution-marker','unsafe');\n" + readFileSync(path, 'utf8'));
-    git('add', '.'); git('commit', '-qm', 'PR-owned module');
-    const script = readFileSync(join(__dirname, 'poller.sh'), 'utf8');
-    const restore = script.match(/git restore --source=origin\/main[^\n]+/)![0];
-    const clean = script.match(/git clean -qfdx[^\n]+/)![0];
-    run('bash', ['-c', `${restore.replace(/ &&$/, '')} && ${clean.replace(/\); then$/, '')}`]);
-    run(process.execPath, ['--input-type=module', '-e', "import { sourceIdentity } from './scripts/verify/receipt-cache.mjs'; sourceIdentity();"]);
-    expect(existsSync(join(root, 'execution-marker'))).toBe(false);
+    expect(readFileSync(marker, "utf8").trim()).toBe("269");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

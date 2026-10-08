@@ -45,64 +45,55 @@ exit 1
   };
 }
 
-test("ordinary changes project one complete source-bound round", () => {
+test("ordinary changes schedule one complete round", () => {
   const f = fixture();
   try {
     writeFileSync(f.files, "scripts/feature/example.test.ts\n");
     writeFileSync(f.labels, "incident\n");
     writeFileSync(f.body, "Spec: https://example.invalid/acceptance\n");
     f.tick();
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });
 
-test("sensitive source projects one round without duplicate execution", () => {
+test("sensitive source still schedules exactly one round", () => {
   const f = fixture();
   try {
     writeFileSync(f.files, "apps/api/lib/auth.ts\n");
     f.tick("high");
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
     writeFileSync(f.calls, "");
     writeFileSync(f.files, "scripts/review/poller.sh\n");
     f.tick("high");
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
     writeFileSync(f.calls, "");
     writeFileSync(f.files, "apps/api/lib/auth.test.ts\n");
     f.tick("high");
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
     writeFileSync(f.calls, "");
     writeFileSync(f.files, "apps/api/services/menuSources/uberEatsSource.ts\n");
     f.tick("high");
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
     for (const path of ["apps/mobile/lib/usePurchases.tsx", "apps/mobile/lib/authClient.ts", "apps/mobile/lib/entitlement.ts", "apps/mobile/lib/useEntitlementVerdict.ts", "apps/mobile/app/welcome/resubscribe.tsx", "prisma/migrations/20260928/migration.sql", "apps/api/app/api/subscriptions/sync/route.ts", "apps/api/app/api/restaurants/route.ts", "apps/api/app/api/restaurants/[id]/menu/route.ts", "apps/api/app/api/user/route.ts"]) {
       writeFileSync(f.calls, "");
       writeFileSync(f.files, `${path}\n`);
       f.tick("high");
-      expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+      expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
     }
     writeFileSync(f.calls, "");
     writeFileSync(f.files, ".github/workflows/deploy.yml\n");
     f.tick("high");
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
     for (const path of ["REVIEW.md", ".claude/lenses/workflow-security.md", ".github/workflows/deploy.test.yml", "scripts/review/poller-status.jq", "docs/engineering/devops/shipping.md", "scripts/verify/registry.yml", "scripts/verify/risk-tiers.yml", "scripts/delivery/hourly-report.mjs"]) {
       writeFileSync(f.calls, "");
       writeFileSync(f.files, `${path}\n`);
       f.tick("high");
-      expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+      expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
     }
     writeFileSync(f.calls, "");
     writeFileSync(f.files, "apps/api/app/api/restaurants/preview/route.ts\n");
     f.tick("high");
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });
 
@@ -145,12 +136,11 @@ test("poller uses the runner deadline and relaxes only one classified retry", ()
   const f = fixture();
   try {
     f.tick();
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls + ".timeouts", "utf8")).toBe("900\n");
     writeFileSync(f.statuses, JSON.stringify([{ context: "review/round", state: "error", id: 1,
       created_at: "2026-10-01T00:00:00Z", description: "execution/timeout: independent review incomplete" }]));
     f.tick();
-    expect(readFileSync(f.calls + ".timeouts", "utf8")).toBe("1800\n");
+    expect(readFileSync(f.calls + ".timeouts", "utf8")).toBe("900\n1800\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });
 
@@ -161,10 +151,8 @@ test("separate legacy lens successes do not replace one complete round receipt",
     writeFileSync(f.files, "apps/api/lib/auth.ts\nscripts/review/poller.sh\n");
     writeFileSync(f.statuses, JSON.stringify(["correctness", "danger-zone", "workflow-security"].map((domain, id) => ({ context: `lens/${domain}`, state: "success", id, created_at: "2026-10-01T00:00:00Z" }))));
     f.tick();
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
+    expect(readFileSync(f.calls + ".timeouts", "utf8")).toBe("900\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });
 
@@ -178,8 +166,7 @@ test("same-head acceptance or harness identity changes invalidate a completed ro
     expect(readFileSync(f.calls + ".cached", "utf8")).toBe("cached-gate\n");
     writeFileSync(f.statuses, JSON.stringify([{ context: "review/round", state: "success", id: 1, created_at: "2026-10-01T00:00:00Z", description: "round-key:old-acceptance-or-harness complete:pass" }]));
     f.tick();
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });
 
@@ -189,14 +176,13 @@ test("changed-input old success is withdrawn before a denied replacement", () =>
   try {
     writeFileSync(f.statuses, JSON.stringify([{ context: "review/round", state: "success", id: 1, created_at: "2026-10-01T00:00:00Z", description: "round-key:old complete:pass" }]));
     const runner = join(f.home, "repo/scripts/review/run-review.sh");
-    writeFileSync(runner, readFileSync(runner, "utf8").replace('cached-gate >> "$REVIEW_TEST_CALLS.cached"; exit;', 'cached-gate >> "$REVIEW_TEST_CALLS.cached"; exit 1;'));
+    writeFileSync(runner, readFileSync(runner, "utf8") + "exit 1\n");
     f.tick();
     const posts = readFileSync(f.posts, "utf8");
     expect(posts).toContain("state=pending");
     for (const context of ["lens/correctness", "lens/workflow-security", "review/round"]) expect(posts).toContain(`context=${context}`);
     expect(posts).not.toContain("state=success");
-    expect(readFileSync(f.calls, "utf8")).toBe("");
-    expect(readFileSync(f.calls + ".cached", "utf8")).toContain("cached-gate\n");
+    expect(readFileSync(f.calls, "utf8")).toBe("review-round\n");
   } finally { rmSync(f.home, { recursive: true, force: true }); }
 });
 

@@ -83,20 +83,7 @@ export function validationOrderCases(f: Fixture) {
     expect(result.stdout).toContain('required before verification');
     expect(existsSync(join(root, '.evidence/order'))).toBe(false);
   });
-  test('focused selection changes invalidate review before full acceptance', () => {
-    setup();
-    const recipe = join(f.root(), '.evidence/verify/focused-tests.json');
-    mkdirSync(join(f.root(), '.evidence/verify'), { recursive: true });
-    writeFileSync(recipe, JSON.stringify({ version: 1, tests: ['relevant.test.ts'] }));
-    expect(f.run().status).toBe(0); expect(verify().status).toBe(0);
-    const before = order().split('full').length;
-    writeFileSync(recipe, JSON.stringify({ version: 1, tests: ['unrelated.test.ts'] }));
-    expect(verify().status).toBe(1); expect(order().split('full').length).toBe(before);
-    expect(callCount()).toBe(1);
-    expect(f.run().status).toBe(0); expect(callCount()).toBe(2);
-    expect(verify().status).toBe(0);
-  });
-  test.each([['local', 'tracked edit'], ['local', 'committed head change'], ['local', 'focused selection change'], ['PR', 'tracked edit']])('reviewer-window source drift blocks caching and full acceptance: %s %s', (mode, drift) => {
+  test.each([['local', 'tracked edit'], ['local', 'committed head change'], ['PR', 'tracked edit']])('reviewer-window source drift blocks caching and full acceptance: %s %s', (mode, drift) => {
     setup();
     const root = f.root();
     const provider = join(root, 'bin/claude');
@@ -116,19 +103,6 @@ export function validationOrderCases(f: Fixture) {
     expect(history).toContain('"event": "finish"');
     expect(verify().status).toBe(1);
     expect(order()).not.toContain('full');
-  });
-  test.each(['--only=test', '--layer=2'])('explicit acceptance reuses unchanged focused and review receipts: %s', flag => {
-    setup();
-    const registry = join(f.root(), 'scripts/verify/registry.yml');
-    writeFileSync(registry, readFileSync(registry, 'utf8').replace('  - name: focused-tests\n', '  - name: focused-tests\n    cache: true\n'));
-    f.git('add', '-A'); f.git('commit', '-qm', 'cached focused fixture');
-    expect(f.run().status).toBe(0);
-    expect(verify([flag, '--reuse']).status).toBe(0);
-    const repeated = verify([flag, '--reuse']);
-    expect(repeated.status).toBe(0);
-    expect(repeated.stdout).toContain('"cached":true');
-    expect(callCount()).toBe(1);
-    expect(order().split('\n').filter(line => line === 'full')).toHaveLength(1);
   });
   test('uncommitted candidate stops local review before cheap checks or budget admission', () => {
     setup(); writeFileSync(join(f.root(), 'app.ts'), 'export const value = 9;\n');
@@ -199,53 +173,4 @@ export function validationOrderCases(f: Fixture) {
     expect(result.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ name: 'test', status: 'fail' })); expect(callCount()).toBe(1);
   });
 
-test('trusted poller overlay permits only exact main harness restoration', () => {
-  const root = f.root(), calls = f.calls(), git = f.git;
-  let env = f.env();
-  const runPr = () => runPrFixture(root, env);
-  writeFileSync(join(root, 'REVIEW.md'), 'Candidate review rules\n');
-  git('add', 'REVIEW.md'); git('commit', '-qm', 'review rules candidate');
-  git('restore', '--source=origin/main', '--staged', '--worktree', '--', 'scripts/review', 'scripts/verify/receipt-cache.mjs', 'scripts/verify/impact-plan.mjs', 'REVIEW.md', '.claude/lenses');
-  env = { ...env, FITSY_REVIEW_TRUSTED_HARNESS_SHA: git('rev-parse', 'origin/main').trim() };
-  const result = runPr();
-  expect(result.status).toBe(0);
-  writeFileSync(join(root, 'app.ts'), 'uncommitted candidate edit\n');
-  expect(runPr().status).toBe(1);
-  expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1);
-});
-
-test('PR clone canonically reuses local focused context without a second reviewer', () => {
-  const root = f.root(), calls = f.calls(), run = f.run;
-  const runPr = () => runPrFixture(root, f.env());
-  mkdirSync(join(root, '.evidence/verify/check-cache'), { recursive: true });
-  writeFileSync(join(root, '.evidence/verify/focused-tests.json'), JSON.stringify({ version: 1, tests: ['fixture.test.ts'] }));
-  writeFileSync(join(root, '.evidence/verify/check-cache/focused-tests.json'), JSON.stringify({ version: 1, source: 'fixture-source', selection: 'fixture-selection', definition: 'fixture-definition', result: { status: 'pass' } }));
-  expect(run().status).toBe(0);
-  rmSync(join(root, '.evidence/verify'), { recursive: true });
-  expect(runPr().status).toBe(0);
-  expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1);
-});
-
-test('default Codex poller reuses source-bound Claude worker profile without another round', () => {
-  const root = f.root(), calls = f.calls();
-  expect(f.run().status).toBe(0);
-  const env = { ...f.env(), FITSY_REVIEW_TRUSTED_HARNESS_SHA: f.git('rev-parse', 'origin/main').trim() };
-  expect(runPrFixture(root, env, 'correctness', 'Delivery-Issue: #355\n', 'codex').status).toBe(0);
-  expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1);
-});
-
-test('trusted poller projects a harness-changing PR from its frozen local round', () => {
-  const root = f.root();
-  for (const path of ['scripts/review/run-review.sh', 'scripts/review/execute-review.py', 'scripts/verify/receipt-cache.mjs', 'REVIEW.md']) {
-    const file = join(root, path);
-    writeFileSync(file, readFileSync(file, 'utf8') + '\n# Candidate harness identity\n'.replace('#', path.endsWith('.mjs') ? '//' : '#'));
-  }
-  f.git('add', '-A'); f.git('commit', '-qm', 'harness-changing candidate');
-  expect(f.run().status).toBe(0);
-  f.git('restore', '--source=origin/main', '--staged', '--worktree', '--', 'scripts/review', 'scripts/verify/receipt-cache.mjs', 'scripts/verify/impact-plan.mjs', 'REVIEW.md', '.claude/lenses');
-  const result = runPrFixture(root, { ...f.env(), FITSY_REVIEW_TRUSTED_HARNESS_SHA: f.git('rev-parse', 'origin/main').trim() });
-  if (result.status !== 0) throw new Error(String(result.stderr));
-  expect(result.stdout).toContain('"verdict": "pass"');
-  expect(readFileSync(f.calls(), 'utf8').trim().split('\n')).toHaveLength(1);
-});
 }

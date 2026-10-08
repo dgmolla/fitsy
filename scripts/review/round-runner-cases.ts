@@ -1,5 +1,5 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const normalizeFixtureResponse = `try:
@@ -35,7 +35,7 @@ if [ "$1" = pr ] && [ "$2" = view ]; then
 fi
 if [ "$1" = issue ] && [ "$2" = view ]; then
   if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi
-  if [ -f ${JSON.stringify(join(root, '.evidence/issue-body'))} ]; then cat ${JSON.stringify(join(root, '.evidence/issue-body'))}; else cat ${JSON.stringify(join(root, 'issue-body'))}; fi; exit
+  cat ${JSON.stringify(join(root, 'issue-body'))}; exit
 fi
 if [ "$1" = api ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
 if [ "$1" = pr ] && [ "$2" = comment ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
@@ -117,7 +117,7 @@ test("current input probe tracks acceptance without executing or charging a revi
   const probe = () => spawnSync("bash", ["scripts/review/run-review.sh", "--local", "--identity"], { cwd: root, env: { ...fixture.env(), FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude" }, encoding: "utf8" });
   const first = probe();
   expect(first.status).toBe(0);
-  writeFileSync(join(root, ".evidence/issue-body"), "Acceptance: current required behavior changed.\n");
+  writeFileSync(join(root, "issue-body"), "Acceptance: current required behavior changed.\n");
   const changed = probe();
   expect(changed.status).toBe(0);
   expect(JSON.parse(changed.stdout).cache_key).not.toBe(JSON.parse(first.stdout).cache_key);
@@ -188,7 +188,7 @@ test.each(["binary", "mode"])("%s-only sensitive changes route and execute one r
   git("add", "."); git("commit", "-qm", "control baseline");
   git("update-ref", "refs/remotes/origin/main", "HEAD");
   if (kind === "binary") writeFileSync(join(root, "scripts/review/change.sh"), Buffer.from([0,3,4]));
-  else { chmodSync(join(root, "scripts/review/change.sh"), 0o755); git("add", "scripts/review/change.sh"); }
+  else git("update-index", "--chmod=+x", "scripts/review/change.sh");
   if (kind === "binary") git("add", "scripts/review/change.sh");
   git("commit", "-qm", "control metadata change");
   expect(JSON.parse(run().stdout).domains).toEqual({ correctness: "pass", "workflow-security": "pass" });

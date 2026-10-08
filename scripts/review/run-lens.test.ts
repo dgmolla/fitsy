@@ -1,4 +1,3 @@
-import { installFixtureHarness, prepareTrustedFixture, fixtureGit } from "./trusted-fixture";
 import { validationOrderCases } from "./validation-order-cases";
 import { roundRunnerCases, normalizeFixtureResponse, runPrFixture } from "./round-runner-cases";
 import { executionFailureCases } from "./execution-failure-cases";
@@ -14,7 +13,6 @@ let root: string;
 let guard: string;
 let guardHead: string;
 let inheritedGit: NodeJS.ProcessEnv;
-// Disposable reviewer fixtures own their source, database and timing context.
 function isolatedEnv() {
   return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|POSTGRES_)/.test(key)));
 }
@@ -22,8 +20,9 @@ let calls: string;
 let cache: string;
 let env: NodeJS.ProcessEnv;
 const verdict = JSON.stringify({ lens: "correctness", verdict: "pass", findings: [] });
-const git = (...args: string[]) => fixtureGit(root, isolatedEnv(), args);
-
+function git(...args: string[]) {
+  return execFileSync("git", args, { cwd: root, env: isolatedEnv(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+}
 function run(model = "fixture-model", provider = "claude", lens = "correctness") {
   return spawnSync("bash", ["scripts/review/run-lens.sh", "--local", lens], {
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: model, FITSY_REVIEW_PROVIDER: provider }, timeout: 15000,
@@ -48,20 +47,19 @@ beforeEach(() => {
   mkdirSync(join(root, "scripts/verify"), { recursive: true });
   mkdirSync(join(root, ".claude/lenses"), { recursive: true });
   mkdirSync(join(root, "bin"));
-  for (const name of ["run-lens.sh", "run-review.sh", "review-round.py", "review-domains.py", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs", "provenance.py"]) {
+  for (const name of ["run-lens.sh", "run-review.sh", "review-round.py", "review-domains.py", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
     cpSync(join(source, "scripts/review", name), join(root, "scripts/review", name));
   }
   for (const name of ["run.mjs", "impact-plan.mjs", "receipt-cache.mjs"]) cpSync(join(source, "scripts/verify", name), join(root, "scripts/verify", name));
   symlinkSync(join(source, "node_modules"), join(root, "node_modules"));
   writeFileSync(join(root, "scripts/verify/registry.yml"), "checks: []\n");
+  writeFileSync(join(root, ".gitignore"), "node_modules\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nbin/gh-fixture\npr-body\npr-diff\nrace-head\n");
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
-  writeFileSync(join(root, ".gitignore"), "node_modules\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nold-poller/\nbin/gh-fixture\npr-body\npr-diff\nrace-head\n");
   writeFileSync(join(root, "REVIEW.md"), "Review rules\n");
   writeFileSync(join(root, ".claude/lenses/correctness.md"), "Review correctness.\n");
-  writeFileSync(join(root, ".claude/lenses/workflow-security.md"), "Review shipping controls.\n");
   writeFileSync(join(root, "app.ts"), "export const value = 1;\n");
   writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: In flight\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
-  writeFileSync(join(root, "bin/gh"), `#!/bin/sh\nif [ "$1" = issue ] && [ "$2" = view ]; then\n  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi\n  if [ -f ${JSON.stringify(join(root, '.evidence/issue-body'))} ]; then cat ${JSON.stringify(join(root, '.evidence/issue-body'))}; else cat ${JSON.stringify(join(root, 'issue-body'))}; fi; exit\nfi\nexit 1\n`, { mode: 0o755 });
+  writeFileSync(join(root, "bin/gh"), `#!/bin/sh\nif [ "$1" = issue ] && [ "$2" = view ]; then\n  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi\n  cat ${JSON.stringify(join(root, 'issue-body'))}; exit\nfi\nexit 1\n`, { mode: 0o755 });
   const cli = `#!/usr/bin/env python3
 import json,os,pathlib,sys,time
 if '--version' in sys.argv:
@@ -85,11 +83,9 @@ sys.exit(int(pathlib.Path(${JSON.stringify(join(root, 'exit'))}).read_text()))
   for (const name of ["claude", "codex"]) writeFileSync(join(root, "bin", name), cli, { mode: 0o755 });
   env = { ...isolatedEnv(), PATH: join(root, "bin") + ":" + process.env.PATH, FITSY_REVIEW_CACHE: cache, FITSY_REVIEW_HOME: join(root, "old-poller"), FITSY_REVIEW_BUDGET_HOME: join(root, "budgets"),
     REVIEW_TEST_CALLS: calls, REVIEW_TEST_VERDICT: verdict };
-  prepareTrustedFixture(root, source);
   git("init", "-q"); git("config", "user.name", "Review fixture"); git("config", "user.email", "fixture@example.test");
   git("add", "."); git("commit", "-qm", "base"); git("update-ref", "refs/remotes/origin/main", "HEAD");
   writeFileSync(join(root, "app.ts"), "export const value = 2;\n"); git("add", "app.ts"); git("commit", "-qm", "change");
-  installFixtureHarness(root, isolatedEnv(), join(root, "old-poller"));
   mkdirSync(join(root, ".evidence/delivery"), { recursive: true });
   writeFileSync(join(root, ".evidence/delivery/binding.json"), JSON.stringify({ issue: 355 }));
 });
@@ -119,14 +115,14 @@ test("local caller runs independent CLI, records identity, and reuses only match
 test("bound acceptance reaches reviewer and changes only when its substance changes", () => {
   expect(run().status).toBe(0);
   expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Acceptance: changed behavior is verified.");
-  writeFileSync(join(root, ".evidence/issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
+  writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
   expect(run().status).toBe(0);
   expect(runPr().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
-  writeFileSync(join(root, ".evidence/issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior also handles retries.\n</details>\n");
+  writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior also handles retries.\n</details>\n");
   expect(run().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
-  writeFileSync(join(root, ".evidence/issue-body"), `Goal: Preserve the required release behavior.\n${"Background context. ".repeat(400)}\n<details>\nAcceptance: later requirement must be seen.\nStatus: required release state must persist.\n</details>\n`);
+  writeFileSync(join(root, "issue-body"), `Goal: Preserve the required release behavior.\n${"Background context. ".repeat(400)}\n<details>\nAcceptance: later requirement must be seen.\nStatus: required release state must persist.\n</details>\n`);
   expect(run().status).toBe(0);
   expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Acceptance: later requirement must be seen.");
   expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Status: required release state must persist.");
@@ -157,7 +153,6 @@ test("nonzero external execution cannot publish or cache a partial pass", () => 
 });
 test("invalid reviewer response is incomplete and cannot publish advisory success", () => {
   writeFileSync(join(root, ".claude/lenses/docs-sanity.md"), "Review documentation.\n");
-  git("add", ".claude/lenses/docs-sanity.md"); git("commit", "-qm", "docs review fixture");
   writeFileSync(join(root, "verdict"), '{"lens":"docs-sanity","verdict":"pass"');
   const local = run("fixture-model", "claude", "docs-sanity");
   expect(local.status).toBe(1);
@@ -178,7 +173,6 @@ test("provider identity separates cache entries", () => {
 });
 test("advisory docs findings remain visible without blocking the caller", () => {
   writeFileSync(join(root, ".claude/lenses/docs-sanity.md"), "Review documentation.\n");
-  git("add", ".claude/lenses/docs-sanity.md"); git("commit", "-qm", "docs review fixture");
   const advisory = { lens: "docs-sanity", verdict: "fail", findings: [{ severity: "CONFIRMED", priority: "P2", impact: "Setup instruction fails for new developers", file: "docs/setup.md", line: 3, summary: "Missing command", scenario: "Setup command fails", fix: "Use the existing command" }] };
   writeFileSync(join(root, "verdict"), JSON.stringify(advisory));
   const result = run("fixture-model", "claude", "docs-sanity");
@@ -271,7 +265,6 @@ test("stale source-bound receipt and changed review inputs cannot reuse a pass",
   writeFileSync(join(root, ".evidence/review-dispositions/correctness.json"), JSON.stringify(disposition));
   expect(run().stderr).toContain("failed or stale required test");
   writeFileSync(join(root, "REVIEW.md"), "Changed review policy\n");
-  git("add", "REVIEW.md"); git("commit", "-qm", "changed review policy");
   expect(run().status).toBe(1);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
 });
@@ -290,9 +283,10 @@ test("new head rejects an old disposition even with a current required-test rece
   expect(result.stderr).toContain("stale disposition identity");
 });
 deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git });
+
 policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: () => env, setEnv: value => { env = value; },
   calls: () => calls, cache: () => cache, run, runPr, git, isolatedEnv });
-executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr, git });
+executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr });
 
 roundRunnerCases({ root: () => root, calls: () => calls, env: () => env, run, runPr, git });
 
