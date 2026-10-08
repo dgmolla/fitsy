@@ -1,3 +1,4 @@
+import { installFixtureHarness } from "./trusted-fixture";
 import { validationOrderCases } from "./validation-order-cases";
 import { roundRunnerCases, normalizeFixtureResponse, runPrFixture } from "./round-runner-cases";
 import { executionFailureCases } from "./execution-failure-cases";
@@ -48,7 +49,7 @@ beforeEach(() => {
   mkdirSync(join(root, "scripts/verify"), { recursive: true });
   mkdirSync(join(root, ".claude/lenses"), { recursive: true });
   mkdirSync(join(root, "bin"));
-  for (const name of ["run-lens.sh", "run-review.sh", "review-round.py", "review-domains.py", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
+  for (const name of ["run-lens.sh", "run-review.sh", "review-round.py", "review-domains.py", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs", "provenance.py"]) {
     cpSync(join(source, "scripts/review", name), join(root, "scripts/review", name));
   }
   for (const name of ["run.mjs", "impact-plan.mjs", "receipt-cache.mjs"]) cpSync(join(source, "scripts/verify", name), join(root, "scripts/verify", name));
@@ -88,6 +89,7 @@ sys.exit(int(pathlib.Path(${JSON.stringify(join(root, 'exit'))}).read_text()))
   git("init", "-q"); git("config", "user.name", "Review fixture"); git("config", "user.email", "fixture@example.test");
   git("add", "."); git("commit", "-qm", "base"); git("update-ref", "refs/remotes/origin/main", "HEAD");
   writeFileSync(join(root, "app.ts"), "export const value = 2;\n"); git("add", "app.ts"); git("commit", "-qm", "change");
+  installFixtureHarness(root, isolatedEnv(), join(root, "old-poller"));
   mkdirSync(join(root, ".evidence/delivery"), { recursive: true });
   writeFileSync(join(root, ".evidence/delivery/binding.json"), JSON.stringify({ issue: 355 }));
 });
@@ -288,7 +290,6 @@ test("new head rejects an old disposition even with a current required-test rece
   expect(result.stderr).toContain("stale disposition identity");
 });
 deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git });
-
 policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: () => env, setEnv: value => { env = value; },
   calls: () => calls, cache: () => cache, run, runPr, git, isolatedEnv });
 executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr, git });

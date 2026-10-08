@@ -31,6 +31,14 @@ Finish implementation and commit the frozen candidate before review.
 Select meaningful focused reproduction and regression tests for the changed behavior.
 Run applicable structural, lint, type and safety checks plus that focused selection before independent review.
 The local review entry point enforces these cheap checks before any reviewer execution.
+Local review delegates to the coordinator-installed committed-main harness under `~/.fitsy-review/trusted-local`, outside the candidate checkout.
+The external runner verifies its artifacts against the immutable current main snapshot before executing reviewer controls.
+The operator's existing `install-poller.sh --refresh-runtime` procedure installs that snapshot and retains its private provenance key outside candidates.
+Cached verdicts require a signature binding their bytes, candidate head, base, cache identity and trusted harness SHA before any successful status projection.
+Missing, forged or stale provenance fails closed and preserves the existing raw verdict and budget attempts.
+Repository writers and the host administrator remain trusted; this protects the canonical runner against candidate-owned review control changes, not a hostile local administrator.
+For a bootstrap changing these controls, independently evaluate the frozen change with committed-main artifacts outside the candidate and retain compatibility limitations.
+The coordinator deliberately installs independently reviewed controls; a worker never installs its candidate as trusted or treats bootstrap review as final acceptance when identities differ.
 
 ```sh
 node scripts/verify/focused-tests.mjs --set scripts/verify/impact-plan.test.ts

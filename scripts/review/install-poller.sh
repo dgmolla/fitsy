@@ -32,6 +32,23 @@ trap 'rm -f "$STAGED_SCRIPT"' EXIT
 git -C "$REVIEW_HOME/repo" show origin/main:scripts/review/poller.sh > "$STAGED_SCRIPT"
 chmod 700 "$STAGED_SCRIPT"
 mv "$STAGED_SCRIPT" "$SCRIPT"
+# The same committed main snapshot supplies local verdict creation outside candidates.
+# Installation remains an operator action; workers never promote their branch here.
+TRUSTED_STAGE="$(mktemp -d "$REVIEW_HOME/.trusted-local.XXXXXX")"
+trap 'rm -f "$STAGED_SCRIPT"; rm -rf "$TRUSTED_STAGE"' EXIT
+git -C "$REVIEW_HOME/repo" archive origin/main scripts/review scripts/delivery/phase-events.mjs scripts/verify/risk-tiers.yml scripts/verify/receipt-cache.mjs scripts/verify/impact-plan.mjs REVIEW.md .claude/lenses | tar -x -C "$TRUSTED_STAGE"
+# Retain the key across refreshes so valid unchanged receipts remain verifiable.
+if [ ! -f "$REVIEW_HOME/provenance-private.pem" ]; then
+  umask 077
+  openssl genrsa -out "$REVIEW_HOME/provenance-private.pem" 3072
+fi
+openssl rsa -in "$REVIEW_HOME/provenance-private.pem" -pubout -out "$REVIEW_HOME/provenance-public.pem"
+if [ -d "$REVIEW_HOME/trusted-local" ]; then
+  TRUSTED_HISTORY="$(mktemp -d "$REVIEW_HOME/.trusted-local.previous.XXXXXX")"
+  rmdir "$TRUSTED_HISTORY"
+  mv "$REVIEW_HOME/trusted-local" "$TRUSTED_HISTORY"
+fi
+mv "$TRUSTED_STAGE" "$REVIEW_HOME/trusted-local"
 # Preserve existing provider/settings when upgrading a legacy mutable-clone
 # launcher. Refresh does not start an absent or disabled service.
 REFRESH="${1:-}"

@@ -44,6 +44,10 @@ test("installed launcher retains trusted main outside a PR-mutated clone", () =>
     git("init", "-q"); git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.test");
     mkdirSync(join(repo, "scripts/review"), { recursive: true });
     writeFileSync(join(repo, "scripts/review/poller.sh"), "#!/bin/bash\necho trusted-launcher\n");
+    for (const name of ["scripts/delivery/phase-events.mjs", "scripts/verify/risk-tiers.yml", "scripts/verify/receipt-cache.mjs", "scripts/verify/impact-plan.mjs", "REVIEW.md", ".claude/lenses/correctness.md"]) {
+      mkdirSync(join(repo, name, ".."), { recursive: true }); writeFileSync(join(repo, name), "fixture trusted artifact\n");
+    }
+
     git("add", "."); git("commit", "-qm", "main"); git("branch", "-M", "main"); git("remote", "add", "origin", repo);
     writeFileSync(join(bin, "launchctl"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     execFileSync("bash", [join(__dirname, "install-poller.sh")], { env, stdio: "pipe" });
