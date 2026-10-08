@@ -11,7 +11,7 @@ const cli = (...args: string[]) => spawnSync(process.execPath, ['scripts/verify/
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'fitsy-focused-'));
   mkdirSync(join(root, 'scripts/verify'), { recursive: true });
-  for (const name of ['focused-tests.mjs', 'impact-plan.mjs', 'python-focused.py', 'local-db.mjs']) copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
+  for (const name of ['focused-tests.mjs', 'impact-plan.mjs', 'python-focused.py', 'local-db.mjs', 'node-focused-reporter.mjs']) copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
   symlinkSync(join(source, 'node_modules'), join(root, 'node_modules'));
   writeFileSync(join(root, '.gitignore'), 'node_modules\n.evidence/\n');
   writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts'] }));
@@ -58,4 +58,15 @@ test.each([undefined, 'postgresql://external.example/prod'])('direct API focused
   const result = spawnSync(process.execPath, ['scripts/verify/focused-tests.mjs'], { cwd: root, encoding: 'utf8', env: { ...env, FITSY_VERIFY_OWNED_DB: '', POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url } });
   expect(result.status).toBe(1);
   expect(result.stderr).not.toContain('must not execute');
+});
+
+test.each(['', "import { test } from 'node:test'; test('skip', {skip:true}, () => {});\n", "import { describe } from 'node:test'; describe('empty suite', () => {});\n"])('focused Node selection rejects empty or unexecuted cases', content => {
+  writeFileSync(join(root, 'scripts/fixture.test.mjs'), content);
+  expect(cli('--set', 'scripts/fixture.test.mjs').status).toBe(0);
+  const result = cli(); expect(result.status).toBe(1); expect(result.stdout).toContain('executed no passing test cases');
+});
+test('focused Node selection retains counted real passing cases', () => {
+  writeFileSync(join(root, 'scripts/fixture.test.mjs'), "import { test } from 'node:test'; test('real outcome', () => {});\n");
+  expect(cli('--set', 'scripts/fixture.test.mjs').status).toBe(0);
+  expect(cli().status).toBe(0);
 });

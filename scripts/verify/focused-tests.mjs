@@ -37,12 +37,16 @@ async function run(paths, pattern) {
       assertOwnedDatabase();
     }
     const report = join(repository, `.evidence/verify/focused-history/jest-${Date.now()}-${process.pid}.json`);
-    const commands = key === 'node' ? [[process.execPath, ['--test', ...tests]]]
+    const commands = key === 'node' ? [[process.execPath, ['--test', '--test-reporter=' + join(repository, 'scripts/verify/node-focused-reporter.mjs'), '--test-reporter-destination=' + report, ...tests]]]
       : key === 'python' ? tests.map((test, index) => ['python3', [join(repository, 'scripts/verify/python-focused.py'), test, report + '.' + index]])
       : [['npm', ['test', '--workspace=' + key, '--', '--runInBand', '--runTestsByPath', ...tests.map(test => resolve(repository, test)), '--json', '--outputFile=' + report, ...(pattern === undefined ? [] : ['--testNamePattern=' + pattern])]]];
     for (const [command, args] of commands) {
       const result = spawnSync(command, args, { cwd: repository, stdio: ['ignore', 'inherit', 'inherit'], env: key === 'python' ? { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } : process.env });
       if (result.error || result.status !== 0) throw new Error(`focused tests failed: ${tests.join(', ')}`);
+      if (key === 'node') {
+        const outcomes = JSON.parse(readFileSync(report, 'utf8').trim().split('\n').at(-1));
+        if (!(outcomes.passing_tests > 0)) throw new Error('focused Node selection executed no passing test cases');
+      }
       if (key === 'python') {
         const outcomes = JSON.parse(readFileSync(args.at(-1), 'utf8'));
         if (!outcomes.success || !(outcomes.tests_run > outcomes.skipped)) throw new Error('focused Python selection executed no passing tests');
