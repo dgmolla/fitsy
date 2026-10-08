@@ -225,4 +225,12 @@ test('PR clone canonically reuses local focused context without a second reviewe
   expect(runPr().status).toBe(0);
   expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1);
 });
+
+test('default Codex poller reuses source-bound Claude worker profile without another round', () => {
+  const root = f.root(), calls = f.calls();
+  expect(f.run().status).toBe(0);
+  const env = { ...f.env(), FITSY_REVIEW_TRUSTED_HARNESS_SHA: f.git('rev-parse', 'origin/main').trim() };
+  expect(runPrFixture(root, env, 'correctness', 'Delivery-Issue: #355\n', 'codex').status).toBe(0);
+  expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1);
+});
 }

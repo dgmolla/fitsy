@@ -166,7 +166,8 @@ The runner supports `claude` and `codex` adapters; choose an authenticated provi
 Set `FITSY_REVIEW_MODEL` to the intended model; Codex defaults to `gpt-6-sol`, while explicitly selected Claude installations retain their tier-based defaults.
 Use a model appropriate to the change's risk and keep the required lenses unchanged.
 Export `FITSY_REVIEW_PROVIDER`, `FITSY_REVIEW_MODEL`, and `FITSY_REVIEW_REASONING_EFFORT` in the shipping shell before review.
-Keep those exports for full verification, pre-push and PR projection so admission resolves the same source-bound provider/model receipt.
+Keep those exports for full verification, pre-push and direct PR projection so admission resolves the same source-bound provider/model receipt.
+The trusted poller service resolves its projection profile from private canonical head/base-bound review evidence; it does not inherit worker shell exports.
 A supported Claude profile uses the same persistent-export contract.
 Provider-specific credentials remain in the provider's normal local credential store and must never enter the repository or evidence.
 The adapters run an independent review process with read-only tools, disabled integrations and bounded execution time.

@@ -193,6 +193,26 @@ done
 TIER="$(echo "$CHANGED" | node scripts/review/tier.mjs)"
 BUDGET_ARGS+=(--risk "$TIER")
 BUDGET_ARGS+=(--required)
+# LaunchAgent shells cannot inherit the worker's exports. Resolve only from
+# private canonical evidence bound to the requested head/base, never PR metadata.
+PROFILE_RECEIPT="$CACHE_DIR/focused-$HEAD_SHA-$BASE_SHA.json"
+if [ "$TARGET" != --local ] && [ -n "${FITSY_REVIEW_TRUSTED_HARNESS_SHA:-}" ] && [ -f "$PROFILE_RECEIPT" ]; then
+  PROFILE="$(python3 -I - "$PROFILE_RECEIPT" "$HEAD_SHA" "$BASE_SHA" <<'PYPROFILE'
+import json,sys
+saved=json.load(open(sys.argv[1]))
+assert saved['head_sha']==sys.argv[2] and saved['base_sha']==sys.argv[3]
+p=saved['reviewer_profile']
+assert p['provider'] in ('codex','claude') and isinstance(p['model'],str) and p['model'] and len(p['model'])<200
+assert not any(c in p['model'] for c in '\n\r\t')
+assert p.get('reasoning_effort') in (None,'low','medium','high','xhigh','provider-default')
+assert p['provider']!='codex' or p.get('reasoning_effort') in ('low','medium','high','xhigh')
+print(json.dumps(p))
+PYPROFILE
+)" || { echo '[run-review] source-bound projection profile unavailable' >&2; exit 1; }
+  export FITSY_REVIEW_PROVIDER="$(printf '%s' "$PROFILE" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["provider"])')"
+  export FITSY_REVIEW_MODEL="$(printf '%s' "$PROFILE" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["model"])')"
+  export FITSY_REVIEW_REASONING_EFFORT="$(printf '%s' "$PROFILE" | python3 -I -c 'import json,sys;print(json.load(sys.stdin).get("reasoning_effort") or "high")')"
+fi
 PROVIDER="${FITSY_REVIEW_PROVIDER:-codex}"
 incomplete_status() {
   [ "$TARGET" != --local ] || return 0
@@ -356,7 +376,7 @@ fi
 
 require_stable_candidate
 if [ "$TARGET" = --local ]; then
-  python3 -I - "$CACHE_DIR/focused-$HEAD_SHA-$BASE_SHA.json" "$HEAD_SHA" "$BASE_SHA" "$FOCUSED_CONTEXT" <<'PYSAVEFOCUSED'
+  python3 -I - "$CACHE_DIR/focused-$HEAD_SHA-$BASE_SHA.json" "$HEAD_SHA" "$BASE_SHA" "$FOCUSED_CONTEXT" "$CACHE_IDENTITY" <<'PYSAVEFOCUSED'
 import json,os,pathlib,sys,tempfile,uuid
 path=pathlib.Path(sys.argv[1])
 if path.exists():
@@ -364,7 +384,7 @@ if path.exists():
  old=json.loads(path.read_text())
  if old.get("context")!=json.loads(sys.argv[4]): os.replace(path,history/(path.name+"."+str(uuid.uuid4())))
 fd,tmp=tempfile.mkstemp(dir=path.parent,prefix=path.name+'.')
-with os.fdopen(fd,'w') as file: json.dump({'head_sha':sys.argv[2],'base_sha':sys.argv[3],'context':json.loads(sys.argv[4])},file)
+with os.fdopen(fd,'w') as file: json.dump({'head_sha':sys.argv[2],'base_sha':sys.argv[3],'context':json.loads(sys.argv[4]),'reviewer_profile':{key:json.loads(sys.argv[5]).get(key) for key in ('provider','model','reasoning_effort')}},file)
 os.replace(tmp,path)
 PYSAVEFOCUSED
 fi
