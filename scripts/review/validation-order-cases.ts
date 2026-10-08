@@ -1,9 +1,10 @@
+import { shippingSessionCases } from './shipping-session-cases';
 import { runPrFixture } from './round-runner-cases';
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-interface Fixture {
+export interface Fixture {
   root(): string;
   env(): NodeJS.ProcessEnv;
   setEnv(value: NodeJS.ProcessEnv): void;
@@ -15,7 +16,7 @@ interface Fixture {
 export function validationOrderCases(f: Fixture) {
   function setup() {
     const root = f.root();
-    for (const name of ['receipt-cache.mjs', 'review-admission.sh']) copyFileSync(join(f.source, 'scripts/verify', name), join(root, 'scripts/verify', name));
+    for (const name of ['receipt-cache.mjs', 'review-admission.sh', 'shipping-session.mjs']) copyFileSync(join(f.source, 'scripts/verify', name), join(root, 'scripts/verify', name));
     writeFileSync(join(root, '.claude/lenses/workflow-security.md'), 'Review shipping controls.\n');
     writeFileSync(join(root, 'scripts/verify/registry.yml'), `checks:
   - name: structural
@@ -63,6 +64,7 @@ export function validationOrderCases(f: Fixture) {
   const order = () => readFileSync(join(f.root(), '.evidence/order'), 'utf8');
   const callCount = () => existsSync(f.calls()) ? readFileSync(f.calls(), 'utf8').trim().split('\n').length : 0;
 
+  shippingSessionCases(f, setup, verify, order, callCount, passingVerdict, failingVerdict);
   test('persistently exported Claude profile runs fresh review before normal full verification', () => {
     setup();
     f.setEnv({ ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' });

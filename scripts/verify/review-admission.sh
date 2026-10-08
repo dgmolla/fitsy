@@ -2,6 +2,14 @@
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
+if [ -n "${FITSY_SHIPPING_SOCKET-}${FITSY_SHIPPING_TOKEN-}" ]; then
+  node scripts/verify/shipping-session.mjs --check || {
+    echo '{"name":"review-admission","status":"fail","summary":"active shipping candidate is invalid","fix":"restart cheap checks and fresh review on frozen source"}'
+    exit 1
+  }
+  echo '{"name":"review-admission","status":"pass","summary":"same live shipping execution still owns current candidate admission","fix":""}'
+  exit 0
+fi
 fail() {
   echo '{"name":"review-admission","status":"fail","summary":"fresh source-bound independent review did not pass","fix":"repair cheap checks or confirmed findings and rerun on frozen source; raw attempts are retained"}'
   exit 1

@@ -41,9 +41,9 @@ npm run verify -- --stage=cheap
 export FITSY_REVIEW_PROVIDER=codex
 export FITSY_REVIEW_MODEL=gpt-6-sol
 export FITSY_REVIEW_REASONING_EFFORT=high
-# The runner completes cheap checks, then fresh independent review, then
-# every required full suite and production build on the stable candidate:
-npm run verify -- --layer=0-3 --reuse
+# One live execution owns the fresh review through acceptance and pre-push.
+# For a non-mobile candidate, the push hook runs all required local layers:
+node scripts/verify/shipping-session.mjs -- git push -u origin HEAD
 ```
 
 Replace the example focused test with the tests that reproduce and protect this issue's behavior.
@@ -56,6 +56,11 @@ Admission checks out the committed candidate in a disposable task-owned director
 It invokes one canonical `scripts/review/run-review.sh` round covering all required domains, using a new execution directory and the original issue budget.
 A candidate-generated cache cannot satisfy admission.
 No candidate controls are installed as trusted, and no saved verdict is projected into a new shipping pass.
+The shipping-session entry point keeps the successful admission in its running process while its child commands complete acceptance and pre-push.
+Each entry point checks that live owner, committed head, base, source/configuration identity and focused selection before proceeding.
+There is no persisted pass or review-result lookup; closing the process removes admission.
+Direct verification outside a session still requires fresh admission.
+Standalone final-candidate simulator acceptance fails closed and must run inside the shipping session.
 Failed, incomplete or invalidated fresh reviews stop full acceptance.
 Raw verdicts, logs and failure attempts remain under `.evidence/review-admission/`.
 Source changes during admission require another cheap stage and fresh review.
@@ -67,7 +72,11 @@ Source drift fails the run, and later source changes require current cheap check
 Reuse unchanged receipts only through the canonical runners; review-budget attempts and raw failure history never reset.
 Verification retains each stage attempt under `.evidence/verify/attempts/` and archives retired test receipts under `check-cache/history/`.
 UI signoff and development walkthroughs precede final UI acceptance.
-The publishable `final-candidate` simulator entry point requires fresh canonical review before native journeys.
+The publishable `final-candidate` simulator entry point requires the live shipping session's fresh canonical review before native journeys.
+Keep native journeys, finish, full verification and push in one session command, using `set -e` or `&&` to stop after a failed acceptance command.
+For example, prepare a task-owned ignored shell script containing the affected final-candidate simulator commands, `finish`, `npm run verify -- --layer=0-3 --reuse`, then `git push -u origin HEAD`, and run `node scripts/verify/shipping-session.mjs -- bash <task-script>`.
+Development walkthroughs and UI signoff happen before that session.
+Source or focused-selection drift invalidates the live admission and requires a new bounded cheap/review execution; it never silently starts another reviewer.
 Apple account, legal and submission approvals, required product-flow status, pre-push, PR, main Verify, Deploy and actual release acceptance remain required.
 
 The pre-push hook runs layers 0-3, including the required source-bound production build, plus size/domain checks.
@@ -95,6 +104,7 @@ Both configurations use local simulator signing with Xcode's application entitle
 node scripts/verify/product-flow.mjs --plan
 export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
+# Inside the task-owned shipping script, invoked through shipping-session.mjs:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name> --mode=final-candidate
 # Capture affected primary and recovery paths through Mobile MCP, then:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json

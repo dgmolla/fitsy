@@ -259,7 +259,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertIn('proceed directly to required acceptance and authorized shipping', prompt)
         self.assertIn('Retain every historical attempt and required review domain', prompt)
         self.assertNotIn('plus at most one durable', prompt)
-        self.assertLess(prompt.index('--stage=cheap'), prompt.index('then use canonical fresh shipping review'))
+        self.assertLess(prompt.index('--stage=cheap'), prompt.index('then use scripts/verify/shipping-session.mjs'))
 
     def test_worker_exports_configured_native_completion_budget(self):
         config = json.loads(self.config.read_text()); config['worker_timeout_seconds'] = 5400

@@ -1543,32 +1543,22 @@ test('required assertion and app identity preflight fails before walkthrough', (
   assert.equal(flowFailureReason(result, [config, assertion], recorder, 'welcome'), null);
 });
 
-test('final simulator admission runs cheap checks before review while development preserves UI signoff', async () => {
+test('final simulator admission requires the live reviewed shipping execution while development preserves UI signoff', async () => {
   const { admitFinalCandidate } = await import('./product-flow.mjs');
   const calls = [];
   const command = (cmd, args) => calls.push([cmd, args]);
   admitFinalCandidate(runSelection(['fixture', '--mode=final-candidate']).mode, command);
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0][0], process.execPath); assert.ok(calls[0][1].includes('--stage=cheap'));
-  assert.deepEqual(calls[1], ['bash', ['scripts/verify/review-admission.sh']]);
+  assert.deepEqual(calls, [[process.execPath, ['scripts/verify/shipping-session.mjs', '--check']]]);
   calls.length = 0;
   admitFinalCandidate(runSelection(['fixture', '--mode=development']).mode, command);
   assert.equal(calls.length, 0);
 });
-test('failed current cheap checks stop direct final simulator admission before review or native acceptance', async () => {
+test('expired or changed shipping execution stops final simulator admission before native acceptance', async () => {
   const { admitFinalCandidate } = await import('./product-flow.mjs');
   const calls = [];
-  assert.throws(() => admitFinalCandidate(runSelection(['fixture', '--mode=final-candidate']).mode, (cmd, args) => {
-    calls.push([cmd, args]); throw new Error('focused selection failed');
-  }), /focused selection failed/);
-  assert.equal(calls.length, 1); assert.ok(calls[0][1].includes('--stage=cheap'));
-});
-
-test('final candidate admission preserves canonical reviewer timeout and closeout', async () => {
-  const { admitFinalCandidate } = await import('./product-flow.mjs');
-  const calls = [];
-  admitFinalCandidate({ publishable: true }, (command, args, options) => calls.push({ command, args, options }));
-  assert.equal(calls.length, 2);
-  assert.equal(calls[1].command, 'bash');
-  assert.equal(calls[1].options?.timeout, undefined);
+  assert.throws(() => admitFinalCandidate({ publishable: true }, (cmd, args) => {
+    calls.push([cmd, args]); throw new Error('shipping session is no longer active');
+  }), /shipping session is no longer active/);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0][1], ['scripts/verify/shipping-session.mjs', '--check']);
 });
