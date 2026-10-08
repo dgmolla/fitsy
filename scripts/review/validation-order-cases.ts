@@ -117,6 +117,19 @@ export function validationOrderCases(f: Fixture) {
     expect(verify().status).toBe(1);
     expect(order()).not.toContain('full');
   });
+  test.each(['--only=test', '--layer=2'])('explicit acceptance reuses unchanged focused and review receipts: %s', flag => {
+    setup();
+    const registry = join(f.root(), 'scripts/verify/registry.yml');
+    writeFileSync(registry, readFileSync(registry, 'utf8').replace('  - name: focused-tests\n', '  - name: focused-tests\n    cache: true\n'));
+    f.git('add', '-A'); f.git('commit', '-qm', 'cached focused fixture');
+    expect(f.run().status).toBe(0);
+    expect(verify([flag, '--reuse']).status).toBe(0);
+    const repeated = verify([flag, '--reuse']);
+    expect(repeated.status).toBe(0);
+    expect(repeated.stdout).toContain('"cached":true');
+    expect(callCount()).toBe(1);
+    expect(order().split('\n').filter(line => line === 'full')).toHaveLength(1);
+  });
   test('uncommitted candidate stops local review before cheap checks or budget admission', () => {
     setup(); writeFileSync(join(f.root(), 'app.ts'), 'export const value = 9;\n');
     const result = f.run(); expect(result.status).toBe(1); expect(result.stderr).toContain('not frozen and committed');

@@ -117,7 +117,9 @@ if (runsCtx === 'local' && acceptance.length) {
   if (gate) {
     for (let c of registry.checks.filter(c => !c.standalone && c.name !== 'review-admission' && !isAcceptance(c) && (!c.runs || c.runs.includes(runsCtx)))) {
       if (c.name === 'focused-tests') c = { ...c, selection: frozenSelection, database: focusedDatabase() };
-      if (!selected.some(existing => existing.name === c.name)) selected.push({ ...c, missing: !existsSync(join(VERIFY_DIR, c.script)) });
+      if (!selected.some(existing => existing.name === c.name)) {
+        selected.push(existsSync(join(VERIFY_DIR, c.script)) ? c : { ...c, missing: true });
+      }
     }
     selected.push({ ...gate, missing: !existsSync(join(VERIFY_DIR, gate.script)) });
   }
