@@ -138,6 +138,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -170,13 +171,17 @@ jobs:
               --body "OTA skipped: ${REASON}. Do NOT eas update until resolved." || true
           fi
           echo "OTA unsafe: ${REASON}"
+      - name: Install release dependencies without release credentials
+        if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'true'
+        run: |
+          npm ci
+          npx --yes eas-cli@18 --version
       - name: Publish OTA
         if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'true'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm ci
           bash scripts/deploy/ota.sh "$(git log -1 --format='%h: %s')"
       - name: No EXPO_TOKEN — remind to publish locally
         if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'false'

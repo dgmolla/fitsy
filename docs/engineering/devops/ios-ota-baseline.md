@@ -62,6 +62,9 @@ A waiting publisher sees the durable hold after acquiring the lease and skips pu
 Interrupted or uncertain EAS mutations retain the lease and fail closed.
 For an abandoned lease, first verify the owner process and EAS mutation are finished and reconcile the served production group, then delete that exact lease ref before retrying recovery.
 The release job needs contents-write permission only to coordinate this trusted main release lease.
+Checkout does not persist its credentials; dependency installation and EAS CLI preparation run without release secrets.
+Only the release helper receives the GitHub write token, and its Git fetch uses an ephemeral GitHub credential helper.
+EAS subprocesses do not inherit that repository write token.
 Before republishing, the rollback helper creates or reuses an open `release: iOS OTA rollback hold` issue.
 CI and local publication read all open release issues through the GitHub API and skip publication while a hold exists.
 Failure to read or establish the hold fails closed.

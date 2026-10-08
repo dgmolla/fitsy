@@ -109,11 +109,11 @@ test('actual production helper prevents unsafe publication and exports only veri
   writeFileSync(holdState, '[[]]');
   const leaseState = join(root, '.git/lease-state');
   installGithubFixture(bin, holdState, leaseState);
-  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nenv:exec) bash -c "$4" ;;\nupdate) [ ! -f '${log}.fail' ] || exit 7; printf '[{"group":"test-group"}]' ;;\nupdate:list) printf '{"currentPage":[{"group":"test-group"}]}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
+  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\n[ -z "\${GH_TOKEN:-}" ] && [ -z "\${GITHUB_TOKEN:-}" ] || exit 88\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nenv:exec) bash -c "$4" ;;\nupdate) [ ! -f '${log}.fail' ] || exit 7; printf '[{"group":"test-group"}]' ;;\nupdate:list) printf '{"currentPage":[{"group":"test-group"}]}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
   const run = (google: string) => spawnSync('bash', ['scripts/deploy/ota.sh', 'test release'], {
     cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}`,
-      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: google },
+      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: google, GH_TOKEN: 'fixture-repository-token', GITHUB_TOKEN: 'fixture-repository-token' },
   });
   expect(run('different.apps.googleusercontent.com').status).toBe(1);
   expect(readFileSync(log, 'utf8')).not.toContain('update --platform');
@@ -236,7 +236,7 @@ test('actual rollback helper keeps a dual-platform prior group on iOS only', () 
   writeFileSync(holdState, '[[]]');
   const leaseState = join(root, '.git/lease-state');
   installGithubFixture(bin, holdState, leaseState);
-  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nupdate:list) if [ -f '${log}.recovered' ]; then printf '{"currentPage":[{"group":"recovery-group"}]}'; exit 0; fi; printf '{"currentPage":[{"group":"current","message":"now"},{"group":"prior","message":"before","platforms":"android, ios"}]}' ;;\nupdate:republish) [ -f '${leaseState}' ]; [ "$(cat '${leaseState}')" != "$(printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')" ]; touch '${log}.recovered'; printf '[{"group":"recovery-group"}]' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
+  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\n[ -z "\${GH_TOKEN:-}" ] && [ -z "\${GITHUB_TOKEN:-}" ] || exit 88\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nupdate:list) if [ -f '${log}.recovered' ]; then printf '{"currentPage":[{"group":"recovery-group"}]}'; exit 0; fi; printf '{"currentPage":[{"group":"current","message":"now"},{"group":"prior","message":"before","platforms":"android, ios"}]}' ;;\nupdate:republish) [ -f '${leaseState}' ]; [ "$(cat '${leaseState}')" != "$(printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')" ]; touch '${log}.recovered'; printf '[{"group":"recovery-group"}]' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
   writeFileSync(leaseState, 'a'.repeat(40));
   writeFileSync(join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
   const result = spawnSync('bash', ['scripts/deploy/rollback.sh', 'mobile', 'prior'], {

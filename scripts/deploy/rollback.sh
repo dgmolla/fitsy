@@ -38,7 +38,7 @@ case "$SURFACE" in
     EXPLICIT="${2:-}"
     mkdir -p ../../.evidence/ota
     UPDATE_LIST="$(mktemp ../../.evidence/ota/rollback-list.XXXXXX)"
-    npx eas-cli@18 update:list --branch production --limit 5 --json --non-interactive > "$UPDATE_LIST"
+    env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:list --branch production --limit 5 --json --non-interactive > "$UPDATE_LIST"
     python3 -c 'import json,sys
 u=json.load(open(sys.argv[1]))
 u=u.get("currentPage") or u.get("updates") or u
@@ -58,9 +58,9 @@ for i,x in enumerate(u):
     RESULT="$(mktemp ../../.evidence/ota/rollback-result.XXXXXX)"
     # Match the verified production release surface; no Android binary is
     # established by the iOS compatibility receipt.
-    npx eas-cli@18 update:republish --platform ios --group "$PREV_GROUP" --message "rollback: republish $PREV_GROUP" --json --non-interactive > "$RESULT"
+    env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:republish --platform ios --group "$PREV_GROUP" --message "rollback: republish $PREV_GROUP" --json --non-interactive > "$RESULT"
     RECOVERY_GROUP="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));d=d[0] if isinstance(d,list) else d;print(d["group"])' "$RESULT")"
-    LATEST="$(npx eas-cli@18 update:list --branch production --limit 1 --json --non-interactive | python3 -c 'import json,sys;d=json.load(sys.stdin);u=d.get("currentPage") or d.get("updates") or d;print(u[0]["group"])')"
+    LATEST="$(env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:list --branch production --limit 1 --json --non-interactive | python3 -c 'import json,sys;d=json.load(sys.stdin);u=d.get("currentPage") or d.get("updates") or d;print(u[0]["group"])')"
     [ "$LATEST" = "$RECOVERY_GROUP" ] || { echo 'Recovery group is not newest; release lease retained' >&2; exit 1; }
     OTA_MUTATION_IN_PROGRESS=0
     echo "republished group $PREV_GROUP; verify, then open an incident issue"
