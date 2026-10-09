@@ -47,15 +47,15 @@ for raw in sorted(set(filter(None,paths))):
 print(hash.hexdigest())
 PYSOURCE
 }
-# The fresh mode is used by shipping admission after restoring immutable main
-# controls, matching the authenticated poller's existing overlay contract.
+# Authenticate the immutable main overlay independently of whether a new
+# reviewer may execute. Explicit cached-only validation still checks this overlay.
 if [ "$FRESH_EXECUTION" = 1 ]; then
-  [ "$CACHED_ONLY" = 0 ] || { echo '[run-review] fresh execution cannot consume cached-only evidence' >&2; exit 1; }
   python3 -I - "$(git rev-parse origin/main)" <<'PYOVERLAY'
 import subprocess,sys
 paths=['scripts/review','scripts/delivery/phase-events.mjs','scripts/verify/risk-tiers.yml','REVIEW.md','.claude/lenses']
 def git(*args): return subprocess.check_output(['git',*args])
-changed=git('diff','--name-only','HEAD','-z').split(b'\0')+git('ls-files','--others','--exclude-standard','-z').split(b'\0')
+if git('ls-files','--others','--exclude-standard','-z'): sys.exit('trusted overlay requires frozen candidate source without untracked inputs')
+changed=git('diff','--name-only','HEAD','-z').split(b'\0')
 for raw in filter(None,changed):
     path=raw.decode()
     if not any(path==allowed or path.startswith(allowed+'/') for allowed in paths): sys.exit('fresh execution requires frozen candidate source')
@@ -277,7 +277,7 @@ if [ -f "$COMPLETED_AUTH" ]; then
   fi
   # Project only the validated original result through the existing domain gates.
   # No provider, new cache or persisted admission is created on this path.
-elif [ "$FRESH_EXECUTION" != 1 ] && [ -f "$CACHE_FILE" ]; then
+elif { [ "$FRESH_EXECUTION" != 1 ] || [ "$CACHED_ONLY" = 1 ]; } && [ -f "$CACHE_FILE" ]; then
   TELEMETRY_CACHE_HIT=1
   echo "[run-review] cache hit ($KEY)" >&2
   RESULT_JSON="$(python3 -I scripts/review/review-round.py "$DOMAINS" < "$CACHE_FILE")"
