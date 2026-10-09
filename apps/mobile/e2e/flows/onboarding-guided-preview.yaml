@@ -87,6 +87,7 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: meal-target-calories
 # Let the native keyboard and initial selection settle before automated typing.
 - waitForAnimationToEnd
+- eraseText: 100
 - inputText: "600"
 - assertVisible: "600"
 - copyTextFrom:
@@ -95,6 +96,7 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - tapOn:
     id: meal-target-protein
 - waitForAnimationToEnd
+- eraseText: 100
 - inputText: "0"
 - assertVisible: "0"
 - copyTextFrom:
@@ -111,6 +113,7 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - tapOn:
     id: meal-target-carbs
 - waitForAnimationToEnd
+- eraseText: 100
 - inputText: "0"
 - assertVisible: "0"
 - copyTextFrom:
@@ -119,11 +122,62 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - tapOn:
     id: meal-target-fat
 - waitForAnimationToEnd
+- eraseText: 100
 - inputText: "0"
 - assertVisible: "0"
 - copyTextFrom:
     id: meal-target-fat
 - assertTrue: ${maestro.copiedText === '0'}
+# Blur fat without navigating, then prove the all-zero draft cannot be saved.
+- tapOn:
+    text: "Fat / meal"
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${maestro.copiedText === '0'}
+- assertVisible:
+    id: welcome-continue
+    enabled: false
+- tapOn:
+    id: welcome-continue
+- assertVisible: "What works.*for one meal.*"
+- assertNotVisible: "A little context.*A better choice.*"
+# Recover using calories, then explicitly retain zero protein with positive energy.
+- tapOn:
+    id: meal-target-calories
+- eraseText: 100
+- inputText: "600"
+- tapOn:
+    id: meal-target-protein
+- eraseText: 100
+- inputText: "0"
+- tapOn:
+    id: meal-target-carbs
+- eraseText: 100
+- inputText: "105"
+- tapOn:
+    id: meal-target-fat
+- eraseText: 100
+- inputText: "20"
+- tapOn:
+    text: "Fat / meal"
+- copyTextFrom:
+    id: meal-target-protein
+- evalScript: ${output.targetProtein = Number(maestro.copiedText)}
+- assertTrue: ${output.targetProtein === 0}
+- copyTextFrom:
+    id: meal-target-carbs
+- evalScript: ${output.targetCarbs = Number(maestro.copiedText)}
+- assertTrue: ${output.targetCarbs === 105}
+- copyTextFrom:
+    id: meal-target-fat
+- evalScript: ${output.targetFat = Number(maestro.copiedText)}
+- assertTrue: ${output.targetFat === 20}
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${Number(maestro.copiedText) === 600 && Number(maestro.copiedText) === 4 * output.targetProtein + 4 * output.targetCarbs + 9 * output.targetFat}
+- assertVisible:
+    id: welcome-continue
+    enabled: true
 - tapOn:
     id: welcome-continue
 - assertVisible: "A little context.*A better choice.*"
@@ -246,13 +300,22 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: preview-edit-targets
 - assertVisible: "600"
 - tapOn: "Increase Calories"
-- assertVisible: "650"
+- assertVisible: "654"
+- copyTextFrom:
+    text: "Protein grams"
+- assertTrue: ${maestro.copiedText === '0'}
+- copyTextFrom:
+    text: "Carbs grams"
+- assertTrue: ${maestro.copiedText === '114'}
+- copyTextFrom:
+    text: "Fat grams"
+- assertTrue: ${maestro.copiedText === '22'}
 - tapOn:
     id: meal-filter-apply
 - extendedWaitUntil:
-    visible: "650"
+    visible: "654"
     timeout: 30000
-- assertVisible: "650"
+- assertVisible: "654"
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -278,8 +341,9 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - assertNotVisible:
     id: discovery-loading
 # The oracle uses the same manual area, craving and active target as the app.
-# Zero-valued macros are inactive, so this checks a useful calorie-only search.
-- evalScript: ${output.contextResponse = http.get('https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&q=pizza&calories=650&protein=0&carbs=0&fat=0')}
+# This complete target has zero protein, an inactive protein search constraint.
+# Its carbs/fat constraints remain active and its calories equal their energy.
+- evalScript: ${output.contextResponse = http.get('https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&q=pizza&calories=654&protein=0&carbs=114&fat=22')}
 - assertTrue: ${output.contextResponse.status === 200}
 - evalScript: ${output.context = json(output.contextResponse.body)}
 - assertTrue: ${output.context.data.length === 3 && output.context.data.every(function (r) { return r.bestMatch && r.bestMatch.calories > 0 && r.bestMatch.matchScore !== null; })}
@@ -370,7 +434,7 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     id: signup-selected-restaurant
 - assertVisible: ${output.context.data[2].name}
 - assertVisible: "pizza · DTLA"
-- assertVisible: "650 kcal · 0g protein · 0g carbs · 0g fat"
+- assertVisible: "654 kcal · 0g protein · 114g carbs · 22g fat"
 - tapOn: "Dev login"
 - extendedWaitUntil:
     visible:
@@ -404,7 +468,7 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - assertVisible:
     id: preview-guide
 - assertVisible: "pizza"
-- assertVisible: "650"
+- assertVisible: "654"
 - scrollUntilVisible:
     element:
       id: locked-value-cta
@@ -435,7 +499,7 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
     visible:
       id: discovery-hero
     timeout: 30000
-- assertVisible: "650"
+- assertVisible: "654"
 - assertVisible: "0g"
 - assertVisible: "pizza"
 # A legacy preview link must reach the welcome preview, without a paywall loop.
@@ -468,7 +532,7 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
             id: preview-guide
           timeout: 30000
 - assertVisible: "pizza"
-- assertVisible: "650"
+- assertVisible: "654"
 
 - assertNotVisible:
     id: coachmark-next
@@ -559,7 +623,7 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - assertNotVisible:
     id: discovery-loading
 - assertVisible: "pizza"
-- assertVisible: "650"
+- assertVisible: "654"
 - copyTextFrom:
     id: discovery-hero
 - assertTrue: ${maestro.copiedText.includes(output.context.data[0].name) && maestro.copiedText.includes(output.context.data[0].bestMatch.name)}
