@@ -140,6 +140,7 @@ BUDGET_LEDGER="$BUDGET_HOME/issue-$ISSUE.jsonl"
 [ -n "$HEAD_BRANCH" ] || { echo '[run-review] review requires a named candidate branch' >&2; exit 1; }
 CANDIDATE="$(git rev-list --max-parents=0 HEAD | sort):$HEAD_BRANCH"
 BUDGET_ARGS=(--ledger "$BUDGET_LEDGER" --candidate "$CANDIDATE" --issue "$ISSUE" --optional-import-ledger "$REPO_ROOT/.evidence/review-budget.jsonl")
+if [ -n "${FITSY_REVIEW_EXECUTION_POLICY:-}" ]; then BUDGET_ARGS+=(--execution-policy "$FITSY_REVIEW_EXECUTION_POLICY"); fi
 for LEGACY_LEDGER in "${FITSY_REVIEW_BUDGET_LEDGER:-}" "${FITSY_REVIEW_BUDGET_IMPORT_LEDGER:-}"; do
   [ -z "$LEGACY_LEDGER" ] || BUDGET_ARGS+=(--import-ledger "$LEGACY_LEDGER")
 done
@@ -281,7 +282,7 @@ else
   REQUESTED_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-}"
   if [ -z "$REQUESTED_TIMEOUT" ] || [ "${FITSY_REVIEW_TIMEOUT_FLOOR:-0}" = 1 ]; then
     WINDOW_STATUS="$(python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" --lens "$LENS")" || { echo '[run-review] capacity preflight failed' >&2; incomplete_status budget; exit 1; }
-    REQUIRED_TIMEOUT="$(printf '%s' "$WINDOW_STATUS" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["required_window_seconds"])')"
+    REQUIRED_TIMEOUT="$(printf '%s' "$WINDOW_STATUS" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); print(max(1,int(min(d["remaining_seconds"],d["prospective_remaining_seconds"])-5)) if "prospective_remaining_seconds" in d else d["required_window_seconds"])')"
     if [ -n "$REQUESTED_TIMEOUT" ] && ! [[ "$REQUESTED_TIMEOUT" =~ ^[0-9]+$ ]]; then echo '[run-review] invalid timeout' >&2; incomplete_status configuration; exit 1; fi
     if [ -z "$REQUESTED_TIMEOUT" ] || [ "$REQUESTED_TIMEOUT" -lt "$REQUIRED_TIMEOUT" ]; then REQUESTED_TIMEOUT="$REQUIRED_TIMEOUT"; fi
   fi

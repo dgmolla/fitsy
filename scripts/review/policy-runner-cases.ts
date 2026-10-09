@@ -115,6 +115,20 @@ test("insufficient capacity refuses execution before a short deadline is charged
   expect(existsSync(calls)).toBe(false);
   expect(readdirSync(cache).filter(name => name.endsWith(".json"))).toHaveLength(0);
 });
+test("prospective policy default requests the available bounded execution window", () => {
+  const directory = mkdtempSync(join(tmpdir(), "fitsy-private-review-policy-"));
+  const policy = join(directory, "policy.json");
+  const candidate = `${git("rev-list", "--max-parents=0", "HEAD").trim()}:${git("symbolic-ref", "--short", "HEAD").trim()}`;
+  writeFileSync(policy, JSON.stringify({ issue: 355, candidate, seconds: 300, baseline: {},
+    provenance: "https://github.com/dgmolla/fitsy/issues/355#issuecomment-123" }), { mode: 0o600 });
+  fixture.setEnv({ ...env, FITSY_REVIEW_EXECUTION_POLICY: policy });
+  try {
+    const result = run();
+    if (result.status !== 0) throw new Error(result.stderr);
+    expect(JSON.parse(result.stdout).reviewer.timeout_seconds).toBe(295);
+    expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
 test("default CLI deadline grows to the observed admission window", () => {
   const rows = [
     { event: "extension", attempt_id: "issue-extension", seconds: 900, issue: 355, risk: "medium", required: true },

@@ -235,6 +235,44 @@ def required_window(starts, finishes, lens):
     return max(NORMAL_REVIEW_SECONDS, observed), recent
 
 
+def prospective_policy(path, ledger, candidate, issue, events):
+    """Private operator policy narrows capacity; it never adds a grant."""
+    if path is None:
+        return None
+    path = path.resolve()
+    if (not path.is_file() or path.stat().st_uid != os.getuid()
+            or path.stat().st_mode & 0o077 or not candidate
+            or ledger.name != f"issue-{issue}.jsonl"):
+        raise ValueError("prospective policy requires private operator file and original issue ledger")
+    git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    check = subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"],
+                           env=git_env, capture_output=True, text=True)
+    if check.returncode == 0:
+        raise ValueError("prospective policy must be outside every Git checkout")
+    policy = json.loads(path.read_text())
+    if (set(policy) != {"issue", "candidate", "seconds", "baseline", "provenance"}
+            or policy["issue"] != issue or policy["candidate"] != candidate
+            or type(policy["seconds"]) is not int or not 1 <= policy["seconds"] <= 300
+            or not re.fullmatch(r"https://github.com/dgmolla/fitsy/issues/" + str(issue)
+                               + r"#issuecomment-[1-9][0-9]*", policy["provenance"])
+            or not isinstance(policy["baseline"], dict)):
+        raise ValueError("prospective policy identity/schema mismatch")
+    starts, finishes, total = usage(events)
+    for attempt, digest in policy["baseline"].items():
+        if attempt not in starts or attempt not in finishes:
+            raise ValueError("prospective baseline must contain completed original attempts")
+        raw = json.dumps([starts[attempt], finishes[attempt]], sort_keys=True).encode()
+        if hashlib.sha256(raw).hexdigest() != digest:
+            raise ValueError("prospective baseline history changed")
+    stopped = any(row.get("verdict") == "incomplete" or row.get("failure_kind") in ("timeout", "transient_provider", "interrupted", "authentication", "process_error", "invalid_output")
+                  for key, row in finishes.items() if key not in policy["baseline"])
+    spent = sum(row["elapsed_seconds"] for key, row in finishes.items()
+                if key not in policy["baseline"])
+    return {"prospective_stopped": stopped, "prospective_completed_seconds": spent,
+            "prospective_remaining_seconds": max(0, policy["seconds"] - spent - total["reserved_seconds"]),
+            "prospective_cap_seconds": policy["seconds"]}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit"))
@@ -251,6 +289,7 @@ def main():
     parser.add_argument("--required", action="store_true")
     parser.add_argument("--candidate")
     parser.add_argument("--issue", type=int)
+    parser.add_argument("--execution-policy", type=Path)
     parser.add_argument("--authorization-file", type=Path)
     parser.add_argument("--failure-kind", choices=FAILURE_KINDS)
     parser.add_argument("--outcome", choices=("pass", "fail", "interrupted"), default="interrupted")
@@ -275,6 +314,8 @@ def main():
                 raise ValueError("execution limit requires the original bound issue")
             if limit and args.action in ("grant-authorized", "extend", "bind-limit"):
                 raise ValueError("issue execution limit forbids top-ups or allowance resets")
+            if args.execution_policy and args.action == "grant-authorized":
+                raise ValueError("prospective policy forbids capacity grants")
             if args.action in ("grant-authorized", "bind-limit"):
                 # This is operator authorization, never inferred from reviewer output.
                 # Keep the approval manifest outside the branch being reviewed.
@@ -344,12 +385,16 @@ def main():
                     or total["unfinished_attempts"]):
                 print(json.dumps({"allowed": False, "reason": "issue execution limit exhausted or prior reservation unfinished", **total}))
                 return 1
+            policy = prospective_policy(args.execution_policy, args.ledger, args.candidate, args.issue, events)
+            if policy and args.action in ("begin", "extend", "grant-authorized"):
+                if total["unfinished_attempts"] or policy["prospective_stopped"] or args.action != "begin":
+                    raise ValueError("prospective policy forbids unfinished attempts, incomplete retries and capacity extensions")
             eligible = not limit and args.required and args.risk in ("medium", "high") and args.candidate and args.issue
             if args.action == "extend" and not eligible:
                 raise ValueError("extension requires bound normal/protected required review")
             needs_extension = args.action == "extend" or (args.action == "begin" and eligible
                 and 1 <= args.timeout_seconds <= 3600 and total["remaining_seconds"] < args.timeout_seconds + CLOSEOUT_SECONDS)
-            if needs_extension and total["extension_issue"] is None:
+            if needs_extension and policy is None and total["extension_issue"] is None:
                 if not eligible or total["unbounded_attempts"]:
                     raise ValueError("extension requires a bound normal/protected issue with incomplete required review and reconciled history")
                 append(handle, {"event": "extension", "attempt_id": "issue-extension", "at": utc(),
@@ -361,7 +406,7 @@ def main():
             failures = [e for e in finishes.values() if e.get("source_sha") == args.source_sha
                         and e.get("lens") == args.lens and e.get("outcome") == "fail"]
             latest = failures[-1] if failures else None
-            if (args.action == "begin" and eligible and total["recovery_issue"] is None
+            if (policy is None and args.action == "begin" and eligible and total["recovery_issue"] is None
                     and total["extension_issue"] is not None and total["authorized_grant_issue"] is None and not total["unfinished_attempts"]
                     and total["remaining_seconds"] < args.timeout_seconds + CLOSEOUT_SECONDS
                     and latest and latest.get("failure_kind") in ("timeout", "transient_provider")):
@@ -370,13 +415,16 @@ def main():
                 events = list(indexed(read_events(handle)).values())
                 starts, finishes, total = usage(events)
             result = {"allowed": True, "reason": "history accounted", "ledger": str(args.ledger.resolve()), **total}
+            if policy:
+                result.update(policy)
             if args.action == "status" and args.required and args.lens:
                 minimum, observed = required_window(starts, finishes, args.lens)
                 if limit:
                     minimum = min(minimum, limit["per_round_timeout_seconds_max"])
+                if policy:
+                    minimum = 1
                 result.update(required_window_seconds=minimum, recent_completed_seconds=observed,
-                              can_admit=total["remaining_seconds"] >= minimum + CLOSEOUT_SECONDS
-                              and (not limit or (total["bounded_executions_used"] < limit["new_rounds_max"] and not total["unfinished_attempts"])))
+                              can_admit=(not limit or (total["bounded_executions_used"] < limit["new_rounds_max"] and not total["unfinished_attempts"])) and (not policy or not policy["prospective_stopped"]) and min(total["remaining_seconds"], policy["prospective_remaining_seconds"] if policy else total["remaining_seconds"]) >= minimum + CLOSEOUT_SECONDS)
             if args.action == "begin":
                 if args.attempt_id in starts:
                     result.update(allowed=False, reason="duplicate attempt")
@@ -390,10 +438,13 @@ def main():
                         # automatic growth beyond the request or executor ceiling.
                         if type(previous) is int and previous > 0:
                             ceiling = min(ceiling, previous * 2, 3600)
-                    grant = min(ceiling, math.floor(total["remaining_seconds"] - CLOSEOUT_SECONDS))
+                    available = min(total["remaining_seconds"], policy["prospective_remaining_seconds"] if policy else total["remaining_seconds"])
+                    grant = min(ceiling, math.floor(available - CLOSEOUT_SECONDS))
                     minimum, observed = required_window(starts, finishes, args.lens) if args.required else (1, [])
                     if limit:
                         minimum = min(minimum, limit["per_round_timeout_seconds_max"])
+                    if policy:
+                        minimum = 1
                     result.update(required_window_seconds=minimum, recent_completed_seconds=observed)
                     if grant < minimum:
                         result.update(allowed=False, reason=f"insufficient review capacity: {grant}s available deadline, {minimum}s required from normal {NORMAL_REVIEW_SECONDS}s baseline and recent completed {args.lens} runtimes")
