@@ -26,7 +26,7 @@ it('quarantines an ownerless legacy target across accounts until explicit restor
   expect(await hasSavedMealTargets()).toBe(false);
   expect(onboardingEntry({ signedIn: true, purchasesReady: true, entitled: true,
     isLapsed: false, completed: true, declined: false, resume: null,
-    hasTargets: await hasSavedMealTargets(), access: 'hard', onboardingPreviewEntry: false,
+    hasTargets: await hasSavedMealTargets(), access: 'hard', onboardingPreviewEntry: false, paymentSignInContinuation: false, pendingMealClaim: false,
   })).toBe('/macro-setup');
   mockUserId = 'account-a';
   expect(await getMacroTargets()).toBeNull();
