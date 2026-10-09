@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+CONTROL_ROOT="$REPO_ROOT"
+REPO_ROOT="${FITSY_SHIPPING_ROOT:-$REPO_ROOT}"
 cd "$REPO_ROOT"
 if [ -n "${FITSY_SHIPPING_SOCKET-}${FITSY_SHIPPING_TOKEN-}" ]; then
   node scripts/verify/shipping-session.mjs --check || {
@@ -11,16 +13,29 @@ if [ -n "${FITSY_SHIPPING_SOCKET-}${FITSY_SHIPPING_TOKEN-}" ]; then
   exit 0
 fi
 fail() {
-  echo '{"name":"review-admission","status":"fail","summary":"fresh source-bound independent review did not pass","fix":"repair cheap checks or confirmed findings and rerun on frozen source; raw attempts are retained"}'
+  echo '{"name":"review-admission","status":"fail","summary":"source-bound independent review admission did not pass","fix":"repair cheap checks or confirmed findings and rerun on frozen source; raw attempts are retained"}'
   exit 1
 }
 [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
 HEAD_SHA="$(git rev-parse HEAD)"
 TRUSTED_REPO="${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/repo"
 BASE_SHA="$(git -C "$TRUSTED_REPO" rev-parse refs/remotes/origin/main)" || fail
-[ "$(git rev-parse origin/main)" = "$BASE_SHA" ] || fail
+ISSUE="$(python3 -I -c 'import json; print(json.load(open(".evidence/delivery/binding.json"))["issue"])')" || fail
+COMPLETED_AUTH="${FITSY_REVIEW_COMPLETED_HOME:-${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/completed}/issue-$ISSUE.json"
+if [ "$REPO_ROOT" != "$CONTROL_ROOT" ]; then
+  [ -f "$COMPLETED_AUTH" ] || fail
+  [ "$(git -C "$CONTROL_ROOT" rev-parse HEAD)" = "$BASE_SHA" ] || fail
+  [ -z "$(git -C "$CONTROL_ROOT" status --porcelain --untracked-files=all)" ] || fail
+fi
+if [ -f "$COMPLETED_AUTH" ]; then
+  COMPARE_SHA="$(python3 -I "$CONTROL_ROOT/scripts/review/review-budget.py" completed-context \
+    --ledger /dev/null --authorization-file "$COMPLETED_AUTH" --issue "$ISSUE" --source-sha "$HEAD_SHA")" || fail
+  [ "$(git rev-parse origin/main)" = "$COMPARE_SHA" ] || fail
+else
+  [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] || fail
+fi
 BRANCH="$(git symbolic-ref --quiet --short HEAD)"
-# No review receipt is reused. Direct admission also completes the cheap stage.
+# Direct admission completes cheap checks before validating independent evidence.
 node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
 [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
 mkdir -p .evidence/review-admission
@@ -53,6 +68,6 @@ REVIEW_CODE=0
   bash scripts/review/run-review.sh --local > "$ATTEMPT/result.json" 2> "$ATTEMPT/review.log") || REVIEW_CODE=$?
 cat "$ATTEMPT/review.log" >&2
 [ "$REVIEW_CODE" = 0 ] || fail
-[ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] && \
+[ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ "$(git rev-parse origin/main)" = "${COMPARE_SHA:-$BASE_SHA}" ] && \
   [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
-echo '{"name":"review-admission","status":"pass","summary":"fresh canonical exact-head independent review permits full acceptance","fix":""}'
+echo '{"name":"review-admission","status":"pass","summary":"validated exact-head independent review permits full acceptance","fix":""}'

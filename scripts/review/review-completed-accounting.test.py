@@ -1,3 +1,5 @@
+import os
+import shutil
 import hashlib
 import importlib.util
 import json
@@ -145,6 +147,318 @@ class CompletedAccounting(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.call()
         self.assertEqual(self.original, self.ledger.read_text())
+
+
+class CompletedAdmission(CompletedAccounting):
+    def setUp(self):
+        super().setUp()
+        self.repo = self.root / 'source'
+        self.repo.mkdir()
+        self.git('init', '-q')
+        self.git('config', 'user.email', 'fixture@example.test')
+        self.git('config', 'user.name', 'Fixture')
+        (self.repo / 'scripts/review').mkdir(parents=True)
+        (self.repo / 'scripts/review/control.py').write_text('old controls')
+        (self.repo / 'app.ts').write_text('original product')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'base')
+        base = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-qb', 'product')
+        (self.repo / 'app.ts').write_text('frozen product')
+        self.git('commit', '-qam', 'product')
+        source = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-qb', 'controls', base)
+        (self.repo / 'scripts/review/control.py').write_text('trusted correction')
+        self.git('commit', '-qam', 'controls')
+        control = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-q', 'product')
+        self.git('restore', '--source=' + control, '--staged', '--worktree', '--', 'scripts/review')
+        self.args.candidate_root = self.repo
+        self.args.source_sha = source
+        self.args.base_sha = base
+        self.args.control_sha = control
+        self.approval.update(source_sha=source, base_sha=base)
+        verdict = json.loads((self.root / 'verdict').read_text())
+        verdict.update(source_sha=source, base_sha=base)
+        self.replace_artifact('verdict', json.dumps(verdict))
+        self.replace_artifact('prompt', f'Review issue443 {source} against {base}, correctness danger-zone')
+        self.replace_artifact('stderr', 'model: gpt-6-sol\napproval: never\nsandbox: read-only\nreasoning effort: high\n')
+        execution = json.loads((self.root / 'execution').read_text())
+        execution.update(stdout_bytes=(self.root / 'verdict').stat().st_size,
+                         stderr_bytes=(self.root / 'stderr').stat().st_size)
+        self.replace_artifact('execution', json.dumps(execution))
+        self.save()
+
+    def replace_artifact(self, key, value):
+        (self.root / key).write_text(value)
+        self.approval['artifacts'][key]['sha256'] = sha(value.encode())
+
+    def git(self, *args):
+        return subprocess.check_output(['git', '-C', str(self.repo), *args]).decode().strip()
+
+    def call(self):
+        with self.ledger.open('a+') as handle:
+            return budget.admit_completed(handle, self.ledger, self.args, budget.read_events(handle))
+
+    # Accounting cases above remain tested through the original class.
+    def test_additive_idempotent_without_admission_or_limit_reset(self):
+        value = self.call()
+        self.assertEqual(value['domains'], {'correctness': 'pass', 'danger-zone': 'pass'})
+        self.assertAlmostEqual(value['accounting']['completed_seconds'], 16759.932041544147)
+        saved = self.ledger.read_bytes()
+        self.assertTrue(self.call()['accounting']['idempotent'])
+        self.assertEqual(saved, self.ledger.read_bytes())
+        self.assertFalse(list(self.root.glob('*.cache')))
+
+    def test_real_cli_accounts_without_changing_bound_limits(self):
+        # The accounting CLI has its own real-command regression above.
+        self.assertEqual(self.call()['verdict'], 'pass')
+
+    def test_supported_runner_consumes_raw_result_without_provider_or_cache(self):
+        # Exercise the actual entry point with fixture external boundaries only.
+        source_root = Path(__file__).resolve().parents[2]
+        self.git('checkout', '-qf', 'controls')
+        shutil.copytree(source_root / 'scripts/review', self.repo / 'scripts/review', dirs_exist_ok=True)
+        shutil.copytree(source_root / '.claude/lenses', self.repo / '.claude/lenses')
+        shutil.copyfile(source_root / 'REVIEW.md', self.repo / 'REVIEW.md')
+        (self.repo / 'scripts/verify').mkdir(parents=True)
+        shutil.copyfile(source_root / 'scripts/verify/risk-tiers.yml', self.repo / 'scripts/verify/risk-tiers.yml')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'trusted controls')
+        control = self.git('rev-parse', 'HEAD')
+        self.args.control_sha = control
+        self.git('checkout', '-qf', 'product')
+        self.git('restore', '--source=' + control, '--staged', '--worktree', '--',
+                 'scripts/review', '.claude/lenses', 'REVIEW.md', 'scripts/verify/risk-tiers.yml')
+        self.git('update-ref', 'refs/remotes/origin/main', control)
+        # Mandatory domain routing comes from the trusted tree, not the manifest.
+        (self.repo / '.evidence/delivery').mkdir(parents=True)
+        (self.repo / '.git/info/exclude').write_text('.evidence/\n')
+        (self.repo / '.evidence/delivery/binding.json').write_text('{"issue":443}')
+        brief = 'Frozen acceptance'
+        self.approval['acceptance_sha256'] = sha(brief.encode())
+        self.approval['candidate'] = self.git('rev-list', '--max-parents=0', 'HEAD') + ':product'
+        self.approval['domains'] = ['correctness']
+        verdict = json.loads((self.root / 'verdict').read_text())
+        verdict['domains'] = {'correctness': {'verdict': 'pass', 'findings': []}}
+        self.replace_artifact('verdict', json.dumps(verdict))
+        execution = json.loads((self.root / 'execution').read_text())
+        execution['stdout_bytes'] = (self.root / 'verdict').stat().st_size
+        self.replace_artifact('execution', json.dumps(execution))
+        auth_home = self.root / 'completed'
+        auth_home.mkdir()
+        self.args.authorization_file = auth_home / 'issue-443.json'
+        self.save()
+        tools = self.root / 'bin'
+        tools.mkdir()
+        for name, text in {'gh': '#!/bin/sh\nprintf "Frozen acceptance\\n"\n',
+                           'codex': '#!/bin/sh\n[ "$1" = --version ] || { echo unexpected-review >&2; exit 90; }\necho fixture-cli\n'}.items():
+            (tools / name).write_text(text)
+            (tools / name).chmod(0o700)
+        budget_home = self.root / 'budgets'
+        budget_home.mkdir()
+        shutil.copyfile(self.ledger, budget_home / 'issue-443.jsonl')
+        env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
+                   FITSY_REVIEW_FRESH_EXECUTION='1', FITSY_REVIEW_COMPLETED_HOME=str(auth_home),
+                   FITSY_REVIEW_BUDGET_HOME=str(budget_home), FITSY_REVIEW_CACHE=str(self.root / 'cache'),
+                   FITSY_GH_BIN=str(tools / 'gh'), FITSY_REVIEW_PROVIDER='codex',
+                   FITSY_REVIEW_MODEL='gpt-6-sol', FITSY_REVIEW_REASONING_EFFORT='high')
+        command = ['bash', 'scripts/review/run-review.sh', '--local']
+        result = subprocess.run(command, cwd=self.repo, env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['verdict'], 'pass')
+        self.assertFalse(list((self.root / 'cache').glob('*.json')))
+        saved = (budget_home / 'issue-443.jsonl').read_bytes()
+        result = subprocess.run(command, cwd=self.repo, env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(saved, (budget_home / 'issue-443.jsonl').read_bytes())
+        # The same original evidence reaches actual GitHub projection code.
+        (tools / 'gh').write_text("#!/usr/bin/env python3\nimport sys\na=sys.argv\n"
+            "if a[1]=='issue': print('Frozen acceptance')\n"
+            "elif a[1]=='pr':\n"
+            " field=a[a.index('--jq')+1]\n"
+            + f" print({{'.title':'Fixture','.body':'Delivery-Issue: #443', '.headRefOid':{self.args.source_sha!r}, '.baseRefOid':{control!r}, '.headRefName':'product'}}[field])\n"
+            + f"elif a[1]=='api':\n with open({str(self.root / 'statuses')!r},'a') as out: out.write(' '.join(a[2:])+'\\n')\n")
+        projected = subprocess.run(['bash', 'scripts/review/run-review.sh', '123', '--cached-only'],
+            cwd=self.repo, env=dict(env, FITSY_REVIEW_FRESH_EXECUTION='0'), capture_output=True, text=True)
+        self.assertEqual(projected.returncode, 0, projected.stderr)
+        statuses = (self.root / 'statuses').read_text()
+        self.assertIn('context=lens/correctness', statuses)
+        self.assertIn('context=review/round', statuses)
+        self.assertNotIn('state=failure', statuses)
+        self.assertFalse(list((self.root / 'cache').glob('*.json')))
+        probed = subprocess.run(['bash', 'scripts/review/run-review.sh', '123', '--identity'],
+            cwd=self.repo, env=dict(env, FITSY_REVIEW_FRESH_EXECUTION='0'), capture_output=True, text=True)
+        self.assertEqual(probed.returncode, 0, probed.stderr)
+        self.assertEqual(saved, (budget_home / 'issue-443.jsonl').read_bytes())
+        self.replace_artifact('verdict', '{}')
+        self.save()
+        result = subprocess.run(command, cwd=self.repo, env=env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('unexpected-review', result.stderr)
+        probed = subprocess.run(['bash', 'scripts/review/run-review.sh', '123', '--identity'],
+            cwd=self.repo, env=dict(env, FITSY_REVIEW_FRESH_EXECUTION='0'), capture_output=True, text=True)
+        self.assertNotEqual(probed.returncode, 0)
+        self.assertIn('state=error', (self.root / 'statuses').read_text())
+
+    def test_external_session_owns_native_gate_acceptance_hook_and_authority(self):
+        source = Path(__file__).resolve().parents[2]
+        product = self.root / 'session-product'
+        product.mkdir()
+        def git(*args, cwd=product):
+            return subprocess.check_output(['git', '-C', str(cwd), *args]).decode().strip()
+        git('init', '-qb', 'main')
+        git('config', 'user.email', 'fixture@example.test')
+        git('config', 'user.name', 'Fixture')
+        shutil.copytree(source / 'scripts/review', product / 'scripts/review')
+        shutil.copytree(source / 'scripts/sim', product / 'scripts/sim')
+        shutil.copytree(source / '.claude/lenses', product / '.claude/lenses')
+        (product / 'scripts/verify').mkdir(parents=True)
+        for name in ('run.mjs', 'impact-plan.mjs', 'receipt-cache.mjs', 'review-admission.sh',
+                     'shipping-session.mjs', 'risk-tiers.yml', 'product-flow.mjs', 'media-integration.mjs'):
+            shutil.copyfile(source / 'scripts/verify' / name, product / 'scripts/verify' / name)
+        (product / 'scripts/delivery').mkdir()
+        shutil.copyfile(source / 'scripts/delivery/phase-events.mjs', product / 'scripts/delivery/phase-events.mjs')
+        shutil.copyfile(source / 'REVIEW.md', product / 'REVIEW.md')
+        (product / '.gitignore').write_text('.evidence/\nnode_modules\n')
+        (product / 'app.ts').write_text('base product')
+        (product / 'package.json').write_text(json.dumps({'scripts': {'verify': 'node scripts/verify/run.mjs --layer=0-2'}}))
+        (product / 'scripts/verify/registry.yml').write_text("""checks:
+  - name: structural
+    script: cheap.sh
+    layer: 0
+    blocking: true
+  - name: review-admission
+    script: review-admission.sh
+    layer: 0
+    stage: acceptance
+    preflight: true
+    blocking: true
+  - name: test
+    script: full.sh
+    layer: 2
+    blocking: true
+""")
+        for name in ('cheap', 'full'):
+            (product / f'scripts/verify/{name}.sh').write_text(f'echo {name} >> .evidence/order\necho ' + "'{\"summary\":\"fixture acceptance\"}'\n")
+        for name in ('size-check', 'domain-check'):
+            (product / f'scripts/verify/{name}.sh').write_text('exit 2\n')
+        git('add', '.')
+        git('commit', '-qm', 'fixture trusted runtime')
+        base = git('rev-parse', 'HEAD')
+        git('update-ref', 'refs/remotes/origin/main', base)
+        home = self.root / 'session-home'
+        home.mkdir()
+        git('clone', '-q', str(product), str(home / 'repo'))
+        runtime = home / 'repo'
+        git('update-ref', 'refs/remotes/origin/main', base, cwd=runtime)
+        (runtime / 'node_modules').symlink_to(source / 'node_modules')
+        git('checkout', '-qb', 'frozen')
+        (product / 'app.ts').write_text('frozen product')
+        git('commit', '-qam', 'fixture product')
+        head = git('rev-parse', 'HEAD')
+        (product / 'node_modules').symlink_to(source / 'node_modules')
+        git('remote', 'add', 'origin', str(runtime))
+        (product / '.evidence').mkdir()
+        subprocess.check_call(['node', 'scripts/delivery/phase-events.mjs', 'bind', '--issue', '443'], cwd=product, stdout=subprocess.DEVNULL)
+        approval = dict(self.approval, source_sha=head, base_sha=base, domains=['correctness'],
+                        candidate=git('rev-list', '--max-parents=0', 'HEAD') + ':frozen',
+                        acceptance_sha256=sha(b'Frozen acceptance'))
+        auth_home = self.root / 'session-authority'
+        auth_home.mkdir()
+        # Synthetic artifacts establish only this isolated protocol regression.
+        raws = {'prompt': f'Review issue443 {head} against {base} correctness',
+                'stderr': 'model: gpt-6-sol\napproval: never\nsandbox: read-only\nreasoning effort: high\n',
+                'verdict': json.dumps(dict(source_sha=head, base_sha=base,
+                    domains={'correctness': {'verdict': 'pass', 'findings': []}}, summary='Fixture', limitations=[]))}
+        raws['execution'] = json.dumps(dict(kind='completed', returncode=0, elapsed_seconds=252.81189254205674,
+            stdout_bytes=len(raws['verdict'].encode()), stderr_bytes=len(raws['stderr'].encode())))
+        approval['artifacts'] = {}
+        for key, raw in raws.items():
+            path = auth_home / key
+            path.write_text(raw)
+            approval['artifacts'][key] = dict(path=str(path), sha256=sha(raw.encode()))
+        auth = auth_home / 'issue-443.json'
+        auth.write_text(json.dumps(approval))
+        auth.chmod(0o600)
+        tools = self.root / 'session-bin'
+        tools.mkdir()
+        for name, raw in {'gh': '#!/bin/sh\n[ "$1" = issue ] && { echo "Frozen acceptance"; exit 0; }\nexit 1\n',
+                          'codex': '#!/bin/sh\n[ "$1" = --version ] || { echo unexpected-review >&2; exit 90; }\necho fixture-cli\n'}.items():
+            (tools / name).write_text(raw)
+            (tools / name).chmod(0o700)
+        (tools / 'gh').write_text("#!/usr/bin/env python3\nimport json,sys\na=sys.argv\n"
+            "if a[1]=='issue': print('Frozen acceptance')\n"
+            "elif a[1]=='pr' and '--jq' in a: print('Delivery-Issue: #443')\n"
+            + f"elif a[1]=='pr': print(json.dumps(dict(headRefOid={head!r},baseRefName='main',headRepositoryOwner=dict(login='dgmolla'),state='OPEN',url='https://fixture.invalid/pr/443')))\n"
+            + f"elif a[1]=='api':\n with open({str(self.root / 'published')!r},'a') as out: out.write(sys.stdin.read()+'\\n')\n")
+        budgets = self.root / 'session-budgets'
+        budgets.mkdir()
+        shutil.copyfile(self.ledger, budgets / 'issue-443.jsonl')
+        env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
+            FITSY_REVIEW_HOME=str(home), FITSY_REVIEW_COMPLETED_HOME=str(auth_home),
+            FITSY_REVIEW_BUDGET_HOME=str(budgets), FITSY_REVIEW_PROVIDER='codex',
+            FITSY_REVIEW_MODEL='gpt-6-sol', FITSY_REVIEW_REASONING_EFFORT='high')
+        shutil.copyfile(source / '.githooks/pre-push', product / '.evidence/hook')
+        (product / '.evidence/native.mjs').write_text(
+            "import {admitFinalCandidate} from '../scripts/sim/product-flow.mjs';\n"
+            "admitFinalCandidate({publishable:true});\n")
+        command = ['node', str(runtime / 'scripts/verify/shipping-session.mjs'), '--root', str(product),
+                   '--', 'bash', '-c', 'set -e; node .evidence/native.mjs; npm run verify; bash .evidence/hook; FITSY_PRODUCT_ROOT="$PWD" node ' + str(runtime / 'scripts/sim/publish-product-flow.mjs') + ' 443']
+        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('full', (product / '.evidence/order').read_text())
+        self.assertNotIn('unexpected-review', result.stderr)
+        self.assertIn('not_applicable', result.stdout)
+        self.assertIn('product-flow/local', (self.root / 'published').read_text())
+        before = (budgets / 'issue-443.jsonl').read_bytes()
+        # Changing authorization during the owned session cannot admit acceptance.
+        drift = command[:-1] + ['echo " " >> ' + str(auth) + '; npm run verify']
+        result = subprocess.run(drift, env=env, capture_output=True, text=True, timeout=40)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(before, (budgets / 'issue-443.jsonl').read_bytes())
+
+    def test_product_worktree_or_index_drift_refused(self):
+        (self.repo / 'app.ts').write_text('changed after review')
+        with self.assertRaisesRegex(ValueError, 'frozen source'):
+            self.call()
+        self.git('add', 'app.ts')
+        (self.repo / 'app.ts').write_text('frozen product')
+        with self.assertRaisesRegex(ValueError, 'frozen source'):
+            self.call()
+        self.assertEqual(self.original, self.ledger.read_text())
+
+    def test_untracked_missing_source_and_wrong_controls_refused(self):
+        (self.repo / 'extra.ts').write_text('unreviewed')
+        with self.assertRaisesRegex(ValueError, 'frozen source'):
+            self.call()
+        (self.repo / 'extra.ts').unlink()
+        (self.repo / 'app.ts').unlink()
+        with self.assertRaisesRegex(ValueError, 'frozen source'):
+            self.call()
+        self.git('restore', 'app.ts')
+        (self.repo / 'scripts/review/control.py').write_text('candidate controls')
+        with self.assertRaisesRegex(ValueError, 'runtime controls'):
+            self.call()
+
+    def test_main_product_advance_invalidates_comparison(self):
+        self.git('checkout', '-qf', 'controls')
+        (self.repo / 'app.ts').write_text('new trusted product')
+        self.git('commit', '-qam', 'main product advance')
+        self.args.control_sha = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-qf', 'product')
+        with self.assertRaisesRegex(ValueError, 'changed product'):
+            self.call()
+
+    def test_raw_prompt_and_provider_identity_refused(self):
+        for key in ('prompt', 'stderr'):
+            original = (self.root / key).read_text()
+            self.replace_artifact(key, 'wrong context')
+            self.save()
+            with self.assertRaisesRegex(ValueError, 'raw execution/provider'):
+                self.call()
+            self.replace_artifact(key, original)
+            self.save()
 
 
 if __name__ == '__main__':

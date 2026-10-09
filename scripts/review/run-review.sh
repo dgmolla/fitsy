@@ -115,6 +115,13 @@ else
   ISSUE="$(printf '%s\n' "$BODY" | sed -nE 's/^Delivery-Issue: #([1-9][0-9]*)[[:space:]]*$/\1/p')"
 fi
 [[ "$ISSUE" =~ ^[1-9][0-9]*$ ]] || { echo '[run-review] timing gap: review budget requires one bound Delivery-Issue candidate' >&2; exit 1; }
+CONTROL_SHA="$(git rev-parse origin/main)"
+COMPLETED_AUTH="${FITSY_REVIEW_COMPLETED_HOME:-${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/completed}/issue-$ISSUE.json"
+if [ -f "$COMPLETED_AUTH" ]; then
+  BASE_SHA="$(python3 -I scripts/review/review-budget.py completed-context --ledger "$CACHE_DIR/unused" \
+    --authorization-file "$COMPLETED_AUTH" --issue "$ISSUE" --source-sha "$HEAD_SHA")" || exit 1
+  DIFF="$(git diff --abbrev=8 "$BASE_SHA...$HEAD_SHA" | python3 -I -c 'import re,sys; print(re.sub(r"(?m)^(@@ -[0-9]+(?:,[0-9]+)? \+[0-9]+(?:,[0-9]+)? @@).*$",r"\1",sys.stdin.read()),end="")')"
+fi
 # The bound issue supplies release intent, never reviewer instructions or proof.
 # Ignore changing task status so local and PR reviews reuse the same acceptance.
 if ! ISSUE_BRIEF="$("$GH_BIN" issue view "$ISSUE" --json body --jq .body 2>/dev/null)"; then
@@ -240,16 +247,37 @@ if ! IDENTITY="$(python3 -I scripts/review/execute-review.py --identity "$PROVID
 # deadlines stay in its provenance, not the semantic reviewer/cache identity.
 CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d.pop("timeout_seconds"); print(json.dumps(d,sort_keys=True))')"
 
+COMPLETED_IDENTITY=""
+if [ -f "$COMPLETED_AUTH" ]; then
+  COMPLETED_IDENTITY="$(python3 -I -c 'import hashlib,json,pathlib,sys; p=pathlib.Path(sys.argv[1]); raw=p.read_bytes(); d=json.loads(raw); h=hashlib.sha256(raw); [(h.update(k.encode()),h.update(pathlib.Path(v["path"]).read_bytes())) for k,v in sorted(d["artifacts"].items())]; print(h.hexdigest())' "$COMPLETED_AUTH")" || { incomplete_status completed_evidence; exit 1; }
+fi
 # Key on reviewed content and the bound release brief. PR title/body can change
 # without altering acceptance, while an issue acceptance edit must rerun review.
-KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" <(printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF") | shasum -a 256 | cut -d' ' -f1)"
+KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" <(printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF:$COMPLETED_IDENTITY") | shasum -a 256 | cut -d' ' -f1)"
 DIFF_SHA256="$(printf '%s' "$DIFF" | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
-if [ "$PROBE" = 1 ]; then
+if [ "$PROBE" = 1 ] && [ ! -f "$COMPLETED_AUTH" ]; then
   python3 -I -c 'import json,sys; print(json.dumps({"cache_key":sys.argv[1],"domains":sys.argv[2].split(),"head_sha":sys.argv[3]}))' "$KEY" "$DOMAINS" "$HEAD_SHA"
   exit 0
 fi
-if [ "$FRESH_EXECUTION" != 1 ] && [ -f "$CACHE_FILE" ]; then
+if [ -f "$COMPLETED_AUTH" ]; then
+  [ "$PROVIDER" = codex ] && [ "$MODEL" = gpt-6-sol ] && [ "${FITSY_REVIEW_REASONING_EFFORT:-high}" = high ] || {
+    echo '[run-review] completed reviewer profile does not match selected provider/model/effort' >&2; exit 1;
+  }
+  COMPLETED_ARGS=(--authorization-file "$COMPLETED_AUTH" --candidate-root "$REPO_ROOT"
+    --control-sha "$CONTROL_SHA" --source-sha "$HEAD_SHA" --base-sha "$BASE_SHA"
+    --acceptance-sha256 "$(printf '%s' "$ISSUE_BRIEF" | shasum -a 256 | cut -d' ' -f1)")
+  for DOMAIN in $DOMAINS; do COMPLETED_ARGS+=(--required-domain "$DOMAIN"); done
+  COMPLETED_ACTION=admit-completed
+  if [ "$PROBE" = 1 ]; then COMPLETED_ACTION=validate-completed; fi
+  RESULT_JSON="$(python3 -I scripts/review/review-budget.py "$COMPLETED_ACTION" "${BUDGET_ARGS[@]}" "${COMPLETED_ARGS[@]}")" || { incomplete_status completed_evidence; exit 1; }
+  if [ "$PROBE" = 1 ]; then
+    python3 -I -c 'import json,sys; print(json.dumps({"cache_key":sys.argv[1],"domains":sys.argv[2].split(),"head_sha":sys.argv[3]}))' "$KEY" "$DOMAINS" "$HEAD_SHA"
+    exit 0
+  fi
+  # Project only the validated original result through the existing domain gates.
+  # No provider, new cache or persisted admission is created on this path.
+elif [ "$FRESH_EXECUTION" != 1 ] && [ -f "$CACHE_FILE" ]; then
   TELEMETRY_CACHE_HIT=1
   echo "[run-review] cache hit ($KEY)" >&2
   RESULT_JSON="$(python3 -I scripts/review/review-round.py "$DOMAINS" < "$CACHE_FILE")"

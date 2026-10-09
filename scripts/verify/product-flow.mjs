@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { parseEnv } from 'node:util';
 const yaml = createRequire(import.meta.url)('js-yaml');
 
-export const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+export const root = resolve(process.env.FITSY_PRODUCT_ROOT || fileURLToPath(new URL('../..', import.meta.url)));
 // Explicit worktree identity must win over a surrounding Git hook's pointers.
 export const repoEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
 const git = (args, cwd = root) => execFileSync('git', args, { cwd, encoding: 'utf8', env: repoEnv() }).trim();

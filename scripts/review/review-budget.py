@@ -273,7 +273,7 @@ def prospective_policy(path, ledger, candidate, issue, events):
             "prospective_cap_seconds": policy["seconds"]}
 
 
-def account_completed(handle, ledger, args, events):
+def account_completed(handle, ledger, args, events, record=True):
     """Record an operator-attested execution, without granting admission or time.
 
     The operator attests raw artifact identity after independent inspection.
@@ -359,7 +359,7 @@ def account_completed(handle, ledger, args, events):
             or not number(approval["completed_seconds_stop_at"])
             or prior + seconds > approval["completed_seconds_stop_at"]):
         raise ValueError("completed accounting original history or authorized stop mismatch")
-    if not all(present):
+    if not all(present) and record:
         append(handle, {"event": "import", "at": utc(), "source": str(path),
                         "sha256": hashlib.sha256(raw).hexdigest(), "events": rows})
     return {"allowed": True, "reason": "completed execution accounted; shipping admission unchanged",
@@ -367,9 +367,68 @@ def account_completed(handle, ledger, args, events):
             **usage(list(indexed(read_events(handle)).values()))[2]}
 
 
+def completed_context(path):
+    """Read operator authority outside source control, never candidate policy."""
+    path = path.resolve()
+    if (not path.is_file() or path.stat().st_uid != os.getuid()
+            or path.stat().st_mode & 0o077):
+        raise ValueError("completed review requires private operator authority")
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    if subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"],
+                      env=env, capture_output=True).returncode == 0:
+        raise ValueError("completed review authority must be outside every checkout")
+    return json.loads(path.read_text())
+
+
+def admit_completed(handle, ledger, args, events):
+    """Consume original authorized evidence directly, without writing a pass cache."""
+    approval = completed_context(args.authorization_file)
+    root = args.candidate_root.resolve()
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    def git(*command):
+        return subprocess.check_output(["git", "-C", str(root), *command], env=env).decode().strip()
+    if git("rev-parse", "HEAD") != args.source_sha:
+        raise ValueError("completed review candidate head mismatch")
+    # Runtime may overlay only immutable current-main controls, as the existing
+    # authenticated poller does. All product files remain the frozen commit.
+    controls = ["scripts/review", "scripts/delivery/phase-events.mjs",
+                "scripts/verify/risk-tiers.yml", "REVIEW.md", ".claude/lenses"]
+    git("merge-base", "--is-ancestor", args.base_sha, args.source_sha)
+    git("merge-base", "--is-ancestor", args.base_sha, args.control_sha)
+    changed = git("diff", "--name-only", args.base_sha, args.control_sha).splitlines()
+    # A control-only trusted-main advance cannot expand the product comparison.
+    allowed = controls + ["scripts/verify/shipping-session.mjs", "scripts/verify/review-admission.sh",
+                          "scripts/verify/product-flow.mjs", "scripts/sim/publish-product-flow.mjs"]
+    if any(not any(name == path or name.startswith(path + "/") for path in allowed) for name in changed):
+        raise ValueError("trusted main changed product or unrelated inputs; frozen comparison invalid")
+    dirty = (git("diff", "HEAD", "--name-only").splitlines()
+             + git("diff", "--cached", "HEAD", "--name-only").splitlines())
+    untracked = git("ls-files", "--others", "--exclude-standard").splitlines()
+    if untracked or any(not any(name == path or name.startswith(path + "/") for path in controls) for name in dirty):
+        raise ValueError("completed review requires complete frozen source")
+    for command in [("diff", "--quiet", args.control_sha, "--", *controls),
+                    ("diff", "--cached", "--quiet", args.control_sha, "--", *controls)]:
+        if subprocess.run(["git", "-C", str(root), *command], env=env).returncode:
+            raise ValueError("completed review runtime controls mismatch")
+    prompt = Path(approval["artifacts"]["prompt"]["path"]).read_text()
+    trace = Path(approval["artifacts"]["stderr"]["path"]).read_text()
+    if (args.source_sha not in prompt or args.base_sha not in prompt
+            or f"issue{args.issue}" not in prompt
+            or any(domain not in prompt for domain in args.required_domain)
+            or "model: gpt-6-sol\n" not in trace or "sandbox: read-only\n" not in trace
+            or "approval: never\n" not in trace or "reasoning effort: high\n" not in trace):
+        raise ValueError("completed review raw execution/provider context mismatch")
+    accounting = account_completed(handle, ledger, args, events, record=getattr(args, "action", None) != "validate-completed")
+    return {"verdict": "pass", "domains": {domain: "pass" for domain in args.required_domain},
+            "findings": [], "accounting": accounting,
+            "reviewer": {key: approval[key] for key in ("provider", "model", "reasoning_effort")},
+            "evidence": {"authorization_sha256": hashlib.sha256(args.authorization_file.read_bytes()).hexdigest(),
+                         "artifacts": approval["artifacts"], "control_sha": args.control_sha}}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit", "account-completed"))
+    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit", "account-completed", "admit-completed", "validate-completed", "completed-context"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
     parser.add_argument("--optional-import-ledger", action="append", default=[])
@@ -384,6 +443,8 @@ def main():
     parser.add_argument("--candidate")
     parser.add_argument("--issue", type=int)
     parser.add_argument("--base-sha")
+    parser.add_argument("--candidate-root", type=Path)
+    parser.add_argument("--control-sha")
     parser.add_argument("--acceptance-sha256")
     parser.add_argument("--required-domain", action="append", default=[])
     parser.add_argument("--execution-policy", type=Path)
@@ -392,6 +453,16 @@ def main():
     parser.add_argument("--outcome", choices=("pass", "fail", "interrupted"), default="interrupted")
     parser.add_argument("--verdict", choices=("pass", "fail", "incomplete"))
     args = parser.parse_args()
+    if args.action == "completed-context":
+        try:
+            value = completed_context(args.authorization_file)
+            if value["issue"] != args.issue or value["source_sha"] != args.source_sha:
+                raise ValueError("completed review context issue/source mismatch")
+            print(value["base_sha"])
+            return 0
+        except (ValueError, OSError, KeyError) as error:
+            print(str(error), file=__import__("sys").stderr)
+            return 1
     args.ledger.parent.mkdir(parents=True, exist_ok=True)
     try:
         if args.candidate is not None:
@@ -409,6 +480,9 @@ def main():
             limit = total["execution_limit"]
             if limit and args.issue != limit["issue"]:
                 raise ValueError("execution limit requires the original bound issue")
+            if args.action in ("admit-completed", "validate-completed"):
+                print(json.dumps(admit_completed(handle, args.ledger, args, events)))
+                return 0
             if args.action == "account-completed":
                 print(json.dumps(account_completed(handle, args.ledger, args, events)))
                 return 0
