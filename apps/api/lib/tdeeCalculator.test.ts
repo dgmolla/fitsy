@@ -97,6 +97,13 @@ test('fallback profiles and supported extremes stay within 40 g per meal without
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn() },
 }));
+jest.mock('react-native-url-polyfill/auto', () => ({}));
+jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn() }));
+jest.mock('@supabase/supabase-js', () => {
+  process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
+  return { createClient: () => ({ auth: {} }) };
+});
 import { calculateMacros, dailyToPerMealMacros } from '../../mobile/lib/macroCalculator';
 import { calculateAge } from '../../../packages/shared/src/utils/dateUtils';
 const goals = ['build_muscle', 'lose_fat', 'performance', 'maintain'] as const;
