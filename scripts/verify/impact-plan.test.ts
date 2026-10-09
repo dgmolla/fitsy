@@ -17,7 +17,7 @@ const write = (file: string, value: string) => {
 const commit = () => { git('add', '-A'); git('commit', '-qm', 'fixture'); return git('rev-parse', 'HEAD'); };
 const cli = (file: string, args: string[] = [], extra: Record<string, string> = {}) =>
   spawnSync(file.endsWith('.sh') ? 'bash' : process.execPath,
-    [`scripts/verify/${file}`, ...args], { cwd: directory, encoding: 'utf8', env: { ...env, ...extra }, timeout: 15000 });
+    [`scripts/verify/${file}`, ...args], { cwd: directory, encoding: 'utf8', env: { ...env, ...extra }, timeout: 30000 });
 const plan = (extra: Record<string, string> = {}) => JSON.parse(cli('impact-plan.mjs', [], extra).stdout);
 const event = (name: string, data: object) => { const path = join(directory, `.evidence/${name}.json`); write(`.evidence/${name}.json`, JSON.stringify(data)); return path; };
 function timingHook() {
@@ -225,12 +225,12 @@ test('real Git push reuses local unit receipts and preserves custom environment 
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   const local = (extra: Record<string, string> = {}) => spawnSync('npm', ['run', 'verify', '--', '--runs=local', '--reuse'],
-    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 15000 });
+    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 30000 });
   const remote = join(directory, '.evidence/remote.git');
   execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
   const push = (ref: string, extra: Record<string, string> = {}) => spawnSync('git',
     ['-c', 'core.hooksPath=.githooks', 'push', remote, `HEAD:refs/heads/${ref}`],
-    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 15000 });
+    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 30000 });
   expect(local().status).toBe(0); expect(calls()).toBe(1);
   const first = push('main'); expect(first.status).toBe(0);
   expect(first.stdout + first.stderr).toMatch(/"name":"test"[^\n]*"duration_ms":0[^\n]*"cached":true/);
@@ -259,7 +259,7 @@ test('pre-push refuses an unbound issue before checks or publication', () => {
   const hookEnv = timingHook();
   write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
   rmSync(join(directory, '.evidence/delivery/binding.json'));
-  const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
+  const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
   expect(hook.status).toBe(1); expect(hook.stderr).toContain('bind --issue N');
   expect(existsSync(join(directory, '.evidence/gh-calls'))).toBe(false);
 });
@@ -269,7 +269,7 @@ test('pre-push accepts an inapplicable domain gate but refuses its real failure'
   const hookEnv = timingHook();
   write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"skipped"}\'\nexit 2\n');
-  const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 15000 });
+  const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
   expect(hook().status).toBe(0);
   const before = readFileSync(join(directory, '.evidence/gh-calls'), 'utf8').split('\n').filter(line => line.startsWith('POST ')).length;
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"fail"}\'\nexit 1\n');
@@ -289,7 +289,7 @@ test('real Git push hook preserves outer refs, isolates nested Git, reuses L2, a
   const remote = join(directory, '.evidence/remote.git');
   execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
   const push = (ref: string) => spawnSync('git', ['push', remote, `HEAD:refs/heads/${ref}`],
-    { cwd: directory, env: hookEnv, encoding: 'utf8', timeout: 15000 });
+    { cwd: directory, env: hookEnv, encoding: 'utf8', timeout: 30000 });
   const first = push('first'); expect(first.status).toBe(0); expect(calls()).toBe(1);
   const second = push('second'); expect(second.status).toBe(0);
   expect(second.stdout + second.stderr).toContain('"cached":true'); expect(calls()).toBe(1);

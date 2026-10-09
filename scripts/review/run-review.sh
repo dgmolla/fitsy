@@ -7,6 +7,7 @@ TARGET="${1:?pr number or --local}"; shift
 DOMAIN_ARGS=()
 PROBE=0
 CACHED_ONLY=0
+FRESH_EXECUTION="${FITSY_REVIEW_FRESH_EXECUTION:-0}"
 while [ "$#" -gt 0 ]; do
   if [ "$1" = --cached-only ]; then CACHED_ONLY=1; shift; continue; fi
   if [ "$1" = --identity ]; then PROBE=1; shift; continue; fi
@@ -22,6 +23,66 @@ umask 077
 if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
   echo '[run-review] review requires complete Git ancestry; fetch the missing history first' >&2
   exit 1
+fi
+
+source_identity() {
+  # Authenticated PR controls must not import modules from the candidate tree.
+  python3 -I - <<'PYSOURCE'
+import hashlib,os,pathlib,stat,subprocess
+paths=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','-z']).split(b'\0')
+hash=hashlib.sha256()
+for raw in sorted(set(filter(None,paths))):
+    name=os.fsdecode(raw)
+    if name.startswith('.evidence/'): continue
+    path=pathlib.Path(name)
+    hash.update(raw+b'\0')
+    try:
+        mode=path.lstat().st_mode
+        hash.update(str(mode).encode()+b'\0')
+        if stat.S_ISLNK(mode): hash.update(os.fsencode(os.readlink(path)))
+        elif stat.S_ISREG(mode): hash.update(path.read_bytes())
+        else: raise ValueError('unsupported source input: '+name)
+    except FileNotFoundError: hash.update(b'<deleted>')
+    hash.update(b'\0')
+print(hash.hexdigest())
+PYSOURCE
+}
+# The fresh mode is used by shipping admission after restoring immutable main
+# controls, matching the authenticated poller's existing overlay contract.
+if [ "$FRESH_EXECUTION" = 1 ]; then
+  [ "$CACHED_ONLY" = 0 ] || { echo '[run-review] fresh execution cannot consume cached-only evidence' >&2; exit 1; }
+  python3 -I - "$(git rev-parse origin/main)" <<'PYOVERLAY'
+import subprocess,sys
+paths=['scripts/review','scripts/delivery/phase-events.mjs','scripts/verify/risk-tiers.yml','REVIEW.md','.claude/lenses']
+def git(*args): return subprocess.check_output(['git',*args])
+changed=git('diff','--name-only','HEAD','-z').split(b'\0')+git('ls-files','--others','--exclude-standard','-z').split(b'\0')
+for raw in filter(None,changed):
+    path=raw.decode()
+    if not any(path==allowed or path.startswith(allowed+'/') for allowed in paths): sys.exit('fresh execution requires frozen candidate source')
+for args in [('diff','--quiet',sys.argv[1],'--',*paths),('diff','--cached','--quiet',sys.argv[1],'--',*paths)]:
+    if subprocess.run(['git',*args]).returncode: sys.exit('fresh execution requires immutable main reviewer controls')
+PYOVERLAY
+fi
+FROZEN_SOURCE=""
+FROZEN_HEAD=""
+if [ "$PROBE" = 0 ]; then
+  if [ "$TARGET" = --local ] && [ "$FRESH_EXECUTION" != 1 ] && [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+    echo '[run-review] candidate source is not frozen and committed' >&2; exit 1
+  fi
+  FROZEN_HEAD="$(git rev-parse HEAD)"
+  FROZEN_SOURCE="$(source_identity)"
+fi
+require_stable_candidate() {
+  if [ "$(git rev-parse HEAD)" != "$FROZEN_HEAD" ] || [ "$(source_identity)" != "$FROZEN_SOURCE" ]; then
+    echo '[run-review] candidate changed during independent review; raw attempt retained, revalidate cheap checks and review' >&2
+    return 1
+  fi
+}
+# Fresh local rounds finish cheap checks before reserving review capacity.
+# Existing admission/projection calls never execute a provider.
+if [ "$TARGET" = --local ] && [ "$PROBE" = 0 ] && [ "$CACHED_ONLY" = 0 ] && [ "$FRESH_EXECUTION" != 1 ]; then
+  node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2
+  require_stable_candidate
 fi
 
 if [ "$TARGET" = "--local" ]; then
@@ -187,7 +248,7 @@ if [ "$PROBE" = 1 ]; then
   python3 -I -c 'import json,sys; print(json.dumps({"cache_key":sys.argv[1],"domains":sys.argv[2].split(),"head_sha":sys.argv[3]}))' "$KEY" "$DOMAINS" "$HEAD_SHA"
   exit 0
 fi
-if [ -f "$CACHE_FILE" ]; then
+if [ "$FRESH_EXECUTION" != 1 ] && [ -f "$CACHE_FILE" ]; then
   TELEMETRY_CACHE_HIT=1
   echo "[run-review] cache hit ($KEY)" >&2
   RESULT_JSON="$(python3 -I scripts/review/review-round.py "$DOMAINS" < "$CACHE_FILE")"
@@ -274,6 +335,7 @@ import json,sys
 result=json.load(sys.stdin)
 result["reviewer"]=json.loads(sys.argv[1])
 print(json.dumps(result))' "$IDENTITY")"
+  require_stable_candidate || { echo "$RESULT_JSON"; exit 1; }
   # Never cache incomplete reviews or historical runner findings. Both are
   # transient infrastructure failures, not reusable independent verdicts.
   if [ "$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" != "incomplete" ] && \
@@ -284,6 +346,7 @@ print(json.dumps(result))' "$IDENTITY")"
   fi
 fi
 
+require_stable_candidate
 VERDICT="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import sys,json;print(json.load(sys.stdin)["verdict"])')"
 N_FINDINGS="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import sys,json;print(len(json.load(sys.stdin)["findings"]))')"
 ROUND_GATE=pass

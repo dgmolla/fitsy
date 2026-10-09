@@ -16,15 +16,22 @@ export function policyRunnerCases(fixture: Fixture) {
   const { run, runPr, git, isolatedEnv } = fixture;
   let root: string, calls: string, cache: string, env: NodeJS.ProcessEnv;
   beforeEach(() => { root = fixture.root(); calls = fixture.calls(); cache = fixture.cache(); env = fixture.env(); });
-test("third source head still runs when cumulative review time remains", () => {
-  for (let head = 1; head <= 3; head++) {
+test("third source head is denied after two review executions despite remaining time", () => {
+  for (let head = 1; head <= 2; head++) {
     writeFileSync(join(root, "app.ts"), `export const value = ${head + 2};\n`);
     git("add", "app.ts"); git("commit", "-qm", `candidate ${head}`);
     const result = run();
     if (result.status !== 0) throw new Error(`Head ${head}: ${result.stderr}`);
-    expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
   }
-  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(3);
+  const ledger = join(root, "budgets/issue-355.jsonl");
+  const retained = readFileSync(ledger, "utf8");
+  writeFileSync(join(root, "app.ts"), "export const value = 5;\n");
+  git("add", "app.ts"); git("commit", "-qm", "third candidate");
+  const denied = run();
+  expect(denied.status).toBe(1);
+  expect(denied.stderr).toContain("issue execution limit exhausted");
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
+  expect(readFileSync(ledger, "utf8")).toBe(retained);
 });
 test("local and PR review share imported history without resetting exception time", () => {
   const ledger = join(root, ".evidence/review-budget.jsonl");
@@ -48,6 +55,8 @@ test("local and PR review share imported history without resetting exception tim
     git("update-ref", "refs/remotes/origin/main", base);
     writeFileSync(join(root, "app.ts"), "export const value = 9;\n");
     git("add", "app.ts"); git("commit", "-qm", "PR follow-up");
+    // Issue bodies are ignored task context, so the PR clone needs its own brief.
+    writeFileSync(join(root, "issue-body"), "Goal: Verify the changed issue binding.\nAcceptance: reject migration to issue 356.\n");
     const changedIssue = runPr("correctness", "Delivery-Issue: #356\n");
     expect(changedIssue.status).toBe(1);
     expect(changedIssue.stderr).toContain("candidate issue binding conflict");
@@ -137,6 +146,7 @@ test("signal stops reviewer before releasing its reservation", async () => {
   // Reproduce slow CLI startup before the reviewer publishes its ready PID.
   const cli = join(root, "bin/claude");
   writeFileSync(cli, readFileSync(cli, "utf8").replace("if '--version' in sys.argv:", "if '--version' in sys.argv: time.sleep(2.2)\nif '--version' in sys.argv:"), { mode: 0o755 });
+  git("add", "bin/claude"); git("commit", "-qm", "slow provider fixture");
   const child = spawn("bash", ["scripts/review/run-lens.sh", "--local", "correctness"], {
     cwd: root, env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: "claude" }, stdio: "ignore",
   });

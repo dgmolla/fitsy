@@ -82,7 +82,10 @@ Review cross-cutting changes and architecture decisions. Check:
 
 ## Before Opening a PR
 
-Run the full pre-PR gate locally. Fix all failures in your session.
+Follow [canonical shipping](../../docs/engineering/devops/shipping.md): freeze and commit source, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, and complete one passing independent review before full suites and affected E2E acceptance.
+Repair findings and revalidate affected cheap checks and review before full acceptance.
+Preserve UI signoff, release approvals, source identity and the retained issue review budget.
+Run every required full gate before push; fix all failures in your session.
 
 1. `bash scripts/structural-tests.sh`
 2. Verify CLAUDE.md accuracy against codebase

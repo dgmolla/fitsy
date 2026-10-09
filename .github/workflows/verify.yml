@@ -114,7 +114,7 @@ jobs:
             --body "**domain-check** could not resolve the PR head, comparison history, or reviewed routing table. Restore that context and rerun the check." || true
 
   test:
-    needs: classify
+    needs: [classify, static]
     if: needs.classify.outputs.tests == 'true'
     name: Tests (L2)
     runs-on: ubuntu-latest
@@ -154,7 +154,7 @@ jobs:
         run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed
 
   build:
-    needs: classify
+    needs: [classify, static]
     if: needs.classify.outputs.build == 'true'
     name: Build (L3)
     runs-on: ubuntu-latest

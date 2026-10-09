@@ -243,6 +243,24 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.workers(), [])
         self.assertEqual(self.board_data()['items'][0]['status'], 'Queued')
 
+    def test_worker_prompt_bounds_review_and_preserves_newer_human_scope(self):
+        self.env['FAKE_WORKER_MODE'] = 'fail'
+        self.tick()
+        claim = self.state_data()['active']
+        prompt = dispatcher.make_prompt(claim)
+        self.assertIn('review-policy-human-relaxed-20261004.json', prompt)
+        self.assertIn('two combined rounds, at most 900 seconds each and 1800 cumulative seconds per issue', prompt)
+        self.assertIn('newer narrower human instructions take precedence over older grants', prompt)
+        self.assertIn('Do not expand automatically', prompt)
+        self.assertNotIn('top up only', prompt)
+        self.assertIn('one consolidated repair and affected rereview', prompt)
+        self.assertIn('Acknowledge human scope steering at the next safe command boundary', prompt)
+        self.assertIn('use source-bound owned P2 deferrals and P3 advisories', prompt)
+        self.assertIn('proceed directly to required acceptance and authorized shipping', prompt)
+        self.assertIn('Retain every historical attempt and required review domain', prompt)
+        self.assertNotIn('plus at most one durable', prompt)
+        self.assertLess(prompt.index('--stage=cheap'), prompt.index('then use scripts/verify/shipping-session.mjs'))
+
     def test_worker_exports_configured_native_completion_budget(self):
         config = json.loads(self.config.read_text()); config['worker_timeout_seconds'] = 5400
         self.config.write_text(json.dumps(config))

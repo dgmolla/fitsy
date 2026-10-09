@@ -1,6 +1,6 @@
 // Local performance cache, never an independent review or product attestation.
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { git } from './impact-plan.mjs';
 
@@ -73,7 +73,10 @@ export function verificationCache(root, env, plan) {
     },
     unchanged() { return sourceIdentity(root) === source; },
     invalidate(check) {
-      try { unlinkSync(join(directory, `${check.name}.json`)); }
+      // Retire reusable evidence without deleting the prior attempt.
+      const history = join(directory, 'history');
+      mkdirSync(history, { recursive: true, mode: 0o700 });
+      try { renameSync(join(directory, `${check.name}.json`), join(history, `${check.name}.${Date.now()}.${randomBytes(8).toString('hex')}.json`)); }
       catch (error) { if (error.code !== 'ENOENT') throw error; }
     },
     write(check, result) {

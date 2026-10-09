@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the same local gate, reusing only successful source-bound L2 receipts.
+# Run the same local gate, reusing only successful source-bound acceptance receipts.
 # Size and domain checks still run on every push.
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
@@ -33,7 +33,7 @@ node "$ROOT/scripts/delivery/phase-events.mjs" summary >/dev/null || {
   echo 'pre-push: bind this worktree first with node scripts/delivery/phase-events.mjs bind --issue N' >&2
   exit 1
 }
-npm run verify -- --runs=local --reuse
+npm run verify -- --layer=0-3 --runs=local --reuse
 # exit 2 = skipped (not applicable), which must not block the push
 for check in size-check domain-check; do
   if bash "$ROOT/scripts/verify/$check.sh"; then code=0; else code=$?; fi

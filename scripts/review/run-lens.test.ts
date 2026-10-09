@@ -1,10 +1,11 @@
-import { roundRunnerCases, normalizeFixtureResponse, runPrFixture } from "./round-runner-cases";
+import { validationOrderCases } from "./validation-order-cases";
+import { roundRunnerCases, normalizeFixtureResponse, runPrFixture, seedManagedFixture } from "./round-runner-cases";
 import { executionFailureCases } from "./execution-failure-cases";
 import { policyRunnerCases } from "./policy-runner-cases";
 import { deliveryTimingCases } from "./delivery-timing-cases";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 const source = resolve(__dirname, "../..");
@@ -13,7 +14,8 @@ let guard: string;
 let guardHead: string;
 let inheritedGit: NodeJS.ProcessEnv;
 function isolatedEnv() {
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+  // Synthetic checkouts must establish their own shipping session ownership.
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|FITSY_SHIPPING_(SOCKET|TOKEN)$|POSTGRES_)/.test(key)));
 }
 let calls: string;
 let cache: string;
@@ -49,9 +51,16 @@ beforeEach(() => {
   for (const name of ["run-lens.sh", "run-review.sh", "review-round.py", "review-domains.py", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
     cpSync(join(source, "scripts/review", name), join(root, "scripts/review", name));
   }
+  for (const name of ["run.mjs", "impact-plan.mjs", "receipt-cache.mjs"]) cpSync(join(source, "scripts/verify", name), join(root, "scripts/verify", name));
+  symlinkSync(join(source, "node_modules"), join(root, "node_modules"));
+  writeFileSync(join(root, "scripts/verify/registry.yml"), "checks: []\n");
+  writeFileSync(join(root, ".gitignore"), "node_modules\nold-poller/\n.evidence/\ncalls\ncache/\nbudgets/\nprompt\nreviewer-pid\ndelay\nverdict\nexit\ngh-calls\nissue-fail\nbin/gh-fixture\npr-body\npr-diff\nrace-head\nissue-body\n");
+  mkdirSync(join(root, "scripts/delivery"), { recursive: true });
+  cpSync(join(source, "scripts/delivery/phase-events.mjs"), join(root, "scripts/delivery/phase-events.mjs"));
   cpSync(join(source, "scripts/verify/risk-tiers.yml"), join(root, "scripts/verify/risk-tiers.yml"));
   writeFileSync(join(root, "REVIEW.md"), "Review rules\n");
   writeFileSync(join(root, ".claude/lenses/correctness.md"), "Review correctness.\n");
+  for (const domain of ["workflow-security", "danger-zone", "docs-sanity"]) writeFileSync(join(root, `.claude/lenses/${domain}.md`), domain === "docs-sanity" ? "Review documentation.\n" : "Review controls.\n");
   writeFileSync(join(root, "app.ts"), "export const value = 1;\n");
   writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: In flight\n<details>\nAcceptance: changed behavior is verified.\n</details>\n");
   writeFileSync(join(root, "bin/gh"), `#!/bin/sh\nif [ "$1" = issue ] && [ "$2" = view ]; then\n  if [ -f ${JSON.stringify(join(root, 'issue-fail'))} ]; then exit 1; fi\n  cat ${JSON.stringify(join(root, 'issue-body'))}; exit\nfi\nexit 1\n`, { mode: 0o755 });
@@ -80,6 +89,7 @@ sys.exit(int(pathlib.Path(${JSON.stringify(join(root, 'exit'))}).read_text()))
     REVIEW_TEST_CALLS: calls, REVIEW_TEST_VERDICT: verdict };
   git("init", "-q"); git("config", "user.name", "Review fixture"); git("config", "user.email", "fixture@example.test");
   git("add", "."); git("commit", "-qm", "base"); git("update-ref", "refs/remotes/origin/main", "HEAD");
+  seedManagedFixture(root, git);
   writeFileSync(join(root, "app.ts"), "export const value = 2;\n"); git("add", "app.ts"); git("commit", "-qm", "change");
   mkdirSync(join(root, ".evidence/delivery"), { recursive: true });
   writeFileSync(join(root, ".evidence/delivery/binding.json"), JSON.stringify({ issue: 355 }));
@@ -114,11 +124,10 @@ test("bound acceptance reaches reviewer and changes only when its substance chan
   expect(run().status).toBe(0);
   expect(runPr().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
-  writeFileSync(join(root, "issue-body"), "Goal: Preserve the required release behavior.\nStatus: Done\n<details>\nAcceptance: changed behavior also handles retries.\n</details>\n");
+  writeFileSync(join(root, "issue-body"), `Goal: Preserve the required release behavior.\n${"Background context. ".repeat(400)}\n<details>\nAcceptance: changed behavior also handles retries.\nAcceptance: later requirement must be seen.\nStatus: required release state must persist.\n</details>\n`);
   expect(run().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
-  writeFileSync(join(root, "issue-body"), `Goal: Preserve the required release behavior.\n${"Background context. ".repeat(400)}\n<details>\nAcceptance: later requirement must be seen.\nStatus: required release state must persist.\n</details>\n`);
-  expect(run().status).toBe(0);
+  expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Acceptance: changed behavior also handles retries.");
   expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Acceptance: later requirement must be seen.");
   expect(readFileSync(join(root, "prompt"), "utf8")).toContain("Status: required release state must persist.");
 });
@@ -131,20 +140,6 @@ test("issue fetch failure cannot reuse or publish a review without acceptance", 
   const pr = runPr();
   expect(pr.status).toBe(1);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
-});
-test("nonzero external execution cannot publish or cache a partial pass", () => {
-  writeFileSync(join(root, "exit"), "1");
-  const result = run();
-  expect(result.status).toBe(1);
-  expect(JSON.parse(result.stdout)).toMatchObject({ verdict: "incomplete", findings: [], error: { kind: "process_error" } });
-  expect(JSON.parse(readFileSync(join(root, "budgets/issue-355.jsonl"), "utf8").trim().split("\n").at(-1)!)).toMatchObject({ event: "finish", outcome: "fail", verdict: "incomplete" });
-  expect(readdirSync(cache).filter(name => name.endsWith(".json"))).toHaveLength(0);
-  const posted = runPr();
-  expect(posted.status).toBe(1);
-  expect(readFileSync(join(root, "gh-calls"), "utf8")).toContain("state=error");
-  writeFileSync(join(root, "exit"), "0");
-  expect(run().status).toBe(0);
-  expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(3);
 });
 test("invalid reviewer response is incomplete and cannot publish advisory success", () => {
   writeFileSync(join(root, ".claude/lenses/docs-sanity.md"), "Review documentation.\n");
@@ -260,6 +255,7 @@ test("stale source-bound receipt and changed review inputs cannot reuse a pass",
   writeFileSync(join(root, ".evidence/review-dispositions/correctness.json"), JSON.stringify(disposition));
   expect(run().stderr).toContain("failed or stale required test");
   writeFileSync(join(root, "REVIEW.md"), "Changed review policy\n");
+  git("add", "REVIEW.md"); git("commit", "-qm", "changed review policy");
   expect(run().status).toBe(1);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
 });
@@ -281,6 +277,8 @@ deliveryTimingCases({ root: () => root, env: () => env, source, run, runPr, git 
 
 policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: () => env, setEnv: value => { env = value; },
   calls: () => calls, cache: () => cache, run, runPr, git, isolatedEnv });
-executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr });
+executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr, git });
 
 roundRunnerCases({ root: () => root, calls: () => calls, env: () => env, run, runPr, git });
+
+validationOrderCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, source, run, git, calls: () => calls });

@@ -47,14 +47,21 @@ Apply existing PR scope and review rules from [shipping.md](shipping.md); this c
 One dispatcher assigns the execution owner before starting a worker.
 An FM task delegated to a Codex coordinator remains owned by that coordinator until explicit transfer or completion; FM must not dispatch a competing implementation.
 Parallel subtasks have explicit file/behavior boundaries and report to that owner.
+Freeze the accepted outcome during validation and keep optional improvements in owned follow-ups.
+When human steering changes active scope, the coordinator delivers it at the existing owner's next safe boundary and records that owner's acknowledgment before claiming the change was applied.
+Editing a board field, issue body or handoff alone does not prove that a running worker received the instruction.
+Do not interrupt an active command or create a second owner to deliver steering.
 Before transfer, persist current source, evidence, running operations, blockers and next action, confirm the prior owner stopped or released ownership, then record the successor.
 An issue assignment alone is not an atomic process lock; use FM's supported ownership/session controls for runtime exclusion.
 If ownership cannot be established, reconcile it before launching another worker.
 
 For Codex-led work, one coordinator claims the issue and assigns one Sol implementation owner by default.
 Add agents only for bounded independent tasks with explicit file ownership; another lane's blocker does not hold unrelated work.
-Freeze the source while final checks and review run, reuse source-bound check receipts when the canonical runner permits it, and use only the review lenses and limits in [shipping.md](shipping.md).
-Send actionable human-decision, exhausted-review, required-gate, or dependency blockers immediately in a separate Slack alert headed `🚨 *BLOCKED*`.
+Freeze and commit the candidate, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, then complete one independent canonical review before full suites and affected E2E acceptance.
+Repair findings and revalidate cheap checks and review before full acceptance; use fresh canonical shipping review admission and retain the original issue review budget.
+Use the review domains, UI signoff, release approvals and shipping gates in [shipping.md](shipping.md).
+Send a separate Slack alert headed `🚨 *BLOCKED*` only when live evidence establishes a concrete action that requires the human.
+Keep agent-owned review, required-gate, execution and dependency recovery on the issue and handoff without human mentions.
 Mention the recipient directly and state the issue, reason, and next action in at most three short lines; do not mention the recipient in routine digests.
 Use a stable incident deduplication key and confirmed Slack API receipt, never repeat an unchanged alert, and send one `✅` resolution when that incident clears.
 A Slack delivery receipt confirms API acceptance, not a phone push or that the user saw the alert.
@@ -100,6 +107,7 @@ Set `Verified at` only after acceptance and applicable main Verify, Deploy, and 
 The [half-hour delivery report](hourly-delivery-report.md) uses only valid timestamp pairs and counts missing values as unknown.
 Report request-to-verified-delivery separately from PR-open-to-merge, queue time, active execution, and blocked time.
 Do not sum overlapping reviewer/test durations and label the result wall time.
+Use request-to-verified delivery elapsed time and repeated review/repair/acceptance cycles to assess velocity; activity, log output and check counts alone do not prove delivery.
 Update the issue at material transitions, failures, ownership changes, and completion.
 For active work, publish a fresh checkpoint at the configured reporting interval; a missed checkpoint is a liveness signal, not permission to repeat stale progress.
 Use one configured reporting path with stable event identities and confirmed delivery receipts.

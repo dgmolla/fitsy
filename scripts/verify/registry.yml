@@ -15,6 +15,22 @@ checks:
     runs: [local]
     why: Check dependencies and disk before local verification.
 
+  - name: review-admission
+    script: review-admission.sh
+    layer: 0
+    stage: acceptance
+    blocking: true
+    preflight: true
+    runs: [local]
+    why: Require a clean source-bound passing canonical review before full acceptance.
+
+  - name: focused-tests
+    script: focused-tests.sh
+    layer: 1
+    blocking: true
+    runs: [local]
+    why: Meaningful selected reproduction and regression tests before independent review.
+
   - name: structural
     script: structural.sh
     layer: 0
@@ -44,6 +60,7 @@ checks:
     why: tsc --noEmit per workspace (api, mobile, shared, scripts).
 
   - name: product-flow
+    stage: acceptance
     script: product-flow.sh
     layer: 1
     blocking: true
@@ -121,7 +138,7 @@ checks:
     script: build.sh
     layer: 3
     blocking: true
-    runs: [ci]
+    runs: [local, ci]
     why: Next.js production build catches what tests miss; asserts no compiled output lands in the tree.
 
   - name: api-e2e
