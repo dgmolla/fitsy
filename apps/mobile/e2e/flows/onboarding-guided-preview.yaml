@@ -142,22 +142,52 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
 - assertVisible: "What works.*for one meal.*"
 - assertNotVisible: "A little context.*A better choice.*"
 # Recover using calories, then explicitly retain zero protein with positive energy.
+# Settle the previous field before focusing the next input. Calorie rebalancing
+# changes generated text and can invalidate its initial native selection.
+- tapOn:
+    text: "Calories / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-calories
+- waitForAnimationToEnd
 - eraseText: 100
 - inputText: "600"
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${maestro.copiedText === '600'}
+- tapOn:
+    text: "Protein / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-protein
+- waitForAnimationToEnd
 - eraseText: 100
 - inputText: "0"
+- copyTextFrom:
+    id: meal-target-protein
+- assertTrue: ${maestro.copiedText === '0'}
+- tapOn:
+    text: "Carbs / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-carbs
+- waitForAnimationToEnd
 - eraseText: 100
 - inputText: "105"
+- copyTextFrom:
+    id: meal-target-carbs
+- assertTrue: ${maestro.copiedText === '105'}
+- tapOn:
+    text: "Fat / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-fat
+- waitForAnimationToEnd
 - eraseText: 100
 - inputText: "20"
+- copyTextFrom:
+    id: meal-target-fat
+- assertTrue: ${maestro.copiedText === '20'}
 - tapOn:
     text: "Fat / meal"
 - copyTextFrom:
