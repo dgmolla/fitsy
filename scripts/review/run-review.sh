@@ -282,7 +282,7 @@ else
   REQUESTED_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-}"
   if [ -z "$REQUESTED_TIMEOUT" ] || [ "${FITSY_REVIEW_TIMEOUT_FLOOR:-0}" = 1 ]; then
     WINDOW_STATUS="$(python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" --lens "$LENS")" || { echo '[run-review] capacity preflight failed' >&2; incomplete_status budget; exit 1; }
-    REQUIRED_TIMEOUT="$(printf '%s' "$WINDOW_STATUS" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["required_window_seconds"])')"
+    REQUIRED_TIMEOUT="$(printf '%s' "$WINDOW_STATUS" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); print(max(1,int(min(d["remaining_seconds"],d["prospective_remaining_seconds"])-5)) if "prospective_remaining_seconds" in d else d["required_window_seconds"])')"
     if [ -n "$REQUESTED_TIMEOUT" ] && ! [[ "$REQUESTED_TIMEOUT" =~ ^[0-9]+$ ]]; then echo '[run-review] invalid timeout' >&2; incomplete_status configuration; exit 1; fi
     if [ -z "$REQUESTED_TIMEOUT" ] || [ "$REQUESTED_TIMEOUT" -lt "$REQUIRED_TIMEOUT" ]; then REQUESTED_TIMEOUT="$REQUIRED_TIMEOUT"; fi
   fi
