@@ -14,6 +14,14 @@ budget = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(budget)
 
 
+def fixture_env():
+    # Nested fixtures own their source, budget, comparison and live session.
+    return {key: value for key, value in os.environ.items()
+            if not key.startswith(('GIT_', 'FITSY_VERIFY_', 'FITSY_DIFF_', 'FITSY_SHIPPING_',
+                                   'FITSY_REVIEW_', 'FITSY_PRODUCT_ROOT', 'GITHUB_'))
+            and key not in ('CI', 'FITSY_RUNS', 'FITSY_VERIFY_OWNED_DB')}
+
+
 def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
@@ -194,7 +202,7 @@ class CompletedAdmission(CompletedAccounting):
         self.approval['artifacts'][key]['sha256'] = sha(value.encode())
 
     def git(self, *args):
-        return subprocess.check_output(['git', '-C', str(self.repo), *args]).decode().strip()
+        return subprocess.check_output(['git', '-C', str(self.repo), *args], env=fixture_env()).decode().strip()
 
     def call(self):
         with self.ledger.open('a+') as handle:
@@ -258,7 +266,7 @@ class CompletedAdmission(CompletedAccounting):
         budget_home = self.root / 'budgets'
         budget_home.mkdir()
         shutil.copyfile(self.ledger, budget_home / 'issue-443.jsonl')
-        env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
+        env = dict(fixture_env(), PATH=str(tools) + os.pathsep + os.environ['PATH'],
                    FITSY_REVIEW_FRESH_EXECUTION='1', FITSY_REVIEW_COMPLETED_HOME=str(auth_home),
                    FITSY_REVIEW_BUDGET_HOME=str(budget_home), FITSY_REVIEW_CACHE=str(self.root / 'cache'),
                    FITSY_GH_BIN=str(tools / 'gh'), FITSY_REVIEW_PROVIDER='codex',
@@ -306,7 +314,7 @@ class CompletedAdmission(CompletedAccounting):
         product = self.root / 'session-product'
         product.mkdir()
         def git(*args, cwd=product):
-            return subprocess.check_output(['git', '-C', str(cwd), *args]).decode().strip()
+            return subprocess.check_output(['git', '-C', str(cwd), *args], env=fixture_env()).decode().strip()
         git('init', '-qb', 'main')
         git('config', 'user.email', 'fixture@example.test')
         git('config', 'user.name', 'Fixture')
@@ -360,7 +368,7 @@ class CompletedAdmission(CompletedAccounting):
         (product / 'node_modules').symlink_to(source / 'node_modules')
         git('remote', 'add', 'origin', str(runtime))
         (product / '.evidence').mkdir()
-        subprocess.check_call(['node', 'scripts/delivery/phase-events.mjs', 'bind', '--issue', '443'], cwd=product, stdout=subprocess.DEVNULL)
+        subprocess.check_call(['node', 'scripts/delivery/phase-events.mjs', 'bind', '--issue', '443'], cwd=product, env=fixture_env(), stdout=subprocess.DEVNULL)
         approval = dict(self.approval, source_sha=head, base_sha=base, domains=['correctness'],
                         candidate=git('rev-list', '--max-parents=0', 'HEAD') + ':frozen',
                         acceptance_sha256=sha(b'Frozen acceptance'))
@@ -395,7 +403,7 @@ class CompletedAdmission(CompletedAccounting):
         budgets = self.root / 'session-budgets'
         budgets.mkdir()
         shutil.copyfile(self.ledger, budgets / 'issue-443.jsonl')
-        env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
+        env = dict(fixture_env(), PATH=str(tools) + os.pathsep + os.environ['PATH'],
             FITSY_REVIEW_HOME=str(home), FITSY_REVIEW_COMPLETED_HOME=str(auth_home),
             FITSY_REVIEW_BUDGET_HOME=str(budgets), FITSY_REVIEW_PROVIDER='codex',
             FITSY_REVIEW_MODEL='gpt-6-sol', FITSY_REVIEW_REASONING_EFFORT='high')
