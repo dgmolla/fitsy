@@ -1,8 +1,9 @@
 import { shippingSessionCases } from './shipping-session-cases';
 import { runPrFixture } from './round-runner-cases';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 interface Fixture {
   root(): string;
@@ -14,7 +15,11 @@ interface Fixture {
   calls(): string;
 }
 export function validationOrderCases(f: Fixture) {
+  let admissionCache: string | undefined;
+  afterEach(() => { if (admissionCache) rmSync(admissionCache, { recursive: true, force: true }); admissionCache = undefined; });
   function setup() {
+    admissionCache = mkdtempSync(join(tmpdir(), 'fitsy-admission-cache-'));
+    f.setEnv({ ...f.env(), FITSY_REVIEW_CACHE: admissionCache });
     const root = f.root();
     for (const name of ['receipt-cache.mjs', 'review-admission.sh', 'shipping-session.mjs']) copyFileSync(join(f.source, 'scripts/verify', name), join(root, 'scripts/verify', name));
     writeFileSync(join(root, '.claude/lenses/workflow-security.md'), 'Review shipping controls.\n');
@@ -53,7 +58,15 @@ export function validationOrderCases(f: Fixture) {
     const bind = spawnSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'], { cwd: root, env: f.env(), encoding: 'utf8' });
     expect(bind.status).toBe(0);
   }
+  function prepare() {
+    return spawnSync('bash', ['scripts/verify/review-admission.sh', '--execute-review'], {
+      cwd: f.root(), encoding: 'utf8', timeout: 15000,
+      env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' },
+    });
+  }
   function verify(args: string[] = [], hook = false) {
+    const reviewed = prepare();
+    if (reviewed.status !== 0) return reviewed;
     return spawnSync(hook ? 'bash' : 'npm', hook ? ['.evidence/pre-push'] : ['run', 'verify', '--', ...args], {
       cwd: f.root(), encoding: 'utf8', timeout: 15000,
       env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' },
@@ -61,13 +74,14 @@ export function validationOrderCases(f: Fixture) {
   }
   const passingVerdict = JSON.stringify({ lens: 'correctness', verdict: 'pass', findings: [] });
   const failingVerdict = JSON.stringify({ lens: 'correctness', verdict: 'fail', findings: [{ severity: 'CONFIRMED', priority: 'P1', impact: 'shipping skips acceptance', file: 'app.ts', line: 1, summary: 'regression', scenario: 'bad candidate', fix: 'repair' }] });
-  const order = () => readFileSync(join(f.root(), '.evidence/order'), 'utf8');
+  const order = () => existsSync(join(f.root(), '.evidence/order')) ? readFileSync(join(f.root(), '.evidence/order'), 'utf8') : '';
   const callCount = () => existsSync(f.calls()) ? readFileSync(f.calls(), 'utf8').trim().split('\n').length : 0;
 
-  shippingSessionCases(f, setup, verify, order, callCount, passingVerdict, failingVerdict);
+  shippingSessionCases(f, setup, verify, order, callCount, passingVerdict, failingVerdict, prepare);
   test('persistently exported Claude profile runs fresh review before normal full verification', () => {
     setup();
     f.setEnv({ ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' });
+    expect(prepare().status).toBe(0);
     const result = spawnSync('npm', ['run', 'verify'], { cwd: f.root(), env: f.env(), encoding: 'utf8', timeout: 15000 });
     expect(result.status).toBe(0); expect(order()).toContain('full'); expect(callCount()).toBe(1);
   });
@@ -119,7 +133,7 @@ export function validationOrderCases(f: Fixture) {
     writeFileSync(join(root, 'scripts/verify/registry.yml'), readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8') + '  - name: build\n    script: build.sh\n    layer: 3\n    blocking: true\n    runs: [local, ci]\n');
     writeFileSync(join(root, 'scripts/verify/build.sh'), "echo build >> .evidence/order\n[ ! -f .evidence/build-fail ]\n");
     f.git('add', '-A'); f.git('commit', '-qm', 'local build acceptance fixture');
-    const full = () => spawnSync('npm', ['run', 'verify:all'], { cwd: root, env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' }, encoding: 'utf8', timeout: 15000 });
+    const full = () => { const reviewed = prepare(); if (reviewed.status !== 0) return reviewed; return spawnSync('npm', ['run', 'verify:all'], { cwd: root, env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' }, encoding: 'utf8', timeout: 15000 }); };
     writeFileSync(join(root, 'verdict'), failingVerdict);
     expect(full().status).toBe(1); expect(order()).not.toContain('build');
     writeFileSync(join(root, 'verdict'), passingVerdict);
@@ -180,7 +194,7 @@ export function validationOrderCases(f: Fixture) {
     setup(); const review = f.run();
     if (review.status !== 0) throw new Error(String(review.stderr));
     writeFileSync(join(f.root(), '.evidence/drift'), 'drift');
-    const drift = verify(); expect(drift.status).toBe(1); expect(drift.stdout).toContain('candidate changed during cheap checks');
+    const drift = verify(); expect(drift.status).toBe(1); expect(String(drift.stdout) + String(drift.stderr)).toContain('candidate changed during cheap checks');
     expect(order()).not.toContain('full');
     f.git('add', 'app.ts'); f.git('commit', '-qm', 'new candidate');
     // Stop the intentional edit but keep its raw failed attempt.

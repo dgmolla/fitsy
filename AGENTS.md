@@ -128,7 +128,9 @@ vercel env add KEY prod    # Add/update a secret
 
 ## Agent routing
 
-Follow [model routing and delegation](docs/engineering/devops/agent-model-routing.md) for model choice, worker ownership, compact handoffs and independent review.
+The human-selected standalone Pstack orchestrate-delivery, ship-branch and verify-fitsy skills supplied by the coordinator control orchestration and shipping.
+Repository documents retain product, supported command, security/data and release contracts.
+Follow [model routing and delegation](docs/engineering/devops/agent-model-routing.md) for configured model and independent review protections.
 
 ## Session Discipline
 
@@ -138,7 +140,7 @@ Follow [model routing and delegation](docs/engineering/devops/agent-model-routin
 
 ## Pre-PR Gate
 
-Follow `docs/engineering/devops/shipping.md` for the canonical shipping procedure and review dispositions.
+Follow `docs/engineering/devops/shipping.md` for supported commands, acceptance, release protections and review dispositions under the selected skills.
 
 CI is a safety net, not a first pass.
 Run cheap checks and meaningful focused regressions, commit the frozen candidate, and obtain a passing independent review before expensive full acceptance.

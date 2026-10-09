@@ -126,3 +126,57 @@ test("imported limit cannot reset the shared issue allowance", () => {
   expect(result.value.reason).toContain("cannot grant new review authority");
   expect(readFileSync(original, "utf8")).toBe(bound);
 });
+
+function reconciliationFixture() {
+  ledger = join(root, 'issue-456.jsonl');
+  const original = { event: 'execution-limit', attempt_id: 'issue-execution-limit', issue: 456,
+    baseline_attempts: [], baseline_completed_seconds: 0, completed_seconds_stop_at: 300,
+    new_rounds_max: 1, per_round_timeout_seconds_max: 295 };
+  seed([original, ...history('reviewed', 272.11151983297896)]);
+  const crypto = require('node:crypto') as typeof import('node:crypto');
+  const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
+  const approval = join(root, 'reconcile.json');
+  const value = { issue: 456, candidate: 'root:branch', count_origin: 'coordinator', new_rounds_max: null,
+    limit_sha256: hash(JSON.stringify(original, Object.keys(original).sort()).replaceAll(':', ': ').replaceAll(',', ', ')),
+    ledger_sha256: hash(readFileSync(ledger, 'utf8')),
+    coordinator_provenance: 'https://github.com/dgmolla/fitsy/issues/456#issuecomment-12345',
+    human_provenance: 'https://github.com/dgmolla/fitsy/issues/456#issuecomment-12346' };
+  writeFileSync(approval, JSON.stringify(value), { mode: 0o600 });
+  const invoke = () => call('reconcile-count', 'current', [...boundArgs, '--authorization-file', approval]);
+  return { approval, value, invoke };
+}
+
+test('coordinator count reconciliation is additive, idempotent and retains the original cumulative ceiling', () => {
+  const { invoke } = reconciliationFixture();
+  const before = readFileSync(ledger, 'utf8');
+  expect(call('begin', 'repair', [...boundArgs, '--timeout-seconds', '22']).status).toBe(1);
+  const result = invoke();
+  expect(result.status).toBe(0);
+  expect(result.value).toMatchObject({ cap_seconds: 300, completed_seconds: 272.11151983297896,
+    bounded_executions_used: 1, execution_limit: { new_rounds_max: null } });
+  expect(readFileSync(ledger, 'utf8').startsWith(before)).toBe(true);
+  const reconciled = readFileSync(ledger, 'utf8');
+  expect(invoke().status).toBe(0); expect(readFileSync(ledger, 'utf8')).toBe(reconciled);
+  const policy = join(root, 'policy.json');
+  writeFileSync(policy, JSON.stringify({ issue: 456, candidate: 'root:branch', seconds: 300, baseline: {},
+    provenance: 'https://github.com/dgmolla/fitsy/issues/456#issuecomment-12346' }), { mode: 0o600 });
+  const begin = call('begin', 'repair', [...boundArgs, '--timeout-seconds', '22', '--execution-policy', policy]);
+  expect(begin.status).toBe(0); expect(begin.value.timeout_seconds).toBe(22);
+  expect(call('finish', 'repair', [...boundArgs, '--outcome', 'fail', '--verdict', 'incomplete', '--failure-kind', 'timeout']).status).toBe(0);
+  expect(call('begin', 'retry', [...boundArgs, '--execution-policy', policy]).status).toBe(1);
+});
+
+test.each(['human count', 'wrong issue', 'changed history', 'extra capacity', 'incomplete review'])('count reconciliation refuses %s without changing history', mutation => {
+  const { approval, value, invoke } = reconciliationFixture();
+  if (mutation === 'human count') value.count_origin = 'human';
+  if (mutation === 'wrong issue') value.issue = 463;
+  if (mutation === 'changed history') value.ledger_sha256 = '0'.repeat(64);
+  if (mutation === 'extra capacity') Object.assign(value, { completed_seconds_stop_at: 600 });
+  if (mutation === 'incomplete review') {
+    const rows = readFileSync(ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    rows[2].failure_kind = 'timeout'; rows[2].verdict = 'incomplete'; seed(rows);
+  }
+  writeFileSync(approval, JSON.stringify(value));
+  const retained = readFileSync(ledger, 'utf8');
+  expect(invoke().status).toBe(1); expect(readFileSync(ledger, 'utf8')).toBe(retained);
+});

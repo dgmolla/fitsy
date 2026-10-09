@@ -115,8 +115,19 @@ with p.with_suffix('.lock').open('a') as f:
 '''
 
 
+def selected_tick_args(*args):
+    # Simulate the selected coordinator's in-process renderer, never a real brief.
+    if len(args) > 2 and args[1] == str(SCRIPT) and args[2] == 'tick':
+        code = ("import importlib.util,sys; p=sys.argv.pop(1); "
+                "s=importlib.util.spec_from_file_location('fixture_dispatcher',p); "
+                "m=importlib.util.module_from_spec(s); s.loader.exec_module(m); "
+                "m.make_prompt=lambda claim: 'Synthetic selected coordinator brief'; m.main()")
+        args = (args[0], '-c', code, *args[1:])
+    return args
+
+
 def run(*args, cwd=None, env=None):
-    return subprocess.run(args, cwd=cwd, env=env, text=True, capture_output=True, timeout=20, check=True)
+    return subprocess.run(selected_tick_args(*args), cwd=cwd, env=env, text=True, capture_output=True, timeout=20, check=True)
 
 
 def item(number, *, status='Queued', labels=None, dependencies=None, priority='Next'):
@@ -243,23 +254,15 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.workers(), [])
         self.assertEqual(self.board_data()['items'][0]['status'], 'Queued')
 
-    def test_worker_prompt_bounds_review_and_preserves_newer_human_scope(self):
-        self.env['FAKE_WORKER_MODE'] = 'fail'
-        self.tick()
-        claim = self.state_data()['active']
-        prompt = dispatcher.make_prompt(claim)
-        self.assertIn('review-policy-human-relaxed-20261004.json', prompt)
-        self.assertIn('two combined rounds, at most 900 seconds each and 1800 cumulative seconds per issue', prompt)
-        self.assertIn('newer narrower human instructions take precedence over older grants', prompt)
-        self.assertIn('Do not expand automatically', prompt)
-        self.assertNotIn('top up only', prompt)
-        self.assertIn('one consolidated repair and affected rereview', prompt)
-        self.assertIn('Acknowledge human scope steering at the next safe command boundary', prompt)
-        self.assertIn('use source-bound owned P2 deferrals and P3 advisories', prompt)
-        self.assertIn('proceed directly to required acceptance and authorized shipping', prompt)
-        self.assertIn('Retain every historical attempt and required review domain', prompt)
-        self.assertNotIn('plus at most one durable', prompt)
-        self.assertLess(prompt.index('--stage=cheap'), prompt.index('then use scripts/verify/shipping-session.mjs'))
+    def test_default_admission_requires_selected_brief_without_claiming(self):
+        result = subprocess.run([sys.executable, str(SCRIPT), 'tick', '--config', str(self.config)],
+                                cwd=self.base, env=self.env, text=True, capture_output=True, check=True)
+        self.assertEqual(json.loads(result.stdout)['state'], 'selected-brief-required')
+        self.assertIsNone(self.state_data().get('active'))
+        self.assertEqual(self.board_data()['items'][0]['status'], 'Queued')
+        self.assertEqual(self.workers(), [])
+        with self.assertRaisesRegex(RuntimeError, 'selected coordinator-owned brief'):
+            dispatcher.make_prompt({})
 
     def test_worker_exports_configured_native_completion_budget(self):
         config = json.loads(self.config.read_text()); config['worker_timeout_seconds'] = 5400
@@ -938,9 +941,9 @@ class DispatcherProcessTest(unittest.TestCase):
         self.set_board([item(385), item(351, dependencies='#385')])
         self.env['FAKE_WORKER_MODE'] = 'sleep'
         self.env['FAKE_WORKER_SLEEP'] = '1'
-        p1 = subprocess.Popen([sys.executable, str(SCRIPT), 'tick', '--config', str(self.config)],
+        p1 = subprocess.Popen(selected_tick_args(sys.executable, str(SCRIPT), 'tick', '--config', str(self.config)),
                               cwd=self.base, env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p2 = subprocess.Popen([sys.executable, str(SCRIPT), 'tick', '--config', str(self.config)],
+        p2 = subprocess.Popen(selected_tick_args(sys.executable, str(SCRIPT), 'tick', '--config', str(self.config)),
                               cwd=self.base, env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         r1 = p1.communicate(timeout=20); r2 = p2.communicate(timeout=20)
         self.assertEqual((p1.returncode, p2.returncode), (0, 0), (r1, r2))

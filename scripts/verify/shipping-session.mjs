@@ -66,7 +66,7 @@ export async function shippingSession(command, args, { root = process.cwd(), env
     throw Error('external shipping controls must be clean exact current main');
   }
   const stable = () => identity(root, env) === frozen && (!runtime || identity(controls, env) === runtime);
-  // This existing admission completes cheap/focused checks and fresh trusted review.
+  // This existing admission completes cheap/focused checks and revalidates matching trusted review.
   const code = await execute('bash', [join(controls, 'scripts/verify/review-admission.sh')], root, { ...env, FITSY_SHIPPING_ROOT: root });
   if (code !== 0) return code;
   if (!stable()) throw Error('candidate changed during admission');
@@ -88,7 +88,7 @@ export async function shippingSession(command, args, { root = process.cwd(), env
         if (value.token !== token || value.root !== root) throw Error('shipping execution owner mismatch');
         if (invalidated || !stable()) {
           invalidated = true;
-          throw Error('candidate changed; finish edits and start fresh cheap checks and review');
+          throw Error('candidate changed; finish edits and revalidate cheap checks and matching review');
         }
         socket.end('pass');
       } catch (error) { socket.end(error.message); }

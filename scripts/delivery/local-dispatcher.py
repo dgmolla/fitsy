@@ -614,52 +614,10 @@ def stop_owned_group(pgid, own_pid):
 
 
 def make_prompt(claim):
-    task = claim['input']
-    return (f"Deliver Fitsy issue #{task['issue']}: {task['title']}\n\n{task['body']}\n\n"
-            'You are the only implementation owner for this issue. Work only in this isolated checkout. '
-            'Read AGENTS.md, package instructions, docs/engineering/devops/task-management.md, shipping.md, '
-            'and the ship-branch skill. Bind the issue phase-events before edits. Reproduce the actual bug before fixing it. '
-            'Use canonical exact-head tests and independent reviews with retained issue budget, then authorized push/PR/merge, '
-            'main Verify and Deploy, actual acceptance, issue and board closeout. Preserve P0/P1 gates and review history. '
-            'Do not start another issue, restart FM, change unrelated source, or send a second periodic Slack digest. '
-            'Report blockers on this issue with a stable incident key; the dispatcher owns any Slack blocker alert. '
-            f"Planning classification is advisory: {claim['classification']['task_type']}, "
-            f"risk {claim['classification']['planning_risk']}, profile {claim['classification']['profile']}. "
-            f"The configured implementation provider/model is {claim['worker_profile']['provider']}/"
-            f"{claim['worker_profile']['model']}; record actual use. "
-            f"Run one canonical scripts/review/run-review.sh round with all required domains and the snapshotted reviewer provider/model "
-            f"{claim['review_profile']['provider']}/{claim['review_profile']['model']} "
-            f"at {claim['review_profile']['effort']} effort. "
-            'The canonical diff-based review tier is authoritative. '
-            f"This dispatcher claim ID is {claim['id']} and its source branch is {claim['branch']}. "
-            'At completion, set board Verified at and Done only after acceptance, then post exactly one issue comment '
-            'starting `<!-- fitsy-dispatch-terminal:v1 -->` followed by compact JSON containing '
-            '`{"issue":number,"claim_id":"this-claim-id","branch":"this-branch","pr":number,"head_sha":"40-hex","merge_sha":"40-hex","verify_run":number,"deploy_run":number,"acceptance":"verified"}`. '
-            'The dispatcher independently checks the merged PR and successful main Verify and Deploy run IDs at the merge SHA; '
-            'missing evidence does not satisfy dependencies. '
-            'if blocked, add dispatch-hold with a concrete reason and stop. '
-            'Freeze and commit the candidate, select meaningful focused tests with scripts/verify/focused-tests.mjs --set, '
-            'run npm run verify -- --stage=cheap, then use scripts/verify/shipping-session.mjs -- <shipping command> for one live fresh admission across affected final E2E, full verification and pre-push. '
-            'Keep those commands in one fail-fast session; closing it or source drift requires fresh bounded admission, never a saved review pass. '
-            'Freeze the accepted outcome during validation; optional improvements stay in owned follow-ups. '
-            'A blocker needs a reachable trigger, evidence, concrete impact and violated contract. '
-            'Preserve confirmed P0/P1 blockers, use source-bound owned P2 deferrals and P3 advisories, and never rewrite raw verdicts. '
-            'Consolidate findings into one repair pass, rerun affected cheap/focused checks and one affected rereview. '
-            'Do not reopen unrelated adjudicated behavior without new evidence. '
-            'After a passing review, proceed directly to required acceptance and authorized shipping; preserve UI signoff and release approvals. '
-            'Acknowledge human scope steering at the next safe command boundary; an issue or board edit alone is not receipt. '
-            'Measure request-to-verified delivery elapsed time and repeated review/repair cycles, not activity alone. '
-            'Before expensive checks, confirm both root and workspace-local dependencies match the lockfile and generated schema; '
-            'reuse only a verified matching seed and never mutate shared dependencies. '
-            'Default review is bounded to two combined rounds, at most 900 seconds each and 1800 cumulative seconds per issue. '
-            'Failed, interrupted and timed-out attempts count; allow at most one consolidated repair and affected rereview. '
-            'Do not expand automatically. Explicit human-approved issue-specific exceptions retain their boundary, '
-            'but newer narrower human instructions take precedence over older grants. '
-            'Read current issue-bound instructions and existing external authorization receipts before another reservation. '
-            'The historical policy remains at /Users/dawitmolla/.fitsy-dispatcher/authorizations/review-policy-human-relaxed-20261004.json; '
-            'it is not authority to override a newer bound or automatically top up. '
-            'Retain every historical attempt and required review domain. Never reset the ledger or infer review acceptance. '
-            'At the boundary, stop with the concrete finding or execution failure, its owner and next action, and release the lane.\n')
+    raise RuntimeError('new admission requires the selected coordinator-owned brief')
+
+
+DEFAULT_PROMPT_RENDERER = make_prompt
 
 
 def archive(state, claim, status, state_path):
@@ -923,6 +881,8 @@ def tick(config, state, state_path, script):
     if available < required:
         return {'state': 'resource-hold', 'reason': 'disk below floor plus scratch reserve',
                 'free_bytes': available, 'required_free_bytes': required}
+    if make_prompt is DEFAULT_PROMPT_RENDERER:
+        return {'state': 'selected-brief-required'}
     items = board(config)
     candidates = eligible(items, state.setdefault('readiness', {}), state.setdefault('readiness_source', {}),
                           config, state.setdefault('verified', {}))

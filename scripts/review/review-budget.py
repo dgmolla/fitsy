@@ -42,6 +42,15 @@ def read_events(handle):
         if not isinstance(rows, list):
             raise ValueError("invalid imported review history")
         for row in rows:
+            if isinstance(row, dict) and row.get("event") == "count-reconciliation":
+                if (row.get("attempt_id") != "issue-count-reconciliation"
+                        or type(row.get("issue")) is not int or row["issue"] <= 0
+                        or row.get("new_rounds_max", "missing") is not None
+                        or not re.fullmatch(r"[0-9a-f]{64}", row.get("limit_sha256", ""))
+                        or not re.fullmatch(r"[0-9a-f]{64}", row.get("authorization_sha256", ""))):
+                    raise ValueError("invalid coordinator count reconciliation")
+                events.append(row)
+                continue
             if isinstance(row, dict) and row.get("event") == "execution-limit":
                 if (row.get("attempt_id") != "issue-execution-limit"
                         or type(row.get("issue")) is not int or row["issue"] <= 0
@@ -132,7 +141,7 @@ def import_history(handle, ledger, paths, optional_paths):
             if key in events and events[key] != event:
                 raise ValueError(f"conflicting retained review history in {source}")
             if key not in events:
-                if event["event"] in ("authorized-grant", "liberal-grant", "recovery_extension", "execution-limit"):
+                if event["event"] in ("authorized-grant", "liberal-grant", "recovery_extension", "execution-limit", "count-reconciliation"):
                     raise ValueError("imported history cannot grant new review authority; verify authorization through the external operator manifest")
                 new.append(event)
                 events[key] = event
@@ -187,6 +196,13 @@ def usage(events):
     if len(limits) > 1:
         raise ValueError("issue review execution limit cannot be replaced")
     limit = limits[0] if limits else None
+    reconciliations = [e for e in events if e["event"] == "count-reconciliation"]
+    if reconciliations:
+        if (len(reconciliations) != 1 or not limit or limit["new_rounds_max"] != 1
+                or reconciliations[0]["issue"] != limit["issue"]
+                or reconciliations[0]["limit_sha256"] != hashlib.sha256(json.dumps(limit, sort_keys=True).encode()).hexdigest()):
+            raise ValueError("reconciliation must retain the original coordinator limit")
+        limit = {**limit, "new_rounds_max": reconciliations[0]["new_rounds_max"]}
     cap = sum(e["seconds"] for e in grants) + CAP_SECONDS + (EXTENSION_SECONDS if extensions else 0) + (RECOVERY_SECONDS if recoveries else 0)
     starts = {e["attempt_id"]: e for e in events if e["event"] == "start"}
     finishes = {e["attempt_id"]: e for e in events if e["event"] == "finish"}
@@ -426,9 +442,55 @@ def admit_completed(handle, ledger, args, events):
                          "artifacts": approval["artifacts"], "control_sha": args.control_sha}}
 
 
+def reconcile_count(handle, args, events, total):
+    """Operator-attested coordinator error correction, without changing capacity."""
+    path = args.authorization_file.resolve() if args.authorization_file else None
+    if (not path or not path.is_file() or path.stat().st_uid != os.getuid()
+            or path.stat().st_mode & 0o077 or not args.candidate
+            or args.ledger.name != f"issue-{args.issue}.jsonl"):
+        raise ValueError("count reconciliation requires private external operator authorization")
+    git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    if subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"],
+                      env=git_env, capture_output=True).returncode == 0:
+        raise ValueError("reconciliation authorization must be outside every Git checkout")
+    raw = path.read_bytes()
+    approval = json.loads(raw)
+    required = {"issue", "candidate", "limit_sha256", "ledger_sha256", "count_origin",
+                "coordinator_provenance", "human_provenance", "new_rounds_max"}
+    if (set(approval) != required or approval["issue"] != args.issue
+            or approval["candidate"] != args.candidate or approval["count_origin"] != "coordinator"
+            or approval["new_rounds_max"] is not None):
+        raise ValueError("reconciliation cannot change explicit human count or issue authority")
+    for key in ("coordinator_provenance", "human_provenance"):
+        if not re.fullmatch(r"https://github.com/dgmolla/fitsy/issues/" + str(args.issue)
+                            + r"#issuecomment-[1-9][0-9]*", approval[key]):
+            raise ValueError("reconciliation requires issue-bound authority provenance")
+    previous = next((e for e in events if e["event"] == "count-reconciliation"), None)
+    digest = hashlib.sha256(raw).hexdigest()
+    if previous:
+        if previous["authorization_sha256"] != digest:
+            raise ValueError("count reconciliation already bound to different authority")
+        return {"allowed": True, "reason": "count already reconciled", **total}
+    original = next((e for e in events if e["event"] == "execution-limit"), None)
+    handle.seek(0)
+    if (not original or original["new_rounds_max"] != 1
+            or approval["limit_sha256"] != hashlib.sha256(json.dumps(original, sort_keys=True).encode()).hexdigest()
+            or approval["ledger_sha256"] != hashlib.sha256(handle.read().encode()).hexdigest()
+            or total["unfinished_attempts"]
+            or any(e.get("verdict") == "incomplete" or e.get("failure_kind") not in (None, "completed")
+                   for e in events if e["event"] == "finish")):
+        raise ValueError("reconciliation requires unchanged completed history and original coordinator limit")
+    event = {"event": "count-reconciliation", "attempt_id": "issue-count-reconciliation", "at": utc(),
+             "authorization_sha256": digest, **approval}
+    usage(events + [event])
+    append(handle, event)
+    return {"allowed": True, "reason": "coordinator count reconciled; cumulative ceiling unchanged",
+            **usage(events + [event])[2]}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit", "account-completed", "admit-completed", "validate-completed", "completed-context"))
+    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit", "reconcile-count", "account-completed", "admit-completed", "validate-completed", "completed-context"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
     parser.add_argument("--optional-import-ledger", action="append", default=[])
@@ -480,6 +542,9 @@ def main():
             limit = total["execution_limit"]
             if limit and args.issue != limit["issue"]:
                 raise ValueError("execution limit requires the original bound issue")
+            if args.action == "reconcile-count":
+                print(json.dumps(reconcile_count(handle, args, events, total)))
+                return 0
             if args.action in ("admit-completed", "validate-completed"):
                 print(json.dumps(admit_completed(handle, args.ledger, args, events)))
                 return 0
@@ -555,7 +620,11 @@ def main():
                 append(handle, event)
                 starts, finishes, total = usage(events + [event])
             limit = total["execution_limit"]
-            if args.action == "begin" and limit and (total["bounded_executions_used"] >= limit["new_rounds_max"]
+            if args.action == "begin" and any(e["event"] == "count-reconciliation" for e in events) and any(
+                    e.get("verdict") == "incomplete" or e.get("failure_kind") not in (None, "completed")
+                    for e in finishes.values()):
+                raise ValueError("reconciled cumulative authority forbids incomplete review retries")
+            if args.action == "begin" and limit and (limit["new_rounds_max"] is not None and total["bounded_executions_used"] >= limit["new_rounds_max"]
                     or total["unfinished_attempts"]):
                 print(json.dumps({"allowed": False, "reason": "issue execution limit exhausted or prior reservation unfinished", **total}))
                 return 1
@@ -595,10 +664,10 @@ def main():
                 minimum, observed = required_window(starts, finishes, args.lens)
                 if limit:
                     minimum = min(minimum, limit["per_round_timeout_seconds_max"])
-                if policy:
+                if policy or any(e["event"] == "count-reconciliation" for e in events):
                     minimum = 1
                 result.update(required_window_seconds=minimum, recent_completed_seconds=observed,
-                              can_admit=(not limit or (total["bounded_executions_used"] < limit["new_rounds_max"] and not total["unfinished_attempts"])) and (not policy or not policy["prospective_stopped"]) and min(total["remaining_seconds"], policy["prospective_remaining_seconds"] if policy else total["remaining_seconds"]) >= minimum + CLOSEOUT_SECONDS)
+                              can_admit=(not limit or ((limit["new_rounds_max"] is None or total["bounded_executions_used"] < limit["new_rounds_max"]) and not total["unfinished_attempts"])) and (not policy or not policy["prospective_stopped"]) and min(total["remaining_seconds"], policy["prospective_remaining_seconds"] if policy else total["remaining_seconds"]) >= minimum + CLOSEOUT_SECONDS)
             if args.action == "begin":
                 if args.attempt_id in starts:
                     result.update(allowed=False, reason="duplicate attempt")
@@ -617,7 +686,7 @@ def main():
                     minimum, observed = required_window(starts, finishes, args.lens) if args.required else (1, [])
                     if limit:
                         minimum = min(minimum, limit["per_round_timeout_seconds_max"])
-                    if policy:
+                    if policy or any(e["event"] == "count-reconciliation" for e in events):
                         minimum = 1
                     result.update(required_window_seconds=minimum, recent_completed_seconds=observed)
                     if grant < minimum:

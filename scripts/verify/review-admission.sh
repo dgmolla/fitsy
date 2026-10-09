@@ -4,9 +4,17 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CONTROL_ROOT="$REPO_ROOT"
 REPO_ROOT="${FITSY_SHIPPING_ROOT:-$REPO_ROOT}"
 cd "$REPO_ROOT"
+REVIEW_ARGS=(--local --cached-only)
+for ARG in "$@"; do
+  case "$ARG" in
+    --execute-review) REVIEW_ARGS=(--local) ;;
+    --scope=*) ;; # Canonical verify runner passes its scope to check scripts.
+    *) echo "unsupported review admission argument: $ARG" >&2; exit 1 ;;
+  esac
+done
 if [ -n "${FITSY_SHIPPING_SOCKET-}${FITSY_SHIPPING_TOKEN-}" ]; then
   node scripts/verify/shipping-session.mjs --check || {
-    echo '{"name":"review-admission","status":"fail","summary":"active shipping candidate is invalid","fix":"restart cheap checks and fresh review on frozen source"}'
+    echo '{"name":"review-admission","status":"fail","summary":"active shipping candidate is invalid","fix":"revalidate cheap checks and matching review on frozen source"}'
     exit 1
   }
   echo '{"name":"review-admission","status":"pass","summary":"same live shipping execution still owns current candidate admission","fix":""}'
@@ -61,11 +69,26 @@ for CONTEXT in review-budget.jsonl review-dispositions review-tests; do
     cp -R "$REPO_ROOT/.evidence/$CONTEXT" "$ATTEMPT/candidate/.evidence/$CONTEXT" || fail
   fi
 done
-# A new execution directory prevents legacy main from reading any candidate
-# cache. New main additionally ignores all cache reads in fresh execution mode.
+# Revalidate only the established external cache or authorized original evidence.
+# A session restart does not authorize reviewer execution. Explicit execution uses
+# this same trusted overlay and writes the canonical cache for later admission.
+REVIEW_CACHE="${FITSY_REVIEW_CACHE:-$HOME/.cache/fitsy-review}"
+python3 -I - "$REVIEW_CACHE" "$REPO_ROOT" <<'PYCACHE'
+import os,pathlib,subprocess,sys
+cache=pathlib.Path(sys.argv[1]).resolve()
+root=pathlib.Path(sys.argv[2]).resolve()
+if cache == root or root in cache.parents: sys.exit('admission cache must be outside candidate checkout')
+probe=cache
+while not probe.exists(): probe=probe.parent
+env={k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
+if subprocess.run(['git','-C',str(probe),'rev-parse','--show-toplevel'],env=env,capture_output=True).returncode == 0:
+    sys.exit('admission cache must be outside every Git checkout')
+cache.mkdir(parents=True,exist_ok=True)
+PYCACHE
+
 REVIEW_CODE=0
-(cd "$ATTEMPT/candidate"; FITSY_REVIEW_FRESH_EXECUTION=1 FITSY_REVIEW_CACHE="$ATTEMPT/execution-cache" \
-  bash scripts/review/run-review.sh --local > "$ATTEMPT/result.json" 2> "$ATTEMPT/review.log") || REVIEW_CODE=$?
+(cd "$ATTEMPT/candidate"; FITSY_REVIEW_FRESH_EXECUTION=1 FITSY_REVIEW_CACHE="$REVIEW_CACHE" \
+  bash scripts/review/run-review.sh "${REVIEW_ARGS[@]}" > "$ATTEMPT/result.json" 2> "$ATTEMPT/review.log") || REVIEW_CODE=$?
 cat "$ATTEMPT/review.log" >&2
 [ "$REVIEW_CODE" = 0 ] || fail
 [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ "$(git rev-parse origin/main)" = "${COMPARE_SHA:-$BASE_SHA}" ] && \

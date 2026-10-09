@@ -8,8 +8,9 @@ interface Fixture {
 
 export function shippingSessionCases(f: Fixture, setup: () => void,
   verify: () => ReturnType<typeof spawnSync>, order: () => string,
-  callCount: () => number, passingVerdict: string, failingVerdict: string) {
-  function session(script: string) {
+  callCount: () => number, passingVerdict: string, failingVerdict: string, prepare: () => ReturnType<typeof spawnSync>) {
+  function session(script: string, execute = true) {
+    if (execute) { const reviewed = prepare(); if (reviewed.status !== 0) return reviewed; }
     const root = f.root();
     writeFileSync(join(root, '.evidence/shipping.sh'), 'set -e\n' + script + '\n');
     return spawnSync(process.execPath, ['scripts/verify/shipping-session.mjs', '--', 'bash', '.evidence/shipping.sh'], {
@@ -25,10 +26,27 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command,args
 `);
     return 'node .evidence/mobile.mjs';
   };
+  test('recreating live ownership revalidates retained evidence without new execution or accounting', () => {
+    setup();
+    expect(prepare().status).toBe(0);
+    const ledger = join(f.root(), 'budgets/issue-355.jsonl');
+    const retained = readFileSync(ledger, 'utf8');
+    for (let i = 0; i < 2; i++) {
+      const accepted = session('node scripts/verify/shipping-session.mjs --check\nnpm run verify', false);
+      if (accepted.status !== 0) throw Error(String(accepted.stderr));
+    }
+    expect(callCount()).toBe(1);
+    expect(readFileSync(ledger, 'utf8')).toBe(retained);
+  });
+  test('missing retained result never launches a reviewer while establishing ownership', () => {
+    setup();
+    expect(session('echo shipped >> .evidence/order', false).status).toBe(1);
+    expect(callCount()).toBe(0); expect(order()).not.toContain('shipped');
+  });
   test('one live review covers actual mobile admission, full verification and pre-push without saved verdict projection', () => {
     setup();
     const accepted = session(publicMobile() + '\nnpm run verify\nbash .evidence/pre-push\necho shipped >> .evidence/order');
-    if (accepted.status !== 0) throw Error(accepted.stderr);
+    if (accepted.status !== 0) throw Error(String(accepted.stderr));
     expect(callCount()).toBe(1);
     expect(order().split('\n').filter(line => line === 'full')).toHaveLength(1);
     expect(accepted.stdout).toContain('"cached":true');
@@ -46,7 +64,7 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command,args
     f.git('add', 'app.ts'); f.git('commit', '-qm', 'consolidated repair');
     writeFileSync(join(f.root(), 'verdict'), passingVerdict);
     const accepted = session(publicMobile() + '\nnpm run verify\nbash .evidence/pre-push');
-    if (accepted.status !== 0) throw Error(accepted.stderr);
+    if (accepted.status !== 0) throw Error(String(accepted.stderr));
     expect(callCount()).toBe(2); expect(order()).toContain('full');
     expect(readFileSync(ledger, 'utf8').startsWith(failed)).toBe(true);
   });
