@@ -140,6 +140,7 @@ BUDGET_LEDGER="$BUDGET_HOME/issue-$ISSUE.jsonl"
 [ -n "$HEAD_BRANCH" ] || { echo '[run-review] review requires a named candidate branch' >&2; exit 1; }
 CANDIDATE="$(git rev-list --max-parents=0 HEAD | sort):$HEAD_BRANCH"
 BUDGET_ARGS=(--ledger "$BUDGET_LEDGER" --candidate "$CANDIDATE" --issue "$ISSUE" --optional-import-ledger "$REPO_ROOT/.evidence/review-budget.jsonl")
+if [ -n "${FITSY_REVIEW_EXECUTION_POLICY:-}" ]; then BUDGET_ARGS+=(--execution-policy "$FITSY_REVIEW_EXECUTION_POLICY"); fi
 for LEGACY_LEDGER in "${FITSY_REVIEW_BUDGET_LEDGER:-}" "${FITSY_REVIEW_BUDGET_IMPORT_LEDGER:-}"; do
   [ -z "$LEGACY_LEDGER" ] || BUDGET_ARGS+=(--import-ledger "$LEGACY_LEDGER")
 done
