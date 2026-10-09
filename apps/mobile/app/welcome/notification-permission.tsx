@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from 'expo-router';
+import { Redirect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { WelcomeActions } from '@/components/WelcomeActions';
@@ -8,9 +8,10 @@ import { openPurchasedDestination } from '@/lib/paywallJourney';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import { usePurchases } from '@/lib/usePurchases';
+import { BOOT_VERDICT_CAP_MS, usePurchases } from '@/lib/usePurchases';
 import { saveReminderPreferences } from '@/lib/notificationSchedule';
 import { getExpoPushTokenAsync, requestPermissionsAsync } from '@/lib/useNotifications';
+import { withinMs } from '@/lib/async';
 import {
   trackReminderAction, trackNotificationPermissionDenied, trackNotificationPermissionGranted,
   trackNotificationPrimingAllowTapped, trackNotificationPrimingShown, trackNotificationPrimingSkipTapped,
@@ -20,25 +21,29 @@ import {
  * A trial reminder is only scheduled from verified renewal data by ReminderProvider. */
 export default function NotificationPermissionScreen() {
   const navigation = useNavigation();
-  const { customerInfo } = usePurchases();
+  const { customerInfo, ready, entitled, isUnknown } = usePurchases();
   const trial = customerInfo?.entitlements.all.pro;
   const hasTrial = trial?.isActive && trial.periodType === 'TRIAL' && trial.willRenew;
   const [busy, setBusy] = useState(false);
-  useEffect(() => { trackNotificationPrimingShown(); }, []);
+  const purchased = ready && entitled === true;
+  const currentPurchase = useRef(purchased);
+  currentPurchase.current = purchased;
+  useEffect(() => { if (purchased) trackNotificationPrimingShown(); }, [purchased]);
 
   async function registerPushToken(userId: string) {
     try { const token = await getExpoPushTokenAsync(); if (token) await api.post('/api/user/push-token', { token }, true, userId); }
     catch { /* Local reminders do not require an APNs token. */ }
   }
   async function handleAllow() {
-    if (busy) return;
+    if (busy || !purchased) return;
     setBusy(true);
     trackNotificationPrimingAllowTapped();
     try {
       const { status } = await requestPermissionsAsync();
       if (status === 'granted') {
         trackNotificationPermissionGranted();
-        const { data: { session } } = await supabase.auth.getSession();
+        const result = await withinMs(supabase.auth.getSession(), BOOT_VERDICT_CAP_MS);
+        const session = result?.data.session;
         if (session) {
           await saveReminderPreferences(session.user.id, { meals: true, trial: true });
           trackReminderAction({ action: 'preferences_changed', meals: true, trial: true });
@@ -46,13 +51,16 @@ export default function NotificationPermissionScreen() {
         }
       } else trackNotificationPermissionDenied();
     } catch { /* An unavailable permission prompt never blocks the purchased meal. */ }
-    finally { void openPurchasedDestination(navigation); }
+    finally { if (currentPurchase.current && navigation.isFocused()) void openPurchasedDestination(navigation); }
   }
   function handleSkip() {
-    if (busy) return;
+    if (busy || !purchased) return;
     trackNotificationPrimingSkipTapped();
     void openPurchasedDestination(navigation);
   }
+  if (!ready) return null;
+  if (isUnknown) return <Redirect href="/welcome/subscription-check" />;
+  if (entitled !== true) return <Redirect href="/welcome/payment" />;
   return <WelcomeScreen progress={1} title={"Make room for\nyour next meal."} subtitle="A little help to keep your goals in view."
     canContinue={!busy} onContinue={handleAllow} showBack={false}
     beforeTitle={<View style={s.success}><View style={s.tick}><Ionicons name="checkmark" size={22} color={EDITORIAL.greenAccent} /></View><Text style={s.successText}>You're in</Text></View>}

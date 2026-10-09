@@ -3,5 +3,5 @@ import { requireNodeSuite } from './node-suite-bridge';
 
 test('native runner controls pass the Node ESM regression suite', () => {
   requireNodeSuite(resolve(__dirname, 'runner-controls.test.mjs'),
-    process.env.FITSY_MEDIA_INTEGRATION === '1' ? 62 : 58, 90_000);
+    process.env.FITSY_MEDIA_INTEGRATION === '1' ? 64 : 60, 90_000);
 }, 120_000);

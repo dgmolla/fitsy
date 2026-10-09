@@ -1,7 +1,20 @@
 import { generateKeyPairSync } from "crypto";
-import { fetchPricingFromAsc } from "./pricing";
+import { fetchPricingFromAsc, priceAnswer } from "./pricing";
 
+test("public pricing qualifies a catalog trial by account eligibility", () => {
+  const answer = priceAnswer({ monthly: "$9.99", annual: "$59.99", trialDays: 14 });
+  expect(answer).toContain("14-day free trial may be available if you are eligible");
+  expect(answer).toContain("Check the app's purchase screen for your offer and first charge");
+  expect(priceAnswer({ monthly: "$9.99", annual: "$59.99", trialDays: 0 })).not.toContain("free trial");
+  expect(priceAnswer({ monthly: "$9.99", annual: "$59.99", trialDays: 0, trialLabel: "1 month" }))
+    .toContain("1 month free trial");
+  expect(priceAnswer(null)).not.toContain("$9.99");
+});
+
+// The cache wrapper is Next runtime plumbing; run the loader directly.
 jest.mock("next/cache", () => ({ unstable_cache: (fn: () => unknown) => fn }));
+jest.mock("./errorAlert", () => ({ reportServerError: jest.fn() }));
+import { reportServerError } from "./errorAlert";
 
 const ENV = ["ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_P8_BASE64"] as const;
 const saved: Record<string, string | undefined> = {};
@@ -83,6 +96,7 @@ const TRIAL = [
 ];
 
 beforeEach(() => {
+  jest.mocked(reportServerError).mockClear();
   for (const k of ENV) {
     saved[k] = process.env[k];
     delete process.env[k];
@@ -120,6 +134,8 @@ describe("fetchPricingFromAsc", () => {
       annual: "$39.99",
       trialDays: 3,
     });
+    expect(reportServerError).toHaveBeenCalledWith("ASC monthly trial catalog mismatch", expect.any(Error));
+    expect(reportServerError).toHaveBeenCalledWith("ASC annual trial catalog mismatch", expect.any(Error));
   });
 
   it("ignores scheduled and preserved price rows and formats to two decimals", async () => {
@@ -146,7 +162,7 @@ describe("fetchPricingFromAsc", () => {
     expect(p.annual).toBe("$44.50");
   });
 
-  it("reports no trial when there is no live free-trial offer, and the shorter one if plans differ", async () => {
+  it("omits the generic trial claim when there is no offer or durations differ", async () => {
     primeCreds();
     primeAsc([
       {
@@ -187,9 +203,20 @@ describe("fetchPricingFromAsc", () => {
         ],
       },
     ]);
-    await expect(fetchPricingFromAsc(TODAY)).resolves.toMatchObject({
-      trialDays: 3,
-    });
+    await expect(fetchPricingFromAsc(TODAY)).resolves.toMatchObject({ trialDays: 0 });
+  });
+
+  it("keeps a calendar-month offer in calendar units", async () => {
+    primeCreds();
+    const month = [{ offerMode: "FREE_TRIAL", duration: "ONE_MONTH", startDate: "2026-01-01" }];
+    primeAsc([
+      { productId: "com.fitsy.mobile.monthly", prices: [["7.99", null, false]], offers: month },
+      { productId: "com.fitsy.mobile.yearly", prices: [["39.99", null, false]], offers: month },
+    ]);
+    const pricing = await fetchPricingFromAsc(TODAY);
+    expect(pricing).toMatchObject({ trialDays: 0, trialLabel: "1 month" });
+    expect(priceAnswer(pricing)).toContain("1 month free trial");
+    expect(priceAnswer(pricing)).not.toContain("30-day");
   });
 
   it("throws when a product is missing so the caller can fall back", async () => {

@@ -3,14 +3,15 @@ import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { canOfferTrialReminder } from '@/lib/notificationPlan';
+import { trialPresentation } from '@/lib/trialPresentation';
 import type { purchaseTerms } from '@/lib/purchaseTerms';
 
 type Terms = ReturnType<typeof purchaseTerms>;
 export function PaywallTimeline({ terms, compact = false, concise = false }: { terms: Terms; compact?: boolean; concise?: boolean }) {
-  const reminderDay = terms?.trialDays ? terms.trialDays - 1 : null;
+  const presentation = trialPresentation(terms);
+  const reminderDay = presentation.reminderDay;
   const inBrowser = Platform.OS === 'web';
-  const canRemind = !inBrowser && canOfferTrialReminder(terms);
+  const canRemind = !inBrowser && presentation.reminderAvailable;
   const [permission, setPermission] = useState<string | null>(null);
   useEffect(() => {
     if (inBrowser || !canRemind) return;
@@ -30,7 +31,8 @@ export function PaywallTimeline({ terms, compact = false, concise = false }: { t
     { icon: 'lock-open-outline' as const, title: 'Day 1: trial access', body: concise ? 'Fitsy Pro starts.' : 'Start using Fitsy Pro.' },
     { icon: 'notifications-outline' as const, title: inBrowser ? 'Reminder unavailable in this browser' : !canRemind ? 'Reminder unavailable for this trial' : permission === 'denied' ? 'Reminders are off' : reminderDay ? `Day ${reminderDay}: optional reminder` : 'Reminder before trial end, if available',
       body: inBrowser ? (concise ? 'Use the mobile app for reminders.' : 'Trial notifications require the Fitsy mobile app.') : !canRemind ? (concise ? 'This trial ends before a reminder is possible.' : 'This trial is too short for a reminder before the cancellation deadline.') : permission === 'denied' ? (concise ? 'Turn on notifications in settings.' : 'Turn on notifications in device settings to receive one.') : concise ? 'If enabled and the store confirms your trial end.' : 'Requires permission and a store-confirmed trial end date.' },
-    { icon: 'card-outline' as const, title: terms.trialDays ? `Day ${terms.trialDays}: first charge` : `After ${terms.trial}: first charge`, body: concise ? `${terms.recurring}, unless canceled at least 24 hours before trial end.` : `${terms.recurring} after the full trial period, unless canceled at least 24 hours before it ends.` },
+    { icon: 'card-outline' as const, title: presentation.chargeTitle,
+      body: `${terms.recurring}${concise ? '' : ' after the full trial period'}, unless canceled at least 24 hours before trial end.${presentation.projectedChargeDate ? ` Estimated ${presentation.projectedChargeDate.toLocaleDateString([], { month: 'short', day: 'numeric' })} if started today; store confirms the exact date.` : ''}` },
   ] : [
     { icon: 'lock-open-outline' as const, title: terms ? 'Access starts today' : 'Your plan', body: terms ? (concise ? 'After purchase.' : 'Fitsy Pro begins after purchase.') : 'Store plans are loading.' },
     { icon: 'card-outline' as const, title: terms ? 'Your first payment' : 'Checking store terms', body: terms?.charge ?? 'Current prices and eligible offers appear when the store finishes loading.' },

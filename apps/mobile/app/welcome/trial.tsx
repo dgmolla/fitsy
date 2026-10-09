@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -7,6 +8,7 @@ import { TrialArtwork } from '@/components/TrialArtwork';
 import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
+import { defaultTrialPlan, trialPresentation } from '@/lib/trialPresentation';
 import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { trackOnboardingScreenView } from '@/lib/analytics';
@@ -25,8 +27,11 @@ export default function TrialScreen() {
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
   const eligibilityReady = !!visual || introEligibilityReady;
-  const offers = [shownOffering?.annual, shownOffering?.monthly].map(pkg => purchaseTerms(pkg?.product, pkg ? shownEligibility[pkg.product.identifier] : undefined));
-  const trial = offers.find(terms => terms?.trial)?.trial;
+  const annual = purchaseTerms(shownOffering?.annual?.product, shownOffering?.annual ? shownEligibility[shownOffering.annual.product.identifier] : undefined);
+  const monthly = purchaseTerms(shownOffering?.monthly?.product, shownOffering?.monthly ? shownEligibility[shownOffering.monthly.product.identifier] : undefined);
+  const selectedPlan = defaultTrialPlan(annual, monthly);
+  const selectedTerms = selectedPlan === 'yearly' ? annual : monthly;
+  const trial = trialPresentation(selectedTerms).trial;
   const [plansChecked, setPlansChecked] = useState(false);
   const retryInFlight = useRef(false);
   const navigating = useRef(false);
@@ -57,12 +62,18 @@ export default function TrialScreen() {
     router.push(visualRequested ? '/welcome/trial-reminder?devTrialVisual=1' : '/welcome/trial-reminder');
   }
   if (entitled === true || (shownOffering && eligibilityReady && !trial)) return <Redirect href="/welcome/payment" />;
-  return <WelcomeScreen progress={1} title={trial ? 'Try Fitsy free' : 'Checking your plans'}
-    subtitle={trial ? `Get ${trial} of Fitsy Pro with an eligible plan.` : 'Your available plans will appear next.'}
+  return <WelcomeScreen progress={1} title={trial ? 'Try Fitsy' : 'Checking your plans'}
+    subtitle={trial ? 'We want you to try Fitsy for free' : 'Your available plans will appear next.'}
     continueLabel={checkingPlans ? 'Checking plans…' : shownOffering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}
-    onContinue={() => { void continueOrRetry(); }}>
+    onContinue={() => { void continueOrRetry(); }}
+    beforeContinue={trial && !checkingPlans ? <View style={s.reassurance} testID="trial-no-payment"><Ionicons name="checkmark" size={20} color={EDITORIAL.green} /><Text style={s.reassuranceText}>No payment due now</Text></View> : undefined}
+    afterContinue={visual ? <Text style={s.note} testID="trial-visual-note">Synthetic trial eligibility for visual testing. Purchase is disabled.</Text>
+      : !offering && plansChecked ? <Text style={s.note} testID="trial-offer-note">Plans could not load. Check your connection and retry.</Text> : undefined}>
     <TrialArtwork />
-    <Text style={s.note} testID="trial-offer-note">{visual ? 'Synthetic trial eligibility for visual testing. Live Test Store prices appear on the next screen.' : !offering && plansChecked ? 'Plans could not load. Check your connection and retry.' : trial ? 'Review the price and renewal terms before you start.' : 'Checking current plans and trial eligibility…'}</Text>
   </WelcomeScreen>;
 }
-const s = StyleSheet.create({ note: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', lineHeight: 21 } });
+const s = StyleSheet.create({
+  reassurance: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 8 },
+  reassuranceText: { ...TEXT.body, color: EDITORIAL.green },
+  note: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', lineHeight: 19, marginTop: 8 },
+});

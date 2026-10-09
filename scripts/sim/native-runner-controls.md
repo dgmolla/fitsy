@@ -5,7 +5,9 @@ Set `FITSY_SIM_OWNER` and pass the owned simulator UDID.
 The runner checks resolved native/profile identity, app and installed-app hashes, separate JavaScript and public configuration hashes, simulator state, disk headroom and the owned Metro process before starting each Maestro flow.
 The [native binary reuse cookbook](../../docs/engineering/devops/native-binary-reuse.md) lists the exact compile cases and example decisions.
 Development and review `run` invocations default to `--mode=development`, which executes the same Maestro assertions and screenshots without starting the explicit recorder.
-Use `--mode=final-candidate` once the PR candidate is stable for publication evidence.
+Use `--mode=final-candidate` once the PR candidate is stable for publication evidence, inside `scripts/verify/shipping-session.mjs -- <shipping command>`.
+The live session owns one fresh review across final journeys, full verification and pre-push; a closed session or changed source fails admission.
+Standalone final-candidate runs cannot launch another reviewer or consume a saved verdict.
 Add `--record-video` when a complete video is specifically requested; final candidate runs otherwise retain command receipts and screenshots without starting the explicit recorder.
 The flow helper requires an explicit boolean recording choice and fails before starting children if the CLI omits it.
 The product-flow CLI passes its selected mode through `runSelectedRecordedFlow`, which supplies that boolean to the helper; a child-process fixture exercises both CLI choices through this production bridge.

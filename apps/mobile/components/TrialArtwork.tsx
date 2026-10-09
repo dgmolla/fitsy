@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 
@@ -7,17 +7,25 @@ export function TrialArtwork({ reminder = false }: { reminder?: boolean }) {
   const { height, fontScale } = useWindowDimensions();
   const compact = height < 780 && fontScale <= 1.2;
   return <View style={[s.wrap, compact && s.wrapCompact]} accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-    <View style={[s.orbit, compact && s.orbitCompact]}><View style={[s.inner, compact && s.innerCompact]}><Ionicons name={reminder ? 'notifications-outline' : 'restaurant-outline'} size={compact ? 42 : 50} color={EDITORIAL.green} /></View></View>
-    <View style={s.badge}><Ionicons name="checkmark-circle" size={20} color={EDITORIAL.greenMid} /><Text style={s.badgeText}>{reminder ? 'A little heads-up' : 'Meals that fit your goals'}</Text></View>
+    {reminder ? <>
+      <View style={[s.orbit, compact && s.orbitCompact]}><View style={[s.inner, compact && s.innerCompact]}><Ionicons name="notifications-outline" size={compact ? 70 : 88} color={EDITORIAL.green} /></View></View>
+      <View style={s.badge}><Ionicons name="checkmark-circle" size={20} color={EDITORIAL.greenMid} /><Text style={s.badgeText}>A little heads-up</Text></View>
+    </> : <View style={[s.phone, compact && s.phoneCompact]}>
+      <Image source={require('../assets/app-screenshot.png')} resizeMode="contain" style={[s.display, compact && s.displayCompact]} />
+    </View>}
   </View>;
 }
 const s = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 18 },
   wrapCompact: { paddingVertical: 8 },
-  orbit: { width: 160, height: 160, borderRadius: 80, borderWidth: 1, borderColor: EDITORIAL.border, alignItems: 'center', justifyContent: 'center' },
-  orbitCompact: { width: 126, height: 126, borderRadius: 63 },
-  inner: { width: 122, height: 122, borderRadius: 61, backgroundColor: EDITORIAL.greenAccentTint, alignItems: 'center', justifyContent: 'center' },
-  innerCompact: { width: 96, height: 96, borderRadius: 48 },
+  phone: { width: 194, height: 407, padding: 5, borderRadius: 31, backgroundColor: '#252b28', borderWidth: 1, borderColor: '#626a65', shadowColor: '#17251c', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 5 },
+  phoneCompact: { width: 153, height: 320, padding: 4, borderRadius: 25 },
+  display: { width: 182, height: 395, borderRadius: 25, overflow: 'hidden' },
+  displayCompact: { width: 143, height: 310, borderRadius: 20 },
+  orbit: { width: 186, height: 186, borderRadius: 93, borderWidth: 1, borderColor: EDITORIAL.border, alignItems: 'center', justifyContent: 'center' },
+  orbitCompact: { width: 150, height: 150, borderRadius: 75 },
+  inner: { width: 148, height: 148, borderRadius: 74, backgroundColor: EDITORIAL.greenAccentTint, alignItems: 'center', justifyContent: 'center' },
+  innerCompact: { width: 120, height: 120, borderRadius: 60 },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 24, backgroundColor: EDITORIAL.cream, borderWidth: 1, borderColor: EDITORIAL.border, marginTop: -18 },
   badgeText: { ...TEXT.bodySmall, color: EDITORIAL.green },
 });

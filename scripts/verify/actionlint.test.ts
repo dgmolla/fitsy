@@ -20,9 +20,9 @@ test("CI rejects missing ShellCheck even when actionlint exists", () => {
 test.each([0, 1])("installed tool exit %i determines the check verdict", code => {
   tool("actionlint", code); tool("shellcheck"); const result = run(); expect(result.status).toBe(code); expect(JSON.parse(result.stdout).status).toBe(code ? "fail" : "pass");
 });
-test.each([false, true])("local callers explicitly skip incomplete tools (actionlint installed: %s)", installed => {
+test.each([false, true])("local callers fail incomplete required tools (actionlint installed: %s)", installed => {
   if (installed) tool("actionlint");
-  const result = run("local"); expect(result.status).toBe(2); expect(JSON.parse(result.stdout).status).toBe("skipped");
+  const result = run("local"); expect(result.status).toBe(1); expect(JSON.parse(result.stdout).status).toBe("fail");
 });
 function registryEntry(name: string) {
   const registry = readFileSync(join(root, "scripts/verify/registry.yml"), "utf8");

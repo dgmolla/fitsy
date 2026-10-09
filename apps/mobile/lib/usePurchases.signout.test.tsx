@@ -26,6 +26,21 @@ setupPurchasesMocks();
 type SyncResult = { active: boolean; synced: boolean; verdict: 'active' | 'expired' | 'never_subscribed'; lastRcVerifiedAt: string };
 
 describe('sign-out', () => {
+  it('clears account-bound checkout and meal markers when account A signs out', async () => {
+    mockAuth.session = { user: { id: 'account-a' } };
+    mockStore['@fitsy/paymentSignInContinuation'] = 'user:account-a';
+    mockStore['@fitsy/pendingMealClaim'] = '1';
+    const screen = renderProvider();
+    await waitFor(() => expect(mockAuth.listener).toBeDefined());
+    mockAuth.session = null;
+    await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
+    await waitFor(() => {
+      expect(mockStore['@fitsy/paymentSignInContinuation']).toBeUndefined();
+      expect(mockStore['@fitsy/pendingMealClaim']).toBeUndefined();
+    });
+    screen.unmount();
+  });
+
   it('drops old lapsed CustomerInfo before a new free account can route to resubscribe', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValueOnce({ active: false, status: 'expired', expiresAt: null, verdict: 'expired', lastRcVerifiedAt: new Date().toISOString() });
     mockRc.identifyPurchasesUser.mockResolvedValueOnce({ entitlements: { active: {}, all: { pro: {} } } });

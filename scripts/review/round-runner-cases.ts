@@ -1,5 +1,5 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const normalizeFixtureResponse = `try:
@@ -163,7 +163,7 @@ test("PR patch comes from exact immutable commits rather than a separately fetch
 });
 
 test("manual added coverage survives default PR replacement after source changes", () => {
-  writeFileSync(join(root, ".claude/lenses/workflow-security.md"), "Review controls.\n");
+  writeFileSync(join(root, ".claude/lenses/workflow-security.md"), "Review manually requested controls.\n");
   git("add", ".claude/lenses/workflow-security.md"); git("commit", "-qm", "domain instructions");
   git("update-ref", "refs/remotes/origin/main", "HEAD");
   writeFileSync(join(root, "app.ts"), "export const value = 3;\n");
@@ -188,7 +188,7 @@ test.each(["binary", "mode"])("%s-only sensitive changes route and execute one r
   git("add", "."); git("commit", "-qm", "control baseline");
   git("update-ref", "refs/remotes/origin/main", "HEAD");
   if (kind === "binary") writeFileSync(join(root, "scripts/review/change.sh"), Buffer.from([0,3,4]));
-  else git("update-index", "--chmod=+x", "scripts/review/change.sh");
+  else { chmodSync(join(root, "scripts/review/change.sh"), 0o755); git("update-index", "--chmod=+x", "scripts/review/change.sh"); }
   if (kind === "binary") git("add", "scripts/review/change.sh");
   git("commit", "-qm", "control metadata change");
   expect(JSON.parse(run().stdout).domains).toEqual({ correctness: "pass", "workflow-security": "pass" });
@@ -202,4 +202,12 @@ test("cache-only revalidation cannot execute a missing independent result", () =
   expect(existsSync(calls)).toBe(false);
 });
 
+}
+
+// Model the existing external trusted checkout without changing candidate refs.
+export function seedManagedFixture(root: string, git: (...args: string[]) => string) {
+  const managed = join(root, "old-poller/repo");
+  git("clone", "--quiet", "--shared", "--no-checkout", root, managed);
+  git("-C", managed, "update-ref", "refs/remotes/origin/main", git("rev-parse", "HEAD").trim());
+  git("-C", managed, "remote", "set-url", "origin", "https://github.com/dgmolla/fitsy.git");
 }

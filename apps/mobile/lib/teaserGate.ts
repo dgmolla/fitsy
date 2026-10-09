@@ -5,6 +5,8 @@ import { rememberPaywallIntent, type PaywallIntent } from './paywallIntent';
 import type { SubscriptionVerdict } from './apiClient';
 import { readPaywallDecline } from './paywallAccess';
 import { clearOnboardingPreviewEntry } from './onboardingPreviewEntry';
+import { rememberPendingMealClaim } from './pendingMealClaim';
+import { rememberPaymentSignInContinuation } from './paymentSignInContinuation';
 
 const PREVIEW_SAMPLE_USED_KEY = '@fitsy/previewSampleUsed';
 const PREVIEW_TOUR_SEEN_KEY = '@fitsy/previewTourSeen';
@@ -91,11 +93,15 @@ export function registerPaywallVerdictSync(sync: () => Promise<SubscriptionVerdi
   return () => { if (paywallVerdictSync === sync) paywallVerdictSync = null; };
 }
 
+/** Reuse the provider's account-bound verdict for a post-auth checkout. */
+export async function syncPaywallVerdictForCheckout(): Promise<SubscriptionVerdict> {
+  return await paywallVerdictSync?.() ?? 'unknown';
+}
+
 /**
  * Sends a locked-out browser to the right paywall entry point:
- * - no session: account creation on the first preview selection; after an
- *   explicit decline, payment remains the entry. Its purchase action asks
- *   for sign-in when needed, without a deep link restarting onboarding;
+ * - no session: sign-in first, including after an explicit decline. A
+ *   declined offer continues to payment only after the account is known;
  * - signed in with a *lapsed* entitlement: the win-back screen
  *   (welcome/resubscribe), never the first-time paywall - that one promises
  *   a free trial Apple won't grant a second time to the same Apple ID;
@@ -110,12 +116,12 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
   navigating = true;
   const replace = options.replace ?? false;
   // Persisted decline survives anonymous sessions and legacy preview links.
-  let target: '/welcome/payment' | '/welcome/resubscribe' | '/welcome/signin' | '/welcome/subscription-check' = '/welcome/signin';
+  let target: '/welcome/payment' | '/welcome/resubscribe' | '/welcome/signin' | '/welcome/signin?returnTo=payment' | '/welcome/subscription-check' = '/welcome/signin';
   try {
     // A locked choice ends this onboarding preview pass. Returning to the
     // preview now requires another Continue from the nutrition-source screen.
     await clearOnboardingPreviewEntry();
-    if (await readPaywallDecline()) target = '/welcome/payment';
+    if (await readPaywallDecline()) target = '/welcome/signin?returnTo=payment';
     if (options.intent) await rememberPaywallIntent(options.intent);
     try {
       const { data } = await supabase.auth.getSession();
@@ -124,12 +130,16 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
         // which paywall is appropriate. A failed or stale lookup is never a
         // claim that this account has not subscribed before.
         target = '/welcome/subscription-check';
-        const verdict = await paywallVerdictSync?.() ?? 'unknown';
+        const verdict = await syncPaywallVerdictForCheckout();
         const current = await supabase.auth.getSession();
         if (current.data.session?.user.id !== data.session.user.id) return;
         if (verdict === 'expired') target = '/welcome/resubscribe';
         else if (verdict === 'never_subscribed') target = '/welcome/payment';
         else if (verdict === 'active') return;
+      } else if (target === '/welcome/signin?returnTo=payment') {
+        await rememberPaymentSignInContinuation();
+      } else if (options.intent) {
+        await rememberPendingMealClaim();
       }
     } catch {
       target = '/welcome/subscription-check';

@@ -119,6 +119,7 @@ test.each([
   mockEligibility = eligibility;
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+  expect(screen.queryByTestId('trial-no-payment')).toBeNull();
   expect(screen.queryByText('Find your next meal with Fitsy.')).toBeNull();
   expect(screen.queryByText('Trial reminder choice')).toBeNull();
 });
@@ -128,8 +129,12 @@ test('eligible trial introduction keeps the optional reminder choice', async () 
   mockEligibilityReady = true;
   mockEligibility = { annual: true, monthly: false };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
-  await waitFor(() => expect(screen.getByText('Try Fitsy free')).toBeTruthy());
-  expect(screen.getByText('Get 7 days of Fitsy Pro with an eligible plan.')).toBeTruthy();
+  await waitFor(() => expect(screen.getByText('Try Fitsy')).toBeTruthy());
+  expect(screen.getByText('We want you to try Fitsy for free')).toBeTruthy();
+  expect(screen.getByTestId('trial-no-payment')).toBeTruthy();
+  expect(screen.getByText('No payment due now')).toBeTruthy();
+  expect(screen.queryByTestId('trial-offer-note')).toBeNull();
+  expect(screen.queryByText(/7 days free|\$59\.99|No charge until/)).toBeNull();
   const continueButton = screen.getByTestId('welcome-continue');
   fireEvent.press(continueButton);
   fireEvent.press(continueButton);
@@ -140,6 +145,18 @@ test('eligible trial introduction keeps the optional reminder choice', async () 
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
 });
 
+test('mixed duration onboarding describes the annual plan selected at checkout', async () => {
+  mockOffering = { annual: { product: { ...annual.product, introPrice: { ...annual.product.introPrice, period: 'P2D' } } },
+    monthly: { product: { identifier: 'monthly', priceString: '$9.99', subscriptionPeriod: 'P1M',
+      introPrice: { price: 0, priceString: '$0', period: 'P1W', cycles: 1 } } } } as unknown as typeof mockOffering;
+  mockEligibilityReady = true;
+  mockEligibility = { annual: true, monthly: true };
+  const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+  expect(screen.getByTestId('trial-no-payment')).toBeTruthy();
+  expect(screen.getByText('Try Fitsy')).toBeTruthy();
+  expect(screen.queryByTestId('trial-offer-note')).toBeNull();
+});
+
 test('pending eligibility holds Continue before choosing the reminder or plans', async () => {
   mockOffering = { annual, monthly: null };
   mockEligibilityReady = false;
@@ -147,6 +164,7 @@ test('pending eligibility holds Continue before choosing the reminder or plans',
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
   fireEvent.press(screen.getByTestId('welcome-continue'));
   expect(screen.getPathname()).toBe('/welcome/trial');
+  expect(screen.queryByTestId('trial-no-payment')).toBeNull();
 });
 
 test('missing offering requires an explicit retry before trial routing', async () => {

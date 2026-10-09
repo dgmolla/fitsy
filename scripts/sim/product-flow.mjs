@@ -36,6 +36,12 @@ export function readPreviousReportForReuse(file) {
 const save = (file, value) => writeFileSync(file, JSON.stringify(value, null, 2) + '\n');
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 32 * 1024 * 1024, ...opts })?.trim() || '';
+export function admitFinalCandidate(mode, command = run) {
+  if (!mode.publishable) return;
+  // Final journeys belong to the live shipping execution, after fresh review.
+  // Standalone journeys fail rather than consume another bounded review round.
+  command(process.execPath, ['scripts/verify/shipping-session.mjs', '--check']);
+}
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]).sort();
 }
@@ -422,6 +428,9 @@ async function execute(udid, names, mode) {
     try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
   }
+  // Development walkthroughs remain available for reproduction and UI signoff.
+  // Publishable full acceptance requires the canonical reviewed candidate.
+  admitFinalCandidate(mode);
   const r = receipt(udid), identity = device(udid), server = backend();
   const embedded = embeddedBundleCompatibility(r, inputHash(root, 'js'), environment().configHash);
   assert(embedded.compatible,

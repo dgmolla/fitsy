@@ -638,12 +638,28 @@ def make_prompt(claim):
             'The dispatcher independently checks the merged PR and successful main Verify and Deploy run IDs at the merge SHA; '
             'missing evidence does not satisfy dependencies. '
             'if blocked, add dispatch-hold with a concrete reason and stop. '
+            'Freeze and commit the candidate, select meaningful focused tests with scripts/verify/focused-tests.mjs --set, '
+            'run npm run verify -- --stage=cheap, then use scripts/verify/shipping-session.mjs -- <shipping command> for one live fresh admission across affected final E2E, full verification and pre-push. '
+            'Keep those commands in one fail-fast session; closing it or source drift requires fresh bounded admission, never a saved review pass. '
+            'Freeze the accepted outcome during validation; optional improvements stay in owned follow-ups. '
+            'A blocker needs a reachable trigger, evidence, concrete impact and violated contract. '
+            'Preserve confirmed P0/P1 blockers, use source-bound owned P2 deferrals and P3 advisories, and never rewrite raw verdicts. '
+            'Consolidate findings into one repair pass, rerun affected cheap/focused checks and one affected rereview. '
+            'Do not reopen unrelated adjudicated behavior without new evidence. '
+            'After a passing review, proceed directly to required acceptance and authorized shipping; preserve UI signoff and release approvals. '
+            'Acknowledge human scope steering at the next safe command boundary; an issue or board edit alone is not receipt. '
+            'Measure request-to-verified delivery elapsed time and repeated review/repair cycles, not activity alone. '
             'Before expensive checks, confirm both root and workspace-local dependencies match the lockfile and generated schema; '
             'reuse only a verified matching seed and never mutate shared dependencies. '
-            'The user authorizes the existing 1800-second cumulative independent-review budget plus at most one durable '
-            '900-second extension through the shipped budget tool when required; retain every historical attempt. '
-            'Do not ask again for that extension or waive a required domain. Never invoke separate routine reviewers per domain. '
-            'If the authorized total cannot finish mandatory review, park with evidence and release the lane.\n')
+            'Default review is bounded to two combined rounds, at most 900 seconds each and 1800 cumulative seconds per issue. '
+            'Failed, interrupted and timed-out attempts count; allow at most one consolidated repair and affected rereview. '
+            'Do not expand automatically. Explicit human-approved issue-specific exceptions retain their boundary, '
+            'but newer narrower human instructions take precedence over older grants. '
+            'Read current issue-bound instructions and existing external authorization receipts before another reservation. '
+            'The historical policy remains at /Users/dawitmolla/.fitsy-dispatcher/authorizations/review-policy-human-relaxed-20261004.json; '
+            'it is not authority to override a newer bound or automatically top up. '
+            'Retain every historical attempt and required review domain. Never reset the ledger or infer review acceptance. '
+            'At the boundary, stop with the concrete finding or execution failure, its owner and next action, and release the lane.\n')
 
 
 def archive(state, claim, status, state_path):

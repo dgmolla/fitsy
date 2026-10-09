@@ -1,7 +1,8 @@
 import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
+import { TRIAL_CATALOG_POLICY } from '../../../packages/shared/src/contracts/trialPolicy';
 
 /** Visual-only eligible offer on the real Test Store prices. Never purchase it. */
-export function devTrialVisualOffer(offering: PurchasesOffering | null, requested: boolean, development = __DEV__, days: 7 | 14 = 7) {
+export function devTrialVisualOffer(offering: PurchasesOffering | null, requested: boolean, development = __DEV__, days: 7 | 14 = TRIAL_CATALOG_POLICY.desiredDays) {
   if (!development || !requested || !offering) return null;
   const preview = (pkg: PurchasesPackage | null): PurchasesPackage | null => pkg && pkg.product.priceString && pkg.product.subscriptionPeriod
     ? { ...pkg, product: { ...pkg.product, introPrice: {

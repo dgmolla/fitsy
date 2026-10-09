@@ -291,16 +291,22 @@ test('bound product-flow CLI records failure but excludes nested test-harness at
     for (const args of [['init', '-q'], ['config', 'user.name', 'Fixture'], ['config', 'user.email', 'fixture@example.test'],
       ['add', 'scripts', '.gitignore'], ['commit', '-qm', 'fixture']]) execFileSync('git', args, { cwd: dir });
     execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'], { cwd: dir });
+    const fixtureEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+      !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|FITSY_SHIPPING_(SOCKET|TOKEN)$|POSTGRES_)/.test(key)));
     const invoke = context => spawnSync(process.execPath, ['scripts/sim/product-flow.mjs', 'run', 'invalid-udid', '--mode=final-candidate'],
-      { cwd: dir, env: { ...process.env, NODE_TEST_CONTEXT: context, JEST_WORKER_ID: '' }, encoding: 'utf8', timeout: 10000 });
-    assert.equal(invoke('').status, 1);
+      { cwd: dir, env: { ...fixtureEnv, NODE_TEST_CONTEXT: context, JEST_WORKER_ID: '' }, encoding: 'utf8', timeout: 10000 });
+    const standalone = invoke('');
+    assert.equal(standalone.status, 1);
+    assert.match(standalone.stderr, /run final acceptance inside .*shipping-session/);
     const events = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
       { cwd: dir, encoding: 'utf8' })).events;
-    assert.deepEqual(events.map(event => [event.phase, event.check, event.status]), [['e2e', 'run', 'fail']]);
+    assert.deepEqual(events.filter(event => event.phase === 'e2e').map(event => [event.phase, event.check, event.status]), [['e2e', 'run', 'fail']]);
+    assert.equal(events.filter(event => event.phase === 'verification').length, 0);
+    assert.equal(existsSync(join(dir, '.evidence/review-admission')), false);
     assert.equal(invoke('child-v8').status, 1);
     const after = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
       { cwd: dir, encoding: 'utf8' })).events;
-    assert.equal(after.length, 1);
+    assert.deepEqual(after.filter(event => event.phase === 'e2e'), events.filter(event => event.phase === 'e2e'));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -869,10 +875,36 @@ test('recorder exit observed by keeper before stop fails even when IPC delivery 
 test('recorder exit inside startup wait retains partial proof and captures diagnostics', async () => {
   const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
   try {
-    const recorderScript = "require('fs').writeFileSync(process.argv[1],'partial');setTimeout(()=>process.exit(0),40)";
+    const recorderScript = "const fs=require('fs');fs.writeFileSync(process.argv[1],'partial');const wait=()=>fs.existsSync(process.argv[1]+'.startup-ack')?process.exit(0):setTimeout(wait,5);wait()";
+    // Start the real startup interval after the recorder writes its partial proof,
+    // so host process-launch latency cannot turn this into an after-startup exit.
+    const readyRecorderSpawn = (command, args, options) => {
+      const child = spawn(command, args, options), emit = child.emit;
+      let heldStart, timer;
+      const releaseStart = () => {
+        if (timer) clearTimeout(timer);
+        if (heldStart) {
+          const values = heldStart; heldStart = null; emit.call(child, 'message', ...values);
+          setImmediate(() => writeFileSync(video + '.startup-ack', 'started'));
+        }
+      };
+      child.emit = function (name, ...values) {
+        const message = name === 'message' ? values[0] : null;
+        if (message?.type === 'command-start') {
+          heldStart = values;
+          const ready = () => { if (existsSync(video)) releaseStart(); else timer = setTimeout(ready, 5); };
+          ready(); return true;
+        }
+        if (message?.type === 'command-exit') {
+          releaseStart(); setImmediate(() => emit.call(child, 'message', ...values)); return true;
+        }
+        return emit.call(this, name, ...values);
+      };
+      return child;
+    };
     const diagnostics = [];
     const { result, recorderResult, recorderStartedMs, recorderEndedMs } = await runRecordedFlow({ recordVideo: true,
-      recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video],
+      recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, video], recorderSpawnImpl: readyRecorderSpawn,
       maestroCommand: process.execPath, maestroArgs: ['-e', 'setTimeout(()=>process.exit(0),1000)'],
       udid: 'test-device', video, recorderLog: join(dir, 'recorder.log'), cwd: dir, env: process.env,
       dir, timeline, flow: '', diagnostic: async reason => { diagnostics.push(reason); await new Promise(resolve => setTimeout(resolve, 200)); }, quietMs: 3000, wallMs: 3000, pollMs: 20,
@@ -1154,12 +1186,12 @@ for (const signal of ['SIGINT', 'SIGTERM']) test(`${signal} reaps owned flow gro
   let descendantPid = null;
   const moduleUrl = new URL('./runner-controls.mjs', import.meta.url).href;
   const stubborn = "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)";
-  const maestroScript = `const fs=require('fs'),cp=require('child_process');const child=cp.spawn(process.execPath,['-e',${JSON.stringify(stubborn)}],{stdio:'ignore'});fs.writeFileSync(process.argv[1],String(child.pid));process.on('SIGTERM',()=>process.exit(0));setInterval(()=>{},1000)`;
+  const maestroScript = `setTimeout(()=>{const fs=require('fs'),cp=require('child_process');const child=cp.spawn(process.execPath,['-e',${JSON.stringify(stubborn)}],{stdio:'ignore'});fs.writeFileSync(process.argv[1],String(child.pid));process.on('SIGTERM',()=>process.exit(0));setInterval(()=>{},1000)},250)`;
   writeFileSync(fixture, `import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runRecordedFlow } from ${JSON.stringify(moduleUrl)};
 const dir = process.argv[2];
-const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});setInterval(()=>{},1000)";
+const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'video');process.exit(0)});require('fs').writeFileSync(process.argv[1]+'.ready','ready');setInterval(()=>{},1000)";
 const result = await runRecordedFlow({ recordVideo: true, recorderCommand: process.execPath, recorderArgs: ['-e', recorderScript, join(dir,'video.mp4')],
   maestroCommand: process.execPath, maestroArgs: ['-e', ${JSON.stringify(maestroScript)}, join(dir,'descendant.pid')], udid: 'fixture', video: join(dir,'video.mp4'),
   recorderLog: join(dir,'recorder.log'), cwd: dir, env: process.env, dir, timeline: join(dir,'events.jsonl'), flow: '',
@@ -1169,9 +1201,11 @@ writeFileSync(join(dir,'result.json'), JSON.stringify({ reason: result.result.re
   try {
     const timeline = join(dir, 'events.jsonl');
     const deadline = Date.now() + 5000;
-    while ((!existsSync(timeline) || !readFileSync(timeline, 'utf8').includes('maestro-start')) && Date.now() < deadline)
-      await new Promise(resolve => setTimeout(resolve, 20));
-    assert.ok(existsSync(timeline) && readFileSync(timeline, 'utf8').includes('maestro-start'), 'fixture reached active flow');
+    const ready = () => existsSync(timeline) && readFileSync(timeline, 'utf8').includes('maestro-start') &&
+      existsSync(join(dir, 'descendant.pid')) && existsSync(join(dir, 'video.mp4.ready'));
+    while (!ready() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+    assert.ok(ready(), 'fixture processes reached active flow');
+    descendantPid = Number(readFileSync(join(dir, 'descendant.pid'), 'utf8'));
     child.kill(signal);
     const exit = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(Error('fixture cleanup exceeded 5 s')), 5000);
@@ -1510,4 +1544,24 @@ test('required assertion and app identity preflight fails before walkthrough', (
   assert.equal(flowFailureReason(result, [config, { ...assertion, metadata: { status: 'SKIPPED' } }], recorder, 'welcome'), 'missing-or-failed-required-assertions');
   assert.equal(flowFailureReason(result, [config, assertion], recorder, 'another-flow'), 'wrong-app-or-flow-receipt');
   assert.equal(flowFailureReason(result, [config, assertion], recorder, 'welcome'), null);
+});
+
+test('final simulator admission requires the live reviewed shipping execution while development preserves UI signoff', async () => {
+  const { admitFinalCandidate } = await import('./product-flow.mjs');
+  const calls = [];
+  const command = (cmd, args) => calls.push([cmd, args]);
+  admitFinalCandidate(runSelection(['fixture', '--mode=final-candidate']).mode, command);
+  assert.deepEqual(calls, [[process.execPath, ['scripts/verify/shipping-session.mjs', '--check']]]);
+  calls.length = 0;
+  admitFinalCandidate(runSelection(['fixture', '--mode=development']).mode, command);
+  assert.equal(calls.length, 0);
+});
+test('expired or changed shipping execution stops final simulator admission before native acceptance', async () => {
+  const { admitFinalCandidate } = await import('./product-flow.mjs');
+  const calls = [];
+  assert.throws(() => admitFinalCandidate({ publishable: true }, (cmd, args) => {
+    calls.push([cmd, args]); throw new Error('shipping session is no longer active');
+  }), /shipping session is no longer active/);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0][1], ['scripts/verify/shipping-session.mjs', '--check']);
 });

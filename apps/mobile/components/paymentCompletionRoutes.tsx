@@ -20,6 +20,9 @@ export function paymentCompletionRoutes(onNotificationMount: () => void) {
     _layout: () => <PurchasesProvider><Stack screenOptions={{ headerShown: false }} /></PurchasesProvider>,
     'welcome/_layout': WelcomeLayout, 'welcome/trial': TrialScreen, 'welcome/trial-reminder': TrialReminderScreen,
     'welcome/payment': PaymentScreen,
+    'welcome/signin': () => <Text>Sign in before plans</Text>,
+    'welcome/resubscribe': () => <Text>Resubscribe plans</Text>,
+    'welcome/subscription-check': () => <Text>Checking subscription</Text>,
     'welcome/notification-permission': OldNotificationScreen,
     '(tabs)/_layout': () => <Stack />, '(tabs)/search': () => <Text>Meal search</Text>, 'restaurant/[id]': Restaurant,
   };
