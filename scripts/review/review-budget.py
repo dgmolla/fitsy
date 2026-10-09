@@ -273,9 +273,103 @@ def prospective_policy(path, ledger, candidate, issue, events):
             "prospective_cap_seconds": policy["seconds"]}
 
 
+def account_completed(handle, ledger, args, events):
+    """Record an operator-attested execution, without granting admission or time.
+
+    The operator attests raw artifact identity after independent inspection.
+    This accounting action never makes a reviewer verdict a shipping receipt.
+    """
+    path = args.authorization_file.resolve() if args.authorization_file else None
+    if (not path or not path.is_file() or path.stat().st_uid != os.getuid()
+            or path.stat().st_mode & 0o077 or not args.candidate
+            or ledger.name != f"issue-{args.issue}.jsonl"):
+        raise ValueError("completed accounting requires a private external operator manifest")
+    git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    if subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"],
+                      env=git_env, capture_output=True).returncode == 0:
+        raise ValueError("completed accounting authorization must be outside every Git checkout")
+    raw = path.read_bytes()
+    approval = json.loads(raw)
+    fields = {"issue", "candidate", "source_sha", "base_sha", "domains", "provider",
+              "model", "reasoning_effort", "acceptance_sha256", "provenance", "artifacts",
+              "original_ledger_sha256", "prior_completed_seconds", "completed_seconds_stop_at",
+              "completed_at"}
+    if (set(approval) != fields or approval["issue"] != args.issue
+            or approval["candidate"] != args.candidate or approval["source_sha"] != args.source_sha
+            or approval["base_sha"] != args.base_sha
+            or approval["domains"] != sorted(set(args.required_domain)) or not args.required_domain
+            or approval["acceptance_sha256"] != args.acceptance_sha256
+            or not re.fullmatch(r"[0-9a-f]{64}", args.acceptance_sha256 or "")
+            or any(not re.fullmatch(r"[0-9a-f]{40}", approval[key] or "") for key in ("source_sha", "base_sha"))
+            or (approval["provider"], approval["model"], approval["reasoning_effort"]) != ("codex", "gpt-6-sol", "high")
+            or not re.fullmatch(r"https://github.com/dgmolla/fitsy/issues/" + str(args.issue)
+                               + r"#issuecomment-[1-9][0-9]*", approval["provenance"])):
+        raise ValueError("completed accounting source/acceptance/policy binding mismatch")
+    artifacts = approval["artifacts"]
+    if not isinstance(artifacts, dict) or set(artifacts) != {"verdict", "execution", "prompt", "stderr"}:
+        raise ValueError("completed accounting requires all original raw artifacts")
+    contents = {}
+    for key, artifact in artifacts.items():
+        if not isinstance(artifact, dict) or set(artifact) != {"path", "sha256"}:
+            raise ValueError("invalid completed artifact identity")
+        contents[key] = Path(artifact["path"]).read_bytes()
+        if hashlib.sha256(contents[key]).hexdigest() != artifact["sha256"]:
+            raise ValueError("completed raw artifact changed")
+    execution = json.loads(contents["execution"])
+    verdict = json.loads(contents["verdict"])
+    seconds = execution.get("elapsed_seconds")
+    if (execution.get("kind") != "completed" or execution.get("returncode") != 0
+            or not number(seconds) or not 0 < seconds <= 300
+            or execution.get("stdout_bytes") != len(contents["verdict"])
+            or execution.get("stderr_bytes") != len(contents["stderr"])
+            or verdict.get("source_sha") != args.source_sha or verdict.get("base_sha") != args.base_sha
+            or set(verdict.get("domains", {})) != set(args.required_domain)
+            or any(row != {"verdict": "pass", "findings": []} for row in verdict["domains"].values())
+            or not isinstance(verdict.get("summary"), str) or not verdict["summary"].strip()
+            or not isinstance(verdict.get("limitations"), list)):
+        raise ValueError("completed execution lacks a complete passing exact-source verdict")
+    starts, finishes, total = usage(events)
+    if total["unfinished_attempts"]:
+        raise ValueError("completed accounting requires released original execution ownership")
+    attempt = "completed-" + artifacts["execution"]["sha256"]
+    completed_at = datetime.fromisoformat(approval["completed_at"])
+    if completed_at.tzinfo is None:
+        raise ValueError("completed accounting requires an observed timezone-bound completion")
+    rows = [{"event": "start", "attempt_id": attempt, "epoch": completed_at.timestamp() - seconds,
+             "round_id": args.source_sha, "source_sha": args.source_sha, "lens": "review-round",
+             "adoption": hashlib.sha256(raw).hexdigest()},
+            {"event": "finish", "attempt_id": attempt, "elapsed_seconds": seconds,
+             "round_id": args.source_sha, "source_sha": args.source_sha, "lens": "review-round",
+             "outcome": "pass", "verdict": "pass", "failure_kind": "completed",
+             "adoption": hashlib.sha256(raw).hexdigest()}]
+    original = indexed(events)
+    present = [(row["event"], attempt) in original for row in rows]
+    if any(present) and not (all(present) and all(original[(row["event"], attempt)] == row for row in rows)):
+        raise ValueError("conflicting or duplicate completed execution accounting")
+    # Verify the retained raw prefix even on repeat. No old event is rewritten.
+    handle.seek(0)
+    lines = handle.readlines()
+    prefix = "".join(line for line in lines if not (
+        json.loads(line).get("event") == "import" and json.loads(line).get("source") == str(path)
+        and any(row.get("attempt_id") == attempt for row in json.loads(line).get("events", []))))
+    prior = total["completed_seconds"] - (seconds if all(present) else 0)
+    if (hashlib.sha256(prefix.encode()).hexdigest() != approval["original_ledger_sha256"]
+            or not number(approval["prior_completed_seconds"])
+            or not math.isclose(prior, approval["prior_completed_seconds"], abs_tol=1e-6)
+            or not number(approval["completed_seconds_stop_at"])
+            or prior + seconds > approval["completed_seconds_stop_at"]):
+        raise ValueError("completed accounting original history or authorized stop mismatch")
+    if not all(present):
+        append(handle, {"event": "import", "at": utc(), "source": str(path),
+                        "sha256": hashlib.sha256(raw).hexdigest(), "events": rows})
+    return {"allowed": True, "reason": "completed execution accounted; shipping admission unchanged",
+            "accounted_seconds": seconds, "idempotent": all(present),
+            **usage(list(indexed(read_events(handle)).values()))[2]}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit"))
+    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit", "account-completed"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
     parser.add_argument("--optional-import-ledger", action="append", default=[])
@@ -289,6 +383,9 @@ def main():
     parser.add_argument("--required", action="store_true")
     parser.add_argument("--candidate")
     parser.add_argument("--issue", type=int)
+    parser.add_argument("--base-sha")
+    parser.add_argument("--acceptance-sha256")
+    parser.add_argument("--required-domain", action="append", default=[])
     parser.add_argument("--execution-policy", type=Path)
     parser.add_argument("--authorization-file", type=Path)
     parser.add_argument("--failure-kind", choices=FAILURE_KINDS)
@@ -312,6 +409,9 @@ def main():
             limit = total["execution_limit"]
             if limit and args.issue != limit["issue"]:
                 raise ValueError("execution limit requires the original bound issue")
+            if args.action == "account-completed":
+                print(json.dumps(account_completed(handle, args.ledger, args, events)))
+                return 0
             if limit and args.action in ("grant-authorized", "extend", "bind-limit"):
                 raise ValueError("issue execution limit forbids top-ups or allowance resets")
             if args.execution_policy and args.action == "grant-authorized":
