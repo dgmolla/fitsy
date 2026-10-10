@@ -210,3 +210,9 @@ That approval binds `issue`, `source_sha`, `base_sha`, sorted `domains`, `cache_
 It contains no verdict projection and does not replace the retained provider receipt, raw verdict or original ledger.
 Admission checks that approval plus the original execution evidence and refuses changed authority or evidence.
 The existing cache, ledger and adapter remain the execution/accounting entrypoints.
+
+Direct `account-completed` uses the same canonical completed manifest and approved operator digest as shipping admission.
+`reconcile-allocation` uses `~/.fitsy-review/operators/issue-N-allocation.json`; `reconcile-count` uses `~/.fitsy-review/operators/issue-N-count.json`.
+Both reconciliation manifests additionally bind `control_sha` and `operator_sha256` to the separately approved installation.
+Caller-selected copies cannot mutate the canonical original ledger through these entrypoints.
+Allocation reconciliation validates the proposed retained usage before appending an event, so an effective-cap conflict leaves the original ledger readable and unchanged.

@@ -146,12 +146,13 @@ BUDGET_LEDGER="$BUDGET_HOME/issue-$ISSUE.jsonl"
 # A candidate branch has one issue even when its first PR changes the body/head.
 [ -n "$HEAD_BRANCH" ] || { echo '[run-review] review requires a named candidate branch' >&2; exit 1; }
 CANDIDATE="$(git rev-list --max-parents=0 HEAD | sort):$HEAD_BRANCH"
-BUDGET_ARGS=(--ledger "$BUDGET_LEDGER" --candidate "$CANDIDATE" --issue "$ISSUE" --optional-import-ledger "$REPO_ROOT/.evidence/review-budget.jsonl")
+BUDGET_ARGS=(--ledger "$BUDGET_LEDGER" --candidate "$CANDIDATE" --issue "$ISSUE")
+if [ ! -f "$COMPLETED_AUTH" ]; then BUDGET_ARGS+=(--optional-import-ledger "$REPO_ROOT/.evidence/review-budget.jsonl"); fi
 if [ -n "${FITSY_REVIEW_EXECUTION_POLICY:-}" ]; then BUDGET_ARGS+=(--execution-policy "$FITSY_REVIEW_EXECUTION_POLICY"); fi
 for LEGACY_LEDGER in "${FITSY_REVIEW_BUDGET_LEDGER:-}" "${FITSY_REVIEW_BUDGET_IMPORT_LEDGER:-}"; do
-  [ -z "$LEGACY_LEDGER" ] || BUDGET_ARGS+=(--import-ledger "$LEGACY_LEDGER")
+  [ -z "$LEGACY_LEDGER" ] || [ -f "$COMPLETED_AUTH" ] || BUDGET_ARGS+=(--import-ledger "$LEGACY_LEDGER")
 done
-if [ "$TARGET" != "--local" ]; then
+if [ "$TARGET" != "--local" ] && [ ! -f "$COMPLETED_AUTH" ]; then
   BUDGET_ARGS+=(--optional-import-ledger "${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/budgets/$TARGET.jsonl")
 fi
 if ! python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" >&2; then

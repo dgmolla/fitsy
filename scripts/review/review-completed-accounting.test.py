@@ -119,7 +119,14 @@ class CompletedAccounting(unittest.TestCase):
         self.assertEqual(saved, self.ledger.read_text())
 
     def test_real_cli_accounts_without_changing_bound_limits(self):
-        command = ['python3', str(Path(__file__).with_name('review-budget.py')),
+        operator = budget.ADMIN_REVIEW / 'operators/review-budget.py'
+        operator.parent.mkdir(exist_ok=True)
+        operator.write_text(Path(budget.__file__).read_text().replace(
+            'ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)',
+            'ADMIN_HOME = Path(' + repr(str(budget.ADMIN_HOME)) + ')'))
+        self.approval['operator_sha256'] = sha(operator.read_bytes())
+        self.save()
+        command = ['python3', str(operator),
                    'account-completed', '--ledger', str(self.ledger), '--issue', '443',
                    '--candidate', self.args.candidate, '--source-sha', self.args.source_sha,
                    '--base-sha', self.args.base_sha, '--acceptance-sha256', self.args.acceptance_sha256,
@@ -135,6 +142,20 @@ class CompletedAccounting(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(json.loads(result.stdout)['idempotent'])
         self.assertEqual(saved, self.ledger.read_text())
+        incoming = self.root / 'caller-history.jsonl'
+        incoming.write_text(json.dumps(dict(event='start', attempt_id='forged-import', epoch=1))+'\n')
+        result = subprocess.run(command + ['--import-ledger', str(incoming)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(saved, self.ledger.read_text())
+
+    def test_direct_accounting_cannot_select_its_own_approval(self):
+        caller = self.root / 'caller-approved.json'
+        caller.write_bytes(self.args.authorization_file.read_bytes())
+        caller.chmod(0o600)
+        self.args.authorization_file = caller
+        with self.assertRaisesRegex(ValueError, 'canonical coordinator authority'):
+            self.call()
+        self.assertEqual(self.original, self.ledger.read_text())
 
     def test_manifest_stop_must_match_effective_retained_cap(self):
         self.approval['completed_seconds_stop_at'] += 1
@@ -615,37 +636,92 @@ class CompletedAdmission(CompletedAccounting):
 
 
 class PermanentAllocation(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.old_admin = (budget.ADMIN_HOME, budget.ADMIN_REVIEW, budget.ADMIN_CACHE, budget.ADMIN_BUDGET)
+        budget.ADMIN_HOME = self.root
+        budget.ADMIN_REVIEW = self.root / '.fitsy-review'
+        budget.ADMIN_CACHE = self.root / '.cache/fitsy-review'
+        budget.ADMIN_BUDGET = budget.ADMIN_CACHE / 'budgets'
+        budget.ADMIN_BUDGET.mkdir(parents=True)
+        (budget.ADMIN_REVIEW / 'operators').mkdir(parents=True)
+        self.ledger = budget.ADMIN_BUDGET / 'issue-463.jsonl'
+        self.authority = self.root / 'human.json'
+        self.authority.write_text(json.dumps(dict(human_instruction='Add global exception permanently')))
+        self.authority.chmod(0o600)
+        self.path = budget.ADMIN_REVIEW / 'operators/issue-463-allocation.json'
+        self.args = SimpleNamespace(issue=463, ledger=self.ledger, source_sha='f'*40, authorization_file=self.path)
+
+    def tearDown(self):
+        budget.ADMIN_HOME, budget.ADMIN_REVIEW, budget.ADMIN_CACHE, budget.ADMIN_BUDGET = self.old_admin
+        self.temp.cleanup()
+
+    def approval(self, cap, completed):
+        value = dict(issue=463, candidate_source='f'*40, authority_file=str(self.authority),
+            human_instruction='Add global exception permanently', provider='codex', model='gpt-6-sol', effort='high',
+            original_cap_seconds=cap, original_completed_seconds=completed, additional_seconds=300,
+            cumulative_stop_seconds=cap+300, per_execution_timeout_seconds=300,
+            control_sha='2'*40, operator_sha256=sha(Path(budget.__file__).read_bytes()),
+            reason='Diagnosed installed admission mismatch')
+        self.path.write_text(json.dumps(value)); self.path.chmod(0o600)
+
+    def call(self):
+        with self.ledger.open('a+') as handle:
+            rows = budget.read_events(handle)
+            return budget.reconcile_allocation(handle, self.args, rows, budget.usage(rows)[2])
+
     def test_additive_idempotent_authority_and_changed_source_refusal(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            ledger = root / 'issue-463.jsonl'
-            events = [dict(event='execution-limit', attempt_id='issue-execution-limit', issue=463,
-                baseline_attempts=[], baseline_completed_seconds=0, completed_seconds_stop_at=300,
-                new_rounds_max=1, per_round_timeout_seconds_max=295)]
-            original = json.dumps(events[0]) + '\n'
-            ledger.write_text(original)
-            authority = root / 'human.json'
-            authority.write_text(json.dumps(dict(human_instruction='Add global exception permanently')))
-            authority.chmod(0o600)
-            approval = dict(issue=463, candidate_source='f'*40, authority_file=str(authority),
-                human_instruction='Add global exception permanently', provider='codex', model='gpt-6-sol', effort='high',
-                original_cap_seconds=300, original_completed_seconds=0, additional_seconds=300,
-                cumulative_stop_seconds=600, per_execution_timeout_seconds=300, reason='Diagnosed installed admission mismatch')
-            path = root / 'allocation.json'
-            path.write_text(json.dumps(approval)); path.chmod(0o600)
-            args = SimpleNamespace(issue=463, source_sha='f'*40, authorization_file=path)
-            with ledger.open('a+') as handle:
-                result = budget.reconcile_allocation(handle, args, events, budget.usage(events)[2])
-            self.assertEqual(result['cap_seconds'], 600)
-            self.assertTrue(ledger.read_text().startswith(original))
-            with ledger.open('a+') as handle:
-                rows = budget.read_events(handle)
-                self.assertTrue(budget.reconcile_allocation(handle, args, rows, budget.usage(rows)[2])['idempotent'])
-            args.source_sha = 'e'*40
-            with ledger.open('a+') as handle:
-                rows = budget.read_events(handle)
-                with self.assertRaises(ValueError):
-                    budget.reconcile_allocation(handle, args, rows, budget.usage(rows)[2])
+        events = [dict(event='execution-limit', attempt_id='issue-execution-limit', issue=463,
+            baseline_attempts=[], baseline_completed_seconds=0, completed_seconds_stop_at=300,
+            new_rounds_max=1, per_round_timeout_seconds_max=295)]
+        original = json.dumps(events[0]) + '\n'
+        self.ledger.write_text(original); self.approval(300, 0)
+        self.assertEqual(self.call()['cap_seconds'], 600)
+        self.assertTrue(self.ledger.read_text().startswith(original))
+        saved = self.ledger.read_bytes()
+        self.assertTrue(self.call()['idempotent'])
+        self.assertEqual(saved, self.ledger.read_bytes())
+        self.args.source_sha = 'e'*40
+        with self.assertRaises(ValueError): self.call()
+        self.assertEqual(saved, self.ledger.read_bytes())
+
+    def test_effective_cap_conflict_refuses_before_append(self):
+        events = [dict(event='start', attempt_id='old', epoch=1),
+            dict(event='finish', attempt_id='old', elapsed_seconds=100),
+            dict(event='execution-limit', attempt_id='issue-execution-limit', issue=463,
+                 baseline_attempts=['old'], baseline_completed_seconds=100,
+                 completed_seconds_stop_at=1900, new_rounds_max=1, per_round_timeout_seconds_max=300)]
+        original = ''.join(json.dumps(e)+'\n' for e in events)
+        self.ledger.write_text(original); self.approval(1800, 100)
+        with self.assertRaisesRegex(ValueError, 'extend the retained authority additively'): self.call()
+        self.assertEqual(original, self.ledger.read_text())
+        with self.ledger.open() as handle:
+            self.assertEqual(budget.usage(budget.read_events(handle))[2]['cap_seconds'], 1800)
+
+    def test_manifest_stop_cannot_exceed_effective_capacity(self):
+        self.ledger.write_text(json.dumps(dict(event='execution-limit', attempt_id='issue-execution-limit', issue=463,
+            baseline_attempts=[], baseline_completed_seconds=0, completed_seconds_stop_at=1800,
+            new_rounds_max=1, per_round_timeout_seconds_max=300))+'\n')
+        self.approval(1800, 0)
+        saved = self.ledger.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'effective original ledger capacity'): self.call()
+        self.assertEqual(saved, self.ledger.read_bytes())
+
+    def test_caller_selected_authority_and_unapproved_operator_refuse(self):
+        self.ledger.write_text(json.dumps(dict(event='execution-limit', attempt_id='issue-execution-limit', issue=463,
+            baseline_attempts=[], baseline_completed_seconds=0, completed_seconds_stop_at=300,
+            new_rounds_max=1, per_round_timeout_seconds_max=295))+'\n')
+        self.approval(300, 0)
+        saved = self.ledger.read_bytes()
+        caller = self.root / 'caller.json'; caller.write_bytes(self.path.read_bytes()); caller.chmod(0o600)
+        self.args.authorization_file = caller
+        with self.assertRaisesRegex(ValueError, 'canonical coordinator authority'): self.call()
+        self.args.authorization_file = self.path
+        value = json.loads(self.path.read_text()); value['operator_sha256']='0'*64
+        self.path.write_text(json.dumps(value))
+        with self.assertRaisesRegex(ValueError, 'exact independently reviewed operator'): self.call()
+        self.assertEqual(saved, self.ledger.read_bytes())
 
 
 if __name__ == '__main__':

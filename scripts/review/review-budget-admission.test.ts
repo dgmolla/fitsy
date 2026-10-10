@@ -1,12 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const script = join(__dirname, "review-budget.py");
+const sourceScript = join(__dirname, "review-budget.py");
+let script = sourceScript;
 let root: string;
 let ledger: string;
-beforeEach(() => { root = mkdtempSync(join(tmpdir(), "fitsy-review-admission-")); ledger = join(root, "events.jsonl"); });
+beforeEach(() => { script = sourceScript; root = mkdtempSync(join(tmpdir(), "fitsy-review-admission-")); ledger = join(root, "events.jsonl"); });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 function seed(events: unknown[]) { writeFileSync(ledger, events.map(row => JSON.stringify(row)).join("\n") + "\n"); }
 function call(action: string, id: string, extra: string[] = []) {
@@ -135,8 +136,13 @@ function reconciliationFixture() {
   seed([original, ...history('reviewed', 272.11151983297896)]);
   const crypto = require('node:crypto') as typeof import('node:crypto');
   const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
-  const approval = join(root, 'reconcile.json');
-  const value = { issue: 456, candidate: 'root:branch', count_origin: 'coordinator', new_rounds_max: null,
+  script = join(root, 'operator.py');
+  writeFileSync(script, readFileSync(sourceScript, 'utf8')
+    .replace('ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)', `ADMIN_HOME = Path(${JSON.stringify(root)})`)
+    .replace('ADMIN_BUDGET = ADMIN_CACHE / "budgets"', `ADMIN_BUDGET = Path(${JSON.stringify(root)})`));
+  const operators = join(root, '.fitsy-review/operators'); mkdirSync(operators, { recursive: true });
+  const approval = join(operators, 'issue-456-count.json');
+  const value = { control_sha: '2'.repeat(40), operator_sha256: hash(readFileSync(script, 'utf8')), issue: 456, candidate: 'root:branch', count_origin: 'coordinator', new_rounds_max: null,
     limit_sha256: hash(JSON.stringify(original, Object.keys(original).sort()).replaceAll(':', ': ').replaceAll(',', ', ')),
     ledger_sha256: hash(readFileSync(ledger, 'utf8')),
     coordinator_provenance: 'https://github.com/dgmolla/fitsy/issues/456#issuecomment-12345',
@@ -166,7 +172,7 @@ test('coordinator count reconciliation is additive, idempotent and retains the o
   expect(call('begin', 'retry', [...boundArgs, '--execution-policy', policy]).status).toBe(1);
 });
 
-test.each(['human count', 'wrong issue', 'changed history', 'extra capacity', 'incomplete review'])('count reconciliation refuses %s without changing history', mutation => {
+test.each(['human count', 'wrong issue', 'changed history', 'extra capacity', 'incomplete review', 'unapproved operator', 'caller-selected approval'])('count reconciliation refuses %s without changing history', mutation => {
   const { approval, value, invoke } = reconciliationFixture();
   if (mutation === 'human count') value.count_origin = 'human';
   if (mutation === 'wrong issue') value.issue = 463;
@@ -175,6 +181,13 @@ test.each(['human count', 'wrong issue', 'changed history', 'extra capacity', 'i
   if (mutation === 'incomplete review') {
     const rows = readFileSync(ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line));
     rows[2].failure_kind = 'timeout'; rows[2].verdict = 'incomplete'; seed(rows);
+  }
+  if (mutation === 'unapproved operator') value.operator_sha256 = '0'.repeat(64);
+  if (mutation === 'caller-selected approval') {
+    const copy = join(root, 'caller.json'); writeFileSync(copy, JSON.stringify(value), { mode: 0o600 });
+    const before = readFileSync(ledger, 'utf8');
+    expect(call('reconcile-count', 'current', [...boundArgs, '--authorization-file', copy]).status).toBe(1);
+    expect(readFileSync(ledger, 'utf8')).toBe(before); return;
   }
   writeFileSync(approval, JSON.stringify(value));
   const retained = readFileSync(ledger, 'utf8');

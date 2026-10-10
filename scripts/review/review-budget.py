@@ -135,7 +135,7 @@ def append(handle, event):
     os.fsync(handle.fileno())
 
 
-def import_history(handle, ledger, paths, optional_paths):
+def import_history(handle, ledger, paths, optional_paths, allow_new=True):
     """Retain original events and flags; copied histories count exactly once."""
     events = indexed(read_events(handle))
     pending = []
@@ -162,6 +162,8 @@ def import_history(handle, ledger, paths, optional_paths):
                 new.append(event)
                 events[key] = event
         if new:
+            if not allow_new:
+                raise ValueError("privileged accounting requires retained canonical history; caller imports cannot mutate it")
             pending.append({"event": "import", "at": utc(), "source": str(source.resolve()),
                             "sha256": digest, "events": new})
     usage(list(events.values()))
@@ -315,6 +317,8 @@ def prospective_policy(path, ledger, candidate, issue, events):
 def canonical_authority(path, expected):
     # Administrator/coordinator custody is trusted, as in execute-review.py.
     # Candidate environment and copies of controls cannot select this authority.
+    if path is None:
+        raise ValueError("canonical coordinator authority is required")
     if path.absolute() != expected.absolute() or path.resolve() != expected.resolve():
         raise ValueError("admission requires canonical coordinator authority, not caller-selected proof")
     probe = path
@@ -331,12 +335,21 @@ def canonical_ledger(ledger, issue):
         raise ValueError("admission requires original canonical issue ledger")
 
 
-def completed_authority(args):
+def operator_authority(args, kind):
     canonical_ledger(args.ledger, args.issue)
-    approval = canonical_authority(args.authorization_file, ADMIN_REVIEW / "completed" / f"issue-{args.issue}.json")
-    if (approval.get("control_sha") != args.control_sha
-            or approval.get("operator_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest()):
+    expected = (ADMIN_REVIEW / "completed" / f"issue-{args.issue}.json" if kind == "completed"
+                else ADMIN_REVIEW / "operators" / f"issue-{args.issue}-{kind}.json")
+    approval = canonical_authority(args.authorization_file, expected)
+    if (not re.fullmatch(r"[0-9a-f]{40}", approval.get("control_sha", ""))
+            or approval.get("operator_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+            or (getattr(args, "control_sha", None) is not None
+                and approval["control_sha"] != args.control_sha)):
         raise ValueError("coordinator has not approved this exact independently reviewed operator installation")
+    return approval
+
+
+def completed_authority(args):
+    approval = operator_authority(args, "completed")
     expected = subprocess.check_output(["git", "-C", str(args.candidate_root), "show",
                                         args.control_sha + ":scripts/review/review-budget.py"],
                                        env={k:v for k,v in os.environ.items() if not k.startswith("GIT_")})
@@ -351,6 +364,7 @@ def account_completed(handle, ledger, args, events, record=True):
     The operator attests raw artifact identity after independent inspection.
     This accounting action never makes a reviewer verdict a shipping receipt.
     """
+    operator_authority(args, "completed")
     path = args.authorization_file.resolve() if args.authorization_file else None
     if (not path or not path.is_file() or path.stat().st_uid != os.getuid()
             or path.stat().st_mode & 0o077 or not args.candidate
@@ -460,7 +474,7 @@ def completed_context(path):
 
 def reconcile_allocation(handle, args, events, total):
     """Recognize current human authority without rewriting historical limits."""
-    approval = completed_context(args.authorization_file)
+    approval = operator_authority(args, "allocation")
     if approval.get("issue") != args.issue or approval.get("candidate_source") != args.source_sha:
         raise ValueError("review allocation source or issue mismatch")
     digest = hashlib.sha256(args.authorization_file.read_bytes()).hexdigest()
@@ -488,8 +502,11 @@ def reconcile_allocation(handle, args, events, total):
              "authority_sha256": hashlib.sha256(Path(approval["authority_file"]).read_bytes()).hexdigest()}
     import io
     read_events(io.StringIO(json.dumps(event)))
+    proposed = usage(events + [event])[2]
+    if proposed["cap_seconds"] != approval["cumulative_stop_seconds"]:
+        raise ValueError("allocation stop disagrees with effective original ledger capacity")
     append(handle, event)
-    return {"allowed": True, "idempotent": False, **usage(events + [event])[2]}
+    return {"allowed": True, "idempotent": False, **proposed}
 
 
 def admit_cache(args, events):
@@ -598,6 +615,7 @@ def admit_completed(handle, ledger, args, events):
 
 def reconcile_count(handle, args, events, total):
     """Operator-attested coordinator error correction, without changing capacity."""
+    operator_authority(args, "count")
     path = args.authorization_file.resolve() if args.authorization_file else None
     if (not path or not path.is_file() or path.stat().st_uid != os.getuid()
             or path.stat().st_mode & 0o077 or not args.candidate
@@ -610,7 +628,7 @@ def reconcile_count(handle, args, events, total):
     raw = path.read_bytes()
     approval = json.loads(raw)
     required = {"issue", "candidate", "limit_sha256", "ledger_sha256", "count_origin",
-                "coordinator_provenance", "human_provenance", "new_rounds_max"}
+                "coordinator_provenance", "human_provenance", "new_rounds_max", "control_sha", "operator_sha256"}
     if (set(approval) != required or approval["issue"] != args.issue
             or approval["candidate"] != args.candidate or approval["count_origin"] != "coordinator"
             or approval["new_rounds_max"] is not None):
@@ -682,13 +700,20 @@ def main():
         except (ValueError, OSError, KeyError) as error:
             print(str(error), file=__import__("sys").stderr)
             return 1
-    args.ledger.parent.mkdir(parents=True, exist_ok=True)
+    privileged = {"account-completed": "completed", "admit-completed": "completed",
+                  "validate-completed": "completed", "reconcile-allocation": "allocation",
+                  "reconcile-count": "count"}
     try:
+        if args.action in privileged:
+            # Check custody before candidate binding, imports or any ledger write.
+            operator_authority(args, privileged[args.action])
+        args.ledger.parent.mkdir(parents=True, exist_ok=True)
         if args.candidate is not None:
             bind_candidate(args.ledger, args.candidate, args.issue)
         with args.ledger.open("a+") as handle:
             fcntl.flock(handle, fcntl.LOCK_EX)
-            events = import_history(handle, args.ledger, args.import_ledger, args.optional_import_ledger)
+            events = import_history(handle, args.ledger, args.import_ledger, args.optional_import_ledger,
+                                    allow_new=args.action not in privileged)
             starts, finishes, total = usage(events)
             if total["extension_issue"] is not None and args.issue is not None and total["extension_issue"] != args.issue:
                 raise ValueError("review extension issue mismatch")
