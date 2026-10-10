@@ -52,6 +52,8 @@ fail() {
 }
 [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
 HEAD_SHA="$(git rev-parse HEAD)"
+# Local acceptance derives its range from authenticated source, never the caller.
+unset FITSY_DIFF_BASE FITSY_DIFF_HEAD
 ADMIN_HOME="$(python3 -I -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
 for NAME in FITSY_REVIEW_HOME FITSY_REVIEW_CACHE FITSY_REVIEW_BUDGET_HOME FITSY_REVIEW_COMPLETED_HOME; do
   [ -z "${!NAME:-}" ] || { echo "caller-selected $NAME cannot authorize shipping" >&2; fail; }
@@ -82,6 +84,7 @@ if (approval.get('issue') != 463 or approval.get('source_sha') != sys.argv[3]
 PYBOOTSTRAP
   # Only the coordinator may approve/install this exact operator after review.
   # admit-completed checks its canonical approval and digest before accounting.
+  export FITSY_DIFF_BASE="$BASE_SHA" FITSY_DIFF_HEAD="$HEAD_SHA"
   if [ "$SESSION_REVALIDATION" = 0 ]; then
     "$CONTROL_ROOT/scripts/verify/run.mjs" --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
   fi
@@ -120,6 +123,7 @@ if [ -f "$COMPLETED_AUTH" ]; then
 else
   [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] || fail
 fi
+export FITSY_DIFF_BASE="${COMPARE_SHA:-$BASE_SHA}" FITSY_DIFF_HEAD="$HEAD_SHA"
 BRANCH="$(git symbolic-ref --quiet --short HEAD)"
 # Direct admission completes cheap checks before validating independent evidence.
 if [ "$SESSION_REVALIDATION" = 0 ]; then

@@ -757,6 +757,54 @@ class PermanentAllocation(unittest.TestCase):
         with self.assertRaises(ValueError): self.call()
         self.assertEqual(saved, self.ledger.read_bytes())
 
+    def test_malformed_history_recovers_only_with_later_source_bound_allocation(self):
+        limit = dict(event='execution-limit', attempt_id='issue-execution-limit', issue=463,
+            baseline_attempts=[], baseline_completed_seconds=0, completed_seconds_stop_at=300,
+            new_rounds_max=1, per_round_timeout_seconds_max=295)
+        rows = [dict(event='start', attempt_id='malformed', epoch=1, source_sha='a'*40),
+            dict(event='finish', attempt_id='malformed', elapsed_seconds=1,
+                 outcome='fail', verdict='incomplete', failure_kind='invalid_output'), limit,
+            dict(event='count-reconciliation', attempt_id='issue-count-reconciliation', issue=463,
+                 new_rounds_max=None, limit_sha256=sha(json.dumps(limit, sort_keys=True).encode()),
+                 authorization_sha256='b'*64)]
+        original = ''.join(json.dumps(e)+'\n' for e in rows)
+        self.ledger.write_text(original)
+        # Exercise the real installed CLI in an isolated administrator namespace.
+        operator = Path(budget.__file__)
+        operator.write_text(operator.read_text().replace(
+            'ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)',
+            'ADMIN_HOME = Path(' + repr(str(budget.ADMIN_HOME)) + ')'))
+        self.approval(300, 1)
+        self.call()
+        authorized = self.ledger.read_bytes()
+        command = ['python3', '-I', str(operator), 'begin', '--ledger', str(self.ledger),
+            '--issue', '463', '--source-sha', self.args.source_sha,
+            '--round-id', 'recovery', '--lens', 'round', '--attempt-id', 'recovery',
+            '--timeout-seconds', '50']
+        result = subprocess.run(command, capture_output=True, text=True, env=fixture_env())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(self.ledger.read_text().startswith(original))
+        self.assertEqual(json.loads(result.stdout)['completed_seconds'], 1)
+        for invalid in ('wrong-source', 'forged-allocation', 'later-incomplete'):
+            with self.subTest(invalid=invalid):
+                self.ledger.write_bytes(authorized)
+                rejected_command = list(command)
+                if invalid == 'wrong-source':
+                    rejected_command[rejected_command.index('--source-sha') + 1] = 'e'*40
+                elif invalid == 'forged-allocation':
+                    events = [json.loads(line) for line in authorized.decode().splitlines()]
+                    events[-1]['authorization_sha256'] = '0'*64
+                    self.ledger.write_text(''.join(json.dumps(event)+'\n' for event in events))
+                else:
+                    with self.ledger.open('a') as handle:
+                        handle.write(json.dumps(dict(event='start', attempt_id='later', epoch=2))+'\n')
+                        handle.write(json.dumps(dict(event='finish', attempt_id='later', elapsed_seconds=1,
+                            outcome='fail', verdict='incomplete', failure_kind='invalid_output'))+'\n')
+                saved = self.ledger.read_bytes()
+                rejected = subprocess.run(rejected_command, capture_output=True, text=True, env=fixture_env())
+                self.assertEqual(rejected.returncode, 1, rejected.stdout + rejected.stderr)
+                self.assertEqual(saved, self.ledger.read_bytes())
+
     def test_effective_cap_conflict_refuses_before_append(self):
         events = [dict(event='start', attempt_id='old', epoch=1),
             dict(event='finish', attempt_id='old', elapsed_seconds=100),

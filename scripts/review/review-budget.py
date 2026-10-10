@@ -825,10 +825,22 @@ def main():
                 append(handle, event)
                 starts, finishes, total = usage(events + [event])
             limit = total["execution_limit"]
-            if args.action == "begin" and any(e["event"] == "count-reconciliation" for e in events) and any(
-                    e.get("verdict") == "incomplete" or e.get("failure_kind") not in (None, "completed")
-                    for e in finishes.values()):
-                raise ValueError("reconciled cumulative authority forbids incomplete review retries")
+            if args.action == "begin" and any(e["event"] == "count-reconciliation" for e in events):
+                incomplete = [index for index, event in enumerate(events) if event["event"] == "finish"
+                    and (event.get("verdict") == "incomplete" or event.get("failure_kind") not in (None, "completed"))]
+                if incomplete:
+                    allocations = [event for index, event in enumerate(events) if index > max(incomplete)
+                        and event["event"] == "review-allocation" and event["issue"] == args.issue
+                        and event["source_sha"] == args.source_sha]
+                    if not allocations:
+                        raise ValueError("reconciled incomplete history requires a later source-bound review allocation")
+                    allocation_args = argparse.Namespace(**vars(args))
+                    allocation_args.authorization_file = ADMIN_REVIEW / "operators" / f"issue-{args.issue}-allocation.json"
+                    approval = operator_authority(allocation_args, "allocation")
+                    if (approval.get("candidate_source") != args.source_sha
+                            or hashlib.sha256(allocation_args.authorization_file.read_bytes()).hexdigest()
+                            != allocations[-1]["authorization_sha256"]):
+                        raise ValueError("incomplete recovery allocation requires matching installed approval")
             if args.action == "begin" and limit and (limit["new_rounds_max"] is not None and total["bounded_executions_used"] >= limit["new_rounds_max"]
                     or total["unfinished_attempts"]):
                 print(json.dumps({"allowed": False, "reason": "issue execution limit exhausted or prior reservation unfinished", **total}))

@@ -14,7 +14,7 @@ import { git } from './impact-plan.mjs';
 const administratorPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 function executionEnvironment(env) {
   return { ...Object.fromEntries(Object.entries(env).filter(([key]) =>
-    !key.startsWith('GIT_') && key !== 'NODE_OPTIONS' && key !== 'NODE_PATH' && key !== 'BASH_ENV' && key !== 'ENV' && !key.startsWith('BASH_FUNC_'))), PATH: administratorPath };
+    !key.startsWith('GIT_') && !key.startsWith('FITSY_DIFF_') && key !== 'NODE_OPTIONS' && key !== 'NODE_PATH' && key !== 'BASH_ENV' && key !== 'ENV' && !key.startsWith('BASH_FUNC_'))), PATH: administratorPath };
 }
 
 function identity(root, env = process.env) {
@@ -61,7 +61,10 @@ export async function assertShippingSession(root = process.cwd(), env = process.
 }
 function execute(command, args, root, env) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd: root, env: executionEnvironment(env), stdio: 'inherit' });
+    const trustedEnv = executionEnvironment(env);
+    trustedEnv.FITSY_DIFF_BASE = git(['rev-parse', 'origin/main'], root, trustedEnv).trim();
+    trustedEnv.FITSY_DIFF_HEAD = git(['rev-parse', 'HEAD'], root, trustedEnv).trim();
+    const child = spawn(command, args, { cwd: root, env: trustedEnv, stdio: 'inherit' });
     const forward = signal => child.kill(signal);
     const interrupt = () => forward('SIGINT');
     const terminate = () => forward('SIGTERM');
