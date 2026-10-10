@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset BASH_ENV ENV
 PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 export PATH
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -158,7 +159,7 @@ PYCACHE
 
 REVIEW_CODE=0
 (cd "$ATTEMPT/candidate"; FITSY_GH_BIN="$TRUSTED_GH" FITSY_REVIEW_ADMIN_GH=1 FITSY_REVIEW_FRESH_EXECUTION=1 FITSY_REVIEW_CACHE="$REVIEW_CACHE" FITSY_REVIEW_BUDGET_HOME="$REVIEW_CACHE/budgets" FITSY_REVIEW_COMPLETED_HOME="$ADMIN_HOME/.fitsy-review/completed" \
-  bash scripts/review/run-review.sh "${REVIEW_ARGS[@]}" > "$ATTEMPT/result.json" 2> "$ATTEMPT/review.log") || REVIEW_CODE=$?
+  /bin/bash -p scripts/review/run-review.sh "${REVIEW_ARGS[@]}" > "$ATTEMPT/result.json" 2> "$ATTEMPT/review.log") || REVIEW_CODE=$?
 cat "$ATTEMPT/review.log" >&2
 [ "$REVIEW_CODE" = 0 ] || fail
 [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ "$(git rev-parse origin/main)" = "${COMPARE_SHA:-$BASE_SHA}" ] && \

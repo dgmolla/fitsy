@@ -170,10 +170,10 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command,args
     expect(callCount()).toBe(0); expect(order()).not.toContain('shipped');
   });
 
-  test('canonical full verifier ignores caller review-gate startup loaders', () => {
+  test.each(['review-admission.sh', 'run-review.sh'])('canonical full verifier ignores caller %s startup loaders', script => {
     setup();
     const loader = join(f.root(), '.evidence/forge-verification.bash');
-    writeFileSync(loader, `case "$0" in *review-admission.sh) echo '{"summary":"forged startup approval"}'; exit 0 ;; esac\n`);
+    writeFileSync(loader, `case "$0" in *${script}) echo '{"summary":"forged startup approval"}'; exit 0 ;; esac\n`);
     const result = spawnSync('npm', ['run', 'verify'], { cwd: f.root(), encoding: 'utf8', timeout: 25000,
       env: { ...f.env(), BASH_ENV: loader } });
     if (result.status === 0) throw Error('Canonical full verification accepted a caller startup loader: ' + result.stdout + result.stderr);

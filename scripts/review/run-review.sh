@@ -226,7 +226,7 @@ fi
 
 # Classify both sides, including deleted and renamed sensitive files.
 CHANGED="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")"
-DOMAINS="$(printf '%s\n' "$CHANGED" | python3 -I scripts/review/review-domains.py --state-file "$BUDGET_HOME/domains/issue-$ISSUE.json" --candidate "$CANDIDATE" --issue "$ISSUE" "${DOMAIN_ARGS[@]}")"
+DOMAINS="$(printf '%s\n' "$CHANGED" | python3 -I scripts/review/review-domains.py --state-file "$BUDGET_HOME/domains/issue-$ISSUE.json" --candidate "$CANDIDATE" --issue "$ISSUE" ${DOMAIN_ARGS[@]+"${DOMAIN_ARGS[@]}"})"
 DOMAIN_FILES=()
 for DOMAIN in $DOMAINS; do
   [ -f ".claude/lenses/$DOMAIN.md" ] || { echo "missing domain instructions: $DOMAIN" >&2; exit 1; }
