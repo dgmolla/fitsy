@@ -6,8 +6,8 @@ import { git } from './impact-plan.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 const lifetime = 6 * 3600_000;
-export function sourceIdentity(root) {
-  const paths = git(['ls-files', '--cached', '--others', '--exclude-standard', '-z'], root).split('\0').filter(Boolean);
+export function sourceIdentity(root, env = process.env) {
+  const paths = git(['ls-files', '--cached', '--others', '--exclude-standard', '-z'], root, env).split('\0').filter(Boolean);
   // Ignored local configuration affects execution just as exported env does.
   for (const directory of ['', 'apps/api', 'apps/mobile', 'scripts']) {
     try { for (const file of readdirSync(join(root, directory))) if (/^\.env(?:\.|$)/.test(file)) paths.push(join(directory, file)); }

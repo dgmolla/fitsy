@@ -11,17 +11,25 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { sourceIdentity } from './receipt-cache.mjs';
 import { git } from './impact-plan.mjs';
 
+const administratorPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+function executionEnvironment(env) {
+  return { ...Object.fromEntries(Object.entries(env).filter(([key]) =>
+    key !== 'BASH_ENV' && key !== 'ENV' && !key.startsWith('BASH_FUNC_'))), PATH: administratorPath };
+}
+
 function identity(root, env = process.env) {
-  if (git(['status', '--porcelain', '--untracked-files=all'], root).trim()) throw Error('candidate must remain frozen and committed');
+  const trustedEnv = executionEnvironment(env);
+  const readGit = (args, cwd = root) => git(args, cwd, trustedEnv);
+  if (readGit(['status', '--porcelain', '--untracked-files=all'], root).trim()) throw Error('candidate must remain frozen and committed');
   const recipe = join(root, '.evidence/verify/focused-tests.json');
   const bindingFile = join(root, '.evidence/delivery/binding.json');
   const binding = existsSync(bindingFile) ? readFileSync(bindingFile, 'utf8') : null;
   const issue = binding ? JSON.parse(binding).issue : null;
   const managedRepo = join(userInfo().homedir, '.fitsy-review/repo');
-  const managedMain = existsSync(join(managedRepo, '.git')) ? git(['rev-parse', 'origin/main'], managedRepo).trim() : null;
+  const managedMain = existsSync(join(managedRepo, '.git')) ? readGit(['rev-parse', 'origin/main'], managedRepo).trim() : null;
   const authorization = issue ? join(userInfo().homedir, '.fitsy-review/completed', `issue-${issue}.json`) : null;
-  return JSON.stringify({ head: git(['rev-parse', 'HEAD'], root).trim(),
-    base: git(['rev-parse', 'origin/main'], root).trim(), managedMain, source: sourceIdentity(root), binding,
+  return JSON.stringify({ head: readGit(['rev-parse', 'HEAD'], root).trim(),
+    base: readGit(['rev-parse', 'origin/main'], root).trim(), managedMain, source: sourceIdentity(root, trustedEnv), binding,
     authorization: authorization && existsSync(authorization) ? readFileSync(authorization, 'utf8') : null,
     focused: existsSync(recipe) ? readFileSync(recipe, 'utf8') : null });
 }
@@ -35,7 +43,7 @@ export async function assertShippingSession(root = process.cwd(), env = process.
   // admission owns cheap checks; this evidence-only recheck cannot run a review.
   const controls = resolve(fileURLToPath(new URL('../..', import.meta.url)));
   const admissionEnv = { ...env, FITSY_SHIPPING_ROOT: realpathSync(resolve(root)) };
-  if (await execute('bash', [join(controls, 'scripts/verify/review-admission.sh'), '--revalidate-session'], root, admissionEnv) !== 0) {
+  if (await execute('/bin/bash', ['-p', join(controls, 'scripts/verify/review-admission.sh'), '--revalidate-session'], root, admissionEnv) !== 0) {
     throw Error('live ownership requires current canonical independent review admission');
   }
   await new Promise((resolvePromise, reject) => {
@@ -53,7 +61,7 @@ export async function assertShippingSession(root = process.cwd(), env = process.
 }
 function execute(command, args, root, env) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd: root, env, stdio: 'inherit' });
+    const child = spawn(command, args, { cwd: root, env: executionEnvironment(env), stdio: 'inherit' });
     const forward = signal => child.kill(signal);
     const interrupt = () => forward('SIGINT');
     const terminate = () => forward('SIGTERM');
@@ -72,12 +80,12 @@ export async function shippingSession(command, args, { root = process.cwd(), env
   const frozen = identity(root, env);
   const controls = resolve(fileURLToPath(new URL('../..', import.meta.url)));
   const runtime = controls === root ? null : identity(controls, env);
-  if (runtime && git(['rev-parse', 'HEAD'], controls).trim() !== git(['rev-parse', 'origin/main'], controls).trim()) {
+  if (runtime && git(['rev-parse', 'HEAD'], controls, executionEnvironment(env)).trim() !== git(['rev-parse', 'origin/main'], controls, executionEnvironment(env)).trim()) {
     throw Error('external shipping controls must be clean exact current main');
   }
   const stable = () => identity(root, env) === frozen && (!runtime || identity(controls, env) === runtime);
   // This existing admission completes cheap/focused checks and revalidates matching trusted review.
-  const code = await execute('bash', [join(controls, 'scripts/verify/review-admission.sh')], root, { ...env, FITSY_SHIPPING_ROOT: root });
+  const code = await execute('/bin/bash', ['-p', join(controls, 'scripts/verify/review-admission.sh')], root, { ...env, FITSY_SHIPPING_ROOT: root });
   if (code !== 0) return code;
   if (!stable()) throw Error('candidate changed during admission');
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-shipping-'));

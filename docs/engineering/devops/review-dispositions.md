@@ -233,3 +233,8 @@ Shipping admission pins issue retrieval to the existing administrator GitHub CLI
 Protected retrieval clears caller credential, host, configuration, proxy and executable-search selectors and reads the canonical administrator account configuration against `github.com` and `dgmolla/fitsy`.
 The protected runner receives that pinned executable explicitly; standalone provider fixtures remain external-boundary tests and cannot authorize shipping.
 An acceptance change invalidates reuse even if a caller executable returns the previously approved body.
+
+Admission and live ownership use administrator executable locations for their Git, Node, Python and shell commands, including source identity reads.
+The canonical runner invokes the system Bash with privileged startup semantics; live ownership clears caller shell loaders and exported functions before child execution.
+Caller PATH or `BASH_ENV` artifacts cannot replace proof validation before the gate's code runs.
+These are existing entrypoint corrections, not additional approval issuers or a new execution service.

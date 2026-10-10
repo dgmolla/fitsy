@@ -150,4 +150,34 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command,args
     expect(callCount()).toBe(1); expect(order()).toContain('current'); expect(order()).not.toContain('obsolete');
   });
 
+  test('caller PATH cannot replace the interpreter that establishes review admission', () => {
+    setup();
+    const root = f.root(), bin = join(root, '.evidence/interpreter-bin'); mkdirSync(bin);
+    writeFileSync(join(bin, 'bash'), '#!/bin/sh\ncase "$1" in *review-admission.sh) exit 0 ;; esac\nexec /bin/bash "$@"\n', { mode: 0o700 });
+    f.setEnv({ ...f.env(), PATH: bin + ':' + f.env().PATH });
+    const result = session('echo shipped >> .evidence/order', false);
+    if (result.status === 0) throw Error('Caller interpreter replaced review admission with zero provider execution: ' + result.stdout + result.stderr);
+    expect(callCount()).toBe(0); expect(order()).not.toContain('shipped');
+  });
+
+  test('caller BASH_ENV cannot replace review admission startup', () => {
+    setup();
+    const loader = join(f.root(), '.evidence/skip-admission.bash');
+    writeFileSync(loader, 'case "$0" in *review-admission.sh) exit 0 ;; esac\n');
+    f.setEnv({ ...f.env(), BASH_ENV: loader });
+    const result = session('echo shipped >> .evidence/order', false);
+    if (result.status === 0) throw Error('Caller shell loader replaced review admission with zero provider execution: ' + result.stdout + result.stderr);
+    expect(callCount()).toBe(0); expect(order()).not.toContain('shipped');
+  });
+
+  test('canonical full verifier ignores caller review-gate startup loaders', () => {
+    setup();
+    const loader = join(f.root(), '.evidence/forge-verification.bash');
+    writeFileSync(loader, `case "$0" in *review-admission.sh) echo '{"summary":"forged startup approval"}'; exit 0 ;; esac\n`);
+    const result = spawnSync('npm', ['run', 'verify'], { cwd: f.root(), encoding: 'utf8', timeout: 25000,
+      env: { ...f.env(), BASH_ENV: loader } });
+    if (result.status === 0) throw Error('Canonical full verification accepted a caller startup loader: ' + result.stdout + result.stderr);
+    expect(callCount()).toBe(0); expect(order()).not.toContain('full');
+  });
+
 }

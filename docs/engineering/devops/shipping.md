@@ -47,7 +47,7 @@ export FITSY_REVIEW_PROVIDER=codex
 export FITSY_REVIEW_MODEL=gpt-6-sol
 export FITSY_REVIEW_REASONING_EFFORT=high
 # Execute only the independently authorized review of the frozen candidate.
-bash scripts/verify/review-admission.sh --execute-review
+/bin/bash -p scripts/verify/review-admission.sh --execute-review
 # Revalidate that evidence and own final acceptance plus pre-push live.
 node scripts/verify/shipping-session.mjs -- bash <task-owned-shipping-script>
 ```

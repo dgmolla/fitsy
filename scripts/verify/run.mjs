@@ -164,7 +164,7 @@ function runCheck(c) {
     if (c.name === 'dev-drift' && process.env.FITSY_VERIFY_OWNED_DB) {
       checkEnv.POSTGRES_URL_NON_POOLING = process.env.FITSY_VERIFY_CALLER_NON_POOLING_URL ?? '';
     }
-    execFile("bash", [join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
+    execFile("/bin/bash", ["-p", join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
       env: checkEnv }, (err, stdout, stderr) => {
       const code = err ? (err.code ?? 1) : 0;
       let parsed;

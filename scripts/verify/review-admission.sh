@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CONTROL_ROOT="$REPO_ROOT"
 REPO_ROOT="${FITSY_SHIPPING_ROOT:-$REPO_ROOT}"
@@ -26,7 +28,7 @@ if [ "$SESSION_REVALIDATION" = 1 ]; then
 fi
 if [ "$SESSION_REVALIDATION" = 0 ] && [ -n "${FITSY_SHIPPING_SOCKET-}${FITSY_SHIPPING_TOKEN-}" ]; then
   # Socket data cannot substitute for administrator-managed review authority.
-  bash "$CONTROL_ROOT/scripts/verify/review-admission.sh" --revalidate-session || exit 1
+  /bin/bash -p "$CONTROL_ROOT/scripts/verify/review-admission.sh" --revalidate-session || exit 1
   node "$CONTROL_ROOT/scripts/verify/shipping-session.mjs" --check || {
     echo '{"name":"review-admission","status":"fail","summary":"active shipping candidate is invalid","fix":"revalidate cheap checks and matching review on frozen source"}'
     exit 1

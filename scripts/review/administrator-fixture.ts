@@ -25,6 +25,7 @@ export function approveFixtureCaches(root: string, env: NodeJS.ProcessEnv) {
 export function installAdmissionFixture(root: string, admin: string, cache: string, git: (...args: string[]) => string) {
     const admission = join(root, 'scripts/verify/review-admission.sh');
     writeFileSync(admission, readFileSync(admission, 'utf8')
+      .replace('PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', `PATH=${join(root, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`)
       .replace('ADMIN_HOME="$(python3 -I -c \'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)\')"', `ADMIN_HOME=${JSON.stringify(admin)}`)
       .replace('TRUSTED_GH=/opt/homebrew/bin/gh', `TRUSTED_GH=${JSON.stringify(join(root, 'bin/gh'))}`)
       .replace('TRUSTED_REPO="$ADMIN_HOME/.fitsy-review/repo"', `TRUSTED_REPO=${JSON.stringify(join(root, 'old-poller/repo'))}`)
@@ -32,6 +33,7 @@ export function installAdmissionFixture(root: string, admin: string, cache: stri
     const session = join(root, 'scripts/verify/shipping-session.mjs');
     writeFileSync(session, readFileSync(session, 'utf8')
       .replaceAll('userInfo().homedir', JSON.stringify(admin))
+      .replace("const administratorPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';", `const administratorPath = ${JSON.stringify(join(root, 'bin') + ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')};`)
       .replace(`const managedRepo = join(${JSON.stringify(admin)}, '.fitsy-review/repo');`, `const managedRepo = ${JSON.stringify(join(root, 'old-poller/repo'))};`));
     const runner = join(root, 'scripts/review/run-review.sh');
     const installed = readFileSync(runner, 'utf8')
