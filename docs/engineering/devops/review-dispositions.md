@@ -216,3 +216,7 @@ Direct `account-completed` uses the same canonical completed manifest and approv
 Both reconciliation manifests additionally bind `control_sha` and `operator_sha256` to the separately approved installation.
 Caller-selected copies cannot mutate the canonical original ledger through these entrypoints.
 Allocation reconciliation validates the proposed retained usage before appending an event, so an effective-cap conflict leaves the original ledger readable and unchanged.
+
+Issue463 bootstrap requires the candidate comparison ref to match managed trusted main before admission and rechecks that ref before returning.
+Live shipping identity also binds the managed-main ref; an advance during acceptance closes that source-bound admission.
+Frozen issue443 retains its explicitly approved product comparison while separately binding the unchanged current control installation.

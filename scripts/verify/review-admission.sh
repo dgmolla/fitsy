@@ -39,6 +39,7 @@ COMPLETED_AUTH="$ADMIN_HOME/.fitsy-review/completed/issue-$ISSUE.json"
 # identity, never a nutrition admission, and never permission to execute review.
 if [ -n "${FITSY_REVIEW_BOOTSTRAP_OPERATOR:-}" ]; then
   [ "$ISSUE" = 463 ] && [ "$REPO_ROOT" = "$CONTROL_ROOT" ] && [ -f "$COMPLETED_AUTH" ] || fail
+  [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] || fail
   [ "${REVIEW_ARGS[*]}" = '--local --cached-only' ] || fail
   [ "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" = "$ADMIN_HOME/.fitsy-review/operators/review-budget.py" ] || fail
   python3 -I - "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" "$COMPLETED_AUTH" "$HEAD_SHA" <<'PYBOOTSTRAP' || fail
@@ -73,7 +74,9 @@ print("\n".join(kept))')" || fail
   DOMAINS="$(git diff --name-only --no-renames origin/main...HEAD | python3 -I scripts/review/review-domains.py)" || fail
   for DOMAIN in $DOMAINS; do ARGS+=(--required-domain "$DOMAIN"); done
   python3 -I "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" admit-completed "${ARGS[@]}" >&2 || fail
-  [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
+  [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] && \
+    [ "$(git -C "$TRUSTED_REPO" rev-parse origin/main)" = "$BASE_SHA" ] && \
+    [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
   echo '{"name":"review-admission","status":"pass","summary":"independently reviewed bootstrap operator validated genuine source-bound evidence","fix":""}'
   exit 0
 fi
@@ -139,5 +142,6 @@ REVIEW_CODE=0
 cat "$ATTEMPT/review.log" >&2
 [ "$REVIEW_CODE" = 0 ] || fail
 [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ "$(git rev-parse origin/main)" = "${COMPARE_SHA:-$BASE_SHA}" ] && \
+  [ "$(git -C "$TRUSTED_REPO" rev-parse origin/main)" = "$BASE_SHA" ] && \
   [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
 echo '{"name":"review-admission","status":"pass","summary":"validated exact-head independent review permits full acceptance","fix":""}'

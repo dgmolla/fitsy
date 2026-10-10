@@ -459,6 +459,19 @@ class CompletedAdmission(CompletedAccounting):
         self.assertIn('state=error', (self.root / 'statuses').read_text())
 
     def test_external_session_owns_native_gate_acceptance_hook_and_authority(self):
+        self.external_session()
+
+    def test_bootstrap_refuses_stale_managed_main(self):
+        self.external_session(bootstrap=True)
+
+    def external_session(self, bootstrap=False):
+        issue = 463 if bootstrap else 443
+        domains = ['correctness', 'workflow-security'] if bootstrap else ['correctness']
+        if bootstrap:
+            original = self.ledger.read_text().replace('443', '463')
+            self.ledger = budget.ADMIN_BUDGET / 'issue-463.jsonl'
+            self.ledger.write_text(original)
+            self.approval['original_ledger_sha256'] = sha(original.encode())
         source = Path(__file__).resolve().parents[2]
         product = self.root / 'session-product'
         product.mkdir()
@@ -511,23 +524,28 @@ class CompletedAdmission(CompletedAccounting):
         git('update-ref', 'refs/remotes/origin/main', base, cwd=runtime)
         (runtime / 'node_modules').symlink_to(source / 'node_modules')
         git('checkout', '-qb', 'frozen')
-        (product / 'app.ts').write_text('frozen product')
-        git('commit', '-qam', 'fixture product')
+        if bootstrap:
+            path = product / 'scripts/review/review-budget.py'
+            path.write_text(path.read_text() + '\n# Isolated approved bootstrap control fixture.\n')
+        else:
+            (product / 'app.ts').write_text('frozen product')
+        git('commit', '-qam', 'fixture candidate')
         head = git('rev-parse', 'HEAD')
         (product / 'node_modules').symlink_to(source / 'node_modules')
         git('remote', 'add', 'origin', str(runtime))
         (product / '.evidence').mkdir()
-        subprocess.check_call(['node', 'scripts/delivery/phase-events.mjs', 'bind', '--issue', '443'], cwd=product, env=fixture_env(), stdout=subprocess.DEVNULL)
-        approval = dict(self.approval, source_sha=head, base_sha=base, domains=['correctness'],
+        subprocess.check_call(['node', 'scripts/delivery/phase-events.mjs', 'bind', '--issue', str(issue)], cwd=product, env=fixture_env(), stdout=subprocess.DEVNULL)
+        approval = dict(self.approval, issue=issue, source_sha=head, base_sha=base, domains=domains,
+                        provenance=f'https://github.com/dgmolla/fitsy/issues/{issue}#issuecomment-6084442263',
                         candidate=git('rev-list', '--max-parents=0', 'HEAD') + ':frozen',
                         acceptance_sha256=sha(b'Frozen acceptance'))
         auth_home = budget.ADMIN_REVIEW / 'completed'
-        approval.update(control_sha=base, operator_sha256=sha((runtime / 'scripts/review/review-budget.py').read_bytes()))
+        approval.update(control_sha=head if bootstrap else base, operator_sha256=sha(((product if bootstrap else runtime) / 'scripts/review/review-budget.py').read_bytes()))
         # Synthetic artifacts establish only this isolated protocol regression.
-        raws = {'prompt': f'Review issue443 {head} against {base} correctness',
+        raws = {'prompt': f'Review issue{issue} {head} against {base} ' + ' '.join(domains),
                 'stderr': 'model: gpt-6-sol\napproval: never\nsandbox: read-only\nreasoning effort: high\n',
                 'verdict': json.dumps(dict(source_sha=head, base_sha=base,
-                    domains={'correctness': {'verdict': 'pass', 'findings': []}}, summary='Fixture', limitations=[]))}
+                    domains={domain: {'verdict': 'pass', 'findings': []} for domain in domains}, summary='Fixture', limitations=[]))}
         raws['execution'] = json.dumps(dict(kind='completed', returncode=0, elapsed_seconds=252.81189254205674,
             stdout_bytes=len(raws['verdict'].encode()), stderr_bytes=len(raws['stderr'].encode())))
         approval['artifacts'] = {}
@@ -535,7 +553,7 @@ class CompletedAdmission(CompletedAccounting):
             path = auth_home / key
             path.write_text(raw)
             approval['artifacts'][key] = dict(path=str(path), sha256=sha(raw.encode()))
-        auth = auth_home / 'issue-443.json'
+        auth = auth_home / f'issue-{issue}.json'
         auth.write_text(json.dumps(approval))
         auth.chmod(0o600)
         tools = self.root / 'session-bin'
@@ -553,16 +571,40 @@ class CompletedAdmission(CompletedAccounting):
         env = dict(fixture_env(), PATH=str(tools) + os.pathsep + os.environ['PATH'],
             HOME=str(budget.ADMIN_HOME), FITSY_REVIEW_PROVIDER='codex',
             FITSY_REVIEW_MODEL='gpt-6-sol', FITSY_REVIEW_REASONING_EFFORT='high')
+        if bootstrap:
+            operator = budget.ADMIN_REVIEW / 'operators/review-budget.py'
+            operator.parent.mkdir(exist_ok=True)
+            shutil.copyfile(product / 'scripts/review/review-budget.py', operator)
+            operator.chmod(0o600)
+            env['FITSY_REVIEW_BOOTSTRAP_OPERATOR'] = str(operator)
         shutil.copyfile(source / '.githooks/pre-push', product / '.evidence/hook')
         (product / '.evidence/native.mjs').write_text(
             "import {admitFinalCandidate} from '../scripts/sim/product-flow.mjs';\n"
             "admitFinalCandidate({publishable:true});\n")
         command = ['node', str(runtime / 'scripts/verify/shipping-session.mjs'), '--root', str(product),
                    '--', 'bash', '-c', 'set -e; node .evidence/native.mjs; npm run verify; bash .evidence/hook; FITSY_PRODUCT_ROOT="$PWD" node ' + str(runtime / 'scripts/sim/publish-product-flow.mjs') + ' 443']
+        if bootstrap:
+            command = ['node', str(product / 'scripts/verify/shipping-session.mjs'), '--root', str(product), '--', 'npm', 'run', 'verify']
         result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('full', (product / '.evidence/order').read_text())
         self.assertNotIn('unexpected-review', result.stderr)
+        if bootstrap:
+            before = (budgets / f'issue-{issue}.jsonl').read_bytes()
+            git('config', 'user.email', 'fixture@example.test', cwd=runtime)
+            git('config', 'user.name', 'Fixture', cwd=runtime)
+            (runtime / 'app.ts').write_text('new managed main product')
+            git('commit', '-qam', 'managed main product advance', cwd=runtime)
+            advanced = git('rev-parse', 'HEAD', cwd=runtime)
+            live = command[:-3] + ['bash', '-c',
+                'git -C ' + str(runtime) + ' update-ref refs/remotes/origin/main ' + advanced + '; npm run verify']
+            changed = subprocess.run(live, env=env, capture_output=True, text=True, timeout=40)
+            self.assertNotEqual(changed.returncode, 0, changed.stdout + changed.stderr)
+            self.assertEqual(before, (budgets / f'issue-{issue}.jsonl').read_bytes())
+            stale = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
+            self.assertNotEqual(stale.returncode, 0, stale.stdout + stale.stderr)
+            self.assertEqual(before, (budgets / f'issue-{issue}.jsonl').read_bytes())
+            return
         self.assertIn('not_applicable', result.stdout)
         self.assertIn('product-flow/local', (self.root / 'published').read_text())
         before = (budgets / 'issue-443.jsonl').read_bytes()

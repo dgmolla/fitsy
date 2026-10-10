@@ -28,6 +28,10 @@ export function installAdmissionFixture(root: string, admin: string, cache: stri
       .replace('ADMIN_HOME="$(python3 -I -c \'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)\')"', `ADMIN_HOME=${JSON.stringify(admin)}`)
       .replace('TRUSTED_REPO="$ADMIN_HOME/.fitsy-review/repo"', `TRUSTED_REPO=${JSON.stringify(join(root, 'old-poller/repo'))}`)
       .replace('FITSY_REVIEW_BUDGET_HOME="$REVIEW_CACHE/budgets"', `FITSY_REVIEW_BUDGET_HOME=${JSON.stringify(join(root, 'budgets'))}`));
+    const session = join(root, 'scripts/verify/shipping-session.mjs');
+    writeFileSync(session, readFileSync(session, 'utf8')
+      .replaceAll('userInfo().homedir', JSON.stringify(admin))
+      .replace(`const managedRepo = join(${JSON.stringify(admin)}, '.fitsy-review/repo');`, `const managedRepo = ${JSON.stringify(join(root, 'old-poller/repo'))};`));
     const runner = join(root, 'scripts/review/run-review.sh');
     const installed = readFileSync(runner, 'utf8')
       .replace('CACHE_DIR="${FITSY_REVIEW_CACHE:-$HOME/.cache/fitsy-review}"', `CACHE_DIR="\${FITSY_REVIEW_CACHE:-${cache}}"`)

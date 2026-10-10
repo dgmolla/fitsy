@@ -17,9 +17,11 @@ function identity(root, env = process.env) {
   const bindingFile = join(root, '.evidence/delivery/binding.json');
   const binding = existsSync(bindingFile) ? readFileSync(bindingFile, 'utf8') : null;
   const issue = binding ? JSON.parse(binding).issue : null;
+  const managedRepo = join(userInfo().homedir, '.fitsy-review/repo');
+  const managedMain = existsSync(join(managedRepo, '.git')) ? git(['rev-parse', 'origin/main'], managedRepo).trim() : null;
   const authorization = issue ? join(userInfo().homedir, '.fitsy-review/completed', `issue-${issue}.json`) : null;
   return JSON.stringify({ head: git(['rev-parse', 'HEAD'], root).trim(),
-    base: git(['rev-parse', 'origin/main'], root).trim(), source: sourceIdentity(root), binding,
+    base: git(['rev-parse', 'origin/main'], root).trim(), managedMain, source: sourceIdentity(root), binding,
     authorization: authorization && existsSync(authorization) ? readFileSync(authorization, 'utf8') : null,
     focused: existsSync(recipe) ? readFileSync(recipe, 'utf8') : null });
 }
