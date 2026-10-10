@@ -2,7 +2,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appleGitHookPrologue } from './apple-git-hook-env';
+import { installedFixtureHook, timingHook } from './hook-fixture';
 
 const root = resolve(__dirname, '../..');
 const yaml = require('js-yaml') as { load(value: string): unknown };
@@ -20,24 +20,6 @@ const cli = (file: string, args: string[] = [], extra: Record<string, string> = 
     [`scripts/verify/${file}`, ...args], { cwd: directory, encoding: 'utf8', env: { ...env, ...extra }, timeout: 30000 });
 const plan = (extra: Record<string, string> = {}) => JSON.parse(cli('impact-plan.mjs', [], extra).stdout);
 const event = (name: string, data: object) => { const path = join(directory, `.evidence/${name}.json`); write(`.evidence/${name}.json`, JSON.stringify(data)); return path; };
-// Isolated administrator installation retains executable modes and uses only
-// the fixture GitHub boundary, including inside the protected hook PATH.
-function installedFixtureHook(apple = false) {
-  return readFileSync(join(root, '.githooks/pre-push'), 'utf8')
-    .replace('export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-      `export PATH=${join(directory, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`)
-    .replace('hook_path="$PATH"', (apple ? appleGitHookPrologue : '') + 'hook_path="$PATH"');
-}
-function timingHook() {
-  write('scripts/delivery/phase-events.mjs', readFileSync(join(root, 'scripts/delivery/phase-events.mjs'), 'utf8'));
-  write('package.json', JSON.stringify({ private: true, scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed' } }));
-  const bound = spawnSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'],
-    { cwd: directory, env, encoding: 'utf8' });
-  expect(bound.status).toBe(0);
-  write('bin/gh', '#!/bin/sh\necho "$3 $4" >> .evidence/gh-calls\ncase "$4" in user) echo \'{"login":"fixture"}\' ;; *"/comments?"*) echo \'[]\' ;; */comments) cat >/dev/null; echo \'{"id":1}\' ;; *) exit 1 ;; esac\n');
-  chmodSync(join(directory, 'bin/gh'), 0o755);
-  return { ...env, PATH: `${join(directory, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin` };
-}
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'fitsy-impact-'));
@@ -233,8 +215,8 @@ test('source mutation during a cached run retires the prior receipt', () => {
 
 test('real Git push reuses local unit receipts and preserves custom environment identity', () => {
   cacheFixture();
-  const hookEnv = timingHook();
-  write('.githooks/pre-push', installedFixtureHook(true));
+  const hookEnv = timingHook(root, directory, env);
+  write('.githooks/pre-push', installedFixtureHook(root, directory, true));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   const local = (extra: Record<string, string> = {}) => spawnSync('npm', ['run', 'verify', '--', '--runs=local', '--reuse'],
@@ -269,8 +251,8 @@ test('real Git push reuses local unit receipts and preserves custom environment 
 
 test('pre-push refuses an unbound issue before checks or publication', () => {
   cacheFixture();
-  const hookEnv = timingHook();
-  write('.githooks/pre-push', installedFixtureHook());
+  const hookEnv = timingHook(root, directory, env);
+  write('.githooks/pre-push', installedFixtureHook(root, directory));
   rmSync(join(directory, '.evidence/delivery/binding.json'));
   const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
   expect(hook.status).toBe(1); expect(hook.stderr).toContain('bind --issue N');
@@ -279,8 +261,8 @@ test('pre-push refuses an unbound issue before checks or publication', () => {
 
 test('pre-push accepts an inapplicable domain gate but refuses its real failure', () => {
   cacheFixture();
-  const hookEnv = timingHook();
-  write('.githooks/pre-push', installedFixtureHook());
+  const hookEnv = timingHook(root, directory, env);
+  write('.githooks/pre-push', installedFixtureHook(root, directory));
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"skipped"}\'\nexit 2\n');
   const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
   expect(hook().status).toBe(0);
@@ -292,9 +274,9 @@ test('pre-push accepts an inapplicable domain gate but refuses its real failure'
 
 test('real Git push hook preserves outer refs, isolates nested Git, reuses L2, and reruns size/domain gates', () => {
   cacheFixture();
-  const hookEnv = timingHook();
+  const hookEnv = timingHook(root, directory, env);
   write('scripts/verify/fixture.sh', `mkdir -p .evidence/inner\ngit -C .evidence/inner init -q\ngit -C .evidence/inner config user.name fixture\ngit -C .evidence/inner config user.email fixture@example.test\necho nested > .evidence/inner/file\ngit -C .evidence/inner add file\ngit -C .evidence/inner commit -qm nested\ngit -C .evidence/inner checkout -qb nested\ntest "$(git -C .evidence/inner branch --show-current)" = nested\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\n`);
-  write('.githooks/pre-push', installedFixtureHook());
+  write('.githooks/pre-push', installedFixtureHook(root, directory));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);
   git('add', '.'); git('commit', '-qm', 'hook fixture'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   git('config', 'core.hooksPath', '.githooks');
