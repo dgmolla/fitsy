@@ -5,7 +5,6 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-
 interface Fixture {
   root(): string;
   env(): NodeJS.ProcessEnv;
@@ -218,7 +217,6 @@ export function validationOrderCases(f: Fixture) {
     const result = verify([], true); expect(result.status).toBe(1); expect(order()).toContain('full');
     expect(result.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ name: 'test', status: 'fail' })); expect(callCount()).toBe(1);
   });
-
   test('PR source stability never imports candidate-owned modules in authenticated controls', () => {
     const root = f.root();
     writeFileSync(join(root, 'scripts/verify/receipt-cache.mjs'), "import fs from 'node:fs'; fs.writeFileSync('candidate-import-marker', 'executed'); throw Error('candidate module executed');\n");
