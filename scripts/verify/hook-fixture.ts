@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { appleGitHookPrologue } from './apple-git-hook-env';
@@ -26,3 +26,15 @@ export function timingHook(root: string, directory: string, env: NodeJS.ProcessE
   return { ...env, PATH: `${join(directory, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin` };
 }
 
+
+export function installVerificationFixture(root: string, directory: string) {
+  for (const file of ['impact-plan.mjs', 'local-db.mjs', 'db-lock.py', 'receipt-cache.mjs', 'run.mjs', 'run.sh', 'secrets.sh', 'migration-safety.sh']) {
+    mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
+    copyFileSync(join(root, 'scripts/verify', file), join(directory, 'scripts/verify', file));
+  }
+  // The copied verifier has its own protected interpreter PATH as well.
+  const verifier = join(directory, 'scripts/verify/run.mjs');
+  writeFileSync(verifier, readFileSync(verifier, 'utf8').replace(
+    'PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node',
+    `PATH=${join(directory, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node`));
+}

@@ -17,7 +17,7 @@ export function git(args, cwd = repository, env = process.env) {
 export function comparison({ cwd = repository, env = process.env, base, head } = {}) {
   try {
     let kind = 'branch';
-    if (!base && env.FITSY_DIFF_BASE) { base = env.FITSY_DIFF_BASE; head ??= env.FITSY_DIFF_HEAD; kind = 'explicit'; }
+    if (!base && (env.CI || env.GITHUB_EVENT_NAME) && env.FITSY_DIFF_BASE) { base = env.FITSY_DIFF_BASE; head ??= env.FITSY_DIFF_HEAD; kind = 'explicit'; }
     else if (base) kind = 'explicit';
     if (!base && env.GITHUB_EVENT_PATH && ['push', 'pull_request', 'pull_request_target'].includes(env.GITHUB_EVENT_NAME)) {
       const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'));
@@ -45,7 +45,7 @@ export function changedFiles(options = {}) {
   if (range.unknown) return { comparison: range, files: null };
   try {
     const files = git(['diff', '--name-only', '--no-renames', '-z', range.base, range.head], cwd, env).split('\0');
-    if (!env.CI && !env.GITHUB_EVENT_NAME && !options.head && !env.FITSY_DIFF_HEAD) {
+    if (!env.CI && !env.GITHUB_EVENT_NAME && !options.head) {
       files.push(...git(['diff', '--name-only', '--no-renames', '-z', 'HEAD'], cwd, env).split('\0'));
       files.push(...git(['ls-files', '--others', '--exclude-standard', '-z'], cwd, env).split('\0'));
     }

@@ -253,7 +253,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const previous = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null;
     const build = existsSync(buildFile) ? JSON.parse(readFileSync(buildFile, 'utf8')) : null;
     const configKeys = requiredPublicConfigKeys(previous, build, publicConfigIdentity());
-    const plan = impact(changedPaths(process.env.FITSY_DIFF_BASE), configKeys);
+    const plan = impact(changedPaths(process.env.CI ? process.env.FITSY_DIFF_BASE : undefined), configKeys);
     if (process.argv.includes('--plan')) {
       console.log(JSON.stringify({ ...plan, inputHash: inputHash() }));
     } else if (!plan.required) {

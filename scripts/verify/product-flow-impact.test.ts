@@ -59,4 +59,14 @@ test('actual product-flow CLI returns N/A for health-only diff and requires proo
   const mixed = cli('--plan');
   expect(mixed.status).toBe(0);
   expect(JSON.parse(mixed.stdout)).toMatchObject({ required: true, categories: ['discovery'] });
+  const forged = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs'], {
+    cwd: directory, encoding: 'utf8', env: { ...env(), FITSY_DIFF_BASE: 'HEAD', FITSY_DIFF_HEAD: 'HEAD' } });
+  expect(forged.status).toBe(1);
+  expect(JSON.parse(forged.stdout)).toMatchObject({ status: 'fail' });
+  const originalBase = git('rev-parse', 'origin/main');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  const hosted = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'], {
+    cwd: directory, encoding: 'utf8', env: { ...env(), CI: 'true', FITSY_DIFF_BASE: originalBase } });
+  expect(hosted.status).toBe(0);
+  expect(JSON.parse(hosted.stdout)).toMatchObject({ required: true, categories: ['discovery'] });
 });

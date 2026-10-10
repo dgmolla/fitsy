@@ -23,6 +23,7 @@ test('the real CLI plan requires billing after an ignored public store-key chang
     git(['add', '.gitignore', 'apps/mobile/app.tsx', 'scripts/verify/product-flow.mjs']);
     git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'fixture']);
     const base = git(['rev-parse', 'HEAD']).toString().trim();
+    git(['update-ref', 'refs/remotes/origin/main', base]);
     const identity = spawnSync(process.execPath, ['--input-type=module', '-e',
       `import {publicConfigIdentity} from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(publicConfigIdentity(${JSON.stringify(dir)}, {})));`],
     { encoding: 'utf8', env: cleanEnv() });

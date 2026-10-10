@@ -2,7 +2,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { installedFixtureHook, timingHook } from './hook-fixture';
+import { installedFixtureHook, timingHook, installVerificationFixture } from './hook-fixture';
 
 const root = resolve(__dirname, '../..');
 const yaml = require('js-yaml') as { load(value: string): unknown };
@@ -23,15 +23,7 @@ const event = (name: string, data: object) => { const path = join(directory, `.e
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'fitsy-impact-'));
-  for (const file of ['impact-plan.mjs', 'local-db.mjs', 'db-lock.py', 'receipt-cache.mjs', 'run.mjs', 'run.sh', 'secrets.sh', 'migration-safety.sh']) {
-    mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
-    copyFileSync(join(root, 'scripts/verify', file), join(directory, 'scripts/verify', file));
-  }
-  // The copied verifier has its own protected interpreter PATH as well.
-  const verifier = join(directory, 'scripts/verify/run.mjs');
-  writeFileSync(verifier, readFileSync(verifier, 'utf8').replace(
-    'PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node',
-    `PATH=${join(directory, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node`));
+  installVerificationFixture(root, directory);
   write('.gitignore', 'node_modules\n.evidence/\n');
   symlinkSync(join(root, 'node_modules'), join(directory, 'node_modules'));
   git('init', '-q');
@@ -58,6 +50,18 @@ test('actual main push selects a matching advisory check after origin/main advan
   const result = cli('run.mjs', ['--layer=2', '--runs=ci', '--scope=changed'], extra);
   expect(result.status).toBe(0);
   expect(result.stdout).toContain('L2 ran');
+});
+
+test('local caller comparison cannot hide code or dirty files; explicit CI range remains supported', () => {
+  const before = git('rev-parse', 'HEAD');
+  write('apps/mobile/committed.ts', 'export const committed = true;\n'); const head = commit();
+  write('apps/mobile/dirty.ts', 'export const dirty = true;\n');
+  const selectors = { FITSY_DIFF_BASE: 'HEAD', FITSY_DIFF_HEAD: 'HEAD' };
+  expect(plan(selectors)).toMatchObject({ code: true, native: true,
+    files: expect.arrayContaining(['apps/mobile/committed.ts', 'apps/mobile/dirty.ts']) });
+  git('update-ref', 'refs/remotes/origin/main', head);
+  expect(plan({ CI: 'true', FITSY_DIFF_BASE: before, FITSY_DIFF_HEAD: head })).toMatchObject({
+    code: true, native: true, files: ['apps/mobile/committed.ts'] });
 });
 
 test('nested Markdown outside low-risk documentation paths keeps code jobs', () => {
