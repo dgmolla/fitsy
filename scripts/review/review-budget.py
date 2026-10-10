@@ -564,6 +564,7 @@ def admit_completed(handle, ledger, args, events):
                           "scripts/delivery/local-dispatcher.py", "scripts/delivery/local-dispatcher.test.py",
                           "AGENTS.md", "docs/engineering/devops/shipping.md",
                           "docs/engineering/devops/task-management.md",
+                          "docs/engineering/devops/review-dispositions.md",
                           "docs/engineering/devops/agent-model-routing.md"]
     if any(not any(name == path or name.startswith(path + "/") for path in allowed) for name in changed):
         raise ValueError("trusted main changed product or unrelated inputs; frozen comparison invalid")
