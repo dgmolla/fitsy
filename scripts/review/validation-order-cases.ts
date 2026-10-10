@@ -105,7 +105,7 @@ export function validationOrderCases(f: Fixture) {
     expect(callCount()).toBe(0);
     const result = verify();
     expect(result.status).toBe(1);
-    expect(result.stdout).toContain('required before verification');
+    expect(result.stdout + result.stderr).toContain('required before verification');
     expect(existsSync(join(root, '.evidence/order'))).toBe(false);
   });
   test.each([['local', 'tracked edit'], ['local', 'committed head change'], ['PR', 'tracked edit']])('reviewer-window source drift blocks caching and full acceptance: %s %s', (mode, drift) => {
@@ -123,7 +123,7 @@ export function validationOrderCases(f: Fixture) {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('candidate changed during independent review');
     expect(callCount()).toBe(1);
-    expect(readdirSync(join(root, 'cache')).filter(name => name.endsWith('.json'))).toHaveLength(0);
+    expect(readdirSync(f.env().REVIEW_TEST_CACHE!).filter(name => name.endsWith('.json'))).toHaveLength(0);
     const history = readFileSync(join(root, 'budgets/issue-355.jsonl'), 'utf8');
     expect(history).toContain('"event": "finish"');
     expect(verify().status).toBe(1);
@@ -242,8 +242,8 @@ export function validationOrderCases(f: Fixture) {
       env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' }, encoding: 'utf8' });
     expect(identity.status).toBe(0);
     const key = JSON.parse(identity.stdout).cache_key;
-    mkdirSync(String(f.env().FITSY_REVIEW_CACHE), { recursive: true });
-    writeFileSync(join(String(f.env().FITSY_REVIEW_CACHE), key + '.json'), JSON.stringify({ verdict: 'pass',
+    mkdirSync(String(f.env().REVIEW_TEST_CACHE), { recursive: true });
+    writeFileSync(join(String(f.env().REVIEW_TEST_CACHE), key + '.json'), JSON.stringify({ verdict: 'pass',
       domains: { correctness: 'pass', 'workflow-security': 'pass' }, findings: [] }));
     writeFileSync(join(root, 'verdict'), JSON.stringify({ lens: 'correctness', verdict: 'fail', findings: [{ severity: 'CONFIRMED',
       priority: 'P1', impact: 'shipping skips review', file: 'app.ts', line: 1, summary: 'regression', scenario: 'bad candidate', fix: 'repair' }] }));
