@@ -136,11 +136,11 @@ function reconciliationFixture() {
   seed([original, ...history('reviewed', 272.11151983297896)]);
   const crypto = require('node:crypto') as typeof import('node:crypto');
   const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
-  script = join(root, 'operator.py');
+  const operators = join(root, '.fitsy-review/operators'); mkdirSync(operators, { recursive: true });
+  script = join(operators, 'review-budget.py');
   writeFileSync(script, readFileSync(sourceScript, 'utf8')
     .replace('ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)', `ADMIN_HOME = Path(${JSON.stringify(root)})`)
-    .replace('ADMIN_BUDGET = ADMIN_CACHE / "budgets"', `ADMIN_BUDGET = Path(${JSON.stringify(root)})`));
-  const operators = join(root, '.fitsy-review/operators'); mkdirSync(operators, { recursive: true });
+    .replace('ADMIN_BUDGET = ADMIN_CACHE / "budgets"', `ADMIN_BUDGET = Path(${JSON.stringify(root)})`), { mode: 0o600 });
   const approval = join(operators, 'issue-456-count.json');
   const value = { control_sha: '2'.repeat(40), operator_sha256: hash(readFileSync(script, 'utf8')), issue: 456, candidate: 'root:branch', count_origin: 'coordinator', new_rounds_max: null,
     limit_sha256: hash(JSON.stringify(original, Object.keys(original).sort()).replaceAll(':', ': ').replaceAll(',', ', ')),
