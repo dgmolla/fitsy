@@ -220,3 +220,11 @@ Allocation reconciliation validates the proposed retained usage before appending
 Issue463 bootstrap requires the candidate comparison ref to match managed trusted main before admission and rechecks that ref before returning.
 Live shipping identity also binds the managed-main ref; an advance during acceptance closes that source-bound admission.
 Frozen issue443 retains its explicitly approved product comparison while separately binding the unchanged current control installation.
+
+Live session checks revalidate canonical administrator/coordinator evidence through the control installation before accepting any socket response.
+A responding caller-selected socket cannot replace that review authority, including direct native publication checks.
+The permanent exception supersedes the generic cumulative ceiling only through the exact retained, independently approved bounded allocation stop.
+Each allocation remains at most 300 seconds, additive, source-bound and checked before append; a malformed or disagreeing stop refuses without mutating history.
+Normal session admission still completes cheap checks before it creates live ownership.
+Its internal cached-only `--revalidate-session` path rechecks canonical evidence and current source/control refs, preserving the existing source-bound cheap proof without repeating the entire cheap pipeline on every native or hook call.
+That path requires session selectors and refuses reviewer execution; selectors never replace genuine coordinator-approved evidence.

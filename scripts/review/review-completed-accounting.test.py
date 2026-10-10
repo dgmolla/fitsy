@@ -741,13 +741,22 @@ class PermanentAllocation(unittest.TestCase):
         with self.ledger.open() as handle:
             self.assertEqual(budget.usage(budget.read_events(handle))[2]['cap_seconds'], 1800)
 
-    def test_manifest_stop_cannot_exceed_effective_capacity(self):
+    def test_authorized_bounded_allocation_beyond_generic_cap(self):
         self.ledger.write_text(json.dumps(dict(event='execution-limit', attempt_id='issue-execution-limit', issue=463,
             baseline_attempts=[], baseline_completed_seconds=0, completed_seconds_stop_at=1800,
             new_rounds_max=1, per_round_timeout_seconds_max=300))+'\n')
         self.approval(1800, 0)
+        original = self.ledger.read_bytes()
+        self.assertEqual(self.call()['cap_seconds'], 2100)
+        self.assertTrue(self.ledger.read_bytes().startswith(original))
         saved = self.ledger.read_bytes()
-        with self.assertRaisesRegex(ValueError, 'effective original ledger capacity'): self.call()
+        self.assertTrue(self.call()['idempotent'])
+        self.assertEqual(saved, self.ledger.read_bytes())
+        self.approval(2100, 0)
+        value = json.loads(self.path.read_text())
+        value['cumulative_stop_seconds'] += 1
+        self.path.write_text(json.dumps(value))
+        with self.assertRaisesRegex(ValueError, 'invalid bounded permanent review allocation'): self.call()
         self.assertEqual(saved, self.ledger.read_bytes())
 
     def test_caller_selected_authority_and_unapproved_operator_refuse(self):

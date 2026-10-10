@@ -30,6 +30,14 @@ export function inShippingSession(env = process.env) {
 }
 export async function assertShippingSession(root = process.cwd(), env = process.env) {
   if (!env.FITSY_SHIPPING_SOCKET || !env.FITSY_SHIPPING_TOKEN) throw Error('run final acceptance inside scripts/verify/shipping-session.mjs -- <shipping command>');
+  // A socket response is live ownership data, never independent review authority.
+  // Revalidate canonical evidence through the same controls. Normal session
+  // admission owns cheap checks; this evidence-only recheck cannot run a review.
+  const controls = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+  const admissionEnv = { ...env, FITSY_SHIPPING_ROOT: realpathSync(resolve(root)) };
+  if (await execute('bash', [join(controls, 'scripts/verify/review-admission.sh'), '--revalidate-session'], root, admissionEnv) !== 0) {
+    throw Error('live ownership requires current canonical independent review admission');
+  }
   await new Promise((resolvePromise, reject) => {
     const socket = createConnection(env.FITSY_SHIPPING_SOCKET);
     let response = '';

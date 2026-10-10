@@ -5,15 +5,23 @@ CONTROL_ROOT="$REPO_ROOT"
 REPO_ROOT="${FITSY_SHIPPING_ROOT:-$REPO_ROOT}"
 cd "$REPO_ROOT"
 REVIEW_ARGS=(--local --cached-only)
+SESSION_REVALIDATION=0
 for ARG in "$@"; do
   case "$ARG" in
+    --revalidate-session) SESSION_REVALIDATION=1 ;;
     --execute-review) REVIEW_ARGS=(--local) ;;
     --scope=*) ;; # Canonical verify runner passes its scope to check scripts.
     *) echo "unsupported review admission argument: $ARG" >&2; exit 1 ;;
   esac
 done
-if [ -n "${FITSY_SHIPPING_SOCKET-}${FITSY_SHIPPING_TOKEN-}" ]; then
-  node scripts/verify/shipping-session.mjs --check || {
+if [ "$SESSION_REVALIDATION" = 1 ]; then
+  [ -n "${FITSY_SHIPPING_SOCKET:-}" ] && [ -n "${FITSY_SHIPPING_TOKEN:-}" ] && \
+    [ "${REVIEW_ARGS[*]}" = '--local --cached-only' ] || exit 1
+fi
+if [ "$SESSION_REVALIDATION" = 0 ] && [ -n "${FITSY_SHIPPING_SOCKET-}${FITSY_SHIPPING_TOKEN-}" ]; then
+  # Socket data cannot substitute for administrator-managed review authority.
+  bash "$CONTROL_ROOT/scripts/verify/review-admission.sh" --revalidate-session || exit 1
+  node "$CONTROL_ROOT/scripts/verify/shipping-session.mjs" --check || {
     echo '{"name":"review-admission","status":"fail","summary":"active shipping candidate is invalid","fix":"revalidate cheap checks and matching review on frozen source"}'
     exit 1
   }
@@ -56,7 +64,9 @@ if (approval.get('issue') != 463 or approval.get('source_sha') != sys.argv[3]
 PYBOOTSTRAP
   # Only the coordinator may approve/install this exact operator after review.
   # admit-completed checks its canonical approval and digest before accounting.
-  node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+  if [ "$SESSION_REVALIDATION" = 0 ]; then
+    node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+  fi
   BRANCH="$(git symbolic-ref --quiet --short HEAD)"
   ACCEPTANCE="$(gh issue view "$ISSUE" --json body --jq .body | python3 -I -c '
 import re,sys
@@ -94,7 +104,9 @@ else
 fi
 BRANCH="$(git symbolic-ref --quiet --short HEAD)"
 # Direct admission completes cheap checks before validating independent evidence.
-node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+if [ "$SESSION_REVALIDATION" = 0 ]; then
+  node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+fi
 [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
 mkdir -p .evidence/review-admission
 ATTEMPT="$(mktemp -d "$REPO_ROOT/.evidence/review-admission/attempt.XXXXXX")"

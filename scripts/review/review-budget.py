@@ -248,6 +248,10 @@ def usage(events):
                 or not math.isclose(sum(finishes[key]["elapsed_seconds"] for key in baseline),
                                     limit["baseline_completed_seconds"], abs_tol=1e-6)):
             raise ValueError("execution limit baseline does not match retained history")
+        # Independently approved bounded permanent allocations supersede the
+        # generic ceiling only by their exact retained additive stop.
+        if allocations:
+            cap = max(cap, allocations[-1]["cumulative_stop_seconds"])
         cap = min(cap, limit["completed_seconds_stop_at"])
     # An interrupted new attempt retains its full reservation until reconciled.
     # An unbounded legacy attempt has unknown completion and fails closed at the cap.

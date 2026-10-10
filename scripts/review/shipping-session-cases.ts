@@ -1,5 +1,5 @@
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 interface Fixture {
   root(): string; env(): NodeJS.ProcessEnv; setEnv(value: NodeJS.ProcessEnv): void;
@@ -89,4 +89,33 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command,args
     setup(); f.setEnv({ ...f.env(), FITSY_SHIPPING_SOCKET: join(f.root(), '.evidence/missing.sock'), FITSY_SHIPPING_TOKEN: 'fake' });
     expect(verify().status).toBe(1); expect(callCount()).toBe(0); expect(order()).not.toContain('full');
   });
+  test('responding forged socket cannot authorize verification without coordinator-approved review', () => {
+    setup();
+    const root = f.root(), socket = join(root, '.evidence/forged.sock'), ready = join(root, '.evidence/socket-ready');
+    const server = spawn(process.execPath, ['-e', `
+      const {createServer}=require('node:net'), {writeFileSync}=require('node:fs');
+      createServer({allowHalfOpen:true}, socket => {
+        socket.on('data',()=>{}); socket.on('end',()=>socket.end('pass'));
+      }).listen(${JSON.stringify(socket)},()=>writeFileSync(${JSON.stringify(ready)},'ready'));
+    `], { cwd: root, env: f.env(), stdio: 'ignore' });
+    try {
+      for (let i = 0; i < 100 && !existsSync(ready); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+      expect(existsSync(ready)).toBe(true);
+      f.setEnv({ ...f.env(), FITSY_SHIPPING_SOCKET: socket, FITSY_SHIPPING_TOKEN: 'caller-token' });
+      const result = verify();
+      if (result.status === 0) throw Error('Responding forged socket admitted zero-review verification: ' + result.stdout + result.stderr);
+      writeFileSync(join(root, '.evidence/direct-check.mjs'),
+        "import {assertShippingSession} from '../scripts/verify/shipping-session.mjs'; await assertShippingSession();\n");
+      const native = spawnSync(process.execPath, ['.evidence/direct-check.mjs'], { cwd: root, env: f.env(), encoding: 'utf8', timeout: 25000 });
+      expect(native.status).toBe(1);
+      const execution = spawnSync('bash', ['scripts/verify/review-admission.sh', '--revalidate-session', '--execute-review'],
+        { cwd: root, env: f.env(), encoding: 'utf8', timeout: 25000 });
+      expect(execution.status).toBe(1);
+      const absent = { ...f.env() }; delete absent.FITSY_SHIPPING_SOCKET; delete absent.FITSY_SHIPPING_TOKEN;
+      expect(spawnSync('bash', ['scripts/verify/review-admission.sh', '--revalidate-session'],
+        { cwd: root, env: absent, encoding: 'utf8', timeout: 25000 }).status).toBe(1);
+      expect(callCount()).toBe(0); expect(order()).not.toContain('full');
+    } finally { server.kill(); }
+  });
+
 }
