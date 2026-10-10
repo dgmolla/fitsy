@@ -582,7 +582,7 @@ def admit_completed(handle, ledger, args, events):
     # A control-only trusted-main advance cannot expand the product comparison.
     allowed = controls + ["scripts/verify/shipping-session.mjs", "scripts/verify/review-admission.sh",
                           "scripts/verify/product-flow.mjs", "scripts/sim/publish-product-flow.mjs",
-                          "scripts/verify/run.mjs", "scripts/verify/receipt-cache.mjs",
+                          "scripts/verify/run.mjs", "scripts/verify/receipt-cache.mjs", ".githooks/pre-push",
                           "scripts/delivery/local-dispatcher.py", "scripts/delivery/local-dispatcher.test.py",
                           "AGENTS.md", "docs/engineering/devops/shipping.md",
                           "docs/engineering/devops/task-management.md",

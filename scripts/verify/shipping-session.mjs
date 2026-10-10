@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S -u NODE_OPTIONS -u NODE_PATH PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node
 // One live execution owns admission across simulator, verification and pre-push.
 // There is no saved verdict: closing this process closes admission.
 import { spawn } from 'node:child_process';
@@ -14,7 +14,7 @@ import { git } from './impact-plan.mjs';
 const administratorPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 function executionEnvironment(env) {
   return { ...Object.fromEntries(Object.entries(env).filter(([key]) =>
-    key !== 'BASH_ENV' && key !== 'ENV' && !key.startsWith('BASH_FUNC_'))), PATH: administratorPath };
+    key !== 'NODE_OPTIONS' && key !== 'NODE_PATH' && key !== 'BASH_ENV' && key !== 'ENV' && !key.startsWith('BASH_FUNC_'))), PATH: administratorPath };
 }
 
 function identity(root, env = process.env) {

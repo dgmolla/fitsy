@@ -49,7 +49,7 @@ export FITSY_REVIEW_REASONING_EFFORT=high
 # Execute only the independently authorized review of the frozen candidate.
 /bin/bash -p scripts/verify/review-admission.sh --execute-review
 # Revalidate that evidence and own final acceptance plus pre-push live.
-node scripts/verify/shipping-session.mjs -- bash <task-owned-shipping-script>
+scripts/verify/shipping-session.mjs -- bash <task-owned-shipping-script>
 ```
 
 Replace the focused test and task script with the accepted issue's meaningful regressions and applicable final acceptance commands.
@@ -83,7 +83,7 @@ Verification retains each stage attempt under `.evidence/verify/attempts/` and a
 UI signoff and development walkthroughs precede final UI acceptance.
 The publishable `final-candidate` simulator entry point requires the live shipping session's matching canonical review before native journeys.
 Keep native journeys, finish, full verification and push in one session command, using `set -e` or `&&` to stop after a failed acceptance command.
-For example, prepare a task-owned ignored shell script containing the affected final-candidate simulator commands, `finish`, `npm run verify -- --layer=0-3 --reuse`, then `git push -u origin HEAD`, and run `node scripts/verify/shipping-session.mjs -- bash <task-script>`.
+For example, prepare a task-owned ignored shell script containing the affected final-candidate simulator commands, `finish`, `npm run verify -- --layer=0-3 --reuse`, then `git push -u origin HEAD`, and run `scripts/verify/shipping-session.mjs -- bash <task-script>`.
 Development walkthroughs and UI signoff happen before that session.
 Source or focused-selection drift invalidates the live admission and requires revalidation of cheap checks and affected review evidence; it never silently starts another reviewer.
 Apple account, legal and submission approvals, required product-flow status, pre-push, PR, main Verify, Deploy and actual release acceptance remain required.
@@ -334,3 +334,8 @@ Finish with a concise state report:
 A background process existing is not proof that it will wake its owner.
 When waiting, retain durable task state and use the harness's supported completion notification mechanism.
 If the runner cannot continue automatically, report that limitation rather than promise an unverified future follow-up.
+
+Protected release entrypoints execute `scripts/verify/shipping-session.mjs` and `scripts/verify/run.mjs` directly, using their trusted system Env startup wrapper.
+Do not launch them through a caller-configured `node` process: Node startup imports run before module code can validate admission.
+The executable wrapper clears `NODE_OPTIONS` and `NODE_PATH` and fixes administrator interpreter search locations before Node starts.
+For npm verification aliases, clear those startup options before invoking npm; the pre-push hook and protected live child environment enforce this for shipping.

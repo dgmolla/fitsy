@@ -238,3 +238,7 @@ Admission and live ownership use administrator executable locations for their Gi
 The canonical runner invokes the system Bash with privileged startup semantics; live ownership clears caller shell loaders and exported functions before child execution.
 Caller PATH or `BASH_ENV` artifacts cannot replace proof validation before the gate's code runs.
 These are existing entrypoint corrections, not additional approval issuers or a new execution service.
+
+Protected Node entrypoints use their executable system Env wrapper, which clears Node startup selectors before the interpreter loads the module.
+Live child environments and pre-push also clear these selectors, so a startup import cannot replace admission or acceptance with an early exit.
+Direct caller-configured `node` or npm startup is not release evidence; use the protected executable entrypoints or clear startup selectors before npm starts.

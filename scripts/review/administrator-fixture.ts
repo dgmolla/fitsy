@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // Fixture coordinator independently approves retained fake-provider artifacts.
@@ -33,8 +33,14 @@ export function installAdmissionFixture(root: string, admin: string, cache: stri
     const session = join(root, 'scripts/verify/shipping-session.mjs');
     writeFileSync(session, readFileSync(session, 'utf8')
       .replaceAll('userInfo().homedir', JSON.stringify(admin))
+      .replace('PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node', `PATH=${join(root, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node`)
       .replace("const administratorPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';", `const administratorPath = ${JSON.stringify(join(root, 'bin') + ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')};`)
       .replace(`const managedRepo = join(${JSON.stringify(admin)}, '.fitsy-review/repo');`, `const managedRepo = ${JSON.stringify(join(root, 'old-poller/repo'))};`));
+    chmodSync(session, 0o755);
+    const verification = join(root, 'scripts/verify/run.mjs');
+    writeFileSync(verification, readFileSync(verification, 'utf8')
+      .replace('PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node', `PATH=${join(root, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node`));
+    chmodSync(verification, 0o755);
     const runner = join(root, 'scripts/review/run-review.sh');
     const installed = readFileSync(runner, 'utf8')
       .replace('CACHE_DIR="${FITSY_REVIEW_CACHE:-$HOME/.cache/fitsy-review}"', `CACHE_DIR="\${FITSY_REVIEW_CACHE:-${cache}}"`)

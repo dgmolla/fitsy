@@ -59,7 +59,7 @@ Use optional `--jest-pattern=<test name regex>` to select focused Jest scenarios
 Focused selections run fresh before review and full acceptance.
 Shipping admission completes the cheap stage, restores main reviewer controls from the existing external managed review repository in a disposable committed-candidate checkout, and executes a fresh canonical round with all required domains and the retained issue budget.
 Repair findings and repeat cheap checks and review on the committed repair.
-Use `node scripts/verify/shipping-session.mjs -- <shipping command>` to own one fresh admission across final product-flow acceptance, verification and pre-push.
+Use `scripts/verify/shipping-session.mjs -- <shipping command>` to own one fresh admission across final product-flow acceptance, verification and pre-push.
 The child command runs affected journeys, full verification and push in sequence, stopping on failure.
 The live parent checks source identity and focused selection for every admission request and closes admission on exit.
 It neither reads nor writes saved review verdicts.

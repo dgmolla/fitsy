@@ -180,4 +180,45 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command,args
     expect(callCount()).toBe(0); expect(order()).not.toContain('full');
   });
 
+  test('protected executable entrypoints ignore Node startup exit and caller interpreter search', () => {
+    setup(); expect(prepare().status).toBe(0);
+    const root = f.root(), bin = join(root, '.evidence/node-replay'); mkdirSync(bin);
+    writeFileSync(join(bin, 'node'), '#!/bin/sh\nexit 0\n', { mode: 0o700 });
+    const attack = { ...f.env(), PATH: bin + ':' + f.env().PATH,
+      NODE_OPTIONS: '--import=data:text/javascript,process.exit(0)', NODE_PATH: bin };
+    const owner = spawnSync(join(root, 'scripts/verify/shipping-session.mjs'), ['--', '/usr/bin/false'],
+      { cwd: root, env: attack, encoding: 'utf8', timeout: 25000 });
+    expect(owner.status).toBe(1);
+    writeFileSync(join(root, '.evidence/cheap-fail'), 'fail');
+    const cheap = spawnSync(join(root, 'scripts/verify/run.mjs'), ['--stage=cheap'],
+      { cwd: root, env: attack, encoding: 'utf8', timeout: 25000 });
+    expect(cheap.status).toBe(1);
+    expect(cheap.stdout).toContain('structural'); expect(callCount()).toBe(1);
+  });
+
+  test('actual pre-push launch ignores caller Node options and interpreter search', () => {
+    setup(); expect(prepare().status).toBe(0);
+    const root = f.root(), bin = join(root, '.evidence/hook-replay'); mkdirSync(bin);
+    for (const name of ['node', 'npm']) writeFileSync(join(bin, name), '#!/bin/sh\nexit 0\n', { mode: 0o700 });
+    writeFileSync(join(root, '.evidence/full-fail'), 'fail');
+    const result = spawnSync('/bin/bash', ['-p', '.evidence/pre-push'], { cwd: root,
+      env: { ...f.env(), PATH: bin + ':' + f.env().PATH,
+        NODE_OPTIONS: '--import=data:text/javascript,process.exit(0)', NODE_PATH: bin },
+      encoding: 'utf8', timeout: 25000 });
+    expect(result.status).toBe(1); expect(order()).toContain('cheap'); expect(callCount()).toBe(1);
+  });
+
+  test('caller Git repository selectors cannot replay review for an earlier source', () => {
+    setup(); expect(prepare().status).toBe(0);
+    const root = f.root(), retained = join(root, '.evidence/reviewed-repo');
+    f.git('clone', '-q', root, retained);
+    f.git('-C', retained, 'update-ref', 'refs/remotes/origin/main', f.git('rev-parse', 'origin/main').trim());
+    writeFileSync(join(root, 'app.ts'), 'export const value = 3;\n');
+    f.git('add', 'app.ts'); f.git('commit', '-qm', 'unreviewed candidate');
+    f.setEnv({ ...f.env(), GIT_DIR: join(retained, '.git'), GIT_WORK_TREE: retained });
+    const result = session('echo unreviewed >> .evidence/order', false);
+    if (result.status === 0) throw Error('Alternate Git context admitted earlier-source review for an unreviewed head: ' + result.stdout + result.stderr);
+    expect(callCount()).toBe(1); expect(order()).not.toContain('unreviewed');
+  });
+
 }

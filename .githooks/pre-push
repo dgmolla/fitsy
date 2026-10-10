@@ -1,7 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 # Run the same local gate, reusing only successful source-bound acceptance receipts.
 # Size and domain checks still run on every push.
 set -euo pipefail
+unset NODE_OPTIONS NODE_PATH BASH_ENV ENV
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 # Git exports repository-local pointers into hooks. Child Git fixtures must
@@ -28,6 +29,7 @@ if [[ "$git_core" == */usr/libexec/git-core ]]; then
   elif [[ "${MANPATH-}" == "$default_manpath"* ]]; then export MANPATH="${MANPATH#"$default_manpath"}"
   fi
 fi
+export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 # A push must name the issue whose local evidence this hook is about to run.
 node "$ROOT/scripts/delivery/phase-events.mjs" summary >/dev/null || {
   echo 'pre-push: bind this worktree first with node scripts/delivery/phase-events.mjs bind --issue N' >&2

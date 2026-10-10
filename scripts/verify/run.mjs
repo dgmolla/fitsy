@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S -u NODE_OPTIONS -u NODE_PATH PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node
 /**
  * Registry-driven check runner. One implementation, every caller:
  * the pre-push hook, CI jobs, agents, and `npm run verify` all come here.

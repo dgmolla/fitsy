@@ -54,7 +54,8 @@ export function validationOrderCases(f: Fixture) {
     writeFileSync(join(root, 'scripts/verify/focused.sh'), `echo focused >> .evidence/order\necho '{"summary":"focused tests"}'\n`);
     writeFileSync(join(root, 'scripts/verify/full.sh'), `echo full >> .evidence/order\nif [ -f .evidence/full-fail ]; then exit 1; fi\necho '{"summary":"full tests"}'\n`);
     writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed', 'verify:all': 'node scripts/verify/run.mjs --layer=all --scope=all' } }));
-    copyFileSync(join(f.source, '.githooks/pre-push'), join(root, '.evidence/pre-push'));
+    writeFileSync(join(root, '.evidence/pre-push'), readFileSync(join(f.source, '.githooks/pre-push'), 'utf8')
+      .replace('export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', `export PATH=${join(root, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`));
     // The actual hook keeps its issue binding and timing publication contracts.
     mkdirSync(join(root, 'scripts/delivery'), { recursive: true });
     copyFileSync(join(f.source, 'scripts/delivery/phase-events.mjs'), join(root, 'scripts/delivery/phase-events.mjs'));
