@@ -246,3 +246,5 @@ Direct caller-configured `node` or npm startup is not release evidence; use the 
 The canonical `.githooks/pre-push` fixes administrator executable search before any Git command.
 It derives the checkout from its installed hook location, clears Git repository selectors, and verifies that checkout before acceptance.
 Caller PATH and GIT_WORK_TREE cannot redirect verification to another source.
+The hook removes exported BASH_FUNC_* entries before child shells and directly executes the protected verifier.
+The verifier clears shell startup selectors before nested checks; nested hook Bash checks use protected startup.

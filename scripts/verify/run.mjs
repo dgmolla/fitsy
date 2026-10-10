@@ -22,6 +22,11 @@ import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import { impactPlan, git, focusedDatabaseRequired } from "./impact-plan.mjs";
 
+// Clear shell startup selectors before checks launch nested npm or Bash shells.
+for (const key of Object.keys(process.env)) {
+  if (key === 'BASH_ENV' || key === 'ENV' || key.startsWith('BASH_FUNC_')) delete process.env[key];
+}
+
 const VERIFY_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(VERIFY_DIR, "..", "..");
 if (!existsSync(join(REPO_ROOT, "node_modules/js-yaml"))) {

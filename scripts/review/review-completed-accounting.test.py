@@ -486,7 +486,7 @@ class CompletedAdmission(CompletedAccounting):
         (product / 'scripts/verify').mkdir(parents=True)
         for name in ('run.mjs', 'impact-plan.mjs', 'receipt-cache.mjs', 'review-admission.sh',
                      'shipping-session.mjs', 'risk-tiers.yml', 'product-flow.mjs', 'media-integration.mjs'):
-            shutil.copyfile(source / 'scripts/verify' / name, product / 'scripts/verify' / name)
+            shutil.copy2(source / 'scripts/verify' / name, product / 'scripts/verify' / name)
         (product / 'scripts/delivery').mkdir()
         shutil.copyfile(source / 'scripts/delivery/phase-events.mjs', product / 'scripts/delivery/phase-events.mjs')
         shutil.copyfile(source / 'REVIEW.md', product / 'REVIEW.md')

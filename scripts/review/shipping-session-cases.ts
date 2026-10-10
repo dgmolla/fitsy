@@ -233,6 +233,25 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command,args
     expect(f.git('--git-dir=' + remote, 'for-each-ref')).toBe('');
   });
 
+  test.each(['direct-hook', 'native-push', 'full-verifier'])('%s refuses exported functions suppressing nested verification', mode => {
+    setup(); const root = f.root();
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    pkg.scripts['nested-failure'] = "node -e 'process.exit(9)'";
+    writeFileSync(join(root, 'package.json'), JSON.stringify(pkg));
+    writeFileSync(join(root, 'scripts/verify/full.sh'), "echo full >> .evidence/order\nnpm run nested-failure || exit $?\necho '{\"summary\":\"nested test\"}'\n");
+    f.git('add', '-A'); f.git('commit', '-qm', 'nested failure fixture');
+    expect(prepare().status).toBe(0);
+    const hooks = join(root, '.evidence'); chmodSync(join(hooks, 'pre-push'), 0o700);
+    f.git('config', 'core.hooksPath', hooks);
+    const remote = join(root, '.evidence/remote.git'); f.git('init', '-q', '--bare', remote);
+    const executable = mode === 'direct-hook' ? '/bin/bash' : mode === 'native-push' ? '/usr/bin/git' : join(root, 'scripts/verify/run.mjs');
+    const args = mode === 'direct-hook' ? ['-p', join(hooks, 'pre-push')] : mode === 'native-push' ? ['push', remote, 'HEAD'] : ['--layer=0-2'];
+    const result = spawnSync(executable, args, { cwd: root, encoding: 'utf8', timeout: 25000,
+      env: { ...f.env(), 'BASH_FUNC_node%%': '() { return 0; }', 'BASH_FUNC_bash%%': '() { return 0; }' } });
+    expect(result.status).not.toBe(0); expect(callCount()).toBe(1);
+    expect(f.git('--git-dir=' + remote, 'for-each-ref')).toBe('');
+  });
+
   test('protected shipping child clears caller Git repository selectors', () => {
     setup(); expect(prepare().status).toBe(0);
     const root = f.root(), fake = join(root, '.evidence/alternate-worktree'); mkdirSync(fake);
