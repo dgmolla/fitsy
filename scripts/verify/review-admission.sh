@@ -30,6 +30,44 @@ TRUSTED_REPO="${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/repo"
 BASE_SHA="$(git -C "$TRUSTED_REPO" rev-parse refs/remotes/origin/main)" || fail
 ISSUE="$(python3 -I -c 'import json; print(json.load(open(".evidence/delivery/binding.json"))["issue"])')" || fail
 COMPLETED_AUTH="${FITSY_REVIEW_COMPLETED_HOME:-${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/completed}/issue-$ISSUE.json"
+# The permanent human exception permits a separately installed, independently
+# reviewed operator to bootstrap this recovery outcome only. It is never main
+# identity, never a nutrition admission, and never permission to execute review.
+if [ -n "${FITSY_REVIEW_BOOTSTRAP_OPERATOR:-}" ]; then
+  [ "$ISSUE" = 463 ] && [ "$REPO_ROOT" = "$CONTROL_ROOT" ] && [ -f "$COMPLETED_AUTH" ] || fail
+  [ "${REVIEW_ARGS[*]}" = '--local --cached-only' ] || fail
+  python3 -I - "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" "$HEAD_SHA" <<'PYBOOTSTRAP' || fail
+import hashlib,os,pathlib,subprocess,sys
+p=pathlib.Path(sys.argv[1]).resolve()
+if not p.is_file() or p.stat().st_uid != os.getuid() or p.stat().st_mode & 0o077:
+    sys.exit('bootstrap operator requires a private external installation')
+if subprocess.run(['git','-C',str(p.parent),'rev-parse','--show-toplevel'],capture_output=True).returncode == 0:
+    sys.exit('bootstrap operator must be outside every candidate checkout')
+expected=subprocess.check_output(['git','show',sys.argv[2]+':scripts/review/review-budget.py'])
+if p.read_bytes() != expected: sys.exit('bootstrap operator differs from independently reviewed source')
+PYBOOTSTRAP
+  node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+  BRANCH="$(git symbolic-ref --quiet --short HEAD)"
+  ACCEPTANCE="$(gh issue view "$ISSUE" --json body --jq .body | python3 -I -c '
+import re,sys
+kept=[]; details=False
+for line in sys.stdin.read().splitlines():
+    if re.match(r"^\s*<details(?:\s|>)",line,re.I): details=True
+    if not details and re.match(r"^\s*(?:\*\*)?(?:Status|Next|Done|Blocker)(?:\*\*)?\s*:",line,re.I): continue
+    kept.append(line)
+print("\n".join(kept))')" || fail
+  ARGS=(--ledger "$HOME/.cache/fitsy-review/budgets/issue-$ISSUE.jsonl" --issue "$ISSUE"
+    --candidate "$(git rev-list --max-parents=0 HEAD | sort):$BRANCH"
+    --source-sha "$HEAD_SHA" --base-sha "$(git rev-parse origin/main)"
+    --control-sha "$HEAD_SHA" --candidate-root "$REPO_ROOT" --authorization-file "$COMPLETED_AUTH"
+    --acceptance-sha256 "$(printf '%s' "$ACCEPTANCE" | shasum -a 256 | cut -d' ' -f1)")
+  DOMAINS="$(git diff --name-only --no-renames origin/main...HEAD | python3 -I scripts/review/review-domains.py)" || fail
+  for DOMAIN in $DOMAINS; do ARGS+=(--required-domain "$DOMAIN"); done
+  python3 -I "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" admit-completed "${ARGS[@]}" >&2 || fail
+  [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
+  echo '{"name":"review-admission","status":"pass","summary":"independently reviewed bootstrap operator validated genuine source-bound evidence","fix":""}'
+  exit 0
+fi
 if [ "$REPO_ROOT" != "$CONTROL_ROOT" ]; then
   [ -f "$COMPLETED_AUTH" ] || fail
   [ "$(git -C "$CONTROL_ROOT" rev-parse HEAD)" = "$BASE_SHA" ] || fail

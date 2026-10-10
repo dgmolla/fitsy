@@ -61,6 +61,8 @@ Admission checks out the frozen candidate in a disposable directory and restores
 Default admission uses `run-review.sh --local --cached-only` and cannot execute a provider when matching evidence is missing.
 Explicit `--execute-review` uses the same authenticated overlay, ignores cached results and charges the original issue ledger.
 The existing canonical review cache must remain outside every Git checkout; candidate-local caches cannot admit shipping.
+Cached verdicts require a retained matching provider execution, source/base/key binding, the result digest recorded by trusted closeout, and unchanged original raw artifacts.
+Bare or legacy unproven cache JSON cannot admit shipping.
 Externally authorized original completed evidence remains subject to the source, base, issue, acceptance, provider, domain and raw-artifact checks.
 No candidate controls are installed as trusted, and no new persisted admission or saved-pass projection is created.
 Changing material review inputs invalidates reuse.
@@ -264,7 +266,13 @@ It appends one idempotent reconciliation event and preserves the original baseli
 It refuses unfinished or incomplete history, explicit human-count declarations, mismatched authority and capacity changes.
 The existing prospective execution policy can narrow the remaining window; it cannot reset cumulative accounting or authorize an incomplete retry.
 See [review-dispositions.md](review-dispositions.md#review-budget) for the retained ledger and disposition contracts.
-Do not invoke a candidate version of the operator against the live ledger before its reviewed trusted-main installation.
+Do not invoke an unreviewed candidate operator against a live ledger.
+The permanent human exception permits issue463 bootstrap using a private external installation of the independently reviewed exact-source operator and authorized original raw evidence.
+Set `FITSY_REVIEW_BOOTSTRAP_OPERATOR` only after that independent review and installation; this issue-specific path retains actual main identity and cannot admit nutrition.
+`review-budget.py reconcile-allocation` appends a source-bound bounded allocation authorized by the private permanent human receipt, preserving the original limit and every elapsed attempt.
+Completed failed bootstrap reviews are accounted as failed verdicts and cannot admit shipping.
+All bootstrap allocations and execution must be reconciled before final acceptance.
+After verified main release, install through the ordinary trusted-main path and stop using the bootstrap operator.
 Exhaustion and admission refusal are neither review approval nor permission to bypass hooks.
 P3 findings remain advisory; confirmed P0/P1, required tests and essential acceptance continue to block independently.
 The Jev review-triage evaluation is a later shadow experiment under issue #372, with no gate or merge authority.

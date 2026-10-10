@@ -280,7 +280,11 @@ if [ -f "$COMPLETED_AUTH" ]; then
 elif { [ "$FRESH_EXECUTION" != 1 ] || [ "$CACHED_ONLY" = 1 ]; } && [ -f "$CACHE_FILE" ]; then
   TELEMETRY_CACHE_HIT=1
   echo "[run-review] cache hit ($KEY)" >&2
-  RESULT_JSON="$(python3 -I scripts/review/review-round.py "$DOMAINS" < "$CACHE_FILE")"
+  CACHE_ARGS=(--result-file "$CACHE_FILE" --cache-key "$KEY" --base-sha "$BASE_SHA" --source-sha "$HEAD_SHA")
+  for DOMAIN in $DOMAINS; do CACHE_ARGS+=(--required-domain "$DOMAIN"); done
+  RESULT_JSON="$(python3 -I scripts/review/review-budget.py admit-cache "${BUDGET_ARGS[@]}" "${CACHE_ARGS[@]}")" || {
+    incomplete_status cache_provenance; exit 1;
+  }
 else
   if [ "$CACHED_ONLY" = 1 ]; then
     echo "[run-review] required complete review cache unavailable; no execution authorized" >&2
@@ -353,17 +357,23 @@ else
   if [ "$BUDGET_OUTCOME" = pass ]; then
     BUDGET_VERDICT="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["verdict"])')"
   fi
-  python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --failure-kind "$FAILURE_KIND" --round-id "$HEAD_SHA" \
-    --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" >&2
-  BUDGET_OPEN=0
   cp "$RAW_FILE" "$CACHE_DIR/$KEY.raw"
   rm -f "$PROMPT_FILE" "$RAW_FILE"
   PROMPT_FILE=""; RAW_FILE=""
   RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c '
 import json,sys
 result=json.load(sys.stdin)
+import hashlib,pathlib
 result["reviewer"]=json.loads(sys.argv[1])
-print(json.dumps(result))' "$IDENTITY")"
+result["execution"]={"attempt_id":sys.argv[2],"cache_key":sys.argv[3],"base_sha":sys.argv[4],
+ "artifacts":{key:{"path":path,"sha256":hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()}
+ for key,path in (("raw",sys.argv[5]),("receipt",sys.argv[6]))}}
+print(json.dumps(result))' "$IDENTITY" "$ATTEMPT_ID" "$KEY" "$BASE_SHA" "$CACHE_DIR/$KEY.raw" "$EXECUTION_FILE")"
+  RESULT_DIGEST="$(printf '%s' "$RESULT_JSON" | shasum -a 256 | cut -d' ' -f1)"
+  python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --failure-kind "$FAILURE_KIND" --round-id "$HEAD_SHA" \
+    --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" \
+    --result-sha256 "$RESULT_DIGEST" >&2
+  BUDGET_OPEN=0
   require_stable_candidate || { echo "$RESULT_JSON"; exit 1; }
   # Never cache incomplete reviews or historical runner findings. Both are
   # transient infrastructure failures, not reusable independent verdicts.

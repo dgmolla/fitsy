@@ -64,7 +64,9 @@ test("one invocation covers all required domains and legacy callers reuse the wh
   writeFileSync(join(root, "scripts/review/change.sh"), "echo review-control\n");
   git("add", "."); git("commit", "-qm", "sensitive controls");
   expect(run().status).toBe(0);
-  expect(JSON.parse(runPr().stdout).domains).toEqual({ correctness: "pass", "danger-zone": "pass", "workflow-security": "pass" });
+  const reused = runPr();
+  if (reused.status !== 0) throw new Error(reused.stdout + reused.stderr);
+  expect(JSON.parse(reused.stdout).domains).toEqual({ correctness: "pass", "danger-zone": "pass", "workflow-security": "pass" });
   expect(run("fixture-model", "claude", "danger-zone").status).toBe(0);
   expect(run("fixture-model", "claude", "workflow-security").status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
@@ -94,7 +96,9 @@ test("local and PR share exact committed patch and changed source invalidates ca
   expect(run().status).toBe(0);
   const diff = git("diff", "--abbrev=8", "origin/main...HEAD");
   writeFileSync(join(root, "pr-diff"), diff.replace(/(@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@).*$/gm, "$1 function example"));
-  expect(runPr().status).toBe(0);
+  const reused = runPr();
+  if (reused.status !== 0) throw new Error(reused.stdout + reused.stderr);
+  expect(reused.status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
   writeFileSync(join(root, "app.ts"), "export const value = 3;\n");
   git("add", "app.ts"); git("commit", "-qm", "changed actual source");
@@ -235,7 +239,8 @@ test("cache-only revalidation cannot execute a missing independent result", () =
   });
   test.each(['candidate edit', 'staged candidate edit', 'untracked candidate', 'control edit', 'untracked control',
     'missing evidence', 'incomplete verdict', 'changed source', 'changed base', 'changed domain',
-    'changed provider', 'wrong issue', 'changed acceptance'])('trusted cached-only overlay refuses %s without executing a provider', mutation => {
+    'changed provider', 'wrong issue', 'changed acceptance', 'forged passing verdict',
+    'missing execution proof', 'altered raw receipt'])('trusted cached-only overlay refuses %s without executing a provider', mutation => {
     const { root, invoke, completed } = retainedOverlay();
     const ledger = readFileSync(join(root, 'budgets/issue-355.jsonl'), 'utf8');
     let extra: NodeJS.ProcessEnv = {};
@@ -255,6 +260,15 @@ test("cache-only revalidation cannot execute a missing independent result", () =
       const value = JSON.parse(completed.stdout);
       delete value.domains['workflow-security'];
       writeFileSync(join(String(fixture.env().FITSY_REVIEW_CACHE), value.source.cache_key + '.json'), JSON.stringify(value));
+    } else if (['forged passing verdict', 'missing execution proof', 'altered raw receipt'].includes(mutation)) {
+      const value = JSON.parse(completed.stdout);
+      const cache = join(String(fixture.env().FITSY_REVIEW_CACHE), value.source.cache_key + '.json');
+      if (mutation === 'altered raw receipt') writeFileSync(value.execution.artifacts.receipt.path, JSON.stringify({ kind: 'completed', returncode: 0 }));
+      else {
+        if (mutation === 'missing execution proof') delete value.execution;
+        else value.execution.attempt_id = 'self-authored-pass';
+        writeFileSync(cache, JSON.stringify(value));
+      }
     } else if (mutation === 'changed base') git('update-ref', 'refs/remotes/origin/main', 'HEAD');
     else if (mutation === 'changed domain') {
       writeFileSync(join(root, 'budgets/domains/issue-355.json'), JSON.stringify({ candidate: git('rev-list', '--max-parents=0', 'HEAD').trim() + ':fixture-retained', issue: '355', domains: ['correctness', 'workflow-security', 'danger-zone'] }));

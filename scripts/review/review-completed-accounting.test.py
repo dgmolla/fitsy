@@ -7,8 +7,10 @@ from pathlib import Path
 import tempfile
 import subprocess
 import unittest
+import sys
 from types import SimpleNamespace
 
+sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location('budget', Path(__file__).with_name('review-budget.py'))
 budget = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(budget)
@@ -137,6 +139,23 @@ class CompletedAccounting(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.call()
         self.assertEqual(saved, self.ledger.read_text())
+
+    def test_completed_failed_review_is_accounted_but_cannot_admit(self):
+        path = self.root / 'verdict'
+        value = json.loads(path.read_text())
+        value['domains']['correctness'] = dict(verdict='fail', findings=[dict(priority='P1', summary='Real defect')])
+        path.write_text(json.dumps(value))
+        self.approval['artifacts']['verdict']['sha256'] = sha(path.read_bytes())
+        execution = json.loads((self.root / 'execution').read_text())
+        execution['stdout_bytes'] = path.stat().st_size
+        (self.root / 'execution').write_text(json.dumps(execution))
+        self.approval['artifacts']['execution']['sha256'] = sha((self.root / 'execution').read_bytes())
+        self.save()
+        with self.ledger.open('a+') as handle:
+            result = budget.account_completed(handle, self.ledger, self.args, budget.read_events(handle))
+        self.assertAlmostEqual(result['completed_seconds'], 16759.932041544147)
+        with self.ledger.open() as handle:
+            self.assertEqual(budget.read_events(handle)[-1]['verdict'], 'fail')
 
     def test_changed_retained_history_fails(self):
         self.ledger.write_text(self.original + '\n')
@@ -467,6 +486,57 @@ class CompletedAdmission(CompletedAccounting):
                 self.call()
             self.replace_artifact(key, original)
             self.save()
+
+
+    def test_complete_instruction_and_dispatcher_advance_preserves_product_comparison(self):
+        self.git('checkout', '-qf', 'controls')
+        for name in ['AGENTS.md', 'docs/engineering/devops/shipping.md',
+                     'docs/engineering/devops/task-management.md',
+                     'docs/engineering/devops/agent-model-routing.md',
+                     'scripts/delivery/local-dispatcher.py', 'scripts/delivery/local-dispatcher.test.py']:
+            path = self.repo / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('Reviewed admission routing correction\n')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'complete trusted control delta')
+        self.args.control_sha = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-qf', 'product')
+        self.git('restore', '--source=' + self.args.control_sha, '--staged', '--worktree', '--', 'scripts/review')
+        self.assertEqual(self.call()['verdict'], 'pass')
+
+
+class PermanentAllocation(unittest.TestCase):
+    def test_additive_idempotent_authority_and_changed_source_refusal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ledger = root / 'issue-463.jsonl'
+            events = [dict(event='execution-limit', attempt_id='issue-execution-limit', issue=463,
+                baseline_attempts=[], baseline_completed_seconds=0, completed_seconds_stop_at=300,
+                new_rounds_max=1, per_round_timeout_seconds_max=295)]
+            original = json.dumps(events[0]) + '\n'
+            ledger.write_text(original)
+            authority = root / 'human.json'
+            authority.write_text(json.dumps(dict(human_instruction='Add global exception permanently')))
+            authority.chmod(0o600)
+            approval = dict(issue=463, candidate_source='f'*40, authority_file=str(authority),
+                human_instruction='Add global exception permanently', provider='codex', model='gpt-6-sol', effort='high',
+                original_cap_seconds=300, original_completed_seconds=0, additional_seconds=300,
+                cumulative_stop_seconds=600, per_execution_timeout_seconds=300, reason='Diagnosed installed admission mismatch')
+            path = root / 'allocation.json'
+            path.write_text(json.dumps(approval)); path.chmod(0o600)
+            args = SimpleNamespace(issue=463, source_sha='f'*40, authorization_file=path)
+            with ledger.open('a+') as handle:
+                result = budget.reconcile_allocation(handle, args, events, budget.usage(events)[2])
+            self.assertEqual(result['cap_seconds'], 600)
+            self.assertTrue(ledger.read_text().startswith(original))
+            with ledger.open('a+') as handle:
+                rows = budget.read_events(handle)
+                self.assertTrue(budget.reconcile_allocation(handle, args, rows, budget.usage(rows)[2])['idempotent'])
+            args.source_sha = 'e'*40
+            with ledger.open('a+') as handle:
+                rows = budget.read_events(handle)
+                with self.assertRaises(ValueError):
+                    budget.reconcile_allocation(handle, args, rows, budget.usage(rows)[2])
 
 
 if __name__ == '__main__':
