@@ -34,6 +34,14 @@ def install_fixture_admin(repo, home):
     p = repo / 'scripts/review/review-budget.py'
     p.write_text(p.read_text().replace('ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)',
                                      'ADMIN_HOME = Path(' + repr(str(home)) + ')'))
+    operator = home / '.fitsy-review/operators/review-budget.py'
+    operator.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(p, operator)
+    operator.chmod(0o600)
+    p = repo / 'scripts/review/run-review.sh'
+    if p.exists():
+        p.write_text(p.read_text().replace('ADMIN_HOME="$(python3 -I -c \'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)\')"',
+                                         'ADMIN_HOME=' + repr(str(home))))
     p = repo / 'scripts/verify/review-admission.sh'
     if p.exists():
         p.write_text(p.read_text().replace('ADMIN_HOME="$(python3 -I -c \'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)\')"',
@@ -48,12 +56,19 @@ class CompletedAccounting(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.old_admin = (budget.ADMIN_HOME, budget.ADMIN_REVIEW, budget.ADMIN_CACHE, budget.ADMIN_BUDGET)
+        self.old_operator_file = budget.__file__
         budget.ADMIN_HOME = self.root / 'admin'
         budget.ADMIN_REVIEW = budget.ADMIN_HOME / '.fitsy-review'
         budget.ADMIN_CACHE = budget.ADMIN_HOME / '.cache/fitsy-review'
         budget.ADMIN_BUDGET = budget.ADMIN_CACHE / 'budgets'
         (budget.ADMIN_REVIEW / 'completed').mkdir(parents=True)
         (budget.ADMIN_CACHE / 'budgets').mkdir(parents=True)
+        operator = budget.ADMIN_REVIEW / 'operators/review-budget.py'
+        operator.parent.mkdir(parents=True)
+        operator.write_bytes(Path(self.old_operator_file).read_bytes())
+        operator.chmod(0o600)
+        shutil.copyfile(Path(__file__).with_name('review-round.py'), operator.with_name('review-round.py'))
+        budget.__file__ = str(operator)
         self.ledger = budget.ADMIN_CACHE / 'budgets/issue-443.jsonl'
         source = 'f' * 40
         base = '2' * 40
@@ -96,6 +111,7 @@ class CompletedAccounting(unittest.TestCase):
 
     def tearDown(self):
         budget.ADMIN_HOME, budget.ADMIN_REVIEW, budget.ADMIN_CACHE, budget.ADMIN_BUDGET = self.old_admin
+        budget.__file__ = self.old_operator_file
         self.temp.cleanup()
 
     def save(self):
@@ -316,7 +332,7 @@ class CompletedAdmission(CompletedAccounting):
         # Self-authored internally consistent rows and artifacts cannot approve reuse.
         with self.assertRaises(OSError): admit()
         operators = budget.ADMIN_REVIEW / 'operators'
-        operators.mkdir()
+        operators.mkdir(exist_ok=True)
         authority = operators / ('issue-443-cache-' + key + '.json')
         approval = dict(issue=443, source_sha=args.source_sha, base_sha=args.base_sha,
                         domains=['correctness'], cache_key=key,
@@ -689,12 +705,17 @@ class PermanentAllocation(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.old_admin = (budget.ADMIN_HOME, budget.ADMIN_REVIEW, budget.ADMIN_CACHE, budget.ADMIN_BUDGET)
+        self.old_operator_file = budget.__file__
         budget.ADMIN_HOME = self.root
         budget.ADMIN_REVIEW = self.root / '.fitsy-review'
         budget.ADMIN_CACHE = self.root / '.cache/fitsy-review'
         budget.ADMIN_BUDGET = budget.ADMIN_CACHE / 'budgets'
         budget.ADMIN_BUDGET.mkdir(parents=True)
         (budget.ADMIN_REVIEW / 'operators').mkdir(parents=True)
+        operator = budget.ADMIN_REVIEW / 'operators/review-budget.py'
+        operator.write_bytes(Path(self.old_operator_file).read_bytes())
+        operator.chmod(0o600)
+        budget.__file__ = str(operator)
         self.ledger = budget.ADMIN_BUDGET / 'issue-463.jsonl'
         self.authority = self.root / 'human.json'
         self.authority.write_text(json.dumps(dict(human_instruction='Add global exception permanently')))
@@ -704,6 +725,7 @@ class PermanentAllocation(unittest.TestCase):
 
     def tearDown(self):
         budget.ADMIN_HOME, budget.ADMIN_REVIEW, budget.ADMIN_CACHE, budget.ADMIN_BUDGET = self.old_admin
+        budget.__file__ = self.old_operator_file
         self.temp.cleanup()
 
     def approval(self, cap, completed):
@@ -779,6 +801,28 @@ class PermanentAllocation(unittest.TestCase):
         value = json.loads(self.path.read_text()); value['operator_sha256']='0'*64
         self.path.write_text(json.dumps(value))
         with self.assertRaisesRegex(ValueError, 'exact independently reviewed operator'): self.call()
+        self.assertEqual(saved, self.ledger.read_bytes())
+
+    def test_approved_operator_copy_cannot_act_before_canonical_installation(self):
+        self.ledger.write_text(json.dumps(dict(event='execution-limit', attempt_id='issue-execution-limit', issue=463,
+            baseline_attempts=[], baseline_completed_seconds=0, completed_seconds_stop_at=300,
+            new_rounds_max=1, per_round_timeout_seconds_max=300))+'\n')
+        self.approval(300, 0)
+        saved = self.ledger.read_bytes()
+        original_file = budget.__file__
+        copied = self.root / 'copied-approved-operator.py'
+        copied.write_text(Path(original_file).read_text().replace(
+            'ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)',
+            'ADMIN_HOME = Path(' + repr(str(budget.ADMIN_HOME)) + ')'))
+        approval = json.loads(self.path.read_text())
+        approval['operator_sha256'] = sha(copied.read_bytes())
+        self.path.write_text(json.dumps(approval))
+        Path(original_file).unlink()
+        result = subprocess.run(['python3', '-I', str(copied), 'reconcile-allocation',
+            '--ledger', str(self.ledger), '--issue', '463', '--source-sha', self.args.source_sha,
+            '--authorization-file', str(self.path)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('canonical operator installation', result.stdout + result.stderr)
         self.assertEqual(saved, self.ledger.read_bytes())
 
 

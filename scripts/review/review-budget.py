@@ -341,6 +341,16 @@ def canonical_ledger(ledger, issue):
 
 def operator_authority(args, kind):
     canonical_ledger(args.ledger, args.issue)
+    operator = Path(__file__).absolute()
+    installations = {ADMIN_REVIEW / "operators/review-budget.py",
+                     ADMIN_REVIEW / "repo/scripts/review/review-budget.py"}
+    if operator not in installations or operator.is_symlink():
+        raise ValueError("privileged actions require canonical operator installation")
+    probe = operator
+    while probe != ADMIN_HOME:
+        if probe.is_symlink() or probe.stat().st_uid != os.getuid() or probe.stat().st_mode & 0o022:
+            raise ValueError("privileged actions require canonical operator installation custody")
+        probe = probe.parent
     expected = (ADMIN_REVIEW / "completed" / f"issue-{args.issue}.json" if kind == "completed"
                 else ADMIN_REVIEW / "operators" / f"issue-{args.issue}-{kind}.json")
     approval = canonical_authority(args.authorization_file, expected)
@@ -582,6 +592,7 @@ def admit_completed(handle, ledger, args, events):
     # A control-only trusted-main advance cannot expand the product comparison.
     allowed = controls + ["scripts/verify/shipping-session.mjs", "scripts/verify/review-admission.sh",
                           "scripts/verify/product-flow.mjs", "scripts/sim/publish-product-flow.mjs",
+                          "scripts/sim/product-flow.mjs", "scripts/sim/runner-controls.test.mjs",
                           "scripts/verify/run.mjs", "scripts/verify/receipt-cache.mjs", "scripts/verify/README.md",
                           ".githooks/pre-push",
                           "scripts/delivery/local-dispatcher.py", "scripts/delivery/local-dispatcher.test.py",

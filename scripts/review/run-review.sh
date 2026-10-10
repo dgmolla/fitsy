@@ -279,7 +279,10 @@ if [ -f "$COMPLETED_AUTH" ]; then
   for DOMAIN in $DOMAINS; do COMPLETED_ARGS+=(--required-domain "$DOMAIN"); done
   COMPLETED_ACTION=admit-completed
   if [ "$PROBE" = 1 ]; then COMPLETED_ACTION=validate-completed; fi
-  RESULT_JSON="$(python3 -I scripts/review/review-budget.py "$COMPLETED_ACTION" "${BUDGET_ARGS[@]}" "${COMPLETED_ARGS[@]}")" || { incomplete_status completed_evidence; exit 1; }
+  ADMIN_HOME="$(python3 -I -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
+  INSTALLED_OPERATOR="$ADMIN_HOME/.fitsy-review/operators/review-budget.py"
+  if [ ! -f "$INSTALLED_OPERATOR" ]; then INSTALLED_OPERATOR="$ADMIN_HOME/.fitsy-review/repo/scripts/review/review-budget.py"; fi
+  RESULT_JSON="$(python3 -I "$INSTALLED_OPERATOR" "$COMPLETED_ACTION" "${BUDGET_ARGS[@]}" "${COMPLETED_ARGS[@]}")" || { incomplete_status completed_evidence; exit 1; }
   if [ "$PROBE" = 1 ]; then
     python3 -I -c 'import json,sys; print(json.dumps({"cache_key":sys.argv[1],"domains":sys.argv[2].split(),"head_sha":sys.argv[3]}))' "$KEY" "$DOMAINS" "$HEAD_SHA"
     exit 0

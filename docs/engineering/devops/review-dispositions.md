@@ -248,3 +248,7 @@ It derives the checkout from its installed hook location, clears Git repository 
 Caller PATH and GIT_WORK_TREE cannot redirect verification to another source.
 The hook removes exported BASH_FUNC_* entries before child shells and directly executes the protected verifier.
 The verifier clears shell startup selectors before nested checks; nested hook Bash checks use protected startup.
+Privileged accounting and reconciliation require the canonical private operator or managed-main operator pathname as well as its approved digest.
+Disposable authenticated overlays delegate those actions to that installed operator; byte-identical caller copies cannot act before installation.
+Direct admission and publishable simulator guards use protected Node child startup.
+Frozen pre-cutover verifier files retain their original mode and use the same system Env startup protection without source edits.

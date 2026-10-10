@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { shippingStartupCases } from './shipping-startup-cases';
 interface Fixture {
   root(): string; env(): NodeJS.ProcessEnv; setEnv(value: NodeJS.ProcessEnv): void;
   git(...args: string[]): string; source: string;
@@ -9,6 +10,7 @@ interface Fixture {
 export function shippingSessionCases(f: Fixture, setup: () => void,
   verify: () => ReturnType<typeof spawnSync>, order: () => string,
   callCount: () => number, passingVerdict: string, failingVerdict: string, prepare: () => ReturnType<typeof spawnSync>) {
+  shippingStartupCases(f, setup, prepare, callCount);
   function session(script: string, execute = true) {
     if (execute) { const reviewed = prepare(); if (reviewed.status !== 0) return reviewed; }
     const root = f.root();
@@ -22,7 +24,7 @@ export function shippingSessionCases(f: Fixture, setup: () => void,
     const root = f.root();
     writeFileSync(join(root, '.evidence/mobile.mjs'), `import {execFileSync} from 'node:child_process';
 import {admitFinalCandidate} from ${JSON.stringify(join(f.source, 'scripts/sim/product-flow.mjs'))};
-admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command,args,{cwd:process.cwd(),env:process.env,stdio:'inherit'}));
+admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command.endsWith('/shipping-session.mjs')?process.cwd()+'/scripts/verify/shipping-session.mjs':command,args,{cwd:process.cwd(),env:process.env,stdio:'inherit'}));
 `);
     return 'node .evidence/mobile.mjs';
   };

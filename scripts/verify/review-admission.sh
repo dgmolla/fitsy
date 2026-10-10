@@ -1,10 +1,19 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 set -euo pipefail
-unset BASH_ENV ENV
+unset BASH_ENV ENV NODE_OPTIONS NODE_PATH
 PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 export PATH
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CONTROL_ROOT="$REPO_ROOT"
+# Clear selectors before any child shell or Git source read. Privileged Bash
+# ignores function imports but preserves their entries for ordinary children.
+selected_environment=()
+while IFS= read -r -d '' name; do
+  selected_environment+=(-u "$name")
+done < <(node -e 'for (const key of Object.keys(process.env)) if (key.startsWith("BASH_FUNC_") || key.startsWith("GIT_")) process.stdout.write(key + "\0")')
+if [ "${#selected_environment[@]}" -gt 0 ]; then
+  exec /usr/bin/env "${selected_environment[@]}" /bin/bash -p "$CONTROL_ROOT/scripts/verify/review-admission.sh" "$@"
+fi
 REPO_ROOT="${FITSY_SHIPPING_ROOT:-$REPO_ROOT}"
 cd "$REPO_ROOT"
 REVIEW_ARGS=(--local --cached-only)
@@ -30,7 +39,7 @@ fi
 if [ "$SESSION_REVALIDATION" = 0 ] && [ -n "${FITSY_SHIPPING_SOCKET-}${FITSY_SHIPPING_TOKEN-}" ]; then
   # Socket data cannot substitute for administrator-managed review authority.
   /bin/bash -p "$CONTROL_ROOT/scripts/verify/review-admission.sh" --revalidate-session || exit 1
-  node "$CONTROL_ROOT/scripts/verify/shipping-session.mjs" --check || {
+  "$CONTROL_ROOT/scripts/verify/shipping-session.mjs" --check || {
     echo '{"name":"review-admission","status":"fail","summary":"active shipping candidate is invalid","fix":"revalidate cheap checks and matching review on frozen source"}'
     exit 1
   }
@@ -74,7 +83,7 @@ PYBOOTSTRAP
   # Only the coordinator may approve/install this exact operator after review.
   # admit-completed checks its canonical approval and digest before accounting.
   if [ "$SESSION_REVALIDATION" = 0 ]; then
-    node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+    "$CONTROL_ROOT/scripts/verify/run.mjs" --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
   fi
   BRANCH="$(git symbolic-ref --quiet --short HEAD)"
   ACCEPTANCE="$(/usr/bin/env -i HOME="$ADMIN_HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin GH_HOST=github.com GH_REPO=dgmolla/fitsy "$TRUSTED_GH" issue view "$ISSUE" --json body --jq .body | python3 -I -c '
@@ -114,7 +123,13 @@ fi
 BRANCH="$(git symbolic-ref --quiet --short HEAD)"
 # Direct admission completes cheap checks before validating independent evidence.
 if [ "$SESSION_REVALIDATION" = 0 ]; then
-  node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+  if [ -x scripts/verify/run.mjs ]; then
+    scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+  else
+    # Frozen pre-cutover source retains its original file mode. Use the same
+    # protected system Env startup wrapper without modifying that source.
+    /usr/bin/env -u NODE_OPTIONS -u NODE_PATH node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+  fi
 fi
 [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
 mkdir -p .evidence/review-admission
