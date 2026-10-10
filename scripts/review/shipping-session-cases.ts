@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 interface Fixture {
   root(): string; env(): NodeJS.ProcessEnv; setEnv(value: NodeJS.ProcessEnv): void;
@@ -206,6 +206,41 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command,args
         NODE_OPTIONS: '--import=data:text/javascript,process.exit(0)', NODE_PATH: bin },
       encoding: 'utf8', timeout: 25000 });
     expect(result.status).toBe(1); expect(order()).toContain('cheap'); expect(callCount()).toBe(1);
+  });
+
+  test.each(['native-push', 'direct-hook', 'git-worktree'])('%s cannot redirect hook root discovery through caller PATH', mode => {
+    setup(); expect(prepare().status).toBe(0);
+    const root = f.root(), bin = join(root, '.evidence/git-replay'), fake = join(bin, 'fake-root');
+    mkdirSync(join(fake, 'scripts/delivery'), { recursive: true });
+    mkdirSync(join(fake, 'scripts/verify'), { recursive: true });
+    writeFileSync(join(fake, 'scripts/delivery/phase-events.mjs'), 'process.exit(0);\n');
+    for (const name of ['size-check', 'domain-check']) writeFileSync(join(fake, `scripts/verify/${name}.sh`), 'exit 0\n');
+    writeFileSync(join(fake, 'package.json'), JSON.stringify({ scripts: { verify: 'true' } }));
+    writeFileSync(join(bin, 'git'), '#!/bin/sh\nif [ "$1" = rev-parse ] && [ "$2" = --show-toplevel ]; then echo ' + JSON.stringify(fake) + '; else exec /usr/bin/git "$@"; fi\n', { mode: 0o700 });
+    writeFileSync(join(root, '.evidence/full-fail'), 'fail');
+    const hooks = join(root, '.evidence');
+    chmodSync(join(hooks, 'pre-push'), 0o700);
+    f.git('config', 'core.hooksPath', hooks);
+    const remote = join(root, '.evidence/remote.git'); f.git('init', '-q', '--bare', remote);
+    const nativeGit = existsSync('/Applications/Xcode.app/Contents/Developer/usr/bin/git')
+      ? '/Applications/Xcode.app/Contents/Developer/usr/bin/git' : '/usr/bin/git';
+    const result = spawnSync(mode !== 'direct-hook' ? nativeGit : '/bin/bash',
+      mode !== 'direct-hook' ? ['push', remote, 'HEAD'] : ['-p', join(hooks, 'pre-push')], { cwd: root,
+      env: { ...f.env(), PATH: bin + ':' + f.env().PATH,
+        ...(mode === 'git-worktree' ? { GIT_DIR: join(root, '.git'), GIT_WORK_TREE: fake } : {}) },
+      encoding: 'utf8', timeout: 25000 });
+    expect(result.status).not.toBe(0); expect(callCount()).toBe(1);
+    expect(f.git('--git-dir=' + remote, 'for-each-ref')).toBe('');
+  });
+
+  test('protected shipping child clears caller Git repository selectors', () => {
+    setup(); expect(prepare().status).toBe(0);
+    const root = f.root(), fake = join(root, '.evidence/alternate-worktree'); mkdirSync(fake);
+    f.setEnv({ ...f.env(), GIT_DIR: join(root, '.git'), GIT_WORK_TREE: fake });
+    const result = session('env > .evidence/child-environment', false);
+    if (result.status !== 0) throw Error(String(result.stderr));
+    expect(readFileSync(join(root, '.evidence/child-environment'), 'utf8')).not.toMatch(/^GIT_(?:DIR|WORK_TREE)=/m);
+    expect(callCount()).toBe(1);
   });
 
   test('caller Git repository selectors cannot replay review for an earlier source', () => {

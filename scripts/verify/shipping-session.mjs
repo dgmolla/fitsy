@@ -14,7 +14,7 @@ import { git } from './impact-plan.mjs';
 const administratorPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 function executionEnvironment(env) {
   return { ...Object.fromEntries(Object.entries(env).filter(([key]) =>
-    key !== 'NODE_OPTIONS' && key !== 'NODE_PATH' && key !== 'BASH_ENV' && key !== 'ENV' && !key.startsWith('BASH_FUNC_'))), PATH: administratorPath };
+    !key.startsWith('GIT_') && key !== 'NODE_OPTIONS' && key !== 'NODE_PATH' && key !== 'BASH_ENV' && key !== 'ENV' && !key.startsWith('BASH_FUNC_'))), PATH: administratorPath };
 }
 
 function identity(root, env = process.env) {

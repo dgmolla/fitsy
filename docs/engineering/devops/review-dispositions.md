@@ -242,3 +242,7 @@ These are existing entrypoint corrections, not additional approval issuers or a 
 Protected Node entrypoints use their executable system Env wrapper, which clears Node startup selectors before the interpreter loads the module.
 Live child environments and pre-push also clear these selectors, so a startup import cannot replace admission or acceptance with an early exit.
 Direct caller-configured `node` or npm startup is not release evidence; use the protected executable entrypoints or clear startup selectors before npm starts.
+
+The canonical `.githooks/pre-push` fixes administrator executable search before any Git command.
+It derives the checkout from its installed hook location, clears Git repository selectors, and verifies that checkout before acceptance.
+Caller PATH and GIT_WORK_TREE cannot redirect verification to another source.
