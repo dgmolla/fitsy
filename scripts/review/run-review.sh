@@ -17,6 +17,14 @@ done
 LENS=review-round
 CACHE_DIR="${FITSY_REVIEW_CACHE:-$HOME/.cache/fitsy-review}"
 GH_BIN="${FITSY_GH_BIN:-gh}"
+github() {
+  if [ "${FITSY_REVIEW_ADMIN_GH:-0}" = 1 ]; then
+    /usr/bin/env -i HOME="$(python3 -I -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')" \
+      PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin GH_HOST=github.com GH_REPO=dgmolla/fitsy "$GH_BIN" "$@"
+  else
+    "$GH_BIN" "$@"
+  fi
+}
 mkdir -p "$CACHE_DIR"
 umask 077
 
@@ -92,16 +100,16 @@ if [ "$TARGET" = "--local" ]; then
   TITLE="$(git log -1 --format=%s)"; BODY=""
   HEAD_BRANCH="$(git symbolic-ref --quiet --short HEAD)"
 else
-  TITLE="$("$GH_BIN" pr view "$TARGET" --json title --jq .title)"
-  BODY="$("$GH_BIN" pr view "$TARGET" --json body --jq .body)"
-  HEAD_SHA="$("$GH_BIN" pr view "$TARGET" --json headRefOid --jq .headRefOid)"
-  HEAD_BRANCH="$("$GH_BIN" pr view "$TARGET" --json headRefName --jq .headRefName)"
+  TITLE="$(github pr view "$TARGET" --json title --jq .title)"
+  BODY="$(github pr view "$TARGET" --json body --jq .body)"
+  HEAD_SHA="$(github pr view "$TARGET" --json headRefOid --jq .headRefOid)"
+  HEAD_BRANCH="$(github pr view "$TARGET" --json headRefName --jq .headRefName)"
   [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] || { echo "PR context is not the requested source head" >&2; exit 1; }
-  BASE_SHA="$("$GH_BIN" pr view "$TARGET" --json baseRefOid --jq .baseRefOid)"
+  BASE_SHA="$(github pr view "$TARGET" --json baseRefOid --jq .baseRefOid)"
   [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "PR base identity unavailable" >&2; exit 1; }
   git cat-file -e "$BASE_SHA^{commit}" || git fetch -q origin "$BASE_SHA"
   DIFF="$(git diff --abbrev=8 "$BASE_SHA...$HEAD_SHA")"
-  [ "$("$GH_BIN" pr view "$TARGET" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA" ] || { echo "PR source changed during input gathering" >&2; exit 1; }
+  [ "$(github pr view "$TARGET" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA" ] || { echo "PR source changed during input gathering" >&2; exit 1; }
 fi
 [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] || { echo "checkout source changed during input gathering" >&2; exit 1; }
 # Optional hunk-heading labels are not code; retain every patch body/index line.
@@ -124,7 +132,7 @@ if [ -f "$COMPLETED_AUTH" ]; then
 fi
 # The bound issue supplies release intent, never reviewer instructions or proof.
 # Ignore changing task status so local and PR reviews reuse the same acceptance.
-if ! ISSUE_BRIEF="$("$GH_BIN" issue view "$ISSUE" --json body --jq .body 2>/dev/null)"; then
+if ! ISSUE_BRIEF="$(github issue view "$ISSUE" --json body --jq .body 2>/dev/null)"; then
   echo '[run-review] bound issue brief unavailable; review cannot verify release acceptance' >&2
   exit 1
 fi
@@ -231,7 +239,7 @@ PROVIDER="${FITSY_REVIEW_PROVIDER:-codex}"
 incomplete_status() {
   [ "$TARGET" != --local ] || return 0
   for CONTEXT in $(printf 'lens/%s\n' $DOMAINS) review/round; do
-    "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state=error -f context="$CONTEXT" -f description="execution/$1: independent review incomplete" >/dev/null || true
+    github api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state=error -f context="$CONTEXT" -f description="execution/$1: independent review incomplete" >/dev/null || true
   done
 }
 preflight_error() { echo '[run-review] reviewer configuration failed; diagnose before retrying' >&2; incomplete_status configuration; exit 1; }
@@ -404,20 +412,20 @@ for DOMAIN in $DOMAINS; do
   if [ "$TARGET" != --local ]; then
     DESCRIPTION="$N_FINDINGS round finding(s), gate $GATE, $PROVIDER/$MODEL"
     if [ "$VERDICT" = incomplete ]; then DESCRIPTION="execution/${FAILURE_KIND:-invalid_output}: independent review incomplete"; fi
-    "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$STATE" -f context="lens/$DOMAIN" -f description="$DESCRIPTION" >/dev/null
+    github api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$STATE" -f context="lens/$DOMAIN" -f description="$DESCRIPTION" >/dev/null
   fi
 done
 if [ "$TARGET" != --local ]; then
   if [ "$VERDICT" = incomplete ]; then ROUND_STATE=error; ROUND_DESCRIPTION="execution/${FAILURE_KIND:-invalid_output}: independent review incomplete"
   else ROUND_STATE=$([ "$ROUND_GATE" = pass ] && echo success || echo failure); ROUND_DESCRIPTION="round-key:$KEY complete:$ROUND_GATE"; fi
-  "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$ROUND_STATE" -f context=review/round -f description="$ROUND_DESCRIPTION" >/dev/null
+  github api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$ROUND_STATE" -f context=review/round -f description="$ROUND_DESCRIPTION" >/dev/null
 fi
 # Persist source provenance without converting raw adverse findings to passes.
 RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["source"]={"head_sha":sys.argv[1],"base_sha":sys.argv[4],"diff_sha256":sys.argv[2],"cache_key":sys.argv[3]}; print(json.dumps(d))' "$HEAD_SHA" "$DIFF_SHA256" "$KEY" "$BASE_SHA")"
 echo "$RESULT_JSON"
 if [ "$TARGET" != --local ] && [ "$CACHED_ONLY" = 0 ] && { [ "$N_FINDINGS" -gt 0 ] || [ "$VERDICT" = incomplete ]; }; then
   COMMENT="$(printf '%s' "$RESULT_JSON" | python3 -I scripts/review/format-comment.py)"
-  "$GH_BIN" pr comment "$TARGET" --body "$COMMENT" >/dev/null
+  github pr comment "$TARGET" --body "$COMMENT" >/dev/null
 fi
 if [ "$TELEMETRY_CACHE_HIT" = 1 ]; then TELEMETRY_RESULT=cached
 elif [ "$ROUND_GATE" = pass ]; then TELEMETRY_RESULT=pass

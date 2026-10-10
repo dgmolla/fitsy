@@ -228,3 +228,8 @@ Each allocation remains at most 300 seconds, additive, source-bound and checked 
 Normal session admission still completes cheap checks before it creates live ownership.
 Its internal cached-only `--revalidate-session` path rechecks canonical evidence and current source/control refs, preserving the existing source-bound cheap proof without repeating the entire cheap pipeline on every native or hook call.
 That path requires session selectors and refuses reviewer execution; selectors never replace genuine coordinator-approved evidence.
+
+Shipping admission pins issue retrieval to the existing administrator GitHub CLI in known installation locations, rejecting `FITSY_GH_BIN` before any live-session branch.
+Protected retrieval clears caller credential, host, configuration, proxy and executable-search selectors and reads the canonical administrator account configuration against `github.com` and `dgmolla/fitsy`.
+The protected runner receives that pinned executable explicitly; standalone provider fixtures remain external-boundary tests and cannot authorize shipping.
+An acceptance change invalidates reuse even if a caller executable returns the previously approved body.

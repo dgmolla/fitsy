@@ -514,6 +514,9 @@ class CompletedAdmission(CompletedAccounting):
         for name in ('size-check', 'domain-check'):
             (product / f'scripts/verify/{name}.sh').write_text('exit 2\n')
         install_fixture_admin(product, budget.ADMIN_HOME)
+        admission = product / 'scripts/verify/review-admission.sh'
+        admission.write_text(admission.read_text().replace('TRUSTED_GH=/opt/homebrew/bin/gh',
+            'TRUSTED_GH=' + str(self.root / 'session-bin/gh')))
         git('add', '.')
         git('commit', '-qm', 'fixture trusted runtime')
         base = git('rev-parse', 'HEAD')

@@ -26,6 +26,7 @@ export function installAdmissionFixture(root: string, admin: string, cache: stri
     const admission = join(root, 'scripts/verify/review-admission.sh');
     writeFileSync(admission, readFileSync(admission, 'utf8')
       .replace('ADMIN_HOME="$(python3 -I -c \'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)\')"', `ADMIN_HOME=${JSON.stringify(admin)}`)
+      .replace('TRUSTED_GH=/opt/homebrew/bin/gh', `TRUSTED_GH=${JSON.stringify(join(root, 'bin/gh'))}`)
       .replace('TRUSTED_REPO="$ADMIN_HOME/.fitsy-review/repo"', `TRUSTED_REPO=${JSON.stringify(join(root, 'old-poller/repo'))}`)
       .replace('FITSY_REVIEW_BUDGET_HOME="$REVIEW_CACHE/budgets"', `FITSY_REVIEW_BUDGET_HOME=${JSON.stringify(join(root, 'budgets'))}`));
     const session = join(root, 'scripts/verify/shipping-session.mjs');

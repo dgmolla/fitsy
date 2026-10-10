@@ -118,4 +118,36 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command,args
     } finally { server.kill(); }
   });
 
+  test('caller-selected GitHub executable cannot replay acceptance after an approved review', () => {
+    setup(); expect(prepare().status).toBe(0);
+    const root = f.root(), body = join(root, 'issue-body'), stale = join(root, '.evidence/stale-gh');
+    writeFileSync(stale, '#!/bin/sh\ncat ' + JSON.stringify(join(root, '.evidence/old-acceptance')) + '\n', { mode: 0o700 });
+    writeFileSync(join(root, '.evidence/old-acceptance'), readFileSync(body));
+    writeFileSync(body, readFileSync(body, 'utf8') + 'Acceptance: additional required recovery behavior.\n');
+    f.setEnv({ ...f.env(), FITSY_GH_BIN: stale });
+    const result = session('echo shipped >> .evidence/order', false);
+    if (result.status === 0) throw Error('Stale caller GitHub body admitted obsolete approval: ' + result.stdout + result.stderr);
+    expect(callCount()).toBe(1); expect(order()).not.toContain('shipped');
+  });
+
+  test('protected GitHub transport ignores caller host configuration credentials and PATH replay', () => {
+    setup();
+    const root = f.root(), body = join(root, 'issue-body'), old = join(root, '.evidence/old-transport-body');
+    writeFileSync(old, readFileSync(body));
+    const gh = join(root, 'bin/gh');
+    writeFileSync(gh, readFileSync(gh, 'utf8').replace('#!/bin/sh\n', '#!/bin/sh\n' +
+      '[ "$GH_HOST" = github.com ] && [ "$GH_REPO" = dgmolla/fitsy ] && ' +
+      '[ -z "${GH_CONFIG_DIR+x}${GH_TOKEN+x}${HTTPS_PROXY+x}${SSL_CERT_FILE+x}" ] || { cat ' + JSON.stringify(old) + '; exit; }\n'));
+    f.git('add', 'bin/gh'); f.git('commit', '-qm', 'external GitHub transport fixture');
+    const bin = join(root, '.evidence/replay-bin'); mkdirSync(bin);
+    writeFileSync(join(bin, 'gh'), '#!/bin/sh\ncat ' + JSON.stringify(old) + '\n', { mode: 0o700 });
+    f.setEnv({ ...f.env(), PATH: bin + ':' + f.env().PATH, GH_HOST: 'caller.invalid', GH_REPO: 'caller/other',
+      GH_CONFIG_DIR: bin, GH_TOKEN: 'fixture-token', HTTPS_PROXY: 'https://caller.invalid', SSL_CERT_FILE: join(bin, 'caller.pem') });
+    expect(prepare().status).toBe(0);
+    expect(session('echo current >> .evidence/order', false).status).toBe(0);
+    writeFileSync(body, readFileSync(body, 'utf8') + 'Acceptance: new required transport recovery.\n');
+    expect(session('echo obsolete >> .evidence/order', false).status).toBe(1);
+    expect(callCount()).toBe(1); expect(order()).toContain('current'); expect(order()).not.toContain('obsolete');
+  });
+
 }

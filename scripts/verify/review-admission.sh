@@ -6,6 +6,12 @@ REPO_ROOT="${FITSY_SHIPPING_ROOT:-$REPO_ROOT}"
 cd "$REPO_ROOT"
 REVIEW_ARGS=(--local --cached-only)
 SESSION_REVALIDATION=0
+[ -z "${FITSY_GH_BIN:-}" ] || { echo 'caller-selected GitHub executable cannot authorize shipping' >&2; exit 1; }
+# Known administrator installation locations, never caller PATH or a private copy.
+TRUSTED_GH=/opt/homebrew/bin/gh
+if [ ! -x "$TRUSTED_GH" ]; then TRUSTED_GH=/usr/local/bin/gh; fi
+if [ ! -x "$TRUSTED_GH" ]; then TRUSTED_GH=/usr/bin/gh; fi
+[ -x "$TRUSTED_GH" ] || { echo 'administrator GitHub CLI unavailable' >&2; exit 1; }
 for ARG in "$@"; do
   case "$ARG" in
     --revalidate-session) SESSION_REVALIDATION=1 ;;
@@ -68,7 +74,7 @@ PYBOOTSTRAP
     node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
   fi
   BRANCH="$(git symbolic-ref --quiet --short HEAD)"
-  ACCEPTANCE="$(gh issue view "$ISSUE" --json body --jq .body | python3 -I -c '
+  ACCEPTANCE="$(/usr/bin/env -i HOME="$ADMIN_HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin GH_HOST=github.com GH_REPO=dgmolla/fitsy "$TRUSTED_GH" issue view "$ISSUE" --json body --jq .body | python3 -I -c '
 import re,sys
 kept=[]; details=False
 for line in sys.stdin.read().splitlines():
@@ -149,7 +155,7 @@ cache.mkdir(parents=True,exist_ok=True)
 PYCACHE
 
 REVIEW_CODE=0
-(cd "$ATTEMPT/candidate"; FITSY_REVIEW_FRESH_EXECUTION=1 FITSY_REVIEW_CACHE="$REVIEW_CACHE" FITSY_REVIEW_BUDGET_HOME="$REVIEW_CACHE/budgets" FITSY_REVIEW_COMPLETED_HOME="$ADMIN_HOME/.fitsy-review/completed" \
+(cd "$ATTEMPT/candidate"; FITSY_GH_BIN="$TRUSTED_GH" FITSY_REVIEW_ADMIN_GH=1 FITSY_REVIEW_FRESH_EXECUTION=1 FITSY_REVIEW_CACHE="$REVIEW_CACHE" FITSY_REVIEW_BUDGET_HOME="$REVIEW_CACHE/budgets" FITSY_REVIEW_COMPLETED_HOME="$ADMIN_HOME/.fitsy-review/completed" \
   bash scripts/review/run-review.sh "${REVIEW_ARGS[@]}" > "$ATTEMPT/result.json" 2> "$ATTEMPT/review.log") || REVIEW_CODE=$?
 cat "$ATTEMPT/review.log" >&2
 [ "$REVIEW_CODE" = 0 ] || fail
