@@ -26,26 +26,35 @@ fail() {
 }
 [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
 HEAD_SHA="$(git rev-parse HEAD)"
-TRUSTED_REPO="${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/repo"
+ADMIN_HOME="$(python3 -I -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
+for NAME in FITSY_REVIEW_HOME FITSY_REVIEW_CACHE FITSY_REVIEW_BUDGET_HOME FITSY_REVIEW_COMPLETED_HOME; do
+  [ -z "${!NAME:-}" ] || { echo "caller-selected $NAME cannot authorize shipping" >&2; fail; }
+done
+TRUSTED_REPO="$ADMIN_HOME/.fitsy-review/repo"
 BASE_SHA="$(git -C "$TRUSTED_REPO" rev-parse refs/remotes/origin/main)" || fail
 ISSUE="$(python3 -I -c 'import json; print(json.load(open(".evidence/delivery/binding.json"))["issue"])')" || fail
-COMPLETED_AUTH="${FITSY_REVIEW_COMPLETED_HOME:-${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/completed}/issue-$ISSUE.json"
+COMPLETED_AUTH="$ADMIN_HOME/.fitsy-review/completed/issue-$ISSUE.json"
 # The permanent human exception permits a separately installed, independently
 # reviewed operator to bootstrap this recovery outcome only. It is never main
 # identity, never a nutrition admission, and never permission to execute review.
 if [ -n "${FITSY_REVIEW_BOOTSTRAP_OPERATOR:-}" ]; then
   [ "$ISSUE" = 463 ] && [ "$REPO_ROOT" = "$CONTROL_ROOT" ] && [ -f "$COMPLETED_AUTH" ] || fail
   [ "${REVIEW_ARGS[*]}" = '--local --cached-only' ] || fail
-  python3 -I - "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" "$HEAD_SHA" <<'PYBOOTSTRAP' || fail
-import hashlib,os,pathlib,subprocess,sys
-p=pathlib.Path(sys.argv[1]).resolve()
-if not p.is_file() or p.stat().st_uid != os.getuid() or p.stat().st_mode & 0o077:
-    sys.exit('bootstrap operator requires a private external installation')
-if subprocess.run(['git','-C',str(p.parent),'rev-parse','--show-toplevel'],capture_output=True).returncode == 0:
-    sys.exit('bootstrap operator must be outside every candidate checkout')
-expected=subprocess.check_output(['git','show',sys.argv[2]+':scripts/review/review-budget.py'])
-if p.read_bytes() != expected: sys.exit('bootstrap operator differs from independently reviewed source')
+  [ "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" = "$ADMIN_HOME/.fitsy-review/operators/review-budget.py" ] || fail
+  python3 -I - "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" "$COMPLETED_AUTH" "$HEAD_SHA" <<'PYBOOTSTRAP' || fail
+import hashlib,json,os,pathlib,sys
+operator,authority=map(pathlib.Path,sys.argv[1:3])
+for path in (operator,authority):
+    if path.is_symlink() or not path.is_file() or path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
+        sys.exit('bootstrap requires canonical private administrator installation and approval')
+approval=json.loads(authority.read_text())
+if (approval.get('issue') != 463 or approval.get('source_sha') != sys.argv[3]
+        or approval.get('control_sha') != sys.argv[3]
+        or approval.get('operator_sha256') != hashlib.sha256(operator.read_bytes()).hexdigest()):
+    sys.exit('coordinator has not independently approved this exact operator/source')
 PYBOOTSTRAP
+  # Only the coordinator may approve/install this exact operator after review.
+  # admit-completed checks its canonical approval and digest before accounting.
   node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
   BRANCH="$(git symbolic-ref --quiet --short HEAD)"
   ACCEPTANCE="$(gh issue view "$ISSUE" --json body --jq .body | python3 -I -c '
@@ -56,7 +65,7 @@ for line in sys.stdin.read().splitlines():
     if not details and re.match(r"^\s*(?:\*\*)?(?:Status|Next|Done|Blocker)(?:\*\*)?\s*:",line,re.I): continue
     kept.append(line)
 print("\n".join(kept))')" || fail
-  ARGS=(--ledger "$HOME/.cache/fitsy-review/budgets/issue-$ISSUE.jsonl" --issue "$ISSUE"
+  ARGS=(--ledger "$ADMIN_HOME/.cache/fitsy-review/budgets/issue-$ISSUE.jsonl" --issue "$ISSUE"
     --candidate "$(git rev-list --max-parents=0 HEAD | sort):$BRANCH"
     --source-sha "$HEAD_SHA" --base-sha "$(git rev-parse origin/main)"
     --control-sha "$HEAD_SHA" --candidate-root "$REPO_ROOT" --authorization-file "$COMPLETED_AUTH"
@@ -110,7 +119,7 @@ done
 # Revalidate only the established external cache or authorized original evidence.
 # A session restart does not authorize reviewer execution. Explicit execution uses
 # this same trusted overlay and writes the canonical cache for later admission.
-REVIEW_CACHE="${FITSY_REVIEW_CACHE:-$HOME/.cache/fitsy-review}"
+REVIEW_CACHE="$ADMIN_HOME/.cache/fitsy-review"
 python3 -I - "$REVIEW_CACHE" "$REPO_ROOT" <<'PYCACHE'
 import os,pathlib,subprocess,sys
 cache=pathlib.Path(sys.argv[1]).resolve()
@@ -125,7 +134,7 @@ cache.mkdir(parents=True,exist_ok=True)
 PYCACHE
 
 REVIEW_CODE=0
-(cd "$ATTEMPT/candidate"; FITSY_REVIEW_FRESH_EXECUTION=1 FITSY_REVIEW_CACHE="$REVIEW_CACHE" \
+(cd "$ATTEMPT/candidate"; FITSY_REVIEW_FRESH_EXECUTION=1 FITSY_REVIEW_CACHE="$REVIEW_CACHE" FITSY_REVIEW_BUDGET_HOME="$REVIEW_CACHE/budgets" FITSY_REVIEW_COMPLETED_HOME="$ADMIN_HOME/.fitsy-review/completed" \
   bash scripts/review/run-review.sh "${REVIEW_ARGS[@]}" > "$ATTEMPT/result.json" 2> "$ATTEMPT/review.log") || REVIEW_CODE=$?
 cat "$ATTEMPT/review.log" >&2
 [ "$REVIEW_CODE" = 0 ] || fail

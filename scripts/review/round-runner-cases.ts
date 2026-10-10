@@ -1,3 +1,5 @@
+import { approveFixtureCaches } from "./administrator-fixture";
+export { approveFixtureCaches } from "./administrator-fixture";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -41,10 +43,14 @@ if [ "$1" = api ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
 if [ "$1" = pr ] && [ "$2" = comment ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
 exit 1
 `, { mode: 0o755 });
-  return spawnSync("bash", ["scripts/review/run-lens.sh", "123", lens], {
+  const calls = join(root, "calls");
+  const before = existsSync(calls) ? readFileSync(calls, "utf8") : "";
+  const result = spawnSync("bash", ["scripts/review/run-lens.sh", "123", lens], {
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: provider,
       FITSY_GH_BIN: gh, REVIEW_TEST_GH_CALLS: join(root, "gh-calls") }, timeout: 15000,
   });
+  if (existsSync(calls) && readFileSync(calls, "utf8") !== before) approveFixtureCaches(root, env);
+  return result;
 }
 
 type Fixture = {
@@ -222,6 +228,7 @@ test("cache-only revalidation cannot execute a missing independent result", () =
         encoding: 'utf8', timeout: 15000,
       });
     const completed = invoke(false);
+    if (completed.status === 0) approveFixtureCaches(root, fixture.env());
     if (completed.status !== 0) throw new Error(completed.stdout + completed.stderr);
     expect(JSON.parse(completed.stdout).domains).toEqual({ correctness: 'pass', 'workflow-security': 'pass' });
     expect(git('status', '--porcelain')).not.toBe('');

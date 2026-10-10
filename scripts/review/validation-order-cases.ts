@@ -1,5 +1,6 @@
+import { installAdmissionFixture } from "./administrator-fixture";
 import { shippingSessionCases } from './shipping-session-cases';
-import { runPrFixture } from './round-runner-cases';
+import { runPrFixture, approveFixtureCaches } from './round-runner-cases';
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,10 +19,15 @@ export function validationOrderCases(f: Fixture) {
   let admissionCache: string | undefined;
   afterEach(() => { if (admissionCache) rmSync(admissionCache, { recursive: true, force: true }); admissionCache = undefined; });
   function setup() {
-    admissionCache = mkdtempSync(join(tmpdir(), 'fitsy-admission-cache-'));
-    f.setEnv({ ...f.env(), FITSY_REVIEW_CACHE: admissionCache });
+    admissionCache = undefined;
+    const admin = f.env().REVIEW_TEST_ADMIN!;
+    const cache = f.env().REVIEW_TEST_CACHE!;
+    const clean = { ...f.env() };
+    for (const key of ['FITSY_REVIEW_HOME', 'FITSY_REVIEW_CACHE', 'FITSY_REVIEW_BUDGET_HOME', 'FITSY_REVIEW_COMPLETED_HOME']) delete clean[key];
+    f.setEnv(clean);
     const root = f.root();
     for (const name of ['receipt-cache.mjs', 'review-admission.sh', 'shipping-session.mjs']) copyFileSync(join(f.source, 'scripts/verify', name), join(root, 'scripts/verify', name));
+    installAdmissionFixture(root, admin, cache, f.git);
     writeFileSync(join(root, '.claude/lenses/workflow-security.md'), 'Review shipping controls.\n');
     writeFileSync(join(root, 'scripts/verify/registry.yml'), `checks:
   - name: structural
@@ -59,10 +65,12 @@ export function validationOrderCases(f: Fixture) {
     expect(bind.status).toBe(0);
   }
   function prepare() {
-    return spawnSync('bash', ['scripts/verify/review-admission.sh', '--execute-review'], {
+    const result = spawnSync('bash', ['scripts/verify/review-admission.sh', '--execute-review'], {
       cwd: f.root(), encoding: 'utf8', timeout: 15000,
       env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' },
     });
+    if (result.status === 0) approveFixtureCaches(f.root(), f.env());
+    return result;
   }
   function verify(args: string[] = [], hook = false) {
     const reviewed = prepare();

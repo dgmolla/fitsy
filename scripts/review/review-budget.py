@@ -8,9 +8,15 @@ import json
 import math
 import os
 import re
+import pwd
 import subprocess
 from pathlib import Path
 import time
+
+ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
+ADMIN_REVIEW = ADMIN_HOME / ".fitsy-review"
+ADMIN_CACHE = ADMIN_HOME / ".cache/fitsy-review"
+ADMIN_BUDGET = ADMIN_CACHE / "budgets"
 
 CAP_SECONDS = 1800
 EXTENSION_SECONDS = 900
@@ -306,6 +312,39 @@ def prospective_policy(path, ledger, candidate, issue, events):
             "prospective_cap_seconds": policy["seconds"]}
 
 
+def canonical_authority(path, expected):
+    # Administrator/coordinator custody is trusted, as in execute-review.py.
+    # Candidate environment and copies of controls cannot select this authority.
+    if path.absolute() != expected.absolute() or path.resolve() != expected.resolve():
+        raise ValueError("admission requires canonical coordinator authority, not caller-selected proof")
+    probe = path
+    while probe != ADMIN_HOME:
+        if probe.is_symlink() or probe.stat().st_uid != os.getuid() or probe.stat().st_mode & 0o022:
+            raise ValueError("coordinator authority must remain administrator managed")
+        probe = probe.parent
+    return completed_context(path)
+
+
+def canonical_ledger(ledger, issue):
+    expected = ADMIN_BUDGET / f"issue-{issue}.jsonl"
+    if ledger.absolute() != expected.absolute() or ledger.resolve() != expected.resolve():
+        raise ValueError("admission requires original canonical issue ledger")
+
+
+def completed_authority(args):
+    canonical_ledger(args.ledger, args.issue)
+    approval = canonical_authority(args.authorization_file, ADMIN_REVIEW / "completed" / f"issue-{args.issue}.json")
+    if (approval.get("control_sha") != args.control_sha
+            or approval.get("operator_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest()):
+        raise ValueError("coordinator has not approved this exact independently reviewed operator installation")
+    expected = subprocess.check_output(["git", "-C", str(args.candidate_root), "show",
+                                        args.control_sha + ":scripts/review/review-budget.py"],
+                                       env={k:v for k,v in os.environ.items() if not k.startswith("GIT_")})
+    if hashlib.sha256(expected).hexdigest() != approval["operator_sha256"]:
+        raise ValueError("installed operator differs from coordinator-approved committed source")
+    return approval
+
+
 def account_completed(handle, ledger, args, events, record=True):
     """Record an operator-attested execution, without granting admission or time.
 
@@ -326,7 +365,7 @@ def account_completed(handle, ledger, args, events, record=True):
     fields = {"issue", "candidate", "source_sha", "base_sha", "domains", "provider",
               "model", "reasoning_effort", "acceptance_sha256", "provenance", "artifacts",
               "original_ledger_sha256", "prior_completed_seconds", "completed_seconds_stop_at",
-              "completed_at"}
+              "completed_at", "control_sha", "operator_sha256"}
     if (set(approval) != fields or approval["issue"] != args.issue
             or approval["candidate"] != args.candidate or approval["source_sha"] != args.source_sha
             or approval["base_sha"] != args.base_sha
@@ -395,7 +434,8 @@ def account_completed(handle, ledger, args, events, record=True):
             or not number(approval["prior_completed_seconds"])
             or not math.isclose(prior, approval["prior_completed_seconds"], abs_tol=1e-6)
             or not number(approval["completed_seconds_stop_at"])
-            or prior + seconds > approval["completed_seconds_stop_at"]):
+            or not math.isclose(total["cap_seconds"], approval["completed_seconds_stop_at"], abs_tol=1e-6)
+            or prior + seconds > total["cap_seconds"]):
         raise ValueError("completed accounting original history or authorized stop mismatch")
     if not all(present) and record:
         append(handle, {"event": "import", "at": utc(), "source": str(path),
@@ -421,7 +461,7 @@ def completed_context(path):
 def reconcile_allocation(handle, args, events, total):
     """Recognize current human authority without rewriting historical limits."""
     approval = completed_context(args.authorization_file)
-    if args.issue != 463 or approval.get("issue") != args.issue or approval.get("candidate_source") != args.source_sha:
+    if approval.get("issue") != args.issue or approval.get("candidate_source") != args.source_sha:
         raise ValueError("review allocation source or issue mismatch")
     digest = hashlib.sha256(args.authorization_file.read_bytes()).hexdigest()
     previous = next((e for e in events if e.get("event") == "review-allocation"
@@ -429,7 +469,7 @@ def reconcile_allocation(handle, args, events, total):
     if previous:
         return {"allowed": True, "idempotent": True, **total}
     authority = completed_context(Path(approval["authority_file"]))
-    if (args.issue != 463 or approval.get("issue") != args.issue
+    if (approval.get("issue") != args.issue
             or approval.get("candidate_source") != args.source_sha
             or authority.get("human_instruction") != "Add global exception permanently"
             or approval.get("human_instruction") != authority["human_instruction"]
@@ -454,10 +494,25 @@ def reconcile_allocation(handle, args, events, total):
 
 def admit_cache(args, events):
     """A cache entry is data; only retained execution can authenticate it."""
+    canonical_ledger(args.ledger, args.issue)
+    if not re.fullmatch(r"[0-9a-f]{64}", args.cache_key or ""):
+        raise ValueError("invalid canonical cache identity")
+    if args.result_file.absolute() != ADMIN_CACHE / (args.cache_key + ".json") or args.result_file.is_symlink():
+        raise ValueError("cache must use canonical administrator-managed location")
+    approval = canonical_authority(ADMIN_REVIEW / "operators" / f"issue-{args.issue}-cache-{args.cache_key}.json",
+                                   ADMIN_REVIEW / "operators" / f"issue-{args.issue}-cache-{args.cache_key}.json")
     raw = args.result_file.read_bytes()
+    expected = dict(issue=args.issue, source_sha=args.source_sha, base_sha=args.base_sha,
+                    domains=sorted(set(args.required_domain)), cache_key=args.cache_key,
+                    result_sha256=hashlib.sha256(raw).hexdigest(),
+                    ledger_sha256=hashlib.sha256(args.ledger.read_bytes()).hexdigest())
+    if any(approval.get(key) != value for key, value in expected.items()):
+        raise ValueError("cache lacks exact coordinator-verified independent execution approval")
     value = json.loads(raw)
     proof = value.get("execution", {})
-    starts, finishes, _ = usage(events)
+    starts, finishes, total = usage(events)
+    if total["unfinished_attempts"] or total["completed_seconds"] > total["cap_seconds"]:
+        raise ValueError("cached execution exceeds effective original ledger authority")
     attempt = proof.get("attempt_id")
     start, finish = starts.get(attempt, {}), finishes.get(attempt, {})
     if (proof.get("cache_key") != args.cache_key or proof.get("base_sha") != args.base_sha
@@ -489,7 +544,7 @@ def admit_cache(args, events):
 
 def admit_completed(handle, ledger, args, events):
     """Consume original authorized evidence directly, without writing a pass cache."""
-    approval = completed_context(args.authorization_file)
+    approval = completed_authority(args)
     root = args.candidate_root.resolve()
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     def git(*command):
@@ -618,7 +673,7 @@ def main():
     args = parser.parse_args()
     if args.action == "completed-context":
         try:
-            value = completed_context(args.authorization_file)
+            value = canonical_authority(args.authorization_file, ADMIN_REVIEW / "completed" / f"issue-{args.issue}.json")
             if value["issue"] != args.issue or value["source_sha"] != args.source_sha:
                 raise ValueError("completed review context issue/source mismatch")
             print(value["base_sha"])

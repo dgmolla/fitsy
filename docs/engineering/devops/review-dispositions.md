@@ -186,3 +186,27 @@ Historical finite authorized-grant events remain readable without issue-specific
 Recommended worker policy: allow a three-hour default delivery window for native build/review/E2E work, with a bounded extension to four hours when the recorded owner has concrete recent phase progress.
 Idle heartbeats, log noise and a still-existing process do not establish that progress.
 This recommendation does not change dispatcher worker scheduling in this patch.
+
+### Coordinator custody for selected-skill admission
+
+Admission uses the administrator home from the OS account record, not caller-selected review directories.
+The canonical original ledger is `~/.cache/fitsy-review/budgets/issue-N.jsonl`.
+The existing private completed-evidence manifest is `~/.fitsy-review/completed/issue-N.json`.
+Only the selected coordinator may issue that real approval after independently checking provider execution, raw artifacts, source/base, acceptance, domains, authorization and cumulative accounting.
+The implementation owner must request verification through the issue/handoff and must not create its own passing approval.
+Unsigned administrator-managed policy remains trusted infrastructure under the existing adapter contract; same-user compromise of that infrastructure is outside this boundary.
+Candidate environment paths, copied operators and internally consistent artifact hashes do not establish that custody.
+
+The completed manifest additionally binds `control_sha` and `operator_sha256` to the independently reviewed committed controls and their installed bytes.
+Issue463 bootstrap uses only `~/.fitsy-review/operators/review-budget.py`, installed by the coordinator after genuine independent approval of that exact source.
+It is not installed from an unreviewed candidate and does not authorize another nutrition review.
+Before completed accounting, use the installed operator's existing `reconcile-allocation` entrypoint to append the approved source-bound stop to the original ledger.
+The manifest stop must equal the effective ledger cap; accounting rejects a disagreement and retains every original event.
+The coordinator then binds the post-reconciliation original ledger digest in the completed manifest.
+Repeated completed accounting remains idempotent.
+
+For existing cache reuse, the coordinator independently reconciles execution before placing a private approval in `~/.fitsy-review/operators/issue-N-cache-KEY.json`.
+That approval binds `issue`, `source_sha`, `base_sha`, sorted `domains`, `cache_key`, `result_sha256` and `ledger_sha256`.
+It contains no verdict projection and does not replace the retained provider receipt, raw verdict or original ledger.
+Admission checks that approval plus the original execution evidence and refuses changed authority or evidence.
+The existing cache, ledger and adapter remain the execution/accounting entrypoints.

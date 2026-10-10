@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { createConnection, createServer } from 'node:net';
 import { mkdtempSync, readFileSync, rmSync, existsSync, realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { sourceIdentity } from './receipt-cache.mjs';
@@ -17,7 +17,7 @@ function identity(root, env = process.env) {
   const bindingFile = join(root, '.evidence/delivery/binding.json');
   const binding = existsSync(bindingFile) ? readFileSync(bindingFile, 'utf8') : null;
   const issue = binding ? JSON.parse(binding).issue : null;
-  const authorization = issue ? join(env.FITSY_REVIEW_COMPLETED_HOME || join(env.FITSY_REVIEW_HOME || join(process.env.HOME, '.fitsy-review'), 'completed'), `issue-${issue}.json`) : null;
+  const authorization = issue ? join(userInfo().homedir, '.fitsy-review/completed', `issue-${issue}.json`) : null;
   return JSON.stringify({ head: git(['rev-parse', 'HEAD'], root).trim(),
     base: git(['rev-parse', 'origin/main'], root).trim(), source: sourceIdentity(root), binding,
     authorization: authorization && existsSync(authorization) ? readFileSync(authorization, 'utf8') : null,

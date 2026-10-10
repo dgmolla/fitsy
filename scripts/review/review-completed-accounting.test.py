@@ -28,14 +28,36 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
+def install_fixture_admin(repo, home):
+    # Isolated installation substitutes administrator custody in fixture code,
+    # never through production environment paths or real operator approval.
+    p = repo / 'scripts/review/review-budget.py'
+    p.write_text(p.read_text().replace('ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)',
+                                     'ADMIN_HOME = Path(' + repr(str(home)) + ')'))
+    p = repo / 'scripts/verify/review-admission.sh'
+    if p.exists():
+        p.write_text(p.read_text().replace('ADMIN_HOME="$(python3 -I -c \'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)\')"',
+                                         'ADMIN_HOME=' + repr(str(home))))
+    p = repo / 'scripts/verify/shipping-session.mjs'
+    if p.exists():
+        p.write_text(p.read_text().replace('userInfo().homedir', json.dumps(str(home))))
+
+
 class CompletedAccounting(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.ledger = self.root / 'issue-443.jsonl'
+        self.old_admin = (budget.ADMIN_HOME, budget.ADMIN_REVIEW, budget.ADMIN_CACHE, budget.ADMIN_BUDGET)
+        budget.ADMIN_HOME = self.root / 'admin'
+        budget.ADMIN_REVIEW = budget.ADMIN_HOME / '.fitsy-review'
+        budget.ADMIN_CACHE = budget.ADMIN_HOME / '.cache/fitsy-review'
+        budget.ADMIN_BUDGET = budget.ADMIN_CACHE / 'budgets'
+        (budget.ADMIN_REVIEW / 'completed').mkdir(parents=True)
+        (budget.ADMIN_CACHE / 'budgets').mkdir(parents=True)
+        self.ledger = budget.ADMIN_CACHE / 'budgets/issue-443.jsonl'
         source = 'f' * 40
         base = '2' * 40
-        self.args = SimpleNamespace(authorization_file=self.root / 'operator.json', issue=443,
+        self.args = SimpleNamespace(authorization_file=budget.ADMIN_REVIEW / 'completed/issue-443.json', ledger=self.ledger, issue=443,
             candidate='root:branch', source_sha=source, base_sha=base,
             required_domain=['correctness', 'danger-zone'], acceptance_sha256='a' * 64)
         rows = [dict(event='authorized-grant', attempt_id='historical-grant', issue=443, seconds=14400,
@@ -46,7 +68,11 @@ class CompletedAccounting(unittest.TestCase):
                 dict(event='execution-limit', attempt_id='issue-execution-limit', issue=443,
                      baseline_attempts=['original'], baseline_completed_seconds=16507.12014900209,
                      completed_seconds_stop_at=16511.78812287716, new_rounds_max=1,
-                     per_round_timeout_seconds_max=300)]
+                     per_round_timeout_seconds_max=300),
+                dict(event='review-allocation', attempt_id='approved-stop', issue=443,
+                     previous_cap_seconds=16511.78812287716, additional_seconds=300,
+                     cumulative_stop_seconds=16811.78812287716, source_sha=source,
+                     authorization_sha256='a'*64)]
         self.original = ''.join(json.dumps(row) + '\n' for row in rows)
         self.ledger.write_text(self.original)
         verdict = json.dumps(dict(source_sha=source, base_sha=base,
@@ -60,6 +86,7 @@ class CompletedAccounting(unittest.TestCase):
             provider='codex', model='gpt-6-sol', reasoning_effort='high',
             provenance='https://github.com/dgmolla/fitsy/issues/443#issuecomment-6084442263',
             original_ledger_sha256=sha(self.original.encode()), prior_completed_seconds=16507.12014900209,
+            control_sha=base, operator_sha256=sha(Path(budget.__file__).read_bytes()),
             completed_seconds_stop_at=16811.788122877158, completed_at='2026-10-09T15:56:44+00:00', artifacts={})
         for key, raw in dict(verdict=verdict, execution=execution, prompt=b'Original source review prompt', stderr=stderr).items():
             path = self.root / key
@@ -68,9 +95,12 @@ class CompletedAccounting(unittest.TestCase):
         self.save()
 
     def tearDown(self):
+        budget.ADMIN_HOME, budget.ADMIN_REVIEW, budget.ADMIN_CACHE, budget.ADMIN_BUDGET = self.old_admin
         self.temp.cleanup()
 
     def save(self):
+        if hasattr(self.args, "control_sha"):
+            self.approval["control_sha"] = self.args.control_sha
         self.args.authorization_file.write_text(json.dumps(self.approval))
         self.args.authorization_file.chmod(0o600)
 
@@ -81,8 +111,8 @@ class CompletedAccounting(unittest.TestCase):
     def test_additive_idempotent_without_admission_or_limit_reset(self):
         first = self.call()
         self.assertAlmostEqual(first['completed_seconds'], 16759.932041544147)
-        self.assertEqual(first['cap_seconds'], 16511.78812287716)
-        self.assertEqual(first['remaining_seconds'], 0)
+        self.assertAlmostEqual(first['cap_seconds'], 16811.788122877158)
+        self.assertGreater(first['remaining_seconds'], 0)
         saved = self.ledger.read_text()
         self.assertTrue(saved.startswith(self.original))
         self.assertTrue(self.call()['idempotent'])
@@ -105,6 +135,13 @@ class CompletedAccounting(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(json.loads(result.stdout)['idempotent'])
         self.assertEqual(saved, self.ledger.read_text())
+
+    def test_manifest_stop_must_match_effective_retained_cap(self):
+        self.approval['completed_seconds_stop_at'] += 1
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'authorized stop mismatch'):
+            self.call()
+        self.assertEqual(self.original, self.ledger.read_text())
 
     def test_changed_source_base_domain_issue_acceptance_policy_fail_without_writes(self):
         for field, bad in dict(source_sha='e'*40, base_sha='3'*40, domains=['correctness'],
@@ -196,6 +233,8 @@ class CompletedAdmission(CompletedAccounting):
         source = self.git('rev-parse', 'HEAD')
         self.git('checkout', '-qb', 'controls', base)
         (self.repo / 'scripts/review/control.py').write_text('trusted correction')
+        shutil.copyfile(Path(budget.__file__), self.repo / 'scripts/review/review-budget.py')
+        self.git('add', 'scripts/review/review-budget.py')
         self.git('commit', '-qam', 'controls')
         control = self.git('rev-parse', 'HEAD')
         self.git('checkout', '-q', 'product')
@@ -227,6 +266,76 @@ class CompletedAdmission(CompletedAccounting):
         with self.ledger.open('a+') as handle:
             return budget.admit_completed(handle, self.ledger, self.args, budget.read_events(handle))
 
+    def test_cache_requires_coordinator_custody_and_exact_evidence(self):
+        key = 'a' * 64
+        raw = json.dumps(dict(verdict='pass', domains={'correctness': 'pass'}, findings=[]))
+        receipt = json.dumps(dict(kind='completed', returncode=0))
+        proof = {}
+        for name, data in [('raw', raw), ('receipt', receipt)]:
+            path = self.root / name
+            path.write_text(data)
+            proof[name] = dict(path=str(path), sha256=sha(data.encode()))
+        result = dict(verdict='pass', domains={'correctness': 'pass'}, findings=[],
+                      execution=dict(attempt_id='cache-execution', cache_key=key,
+                                     base_sha=self.args.base_sha, artifacts=proof))
+        path = budget.ADMIN_CACHE / (key + '.json')
+        path.write_text(json.dumps(result))
+        rows = [dict(event='start', attempt_id='cache-execution', epoch=1, source_sha=self.args.source_sha),
+                dict(event='finish', attempt_id='cache-execution', elapsed_seconds=1,
+                     source_sha=self.args.source_sha, outcome='pass', failure_kind='completed',
+                     verdict='pass', result_sha256=sha(path.read_bytes()))]
+        with self.ledger.open('a') as handle:
+            for row in rows: handle.write(json.dumps(row) + '\n')
+        args = SimpleNamespace(ledger=self.ledger, issue=443, result_file=path, cache_key=key,
+                               base_sha=self.args.base_sha, source_sha=self.args.source_sha,
+                               required_domain=['correctness'])
+        def admit():
+            with self.ledger.open() as handle:
+                return budget.admit_cache(args, budget.read_events(handle))
+        # Self-authored internally consistent rows and artifacts cannot approve reuse.
+        with self.assertRaises(OSError): admit()
+        operators = budget.ADMIN_REVIEW / 'operators'
+        operators.mkdir()
+        authority = operators / ('issue-443-cache-' + key + '.json')
+        approval = dict(issue=443, source_sha=args.source_sha, base_sha=args.base_sha,
+                        domains=['correctness'], cache_key=key,
+                        result_sha256=sha(path.read_bytes()), ledger_sha256=sha(self.ledger.read_bytes()))
+        authority.write_text(json.dumps(approval))
+        authority.chmod(0o600)
+        self.assertEqual(admit()['verdict'], 'pass')
+        saved = self.ledger.read_bytes()
+        for field, wrong in dict(issue=463, source_sha='e'*40, base_sha='3'*40,
+                                 domains=['danger-zone'], result_sha256='0'*64,
+                                 ledger_sha256='0'*64).items():
+            with self.subTest(field=field):
+                authority.write_text(json.dumps(dict(approval, **{field: wrong})))
+                with self.assertRaisesRegex(ValueError, 'coordinator-verified'): admit()
+                self.assertEqual(saved, self.ledger.read_bytes())
+        authority.write_text(json.dumps(approval))
+        caller_copy = self.root / 'caller-cache.json'
+        caller_copy.write_bytes(path.read_bytes())
+        args.result_file = caller_copy
+        with self.assertRaisesRegex(ValueError, 'canonical administrator-managed'): admit()
+
+    def test_candidate_selected_copy_cannot_approve_operator(self):
+        forged = self.root / 'forged.json'
+        forged.write_bytes(self.args.authorization_file.read_bytes())
+        forged.chmod(0o600)
+        self.args.authorization_file = forged
+        with self.assertRaisesRegex(ValueError, 'canonical coordinator authority'):
+            self.call()
+        self.assertEqual(self.original, self.ledger.read_text())
+
+    def test_unapproved_operator_or_source_cannot_admit(self):
+        for key in ('control_sha', 'operator_sha256'):
+            saved = self.approval[key]
+            self.approval[key] = '0' * len(saved)
+            self.args.authorization_file.write_text(json.dumps(self.approval))
+            with self.assertRaisesRegex(ValueError, 'exact independently reviewed operator'):
+                self.call()
+            self.assertEqual(self.original, self.ledger.read_text())
+            self.approval[key] = saved
+
     # Accounting cases above remain tested through the original class.
     def test_additive_idempotent_without_admission_or_limit_reset(self):
         value = self.call()
@@ -250,6 +359,7 @@ class CompletedAdmission(CompletedAccounting):
         shutil.copyfile(source_root / 'REVIEW.md', self.repo / 'REVIEW.md')
         (self.repo / 'scripts/verify').mkdir(parents=True)
         shutil.copyfile(source_root / 'scripts/verify/risk-tiers.yml', self.repo / 'scripts/verify/risk-tiers.yml')
+        install_fixture_admin(self.repo, budget.ADMIN_HOME)
         self.git('add', '.')
         self.git('commit', '-qm', 'trusted controls')
         control = self.git('rev-parse', 'HEAD')
@@ -272,8 +382,7 @@ class CompletedAdmission(CompletedAccounting):
         execution = json.loads((self.root / 'execution').read_text())
         execution['stdout_bytes'] = (self.root / 'verdict').stat().st_size
         self.replace_artifact('execution', json.dumps(execution))
-        auth_home = self.root / 'completed'
-        auth_home.mkdir()
+        auth_home = budget.ADMIN_REVIEW / 'completed'
         self.args.authorization_file = auth_home / 'issue-443.json'
         self.save()
         tools = self.root / 'bin'
@@ -282,9 +391,9 @@ class CompletedAdmission(CompletedAccounting):
                            'codex': '#!/bin/sh\n[ "$1" = --version ] || { echo unexpected-review >&2; exit 90; }\necho fixture-cli\n'}.items():
             (tools / name).write_text(text)
             (tools / name).chmod(0o700)
-        budget_home = self.root / 'budgets'
-        budget_home.mkdir()
-        shutil.copyfile(self.ledger, budget_home / 'issue-443.jsonl')
+        budget_home = budget.ADMIN_BUDGET
+        self.approval['operator_sha256'] = sha((self.repo / 'scripts/review/review-budget.py').read_bytes())
+        self.save()
         env = dict(fixture_env(), PATH=str(tools) + os.pathsep + os.environ['PATH'],
                    FITSY_REVIEW_FRESH_EXECUTION='1', FITSY_REVIEW_COMPLETED_HOME=str(auth_home),
                    FITSY_REVIEW_BUDGET_HOME=str(budget_home), FITSY_REVIEW_CACHE=str(self.root / 'cache'),
@@ -370,12 +479,12 @@ class CompletedAdmission(CompletedAccounting):
             (product / f'scripts/verify/{name}.sh').write_text(f'echo {name} >> .evidence/order\necho ' + "'{\"summary\":\"fixture acceptance\"}'\n")
         for name in ('size-check', 'domain-check'):
             (product / f'scripts/verify/{name}.sh').write_text('exit 2\n')
+        install_fixture_admin(product, budget.ADMIN_HOME)
         git('add', '.')
         git('commit', '-qm', 'fixture trusted runtime')
         base = git('rev-parse', 'HEAD')
         git('update-ref', 'refs/remotes/origin/main', base)
-        home = self.root / 'session-home'
-        home.mkdir()
+        home = budget.ADMIN_REVIEW
         git('clone', '-q', str(product), str(home / 'repo'))
         runtime = home / 'repo'
         git('update-ref', 'refs/remotes/origin/main', base, cwd=runtime)
@@ -391,8 +500,8 @@ class CompletedAdmission(CompletedAccounting):
         approval = dict(self.approval, source_sha=head, base_sha=base, domains=['correctness'],
                         candidate=git('rev-list', '--max-parents=0', 'HEAD') + ':frozen',
                         acceptance_sha256=sha(b'Frozen acceptance'))
-        auth_home = self.root / 'session-authority'
-        auth_home.mkdir()
+        auth_home = budget.ADMIN_REVIEW / 'completed'
+        approval.update(control_sha=base, operator_sha256=sha((runtime / 'scripts/review/review-budget.py').read_bytes()))
         # Synthetic artifacts establish only this isolated protocol regression.
         raws = {'prompt': f'Review issue443 {head} against {base} correctness',
                 'stderr': 'model: gpt-6-sol\napproval: never\nsandbox: read-only\nreasoning effort: high\n',
@@ -419,12 +528,9 @@ class CompletedAdmission(CompletedAccounting):
             "elif a[1]=='pr' and '--jq' in a: print('Delivery-Issue: #443')\n"
             + f"elif a[1]=='pr': print(json.dumps(dict(headRefOid={head!r},baseRefName='main',headRepositoryOwner=dict(login='dgmolla'),state='OPEN',url='https://fixture.invalid/pr/443')))\n"
             + f"elif a[1]=='api':\n with open({str(self.root / 'published')!r},'a') as out: out.write(sys.stdin.read()+'\\n')\n")
-        budgets = self.root / 'session-budgets'
-        budgets.mkdir()
-        shutil.copyfile(self.ledger, budgets / 'issue-443.jsonl')
+        budgets = budget.ADMIN_BUDGET
         env = dict(fixture_env(), PATH=str(tools) + os.pathsep + os.environ['PATH'],
-            FITSY_REVIEW_HOME=str(home), FITSY_REVIEW_COMPLETED_HOME=str(auth_home),
-            FITSY_REVIEW_BUDGET_HOME=str(budgets), FITSY_REVIEW_PROVIDER='codex',
+            HOME=str(budget.ADMIN_HOME), FITSY_REVIEW_PROVIDER='codex',
             FITSY_REVIEW_MODEL='gpt-6-sol', FITSY_REVIEW_REASONING_EFFORT='high')
         shutil.copyfile(source / '.githooks/pre-push', product / '.evidence/hook')
         (product / '.evidence/native.mjs').write_text(
@@ -474,6 +580,7 @@ class CompletedAdmission(CompletedAccounting):
         self.git('commit', '-qam', 'main product advance')
         self.args.control_sha = self.git('rev-parse', 'HEAD')
         self.git('checkout', '-qf', 'product')
+        self.save()
         with self.assertRaisesRegex(ValueError, 'changed product'):
             self.call()
 
@@ -502,6 +609,7 @@ class CompletedAdmission(CompletedAccounting):
         self.args.control_sha = self.git('rev-parse', 'HEAD')
         self.git('checkout', '-qf', 'product')
         self.git('restore', '--source=' + self.args.control_sha, '--staged', '--worktree', '--', 'scripts/review')
+        self.save()
         self.assertEqual(self.call()['verdict'], 'pass')
 
 
