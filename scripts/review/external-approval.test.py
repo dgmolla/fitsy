@@ -123,6 +123,13 @@ class ReviewTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'custody'):
                 external.protected_bytes(leaf, os.getuid())
 
+    def test_real_system_config_directory_avoids_platform_aliases(self):
+        import os
+        system_file = external.CONFIG.parent.parent / 'passwd'
+        if not system_file.is_file():
+            self.skipTest('Unix system identity file unavailable')
+        self.assertTrue(external.protected_bytes(system_file, os.getuid()))
+
 
 class CompositionTests(unittest.TestCase):
     def setUp(self):

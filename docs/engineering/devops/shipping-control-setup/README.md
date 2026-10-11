@@ -52,7 +52,9 @@ Keep the original frozen source and evidence recoverable before changing account
 No new paid service or account is required by the design.
 If the current host cannot enforce that separation, preparation continues here and installation remains withheld.
 
-The security operator installs the independently reviewed committed adapter at `/opt/fitsy-approval/external-approval.py` and fills `/etc/fitsy/delivery-authority.json` from `operator-config.json`.
+The security operator installs the independently reviewed committed adapter at `/opt/fitsy-approval/external-approval.py` and fills `/etc/fitsy/delivery-authority.json` from `operator-config.json` on Linux.
+On macOS the adapter's fixed config location is `/private/etc/fitsy/delivery-authority.json`; replace the template's `/var/` custody paths with `/private/var/` before installation and use the operator account's actual canonical home for existing review/accounting files.
+Apple's `/etc` and `/var` aliases are symlinks; do not weaken symlink rejection to accept them or resolve a caller-selected config location.
 Both paths and every ancestor must be root/operator owned and not group/world writable, with no symlinks.
 Credential files are private mode `0600` under `/var/lib/fitsy-approval/credentials/`.
 Run the executable directly so its system Env launcher removes startup selectors before isolated Python begins.
