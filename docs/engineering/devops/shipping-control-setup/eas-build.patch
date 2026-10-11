@@ -1,0 +1,10 @@
+--- a/.github/workflows/eas-build.yml
++++ b/.github/workflows/eas-build.yml
+@@ -12,6 +12,7 @@
+ 
+ jobs:
+   build-and-submit:
++    environment: production-native
+     name: iOS build → TestFlight
+     runs-on: ubuntu-latest
+     steps:

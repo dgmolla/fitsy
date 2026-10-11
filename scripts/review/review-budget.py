@@ -599,7 +599,11 @@ def admit_completed(handle, ledger, args, events):
                           "AGENTS.md", "docs/engineering/devops/shipping.md",
                           "docs/engineering/devops/task-management.md",
                           "docs/engineering/devops/review-dispositions.md",
-                          "docs/engineering/devops/agent-model-routing.md"]
+                          "docs/engineering/devops/agent-model-routing.md",
+                          "docs/engineering/devops/shipping-control-cutover.md",
+                          "docs/engineering/devops/shipping-control-setup",
+                          ".github/workflows/deploy.yml", ".github/workflows/eas-build.yml",
+                          "vercel.json"]
     if any(not any(name == path or name.startswith(path + "/") for path in allowed) for name in changed):
         raise ValueError("trusted main changed product or unrelated inputs; frozen comparison invalid")
     dirty = (git("diff", "HEAD", "--name-only").splitlines()

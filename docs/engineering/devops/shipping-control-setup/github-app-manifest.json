@@ -1,0 +1,18 @@
+{
+  "name": "Fitsy independent delivery approval",
+  "url": "https://github.com/dgmolla/fitsy",
+  "public": false,
+  "hook_attributes": {
+    "url": "https://github.com/dgmolla/fitsy",
+    "active": false
+  },
+  "default_permissions": {
+    "checks": "write",
+    "contents": "read",
+    "issues": "read",
+    "pull_requests": "read",
+    "actions": "read",
+    "administration": "read"
+  },
+  "default_events": []
+}

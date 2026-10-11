@@ -687,6 +687,9 @@ class CompletedAdmission(CompletedAccounting):
                      'docs/engineering/devops/task-management.md',
                      'docs/engineering/devops/review-dispositions.md',
                      'docs/engineering/devops/agent-model-routing.md',
+                     'docs/engineering/devops/shipping-control-cutover.md',
+                     'docs/engineering/devops/shipping-control-setup/README.md',
+                     '.github/workflows/deploy.yml', '.github/workflows/eas-build.yml', 'vercel.json',
                      'scripts/delivery/local-dispatcher.py', 'scripts/delivery/local-dispatcher.test.py']:
             path = self.repo / name
             path.parent.mkdir(parents=True, exist_ok=True)
