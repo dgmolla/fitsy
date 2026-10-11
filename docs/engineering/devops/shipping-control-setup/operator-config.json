@@ -73,5 +73,6 @@
     }
   },
   "merge_operator_user_id": 18452532,
-  "merge_custody_ruleset_id": null
+  "merge_custody_ruleset_id": null,
+  "release_reviewer_user_id": null
 }

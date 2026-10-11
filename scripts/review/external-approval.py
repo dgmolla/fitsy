@@ -278,6 +278,21 @@ def validate_merge_custody(ruleset, config):
             'exclusive independent merge custody unavailable')
 
 
+def validate_release_reviewer(environment, actor_ids, reviewer_id, config):
+    require(type(config.get('release_reviewer_user_id')) is int
+            and reviewer_id == config['release_reviewer_user_id']
+            and reviewer_id != config['merge_operator_user_id']
+            and reviewer_id not in actor_ids, 'release reviewer must be distinct from initiating actors')
+    rules = [row for row in environment['protection_rules'] if row['type'] == 'required_reviewers']
+    require(environment['name'] == 'production-release' and environment['can_admins_bypass'] is False
+            and len(rules) == 1 and rules[0]['prevent_self_review'] is True
+            and [{'type': row['type'], 'id': row['reviewer']['id']} for row in rules[0]['reviewers']]
+            == [{'type': 'User', 'id': reviewer_id}], 'independent production reviewer protection unavailable')
+    require(environment['deployment_branch_policy'] == {'protected_branches': False,
+                                                       'custom_branch_policies': True},
+            'production branch protection unavailable')
+
+
 def release_ready(config, run_id, verify_id):
     endpoint = f'repos/{REPO}'
     run = github(config, f'{endpoint}/actions/runs/{run_id}', release=True)
@@ -292,6 +307,13 @@ def release_ready(config, run_id, verify_id):
     checks = github(config, f'{endpoint}/commits/{main}/check-runs?filter=latest&per_page=100', release=True)
     require(checks['total_count'] <= 100, 'release check pagination requires operator inspection')
     validate_release(run, verify, main, checks['check_runs'], protection, config)
+    reviewer = github(config, 'user', release=True)
+    environment = github(config, f'{endpoint}/environments/production-release', release=True)
+    validate_release_reviewer(environment, [run['actor']['id'], run['triggering_actor']['id']],
+                              reviewer['id'], config)
+    branches = github(config, f'{endpoint}/environments/production-release/deployment-branch-policies', release=True)
+    require(branches['total_count'] == 1 and branches['branch_policies'][0]['name'] == 'main'
+            and branches['branch_policies'][0]['type'] == 'branch', 'production branch policy mismatch')
     merged = github(config, f'{endpoint}/commits/{main}/pulls?per_page=100', release=True)
     matching = [pr for pr in merged if pr.get('merged_at') and pr['merge_commit_sha'] == main
                 and pr['base']['ref'] == 'main']

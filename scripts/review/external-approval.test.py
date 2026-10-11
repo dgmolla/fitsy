@@ -234,6 +234,32 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'merge custody'):
             external.validate_merge_custody(ruleset, config)
 
+    def test_initiating_merge_actor_cannot_approve_release(self):
+        environment = {'name': 'production-release', 'can_admins_bypass': False,
+                       'protection_rules': [{'type': 'required_reviewers', 'prevent_self_review': True,
+                                             'reviewers': [{'type': 'User', 'reviewer': {'id': 777}}]}],
+                       'deployment_branch_policy': {'protected_branches': False, 'custom_branch_policies': True}}
+        config = {'merge_operator_user_id': 18452532, 'release_reviewer_user_id': 777}
+        external.validate_release_reviewer(environment, [18452532, 18452532], 777, config)
+        for identity in (18452532, None):
+            with self.subTest(identity=identity), self.assertRaisesRegex(ValueError, 'distinct'):
+                external.validate_release_reviewer(environment, [18452532, 18452532], identity, config)
+        with self.assertRaisesRegex(ValueError, 'distinct'):
+            external.validate_release_reviewer(environment, [18452532, 777], 777, config)
+
+    def test_missing_bypass_or_self_review_protection_refuses(self):
+        environment = {'name': 'production-release', 'can_admins_bypass': True,
+                       'protection_rules': [{'type': 'required_reviewers', 'prevent_self_review': True,
+                                             'reviewers': [{'type': 'User', 'reviewer': {'id': 777}}]}],
+                       'deployment_branch_policy': {'protected_branches': False, 'custom_branch_policies': True}}
+        config = {'merge_operator_user_id': 18452532, 'release_reviewer_user_id': 777}
+        with self.assertRaisesRegex(ValueError, 'reviewer protection'):
+            external.validate_release_reviewer(environment, [18452532], 777, config)
+        environment['can_admins_bypass'] = False
+        environment['protection_rules'][0]['prevent_self_review'] = False
+        with self.assertRaisesRegex(ValueError, 'reviewer protection'):
+            external.validate_release_reviewer(environment, [18452532], 777, config)
+
 
 class AcceptanceTests(unittest.TestCase):
     def setUp(self):

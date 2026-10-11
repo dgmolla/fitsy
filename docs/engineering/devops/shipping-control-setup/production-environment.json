@@ -4,7 +4,7 @@
   "reviewers": [
     {
       "type": "User",
-      "id": 18452532
+      "id": null
     }
   ],
   "deployment_branch_policy": {

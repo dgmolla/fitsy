@@ -40,7 +40,7 @@ Use the [GitHub manifest procedure](https://docs.github.com/en/apps/sharing-gith
 Keep the manifest conversion code, PEM key and installation token entirely in operator custody.
 The inactive webhook needs no receiver or daemon.
 
-The remaining inputs are a real operator UID distinct from the candidate UID, the actual independent App ID and token, pinned installed GitHub CLI path/digest, independently approved control commit/digest, reconciled evidence digests and the frozen acceptance recipes.
+The remaining inputs are a real operator UID distinct from the candidate UID, the actual independent App ID and token, a protected release reviewer GitHub identity distinct from the merge/deployment initiator, pinned installed GitHub CLI path/digest, independently approved control commit/digest, reconciled evidence digests and the frozen acceptance recipes.
 Operator `dgmolla` credentials must be relocated and revoked from candidate access before they count as independent authority.
 Creating another folder under the current unrestricted user does not establish isolation.
 
@@ -92,6 +92,7 @@ The adapter verifies the returned check's actual App ID instead of treating an i
 The read-only evidence permission can inspect current protection; it cannot change protection or merge.
 
 `release-ready` requires the actual current main source, successful main push Verify, exact required check issuers, one merged PR and equal reviewed-candidate/release trees.
+It authenticates the release credential's actual GitHub user, refuses the merge user and either initiating actor, and reads back self-review prevention, administrator bypass prevention, exact environment reviewer and main-only branch policy.
 It revalidates the original source-bound review or the explicitly permitted #443 control composition.
 It reports the existing pending production environment IDs without approving them or obtaining production credentials.
 The separate environment reviewer inspects the exact pending run, installed workflow bytes, current main source, successful Verify and outstanding UI/native/legal gates immediately before approval.
@@ -119,7 +120,10 @@ Candidate credentials may not edit authoritative issue acceptance, approve envir
 Do not enable auto-merge using a previously issued acceptance check after acceptance changes.
 GitHub documents [App-bound required checks](https://docs.github.com/en/rest/branches/branch-protection).
 
-Create `production-release` from `production-environment.json`, requiring independent `dgmolla` review with self-review prevention.
+Fill the unresolved reviewer ID in `production-environment.json` and `release_reviewer_user_id` in operator configuration with an independently held GitHub user distinct from `dgmolla` and every deployment initiator.
+Place only that reviewer's protected credential in `release_token_file`; the known `dgmolla` credential remains the isolated merge/installation authority, not the production reviewer.
+Separate OS accounts using the same GitHub login do not satisfy GitHub self-review prevention.
+Create `production-release` from the completed template with self-review prevention; unresolved identity values must refuse configuration rather than default to the merge user.
 Disable administrator bypass in the environment settings UI and read back `can_admins_bypass: false`; the public PUT environment API does not document that setting as an input.
 Set its custom deployment branch policy to branch `main` through `POST /repos/dgmolla/fitsy/environments/production-release/deployment-branch-policies` with `{"name":"main","type":"branch"}`.
 Apply the same approval protection to `production-native`, adding only explicitly approved native tag policies through the existing native release process.
