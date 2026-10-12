@@ -71,7 +71,15 @@ def authority():
 
 def github(config, endpoint, payload=None, release=False):
     token_path = config['release_token_file' if release else 'app_token_file']
-    token = protected_bytes(token_path, config['operator_uid'], private=True).decode().strip()
+    token_raw = protected_bytes(token_path, config['operator_uid'], private=True)
+    if not release:
+        provenance = protected_bytes(config['app_identity_file'], config['operator_uid'], private=True)
+        require(digest(provenance) == config['app_identity_sha256'], 'unverified App token provenance')
+        issued = json.loads(provenance)['token']
+        require(digest(token_raw) == issued['sha256']
+                and datetime.fromisoformat(issued['expires_at'].replace('Z', '+00:00')) > datetime.now(timezone.utc),
+                'App token changed or expired before request')
+    token = token_raw.decode().strip()
     require(bool(token), 'operator credential unavailable')
     # Never inherit candidate GitHub, proxy, loader, startup or executable selectors.
     env = {'PATH': '/usr/bin:/bin', 'HOME': pwd.getpwuid(os.getuid()).pw_dir,

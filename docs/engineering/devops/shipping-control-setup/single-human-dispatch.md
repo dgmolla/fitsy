@@ -87,6 +87,7 @@ This short-lived credential provenance repairs the demonstrated absence of issue
 Renewals preserve prior raw receipts rather than erasing them.
 The adapter checks issuer5285837/installation170592990, exact permissions, token digest/expiry, live Fitsy-only scope, live App ID and live Bot identity before either protected check publication, dispatch or readiness.
 Missing, wrong, changed or expired metadata refuses.
+The transport pins provenance digest and expiry against the exact token bytes loaded for every App request, then uses that snapshot; renewal between validation and a write cannot select an unvalidated token.
 
 ## Existing command extension and exact source binding
 

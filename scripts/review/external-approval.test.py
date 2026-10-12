@@ -633,6 +633,47 @@ class DispatchBoundaryTests(PublishBoundaryTests):
             external.authority()
 
 
+class TokenTransportTests(unittest.TestCase):
+    """Use the real credential loader; replace only the outbound CLI/API process."""
+    def setUp(self):
+        self.fixture = PublishBoundaryTests(); self.fixture.setUp()
+        self.config = self.fixture.config
+        self.config['gh_path'] = '/fixture/gh'
+        self.original = (self.fixture.root / 'token').read_text()
+
+    def tearDown(self):
+        self.fixture.tearDown()
+
+    def test_renewed_token_after_validation_never_reaches_publication_write(self):
+        with patch.object(external, 'github', side_effect=self.fixture.transport):
+            external.installation_identity(self.config)
+        (self.fixture.root / 'token').write_text('new-synthetic-token')
+        from types import SimpleNamespace
+        with patch.object(external.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='{}')) as outbound:
+            with self.assertRaisesRegex(ValueError, 'token changed'):
+                external.github(self.config, 'repos/dgmolla/fitsy/check-runs', {'name': external.CHECK})
+            outbound.assert_not_called()
+
+    def test_same_validated_bytes_are_used_if_file_renews_during_request(self):
+        from types import SimpleNamespace
+        original_read = external.protected_bytes
+        def renewal(path, uid, private=False):
+            raw = original_read(path, uid, private)
+            if str(path) == self.config['app_identity_file']:
+                (self.fixture.root / 'token').write_text('new-synthetic-token')
+            return raw
+        with patch.object(external, 'protected_bytes', side_effect=renewal), patch.object(
+                external.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='{}')) as outbound:
+            external.github(self.config, 'repos/dgmolla/fitsy/check-runs', {'name': external.CHECK})
+        self.assertEqual(outbound.call_args.kwargs['env']['GH_TOKEN'], self.original)
+
+    def test_valid_token_metadata_reaches_existing_transport(self):
+        from types import SimpleNamespace
+        with patch.object(external.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='{}')) as outbound:
+            self.assertEqual(external.github(self.config, 'repos/dgmolla/fitsy/check-runs', {'name': external.CHECK}), {})
+        self.assertEqual(outbound.call_args.kwargs['env']['GH_TOKEN'], self.original)
+
+
 class WorkflowGateTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
