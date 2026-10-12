@@ -5,6 +5,8 @@ Install only after independent review, under a separate OS operator identity.
 This is not a reviewer, installer, scheduler, cache, or production deployer.
 """
 import argparse
+import base64
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -82,8 +84,69 @@ def github(config, endpoint, payload=None, release=False):
     result = subprocess.run(argv, input=json.dumps(payload) if payload is not None else None,
                             text=True, capture_output=True, env=env, timeout=60)
     require(result.returncode == 0, 'GitHub operation failed; no approval inferred')
-    return json.loads(result.stdout)
+    return json.loads(result.stdout) if result.stdout.strip() else None
 
+
+
+def installation_identity(config):
+    """Operator-pinned, observed token issuance, plus live scope readback.
+
+    Installation tokens cannot call JWT-only App identity endpoints.
+    The operator retains those actual responses at token renewal, never the key.
+    This manifest is credential provenance, not a review verdict or grant.
+    """
+    uid = config['operator_uid']
+    raw = protected_bytes(config['app_identity_file'], uid, private=True)
+    require(digest(raw) == config['app_identity_sha256'], 'unverified App token provenance')
+    identity = json.loads(raw)
+    app, installation, token = identity['app'], identity['installation'], identity['token']
+    require(config['app_id'] == 5285837 and config['installation_id'] == 170592990
+            and app['id'] == config['app_id'] and installation['app_id'] == app['id']
+            and installation['id'] == config['installation_id']
+            and installation['account']['login'] == 'dgmolla'
+            and installation['repository_selection'] == 'selected', 'App issuer/installation mismatch')
+    expected = {'metadata': 'read', 'checks': 'write', 'contents': 'read', 'issues': 'read',
+                'pull_requests': 'read', 'actions': 'write', 'administration': 'read'}
+    require(installation['permissions'] == expected and token['permissions'] == expected,
+            'App effective permissions mismatch')
+    require(token['sha256'] == digest(protected_bytes(config['app_token_file'], uid, private=True))
+            and datetime.fromisoformat(token['expires_at'].replace('Z', '+00:00')) > datetime.now(timezone.utc),
+            'App token changed or expired')
+    scope = github(config, 'installation/repositories?per_page=100')
+    require(scope['total_count'] == 1 and len(scope['repositories']) == 1
+            and scope['repositories'][0]['full_name'] == REPO
+            and scope['repositories'][0]['id'] == identity['repository_id'], 'App repository scope mismatch')
+    live_app = github(config, f'apps/{app["slug"]}')
+    actor = github(config, f'users/{app["slug"]}[bot]')
+    require(live_app['id'] == app['id'] and actor['type'] == 'Bot'
+            and actor['login'] == config['dispatch_actor_login']
+            and type(config['dispatch_actor_user_id']) is int
+            and actor['id'] == config['dispatch_actor_user_id']
+            and actor['id'] != config['merge_operator_user_id'], 'App dispatch actor mismatch')
+
+
+def workflow_identity(config, source):
+    repo = github(config, f'repos/{REPO}')
+    require(repo['default_branch'] == 'main', 'release workflow must be on default main branch')
+    for name in ('deploy', 'verify'):
+        workflow = github(config, f'repos/{REPO}/actions/workflows/{config[name + "_workflow_id"]}')
+        path = f'.github/workflows/{name}.yml'
+        require(workflow['path'] == path and workflow['state'] == 'active', 'default workflow identity mismatch')
+        blob = github(config, f'repos/{REPO}/contents/{path}?ref={source}')
+        require(blob['type'] == 'file' and blob['path'] == path and blob['encoding'] == 'base64'
+                and digest(base64.b64decode(blob['content'])) == config[name + '_workflow_sha256'],
+                'default-branch workflow bytes changed')
+
+
+def validate_dispatch_actor(run, config):
+    expected = {'id': config['dispatch_actor_user_id'], 'login': config['dispatch_actor_login'], 'type': 'Bot'}
+    require(type(expected['id']) is int and expected['id'] != config['merge_operator_user_id']
+            and all(all(run[field][key] == value for key, value in expected.items())
+                    for field in ('actor', 'triggering_actor')), 'independent App deployment initiation required')
+
+
+def dispatch_title(source, verify_id, acceptance_sha):
+    return f'Release {source} Verify {verify_id} Acceptance {acceptance_sha}'
 
 def acceptance(body):
     # Same normalization as the existing runner, including its shell newline trim.
@@ -249,7 +312,7 @@ def publish_acceptance(config, issue, pr_number, verify_id):
 
 def validate_release(run, verify, main, check_runs, protection, config):
     source = run['head_sha']
-    require(run['path'] == '.github/workflows/deploy.yml' and run['event'] == 'workflow_run'
+    require(run['path'] == '.github/workflows/deploy.yml' and run['event'] == 'workflow_dispatch'
             and run['head_branch'] == 'main' and run['repository']['full_name'] == REPO
             and source == main, 'release source is not current protected main')
     require(verify['path'] == '.github/workflows/verify.yml' and verify['event'] == 'push'
@@ -282,7 +345,10 @@ def validate_merge_custody(ruleset, config):
 def validate_release_reviewer(environment, actor_ids, reviewer_id, config):
     require(type(config.get('release_reviewer_user_id')) is int
             and reviewer_id == config['release_reviewer_user_id']
-            and reviewer_id != config['merge_operator_user_id']
+            and (reviewer_id != config['merge_operator_user_id']
+                 or (type(config.get('dispatch_actor_user_id')) is int
+                     and actor_ids == [config['dispatch_actor_user_id']] * 2
+                     and config['dispatch_actor_user_id'] != reviewer_id))
             and reviewer_id not in actor_ids, 'release reviewer must be distinct from initiating actors')
     rules = [row for row in environment['protection_rules'] if row['type'] == 'required_reviewers']
     require(environment['name'] == 'production-release' and environment['can_admins_bypass'] is False
@@ -294,28 +360,31 @@ def validate_release_reviewer(environment, actor_ids, reviewer_id, config):
             'production branch protection unavailable')
 
 
-def release_ready(config, run_id, verify_id):
+def release_context(config, verify_id):
     endpoint = f'repos/{REPO}'
-    run = github(config, f'{endpoint}/actions/runs/{run_id}', release=True)
-    verify = github(config, f'{endpoint}/actions/runs/{verify_id}', release=True)
-    main = github(config, f'{endpoint}/git/ref/heads/main', release=True)['object']['sha']
-    require(run['workflow_id'] == config['deploy_workflow_id']
-            and verify['workflow_id'] == config['verify_workflow_id'], 'workflow identity mismatch')
-    protection = github(config, f'{endpoint}/branches/main/protection', release=True)
-    ruleset = github(config, f'{endpoint}/rulesets/{config["merge_custody_ruleset_id"]}', release=True)
+    main = github(config, f'{endpoint}/git/ref/heads/main')['object']['sha']
+    workflow_identity(config, main)
+    verify = github(config, f'{endpoint}/actions/runs/{verify_id}')
+    require(verify['workflow_id'] == config['verify_workflow_id'], 'workflow identity mismatch')
+    latest = github(config, f'{endpoint}/actions/workflows/{config["verify_workflow_id"]}/runs?head_sha={main}&event=push&per_page=1')
+    require(latest['workflow_runs'] and latest['workflow_runs'][0]['id'] == verify_id,
+            'superseded main Verify cannot authorize release')
+    protection = github(config, f'{endpoint}/branches/main/protection')
+    ruleset = github(config, f'{endpoint}/rulesets/{config["merge_custody_ruleset_id"]}')
     validate_merge_custody(ruleset, config)
     # Refuse pagination rather than silently truncate protection evidence.
-    checks = github(config, f'{endpoint}/commits/{main}/check-runs?filter=latest&per_page=100', release=True)
+    checks = github(config, f'{endpoint}/commits/{main}/check-runs?filter=latest&per_page=100')
     require(checks['total_count'] <= 100, 'release check pagination requires operator inspection')
-    validate_release(run, verify, main, checks['check_runs'], protection, config)
-    reviewer = github(config, 'user', release=True)
-    environment = github(config, f'{endpoint}/environments/production-release', release=True)
-    validate_release_reviewer(environment, [run['actor']['id'], run['triggering_actor']['id']],
-                              reviewer['id'], config)
-    branches = github(config, f'{endpoint}/environments/production-release/deployment-branch-policies', release=True)
+    provisional = {'path': '.github/workflows/deploy.yml', 'event': 'workflow_dispatch',
+                   'head_branch': 'main', 'head_sha': main, 'repository': {'full_name': REPO}}
+    validate_release(provisional, verify, main, checks['check_runs'], protection, config)
+    environment = github(config, f'{endpoint}/environments/production-release')
+    validate_release_reviewer(environment, [config['dispatch_actor_user_id']] * 2,
+                              config['release_reviewer_user_id'], config)
+    branches = github(config, f'{endpoint}/environments/production-release/deployment-branch-policies')
     require(branches['total_count'] == 1 and branches['branch_policies'][0]['name'] == 'main'
             and branches['branch_policies'][0]['type'] == 'branch', 'production branch policy mismatch')
-    merged = github(config, f'{endpoint}/commits/{main}/pulls?per_page=100', release=True)
+    merged = github(config, f'{endpoint}/commits/{main}/pulls?per_page=100')
     matching = [pr for pr in merged if pr.get('merged_at') and pr['merge_commit_sha'] == main
                 and pr['base']['ref'] == 'main']
     require(len(merged) < 100 and len(matching) == 1, 'release lacks unique protected PR provenance')
@@ -324,19 +393,56 @@ def release_ready(config, run_id, verify_id):
     require(len(issues) == 1, 'merged PR issue missing or ambiguous')
     source = pr['head']['sha']
     issue = int(issues[0])
-    body = github(config, f'{endpoint}/issues/{issue}', release=True)['body']
-    review_inputs(config, issue, source, body)
-    reviewed_tree = github(config, f'{endpoint}/git/commits/{source}', release=True)['tree']['sha']
-    release_tree = github(config, f'{endpoint}/git/commits/{main}', release=True)['tree']['sha']
+    body = github(config, f'{endpoint}/issues/{issue}')['body']
+    approval = review_inputs(config, issue, source, body)
+    policy = config['local_acceptance'][str(issue)]
+    receipt = protected_bytes(policy['receipt_path'], config['operator_uid'])
+    require(digest(receipt) == policy['receipt_sha256'], 'unverified local acceptance receipt')
+    validate_acceptance(json.loads(receipt), policy, source)
+    reviewed_tree = github(config, f'{endpoint}/git/commits/{source}')['tree']['sha']
+    release_tree = github(config, f'{endpoint}/git/commits/{main}')['tree']['sha']
     require(reviewed_tree == release_tree, 'merged tree differs from independently reviewed candidate')
+    return {'source_sha': main, 'reviewed_source_sha': source, 'issue': issue,
+            'acceptance_sha256': approval['acceptance_sha256'], 'verify_run': verify_id}
+
+
+def dispatch_release(config, verify_id):
+    installation_identity(config)
+    context = release_context(config, verify_id)
+    source = context['source_sha']
+    # Bind the documented ref=main to the exact inspected default workflow/source.
+    require(github(config, f'repos/{REPO}/git/ref/heads/main')['object']['sha'] == source,
+            'main changed before dispatch')
+    result = github(config, f'repos/{REPO}/actions/workflows/{config["deploy_workflow_id"]}/dispatches', {
+        'ref': 'main', 'inputs': {'release_sha': source, 'verify_run': str(verify_id),
+                                'acceptance_sha256': context['acceptance_sha256']}})
+    # Older API versions return 204, newer versions return the run ID.
+    # Neither is approval or proof of the initiating actor. No automatic retry.
+    return {**context, 'dispatch_response': result,
+            'release': 'dispatch submitted; actual actor and protected eligibility readback required'}
+
+
+def release_ready(config, run_id, verify_id):
+    installation_identity(config)
+    context = release_context(config, verify_id)
+    endpoint = f'repos/{REPO}'
+    run = github(config, f'{endpoint}/actions/runs/{run_id}', release=True)
+    require(run['workflow_id'] == config['deploy_workflow_id']
+            and run['path'] == '.github/workflows/deploy.yml' and run['event'] == 'workflow_dispatch'
+            and run['head_branch'] == 'main' and run['repository']['full_name'] == REPO
+            and run['head_sha'] == context['source_sha']
+            and run['display_title'] == dispatch_title(context['source_sha'], verify_id, context['acceptance_sha256']),
+            'dispatch source/inputs/workflow mismatch')
+    validate_dispatch_actor(run, config)
+    reviewer = github(config, 'user', release=True)
+    environment = github(config, f'{endpoint}/environments/production-release', release=True)
+    validate_release_reviewer(environment, [run['actor']['id'], run['triggering_actor']['id']],
+                              reviewer['id'], config)
     pending = github(config, f'{endpoint}/actions/runs/{run_id}/pending_deployments', release=True)
     require(pending and all(row['environment']['name'] == 'production-release'
                            and row['current_user_can_approve'] for row in pending),
             'independent production environment approval unavailable')
-    # Report only. The independent reviewer approves this exact run in GitHub
-    # after inspecting workflow bytes, remaining product/legal gates and custody.
-    return {'source_sha': main, 'reviewed_source_sha': source, 'issue': issue,
-            'deploy_run': run_id, 'verify_run': verify_id,
+    return {**context, 'deploy_run': run_id,
             'environment_ids': [row['environment']['id'] for row in pending],
             'release': 'ready for independent environment review; not approved'}
 
@@ -351,6 +457,8 @@ def main():
     accepted.add_argument('--issue', type=int, required=True)
     accepted.add_argument('--pr', type=int, required=True)
     accepted.add_argument('--verify-run', type=int, required=True)
+    dispatch = commands.add_parser('dispatch-release')
+    dispatch.add_argument('--verify-run', type=int, required=True)
     release = commands.add_parser('release-ready')
     release.add_argument('--run', type=int, required=True)
     release.add_argument('--verify-run', type=int, required=True)
@@ -361,6 +469,8 @@ def main():
             result = publish(config, args.issue, args.pr)
         elif args.action == 'publish-acceptance':
             result = publish_acceptance(config, args.issue, args.pr, args.verify_run)
+        elif args.action == 'dispatch-release':
+            result = dispatch_release(config, args.verify_run)
         else:
             result = release_ready(config, args.run, args.verify_run)
         print(json.dumps(result, sort_keys=True))

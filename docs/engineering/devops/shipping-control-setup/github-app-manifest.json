@@ -11,7 +11,7 @@
     "contents": "read",
     "issues": "read",
     "pull_requests": "read",
-    "actions": "read",
+    "actions": "write",
     "administration": "read"
   },
   "default_events": []

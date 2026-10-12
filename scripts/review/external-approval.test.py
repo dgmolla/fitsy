@@ -173,7 +173,7 @@ class CompositionTests(unittest.TestCase):
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
         self.source = 'a' * 40
-        self.run = {'path': '.github/workflows/deploy.yml', 'event': 'workflow_run', 'head_branch': 'main',
+        self.run = {'path': '.github/workflows/deploy.yml', 'event': 'workflow_dispatch', 'head_branch': 'main',
                     'head_sha': self.source, 'repository': {'full_name': 'dgmolla/fitsy'}}
         self.verify = {**self.run, 'path': '.github/workflows/verify.yml', 'event': 'push',
                        'status': 'completed', 'conclusion': 'success'}
@@ -221,7 +221,7 @@ class ReleaseTests(unittest.TestCase):
             self.validate()
 
     def test_candidate_dispatch_cannot_be_release(self):
-        self.run['event'] = 'workflow_dispatch'
+        self.run['event'] = 'workflow_run'
         with self.assertRaisesRegex(ValueError, 'protected main'):
             self.validate()
 
@@ -345,7 +345,7 @@ class PublishBoundaryTests(unittest.TestCase):
             return {'body': self.body}
         if endpoint.endswith('/check-runs') and payload is not None:
             self.writes.append(payload)
-            return {'app': {'id': 123}, 'head_sha': payload['head_sha'],
+            return {'app': {'id': config['app_id']}, 'head_sha': payload['head_sha'],
                     'conclusion': payload['conclusion'], 'html_url': 'https://fixture.invalid/check'}
         raise AssertionError(f'unexpected API request: {endpoint}')
 
@@ -381,6 +381,273 @@ class PublishBoundaryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'PR source'):
                 external.publish(self.config, 443, 9)
         self.assertFalse(self.writes)
+
+
+class DispatchBoundaryTests(PublishBoundaryTests):
+    """Exercise dispatch/readiness using real validators and fixture GitHub I/O only."""
+    def setUp(self):
+        super().setUp()
+        import base64
+        self.main = 'c' * 40
+        self.config.update(app_id=5285837, installation_id=170592990,
+                           dispatch_actor_user_id=888, dispatch_actor_login='fixture[bot]',
+                           merge_operator_user_id=18452532, release_reviewer_user_id=18452532,
+                           verify_workflow_id=10, deploy_workflow_id=11, merge_custody_ruleset_id=12,
+                           release_checks=[{'name': 'Tests', 'app_id': 15368}])
+        self.config['app_token_file'] = str(self.root / 'token')
+        (self.root / 'token').write_text('synthetic-installation-token'); (self.root / 'token').chmod(0o600)
+        permissions = {'metadata': 'read', 'checks': 'write', 'contents': 'read', 'issues': 'read',
+                       'pull_requests': 'read', 'actions': 'write', 'administration': 'read'}
+        self.identity = {'app': {'id': 5285837, 'slug': 'fixture'},
+                         'installation': {'app_id': 5285837, 'id': 170592990,
+                                          'account': {'login': 'dgmolla'}, 'repository_selection': 'selected',
+                                          'permissions': permissions},
+                         'token': {'sha256': external.digest((self.root / 'token').read_bytes()),
+                                   'permissions': permissions, 'expires_at': '2099-01-01T00:00:00Z'},
+                         'repository_id': 42}
+        self.save_identity()
+        self.actor = {'id': 888, 'login': 'fixture[bot]', 'type': 'Bot'}
+        self.verify = {'id': 20, 'workflow_id': 10, 'path': '.github/workflows/verify.yml',
+                       'event': 'push', 'head_branch': 'main', 'head_sha': self.main,
+                       'repository': {'full_name': external.REPO}, 'status': 'completed', 'conclusion': 'success'}
+        self.run = {'id': 30, 'workflow_id': 11, 'path': '.github/workflows/deploy.yml',
+                    'event': 'workflow_dispatch', 'head_branch': 'main', 'head_sha': self.main,
+                    'repository': {'full_name': external.REPO}, 'actor': dict(self.actor),
+                    'triggering_actor': dict(self.actor),
+                    'display_title': external.dispatch_title(self.main, 20, external.acceptance(self.body))}
+        self.environment = {'name': 'production-release', 'can_admins_bypass': False,
+                            'protection_rules': [{'type': 'required_reviewers', 'prevent_self_review': True,
+                                                  'reviewers': [{'type': 'User', 'reviewer': {'id': 18452532}}]}],
+                            'deployment_branch_policy': {'protected_branches': False, 'custom_branch_policies': True}}
+        self.ruleset = {'target': 'branch', 'enforcement': 'active',
+                        'conditions': {'ref_name': {'include': ['refs/heads/main'], 'exclude': []}},
+                        'bypass_actors': [{'actor_id': 18452532, 'actor_type': 'User', 'bypass_mode': 'pull_request'}],
+                        'rules': [{'type': 'update', 'parameters': {'update_allows_fetch_and_merge': False}}]}
+        self.checks = [{'name': 'Tests', 'app': {'id': 15368}, 'head_sha': self.main,
+                        'status': 'completed', 'conclusion': 'success'}]
+        self.protection = {'enforce_admins': {'enabled': True}, 'required_status_checks': {
+            'strict': True, 'checks': [{'context': name, 'app_id': 5285837}
+                                      for name in (external.CHECK, external.ACCEPTANCE_CHECK)]}}
+        self.workflow_bytes = b'fixture independently approved workflow bytes'
+        for name in ('verify', 'deploy'):
+            self.config[name + '_workflow_sha256'] = external.digest(self.workflow_bytes)
+        acceptance = AcceptanceTests(); acceptance.setUp()
+        receipt = self.root / 'acceptance.json'; receipt.write_text(json.dumps(acceptance.receipt))
+        self.config['local_acceptance'] = {'443': {**acceptance.policy, 'receipt_path': str(receipt),
+                                                  'receipt_sha256': external.digest(receipt.read_bytes())}}
+        self.latest_verify = 20
+        self.can_approve = True
+        self.default_branch = 'main'
+        self.scope_name = external.REPO
+        self.api_override = {}
+
+    def save_identity(self):
+        path = self.root / 'identity.json'; path.write_text(json.dumps(self.identity)); path.chmod(0o600)
+        self.config.update(app_identity_file=str(path), app_identity_sha256=external.digest(path.read_bytes()))
+
+    def transport(self, config, endpoint, payload=None, release=False):
+        import base64
+        if endpoint in self.api_override:
+            return self.api_override[endpoint]
+        if endpoint == 'installation/repositories?per_page=100':
+            return {'total_count': 1, 'repositories': [{'id': 42, 'full_name': self.scope_name}]}
+        if endpoint == 'apps/fixture': return self.identity['app']
+        if endpoint == 'users/fixture[bot]': return self.actor
+        if endpoint == 'user': return {'id': 18452532}
+        if endpoint == f'repos/{external.REPO}': return {'default_branch': self.default_branch}
+        if '/contents/' in endpoint:
+            path = endpoint.split('/contents/')[1].split('?')[0]
+            return {'type': 'file', 'path': path, 'encoding': 'base64',
+                    'content': base64.b64encode(self.workflow_bytes).decode()}
+        if endpoint.endswith('/actions/workflows/10'): return {'path': '.github/workflows/verify.yml', 'state': 'active'}
+        if endpoint.endswith('/actions/workflows/11'): return {'path': '.github/workflows/deploy.yml', 'state': 'active'}
+        if endpoint.endswith('/git/ref/heads/main'): return {'object': {'sha': self.main}}
+        if endpoint.endswith('/actions/runs/20'): return self.verify
+        if endpoint.endswith('/actions/runs/30'): return self.run
+        if '/actions/workflows/10/runs?' in endpoint: return {'workflow_runs': [{'id': self.latest_verify}]}
+        if endpoint.endswith('/branches/main/protection'): return self.protection
+        if endpoint.endswith('/rulesets/12'): return self.ruleset
+        if '/check-runs?filter=latest' in endpoint: return {'total_count': len(self.checks), 'check_runs': self.checks}
+        if endpoint.endswith('/environments/production-release'): return self.environment
+        if endpoint.endswith('/deployment-branch-policies'):
+            return {'total_count': 1, 'branch_policies': [{'name': 'main', 'type': 'branch'}]}
+        if endpoint.endswith('/pulls?per_page=100'):
+            return [{**self.pr, 'merged_at': 'fixture', 'merge_commit_sha': self.main}]
+        if '/git/commits/' in endpoint: return {'tree': {'sha': 'equal-reviewed-product-tree'}}
+        if endpoint.endswith('/pending_deployments'):
+            return [{'environment': {'id': 5, 'name': 'production-release'}, 'current_user_can_approve': self.can_approve}]
+        if endpoint.endswith('/actions/workflows/11/dispatches'):
+            self.writes.append(payload); return None  # documented legacy 204 transport
+        return super().transport(config, endpoint, payload, release)
+
+    def dispatch(self):
+        with patch.object(external, 'github', side_effect=self.transport):
+            return external.dispatch_release(self.config, 20)
+
+    def ready(self):
+        with patch.object(external, 'github', side_effect=self.transport):
+            return external.release_ready(self.config, 30, 20)
+
+    def test_valid_single_human_path_binds_dispatch_and_reports_pending_without_approval(self):
+        self.dispatch()
+        self.assertEqual(self.writes, [{'ref': 'main', 'inputs': {'release_sha': self.main,
+                          'verify_run': '20', 'acceptance_sha256': external.acceptance(self.body)}}])
+        self.assertEqual(self.ready()['environment_ids'], [5])
+        self.assertEqual(len(self.writes), 1)
+
+    def test_human_initiation_or_rerun_refuses_even_with_same_release_title(self):
+        for field in ('actor', 'triggering_actor'):
+            saved = self.run[field]
+            self.run[field] = {'id': 18452532, 'login': 'dgmolla', 'type': 'User'}
+            with self.assertRaisesRegex(ValueError, 'App deployment initiation'):
+                self.ready()
+            self.run[field] = saved
+
+    def test_wrong_app_installation_permissions_or_token_refuse_before_dispatch(self):
+        import copy
+        original = copy.deepcopy(self.identity)
+        for section, key, value in [('app', 'id', 999), ('installation', 'id', 999),
+                                     ('installation', 'app_id', 999), ('token', 'sha256', 'forged'),
+                                     ('token', 'expires_at', '2020-01-01T00:00:00Z'),
+                                     ('installation', 'permissions', {'actions': 'write'})]:
+            self.identity = copy.deepcopy(original); self.identity[section][key] = value; self.save_identity()
+            with self.subTest(section=section, key=key), self.assertRaises(ValueError): self.dispatch()
+            self.assertFalse(self.writes)
+
+    def test_unpinned_identity_receipt_refuses(self):
+        (self.root / 'identity.json').write_text('{}')
+        with self.assertRaisesRegex(ValueError, 'provenance'): self.dispatch()
+
+    def test_wrong_actor_scope_or_default_workflow_refuse(self):
+        self.actor['id'] = 999
+        with self.assertRaises(ValueError): self.dispatch()
+        self.actor['id'] = 888; self.scope_name = 'other/repo'
+        with self.assertRaises(ValueError): self.dispatch()
+        self.scope_name = external.REPO; self.default_branch = 'candidate'
+        with self.assertRaises(ValueError): self.dispatch()
+        self.default_branch = 'main'; self.workflow_bytes += b'changed'
+        with self.assertRaisesRegex(ValueError, 'workflow bytes'): self.dispatch()
+        self.assertFalse(self.writes)
+
+    def test_failed_missing_or_superseded_verify_never_dispatches(self):
+        self.verify['conclusion'] = 'failure'
+        with self.assertRaises(ValueError): self.dispatch()
+        self.verify['conclusion'] = 'success'; self.latest_verify = 999
+        with self.assertRaisesRegex(ValueError, 'superseded'): self.dispatch()
+        self.latest_verify = 20; self.verify['head_sha'] = 'd' * 40
+        with self.assertRaises(ValueError): self.dispatch()
+        self.assertFalse(self.writes)
+
+    def test_forged_review_failed_checks_and_changed_acceptance_never_dispatch(self):
+        raw = (self.root / 'execution').read_bytes(); (self.root / 'execution').write_text('{}')
+        with self.assertRaises(ValueError): self.dispatch()
+        (self.root / 'execution').write_bytes(raw); self.checks[0]['conclusion'] = 'failure'
+        with self.assertRaises(ValueError): self.dispatch()
+        self.checks[0]['conclusion'] = 'success'; self.body += 'New accepted requirement.'
+        with self.assertRaises(ValueError): self.dispatch()
+        self.assertFalse(self.writes)
+
+    def test_other_source_or_input_approval_refuses(self):
+        self.run['head_sha'] = 'd' * 40
+        with self.assertRaisesRegex(ValueError, 'dispatch source'): self.ready()
+        self.run['head_sha'] = self.main; self.run['display_title'] += 'forged'
+        with self.assertRaisesRegex(ValueError, 'dispatch source'): self.ready()
+
+    def test_missing_protected_eligibility_or_bypass_refuses(self):
+        self.can_approve = False
+        with self.assertRaisesRegex(ValueError, 'approval unavailable'): self.ready()
+        self.can_approve = True; self.environment['can_admins_bypass'] = True
+        with self.assertRaises(ValueError): self.ready()
+
+    def test_main_race_refuses_before_write(self):
+        calls = 0
+        def moving(config, endpoint, payload=None, release=False):
+            nonlocal calls
+            if endpoint.endswith('/git/ref/heads/main'):
+                calls += 1
+                if calls == 2: return {'object': {'sha': 'd' * 40}}
+            return self.transport(config, endpoint, payload, release)
+        with patch.object(external, 'github', side_effect=moving), self.assertRaisesRegex(ValueError, 'main changed'):
+            external.dispatch_release(self.config, 20)
+        self.assertFalse(self.writes)
+
+    def test_same_uid_cannot_load_authority(self):
+        import os
+        raw = json.dumps({'operator_uid': os.getuid(), 'candidate_uid': os.getuid()}).encode()
+        with patch.object(external, 'protected_bytes', return_value=raw), self.assertRaisesRegex(ValueError, 'candidate'):
+            external.authority()
+
+
+class WorkflowGateTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.temp = tempfile.TemporaryDirectory(dir=SCRIPT.parents[2] / '.evidence')
+        cls.root = Path(cls.temp.name)
+        workflow = cls.root / 'deploy.yml'
+        workflow.write_bytes((SCRIPT.parents[2] / '.github/workflows/deploy.yml').read_bytes())
+        patch_path = SCRIPT.parents[2] / 'docs/engineering/devops/shipping-control-setup/deploy.patch'
+        subprocess.run(['patch', str(workflow), str(patch_path)], check=True, capture_output=True)
+        parsed = subprocess.run(['node', '-e',
+                                "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))",
+                                str(workflow)], cwd=SCRIPT.parents[2], text=True, capture_output=True, check=True)
+        cls.workflow = json.loads(parsed.stdout)
+        cls.gate = cls.workflow['jobs']['changes']['steps'][0]['run']
+        # Only the remote GitHub API boundary is replaced with synthetic files.
+        gh = cls.root / 'gh'
+        gh.write_text('#!/usr/bin/env python3\nimport os,sys\nfrom pathlib import Path\np="latest-input" if "/workflows/" in sys.argv[-1] else "verify-input" if sys.argv[-1].endswith("/20") else "release-input"\nprint((Path(os.environ["RUNNER_TEMP"])/(p+".json")).read_text())\n')
+        gh.chmod(0o700)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.temp.cleanup()
+
+    def setUp(self):
+        self.actor = {'id': 888, 'login': 'fixture[bot]', 'type': 'Bot'}
+        self.run = {'workflow_id': 352171272, 'event': 'workflow_dispatch', 'head_branch': 'main',
+                    'head_sha': 'a' * 40, 'path': '.github/workflows/deploy.yml',
+                    'actor': dict(self.actor), 'triggering_actor': dict(self.actor)}
+        self.verify = {'workflow_id': 352020416, 'path': '.github/workflows/verify.yml',
+                       'event': 'push', 'head_branch': 'main', 'repository': {'full_name': external.REPO},
+                       'head_sha': 'a' * 40, 'status': 'completed', 'conclusion': 'success'}
+        self.latest = {'workflow_runs': [{'id': 20}]}
+
+    def drive(self, **updates):
+        import os
+        for name, value in [('release-input', self.run), ('verify-input', self.verify), ('latest-input', self.latest)]:
+            (self.root / (name + '.json')).write_text(json.dumps(value))
+        env = {'PATH': str(self.root) + ':' + os.environ['PATH'], 'RUNNER_TEMP': str(self.root),
+               'GITHUB_RUN_ID': '30', 'GITHUB_REPOSITORY': external.REPO, 'RELEASE_SHA': 'a' * 40,
+               'ACCEPTANCE_SHA': 'b' * 64, 'VERIFY_RUN': '20',
+               'DISPATCH_ACTOR_ID': '888', 'DISPATCH_ACTOR_LOGIN': 'fixture[bot]', **updates}
+        return subprocess.run(['/bin/bash', '-e', '-c', self.gate], env=env, text=True, capture_output=True)
+
+    def test_valid_fixture_passes_actual_workflow_gate(self):
+        result = self.drive(); self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_human_run_and_human_rerun_fail_actual_gate(self):
+        for field in ('actor', 'triggering_actor'):
+            original = self.run[field]; self.run[field] = {'id': 18452532, 'login': 'dgmolla', 'type': 'User'}
+            self.assertNotEqual(self.drive().returncode, 0)
+            self.run[field] = original
+
+    def test_wrong_source_failed_verify_and_superseded_verify_fail_actual_gate(self):
+        self.run['head_sha'] = 'c' * 40; self.assertNotEqual(self.drive().returncode, 0)
+        self.run['head_sha'] = 'a' * 40; self.verify['conclusion'] = 'failure'; self.assertNotEqual(self.drive().returncode, 0)
+        self.verify['conclusion'] = 'success'; self.latest['workflow_runs'] = []; self.assertNotEqual(self.drive().returncode, 0)
+
+    def test_uninstalled_actor_and_injected_inputs_fail_before_api(self):
+        self.assertNotEqual(self.drive(DISPATCH_ACTOR_ID='INSTALLATION_PROBE_REQUIRED').returncode, 0)
+        self.assertNotEqual(self.drive(VERIFY_RUN='20; echo forged').returncode, 0)
+
+    def test_production_jobs_depend_on_gate_and_retain_protection(self):
+        # Walk the job DAG, because a gate without consumers proves no release boundary.
+        jobs = self.workflow['jobs']
+        for name in ('migrate', 'smoke', 'ota'):
+            job = jobs[name]
+            self.assertEqual(job['environment'], 'production-release')
+            needs = job['needs'] if isinstance(job['needs'], list) else [job['needs']]
+            self.assertIn('changes', needs)
+            self.assertTrue(any(step.get('with', {}).get('ref') == '${{ inputs.release_sha }}' for step in job['steps']))
 
 
 if __name__ == '__main__':

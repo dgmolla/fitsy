@@ -2,6 +2,8 @@
 
 **TL;DR:** This packet prepares an isolated approval issuer and protected release using existing review, GitHub and release commands.
 
+The current single-human installation proposal is [the App dispatch packet](single-human-dispatch.md).
+It supersedes the former second-human/workflow_run assumption; [single-human viability](single-human-viability.md) retains the earlier read-only diagnosis.
 These files are uninstalled templates until the selected coordinator verifies the genuine independent control review and completes the readbacks below.
 Null identity values are unresolved security inputs, never defaults or simulated installation receipts.
 No App registration, credential grant, production setting change, deployment or legacy retirement is performed by this packet.
@@ -14,7 +16,8 @@ flowchart LR
     O --> C[App-bound review and acceptance checks]
     C --> M[Protected PR merge]
     M --> V[Exact main Verify]
-    V --> E[Independent production environment reviewer]
+    V --> A[Isolated App dispatch of exact verified source]
+    A --> E[Human protected environment reviewer]
     E --> D[Existing migration, Vercel promotion and guarded iOS OTA]
     D --> P[Main Deploy and observed product acceptance]
 ```
@@ -33,14 +36,16 @@ The existing Verify and Deploy workflow IDs are `352020416` and `352171272`.
 Observed Actions check issuer ID is `15368`; this binds test transport, not independent review authority.
 The proposed independent check names are `delivery/independent-review` and `delivery/acceptance`.
 An existing independently held App can serve this interface after its actual ID, installation and credential separation are verified.
-Otherwise `github-app-manifest.json` supplies a private, one-repository registration proposal with Checks write and read-only repository evidence permissions.
+Otherwise `github-app-manifest.json` supplies a private, one-repository registration proposal with Checks write, Actions write and read-only repository evidence permissions.
+For the existing App5285837/installation170592990, only Actions read to write is proposed; this is an unsubmitted new grant requiring human approval.
+The dispatch packet assesses its broader effective permissions and exact isolated token custody.
 It requests no Contents write, workflow write, merge bypass, secret access, webhook subscription or scheduled service.
 App registration and installation are final external security grants, not worker actions.
 Use the [GitHub manifest procedure](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) or enter its exact permissions in the existing App registration UI.
 Keep the manifest conversion code, PEM key and installation token entirely in operator custody.
 The inactive webhook needs no receiver or daemon.
 
-The remaining inputs are a real operator UID distinct from the candidate UID, the actual independent App ID and token, a protected release reviewer GitHub identity distinct from the merge/deployment initiator, pinned installed GitHub CLI path/digest, independently approved control commit/digest, reconciled evidence digests and the frozen acceptance recipes.
+The remaining inputs are a real operator UID distinct from the candidate UID, the actual independent App ID and token, the actual independently initiating App bot identity and the human protected release reviewer distinct from that bot, pinned installed GitHub CLI path/digest, independently approved control commit/digest, reconciled evidence digests and the frozen acceptance recipes.
 Operator `dgmolla` credentials must be relocated and revoked from candidate access before they count as independent authority.
 Creating another folder under the current unrestricted user does not establish isolation.
 
@@ -81,7 +86,8 @@ After the operator has validated the actual receipt identities, use these one-sh
 ```sh
 /opt/fitsy-approval/external-approval.py publish-review --issue 463 --pr PR_NUMBER
 /opt/fitsy-approval/external-approval.py publish-acceptance --issue 463 --pr PR_NUMBER --verify-run PR_VERIFY_RUN
-/opt/fitsy-approval/external-approval.py release-ready --run MAIN_DEPLOY_RUN --verify-run MAIN_VERIFY_RUN
+/opt/fitsy-approval/external-approval.py dispatch-release --verify-run MAIN_VERIFY_RUN
+/opt/fitsy-approval/external-approval.py release-ready --run ACTUAL_APP_DEPLOY_RUN --verify-run MAIN_VERIFY_RUN
 ```
 
 Replace symbolic run/PR arguments with actual IDs; null configuration inputs deliberately fail closed.
@@ -94,10 +100,10 @@ The adapter verifies the returned check's actual App ID instead of treating an i
 The read-only evidence permission can inspect current protection; it cannot change protection or merge.
 
 `release-ready` requires the actual current main source, successful main push Verify, exact required check issuers, one merged PR and equal reviewed-candidate/release trees.
-It authenticates the release credential's actual GitHub user, refuses the merge user and either initiating actor, and reads back self-review prevention, administrator bypass prevention, exact environment reviewer and main-only branch policy.
+It authenticates the release credential's actual GitHub user, requires both actual initiating actors to be the separately verified App bot, refuses either initiating actor as reviewer, and reads back self-review prevention, administrator bypass prevention, exact environment reviewer and main-only branch policy.
 It revalidates the original source-bound review or the explicitly permitted #443 control composition.
 It reports the existing pending production environment IDs without approving them or obtaining production credentials.
-The separate environment reviewer inspects the exact pending run, installed workflow bytes, current main source, successful Verify and outstanding UI/native/legal gates immediately before approval.
+The protected human environment reviewer inspects the exact pending run, installed workflow bytes, current main source, successful Verify and outstanding UI/native/legal gates immediately before approval.
 Use GitHub's existing pending-deployment approval UI or REST API; do not treat the readiness report as a release grant.
 
 ## Exact protected-check and environment changes
@@ -122,9 +128,11 @@ Candidate credentials may not edit authoritative issue acceptance, approve envir
 Do not enable auto-merge using a previously issued acceptance check after acceptance changes.
 GitHub documents [App-bound required checks](https://docs.github.com/en/rest/branches/branch-protection).
 
-Fill the unresolved reviewer ID in `production-environment.json` and `release_reviewer_user_id` in operator configuration with an independently held GitHub user distinct from `dgmolla` and every deployment initiator.
-Place only that reviewer's protected credential in `release_token_file`; the known `dgmolla` credential remains the isolated merge/installation authority, not the production reviewer.
-Separate OS accounts using the same GitHub login do not satisfy GitHub self-review prevention.
+`production-environment.json` and `release_reviewer_user_id` now propose the known sole human `dgmolla` (`18452532`).
+This is valid only with actual independently initiated App deployment, never a human-triggered or human-rerun deployment.
+Retain self-review prevention, administrator bypass rejection and verified separate OS custody.
+Keep that human's protected credential in `release_token_file`; it must never reach candidate execution or the App workflow.
+The token's real authenticated `/user` and the pending run's actual approval eligibility remain installation probes.
 Create `production-release` from the completed template with self-review prevention; unresolved identity values must refuse configuration rather than default to the merge user.
 Disable administrator bypass in the environment settings UI and read back `can_admins_bypass: false`; the public PUT environment API does not document that setting as an input.
 Set its custom deployment branch policy to branch `main` through `POST /repos/dgmolla/fitsy/environments/production-release/deployment-branch-policies` with `{"name":"main","type":"branch"}`.
@@ -141,7 +149,8 @@ Candidate CI receives only ephemeral/dev credentials and its normal read/test tr
 App and environment approval credentials stay outside every candidate-controlled workflow and dependency installation.
 
 `deploy.patch` is an inactive, reviewable change to the existing Deploy workflow.
-It starts only after successful main push Verify and checks out that exact triggering source in every job.
+It accepts only source-bound App `workflow_dispatch` after successful main push Verify, verifies both actual initiating actors before production jobs, and checks out that exact input source in every job.
+Unresolved App actor placeholders fail closed; installation requires independently approved resolved bytes and pinned deploy/verify workflow digests on default main.
 It rejects a superseded main source before proceeding, binds `RELEASE_SHA` to the verified source and retains existing release serialization.
 Every surviving release conservatively reconciles migration, API and mobile surfaces so pending-run replacement cannot hide a release.
 Migration, smoke and OTA jobs enter `production-release` before they can receive environment secrets.
