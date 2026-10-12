@@ -91,6 +91,7 @@ After the operator has validated the actual receipt identities, use these one-sh
 ```
 
 Replace symbolic run/PR arguments with actual IDs; null configuration inputs deliberately fail closed.
+Both protected check publication commands validate pinned token issuance, expiry, effective App permissions and live Fitsy-only scope before proceeding.
 `publish-review` loads only coordinator-verified existing raw execution and rechecks live PR source and normalized issue acceptance before posting an App-issued check.
 `publish-acceptance` additionally requires independently observed full local acceptance with the exact source identity, arguments and required result set, plus the latest successful exact-source PR Verify run.
 Populate `local_acceptance` from the selected skill's applicable full recipe and actual canonical receipt, including native proof where required.
@@ -99,7 +100,7 @@ The App token must be a real installation token for only `dgmolla/fitsy` and is 
 The adapter verifies the returned check's actual App ID instead of treating an issuer label as authority.
 The read-only evidence permission can inspect current protection; it cannot change protection or merge.
 
-`release-ready` requires the actual current main source, successful main push Verify, exact required check issuers, one merged PR and equal reviewed-candidate/release trees.
+`release-ready` requires the actual current main source, successful main push Verify, exact required check issuers, retained required `product-flow/local` protection and its successful reviewed-head status, one merged PR and equal reviewed-candidate/release trees.
 It authenticates the release credential's actual GitHub user, requires both actual initiating actors to be the separately verified App bot, refuses either initiating actor as reviewer, and reads back self-review prevention, administrator bypass prevention, exact environment reviewer and main-only branch policy.
 It revalidates the original source-bound review or the explicitly permitted #443 control composition.
 It reports the existing pending production environment IDs without approving them or obtaining production credentials.

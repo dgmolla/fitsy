@@ -245,6 +245,7 @@ def validate_pr(pr, issue, source):
 
 
 def publish(config, issue, pr_number):
+    installation_identity(config)
     endpoint = f'repos/{REPO}'
     pr = github(config, f'{endpoint}/pulls/{pr_number}')
     source = pr['head']['sha']
@@ -280,6 +281,7 @@ def validate_acceptance(receipt, policy, source):
 
 
 def publish_acceptance(config, issue, pr_number, verify_id):
+    installation_identity(config)
     endpoint = f'repos/{REPO}'
     pr = github(config, f'{endpoint}/pulls/{pr_number}')
     source = pr['head']['sha']
@@ -324,6 +326,8 @@ def validate_release(run, verify, main, check_runs, protection, config):
             and all({'context': name, 'app_id': config['app_id']} in required['checks']
                     for name in (CHECK, ACCEPTANCE_CHECK)),
             'protected issuer binding unavailable')
+    require(any(row['context'] == 'product-flow/local' for row in required['checks']),
+            'required product gate removed from protected main')
     # GitHub supplies current check runs with filter=latest, including reruns.
     for spec in config['release_checks']:
         matching = [check for check in check_runs if check['name'] == spec['name']
@@ -331,6 +335,13 @@ def validate_release(run, verify, main, check_runs, protection, config):
         require(len(matching) == 1 and matching[0]['status'] == 'completed'
                 and matching[0]['conclusion'] == 'success', 'required release check failed or ambiguous')
 
+
+
+def validate_product_status(status, source):
+    require(status['sha'] == source and status['total_count'] <= 100,
+            'reviewed-head product status source/pagination mismatch')
+    rows = [row for row in status['statuses'] if row['context'] == 'product-flow/local']
+    require(len(rows) == 1 and rows[0]['state'] == 'success', 'required reviewed-head product gate failed')
 
 def validate_merge_custody(ruleset, config):
     require(ruleset['target'] == 'branch' and ruleset['enforcement'] == 'active'
@@ -392,6 +403,8 @@ def release_context(config, verify_id):
     issues = re.findall(r'^Delivery-Issue: #([1-9][0-9]*)\s*$', pr['body'] or '', re.M)
     require(len(issues) == 1, 'merged PR issue missing or ambiguous')
     source = pr['head']['sha']
+    product = github(config, f'{endpoint}/commits/{source}/status?per_page=100')
+    validate_product_status(product, source)
     issue = int(issues[0])
     body = github(config, f'{endpoint}/issues/{issue}')['body']
     approval = review_inputs(config, issue, source, body)

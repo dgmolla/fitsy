@@ -179,7 +179,8 @@ class ReleaseTests(unittest.TestCase):
                        'status': 'completed', 'conclusion': 'success'}
         self.protection = {'enforce_admins': {'enabled': True}, 'required_status_checks': {
             'strict': True, 'checks': [{'context': external.CHECK, 'app_id': 123},
-                                      {'context': external.ACCEPTANCE_CHECK, 'app_id': 123}]}}
+                                      {'context': external.ACCEPTANCE_CHECK, 'app_id': 123},
+                                      {'context': 'product-flow/local', 'app_id': None}]}}
         self.config = {'app_id': 123, 'release_checks': [{'name': 'Static (L0-L1)', 'app_id': 456}]}
         self.checks = [{'name': 'Static (L0-L1)', 'app': {'id': 456}, 'head_sha': self.source,
                         'status': 'completed', 'conclusion': 'success'}]
@@ -213,6 +214,11 @@ class ReleaseTests(unittest.TestCase):
     def test_forged_check_issuer_refuses(self):
         self.checks[0]['app']['id'] = 999
         with self.assertRaises(ValueError):
+            self.validate()
+
+    def test_removed_required_product_gate_refuses(self):
+        self.protection['required_status_checks']['checks'].pop()
+        with self.assertRaisesRegex(ValueError, 'product gate'):
             self.validate()
 
     def test_unbound_merge_protection_refuses(self):
@@ -333,12 +339,39 @@ class PublishBoundaryTests(unittest.TestCase):
                    'base': {'ref': 'main', 'repo': {'full_name': external.REPO}}}
         self.writes = []
         self.calls = []
+        self.config.update(app_id=5285837, installation_id=170592990,
+                           dispatch_actor_user_id=888, dispatch_actor_login='fixture[bot]',
+                           merge_operator_user_id=18452532, release_reviewer_user_id=18452532,
+                           verify_workflow_id=10, deploy_workflow_id=11, merge_custody_ruleset_id=12,
+                           release_checks=[{'name': 'Tests', 'app_id': 15368}])
+        self.config['app_token_file'] = str(self.root / 'token')
+        (self.root / 'token').write_text('synthetic-installation-token'); (self.root / 'token').chmod(0o600)
+        permissions = {'metadata': 'read', 'checks': 'write', 'contents': 'read', 'issues': 'read',
+                       'pull_requests': 'read', 'actions': 'write', 'administration': 'read'}
+        self.identity = {'app': {'id': 5285837, 'slug': 'fixture'},
+                         'installation': {'app_id': 5285837, 'id': 170592990,
+                                          'account': {'login': 'dgmolla'}, 'repository_selection': 'selected',
+                                          'permissions': permissions},
+                         'token': {'sha256': external.digest((self.root / 'token').read_bytes()),
+                                   'permissions': permissions, 'expires_at': '2099-01-01T00:00:00Z'},
+                         'repository_id': 42}
+        self.save_identity()
+        self.actor = {'id': 888, 'login': 'fixture[bot]', 'type': 'Bot'}
 
     def tearDown(self):
         self.temp.cleanup()
 
+    def save_identity(self):
+        path = self.root / 'identity.json'; path.write_text(json.dumps(self.identity)); path.chmod(0o600)
+        self.config.update(app_identity_file=str(path), app_identity_sha256=external.digest(path.read_bytes()))
+
+
     def transport(self, config, endpoint, payload=None, release=False):
         self.calls.append(endpoint)
+        if endpoint == 'installation/repositories?per_page=100':
+            return {'total_count': 1, 'repositories': [{'id': 42, 'full_name': external.REPO}]}
+        if endpoint == 'apps/fixture': return self.identity['app']
+        if endpoint == 'users/fixture[bot]': return self.actor
         if endpoint.endswith('/pulls/9'):
             return self.pr
         if endpoint.endswith('/issues/443'):
@@ -355,6 +388,13 @@ class PublishBoundaryTests(unittest.TestCase):
         self.assertEqual(result['source_sha'], self.source)
         self.assertEqual(len(self.writes), 1)
         self.assertEqual(self.writes[0]['name'], external.CHECK)
+
+    def test_changed_token_provenance_cannot_publish_protected_check(self):
+        (self.root / 'token').write_text('changed-synthetic-token')
+        with patch.object(external, 'github', side_effect=self.transport):
+            with self.assertRaisesRegex(ValueError, 'token changed'):
+                external.publish(self.config, 443, 9)
+        self.assertFalse(self.writes)
 
     def test_forged_provider_artifact_never_reaches_write(self):
         (self.root / 'execution').write_text('{"kind":"completed"}')
@@ -389,24 +429,6 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         super().setUp()
         import base64
         self.main = 'c' * 40
-        self.config.update(app_id=5285837, installation_id=170592990,
-                           dispatch_actor_user_id=888, dispatch_actor_login='fixture[bot]',
-                           merge_operator_user_id=18452532, release_reviewer_user_id=18452532,
-                           verify_workflow_id=10, deploy_workflow_id=11, merge_custody_ruleset_id=12,
-                           release_checks=[{'name': 'Tests', 'app_id': 15368}])
-        self.config['app_token_file'] = str(self.root / 'token')
-        (self.root / 'token').write_text('synthetic-installation-token'); (self.root / 'token').chmod(0o600)
-        permissions = {'metadata': 'read', 'checks': 'write', 'contents': 'read', 'issues': 'read',
-                       'pull_requests': 'read', 'actions': 'write', 'administration': 'read'}
-        self.identity = {'app': {'id': 5285837, 'slug': 'fixture'},
-                         'installation': {'app_id': 5285837, 'id': 170592990,
-                                          'account': {'login': 'dgmolla'}, 'repository_selection': 'selected',
-                                          'permissions': permissions},
-                         'token': {'sha256': external.digest((self.root / 'token').read_bytes()),
-                                   'permissions': permissions, 'expires_at': '2099-01-01T00:00:00Z'},
-                         'repository_id': 42}
-        self.save_identity()
-        self.actor = {'id': 888, 'login': 'fixture[bot]', 'type': 'Bot'}
         self.verify = {'id': 20, 'workflow_id': 10, 'path': '.github/workflows/verify.yml',
                        'event': 'push', 'head_branch': 'main', 'head_sha': self.main,
                        'repository': {'full_name': external.REPO}, 'status': 'completed', 'conclusion': 'success'}
@@ -427,7 +449,8 @@ class DispatchBoundaryTests(PublishBoundaryTests):
                         'status': 'completed', 'conclusion': 'success'}]
         self.protection = {'enforce_admins': {'enabled': True}, 'required_status_checks': {
             'strict': True, 'checks': [{'context': name, 'app_id': 5285837}
-                                      for name in (external.CHECK, external.ACCEPTANCE_CHECK)]}}
+                                      for name in (external.CHECK, external.ACCEPTANCE_CHECK)] +
+                      [{'context': 'product-flow/local', 'app_id': None}]}}
         self.workflow_bytes = b'fixture independently approved workflow bytes'
         for name in ('verify', 'deploy'):
             self.config[name + '_workflow_sha256'] = external.digest(self.workflow_bytes)
@@ -435,15 +458,14 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         receipt = self.root / 'acceptance.json'; receipt.write_text(json.dumps(acceptance.receipt))
         self.config['local_acceptance'] = {'443': {**acceptance.policy, 'receipt_path': str(receipt),
                                                   'receipt_sha256': external.digest(receipt.read_bytes())}}
+        self.product_status = {'sha': self.source, 'total_count': 1,
+                               'statuses': [{'context': 'product-flow/local', 'state': 'success'}]}
         self.latest_verify = 20
         self.can_approve = True
         self.default_branch = 'main'
         self.scope_name = external.REPO
         self.api_override = {}
 
-    def save_identity(self):
-        path = self.root / 'identity.json'; path.write_text(json.dumps(self.identity)); path.chmod(0o600)
-        self.config.update(app_identity_file=str(path), app_identity_sha256=external.digest(path.read_bytes()))
 
     def transport(self, config, endpoint, payload=None, release=False):
         import base64
@@ -462,6 +484,7 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         if endpoint.endswith('/actions/workflows/10'): return {'path': '.github/workflows/verify.yml', 'state': 'active'}
         if endpoint.endswith('/actions/workflows/11'): return {'path': '.github/workflows/deploy.yml', 'state': 'active'}
         if endpoint.endswith('/git/ref/heads/main'): return {'object': {'sha': self.main}}
+        if endpoint.endswith(f'/commits/{self.source}/status?per_page=100'): return self.product_status
         if endpoint.endswith('/actions/runs/20'): return self.verify
         if endpoint.endswith('/actions/runs/30'): return self.run
         if '/actions/workflows/10/runs?' in endpoint: return {'workflow_runs': [{'id': self.latest_verify}]}
@@ -558,6 +581,38 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         with self.assertRaisesRegex(ValueError, 'approval unavailable'): self.ready()
         self.can_approve = True; self.environment['can_admins_bypass'] = True
         with self.assertRaises(ValueError): self.ready()
+
+    def test_changed_token_or_scope_cannot_publish_either_protected_check(self):
+        token = (self.root / 'token').read_bytes()
+        for kind in ('token', 'scope'):
+            if kind == 'token': (self.root / 'token').write_text('changed-synthetic-token')
+            else:
+                (self.root / 'token').write_bytes(token); self.scope_name = 'other/repository'
+            for operation in (lambda: external.publish(self.config, 443, 9),
+                              lambda: external.publish_acceptance(self.config, 443, 9, 20)):
+                with patch.object(external, 'github', side_effect=self.transport), self.assertRaises(ValueError):
+                    operation()
+                self.assertFalse(self.writes)
+
+    def test_valid_installation_can_publish_source_bound_acceptance(self):
+        self.api_override[f'repos/{external.REPO}/actions/runs/20'] = {
+            **self.verify, 'event': 'pull_request', 'head_sha': self.source}
+        with patch.object(external, 'github', side_effect=self.transport):
+            result = external.publish_acceptance(self.config, 443, 9, 20)
+        self.assertEqual(result['source_sha'], self.source)
+        self.assertEqual(self.writes[0]['name'], external.ACCEPTANCE_CHECK)
+
+    def test_failed_missing_or_wrong_source_product_status_never_dispatches(self):
+        import copy
+        original = copy.deepcopy(self.product_status)
+        for state in ('failure', 'pending'):
+            self.product_status['statuses'][0]['state'] = state
+            with self.assertRaisesRegex(ValueError, 'product gate'): self.dispatch()
+        self.product_status = copy.deepcopy(original); self.product_status['statuses'] = []
+        with self.assertRaisesRegex(ValueError, 'product gate'): self.dispatch()
+        self.product_status = copy.deepcopy(original); self.product_status['sha'] = 'd' * 40
+        with self.assertRaisesRegex(ValueError, 'product status'): self.dispatch()
+        self.assertFalse(self.writes)
 
     def test_main_race_refuses_before_write(self):
         calls = 0

@@ -85,7 +85,7 @@ The private token-provenance JSON has `app` (actual authenticated App response),
 The independent operator pins its digest only after personally observing those responses and custody; a self-consistent candidate-written receipt is not issuance proof.
 This short-lived credential provenance repairs the demonstrated absence of issuer/installation metadata in installation-token scope responses; it is not a verdict cache, grant, queue or new workflow engine.
 Renewals preserve prior raw receipts rather than erasing them.
-The adapter checks issuer5285837/installation170592990, exact permissions, token digest/expiry, live Fitsy-only scope, live App ID and live Bot identity before dispatch or readiness.
+The adapter checks issuer5285837/installation170592990, exact permissions, token digest/expiry, live Fitsy-only scope, live App ID and live Bot identity before either protected check publication, dispatch or readiness.
 Missing, wrong, changed or expired metadata refuses.
 
 ## Existing command extension and exact source binding
@@ -106,7 +106,7 @@ After protected human merge and successful latest exact-source main push Verify,
 /opt/fitsy-approval/external-approval.py release-ready --run ACTUAL_APP_DEPLOY_RUN --verify-run MAIN_VERIFY_RUN
 ```
 
-The first command validates original source-bound review/acceptance, operator-observed full local acceptance, App-bound protected main checks, merge custody, unique merged PR, equal reviewed/release trees, latest successful Verify and protected environment policy before issuing `POST /repos/dgmolla/fitsy/actions/workflows/352171272/dispatches`.
+The first command validates original source-bound review/acceptance, operator-observed full local acceptance, App-bound protected main checks, retained required `product-flow/local` protection and its current successful status on the reviewed PR head, merge custody, unique merged PR, equal reviewed/release trees, latest successful Verify and protected environment policy before issuing `POST /repos/dgmolla/fitsy/actions/workflows/352171272/dispatches`.
 Its payload fixes `ref` to `main` and inputs to actual `release_sha`, `verify_run` and normalized `acceptance_sha256`; none is a caller-selected release source.
 A last main readback detects pre-submit drift; the workflow compares input source to event SHA/current main to reject a ref race.
 Inputs enter shell only as environment values with bounded syntax checks.
@@ -139,7 +139,7 @@ Use the exact approved source/workflow bytes and actual App identity, not a dupl
 | Wrong App issuer, installation, token, repository scope or bot actor | Adapter refuses before dispatch/check authority can count. |
 | Human dispatch or human rerun | Workflow gate fails before protected production jobs; readiness refuses. |
 | Wrong/default-branch workflow, release source or source race | Adapter/gate refuses; no protected secret access. |
-| Missing, failed, stale or superseded Verify/required checks | Dispatch and readiness refuse. |
+| Missing, failed, stale or superseded Verify/required checks/product-flow status | Dispatch and readiness refuse. |
 | Forged/unbound review, changed acceptance or another-source title | Dispatch/readiness refuse; original raw history remains. |
 | Admin bypass, absent self-review prevention, wrong reviewer or no actual eligibility | Readiness/protected environment refuses. |
 | Actual valid App dispatch after protected merge | Read back App bot actor and triggering_actor, exact source/workflow/title/Verify, pending environment and human approval eligibility. |
