@@ -98,10 +98,16 @@ with p.with_suffix('.args').open('a') as f: f.write(json.dumps(sys.argv[1:])+'\n
 p.with_suffix('.worker-budget').write_text(os.environ.get('FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS','missing'))
 mode=os.environ.get('FAKE_WORKER_MODE','done')
 if mode=='sleep': time.sleep(float(os.environ.get('FAKE_WORKER_SLEEP','2')))
-if mode=='spawn_child':
+if mode in ('spawn_child', 'child_success', 'child_fail'):
  child=subprocess.Popen(['sleep','30'])
  p.with_suffix('.childpid').write_text(str(child.pid))
- time.sleep(30)
+ if mode=='spawn_child': time.sleep(30)
+ if os.environ.get('FAKE_WORKER_STATE'):
+  deadline=time.monotonic()+5
+  while time.monotonic()<deadline:
+   if json.loads(Path(os.environ['FAKE_WORKER_STATE']).read_text()).get('active',{}).get('pid')==os.getpid(): break
+   time.sleep(.01)
+ if mode=='child_fail': raise SystemExit(7)
 if mode=='fail': raise SystemExit(7)
 with p.with_suffix('.lock').open('a') as f:
  fcntl.flock(f,fcntl.LOCK_EX); d=json.loads(p.read_text())
@@ -1249,6 +1255,55 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertNotEqual(self.state_data()['active']['stage'], 'ownership-uncertain')
         self.assertEqual(self.tick()['state'], 'idle')
         self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
+
+    def test_success_and_failure_stop_unneeded_children_before_release(self):
+        # Each subcase owns a fresh fixture; real process inventory and teardown are required.
+        for mode, code in (('child_success', 0), ('child_fail', 7)):
+            with self.subTest(mode=mode):
+                fixture = DispatcherProcessTest()
+                fixture.setUp()
+                try:
+                    fixture.env['FAKE_WORKER_MODE'] = mode
+                    fixture.env['FAKE_WORKER_STATE'] = str(fixture.state / 'state.json')
+                    fixture.tick()
+                    fixture.until(lambda: fixture.state_data()['active'].get('finished_at'), seconds=8)
+                    active = fixture.state_data()['active']
+                    self.assertEqual(active['exit_code'], code)
+                    self.assertNotEqual(active['stage'], 'ownership-uncertain')
+                    self.assertEqual(active['resources']['worker-process']['state'], 'released')
+                    self.assertFalse(dispatcher.other_group_members(active['worker_pgid'], os.getpid()))
+                finally:
+                    fixture.doCleanups()
+
+    def test_cancelled_launcher_settles_group_and_cannot_accept_late_success(self):
+        self.env['FAKE_WORKER_MODE'] = 'spawn_child'
+        self.tick()
+        self.until(lambda: self.board.with_suffix('.childpid').exists())
+        active = self.state_data()['active']
+        os.kill(active['launcher_pid'], signal.SIGTERM)
+        self.until(lambda: self.state_data()['active'].get('finished_at'), seconds=8)
+        active = self.state_data()['active']
+        self.assertTrue(active['cancelled'])
+        self.assertNotEqual(active['stage'], 'ownership-uncertain')
+        self.assertFalse(dispatcher.other_group_members(active['worker_pgid'], os.getpid()))
+        self.assertEqual(active['resources']['worker-process']['state'], 'released')
+        self.assertEqual(self.tick()['state'], 'idle')
+        self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
+
+    def test_cancel_during_acquisition_preserves_original_intent_without_new_worker(self):
+        config = json.loads(self.config.read_text())
+        config['test_pause_before_child_seconds'] = 30
+        self.config.write_text(json.dumps(config))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('resources', {}).get('worker-process'))
+        os.kill(self.state_data()['active']['launcher_pid'], signal.SIGTERM)
+        self.until(lambda: self.state_data()['active'].get('finished_at'), seconds=8)
+        active = self.state_data()['active']
+        self.assertTrue(active['cancelled'])
+        self.assertEqual(active['resources']['worker-process']['state'], 'acquiring')
+        self.assertNotIn('identity', active['resources']['worker-process'])
+        self.assertEqual(self.workers(), [])
+        self.assertEqual(self.tick()['state'], 'idle')
 
     def test_timeout_cannot_be_overwritten_by_late_verified_receipt(self):
         delivered = item(385, status='Done')

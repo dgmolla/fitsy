@@ -429,7 +429,7 @@ def recover(config, state, save, now, completed_verified=None):
         raise RuntimeError('cleanup high watermark must be nonnegative bytes')
     high = max(high, minimum)
     pressure = shutil.disk_usage(config['worktree_root']).free < high
-    grace = config.get('superseded_checkout_grace_seconds', 3600 if pressure else 86400)
+    grace = config.get('superseded_checkout_grace_seconds', 14400 if pressure else 86400)
     if not isinstance(grace, int) or isinstance(grace, bool) or grace < 0:
         raise RuntimeError('superseded checkout grace must be nonnegative seconds')
     from resource_lifecycle import read_claims
@@ -478,7 +478,7 @@ def recover(config, state, save, now, completed_verified=None):
         minimum_age = config.get('resource_ttl_seconds', {}).get('integrated_checkout', 86400) if c == newest[c['issue']] and c.get('terminal') == 'verified' else grace
         if not isinstance(minimum_age, int) or isinstance(minimum_age, bool) or minimum_age < 0:
             raise RuntimeError('checkout TTL must be nonnegative seconds')
-        if latest_unfinished or age is None or age < minimum_age or prior.get('state') == 'cold-retired' or prior.get('retry_after', 0) > now:
+        if latest_unfinished or age is None or age <= 14400 or age < minimum_age or prior.get('state') == 'cold-retired' or prior.get('retry_after', 0) > now:
             continue
         if prior.get('state') == 'removal-intent' and not Path(c['worktree']).exists():
             archive = prior.get('archive', {})

@@ -746,5 +746,84 @@ class WorkflowGateTests(unittest.TestCase):
             self.assertTrue(any(step.get('with', {}).get('ref') == '${{ inputs.release_sha }}' for step in job['steps']))
 
 
+class ProfileCustodyTests(unittest.TestCase):
+    """Real private fixture bytes, synthetic OS observations; never installation evidence."""
+    def setUp(self):
+        import os
+        self.os = os
+        # No directory acquisition is needed for these flat credential-free artifacts.
+        # Each exact temporary file has independent cleanup; the caller owns its scratch root.
+        self.paths = {}
+        for key in ('launcher', 'profile', 'receipt', 'state'):
+            with tempfile.NamedTemporaryFile(prefix='custody-'+key+'-', delete=False) as file:
+                self.paths[key] = Path(file.name)
+            self.addCleanup(self.paths[key].unlink, missing_ok=True)
+        self.launcher = b'reviewed fixture launcher'
+        self.profile = b'reviewed fixture profile'
+        self.boundary = dict(kind='codex-permission-profile', claim_id='fixture-claim', issue=463,
+                             source_sha='a'*40, comparison_base='b'*40)
+        for key, raw in (('launcher', self.launcher), ('profile', self.profile)):
+            path = self.paths[key]; path.write_bytes(raw); path.chmod(0o600)
+            self.boundary.update({key+'_path': str(path), key+'_sha256': external.digest(raw)})
+        self.receipt = {**self.boundary, 'version': 1, 'independently_approved': True,
+                        'worker_pid': 999999, 'worker_started': 'fixture-start',
+                        'live_denials': dict.fromkeys(('operator_files', 'approval_credentials', 'claim_write',
+                            'other_branch_write', 'workspace_secrets', 'command_network', 'operator_execution'), True)}
+        self.claim = dict(id='fixture-claim', issue=463, pid=999999, pid_started='fixture-start',
+                          worker_pgid=999998, stage='running', worker_boundary=dict(
+                              kind='codex-permission-profile', config_sha256=external.digest(self.profile),
+                              operator_home_read=False, network=False))
+        self.boundary['receipt_path'] = str(self.paths['receipt'])
+        self.boundary['claim_state_path'] = str(self.paths['state'])
+        self.config = dict(operator_uid=os.getuid(), candidate_uid=os.getuid(), candidate_boundary=self.boundary)
+        self.save()
+
+    def save(self):
+        raw = json.dumps(self.receipt).encode()
+        self.paths['receipt'].write_bytes(raw); self.paths['receipt'].chmod(0o600)
+        self.boundary['receipt_sha256'] = external.digest(raw)
+        self.paths['state'].write_text(json.dumps({'active': self.claim})); self.paths['state'].chmod(0o600)
+
+    def check(self):
+        from types import SimpleNamespace
+        # Only OS process inventory is synthetic; protected_bytes and all validation are real.
+        with patch.object(external.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='fixture-start\n')):
+            with patch.object(external.os, 'getpgid', return_value=999998):
+                external.candidate_custody(self.config, self.os.getuid())
+
+    def test_pinned_profile_is_a_distinct_prepared_contract(self):
+        self.check()
+
+    def test_same_uid_without_boundary_remains_refused(self):
+        with self.assertRaisesRegex(ValueError, 'candidate'):
+            external.candidate_custody({'operator_uid': self.os.getuid(), 'candidate_uid': self.os.getuid()}, self.os.getuid())
+
+    def test_changed_profile_launcher_or_receipt_is_refused(self):
+        for name in ('profile', 'launcher', 'receipt'):
+            path = self.paths[name]; original = path.read_bytes(); path.write_bytes(original+b'changed')
+            with self.assertRaises(ValueError): self.check()
+            path.write_bytes(original)
+
+    def test_partial_denial_wrong_source_and_unapproved_receipt_are_refused(self):
+        import copy
+        original = copy.deepcopy(self.receipt)
+        for change in ({'source_sha': 'c'*40}, {'comparison_base': 'c'*40}, {'claim_id': 'other'},
+                       {'independently_approved': False}, {'live_denials': {'operator_files': True}}):
+            self.receipt = {**original, **change}; self.save()
+            with self.assertRaises(ValueError): self.check()
+
+    def test_inactive_reused_or_candidate_operator_process_is_refused(self):
+        original = dict(self.claim)
+        for change in ({'stage': 'finished'}, {'finished_at': 'ended'}, {'pid_started': 'reused'},
+                       {'worker_pgid': self.os.getpgrp()}):
+            self.claim = {**original, **change}; self.save()
+            with self.assertRaises(ValueError): self.check()
+
+    def test_other_candidate_cannot_reuse_profile_authority(self):
+        for issue, source in ((443, 'a'*40), (463, 'c'*40)):
+            with self.assertRaisesRegex(ValueError, 'issue/source'):
+                external.review_inputs(self.config, issue, source, 'fixture')
+
+
 if __name__ == '__main__':
     unittest.main()

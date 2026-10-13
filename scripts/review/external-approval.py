@@ -52,12 +52,67 @@ def protected_bytes(path, uid, private=False):
     return path.read_bytes()
 
 
+def candidate_custody(config, uid):
+    """Operator-pinned live boundary proof; candidate input/env cannot select authority.
+
+    The default separate-UID contract remains. Profile custody is a prepared,
+    independently reviewed installation option, never inferred from same UID or file mode.
+    """
+    require(type(config.get('operator_uid')) is int and uid == config['operator_uid']
+            and type(config.get('candidate_uid')) is int, 'candidate cannot act as operator')
+    boundary = config.get('candidate_boundary')
+    if boundary is None:
+        require(uid != config['candidate_uid'], 'candidate cannot act as operator')
+        return
+    require(uid == config['candidate_uid'] and boundary.get('kind') == 'codex-permission-profile',
+            'unsupported candidate custody boundary')
+    raw = protected_bytes(boundary['receipt_path'], uid, private=True)
+    require(digest(raw) == boundary['receipt_sha256'], 'candidate boundary receipt changed')
+    receipt = json.loads(raw)
+    require(receipt.get('version') == 1 and receipt.get('claim_id') == boundary['claim_id']
+            and receipt.get('issue') == boundary['issue']
+            and receipt.get('source_sha') == boundary['source_sha']
+            and receipt.get('comparison_base') == boundary['comparison_base']
+            and receipt.get('independently_approved') is True,
+            'candidate boundary approval/source mismatch')
+    for key in ('source_sha', 'comparison_base'):
+        require(isinstance(boundary[key], str) and re.fullmatch(r'[0-9a-f]{40}', boundary[key]),
+                'candidate boundary source identity incomplete')
+    for key in ('launcher', 'profile'):
+        content = protected_bytes(boundary[key + '_path'], uid, private=(key == 'profile'))
+        require(digest(content) == boundary[key + '_sha256'] == receipt.get(key + '_sha256'),
+                'candidate boundary executable/profile changed')
+    denials = receipt.get('live_denials') or {}
+    require(all(denials.get(key) is True for key in (
+        'operator_files', 'approval_credentials', 'claim_write', 'other_branch_write',
+        'workspace_secrets', 'command_network', 'operator_execution')),
+        'candidate boundary live denials incomplete')
+    state = json.loads(protected_bytes(boundary['claim_state_path'], uid, private=True))
+    claim = state.get('active') or {}
+    observed = claim.get('worker_boundary') or {}
+    require(claim.get('id') == boundary['claim_id'] and claim.get('issue') == boundary['issue']
+            and observed.get('kind') == boundary['kind']
+            and observed.get('config_sha256') == boundary['profile_sha256']
+            and observed.get('operator_home_read') is False and observed.get('network') is False,
+            'candidate boundary does not match original claim')
+    require(claim.get('stage') == 'running' and not claim.get('finished_at')
+            and type(claim.get('pid')) is int and claim['pid'] > 0
+            and receipt.get('worker_pid') == claim['pid']
+            and receipt.get('worker_started') == claim.get('pid_started')
+            and type(claim.get('worker_pgid')) is int
+            and claim['worker_pgid'] != os.getpgrp(), 'candidate boundary is inactive or operator is candidate')
+    process = subprocess.run(['/bin/ps', '-p', str(claim['pid']), '-o', 'lstart='],
+                             capture_output=True, text=True, timeout=10,
+                             env={'PATH': '/usr/bin:/bin'})
+    require(process.returncode == 0 and bool(claim.get('pid_started'))
+            and process.stdout.strip() == claim['pid_started']
+            and os.getpgid(claim['pid']) == claim['worker_pgid'], 'candidate process identity changed')
+
+
 def authority():
     uid = os.getuid()
     config = json.loads(protected_bytes(CONFIG, uid))
-    require(type(config.get('operator_uid')) is int and uid == config['operator_uid']
-            and type(config.get('candidate_uid')) is int
-            and uid != config['candidate_uid'], 'candidate cannot act as operator')
+    candidate_custody(config, uid)
     require(Path(__file__).absolute() == INSTALL
             and digest(protected_bytes(INSTALL, uid)) == config['adapter_sha256'],
             'only independently approved installed adapter may issue checks')
@@ -88,6 +143,8 @@ def github(config, endpoint, payload=None, release=False):
     argv = [config['gh_path'], 'api', '--hostname', 'github.com',
             '-H', 'Accept: application/vnd.github+json', endpoint]
     if payload is not None:
+        if config.get('candidate_boundary') is not None:
+            candidate_custody(config, config['operator_uid'])
         argv += ['--method', 'POST', '--input', '-']
     result = subprocess.run(argv, input=json.dumps(payload) if payload is not None else None,
                             text=True, capture_output=True, env=env, timeout=60)
@@ -208,11 +265,17 @@ def validate_review(approval, artifacts, ledger, policy, issue, source, body):
 
 
 def review_inputs(config, issue, source, body):
+    boundary = config.get('candidate_boundary')
+    if boundary is not None:
+        require(boundary['issue'] == issue and boundary['source_sha'] == source,
+                'candidate boundary issue/source differs from reviewed candidate')
     uid = config['operator_uid']
     policy = config['reviews'][str(issue)]
     raw = protected_bytes(Path(config['review_home']) / 'completed' / f'issue-{issue}.json', uid)
     require(digest(raw) == policy['manifest_sha256'], 'unapproved execution manifest')
     approval = json.loads(raw)
+    if boundary is not None:
+        require(approval['base_sha'] == boundary['comparison_base'], 'candidate boundary comparison mismatch')
     artifacts = {name: protected_bytes(row['path'], uid) for name, row in approval['artifacts'].items()}
     ledger = protected_bytes(Path(config['budget_home']) / f'issue-{issue}.jsonl', uid)
     validate_review(approval, artifacts, ledger, policy, issue, approval['source_sha'], body)

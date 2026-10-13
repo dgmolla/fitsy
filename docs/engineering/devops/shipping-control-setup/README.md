@@ -2,7 +2,10 @@
 
 **TL;DR:** This packet prepares an isolated approval issuer and protected release using existing review, GitHub and release commands.
 
-The current single-human installation proposal is [the App dispatch packet](single-human-dispatch.md).
+The single-human release proposal is [the App dispatch packet](single-human-dispatch.md).
+The human withdrew account switching; retain the created account and earlier custody
+evidence without requesting login or deletion. Candidate custody continuation is the
+uninstalled [profile-bound resource/control contract](../resource-control-continuation.md).
 It supersedes the former second-human/workflow_run assumption; [single-human viability](single-human-viability.md) retains the earlier read-only diagnosis.
 These files are uninstalled templates until the selected coordinator verifies the genuine independent control review and completes the readbacks below.
 Null identity values are unresolved security inputs, never defaults or simulated installation receipts.
@@ -45,13 +48,13 @@ Use the [GitHub manifest procedure](https://docs.github.com/en/apps/sharing-gith
 Keep the manifest conversion code, PEM key and installation token entirely in operator custody.
 The inactive webhook needs no receiver or daemon.
 
-The remaining inputs are a real operator UID distinct from the candidate UID, the actual independent App ID and token, the actual independently initiating App bot identity and the human protected release reviewer distinct from that bot, pinned installed GitHub CLI path/digest, independently approved control commit/digest, reconciled evidence digests and the frozen acceptance recipes.
+The remaining custody input is independently validated execution separation: the prepared profile contract requires pinned live command denials and original claim/process identity. The default separate-UID schema remains fail-closed until that replacement is independently approved and installed. Other inputs remain the actual independent App ID and token, independently initiating App bot identity, human protected release reviewer distinct from that bot, pinned installed GitHub CLI path/digest, independently approved control commit/digest, reconciled evidence digests and frozen acceptance recipes.
 Operator `dgmolla` credentials must be relocated and revoked from candidate access before they count as independent authority.
 Creating another folder under the current unrestricted user does not establish isolation.
 
 ## Credential isolation and supported operator commands
 
-Use an existing isolated operator host or a separate local OS account whose files, processes, login sessions and credential store are inaccessible to the candidate account.
+Use the selected committed sandboxed-worker entry point and independently verify its live permission-profile boundary. Do not initiate another account switch or treat a private folder as isolation.
 The candidate must have no root/sudo access or ability to modify the operator account, installed adapter, GitHub CLI, App keys or environment approval credential.
 Keep the original frozen source and evidence recoverable before changing account custody.
 No new paid service or account is required by the design.
@@ -63,7 +66,7 @@ Apple's `/etc` and `/var` aliases are symlinks; do not weaken symlink rejection 
 Both paths and every ancestor must be root/operator owned and not group/world writable, with no symlinks.
 Credential files are private mode `0600` under `/var/lib/fitsy-approval/credentials/`.
 Run the executable directly so its system Env launcher removes startup selectors before isolated Python begins.
-The adapter rejects caller copies, unsafe ancestry, same-UID candidate authority and changed installed bytes.
+The default adapter rejects caller copies, unsafe ancestry, same-UID candidate authority and changed installed bytes. The prepared explicit profile mode additionally requires operator-pinned independent/live boundary proof; it is not an installed exception merely because its fixtures pass.
 It ignores candidate GitHub configuration, tokens, proxy settings and executable selection.
 
 Retain the existing `.fitsy-review/completed/issue-N.json`, raw provider files and original `.cache/fitsy-review/budgets/issue-N.jsonl` in isolated operator custody.

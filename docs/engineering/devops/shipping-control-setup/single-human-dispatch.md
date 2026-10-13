@@ -11,7 +11,7 @@ The installed workflow identity, App bot identity and approval eligibility remai
 
 ```mermaid
 flowchart LR
-    C[Standard candidate Mac account] --> T[Full product checks and genuine review]
+    C[Independently validated candidate command boundary] --> T[Full product checks and genuine review]
     T --> O[Isolated operator verifies original receipts]
     O --> K[App-bound independent checks]
     K --> H[Human protected PR merge]
@@ -45,15 +45,21 @@ Compromise of the operator account or App key remains outside the candidate isol
 
 ## Exact Mac separation and human-only setup
 
-The human creates standard Mac account `fitsy-candidate` and moves all implementation/reviewer candidate execution there.
+The human withdrew account switching. Retain the already-created account and prior
+custody evidence; do not request login or delete it. Continue candidate execution
+through the committed sandboxed-worker entry point and the prepared
+[profile-bound contract](../resource-control-continuation.md), pending independent
+validation and installation of the changed controls.
 The current operator account retains Notes, login keychain, browser administration, `gh` merge credentials, Vercel/Expo production credentials and environment approval.
 Authenticated account creation, login switching, key relocation/creation and confirmation/submission are human-only operations.
 Do not read or export the Notes key from this task.
 A folder or token split under the present shared UID is insufficient.
 
-After human-created setup, record actual numeric UIDs with `id -u fitsy-candidate` and `id -u` from the operator login; require different non-root UIDs.
-Record `id -Gn fitsy-candidate` and `dscl . -read /Groups/admin GroupMembership`; require no candidate admin membership.
-From the candidate login, `sudo -n -l` must not expose root or operator execution; the human/operator must inspect sudoers and authorization routes so a missing cached password alone cannot count as denial.
+Earlier separate-account UID/admin/sudo observations remain historical evidence.
+They are not a current request to move execution or a profile isolation pass. The
+trusted coordinator must record the exact live launcher/profile/claim/process
+identity and harmless command denials before enabling profile custody; a missing
+file or credential-free synthetic fixture does not prove a denial.
 Exclude candidate root, sudo, operator password, SSH/login access to operator identity, shared automation bridges and the ability to control the operator's authenticated desktop.
 Inspect Accessibility, Automation, Screen Recording and Full Disk Access permissions for the actual candidate executables and login sessions.
 Deny candidate automation of the operator's Notes, browser, Terminal, Keychain Access and GitHub/release UI; do not keep a shared authenticated operator desktop exposed to candidate computer-use tools.
@@ -61,13 +67,13 @@ Test attempted operator-session automation with a harmless, secret-free target a
 
 Inventory all shared credential routes without recording secret values: Notes/iCloud, login keychain, browser profiles, `gh`, Vercel, Expo, shell startup, SSH, environment variables, files and existing workflow/repository secrets.
 The human relocates required authority to operator-private storage and revokes every candidate-accessible copy/session; a key retained in shared-access Notes does not establish custody.
-From the candidate login, use `test -r`/`test -w` and harmless access probes to record read/write denial for operator credential locations, Notes database, keychain and browser profiles without opening their contents.
+Use only authorized harmless sentinels and temporary-data denial probes from the candidate profile. The trusted coordinator verifies protected credential-route custody; the worker must not probe real Notes, keychain, browser or credential contents.
 Candidate execution may receive only scoped ephemeral/dev credentials and normal read/test transport, with no issue-acceptance administration, App check issuance, protected merge, environment approval or production route.
 Installed adapter, config, GitHub CLI and every ancestor must be root/operator owned, non-writable to candidate and non-symlinked.
 Use `/opt/fitsy-approval/external-approval.py`, `/private/etc/fitsy/delivery-authority.json` and canonical `/private/var/lib/fitsy-approval/` custody paths on this Mac.
 Credentials and token-provenance files are private `0600` under operator-controlled ancestors.
 Pin actual CLI digest, reviewed adapter/control identity, UIDs, environment reviewer, ruleset ID and exact deploy/verify workflow digests.
-These instructions preserve existing ca7 transport, installed-location and same-UID rejection; local tests cannot prove OS isolation.
+These instructions preserve existing ca7 transport and installed-location protections. Default same-UID rejection remains until independently approved profile custody is installed; local tests cannot prove OS isolation.
 
 ## Supported installation-token provenance
 
