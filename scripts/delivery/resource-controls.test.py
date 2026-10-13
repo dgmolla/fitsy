@@ -14,7 +14,8 @@ GIB = 1024**3
 
 class ResourceControlsTest(unittest.TestCase):
     def setUp(self):
-        self.now = time.time()
+        # Exactly representable before and after ISO microsecond serialization.
+        self.now = 1791935400.125
         self.budget = dict(peak_memory_bytes=4*GIB, host_reserve_bytes=3*GIB,
                            cpus=2, scratch_bytes=4*GIB)
         self.observed = dict(state='available', at=self.now, free_disk_bytes=20*GIB,
