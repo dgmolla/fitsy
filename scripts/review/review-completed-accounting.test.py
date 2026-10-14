@@ -1049,6 +1049,8 @@ class CompletedAdmission(CompletedAccounting):
                      'scripts/verify/hook-fixture.ts', 'scripts/verify/impact-plan.mjs',
                      'scripts/verify/impact-plan.test.ts',
                      'scripts/verify/run-output.test.ts',
+                     'scripts/verify/test.sh',
+                     'scripts/delivery/phase-events.test.mjs',
                      'scripts/verify/product-flow-impact.test.ts',
                      'scripts/verify/product-flow-public-env.test.ts',
                      'scripts/deploy/native-compatibility.test.ts']:
@@ -1062,6 +1064,25 @@ class CompletedAdmission(CompletedAccounting):
         self.git('restore', '--source=' + self.args.control_sha, '--staged', '--worktree', '--', 'scripts/review')
         self.save()
         self.assertEqual(self.call()['verdict'], 'pass')
+
+    def test_adjacent_unreviewed_test_paths_do_not_expand_trusted_controls(self):
+        self.git('checkout', '-qf', 'controls')
+        for name in ('scripts/verify/test.sh.backup',
+                     'scripts/delivery/phase-events.test.mjs.backup'):
+            path = self.repo / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('unreviewed fixture\n')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'unreviewed adjacent test paths')
+        self.args.control_sha = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-qf', 'product')
+        self.git('restore', '--source=' + self.args.control_sha,
+                 '--staged', '--worktree', '--', 'scripts/review')
+        self.save()
+        before = self.ledger.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'changed product'):
+            self.call()
+        self.assertEqual(before, self.ledger.read_bytes())
 
 
 class PermanentAllocation(unittest.TestCase):

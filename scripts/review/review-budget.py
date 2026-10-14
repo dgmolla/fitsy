@@ -654,6 +654,7 @@ def admit_completed(handle, ledger, args, events):
                           "scripts/verify/product-flow.mjs", "scripts/sim/publish-product-flow.mjs",
                           "scripts/sim/product-flow.mjs", "scripts/sim/runner-controls.test.mjs",
                           "scripts/verify/run.mjs", "scripts/verify/run-output.test.ts",
+                          "scripts/verify/test.sh", "scripts/delivery/phase-events.test.mjs",
                           "scripts/verify/receipt-cache.mjs", "scripts/verify/README.md",
                           ".githooks/pre-push",
                           "scripts/delivery/local-dispatcher.py", "scripts/delivery/local-dispatcher.test.py",
