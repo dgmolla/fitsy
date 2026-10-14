@@ -214,6 +214,14 @@ class DispatcherProcessTest(unittest.TestCase):
         log = self.board.with_suffix('.workers')
         return log.read_text().splitlines() if log.exists() else []
 
+    def assert_receipt_group_settled(self, active):
+        # finished_at is written by the launcher after child settlement, before
+        # its own exit. Children must already be gone; only the writer may linger.
+        pgid, launcher = active['worker_pgid'], active['launcher_pid']
+        self.assertFalse(dispatcher.other_group_members(pgid, launcher))
+        self.until(lambda: launcher not in dispatcher.group_members(pgid, os.getpid()))
+        self.assertFalse(dispatcher.other_group_members(pgid, os.getpid()))
+
     def test_exhausted_live_queue_defers_without_claim_or_repeated_read(self):
         self.env['FAKE_QUEUE_QUOTA_RESET'] = '4070908800'
         first = self.tick()
@@ -1284,7 +1292,7 @@ class DispatcherProcessTest(unittest.TestCase):
                     self.assertEqual(active['exit_code'], code)
                     self.assertNotEqual(active['stage'], 'ownership-uncertain')
                     self.assertEqual(active['resources']['worker-process']['state'], 'released')
-                    self.assertFalse(dispatcher.other_group_members(active['worker_pgid'], os.getpid()))
+                    fixture.assert_receipt_group_settled(active)
                 finally:
                     fixture.doCleanups()
 
@@ -1298,7 +1306,7 @@ class DispatcherProcessTest(unittest.TestCase):
         active = self.state_data()['active']
         self.assertTrue(active['cancelled'])
         self.assertNotEqual(active['stage'], 'ownership-uncertain')
-        self.assertFalse(dispatcher.other_group_members(active['worker_pgid'], os.getpid()))
+        self.assert_receipt_group_settled(active)
         self.assertEqual(active['resources']['worker-process']['state'], 'released')
         self.assertEqual(self.tick()['state'], 'idle')
         self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
@@ -1492,6 +1500,45 @@ class DispatcherProcessTest(unittest.TestCase):
         receipt = json.loads((self.state / 'claims/claim-101/receipt.json').read_text())
         self.assertEqual(receipt['terminal'], 'verified')
         self.assertEqual(receipt['worker_profile']['provider'], 'claude')
+
+
+class ReceiptGroupSettlementTest(unittest.TestCase):
+    def setUp(self):
+        # Exercise the lifecycle assertion without native inventory or fixtures.
+        self.fixture = DispatcherProcessTest()
+        self.active = {'worker_pgid': 101, 'launcher_pid': 101}
+
+    def test_receipt_writer_can_exit_after_publication(self):
+        with mock.patch.object(dispatcher, 'group_members', side_effect=[[], [101], [], []]), \
+                mock.patch.object(time, 'sleep'):
+            self.fixture.assert_receipt_group_settled(self.active)
+
+    def test_surviving_child_fails_before_waiting_for_launcher(self):
+        with mock.patch.object(dispatcher, 'group_members', return_value=[102]), \
+                mock.patch.object(self.fixture, 'until') as wait:
+            with self.assertRaises(AssertionError):
+                self.fixture.assert_receipt_group_settled(self.active)
+            wait.assert_not_called()
+
+    def test_launcher_that_never_exits_fails_at_existing_deadline(self):
+        with mock.patch.object(dispatcher, 'group_members', side_effect=[[], [101]]), \
+                mock.patch.object(time, 'monotonic', side_effect=[0, 0, 9]), \
+                mock.patch.object(time, 'sleep'):
+            with self.assertRaisesRegex(AssertionError, 'condition did not become true'):
+                self.fixture.assert_receipt_group_settled(self.active)
+
+    def test_unavailable_inventory_fails_before_waiting(self):
+        with mock.patch.object(dispatcher, 'group_members', side_effect=RuntimeError('unavailable')), \
+                mock.patch.object(self.fixture, 'until') as wait:
+            with self.assertRaises(AssertionError):
+                self.fixture.assert_receipt_group_settled(self.active)
+            wait.assert_not_called()
+
+    def test_child_observed_after_launcher_exit_still_fails(self):
+        with mock.patch.object(dispatcher, 'group_members', side_effect=[[], [102], [102]]):
+            with self.assertRaises(AssertionError):
+                self.fixture.assert_receipt_group_settled(self.active)
+
 
 class ResourceRetentionTest(unittest.TestCase):
     def setUp(self):
