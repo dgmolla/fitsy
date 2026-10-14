@@ -23,6 +23,7 @@ REPO = 'dgmolla/fitsy'
 CHECK = 'delivery/independent-review'
 ACCEPTANCE_CHECK = 'delivery/acceptance'
 CONTROL_AREAS = ('scripts/review/', 'scripts/verify/', 'scripts/delivery/',
+                 'scripts/deploy/native-compatibility.test.ts',
                  'docs/engineering/devops/', '.githooks/', 'AGENTS.md',
                  'scripts/sim/product-flow.mjs', 'scripts/sim/publish-product-flow.mjs',
                  'scripts/sim/runner-controls.test.mjs',

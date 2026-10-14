@@ -178,6 +178,17 @@ class CompositionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'product path'):
             external.validate_composition(reviewed, candidate, controls, ['.github/workflows/unreviewed.yml'])
 
+    def test_reviewed_native_workflow_regression_is_an_exact_control_path(self):
+        path = 'scripts/deploy/native-compatibility.test.ts'
+        reviewed = {**self.reviewed, path: ('100644', 'blob', 'stale-push-fixture')}
+        controls = {path: ('100644', 'blob', 'dispatch-fixture')}
+        candidate = {**reviewed, path: controls[path]}
+        external.validate_composition(reviewed, candidate, controls, [path])
+        for unrelated in ('scripts/deploy/native-compatibility.test.ts.backup',
+                          'scripts/deploy/ota.sh'):
+            with self.subTest(path=unrelated), self.assertRaisesRegex(ValueError, 'product path'):
+                external.validate_composition(reviewed, candidate, controls, [unrelated])
+
 
 class ReleaseTests(unittest.TestCase):
     def setUp(self):

@@ -661,6 +661,7 @@ def admit_completed(handle, ledger, args, events):
                           "scripts/verify/hook-fixture.ts", "scripts/verify/impact-plan.mjs",
                           "scripts/verify/impact-plan.test.ts", "scripts/verify/product-flow-impact.test.ts",
                           "scripts/verify/product-flow-public-env.test.ts",
+                          "scripts/deploy/native-compatibility.test.ts",
                           "AGENTS.md", "docs/engineering/devops/shipping.md",
                           "docs/engineering/devops/resource-control-continuation.md",
                           "docs/engineering/devops/task-management.md",

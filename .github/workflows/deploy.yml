@@ -1,8 +1,8 @@
-# Deploy from main (autoship L8-L9): derived from the merged diff, never from
-# memory. Runs NO model and holds the only prod secret (T12: agent jobs and
-# deploy jobs never mix).
+# Protected App-initiated release of one verified main commit (L8-L9).
+# Runs NO model and holds the production secrets only in release jobs
+# (T12: agent jobs and deploy jobs never mix).
 #
-#   migrate  - prisma migrate deploy to PROD when migrations changed.
+#   migrate  - reconcile pending Prisma migrations on every authorized dispatch.
 #              Old code runs on the new schema while Vercel builds; guardrails
 #              are structural check 13 (no NOT NULL without default) plus
 #              migration review - NOT a full additive-only proof. If a
@@ -10,9 +10,9 @@
 #   smoke    - waits for Vercel's production deployment of this commit, then
 #              runs the prod-safe API smoke; failure files an incident issue.
 #              Rollback is one local command: scripts/deploy/rollback.sh api
-#   ota      - attempts guarded iOS publication on every surviving main push,
-#              since concurrency can replace a pending mobile push with an
-#              API-only push; native drift still blocks publication.
+#   ota      - attempts guarded iOS publication after migration and smoke,
+#              including when the verified commit changes only API files;
+#              native drift still blocks publication.
 name: Deploy
 on:
   workflow_dispatch:
@@ -32,14 +32,11 @@ on:
 
 run-name: 'Release ${{ inputs.release_sha }} Verify ${{ inputs.verify_run }} Acceptance ${{ inputs.acceptance_sha256 }}'
 
-# Serialize active deploys. GitHub can replace a pending run, so each surviving
-# run reconciles mobile delivery regardless of its individual push range.
+# Serialize active deploys. Each surviving authorized dispatch reconciles
+# mobile delivery regardless of its individual commit diff.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
-
-env:
-  RELEASE_SHA: ${{ inputs.release_sha }}
 
 permissions:
   actions: read
@@ -59,6 +56,7 @@ jobs:
     steps:
       - name: Require independently installed App initiation and exact Verify
         env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERIFY_RUN: ${{ inputs.verify_run }}
           ACCEPTANCE_SHA: ${{ inputs.acceptance_sha256 }}
@@ -93,12 +91,13 @@ jobs:
           ref: ${{ inputs.release_sha }}
       - id: f
         env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Verify completed for this frozen main source; reconcile every release surface.
           CURRENT=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
           [ "$CURRENT" = "$RELEASE_SHA" ] || { echo "superseded main source"; exit 1; }
-          CHANGED=$(printf 'prisma/migrations/x\napps/mobile/x\napps/api/x\n')
+          CHANGED=$(git diff --name-only "${RELEASE_SHA}^" "$RELEASE_SHA")
           echo "$CHANGED"
           {
             echo "migrations=$(echo "$CHANGED" | grep -q '^prisma/migrations/' && echo true || echo false)"
@@ -108,9 +107,9 @@ jobs:
 
   migrate:
     environment: production-release
-    # Runs on EVERY push: migrate deploy is a no-op when nothing is pending,
-    # and gating it on this push's diff loses migrations from pushes that a
-    # concurrency queue superseded (lens finding, 2026-09-07).
+    # Runs on every authorized dispatch: migrate deploy is a no-op when
+    # nothing is pending, and gating it on this commit's diff can lose
+    # migrations from commits whose pending dispatch was superseded.
     needs: changes
     runs-on: ubuntu-latest
     steps:
@@ -129,6 +128,7 @@ jobs:
       - name: File incident on failure
         if: failure()
         env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue create --label incident \
@@ -147,6 +147,7 @@ jobs:
           ref: ${{ inputs.release_sha }}
       - name: Wait for Vercel PRODUCTION deployment of this commit
         env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Use the Deployments API filtered to environment=Production: the same
@@ -174,6 +175,7 @@ jobs:
       - name: File incident on failure
         if: failure()
         env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue create --label incident \
@@ -218,6 +220,7 @@ jobs:
       - name: File a release reminder when OTA is unsafe
         if: steps.nativecheck.outputs.unsafe == 'true'
         env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REASON: ${{ steps.nativecheck.outputs.reason }}
         run: |
@@ -244,6 +247,7 @@ jobs:
       - name: Missing protected EXPO_TOKEN
         if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'false'
         env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh issue list --label release --state open --search "OTA pending" --json number --jq length | grep -qv '^0$'; then
@@ -255,6 +259,7 @@ jobs:
       - name: File incident on OTA failure
         if: failure()
         env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue create --label incident \
