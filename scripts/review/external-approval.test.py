@@ -2,8 +2,10 @@
 import importlib.util
 import hashlib
 import json
+import os
 from pathlib import Path
 import ssl
+import stat
 import subprocess
 import sys
 import tempfile
@@ -840,16 +842,39 @@ class ProductionTlsMaterialTests(unittest.TestCase):
                          '807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa')
 
 
+def custody_fixture_directory():
+    # Protected fixture bytes need secure ancestry even when the command's
+    # short TMPDIR is beneath a sticky system directory for Unix sockets.
+    if sys.platform == 'darwin':
+        raw = subprocess.check_output(['/usr/bin/getconf', 'DARWIN_USER_TEMP_DIR'], text=True).strip()
+        parent = Path(raw).resolve(strict=True)
+    else:
+        parent = Path.home().resolve(strict=True)
+    for probe in (parent, *parent.parents):
+        metadata = probe.lstat()
+        if (probe.is_symlink() or metadata.st_uid not in (0, os.getuid())
+                or metadata.st_mode & 0o022
+                or (sys.platform == 'darwin' and (probe / '.codex/config.toml').exists())):
+            raise RuntimeError('secure operator fixture temp ancestry unavailable')
+    temporary = tempfile.TemporaryDirectory(prefix='custody-', dir=parent)
+    metadata = Path(temporary.name).lstat()
+    if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) != 0o700:
+        temporary.cleanup()
+        raise RuntimeError('private operator fixture temp directory unavailable')
+    return temporary
+
+
 class ProfileCustodyTests(unittest.TestCase):
     """Real private fixture bytes, synthetic OS observations; never installation evidence."""
     def setUp(self):
         import os
         self.os = os
-        # No directory acquisition is needed for these flat credential-free artifacts.
-        # Each exact temporary file has independent cleanup; the caller owns its scratch root.
+        self.temporary = custody_fixture_directory()
+        self.addCleanup(self.temporary.cleanup)
         self.paths = {}
         for key in ('launcher', 'profile', 'receipt', 'state'):
-            with tempfile.NamedTemporaryFile(prefix='custody-'+key+'-', delete=False) as file:
+            with tempfile.NamedTemporaryFile(prefix='custody-'+key+'-', dir=self.temporary.name,
+                                             delete=False) as file:
                 self.paths[key] = Path(file.name)
             self.addCleanup(self.paths[key].unlink, missing_ok=True)
         self.launcher = b'reviewed fixture launcher'
@@ -887,6 +912,16 @@ class ProfileCustodyTests(unittest.TestCase):
 
     def test_pinned_profile_is_a_distinct_prepared_contract(self):
         self.check()
+
+    def test_private_fixture_ignores_sticky_command_tmpdir(self):
+        with tempfile.TemporaryDirectory() as command_tmp:
+            sticky = Path(command_tmp); sticky.chmod(0o1777)
+            with patch.dict(os.environ, {'TMPDIR': str(sticky)}):
+                with custody_fixture_directory() as directory:
+                    leaf = Path(directory) / 'receipt'
+                    leaf.write_bytes(b'fixture'); leaf.chmod(0o600)
+                    self.assertFalse(leaf.is_relative_to(sticky))
+                    self.assertEqual(external.protected_bytes(leaf, os.getuid(), private=True), b'fixture')
 
     def test_same_uid_without_boundary_remains_refused(self):
         with self.assertRaisesRegex(ValueError, 'candidate'):
