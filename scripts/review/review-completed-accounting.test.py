@@ -661,14 +661,27 @@ class CompletedAdmission(CompletedAccounting):
             self.call()
 
     def test_main_product_advance_invalidates_comparison(self):
-        self.git('checkout', '-qf', 'controls')
-        (self.repo / 'app.ts').write_text('new trusted product')
-        self.git('commit', '-qam', 'main product advance')
-        self.args.control_sha = self.git('rev-parse', 'HEAD')
-        self.git('checkout', '-qf', 'product')
-        self.save()
-        with self.assertRaisesRegex(ValueError, 'changed product'):
-            self.call()
+        original_control = self.args.control_sha
+        for name in ('app.ts', 'apps/mobile/app/nutrition.tsx',
+                     'scripts/delivery/unrelated.py', 'scripts/verify/unrelated.mjs',
+                     'docs/engineering/devops/unrelated.md',
+                     'scripts/delivery/resource_lifecycle.py.backup',
+                     'scripts/verify/impact-plan.mjs.backup'):
+            with self.subTest(path=name):
+                self.git('checkout', '-qf', '-B', 'controls', original_control)
+                path = self.repo / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('new product or unrelated input')
+                self.git('add', '.')
+                self.git('commit', '-qm', 'unrelated main advance')
+                self.args.control_sha = self.git('rev-parse', 'HEAD')
+                self.git('checkout', '-qf', 'product')
+                self.git('restore', '--source=' + self.args.control_sha,
+                         '--staged', '--worktree', '--', 'scripts/review')
+                self.save()
+                with self.assertRaisesRegex(ValueError, 'changed product'):
+                    self.call()
+                self.assertEqual(self.original, self.ledger.read_text())
 
     def test_raw_prompt_and_provider_identity_refused(self):
         for key in ('prompt', 'stderr'):
@@ -690,7 +703,16 @@ class CompletedAdmission(CompletedAccounting):
                      'docs/engineering/devops/shipping-control-cutover.md',
                      'docs/engineering/devops/shipping-control-setup/README.md',
                      '.github/workflows/deploy.yml', '.github/workflows/eas-build.yml', 'vercel.json',
-                     'scripts/delivery/local-dispatcher.py', 'scripts/delivery/local-dispatcher.test.py']:
+                     'scripts/delivery/local-dispatcher.py', 'scripts/delivery/local-dispatcher.test.py',
+                     'docs/engineering/devops/resource-control-continuation.md',
+                     'scripts/delivery/cold_retention.py',
+                     'scripts/delivery/pressure-retention.test.py',
+                     'scripts/delivery/resource-controls.test.py',
+                     'scripts/delivery/resource_lifecycle.py',
+                     'scripts/verify/hook-fixture.ts', 'scripts/verify/impact-plan.mjs',
+                     'scripts/verify/impact-plan.test.ts',
+                     'scripts/verify/product-flow-impact.test.ts',
+                     'scripts/verify/product-flow-public-env.test.ts']:
             path = self.repo / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('Reviewed admission routing correction\n')
