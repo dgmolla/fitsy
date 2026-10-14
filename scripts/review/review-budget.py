@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime, timezone
 import fcntl
 import hashlib
+import io
 import json
 import math
 import os
@@ -372,6 +373,28 @@ def completed_authority(args):
     return approval
 
 
+def completed_history_prefix(raw_history, attempt, rows, source, digest, accounted):
+    """Locate the unique exact adoption without normalizing historical bytes."""
+    lines = raw_history.splitlines(keepends=True)
+    imports = []
+    for offset, line in enumerate(lines):
+        if not line.strip():
+            continue
+        event = json.loads(line)
+        if event.get("event") == "import" and any(
+                row.get("attempt_id") == attempt for row in event.get("events", [])):
+            imports.append((offset, event))
+    if accounted:
+        if (len(imports) != 1 or imports[0][1].get("events") != rows
+                or imports[0][1].get("source") != source
+                or imports[0][1].get("sha256") != digest):
+            raise ValueError("ambiguous or mismatched original completed import")
+        return b"".join(lines[:imports[0][0]])
+    if imports:
+        raise ValueError("conflicting original completed import")
+    return raw_history
+
+
 def account_completed(handle, ledger, args, events, record=True):
     """Record an operator-attested execution, without granting admission or time.
 
@@ -390,10 +413,36 @@ def account_completed(handle, ledger, args, events, record=True):
         raise ValueError("completed accounting authorization must be outside every Git checkout")
     raw = path.read_bytes()
     approval = json.loads(raw)
+    has_original_manifest = "original_manifest" in approval
     fields = {"issue", "candidate", "source_sha", "base_sha", "domains", "provider",
               "model", "reasoning_effort", "acceptance_sha256", "provenance", "artifacts",
               "original_ledger_sha256", "prior_completed_seconds", "completed_seconds_stop_at",
               "completed_at", "control_sha", "operator_sha256"}
+    # Installation approval may advance; the original accounting attestation
+    # and its adoption digest must never advance with it.
+    if has_original_manifest:
+        reference = approval["original_manifest"]
+        if (set(approval) != fields | {"original_manifest"}
+                or not isinstance(reference, dict) or set(reference) != {"path", "sha256"}
+                or not isinstance(reference["path"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", reference.get("sha256", ""))):
+            raise ValueError("invalid original completed manifest reference")
+        original_path = Path(reference["path"])
+        if (not original_path.is_absolute() or original_path == path
+                or not original_path.is_relative_to(ADMIN_REVIEW)
+                or ".." in original_path.parts):
+            raise ValueError("original completed authority must remain private and administrator managed")
+        original_approval = canonical_authority(original_path, original_path)
+        original_raw = original_path.read_bytes()
+        if (hashlib.sha256(original_raw).hexdigest() != reference["sha256"]
+                or set(original_approval) != fields
+                or any(original_approval[key] != approval[key]
+                       for key in fields - {"control_sha", "operator_sha256"})
+                or not re.fullmatch(r"[0-9a-f]{40}", original_approval.get("control_sha", ""))
+                or not re.fullmatch(r"[0-9a-f]{64}", original_approval.get("operator_sha256", ""))):
+            raise ValueError("original completed accounting attestation mismatch")
+        raw = original_raw
+        approval = original_approval
     if (set(approval) != fields or approval["issue"] != args.issue
             or approval["candidate"] != args.candidate or approval["source_sha"] != args.source_sha
             or approval["base_sha"] != args.base_sha
@@ -433,7 +482,7 @@ def account_completed(handle, ledger, args, events, record=True):
             or not isinstance(verdict.get("limitations"), list)):
         raise ValueError("completed execution lacks a complete exact-source verdict")
     review_verdict = "fail" if any(row["verdict"] == "fail" for row in verdict["domains"].values()) else "pass"
-    starts, finishes, total = usage(events)
+    starts, finishes, total = usage(list(indexed(events).values()))
     if total["unfinished_attempts"]:
         raise ValueError("completed accounting requires released original execution ownership")
     attempt = "completed-" + artifacts["execution"]["sha256"]
@@ -451,20 +500,23 @@ def account_completed(handle, ledger, args, events, record=True):
     present = [(row["event"], attempt) in original for row in rows]
     if any(present) and not (all(present) and all(original[(row["event"], attempt)] == row for row in rows)):
         raise ValueError("conflicting or duplicate completed execution accounting")
-    # Verify the retained raw prefix even on repeat. No old event is rewritten.
-    handle.seek(0)
-    lines = handle.readlines()
-    prefix = "".join(line for line in lines if not (
-        json.loads(line).get("event") == "import" and json.loads(line).get("source") == str(path)
-        and any(row.get("attempt_id") == attempt for row in json.loads(line).get("events", []))))
-    prior = total["completed_seconds"] - (seconds if all(present) else 0)
-    if (hashlib.sha256(prefix.encode()).hexdigest() != approval["original_ledger_sha256"]
+    # Bind the unique original import to the exact bytes preceding it. Later
+    # executions/allocations are validated and counted separately, never removed.
+    if not all(present) and has_original_manifest:
+        raise ValueError("original completed manifest reference requires retained accounting")
+    prefix = completed_history_prefix(ledger.read_bytes(), attempt, rows, str(path),
+                                      hashlib.sha256(raw).hexdigest(), all(present))
+    prior_total = usage(list(indexed(read_events(io.StringIO(prefix.decode()))).values()))[2]
+    prior = prior_total["completed_seconds"]
+    if (hashlib.sha256(prefix).hexdigest() != approval["original_ledger_sha256"]
             or not number(approval["prior_completed_seconds"])
             or not math.isclose(prior, approval["prior_completed_seconds"], abs_tol=1e-6)
             or not number(approval["completed_seconds_stop_at"])
-            or not math.isclose(total["cap_seconds"], approval["completed_seconds_stop_at"], abs_tol=1e-6)
-            or prior + seconds > total["cap_seconds"]):
+            or not math.isclose(prior_total["cap_seconds"], approval["completed_seconds_stop_at"], abs_tol=1e-6)
+            or prior_total["unfinished_attempts"] or prior + seconds > prior_total["cap_seconds"]):
         raise ValueError("completed accounting original history or authorized stop mismatch")
+    if total["completed_seconds"] + (0 if all(present) else seconds) > total["cap_seconds"]:
+        raise ValueError("completed accounting exceeds current authorized capacity")
     if not all(present) and record:
         append(handle, {"event": "import", "at": utc(), "source": str(path),
                         "sha256": hashlib.sha256(raw).hexdigest(), "events": rows})

@@ -2,6 +2,7 @@ import os
 import shutil
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -100,6 +101,50 @@ class GitChangedPaths(unittest.TestCase):
         self.git('restore', '--source=HEAD', '--worktree', '--', self.product)
         self.assertIn(self.product, self.paths('HEAD'))
         self.assertIn(self.product, self.paths('--cached', 'HEAD'))
+
+
+class CompletedHistoryPrefix(unittest.TestCase):
+    """Byte-boundary and full-history behavior without external custody fixtures."""
+    def setUp(self):
+        self.prior = b'{"event":"start","attempt_id":"old","epoch":1}\r\n' + b'\n' + (
+            b'{"event":"finish","attempt_id":"old","elapsed_seconds":2}\n')
+        self.rows = [dict(event='start', attempt_id='adopted', epoch=3, adoption='a' * 64),
+                     dict(event='finish', attempt_id='adopted', elapsed_seconds=4, adoption='a' * 64)]
+        self.imported = dict(event='import', source='/private/operator.json', sha256='a' * 64,
+                             events=self.rows)
+
+    def encode(self, event):
+        return json.dumps(event).encode() + b'\n'
+
+    def prefix(self, raw, accounted=True):
+        return budget.completed_history_prefix(raw, 'adopted', self.rows,
+            '/private/operator.json', 'a' * 64, accounted)
+
+    def test_repeat_retains_exact_original_prefix_after_later_review(self):
+        raw = self.prior + self.encode(self.imported)
+        self.assertEqual(self.prefix(raw), self.prior)
+        raw += self.encode(dict(event='start', attempt_id='later', epoch=5))
+        raw += self.encode(dict(event='finish', attempt_id='later', elapsed_seconds=1))
+        self.assertEqual(self.prefix(raw), self.prior)
+        events = budget.read_events(io.StringIO(raw.decode()))
+        self.assertEqual(budget.usage(events)[2]['completed_seconds'], 7)
+        prior = budget.read_events(io.StringIO(self.prefix(raw).decode()))
+        self.assertEqual(budget.usage(prior)[2]['completed_seconds'], 2)
+
+    def test_first_time_preserves_entire_current_history(self):
+        self.assertEqual(self.prefix(self.prior, accounted=False), self.prior)
+        with self.assertRaises(ValueError):
+            self.prefix(self.prior + self.encode(self.imported), accounted=False)
+
+    def test_missing_duplicate_or_changed_import_rejected(self):
+        raw = self.prior + self.encode(self.imported)
+        for invalid in (self.prior, raw + self.encode(self.imported),
+                        self.prior + self.encode(dict(self.imported, sha256='b' * 64)),
+                        self.prior + self.encode(dict(self.imported, source='/caller/copy')),
+                        self.prior + self.encode(dict(self.imported, events=self.rows[:1]))):
+            with self.subTest(raw=sha(invalid)):
+                with self.assertRaises(ValueError):
+                    self.prefix(invalid)
 
 
 class CompletedAccounting(unittest.TestCase):
@@ -231,6 +276,195 @@ class CompletedAccounting(unittest.TestCase):
             self.call()
         self.assertEqual(self.original, self.ledger.read_text())
 
+    def append_rows(self, *rows):
+        with self.ledger.open('a') as handle:
+            for row in rows:
+                handle.write(json.dumps(row) + '\n')
+
+    def accounting(self):
+        value = self.call()
+        return value.get('accounting', value)
+
+    def later_review(self, seconds=1):
+        self.append_rows(dict(event='start', attempt_id='later', epoch=2),
+                         dict(event='finish', attempt_id='later', elapsed_seconds=seconds))
+
+    def upgrade(self):
+        original = budget.ADMIN_REVIEW / 'completed/original-443.json'
+        original.write_bytes(self.args.authorization_file.read_bytes())
+        original.chmod(0o600)
+        self.approval['original_manifest'] = dict(path=str(original), sha256=sha(original.read_bytes()))
+        operator = Path(budget.__file__)
+        operator.write_bytes(operator.read_bytes() + b'\n# independently approved fixture upgrade\n')
+        self.approval['operator_sha256'] = sha(operator.read_bytes())
+        if hasattr(self, 'repo'):
+            self.git('checkout', '-qf', 'controls')
+            shutil.copyfile(operator, self.repo / 'scripts/review/review-budget.py')
+            self.git('commit', '-qam', 'approved operator upgrade')
+            self.args.control_sha = self.git('rev-parse', 'HEAD')
+            self.git('checkout', '-qf', 'product')
+            self.git('restore', '--source=' + self.args.control_sha, '--staged', '--worktree', '--', 'scripts/review')
+        else:
+            self.approval['control_sha'] = '4' * 40
+        self.save()
+        return original
+
+    def test_later_review_is_counted_without_rewriting_original_adoption(self):
+        initial = self.accounting()
+        self.later_review()
+        saved = self.ledger.read_bytes()
+        value = self.accounting()
+        self.assertTrue(value['idempotent'])
+        self.assertAlmostEqual(value['completed_seconds'], initial['completed_seconds'] + 1)
+        self.assertAlmostEqual(value['remaining_seconds'], initial['remaining_seconds'] - 1)
+        self.assertEqual(saved, self.ledger.read_bytes())
+
+    def test_additive_allocation_is_counted_without_refreshing_attestation(self):
+        initial = self.accounting()
+        self.append_rows(dict(event='review-allocation', attempt_id='later-allocation', issue=443,
+            previous_cap_seconds=initial['cap_seconds'], additional_seconds=45,
+            cumulative_stop_seconds=initial['cap_seconds'] + 45,
+            source_sha=self.args.source_sha, authorization_sha256='b' * 64))
+        saved = self.ledger.read_bytes()
+        value = self.accounting()
+        self.assertAlmostEqual(value['cap_seconds'], initial['cap_seconds'] + 45)
+        self.assertAlmostEqual(value['completed_seconds'], initial['completed_seconds'])
+        self.assertAlmostEqual(value['remaining_seconds'], initial['remaining_seconds'] + 45)
+        self.assertEqual(saved, self.ledger.read_bytes())
+
+    def test_operator_upgrade_preserves_original_rows_with_later_usage(self):
+        initial = self.accounting()
+        original_rows = self.ledger.read_bytes()
+        self.upgrade()
+        self.later_review()
+        saved = self.ledger.read_bytes()
+        value = self.accounting()
+        self.assertTrue(value['idempotent'])
+        self.assertAlmostEqual(value['completed_seconds'], initial['completed_seconds'] + 1)
+        self.assertTrue(saved.startswith(original_rows))
+        self.assertEqual(saved, self.ledger.read_bytes())
+
+    def test_upgrade_cannot_start_first_time_accounting(self):
+        self.upgrade()
+        with self.assertRaises(ValueError):
+            self.call()
+        self.assertEqual(self.original.encode(), self.ledger.read_bytes())
+
+    def test_first_time_accounting_still_requires_full_current_history(self):
+        self.later_review()
+        saved = self.ledger.read_bytes()
+        with self.assertRaises(ValueError):
+            self.call()
+        self.assertEqual(saved, self.ledger.read_bytes())
+
+    def test_current_unfinished_or_over_cap_history_rejects_repeat(self):
+        self.accounting()
+        saved = self.ledger.read_bytes()
+        for seconds in (None, 100):
+            with self.subTest(seconds=seconds):
+                self.ledger.write_bytes(saved)
+                if seconds is None:
+                    self.append_rows(dict(event='start', attempt_id='later', epoch=2))
+                else:
+                    self.later_review(seconds)
+                before = self.ledger.read_bytes()
+                with self.assertRaises(ValueError):
+                    self.call()
+                self.assertEqual(before, self.ledger.read_bytes())
+
+    def test_unique_import_and_exact_prefix_required_on_repeat(self):
+        self.accounting()
+        saved = self.ledger.read_bytes()
+        imported = saved.splitlines(keepends=True)[-1]
+        changed = json.loads(imported)
+        changed['sha256'] = '0' * 64
+        for raw in (saved + imported, b' ' + saved,
+                    saved[:-len(imported)] + json.dumps(changed).encode() + b'\n'):
+            with self.subTest(raw=sha(raw)):
+                self.ledger.write_bytes(raw)
+                with self.assertRaises(ValueError):
+                    self.call()
+                self.assertEqual(raw, self.ledger.read_bytes())
+
+    def test_changed_import_source_or_rows_rejects_repeat(self):
+        self.accounting()
+        saved = self.ledger.read_bytes()
+        lines = saved.splitlines(keepends=True)
+        for field in ('source', 'adoption', 'extra-row'):
+            with self.subTest(field=field):
+                imported = json.loads(lines[-1])
+                if field == 'source': imported['source'] += '.copy'
+                elif field == 'adoption': imported['events'][0]['adoption'] = '0' * 64
+                else: imported['events'].append(dict(event='start', attempt_id='extra', epoch=2))
+                raw = b''.join(lines[:-1]) + json.dumps(imported).encode() + b'\n'
+                self.ledger.write_bytes(raw)
+                with self.assertRaises(ValueError):
+                    self.call()
+                self.assertEqual(raw, self.ledger.read_bytes())
+
+    def test_original_authority_missing_unsafe_or_changed_rejects_upgrade(self):
+        self.accounting()
+        original = self.upgrade()
+        raw = original.read_bytes()
+        saved = self.ledger.read_bytes()
+        for fault in ('missing', 'public', 'changed', 'symlink', 'hash', 'checkout'):
+            with self.subTest(fault=fault):
+                original.write_bytes(raw)
+                original.chmod(0o600)
+                reference = dict(self.approval['original_manifest'])
+                if fault == 'missing': original.unlink()
+                elif fault == 'public': original.chmod(0o644)
+                elif fault == 'changed': original.write_bytes(raw + b'\n')
+                elif fault == 'symlink':
+                    target = original.with_name('copy.json')
+                    target.write_bytes(raw)
+                    target.chmod(0o600)
+                    original.unlink()
+                    original.symlink_to(target)
+                elif fault == 'hash': self.approval['original_manifest']['sha256'] = '0' * 64
+                elif fault == 'checkout':
+                    self.approval['original_manifest']['path'] = str(Path(__file__).resolve())
+                self.save()
+                with self.assertRaises((ValueError, OSError)):
+                    self.call()
+                self.assertEqual(saved, self.ledger.read_bytes())
+                if original.is_symlink(): original.unlink()
+                self.approval['original_manifest'] = reference
+
+    def test_upgrade_cannot_change_any_immutable_attestation_field(self):
+        self.accounting()
+        self.upgrade()
+        saved = self.ledger.read_bytes()
+        # Even coordinated caller changes cannot turn a current installation
+        # approval into a new execution, source, accounting or artifact identity.
+        for field in self.approval.keys() - {'control_sha', 'operator_sha256', 'original_manifest'}:
+            with self.subTest(field=field):
+                original = self.approval[field]
+                if isinstance(original, str): changed = original + 'changed'
+                elif isinstance(original, list): changed = original + ['changed']
+                elif isinstance(original, dict): changed = dict(original, changed={})
+                else: changed = original + 1
+                self.approval[field] = changed
+                self.save()
+                with self.assertRaises(ValueError):
+                    self.call()
+                self.assertEqual(saved, self.ledger.read_bytes())
+                self.approval[field] = original
+
+    def test_upgrade_still_requires_current_installation_approval(self):
+        self.accounting()
+        self.upgrade()
+        saved = self.ledger.read_bytes()
+        for key in ('control_sha', 'operator_sha256'):
+            with self.subTest(field=key):
+                original = self.approval[key]
+                self.approval[key] = '0' * len(original)
+                self.args.authorization_file.write_text(json.dumps(self.approval))
+                with self.assertRaises(ValueError):
+                    self.call()
+                self.assertEqual(saved, self.ledger.read_bytes())
+                self.approval[key] = original
+
     def test_changed_source_base_domain_issue_acceptance_policy_fail_without_writes(self):
         for field, bad in dict(source_sha='e'*40, base_sha='3'*40, domains=['correctness'],
                                issue=463, acceptance_sha256='b'*64, model='other').items():
@@ -353,6 +587,20 @@ class CompletedAdmission(CompletedAccounting):
     def call(self):
         with self.ledger.open('a+') as handle:
             return budget.admit_completed(handle, self.ledger, self.args, budget.read_events(handle))
+
+    def test_validate_completed_is_read_only_before_and_after_accounting_and_upgrade(self):
+        self.args.action = 'validate-completed'
+        saved = self.ledger.read_bytes()
+        self.assertEqual(self.call()['verdict'], 'pass')
+        self.assertEqual(saved, self.ledger.read_bytes())
+        self.args.action = 'admit-completed'
+        self.call()
+        self.upgrade()
+        self.later_review()
+        saved = self.ledger.read_bytes()
+        self.args.action = 'validate-completed'
+        self.assertTrue(self.call()['accounting']['idempotent'])
+        self.assertEqual(saved, self.ledger.read_bytes())
 
     def test_cache_requires_coordinator_custody_and_exact_evidence(self):
         key = 'a' * 64
