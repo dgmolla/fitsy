@@ -668,7 +668,9 @@ def admit_completed(handle, ledger, args, events):
                           "docs/engineering/devops/agent-model-routing.md",
                           "docs/engineering/devops/shipping-control-cutover.md",
                           "docs/engineering/devops/shipping-control-setup",
+                          "docs/engineering/devops/ios-release-runbook.md",
                           ".github/workflows/deploy.yml", ".github/workflows/eas-build.yml",
+                          ".github/workflows/dev-maintenance.yml",
                           "vercel.json"]
     if any(not any(name == path or name.startswith(path + "/") for path in allowed) for name in changed):
         raise ValueError("trusted main changed product or unrelated inputs; frozen comparison invalid")

@@ -996,6 +996,7 @@ class CompletedAdmission(CompletedAccounting):
         for name in ('app.ts', 'apps/mobile/app/nutrition.tsx',
                      'scripts/delivery/unrelated.py', 'scripts/verify/unrelated.mjs',
                      'docs/engineering/devops/unrelated.md',
+                     '.github/workflows/unrelated.yml',
                      'scripts/delivery/resource_lifecycle.py.backup',
                      'scripts/verify/impact-plan.mjs.backup'):
             with self.subTest(path=name):
@@ -1033,6 +1034,8 @@ class CompletedAdmission(CompletedAccounting):
                      'docs/engineering/devops/agent-model-routing.md',
                      'docs/engineering/devops/shipping-control-cutover.md',
                      'docs/engineering/devops/shipping-control-setup/README.md',
+                     'docs/engineering/devops/ios-release-runbook.md',
+                     '.github/workflows/dev-maintenance.yml',
                      '.github/workflows/deploy.yml', '.github/workflows/eas-build.yml', 'vercel.json',
                      'scripts/delivery/local-dispatcher.py', 'scripts/delivery/local-dispatcher.test.py',
                      'docs/engineering/devops/resource-control-continuation.md',
