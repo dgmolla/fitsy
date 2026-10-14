@@ -1,4 +1,4 @@
-#!/usr/bin/env -S -u NODE_OPTIONS -u NODE_PATH PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node
+#!/usr/bin/env -S -u NODE_OPTIONS -u NODE_PATH PATH=/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node
 // One live execution owns admission across simulator, verification and pre-push.
 // There is no saved verdict: closing this process closes admission.
 import { spawn } from 'node:child_process';
@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { sourceIdentity } from './receipt-cache.mjs';
 import { git } from './impact-plan.mjs';
 
-const administratorPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+const administratorPath = '/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 function executionEnvironment(env) {
   return { ...Object.fromEntries(Object.entries(env).filter(([key]) =>
     !key.startsWith('GIT_') && !key.startsWith('FITSY_DIFF_') && key !== 'NODE_OPTIONS' && key !== 'NODE_PATH' && key !== 'BASH_ENV' && key !== 'ENV' && !key.startsWith('BASH_FUNC_'))), PATH: administratorPath };

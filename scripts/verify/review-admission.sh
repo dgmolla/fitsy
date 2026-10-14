@@ -1,7 +1,7 @@
 #!/bin/bash -p
 set -euo pipefail
 unset BASH_ENV ENV NODE_OPTIONS NODE_PATH
-PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+PATH=/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 export PATH
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CONTROL_ROOT="$REPO_ROOT"

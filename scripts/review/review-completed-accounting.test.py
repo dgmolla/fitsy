@@ -835,9 +835,9 @@ class CompletedAdmission(CompletedAccounting):
         admission.write_text(admission.read_text().replace('TRUSTED_GH=/opt/homebrew/bin/gh',
             'TRUSTED_GH=' + str(self.root / 'session-bin/gh')))
         fixed_path = str(self.root / 'session-bin') + ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
-        admission.write_text(admission.read_text().replace('PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'PATH=' + fixed_path))
+        admission.write_text(admission.read_text().replace('PATH=/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'PATH=' + fixed_path))
         session_path = product / 'scripts/verify/shipping-session.mjs'
-        session_path.write_text(session_path.read_text().replace("const administratorPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';", 'const administratorPath = ' + json.dumps(fixed_path) + ';'))
+        session_path.write_text(session_path.read_text().replace("const administratorPath = '/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';", 'const administratorPath = ' + json.dumps(fixed_path) + ';'))
         git('add', '.')
         git('commit', '-qm', 'fixture trusted runtime')
         base = git('rev-parse', 'HEAD')
