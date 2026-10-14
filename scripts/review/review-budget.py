@@ -573,6 +573,14 @@ def admit_cache(args, events):
     return value
 
 
+def git_changed_paths(root, *comparison, env):
+    """Enumerate both sides of moves without rename heuristics or path quoting."""
+    raw = subprocess.check_output(
+        ["git", "-C", str(root), "diff", "--no-renames", "--name-only", "-z", *comparison],
+        env=env)
+    return raw.decode().split("\0")[:-1]
+
+
 def admit_completed(handle, ledger, args, events):
     """Consume original authorized evidence directly, without writing a pass cache."""
     approval = completed_authority(args)
@@ -588,7 +596,7 @@ def admit_completed(handle, ledger, args, events):
                 "scripts/verify/risk-tiers.yml", "REVIEW.md", ".claude/lenses"]
     git("merge-base", "--is-ancestor", args.base_sha, args.source_sha)
     git("merge-base", "--is-ancestor", args.base_sha, args.control_sha)
-    changed = git("diff", "--name-only", args.base_sha, args.control_sha).splitlines()
+    changed = git_changed_paths(root, args.base_sha, args.control_sha, env=env)
     # A control-only trusted-main advance cannot expand the product comparison.
     allowed = controls + ["scripts/verify/shipping-session.mjs", "scripts/verify/review-admission.sh",
                           "scripts/verify/product-flow.mjs", "scripts/sim/publish-product-flow.mjs",
@@ -612,8 +620,8 @@ def admit_completed(handle, ledger, args, events):
                           "vercel.json"]
     if any(not any(name == path or name.startswith(path + "/") for path in allowed) for name in changed):
         raise ValueError("trusted main changed product or unrelated inputs; frozen comparison invalid")
-    dirty = (git("diff", "HEAD", "--name-only").splitlines()
-             + git("diff", "--cached", "HEAD", "--name-only").splitlines())
+    dirty = (git_changed_paths(root, "HEAD", env=env)
+             + git_changed_paths(root, "--cached", "HEAD", env=env))
     untracked = git("ls-files", "--others", "--exclude-standard").splitlines()
     if untracked or any(not any(name == path or name.startswith(path + "/") for path in controls) for name in dirty):
         raise ValueError("completed review requires complete frozen source")

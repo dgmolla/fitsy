@@ -51,6 +51,57 @@ def install_fixture_admin(repo, home):
         p.write_text(p.read_text().replace('userInfo().homedir', json.dumps(str(home))))
 
 
+class GitChangedPaths(unittest.TestCase):
+    """Real Git comparisons runnable without an external authority fixture."""
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.temp.name)
+        self.git('init', '-q')
+        self.git('config', 'user.email', 'fixture@example.test')
+        self.git('config', 'user.name', 'Fixture')
+        # NUL separation must preserve a product path with whitespace/newlines.
+        self.product = ' app\nfile.ts'
+        (self.repo / self.product).write_text('original product')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'base')
+        self.base = self.git('rev-parse', 'HEAD')
+        (self.repo / 'scripts/review').mkdir(parents=True)
+        self.destination = 'scripts/review/moved.py'
+        self.git('mv', self.product, self.destination)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def git(self, *args):
+        return subprocess.check_output(['git', '-C', str(self.repo), *args],
+                                       env=fixture_env()).decode().strip()
+
+    def paths(self, *comparison):
+        return budget.git_changed_paths(self.repo, *comparison, env=fixture_env())
+
+    def test_history_rename_retains_both_paths_regardless_of_configuration(self):
+        self.git('commit', '-qm', 'move product into controls')
+        for setting in ('true', 'false', 'copies'):
+            with self.subTest(renames=setting):
+                self.git('config', 'diff.renames', setting)
+                self.assertEqual(set(self.paths(self.base, 'HEAD')),
+                                 {self.product, self.destination})
+
+    def test_staged_rename_and_worktree_restoration_retain_product_removal(self):
+        for setting in ('true', 'false', 'copies'):
+            with self.subTest(renames=setting):
+                self.git('config', 'diff.renames', setting)
+                self.assertEqual(set(self.paths('--cached', 'HEAD')),
+                                 {self.product, self.destination})
+                self.assertEqual(set(self.paths('HEAD')),
+                                 {self.product, self.destination})
+        # Restoring the old path only in the worktree leaves it untracked;
+        # neither comparison may lose the staged product removal.
+        self.git('restore', '--source=HEAD', '--worktree', '--', self.product)
+        self.assertIn(self.product, self.paths('HEAD'))
+        self.assertIn(self.product, self.paths('--cached', 'HEAD'))
+
+
 class CompletedAccounting(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -646,6 +697,36 @@ class CompletedAdmission(CompletedAccounting):
         with self.assertRaisesRegex(ValueError, 'frozen source'):
             self.call()
         self.assertEqual(self.original, self.ledger.read_text())
+
+    def test_product_rename_into_trusted_main_controls_refused_before_accounting(self):
+        self.git('checkout', '-qf', 'controls')
+        (self.repo / '.github/workflows').mkdir(parents=True)
+        self.git('mv', 'app.ts', '.github/workflows/deploy.yml')
+        self.git('commit', '-qm', 'rename product into accepted control path')
+        self.args.control_sha = self.git('rev-parse', 'HEAD')
+        self.assertIn('R100\tapp.ts\t.github/workflows/deploy.yml',
+                      self.git('diff', '--find-renames', '--name-status',
+                               self.args.base_sha, self.args.control_sha))
+        self.git('checkout', '-qf', 'product')
+        self.git('restore', '--source=' + self.args.control_sha,
+                 '--staged', '--worktree', '--', 'scripts/review')
+        self.save()
+        before = self.ledger.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'changed product'):
+            self.call()
+        self.assertEqual(before, self.ledger.read_bytes())
+
+    def test_product_rename_into_staged_controls_refused_before_accounting(self):
+        self.git('mv', 'app.ts', 'scripts/review/moved.py')
+        before = self.ledger.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'frozen source'):
+            self.call()
+        self.assertEqual(before, self.ledger.read_bytes())
+        # Restoring the product in the worktree cannot legitimize the staged move.
+        self.git('restore', '--source=HEAD', '--worktree', '--', 'app.ts')
+        with self.assertRaisesRegex(ValueError, 'frozen source'):
+            self.call()
+        self.assertEqual(before, self.ledger.read_bytes())
 
     def test_untracked_missing_source_and_wrong_controls_refused(self):
         (self.repo / 'extra.ts').write_text('unreviewed')
