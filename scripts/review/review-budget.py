@@ -646,6 +646,7 @@ def admit_completed(handle, ledger, args, events):
     # authenticated poller does. All product files remain the frozen commit.
     controls = ["scripts/review", "scripts/delivery/phase-events.mjs",
                 "scripts/verify/risk-tiers.yml", "REVIEW.md", ".claude/lenses"]
+    control_directories = ("scripts/review", ".claude/lenses")
     git("merge-base", "--is-ancestor", args.base_sha, args.source_sha)
     git("merge-base", "--is-ancestor", args.base_sha, args.control_sha)
     changed = git_changed_paths(root, args.base_sha, args.control_sha, env=env)
@@ -675,12 +676,15 @@ def admit_completed(handle, ledger, args, events):
                           ".github/workflows/deploy.yml", ".github/workflows/eas-build.yml",
                           ".github/workflows/dev-maintenance.yml",
                           "vercel.json"]
-    if any(not any(name == path or name.startswith(path + "/") for path in allowed) for name in changed):
+    allowed_directories = control_directories + ("docs/engineering/devops/shipping-control-setup",)
+    if any(name not in allowed and not any(name.startswith(path + "/") for path in allowed_directories)
+           for name in changed):
         raise ValueError("trusted main changed product or unrelated inputs; frozen comparison invalid")
     dirty = (git_changed_paths(root, "HEAD", env=env)
              + git_changed_paths(root, "--cached", "HEAD", env=env))
     untracked = git("ls-files", "--others", "--exclude-standard").splitlines()
-    if untracked or any(not any(name == path or name.startswith(path + "/") for path in controls) for name in dirty):
+    if untracked or any(name not in controls and not any(name.startswith(path + "/")
+                       for path in control_directories) for name in dirty):
         raise ValueError("completed review requires complete frozen source")
     for command in [("diff", "--quiet", args.control_sha, "--", *controls),
                     ("diff", "--cached", "--quiet", args.control_sha, "--", *controls)]:

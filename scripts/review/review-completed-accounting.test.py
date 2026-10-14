@@ -1037,6 +1037,7 @@ class CompletedAdmission(CompletedAccounting):
                      'docs/engineering/devops/agent-model-routing.md',
                      'docs/engineering/devops/shipping-control-cutover.md',
                      'docs/engineering/devops/shipping-control-setup/README.md',
+                     'docs/engineering/devops/shipping-control-setup/nested/verified.json',
                      'docs/engineering/devops/ios-release-runbook.md',
                      '.github/workflows/dev-maintenance.yml',
                      '.github/workflows/deploy.yml', '.github/workflows/eas-build.yml', 'vercel.json',
@@ -1083,6 +1084,33 @@ class CompletedAdmission(CompletedAccounting):
         with self.assertRaisesRegex(ValueError, 'changed product'):
             self.call()
         self.assertEqual(before, self.ledger.read_bytes())
+
+    def assert_allowed_file_cannot_become_unreviewed_directory(self, name):
+        self.git('checkout', '-qf', 'controls')
+        descendant = self.repo / name / 'extra'
+        descendant.parent.mkdir(parents=True, exist_ok=True)
+        descendant.write_text('unreviewed descendant\n')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'file path becomes a directory')
+        self.args.control_sha = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-qf', 'product')
+        self.git('restore', '--source=' + self.args.control_sha,
+                 '--staged', '--worktree', '--', 'scripts/review')
+        self.save()
+        before = self.ledger.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'changed product'):
+            self.call()
+        self.assertEqual(before, self.ledger.read_bytes())
+
+    def test_verify_test_file_cannot_become_unreviewed_directory(self):
+        self.assert_allowed_file_cannot_become_unreviewed_directory('scripts/verify/test.sh')
+
+    def test_delivery_test_file_cannot_become_unreviewed_directory(self):
+        self.assert_allowed_file_cannot_become_unreviewed_directory(
+            'scripts/delivery/phase-events.test.mjs')
+
+    def test_existing_named_file_cannot_become_unreviewed_directory(self):
+        self.assert_allowed_file_cannot_become_unreviewed_directory('scripts/verify/run.mjs')
 
 
 class PermanentAllocation(unittest.TestCase):
