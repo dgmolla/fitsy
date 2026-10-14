@@ -241,7 +241,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bash scripts/deploy/ota.sh "$(git log -1 --format='%h: %s')"
-      - name: No EXPO_TOKEN — remind to publish locally
+      - name: Missing protected EXPO_TOKEN
         if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -251,7 +251,7 @@ jobs:
           fi
           gh issue create --label release \
             --title "release: OTA pending for ${RELEASE_SHA:0:7} (no EXPO_TOKEN in CI)" \
-            --body "Mobile/shared changed on main but CI has no EXPO_TOKEN. Publish locally: \`bash scripts/deploy/ota.sh\` (it enforces --environment production and verifies the manifest). Add an EXPO_TOKEN repo secret to automate this." || true
+            --body "**TL;DR:** OTA publication stopped because the protected release token is missing. Restore EXPO_TOKEN in the production-release environment, preserve independent approval, and resume the authorized release. Native builds require their separate production-native environment copy. Do not add a repository secret." || true
       - name: File incident on OTA failure
         if: failure()
         env:

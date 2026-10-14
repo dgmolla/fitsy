@@ -26,7 +26,8 @@ CONTROL_AREAS = ('scripts/review/', 'scripts/verify/', 'scripts/delivery/',
                  'docs/engineering/devops/', '.githooks/', 'AGENTS.md',
                  'scripts/sim/product-flow.mjs', 'scripts/sim/publish-product-flow.mjs',
                  'scripts/sim/runner-controls.test.mjs',
-                 '.github/workflows/deploy.yml', '.github/workflows/eas-build.yml', 'vercel.json')
+                 '.github/workflows/deploy.yml', '.github/workflows/eas-build.yml',
+                 '.github/workflows/dev-maintenance.yml', 'vercel.json')
 
 
 def require(condition, message):

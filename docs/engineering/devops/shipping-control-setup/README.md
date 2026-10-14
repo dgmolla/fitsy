@@ -149,6 +149,12 @@ Environment approval cannot substitute for human Apple, legal, submission or pro
 Read back actual reviewers, self-review prevention, bypass setting and branch/tag policies using the [environment API](https://docs.github.com/en/rest/deployments/environments).
 
 Move `PROD_DATABASE_URL`, `EXPO_TOKEN` and production smoke credentials into protected environment custody.
+The existing monthly dev snapshot uses a production credential even though its code starts a read-only transaction; this is not a read-only credential grant.
+Its job requires `production-release` and branch `main`; nightly reset and drift checks retain dev-only credentials.
+If self-review prevention holds a scheduled or human-initiated monthly run, the isolated App operator can initiate the existing `workflow_dispatch` on reviewed main before the human approves the protected job.
+That dispatch also runs the nightly dev reset, so coordinate the existing dev test window before execution.
+This does not add a scheduler or waive environment approval.
+Place `EXPO_TOKEN` in both `production-release` for OTA and `production-native` for native delivery before removing its repository-scoped copy.
 Inventory `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `JWT_SECRET` and other existing repository/Vercel credentials by their real privilege before relocation; names alone do not prove dev or production identity.
 Copy each required secret securely from its current holder into the correct environment, validate presence without exposing values, then delete or revoke its repository/shared-host alternate route.
 Never delete an unknown secret merely because its name resembles a production credential.

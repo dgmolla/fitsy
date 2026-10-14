@@ -169,6 +169,15 @@ class CompositionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'product path'):
             external.validate_composition(self.reviewed, self.candidate, self.controls, [self.product])
 
+    def test_reviewed_maintenance_control_reuses_frozen_product_without_allowing_other_workflows(self):
+        path = '.github/workflows/dev-maintenance.yml'
+        reviewed = {**self.reviewed, path: ('100644', 'blob', 'unprotected')}
+        controls = {path: ('100644', 'blob', 'protected')}
+        candidate = {**reviewed, path: controls[path]}
+        external.validate_composition(reviewed, candidate, controls, [path])
+        with self.assertRaisesRegex(ValueError, 'product path'):
+            external.validate_composition(reviewed, candidate, controls, ['.github/workflows/unreviewed.yml'])
+
 
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
@@ -729,6 +738,11 @@ class WorkflowGateTests(unittest.TestCase):
                                 "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))",
                                 str(workflow)], cwd=SCRIPT.parents[2], text=True, capture_output=True, check=True)
         cls.workflow = json.loads(parsed.stdout)
+        maintenance = SCRIPT.parents[2] / '.github/workflows/dev-maintenance.yml'
+        parsed = subprocess.run(['node', '-e',
+                                "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))",
+                                str(maintenance)], cwd=SCRIPT.parents[2], text=True, capture_output=True, check=True)
+        cls.maintenance = json.loads(parsed.stdout)
         cls.gate = cls.workflow['jobs']['changes']['steps'][0]['run']
         # Only the remote GitHub API boundary is replaced with synthetic files.
         gh = cls.root / 'gh'
@@ -786,6 +800,15 @@ class WorkflowGateTests(unittest.TestCase):
             needs = job['needs'] if isinstance(job['needs'], list) else [job['needs']]
             self.assertIn('changes', needs)
             self.assertTrue(any(step.get('with', {}).get('ref') == '${{ inputs.release_sha }}' for step in job['steps']))
+
+    def test_monthly_production_credential_requires_protected_main_while_nightly_stays_dev_only(self):
+        jobs = self.maintenance['jobs']
+        monthly = jobs['monthly-snapshot']
+        self.assertEqual(monthly['environment'], 'production-release')
+        self.assertEqual(monthly['if'], "github.ref == 'refs/heads/main' && (github.event.schedule == '0 10 1 * *' || github.event_name == 'workflow_dispatch')")
+        production_consumers = [name for name, job in jobs.items() if 'secrets.PROD_DATABASE_URL' in json.dumps(job)]
+        self.assertEqual(production_consumers, ['monthly-snapshot'])
+        self.assertNotIn('environment', jobs['nightly'])
 
 
 class ProfileCustodyTests(unittest.TestCase):

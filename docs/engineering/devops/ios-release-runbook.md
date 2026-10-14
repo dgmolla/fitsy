@@ -43,7 +43,7 @@ eas whoami         # verify
 
 | Secret | Location | Purpose |
 |--------|----------|---------|
-| `EXPO_TOKEN` | GitHub Actions secret | EAS CLI auth in CI |
+| `EXPO_TOKEN` | Protected `production-native` environment; separate `production-release` copy for OTA | EAS CLI auth in CI |
 | `APPLE_ID` | EAS secret (`eas secret:create`) | App Store Connect login |
 | `APPLE_APP_SPECIFIC_PASSWORD` | EAS secret | ASC API (2FA bypass) |
 | `ASC_APP_ID` | EAS secret | App Store Connect app numeric ID |
@@ -55,12 +55,15 @@ eas secret:create --scope project --name APPLE_APP_SPECIFIC_PASSWORD --value "xx
 eas secret:create --scope project --name ASC_APP_ID --value "1234567890"
 ```
 
-Add GitHub secret:
+Add the token to both protected GitHub environments before removing any repository-scoped copy:
 ```
-Settings → Secrets and variables → Actions → New repository secret
+Settings → Environments → production-native → Environment secrets
+Settings → Environments → production-release → Environment secrets
 Name: EXPO_TOKEN
 Value: <token from expo.dev/accounts/[username]/settings/access-tokens>
 ```
+Verify both environment entries without exposing their values, then remove the repository secret so unprotected jobs cannot inherit release authority.
+Keep the required reviewer, self-review prevention, administrator bypass rejection and approved branch/tag policies in place.
 
 ---
 
