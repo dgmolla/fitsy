@@ -1,4 +1,5 @@
 import { validationOrderCases } from "./validation-order-cases";
+import { fixtureNodeUnderProtectedPath } from "../verify/hook-fixture";
 import { roundRunnerCases, normalizeFixtureResponse, runPrFixture, seedManagedFixture, approveFixtureCaches } from "./round-runner-cases";
 import { executionFailureCases } from "./execution-failure-cases";
 import { policyRunnerCases } from "./policy-runner-cases";
@@ -95,7 +96,8 @@ sys.exit(int(pathlib.Path(${JSON.stringify(join(root, 'exit'))}).read_text()))
 `;
   writeFileSync(join(root, "verdict"), verdict); writeFileSync(join(root, "exit"), "0");
   for (const name of ["claude", "codex"]) writeFileSync(join(root, "bin", name), cli, { mode: 0o755 });
-  env = { ...isolatedEnv(), PATH: join(root, "bin") + ":" + process.env.PATH, FITSY_REVIEW_CACHE: cache, FITSY_REVIEW_HOME: join(root, "old-poller"), FITSY_REVIEW_BUDGET_HOME: join(root, "budgets"),
+  const baseEnv = isolatedEnv();
+  env = { ...baseEnv, NODE: fixtureNodeUnderProtectedPath(baseEnv), PATH: join(root, "bin") + ":" + process.env.PATH, FITSY_REVIEW_CACHE: cache, FITSY_REVIEW_HOME: join(root, "old-poller"), FITSY_REVIEW_BUDGET_HOME: join(root, "budgets"),
     REVIEW_TEST_ADMIN: admin, REVIEW_TEST_CACHE: cache, REVIEW_TEST_CALLS: calls, REVIEW_TEST_VERDICT: verdict };
   git("init", "-q"); git("config", "user.name", "Review fixture"); git("config", "user.email", "fixture@example.test");
   git("add", "."); git("commit", "-qm", "base"); git("update-ref", "refs/remotes/origin/main", "HEAD");

@@ -1,7 +1,18 @@
 import { chmodSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { appleGitHookPrologue } from './apple-git-hook-env';
+
+const protectedPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+export function fixtureNodeUnderProtectedPath(env: NodeJS.ProcessEnv) {
+  // Hosted npm can export NODE from setup-node while the hook selects a
+  // different interpreter from its protected PATH.
+  const routed: NodeJS.ProcessEnv = { ...env, PATH: protectedPath };
+  delete routed.NODE_OPTIONS;
+  delete routed.NODE_PATH;
+  return execFileSync('/usr/bin/env', ['node', '-p', 'process.execPath'],
+    { env: routed, encoding: 'utf8' }).trim();
+}
 
 // Isolated administrator installation retains executable modes and uses only
 // the fixture GitHub boundary, including inside the protected hook PATH.
@@ -23,7 +34,8 @@ export function timingHook(root: string, directory: string, env: NodeJS.ProcessE
   expect(bound.status).toBe(0);
   write('bin/gh', '#!/bin/sh\necho "$3 $4" >> .evidence/gh-calls\ncase "$4" in user) echo \'{"login":"fixture"}\' ;; *"/comments?"*) echo \'[]\' ;; */comments) cat >/dev/null; echo \'{"id":1}\' ;; *) exit 1 ;; esac\n');
   chmodSync(join(directory, 'bin/gh'), 0o755);
-  return { ...env, PATH: `${join(directory, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin` };
+  return { ...env, PATH: `${join(directory, 'bin')}:${protectedPath}`,
+    NODE: fixtureNodeUnderProtectedPath(env) };
 }
 
 
