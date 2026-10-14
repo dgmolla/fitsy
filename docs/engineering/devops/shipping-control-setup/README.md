@@ -149,6 +149,13 @@ Environment approval cannot substitute for human Apple, legal, submission or pro
 Read back actual reviewers, self-review prevention, bypass setting and branch/tag policies using the [environment API](https://docs.github.com/en/rest/deployments/environments).
 
 Move `PROD_DATABASE_URL`, `EXPO_TOKEN` and production smoke credentials into protected environment custody.
+For `PROD_DATABASE_URL`, use the verified production Supabase session pooler on `aws-1-us-east-1.pooler.supabase.com:5432`, database `postgres`, and user `postgres.zaxkmjqozvmbifiwbxps`.
+Construct the private URI from the already held production password and append `sslmode=require&sslaccept=strict&sslcert=../docs/engineering/devops/shipping-control-setup/supabase-root-2021-ca.crt`.
+Prisma 6 resolves `sslcert` relative to `prisma/schema.prisma`, so the committed public certificate remains available after checkout on the Linux runner.
+The certificate came from [Supabase's published 2021 production CA](https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt); its PEM SHA-256 is `700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7`.
+The production migration and monthly snapshot both consume this same protected secret; the transaction pooler on port 6543 and a Mac-local certificate path are not valid inputs for these jobs.
+Before installing the secret, verify a read-only Prisma CLI and Prisma Client query with the exact private URI in a neutral Linux runtime, and require both an unrelated CA and a wrong hostname to fail.
+Do not put the URI, password, or a live query result in the repository or candidate environment.
 The existing monthly dev snapshot uses a production credential even though its code starts a read-only transaction; this is not a read-only credential grant.
 Its job requires `production-release` and branch `main`; nightly reset and drift checks retain dev-only credentials.
 If self-review prevention holds a scheduled or human-initiated monthly run, the isolated App operator can initiate the existing `workflow_dispatch` on reviewed main before the human approves the protected job.

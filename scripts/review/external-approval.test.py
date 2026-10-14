@@ -1,7 +1,9 @@
 """External-boundary fixtures prove validation behavior, never installed authority."""
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -9,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).with_name('external-approval.py')
+REPO_ROOT = SCRIPT.parents[2]
 spec = importlib.util.spec_from_file_location('external', SCRIPT)
 external = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(external)
@@ -820,6 +823,21 @@ class WorkflowGateTests(unittest.TestCase):
         production_consumers = [name for name, job in jobs.items() if 'secrets.PROD_DATABASE_URL' in json.dumps(job)]
         self.assertEqual(production_consumers, ['monthly-snapshot'])
         self.assertNotIn('environment', jobs['nightly'])
+
+
+class ProductionTlsMaterialTests(unittest.TestCase):
+    def test_prisma_relative_ca_is_the_pinned_public_supabase_root(self):
+        # The protected URI is supplied only in operator custody. This catches a
+        # missing, moved, or replaced CA before either production consumer runs.
+        relative = '../docs/engineering/devops/shipping-control-setup/supabase-root-2021-ca.crt'
+        certificate = (REPO_ROOT / 'prisma' / relative).resolve(strict=True)
+        self.assertEqual(certificate, REPO_ROOT / 'docs/engineering/devops/shipping-control-setup/supabase-root-2021-ca.crt')
+        pem = certificate.read_bytes()
+        self.assertEqual(hashlib.sha256(pem).hexdigest(),
+                         '700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7')
+        der = ssl.PEM_cert_to_DER_cert(pem.decode('ascii'))
+        self.assertEqual(hashlib.sha256(der).hexdigest(),
+                         '807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa')
 
 
 class ProfileCustodyTests(unittest.TestCase):
