@@ -1,7 +1,7 @@
 """Process-level dispatcher checks with a disposable Git repository and fake transports."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import os
 from pathlib import Path
@@ -285,6 +285,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.until(lambda: self.state_data()['active'].get('finished_at'))
         old = self.state_data()['active'].copy()
         self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        self.age_finished_fixture(release_age_seconds=5 * 3600)
         checkout = Path(old['worktree'])
         scratch = checkout / '.evidence/product-build/Build/Intermediates.noindex'
         app = checkout / '.evidence/product-build/Build/Products/Fitsy.app'
@@ -327,6 +328,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.until(lambda: self.state_data()['active'].get('finished_at'))
         old = self.state_data()['active'].copy()
         self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        self.age_finished_fixture(release_age_seconds=5 * 3600)
         scratch = Path(old['worktree']) / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('keep')
         (self.base / 'fake-lsof').write_text('#!/bin/sh\necho owned-open-file\nexit 0\n')
@@ -336,7 +338,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertIn('ownership', self.state_data()['resource_releases'][old['id']]['reason'])
 
     def test_deferred_release_retries_after_holder_ends_with_failure_history(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
         state['resource_releases'].pop(old['id'])
@@ -358,7 +360,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.state_data()['history'][-1]['exit_code'], 7)
 
     def deferred_scratch(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
         state['resource_releases'][old['id']] = {
@@ -574,7 +576,7 @@ class DispatcherProcessTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('lsof'), 'real process open-file fixture requires lsof')
     def test_open_source_process_protects_scratch_before_first_release_assessment(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         state['resource_releases'] = {}
         (self.state / 'state.json').write_text(json.dumps(state))
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
@@ -594,18 +596,29 @@ class DispatcherProcessTest(unittest.TestCase):
         finally:
             child.terminate(); child.wait(); child.stdout.close()
 
-    def ended_checkout(self):
+    def age_finished_fixture(self, *, release_age_seconds):
+        # Age only this completed disposable claim, before archive writes its
+        # matching durable receipt and checkout-release observation.
+        state = self.state_data()
+        self.assertTrue(state['active'].get('finished_at'))
+        state['active']['finished_at'] = datetime.fromtimestamp(
+            time.time() - release_age_seconds, timezone.utc).isoformat()
+        (self.state / 'state.json').write_text(json.dumps(state))
+
+    def ended_checkout(self, *, release_age_seconds=None):
         self.env['FAKE_WORKER_MODE'] = 'fail'
         self.tick()
         self.until(lambda: self.state_data()['active'].get('finished_at'))
         old = self.state_data()['active'].copy()
         self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        if release_age_seconds is not None:
+            self.age_finished_fixture(release_age_seconds=release_age_seconds)
         self.tick()
         state = self.state_data()
         return state, state['history'][-1], Path(old['worktree'])
 
     def test_interrupted_delete_intent_is_reconciled_before_next_release(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
         state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
@@ -619,7 +632,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertIn(str(scratch.resolve()), result['removed'])
 
     def test_absent_interrupted_delete_gets_uncertain_reconciliation_receipt(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
             'removed': [], 'removal_intent': str(scratch.resolve())}
@@ -631,7 +644,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertIn(str(scratch.resolve()), result['reconciled_absent'])
 
     def test_interrupted_intent_cannot_delete_external_symlink_target(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         outside = self.base / 'outside-module-cache'; outside.mkdir()
         (outside / 'keep').write_text('not task owned')
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
@@ -657,7 +670,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.state_data()['resource_retention'][str(checkout)]['state'], 'assessment-due')
 
     def test_changed_terminal_receipt_refuses_release(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'keep').write_text('retained')
         state['resource_releases'].pop(old['id'])
