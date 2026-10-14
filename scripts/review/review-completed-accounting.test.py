@@ -995,6 +995,7 @@ class CompletedAdmission(CompletedAccounting):
         original_control = self.args.control_sha
         for name in ('app.ts', 'apps/mobile/app/nutrition.tsx',
                      'scripts/delivery/unrelated.py', 'scripts/verify/unrelated.mjs',
+                     'scripts/verify/run-output.test.ts.backup',
                      'scripts/deploy/native-compatibility.test.ts.backup',
                      'scripts/deploy/ota.sh',
                      'docs/engineering/devops/unrelated.md',
@@ -1047,6 +1048,7 @@ class CompletedAdmission(CompletedAccounting):
                      'scripts/delivery/resource_lifecycle.py',
                      'scripts/verify/hook-fixture.ts', 'scripts/verify/impact-plan.mjs',
                      'scripts/verify/impact-plan.test.ts',
+                     'scripts/verify/run-output.test.ts',
                      'scripts/verify/product-flow-impact.test.ts',
                      'scripts/verify/product-flow-public-env.test.ts',
                      'scripts/deploy/native-compatibility.test.ts']:
