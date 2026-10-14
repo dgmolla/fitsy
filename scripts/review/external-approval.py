@@ -415,12 +415,23 @@ def validate_product_status(status, source):
     require(len(rows) == 1 and rows[0]['state'] == 'success', 'required reviewed-head product gate failed')
 
 def validate_merge_custody(ruleset, config):
+    # GitHub GET can omit the optional update parameters on a non-fork.
+    # If present, accept only the explicit boolean false contract.
+    rules = ruleset['rules']
+    update_rule = rules[0] if type(rules) is list and len(rules) == 1 else None
+    valid_update = type(update_rule) is dict and update_rule.get('type') == 'update'
+    if valid_update and set(update_rule) == {'type', 'parameters'}:
+        parameters = update_rule['parameters']
+        valid_update = (type(parameters) is dict
+                        and set(parameters) == {'update_allows_fetch_and_merge'}
+                        and parameters['update_allows_fetch_and_merge'] is False)
+    else:
+        valid_update = valid_update and set(update_rule) == {'type'}
     require(ruleset['target'] == 'branch' and ruleset['enforcement'] == 'active'
             and ruleset['conditions']['ref_name'] == {'include': ['refs/heads/main'], 'exclude': []}
             and ruleset['bypass_actors'] == [{'actor_id': config['merge_operator_user_id'],
                                              'actor_type': 'User', 'bypass_mode': 'pull_request'}]
-            and ruleset['rules'] == [{'type': 'update',
-                                     'parameters': {'update_allows_fetch_and_merge': False}}],
+            and valid_update,
             'exclusive independent merge custody unavailable')
 
 

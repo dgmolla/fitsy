@@ -247,6 +247,50 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'merge custody'):
             external.validate_merge_custody(ruleset, config)
 
+    def test_observed_github_update_rule_without_parameters(self):
+        # Ruleset25054221 GET omitted the optional parameters on this non-fork.
+        ruleset = {'target': 'branch', 'enforcement': 'active',
+                   'conditions': {'ref_name': {'include': ['refs/heads/main'], 'exclude': []}},
+                   'bypass_actors': [{'actor_id': 18452532, 'actor_type': 'User', 'bypass_mode': 'pull_request'}],
+                   'rules': [{'type': 'update'}]}
+        external.validate_merge_custody(ruleset, {'merge_operator_user_id': 18452532})
+
+    def test_update_rule_rejects_invalid_parameters_and_extra_rules(self):
+        ruleset = {'target': 'branch', 'enforcement': 'active',
+                   'conditions': {'ref_name': {'include': ['refs/heads/main'], 'exclude': []}},
+                   'bypass_actors': [{'actor_id': 18452532, 'actor_type': 'User', 'bypass_mode': 'pull_request'}]}
+        invalid_parameters = [None, True, False, 0, [], '', {},
+                              {'update_allows_fetch_and_merge': True},
+                              {'update_allows_fetch_and_merge': None},
+                              {'update_allows_fetch_and_merge': 0},
+                              {'update_allows_fetch_and_merge': 'false'},
+                              {'update_allows_fetch_and_merge': False, 'unknown': False}]
+        invalid_rules = [[{'type': 'update', 'parameters': value}] for value in invalid_parameters]
+        invalid_rules += [None, {}, [], [None], [{'type': 'update'}, {'type': 'update'}],
+                          [{'type': 'update', 'unknown': False}], [{'type': 'deletion'}]]
+        for rules in invalid_rules:
+            with self.subTest(rules=rules):
+                ruleset['rules'] = rules
+                with self.assertRaisesRegex(ValueError, 'merge custody'):
+                    external.validate_merge_custody(ruleset, {'merge_operator_user_id': 18452532})
+
+    def test_observed_rule_retains_scope_and_bypass_restrictions(self):
+        ruleset = {'target': 'branch', 'enforcement': 'active',
+                   'conditions': {'ref_name': {'include': ['refs/heads/main'], 'exclude': []}},
+                   'bypass_actors': [{'actor_id': 18452532, 'actor_type': 'User', 'bypass_mode': 'pull_request'}],
+                   'rules': [{'type': 'update'}]}
+        changes = [('target', 'tag'), ('enforcement', 'evaluate'),
+                   ('conditions', {'ref_name': {'include': ['~ALL'], 'exclude': []}}),
+                   ('conditions', {'ref_name': {'include': ['refs/heads/main'], 'exclude': ['refs/heads/main']}}),
+                   ('bypass_actors', []),
+                   ('bypass_actors', [{'actor_id': 999, 'actor_type': 'User', 'bypass_mode': 'pull_request'}]),
+                   ('bypass_actors', [{'actor_id': 18452532, 'actor_type': 'User', 'bypass_mode': 'always'}]),
+                   ('bypass_actors', [{'actor_id': 18452532, 'actor_type': 'Integration', 'bypass_mode': 'pull_request'}])]
+        for key, value in changes:
+            with self.subTest(key=key, value=value):
+                with self.assertRaisesRegex(ValueError, 'merge custody'):
+                    external.validate_merge_custody({**ruleset, key: value}, {'merge_operator_user_id': 18452532})
+
     def test_initiating_merge_actor_cannot_approve_release(self):
         environment = {'name': 'production-release', 'can_admins_bypass': False,
                        'protection_rules': [{'type': 'required_reviewers', 'prevent_self_review': True,
@@ -681,8 +725,6 @@ class WorkflowGateTests(unittest.TestCase):
         cls.root = Path(cls.temp.name)
         workflow = cls.root / 'deploy.yml'
         workflow.write_bytes((SCRIPT.parents[2] / '.github/workflows/deploy.yml').read_bytes())
-        patch_path = SCRIPT.parents[2] / 'docs/engineering/devops/shipping-control-setup/deploy.patch'
-        subprocess.run(['patch', str(workflow), str(patch_path)], check=True, capture_output=True)
         parsed = subprocess.run(['node', '-e',
                                 "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))",
                                 str(workflow)], cwd=SCRIPT.parents[2], text=True, capture_output=True, check=True)

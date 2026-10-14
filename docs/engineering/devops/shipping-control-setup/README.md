@@ -123,6 +123,9 @@ Update the existing protection through `PUT /repos/dgmolla/fitsy/branches/main/p
 Read back strict exact-source checks, actual issuer binding, required PR integration, administrator enforcement and no force/deletion permission.
 Candidate credentials must not have administration, protection bypass, independent Checks write, environment approval or release access.
 Create `main-custody-ruleset.json` with `POST /repos/dgmolla/fitsy/rulesets` and record its returned ID in operator configuration.
+GitHub can omit the optional update parameters object in a ruleset readback.
+The validator accepts exactly one update rule with omitted parameters or the exact `{"update_allows_fetch_and_merge":false}` object.
+Present null/invalid parameters, true, numeric substitutes, unknown keys and extra rules still refuse; scope and bypass requirements remain exact.
 This separate update-only ruleset permits only the isolated `dgmolla` user to update main through PR integration.
 Its narrow bypass does not bypass the separately enforced required-check branch protection.
 Read back the exact actor, PR-only bypass, main scope and update rule, and observe candidate merge/direct-push rejection.
@@ -153,6 +156,9 @@ Candidate CI receives only ephemeral/dev credentials and its normal read/test tr
 App and environment approval credentials stay outside every candidate-controlled workflow and dependency installation.
 
 `deploy.patch` is an inactive, reviewable change to the existing Deploy workflow.
+The original patch files retain their preparation bytes after application to the repository targets.
+The resolved workflow binds the authenticated App actor `341457831` / `fitsy-delivery-approval[bot]`.
+Independently review the final resolved workflow bytes before integration or installation; local application does not establish remote enforcement.
 It accepts only source-bound App `workflow_dispatch` after successful main push Verify, verifies both actual initiating actors before production jobs, and checks out that exact input source in every job.
 Unresolved App actor placeholders fail closed; installation requires independently approved resolved bytes and pinned deploy/verify workflow digests on default main.
 It rejects a superseded main source before proceeding, binds `RELEASE_SHA` to the verified source and retains existing release serialization.
