@@ -454,6 +454,8 @@ class CompletedAccounting(unittest.TestCase):
     def test_upgrade_still_requires_current_installation_approval(self):
         self.accounting()
         self.upgrade()
+        # Bind the caller to the approved control before testing a mismatch.
+        self.args.control_sha = self.approval["control_sha"]
         saved = self.ledger.read_bytes()
         for key in ('control_sha', 'operator_sha256'):
             with self.subTest(field=key):
