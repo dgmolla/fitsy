@@ -7,8 +7,9 @@
  *                               [--runs=local|ci|scheduled] [--only=name,...]
  *
  * Reads scripts/verify/registry.yml, filters checks by layer, run context and
- * (for advisory checks with --scope=changed) path globs against origin/main, runs them
- * in parallel, and prints one JSON result line per check plus a summary.
+ * (for advisory checks with --scope=changed) path globs against origin/main, runs cheap
+ * checks sequentially within the local resource envelope, and prints one JSON result
+ * line per check plus a summary.
  * Exit 1 if any BLOCKING check fails; shadow failures are reported only.
  *
  * Check contract (scripts/verify/README.md): exit 0 pass / 1 fail / 2 skipped;
@@ -194,7 +195,7 @@ function runCheck(c) {
   });
 }
 
-async function runChecks(checks) {
+async function runChecks(checks, sequential = false) {
   const completedResults = [];
   const cacheable = checks.filter(c => c.cache && runsCtx === 'local');
   let cache;
@@ -210,7 +211,7 @@ async function runChecks(checks) {
   if (completedResults.some(result => result.status === 'fail' && result.blocking)) {
     completedResults.push(...checks.map(c => ({ name: c.name, status: 'skipped', summary: 'receipt cache admission failed' })));
   } else {
-    const completed = await Promise.all(checks.map(c => {
+    const runSelected = c => {
       const prior = args.reuse && c.cache && cache?.read(c);
       if (prior) {
         const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
@@ -218,7 +219,11 @@ async function runChecks(checks) {
       }
       if (!prior && c.cache && cache) cache.invalidate(c);
       return prior || runCheck(c);
-    }));
+    };
+    const completed = sequential ? [] : await Promise.all(checks.map(runSelected));
+    if (sequential) {
+      for (const check of checks) completed.push(await runSelected(check));
+    }
     if (cache) {
       if (cache.unchanged() && sourceStable()) {
         for (const check of cacheable) {
@@ -241,7 +246,9 @@ const results = [...preflight];
 // Cheap failures stop expensive work in local and combined CI invocations.
 if (!results.some(r => r.status === 'fail' && r.blocking)) {
   const focused = cheap.filter(c => c.name === 'focused-tests');
-  results.push(...await runChecks(cheap.filter(c => c.name !== 'focused-tests')));
+  // Cheap static checks include lint and typecheck, whose concurrent memory peaks
+  // can prevent the same full acceptance command from clearing host admission.
+  results.push(...await runChecks(cheap.filter(c => c.name !== 'focused-tests'), true));
   if (!results.some(r => r.status === 'fail' && r.blocking)) {
     if (runsCtx === 'local' && (focused.some(c => c.database) || (focused.length && focusedDatabaseRequired([])))) {
       const { runWithLocalDatabase, assertOwnedDatabase } = await import('./local-db.mjs');

@@ -33,3 +33,41 @@ test.each([true, "shadow"])("drains a failed check's full piped diagnostics with
   expect(result.stderr).toContain(blocking === true ? "verify: 0 pass, 1 fail" : "verify: 0 pass, 0 fail, 1 shadow-fail (fixture)");
   if (blocking === true) expect(result.stderr).toContain("FAIL fixture: fixture failure\n  fix: fixture remedy\n");
 });
+
+test.each([["ci", "cheap"], ["local", "cheap"], ["local", "full"]])("serializes %s %s-stage checks without resource overlap", (runs, stage) => {
+  const verify = join(directory, "scripts/verify");
+  writeFileSync(join(verify, "registry.yml"), `checks:
+  - name: lint
+    script: lint.sh
+    layer: 1
+    blocking: true
+    runs: [ci, local]
+  - name: typecheck
+    script: typecheck.sh
+    layer: 1
+    blocking: true
+    runs: [ci, local]
+`);
+  const check = `#!/bin/bash
+set -eu
+if ! mkdir active-cheap-check 2>/dev/null; then
+  printf '%s\\n' '{"summary":"cheap checks overlapped","fix":"serialize cheap checks"}'
+  exit 1
+fi
+sleep 0.2
+rmdir active-cheap-check
+printf '%s\\n' '{"summary":"check completed","fix":""}'
+`;
+  writeFileSync(join(verify, "lint.sh"), check);
+  writeFileSync(join(verify, "typecheck.sh"), check);
+
+  const result = spawnSync(process.execPath, [join(verify, "run.mjs"), `--stage=${stage}`, "--scope=all", `--runs=${runs}`], {
+    encoding: "utf8", timeout: 10000,
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(0);
+  expect(result.stdout.trim().split("\n").map(line => JSON.parse(line))).toMatchObject([
+    { name: "lint", status: "pass" },
+    { name: "typecheck", status: "pass" },
+  ]);
+});
