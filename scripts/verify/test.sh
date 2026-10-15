@@ -14,7 +14,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/install-local-dispatcher.test
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/review/advisory-finding.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }advisory-finding"
 if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then
   # Jest can collect between suites in this single process when GC is exposed.
-  NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--expose-gc" npm run test:coverage --workspace=apps/api -- --runInBand --logHeapUsage >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
+  npm run test:coverage:gc --workspace=apps/api -- --runInBand --logHeapUsage >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
 else
   npm run test:coverage --workspace=apps/api >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
 fi
