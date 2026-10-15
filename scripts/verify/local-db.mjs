@@ -78,7 +78,8 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       const url = `postgresql://fitsy_test:fitsy_test@127.0.0.1:${port}/fitsy_verify`;
       const childEnv = { ...env, POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url,
         FITSY_VERIFY_CALLER_NON_POOLING_URL: env.POSTGRES_URL_NON_POOLING ?? '',
-        FITSY_VERIFY_OWNED_DB: container.Id, FITSY_VERIFY_DB_IMAGE: container.Image, FITSY_LOCAL_DB: '1' };
+        FITSY_VERIFY_OWNED_DB: container.Id, FITSY_VERIFY_DB_IMAGE: container.Image, FITSY_LOCAL_DB: '1',
+        FITSY_VERIFY_DB_HOST: container.NetworkSettings.Ports['5432/tcp'][0].HostIp };
       for (const commandArgs of [['node_modules/prisma/build/index.js', 'migrate', 'deploy'], ['node_modules/tsx/dist/cli.mjs', 'prisma/seed.ts', '--data-only']]) {
         assert(childEnv);
         const result = spawn(process.execPath, commandArgs, { cwd: root, env: childEnv, stdio: 'inherit' });

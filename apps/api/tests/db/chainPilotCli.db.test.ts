@@ -1,3 +1,4 @@
+import { isLocalDatabaseHost } from '../fixtures/localDatabaseHost';
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,7 +10,7 @@ import { rollbackAprilBatch } from "../../services/chainPilotRollback";
 import { capturedChainPilot } from "../fixtures/chain-pilot";
 const url = process.env["POSTGRES_PRISMA_URL"];
 // CLI writes must never be exercised against a cloud or production database.
-const suite = url && ["localhost", "postgres", "127.0.0.1"].includes(new URL(url).hostname) ? describe : describe.skip;
+const suite = isLocalDatabaseHost(url) ? describe : describe.skip;
 suite("actual pilot CLI plan, apply and rollback", () => {
   const p = new PrismaClient(), root = resolve(__dirname, "../../../..");
   afterAll(async () => { await p.$disconnect(); });

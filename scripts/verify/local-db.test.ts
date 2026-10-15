@@ -64,6 +64,7 @@ function scenario(name: string) {
       calls: calls.map(args => ['exec', 'rm'].includes(args[0]) ? args.slice(0, 3) : args.slice(0, 2)),
       spawned: spawned.map(item => ({ args: item.args, url: item.env.POSTGRES_PRISMA_URL,
         direct: item.env.POSTGRES_URL_NON_POOLING, id: item.env.FITSY_VERIFY_OWNED_DB,
+        host: item.env.FITSY_VERIFY_DB_HOST,
         resetBeforeSpawn: item.resetBeforeSpawn })),
       lockExists: existsSync(join(root, '.evidence/verify/db.lock')), containerExists: !!container };
     process.stdout.write(JSON.stringify(result));
@@ -73,7 +74,7 @@ function scenario(name: string) {
   expect(result.status).toBe(0);
   return JSON.parse(result.stdout) as {
     error: string; calls: string[][]; resetCalls: string[][];
-    spawned: { args: string[]; url: string; direct: string; id: string; resetBeforeSpawn: boolean }[];
+    spawned: { args: string[]; url: string; direct: string; id: string; host: string; resetBeforeSpawn: boolean }[];
     lockExists: boolean; containerExists: boolean;
   };
 }
@@ -130,6 +131,7 @@ test('controlled flow overrides configured external URLs and checks ownership be
     expect(child.url).toBe('postgresql://fitsy_test:fitsy_test@' + ['127', '0', '0', '1'].join('.') + ':55432/fitsy_verify');
     expect(child.direct).toBe(child.url);
     expect(child.id).toBe('owned-container-id');
+    expect(child.host).toBe(new URL(child.url).hostname);
   }
   expect(result.calls.filter(call => call[0] === 'inspect')).toHaveLength(6);
   expect(result.calls.some(call => call.includes('psql'))).toBe(true);

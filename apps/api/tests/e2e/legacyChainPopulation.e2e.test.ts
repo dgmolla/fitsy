@@ -1,3 +1,4 @@
+import { isLocalDatabaseHost } from '../fixtures/localDatabaseHost';
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -5,7 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import { applyCatalogPlan, planChainPilot } from "../../services/chainPilotPlan";
 
 const configured = process.env["POSTGRES_PRISMA_URL"];
-const suite = configured && ["localhost", "postgres", "127.0.0.1"].includes(new URL(configured).hostname) ? describe : describe.skip;
+const suite = isLocalDatabaseHost(configured) ? describe : describe.skip;
 const facts = { calories: 500, proteinG: 30, carbsG: 50, fatG: 20 };
 
 suite("legacy classifier protection in disposable databases", () => {
