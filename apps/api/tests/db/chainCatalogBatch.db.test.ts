@@ -7,7 +7,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { chainPilot } from '../../services/chainPilotData';
 import { stateHash } from '../../services/chainPilotPlan';
 const url = process.env['POSTGRES_PRISMA_URL'];
-const suite = url && ['localhost', 'postgres'].includes(new URL(url).hostname) ? describe : describe.skip;
+const suite = url && ['localhost', 'postgres', '127.0.0.1'].includes(new URL(url).hostname) ? describe : describe.skip;
 suite('catalog batch CLI with arbitrary brands', () => {
   const p = new PrismaClient();
   afterAll(async () => p.$disconnect());

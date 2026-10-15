@@ -7,7 +7,7 @@ import { approvedChainRow } from '../../services/chainCatalog';
 import { applyAprilChainMatch } from '../../services/chainServing';
 import { getMenuPage } from '../../lib/restaurantMenuService';
 const url = process.env['POSTGRES_PRISMA_URL'];
-const suite = url && ['localhost', 'postgres'].includes(new URL(url).hostname) ? describe : describe.skip;
+const suite = url && ['localhost', 'postgres', '127.0.0.1'].includes(new URL(url).hostname) ? describe : describe.skip;
 suite('bounded April bulk writer with real serving and recovery', () => {
   const p = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
   const guardClient = new Proxy(p, { get(target, property, receiver) {

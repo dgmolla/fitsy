@@ -5,7 +5,7 @@ import { PrismaClient } from "@prisma/client";
 import { applyCatalogPlan, planChainPilot } from "../../services/chainPilotPlan";
 
 const configured = process.env["POSTGRES_PRISMA_URL"];
-const suite = configured && ["localhost", "postgres"].includes(new URL(configured).hostname) ? describe : describe.skip;
+const suite = configured && ["localhost", "postgres", "127.0.0.1"].includes(new URL(configured).hostname) ? describe : describe.skip;
 const facts = { calories: 500, proteinG: 30, carbsG: 50, fatG: 20 };
 
 suite("legacy classifier protection in disposable databases", () => {
