@@ -1,7 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { isLocalDatabaseHost } from '../../apps/api/tests/fixtures/localDatabaseHost';
 
 const moduleUrl = new URL('./local-db.mjs', `file://${resolve(__dirname, 'local-db.test.ts')}`).href;
@@ -85,27 +86,43 @@ function scenario(name: string) {
   };
 }
 
-test('DB suite host gate refuses forged remote ownership markers', () => {
-  const owned = scenario('success').spawned.at(-1)!;
-  const env = { FITSY_LOCAL_DB: '1', FITSY_VERIFY_OWNED_DB: owned.id, FITSY_VERIFY_DB_HOST: owned.host };
-  const verified = jest.fn();
-  expect(isLocalDatabaseHost(owned.url, env, verified)).toBe(true);
-  expect(verified).toHaveBeenCalledWith(env);
-  const forgedUrl = new URL(owned.url);
-  forgedUrl.port = '1';
-  const forged = { ...env, FITSY_VERIFY_OWNED_DB: 'forged-unowned-id',
-    FITSY_VERIFY_DB_IMAGE: 'sha256:image', FITSY_VERIFY_DB_LOCKED: '1',
-    POSTGRES_PRISMA_URL: forgedUrl.toString(), POSTGRES_URL_NON_POOLING: forgedUrl.toString() };
-  const refused = jest.fn(() => {
-    throw new Error('owned database assertion refused');
-  });
-  expect(() => isLocalDatabaseHost(forgedUrl.toString(), forged, refused)).toThrow('owned database assertion refused');
-  expect(refused).toHaveBeenCalledWith(forged);
-  expect(isLocalDatabaseHost(owned.url, { ...env, FITSY_VERIFY_OWNED_DB: '' })).toBe(false);
-  expect(isLocalDatabaseHost('postgresql://unused@db.example.invalid:1/forbidden',
-    { ...env, FITSY_VERIFY_DB_HOST: 'db.example.invalid' })).toBe(false);
-  expect(isLocalDatabaseHost('postgresql://unused@localhost:5432/fixture', {})).toBe(true);
-  expect(isLocalDatabaseHost('postgresql://unused@postgres:5432/fixture', {})).toBe(true);
+test('numeric DB suite host gate invokes the real owned assertion against inspected Docker data', () => {
+  const root = resolve(__dirname, '../..');
+  const scratch = mkdtempSync(join(tmpdir(), 'fitsy-db-host-gate-'));
+  const identity = statSync(scratch);
+  try {
+    const owner = createHash('sha256').update(root).digest('hex').slice(0, 16);
+    const loopback = ['127', '0', '0', '1'].join('.');
+    const id = 'a'.repeat(64), image = 'sha256:image', port = '55432';
+    const container = { Id: id, Image: image, Config: { Image: 'postgis/postgis:16-3.4',
+      Labels: { 'fitsy.verify.owner': owner } }, State: { Running: true },
+      NetworkSettings: { Ports: { '5432/tcp': [{ HostIp: loopback, HostPort: port }] } } };
+    const name = `fitsy-verify-${owner}`;
+    const docker = join(scratch, 'docker');
+    writeFileSync(docker, '#!/bin/sh\n[ "$1" = inspect ] && [ "$2" = "$FITSY_TEST_EXPECTED_NAME" ] || exit 75\nprintf "%s\\n" "$FITSY_TEST_INSPECT_CONTAINER"\n');
+    chmodSync(docker, 0o700);
+    const url = `postgresql://fitsy_test:fitsy_test@${loopback}:${port}/fitsy_verify`;
+    const env = { PATH: `${scratch}:${process.env.PATH}`, FITSY_TEST_EXPECTED_NAME: name,
+      FITSY_TEST_INSPECT_CONTAINER: JSON.stringify([container]), FITSY_LOCAL_DB: '1',
+      FITSY_VERIFY_DB_LOCKED: '1', FITSY_VERIFY_OWNED_DB: id,
+      FITSY_VERIFY_DB_IMAGE: image, FITSY_VERIFY_DB_HOST: loopback,
+      POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url };
+    expect(isLocalDatabaseHost(url, env)).toBe(true);
+    const other = new URL(url); other.port = '1';
+    expect(() => isLocalDatabaseHost(other.toString(), env)).toThrow(/differs from the asserted environment/);
+    const forged = { ...env, POSTGRES_PRISMA_URL: other.toString(), POSTGRES_URL_NON_POOLING: other.toString() };
+    expect(() => isLocalDatabaseHost(other.toString(), forged)).toThrow(/verified owned fixture/);
+    expect(() => isLocalDatabaseHost(url, { ...env, FITSY_VERIFY_OWNED_DB: 'b'.repeat(64) })).toThrow(/verified owned fixture/);
+    expect(isLocalDatabaseHost(url, { ...env, FITSY_VERIFY_OWNED_DB: '' })).toBe(false);
+    expect(isLocalDatabaseHost('postgresql://unused@db.example.invalid:1/forbidden',
+      { ...env, FITSY_VERIFY_DB_HOST: 'db.example.invalid' })).toBe(false);
+    expect(isLocalDatabaseHost('postgresql://unused@localhost:5432/fixture', {})).toBe(true);
+    expect(isLocalDatabaseHost('postgresql://unused@postgres:5432/fixture', {})).toBe(true);
+  } finally {
+    const current = statSync(scratch);
+    expect([current.dev, current.ino, current.uid]).toEqual([identity.dev, identity.ino, identity.uid]);
+    rmSync(scratch, { recursive: true });
+  }
 });
 
 test('forged numeric loopback metadata cannot pass the owned container assertion', () => {
