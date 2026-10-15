@@ -778,7 +778,7 @@ class CompletedAdmission(CompletedAccounting):
     def test_external_session_owns_native_gate_acceptance_hook_and_authority(self):
         self.external_session()
 
-    def test_bootstrap_refuses_stale_managed_main(self):
+    def test_bootstrap_accepts_distinct_reviewed_control_and_refuses_stale_main(self):
         self.external_session(bootstrap=True)
 
     def external_session(self, bootstrap=False):
@@ -848,13 +848,18 @@ class CompletedAdmission(CompletedAccounting):
         git('update-ref', 'refs/remotes/origin/main', base, cwd=runtime)
         (runtime / 'node_modules').symlink_to(source / 'node_modules')
         git('checkout', '-qb', 'frozen')
+        control = base
         if bootstrap:
             path = product / 'scripts/review/review-budget.py'
             path.write_text(path.read_text() + '\n# Isolated approved bootstrap control fixture.\n')
-        else:
-            (product / 'app.ts').write_text('frozen product')
+            git('add', str(path))
+            git('commit', '-qm', 'fixture independently reviewed controls')
+            control = git('rev-parse', 'HEAD')
+        (product / 'app.ts').write_text('frozen product')
         git('commit', '-qam', 'fixture candidate')
         head = git('rev-parse', 'HEAD')
+        if bootstrap:
+            self.assertNotEqual(control, head)
         (product / 'node_modules').symlink_to(source / 'node_modules')
         git('remote', 'add', 'origin', str(runtime))
         (product / '.evidence').mkdir()
@@ -864,7 +869,7 @@ class CompletedAdmission(CompletedAccounting):
                         candidate=git('rev-list', '--max-parents=0', 'HEAD') + ':frozen',
                         acceptance_sha256=sha(b'Frozen acceptance'))
         auth_home = budget.ADMIN_REVIEW / 'completed'
-        approval.update(control_sha=head if bootstrap else base, operator_sha256=sha(((product if bootstrap else runtime) / 'scripts/review/review-budget.py').read_bytes()))
+        approval.update(control_sha=control, operator_sha256=sha(((product if bootstrap else runtime) / 'scripts/review/review-budget.py').read_bytes()))
         # Synthetic artifacts establish only this isolated protocol regression.
         raws = {'prompt': f'Review issue{issue} {head} against {base} ' + ' '.join(domains),
                 'stderr': 'model: gpt-6-sol\napproval: never\nsandbox: read-only\nreasoning effort: high\n',
@@ -909,6 +914,29 @@ class CompletedAdmission(CompletedAccounting):
                    '--', 'bash', '-c', 'set -e; node .evidence/native.mjs; npm run verify; bash .evidence/hook; FITSY_PRODUCT_ROOT="$PWD" node ' + str(runtime / 'scripts/sim/publish-product-flow.mjs') + ' 443']
         if bootstrap:
             command = ['node', str(product / 'scripts/verify/shipping-session.mjs'), '--root', str(product), '--', 'npm', 'run', 'verify']
+            original_authority = auth.read_bytes()
+            original_ledger = (budgets / f'issue-{issue}.jsonl').read_bytes()
+            for name, changed, mode in (
+                ('wrong source', {'source_sha': '0' * 40}, 0o600),
+                ('wrong control', {'control_sha': '0' * 40}, 0o600),
+                ('wrong operator', {'operator_sha256': '0' * 64}, 0o600),
+                ('public authority', {}, 0o644),
+            ):
+                try:
+                    auth.write_text(json.dumps(dict(approval, **changed)))
+                    auth.chmod(mode)
+                    refused = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
+                    self.assertNotEqual(refused.returncode, 0, name)
+                    self.assertNotIn('unexpected-review', refused.stderr)
+                    self.assertEqual(original_ledger, (budgets / f'issue-{issue}.jsonl').read_bytes(), name)
+                    if name == 'wrong control':
+                        self.assertIn('cheap', (product / '.evidence/order').read_text(),
+                            'the private source check must pass before the installed operator rejects the control')
+                    if name == 'public authority':
+                        self.assertIn('bootstrap requires canonical private administrator installation and approval', refused.stderr)
+                finally:
+                    auth.write_bytes(original_authority)
+                    auth.chmod(0o600)
         result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('full', (product / '.evidence/order').read_text())
