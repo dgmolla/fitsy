@@ -312,7 +312,7 @@ if (delegated) {
     // Build and tests share the API workspace; compile first rather than race its outputs.
     const builds = remaining.filter(c => c.name === 'build');
     results.push(...await runChecks(builds));
-    if (!results.some(r => r.status === 'fail' && r.blocking)) results.push(...await runChecks(remaining.filter(c => c.name !== 'build')));
+    if (!results.some(r => r.status === 'fail' && r.blocking)) results.push(...await runChecks(remaining.filter(c => c.name !== 'build'), runsCtx === 'local'));
     else skipped.push(...remaining.filter(c => c.name !== 'build').map(c => ({ name: c.name, status: 'skipped', summary: 'production build failed' })));
   }
 }
