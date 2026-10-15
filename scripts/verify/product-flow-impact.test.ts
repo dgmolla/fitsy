@@ -106,6 +106,15 @@ test('the canonical product-flow check excludes only the parsed API GC test scri
   const hosted = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
     { cwd: directory, env: { ...env(), CI: 'true', FITSY_DIFF_BASE: git('rev-parse', 'origin/main') }, encoding: 'utf8' });
   expect(JSON.parse(hosted.stdout)).toMatchObject({ required: false, paths: [] });
+  writeFileSync(manifest, JSON.stringify(gcOnly).replace('"start":"next start"',
+    '"start":"node changed","start":"next start"'));
+  const ambiguousCurrentPlan = plan();
+  expect(ambiguousCurrentPlan.status).toBe(0);
+  expect(JSON.parse(ambiguousCurrentPlan.stdout)).toMatchObject({ required: true, paths: ['apps/api/package.json'] });
+  const ambiguousCurrentCheck = check();
+  expect(ambiguousCurrentCheck.status).toBe(1);
+  expect(JSON.parse(ambiguousCurrentCheck.stdout)).toMatchObject({ status: 'fail' });
+  write(gcOnly);
   const mobileChange = join(directory, 'apps/mobile/app/welcome/entry.tsx');
   mkdirSync(dirname(mobileChange), { recursive: true });
   writeFileSync(mobileChange, 'export const copy = "Changed";');
@@ -128,4 +137,15 @@ test('the canonical product-flow check excludes only the parsed API GC test scri
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   write(gcOnly);
   expect(JSON.parse(plan().stdout)).toMatchObject({ required: true, paths: ['apps/api/package.json'] });
+  writeFileSync(manifest, JSON.stringify(baseline).replace('"dependencies":{"next":"^15.0.0"}',
+    '"dependencies":{"next":"^16.0.0"},"dependencies":{"next":"^15.0.0"}'));
+  git('add', 'apps/api/package.json'); git('commit', '-qm', 'ambiguous-base');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  write(gcOnly);
+  const ambiguousBasePlan = plan();
+  expect(ambiguousBasePlan.status).toBe(0);
+  expect(JSON.parse(ambiguousBasePlan.stdout)).toMatchObject({ required: true, paths: ['apps/api/package.json'] });
+  const ambiguousBaseCheck = check();
+  expect(ambiguousBaseCheck.status).toBe(1);
+  expect(JSON.parse(ambiguousBaseCheck.stdout)).toMatchObject({ status: 'fail' });
 });

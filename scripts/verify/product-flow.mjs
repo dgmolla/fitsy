@@ -105,8 +105,13 @@ export function changedPaths(base, cwd = root) {
   // entire parsed manifest, so runtime, lifecycle and dependency edits still apply.
   if (paths.includes('apps/api/package.json')) {
     try {
-      const previous = JSON.parse(git(['show', `${revision}:apps/api/package.json`], cwd));
-      const current = JSON.parse(readFileSync(resolve(cwd, 'apps/api/package.json'), 'utf8'));
+      const previousText = git(['show', `${revision}:apps/api/package.json`], cwd);
+      const currentText = readFileSync(resolve(cwd, 'apps/api/package.json'), 'utf8');
+      // JSON.parse silently collapses duplicate keys; ambiguous manifests cannot receive this exemption.
+      yaml.load(previousText, { schema: yaml.JSON_SCHEMA });
+      yaml.load(currentText, { schema: yaml.JSON_SCHEMA });
+      const previous = JSON.parse(previousText);
+      const current = JSON.parse(currentText);
       const scripts = current?.scripts;
       if (previous?.scripts && !Object.hasOwn(previous.scripts, 'test:coverage:gc') &&
         scripts && !Array.isArray(scripts) &&
