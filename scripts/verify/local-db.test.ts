@@ -47,7 +47,7 @@ function scenario(name: string) {
     }, disk: () => ({ bavail: mode === 'low_disk' ? 1 : 3 * 1024 ** 3, bsize: 1 }),
     assertLock: () => {}, env: { POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
       POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' } });
-    if (['wrong_owner', 'external_url', 'startup_failure', 'restart_stopped', 'hijack_before_write', 'replacement_before_write', 'existing_failure', 'stop_wrong_owner', 'stop_success', 'stop_stopped'].includes(mode)) container = makeContainer(control.owner);
+    if (['wrong_owner', 'external_url', 'forged_loopback_url', 'startup_failure', 'restart_stopped', 'hijack_before_write', 'replacement_before_write', 'existing_failure', 'stop_wrong_owner', 'stop_success', 'stop_stopped'].includes(mode)) container = makeContainer(control.owner);
     if (mode === 'wrong_owner' || mode === 'stop_wrong_owner') container.Config.Labels['fitsy.verify.owner'] = 'another-owner';
     if (mode === 'startup_failure') container.State.Running = false;
     if (mode === 'restart_stopped') { container.State.Running = false; container.NetworkSettings.Ports = null; }
@@ -55,7 +55,12 @@ function scenario(name: string) {
     if (mode === 'existing_failure') container.NetworkSettings.Ports['5432/tcp'][0].HostIp = '0.0.0.0';
     let error = '';
     try {
-      if (mode === 'external_url') control.assert({ FITSY_VERIFY_OWNED_DB: container.Id,
+      if (mode === 'forged_loopback_url') control.assert({ FITSY_LOCAL_DB: '1', FITSY_VERIFY_DB_LOCKED: '1',
+        FITSY_VERIFY_DB_HOST: loopback, FITSY_VERIFY_OWNED_DB: container.Id,
+        FITSY_VERIFY_DB_IMAGE: container.Image,
+        POSTGRES_PRISMA_URL: 'postgresql://fitsy_test:fitsy_test@' + loopback + ':1/fitsy_verify',
+        POSTGRES_URL_NON_POOLING: 'postgresql://fitsy_test:fitsy_test@' + loopback + ':1/fitsy_verify' });
+      else if (mode === 'external_url') control.assert({ FITSY_VERIFY_OWNED_DB: container.Id,
         FITSY_VERIFY_DB_IMAGE: container.Image, POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
         POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' });
       else if (mode.startsWith('stop_')) control.stop();
@@ -83,12 +88,32 @@ function scenario(name: string) {
 test('DB suite host gate refuses forged remote ownership markers', () => {
   const owned = scenario('success').spawned.at(-1)!;
   const env = { FITSY_LOCAL_DB: '1', FITSY_VERIFY_OWNED_DB: owned.id, FITSY_VERIFY_DB_HOST: owned.host };
-  expect(isLocalDatabaseHost(owned.url, env)).toBe(true);
+  const verified = jest.fn();
+  expect(isLocalDatabaseHost(owned.url, env, verified)).toBe(true);
+  expect(verified).toHaveBeenCalledWith(env);
+  const forgedUrl = new URL(owned.url);
+  forgedUrl.port = '1';
+  const forged = { ...env, FITSY_VERIFY_OWNED_DB: 'forged-unowned-id',
+    FITSY_VERIFY_DB_IMAGE: 'sha256:image', FITSY_VERIFY_DB_LOCKED: '1',
+    POSTGRES_PRISMA_URL: forgedUrl.toString(), POSTGRES_URL_NON_POOLING: forgedUrl.toString() };
+  const refused = jest.fn(() => {
+    throw new Error('owned database assertion refused');
+  });
+  expect(() => isLocalDatabaseHost(forgedUrl.toString(), forged, refused)).toThrow('owned database assertion refused');
+  expect(refused).toHaveBeenCalledWith(forged);
   expect(isLocalDatabaseHost(owned.url, { ...env, FITSY_VERIFY_OWNED_DB: '' })).toBe(false);
   expect(isLocalDatabaseHost('postgresql://unused@db.example.invalid:1/forbidden',
     { ...env, FITSY_VERIFY_DB_HOST: 'db.example.invalid' })).toBe(false);
   expect(isLocalDatabaseHost('postgresql://unused@localhost:5432/fixture', {})).toBe(true);
   expect(isLocalDatabaseHost('postgresql://unused@postgres:5432/fixture', {})).toBe(true);
+});
+
+test('forged numeric loopback metadata cannot pass the owned container assertion', () => {
+  const result = scenario('forged_loopback_url');
+  expect(result.error).toMatch(/execution environment/);
+  expect(result.calls).toEqual([['inspect', expect.stringMatching(/^fitsy-verify-/)]]);
+  expect(result.resetCalls).toHaveLength(0);
+  expect(result.spawned).toHaveLength(0);
 });
 
 test.each(['wrong_owner', 'existing_failure', 'hijack_before_write', 'replacement_before_write'])('%s cannot reset a database', name => {

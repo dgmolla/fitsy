@@ -111,7 +111,8 @@ export const runWithLocalDatabase = args => withOwnedLock('--locked-run', args);
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   try {
-    if (process.argv[2] === '--stop-owned-db') process.exitCode = withOwnedLock('--locked-stop');
+    if (process.argv[2] === '--assert-owned-db') assertOwnedDatabase();
+    else if (process.argv[2] === '--stop-owned-db') process.exitCode = withOwnedLock('--locked-stop');
     else if (process.argv[2] === '--locked-stop') { databaseControl().stop(); console.log('Stopped this worktree\'s owned verification database.'); }
     else if (process.argv[2] === '--locked-run') process.exitCode = databaseControl().run(process.argv.slice(3));
   } catch (error) {
