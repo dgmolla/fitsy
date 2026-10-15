@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { isLocalDatabaseHost } from '../../apps/api/tests/fixtures/localDatabaseHost';
 
 const moduleUrl = new URL('./local-db.mjs', `file://${resolve(__dirname, 'local-db.test.ts')}`).href;
 function scenario(name: string) {
@@ -78,6 +79,17 @@ function scenario(name: string) {
     lockExists: boolean; containerExists: boolean;
   };
 }
+
+test('DB suite host gate refuses forged remote ownership markers', () => {
+  const owned = scenario('success').spawned.at(-1)!;
+  const env = { FITSY_LOCAL_DB: '1', FITSY_VERIFY_OWNED_DB: owned.id, FITSY_VERIFY_DB_HOST: owned.host };
+  expect(isLocalDatabaseHost(owned.url, env)).toBe(true);
+  expect(isLocalDatabaseHost(owned.url, { ...env, FITSY_VERIFY_OWNED_DB: '' })).toBe(false);
+  expect(isLocalDatabaseHost('postgresql://unused@db.example.invalid:1/forbidden',
+    { ...env, FITSY_VERIFY_DB_HOST: 'db.example.invalid' })).toBe(false);
+  expect(isLocalDatabaseHost('postgresql://unused@localhost:5432/fixture', {})).toBe(true);
+  expect(isLocalDatabaseHost('postgresql://unused@postgres:5432/fixture', {})).toBe(true);
+});
 
 test.each(['wrong_owner', 'existing_failure', 'hijack_before_write', 'replacement_before_write'])('%s cannot reset a database', name => {
   const result = scenario(name);
