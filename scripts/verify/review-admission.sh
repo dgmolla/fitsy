@@ -70,18 +70,20 @@ if [ -n "${FITSY_REVIEW_BOOTSTRAP_OPERATOR:-}" ]; then
   [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] || fail
   [ "${REVIEW_ARGS[*]}" = '--local --cached-only' ] || fail
   [ "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" = "$ADMIN_HOME/.fitsy-review/operators/review-budget.py" ] || fail
-  python3 -I - "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" "$COMPLETED_AUTH" "$HEAD_SHA" <<'PYBOOTSTRAP' || fail
-import hashlib,json,os,pathlib,sys
+  APPROVED_CONTROL_SHA="$(python3 -I - "$FITSY_REVIEW_BOOTSTRAP_OPERATOR" "$COMPLETED_AUTH" "$HEAD_SHA" <<'PYBOOTSTRAP'
+import hashlib,json,os,pathlib,re,sys
 operator,authority=map(pathlib.Path,sys.argv[1:3])
 for path in (operator,authority):
     if path.is_symlink() or not path.is_file() or path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
         sys.exit('bootstrap requires canonical private administrator installation and approval')
 approval=json.loads(authority.read_text())
 if (approval.get('issue') != 463 or approval.get('source_sha') != sys.argv[3]
-        or approval.get('control_sha') != sys.argv[3]
+        or not re.fullmatch(r'[0-9a-f]{40}', approval.get('control_sha', ''))
         or approval.get('operator_sha256') != hashlib.sha256(operator.read_bytes()).hexdigest()):
     sys.exit('coordinator has not independently approved this exact operator/source')
+print(approval['control_sha'])
 PYBOOTSTRAP
+  )" || fail
   # Only the coordinator may approve/install this exact operator after review.
   # admit-completed checks its canonical approval and digest before accounting.
   export FITSY_DIFF_BASE="$BASE_SHA" FITSY_DIFF_HEAD="$HEAD_SHA"
@@ -100,7 +102,7 @@ print("\n".join(kept))')" || fail
   ARGS=(--ledger "$ADMIN_HOME/.cache/fitsy-review/budgets/issue-$ISSUE.jsonl" --issue "$ISSUE"
     --candidate "$(git rev-list --max-parents=0 HEAD | sort):$BRANCH"
     --source-sha "$HEAD_SHA" --base-sha "$(git rev-parse origin/main)"
-    --control-sha "$HEAD_SHA" --candidate-root "$REPO_ROOT" --authorization-file "$COMPLETED_AUTH"
+    --control-sha "$APPROVED_CONTROL_SHA" --candidate-root "$REPO_ROOT" --authorization-file "$COMPLETED_AUTH"
     --acceptance-sha256 "$(printf '%s' "$ACCEPTANCE" | shasum -a 256 | cut -d' ' -f1)")
   DOMAINS="$(git diff --name-only --no-renames origin/main...HEAD | python3 -I scripts/review/review-domains.py)" || fail
   for DOMAIN in $DOMAINS; do ARGS+=(--required-domain "$DOMAIN"); done
