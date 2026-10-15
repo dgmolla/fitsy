@@ -6,7 +6,7 @@ import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { parseEnv } from 'node:util';
+import { isDeepStrictEqual, parseEnv } from 'node:util';
 const yaml = createRequire(import.meta.url)('js-yaml');
 
 export const root = resolve(process.env.FITSY_PRODUCT_ROOT || fileURLToPath(new URL('../..', import.meta.url)));
@@ -96,11 +96,31 @@ export function impact(paths, configKeys = []) {
 export function changedPaths(base, cwd = root) {
   // Explicit CI base avoids origin/main...HEAD becoming empty after merge.
   const revision = base || git(['merge-base', 'origin/main', 'HEAD'], cwd);
-  return [...new Set([
+  const paths = [...new Set([
     ...git(['diff', '--name-only', '--no-renames', revision, 'HEAD'], cwd).split('\n'),
     ...git(['diff', '--name-only', 'HEAD'], cwd).split('\n'),
     ...git(['ls-files', '--others', '--exclude-standard'], cwd).split('\n'),
   ].filter(Boolean))];
+  // The API test runner's GC script cannot change a user journey. Compare the
+  // entire parsed manifest, so runtime, lifecycle and dependency edits still apply.
+  if (paths.includes('apps/api/package.json')) {
+    try {
+      const previous = JSON.parse(git(['show', `${revision}:apps/api/package.json`], cwd));
+      const current = JSON.parse(readFileSync(resolve(cwd, 'apps/api/package.json'), 'utf8'));
+      const scripts = current?.scripts;
+      if (previous?.scripts && !Object.hasOwn(previous.scripts, 'test:coverage:gc') &&
+        scripts && !Array.isArray(scripts) &&
+        scripts['test:coverage:gc'] === 'node --expose-gc ../../node_modules/jest/bin/jest.js --coverage') {
+        const withoutGc = { ...current, scripts: { ...scripts } };
+        delete withoutGc.scripts['test:coverage:gc'];
+        if (isDeepStrictEqual(previous, withoutGc))
+          return paths.filter(path => path !== 'apps/api/package.json');
+      }
+    } catch {
+      // Missing or malformed manifests remain product-impacting.
+    }
+  }
+  return paths;
 }
 
 export function inputHash(cwd = root, mobileOnly = false) {
