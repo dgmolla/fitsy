@@ -289,7 +289,20 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
     return value.state === 'phase-ready' && value.execution_id === authority.execution_id &&
       value.authority_sha256 === context.authority_sha256 && value.source_sha === authority.source_sha &&
       value.shipping_identity?.pid === shipping.pid && value.shipping_identity?.lstart === shipping.lstart
-      ? value : null;
+      ? { ...value, admission_sha256: hash(path) } : null;
+  }).filter(Boolean);
+  const priorAcquisitions = priorInvocations.map(value => {
+    const path = join(directory, `phase-acquisition-${value.lock_pid}.json`);
+    if (!existsSync(path)) return null;
+    privateFile(path, uid, 0o600);
+    const acquired = JSON.parse(readFileSync(path, 'utf8'));
+    return acquired.state === 'phase-acquired' && acquired.admission_sha256 === value.admission_sha256 &&
+      acquired.execution_id === value.execution_id && acquired.authority_sha256 === value.authority_sha256 &&
+      acquired.source_sha === value.source_sha && acquired.lock_pid === value.lock_pid &&
+      JSON.stringify(acquired.lock_identity) === JSON.stringify(value.lock_identity) &&
+      JSON.stringify(acquired.shipping_identity) === JSON.stringify(value.shipping_identity) &&
+      acquired.at >= value.at && acquired.container?.id && acquired.container?.image_id
+      ? { admission: value, container: acquired.container } : null;
   }).filter(Boolean);
   const deadline = Date.now() + (exactWarm ? 0 : 60000);
   let ready;
@@ -301,10 +314,10 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
       // Every API, including absence inspection, retains exact-warm identity.
       const existing = inspect(root, (_binary, args) => checkedDocker(args));
       if (existing) {
-        if (!priorInvocations.length || !existing.State?.Running ||
+        if (!priorAcquisitions.some(value => value.container.id === existing.Id && value.container.image_id === existing.Image) || !existing.State?.Running ||
             existing.HostConfig?.Memory !== 805306368 || existing.HostConfig?.MemorySwap !== 1610612736 ||
             existing.HostConfig?.NanoCpus !== 2000000000 || existing.HostConfig?.Binds?.length ||
-            existing.Mounts?.length || !existing.Image) throw Error('existing DB lacks current session ownership or effective limits');
+            existing.Mounts?.length || !existing.Image) throw Error('existing DB lacks current session acquired identity, ownership or effective limits');
         const port = existing.NetworkSettings?.Ports?.['5432/tcp']?.[0]?.HostPort;
         const url = `postgresql://fitsy_test:fitsy_test@127.0.0.1:${port}/fitsy_verify`;
         const { databaseControl } = await import('./local-db.mjs');
@@ -321,7 +334,7 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
       if (!currentIdentity || (exactWarm && JSON.stringify(currentIdentity) !== JSON.stringify(firstIdentity))) {
         throw Error('positive Docker backend and guest ancestry unavailable');
       }
-      if (existing && !priorInvocations.some(value => JSON.stringify(value.readiness?.identity) === JSON.stringify(currentIdentity) &&
+      if (existing && !priorAcquisitions.some(({ admission: value, container }) => container.id === existing.Id && container.image_id === existing.Image && JSON.stringify(value.readiness?.identity) === JSON.stringify(currentIdentity) &&
           value.readiness?.daemon?.id === daemon.id && value.readiness?.daemon?.version === daemon.version)) {
         throw Error('existing DB runtime differs from this session acquisition');
       }

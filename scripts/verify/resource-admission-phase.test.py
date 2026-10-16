@@ -84,7 +84,7 @@ function fixtureCommand(binary, args) {
   }
   if (binary === '/usr/local/bin/docker') {
     if (!existsSync(join(process.env.FIXTURE_PACKET, `phase-intent-${process.ppid}.json`))) throw Error('Docker before atomic phase intent');
-    return execFileSync(process.env.FIXTURE_DOCKER, args, {encoding:'utf8',env:process.env});
+    return execFileSync(process.env.FIXTURE_DOCKER, args, {encoding:'utf8',env:{...process.env,FIXTURE_IN_HELPER:'1'}});
   }
   return execFileSync(binary, args, {encoding:'utf8',timeout:15000});
 }
@@ -105,6 +105,11 @@ console.log('remaining canonical selection modeled');
 if(process.env.FIXTURE_FORGE_REUSE) {
  const value=JSON.parse(fs.readFileSync(process.env.FIXTURE_STATE,'utf8'));
  value.Config.Labels['fitsy.verify.owner']='unowned';
+ fs.writeFileSync(process.env.FIXTURE_STATE,JSON.stringify(value));
+}
+if(process.env.FIXTURE_REPLACE_BETWEEN) {
+ const value=JSON.parse(fs.readFileSync(process.env.FIXTURE_STATE,'utf8'));
+ value.Id='replacement-container'; value.Image='sha256:replacement';
  fs.writeFileSync(process.env.FIXTURE_STATE,JSON.stringify(value));
 }
 if(process.env.FIXTURE_HOLD) {
@@ -140,14 +145,26 @@ if args[0]=='context':
  print('desktop-linux')
 elif args[0]=='info': print('daemon-fixture|fixture-version|4294967296|2')
 elif args[0]=='ps':
- if state.exists(): print('owned-container|'+name+'|Up 1 second')
+ if state.exists(): print(json.loads(state.read_text())['Id']+'|'+name+'|Up 1 second')
 elif args[0]=='inspect':
  if not state.exists(): print('No such object',file=sys.stderr);sys.exit(1)
- print('['+state.read_text()+']')
+ value=json.loads(state.read_text())
+ # Replacement retains every existing label, tag, loopback and effective limit.
+ # Only this disposable Docker copy implements the adversarial change.
+ if os.environ.get('FIXTURE_REPLACE_AFTER_READY') and not os.environ.get('FIXTURE_IN_HELPER') and len(list(Path(os.environ['FIXTURE_PACKET']).glob('phase-admission-*.json'))) == 2:
+  value['Id']='replacement-container';value['Image']='sha256:replacement';state.write_text(json.dumps(value))
+ print('['+json.dumps(value)+']')
 elif args[0]=='run':
  state.write_text(json.dumps({'Id':'owned-container','Image':'sha256:fixture','Config':{'Image':'postgis/postgis:16-3.4','Labels':{'fitsy.verify.owner':name.removeprefix('fitsy-verify-')}},'State':{'Running':True},'HostConfig':{'Memory':805306368,'MemorySwap':1610612736,'NanoCpus':2000000000,'Binds':None},'Mounts':[],'NetworkSettings':{'Ports':{'5432/tcp':[{'HostIp':'127.0.0.1','HostPort':'55432'}]}}}))
  print('owned-container')
 elif args[0]=='exec':
+ if os.environ.get('FIXTURE_REPLACE_AT_RESET') and 'psql' in args:
+  value=json.loads(state.read_text());value['Id']='replacement-container';value['Image']='sha256:replacement';state.write_text(json.dumps(value))
+ # Docker exec addresses immutable IDs; a removed ID cannot redirect to a name replacement.
+ if args[1] != json.loads(state.read_text())['Id']:
+  print('No such container: '+args[1],file=sys.stderr);sys.exit(1)
+ if os.environ.get('FIXTURE_IMAGE_DURING_WAIT') and 'bash' in args:
+  value=json.loads(state.read_text());value['Image']='sha256:replacement';state.write_text(json.dumps(value))
  if 'psql' in args:
   with Path(os.environ['FIXTURE_RESETS']).open('a') as stream:stream.write('reset\n')
 elif args[0]=='rm': state.unlink()
@@ -227,6 +244,11 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
         self.assertEqual({phase['readiness']['owned_db']['state'] for phase in phases}, {'absent', 'owned'})
         self.assertEqual(len((self.directory / 'resets').read_text().splitlines()), 2)
         for path, phase in zip(receipts, phases):
+            acquired = self.packet / f"phase-acquisition-{phase['lock_pid']}.json"
+            self.assertEqual(acquired.stat().st_mode & 0o777, 0o600)
+            value = json.loads(acquired.read_text())
+            self.assertEqual(value['admission_sha256'], self.sha(path))
+            self.assertEqual(value['container'], {'id': 'owned-container', 'image_id': 'sha256:fixture'})
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             self.assertTrue((self.packet / f"phase-intent-{phase['lock_pid']}.json").exists())
 
@@ -260,6 +282,29 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(len((self.directory / 'resets').read_text().splitlines()), 1)
         self.assertIn('ownership or image', result.stdout)
+
+    def test_complete_replacement_between_admission_and_reset_is_rejected(self):
+        result = self.run_packet(FIXTURE_TWICE='1', FIXTURE_REPLACE_AFTER_READY='1')
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(len((self.directory / 'resets').read_text().splitlines()), 1)
+
+    def test_complete_replacement_between_same_session_invocations_is_rejected(self):
+        result = self.run_packet(FIXTURE_TWICE='1', FIXTURE_REPLACE_BETWEEN='1')
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(len((self.directory / 'resets').read_text().splitlines()), 1)
+
+    def test_image_identity_changed_before_destructive_reset_is_rejected(self):
+        result = self.run_packet(FIXTURE_IMAGE_DURING_WAIT='1')
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertFalse((self.directory / 'resets').exists())
+
+    def test_name_replacement_after_last_inspection_cannot_redirect_reset(self):
+        result = self.run_packet(FIXTURE_REPLACE_AT_RESET='1')
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertFalse((self.directory / 'resets').exists())
+        events = [json.loads(line) for line in (self.directory / 'events').read_text().splitlines()]
+        reset = next(args for args in events if args[0] == 'exec' and 'psql' in args)
+        self.assertEqual(reset[1], 'owned-container')
 
     def test_actual_phase_cancellation_releases_detached_child_and_guardian(self):
         ready = self.directory / 'held-child-ready'

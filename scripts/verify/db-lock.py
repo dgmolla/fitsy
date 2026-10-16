@@ -128,10 +128,39 @@ def assert_phase_lock(root, lock_pid, descriptor):
         raise RuntimeError('phase lock supervisor is not the actual fixed DB launcher')
 
 
-if sys.argv[1:2] == ['--assert-phase-lock']:
+def phase_context(root, lock_pid):
+    data = phase_authority(root)
+    directory = Path(data['receipt_directory'])
+    receipt = directory / f'phase-admission-{lock_pid}.json'
+    private(receipt)
+    value = json.loads(receipt.read_text())
+    account = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    authority = account / '.fitsy-review/operators' / f"issue-{data['issue']}-phase-admission.json"
+    started = ' '.join(subprocess.check_output(
+        ['/bin/ps', '-p', str(lock_pid), '-o', 'lstart='], text=True).split())
+    expected = {'state': 'phase-ready', 'issue': data['issue'], 'source_sha': data['source_sha'],
+                'selected_package_sha': data['selected_package_sha'], 'execution_id': data['execution_id'],
+                'completed_manifest_sha256': data['completed_manifest_sha256'],
+                'review_ledger_sha256': data['review_ledger_sha256'], 'lock_pid': lock_pid,
+                'authority_sha256': hashlib.sha256(authority.read_bytes()).hexdigest(),
+                'authority_path': str(authority), 'receipt_path': str(receipt)}
+    if (any(value.get(key) != expected_value for key, expected_value in expected.items())
+            or value.get('lock_identity', {}).get('pid') != lock_pid
+            or not started or value.get('lock_identity', {}).get('lstart') != started):
+        raise RuntimeError('phase receipt does not bind the current actual locked invocation')
+    acquired = directory / f'phase-acquisition-{lock_pid}.json'
+    if os.path.lexists(acquired) or os.path.lexists(str(acquired) + '.tmp'):
+        raise RuntimeError('phase acquisition already exists; preserve prior invocation')
+    return {'receipt': value, 'admission_sha256': hashlib.sha256(receipt.read_bytes()).hexdigest(),
+            'acquisition_path': str(acquired)}
+
+
+if sys.argv[1:2] in (['--assert-phase-lock'], ['--phase-context']):
     try:
         root = Path(sys.argv[2])
         assert_phase_lock(root, int(sys.argv[3]), 3)
+        if sys.argv[1] == '--phase-context':
+            print(json.dumps(phase_context(root, int(sys.argv[3]))))
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         sys.exit(str(error))
     sys.exit(0)
