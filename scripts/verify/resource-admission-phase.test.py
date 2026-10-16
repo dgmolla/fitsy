@@ -70,8 +70,13 @@ function fixtureCommand(binary, args) {
     : 'kern.memorystatus_vm_pressure_level: ' + (process.env.FIXTURE_PRESSURE || '1');
   if (binary === '/bin/ps' && args.join(' ') === '-axo pid=,ppid=,lstart=,command=') {
     identityReads++;
-    const guest = process.env.FIXTURE_CHANGED_GUEST && identityReads > 1 ? 900003 : 900002;
-    return `900001 1 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.backend\n${guest} 900001 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization\n`.replaceAll('\\n','\n');
+    const ready=existsSync(join(process.env.FIXTURE_PACKET, `phase-admission-${process.ppid}.json`));
+    const moved=process.env.FIXTURE_RUNTIME_AFTER_READY && (ready || process.env.FIXTURE_RUNTIME_AT_STOP);
+    const during=(process.env.FIXTURE_RUNTIME_DURING_WAIT && existsSync(join(process.env.FIXTURE_PACKET,'runtime-after-wait'))) || existsSync(join(process.env.FIXTURE_PACKET,'runtime-before-reader'));
+    if(moved && process.env.FIXTURE_RUNTIME_AFTER_READY==='guest-absent') return '900001 1 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.backend\n';
+    const backend=moved && process.env.FIXTURE_RUNTIME_AFTER_READY==='backend-replaced' ? 900009 : 900001;
+    const guest = moved || during || (process.env.FIXTURE_CHANGED_GUEST && identityReads > 1) ? 900003 : 900002;
+    return `${backend} 1 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.backend\n${guest} ${backend} Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization\n`.replaceAll('\\n','\n');
   }
   if (binary === '/bin/ps' && args.join(' ') === '-axo pid=,pgid=,command=') {
     // External capacity is synthetic, like the VM and pressure observations.
@@ -92,6 +97,13 @@ function fixtureCommand(binary, args) {
         helper = helper.replace('if (process.argv[1] && resolve(process.argv[1]) === file)',
                                 injection + '\nif (process.argv[1] && resolve(process.argv[1]) === file)')
         (self.verify / 'resource-admission.mjs').write_text(helper)
+        runtime = (SOURCE / 'docker-runtime.mjs').read_text()
+        runtime = runtime.replace("export function assertAdmittedDockerGuest(expected, command = (binary, args) => execFileSync(binary, args,\n  { encoding: 'utf8', timeout: 15000 }))",
+                                  "export function assertAdmittedDockerGuest(expected, command = fixtureCommand)")
+        # Retain only the host-query fixture body; no production runtime switch.
+        runtime_fixture = injection.replace("let identityReads = 0;", "let identityReads = 0;")
+        runtime = "import { existsSync } from 'node:fs';\nimport { join } from 'node:path';\n" + runtime + runtime_fixture
+        (self.verify / 'docker-runtime.mjs').write_text(runtime)
         shipping = self.verify / 'shipping-session.mjs'
         shipping.write_text("""#!/opt/homebrew/bin/node
 import {spawnSync} from 'node:child_process';
@@ -101,7 +113,17 @@ process.exitCode=result.status ?? 1;
 """)
         shipping.chmod(0o700)
         (self.verify / 'run.mjs').write_text('''import fs from 'node:fs';
+import {spawnSync} from 'node:child_process';
 console.log('remaining canonical selection modeled');
+if(process.env.FIXTURE_ASSERT_READER) {
+ if(process.env.FIXTURE_RUNTIME_BEFORE_READER) fs.writeFileSync(process.env.FIXTURE_PACKET+'/runtime-before-reader','changed guest');
+ const local=process.env.FIXTURE_EVENTS+'.local';
+ const before=fs.existsSync(local)?fs.readFileSync(local,'utf8'):'';
+ const result=spawnSync(process.execPath,['scripts/verify/local-db.mjs','--assert-owned-db'],{cwd:process.cwd(),env:process.env,encoding:'utf8'});
+ const after=fs.existsSync(local)?fs.readFileSync(local,'utf8'):'';
+ fs.writeFileSync(process.env.FIXTURE_PACKET+'/reader-proof.json',JSON.stringify({returncode:result.status,before,after,stderr:result.stderr}));
+ process.exit(result.status ?? 1);
+}
 if(process.env.FIXTURE_FORGE_REUSE) {
  const value=JSON.parse(fs.readFileSync(process.env.FIXTURE_STATE,'utf8'));
  value.Config.Labels['fitsy.verify.owner']='unowned';
@@ -140,6 +162,8 @@ args=sys.argv[1:];state=Path(os.environ['FIXTURE_STATE']);root=os.environ['FIXTU
 name='fitsy-verify-'+hashlib.sha256(root.encode()).hexdigest()[:16]
 events=Path(os.environ['FIXTURE_EVENTS'])
 with events.open('a') as stream:stream.write(json.dumps(args)+'\n')
+if not os.environ.get('FIXTURE_IN_HELPER'):
+ with Path(str(events)+'.local').open('a') as stream:stream.write(json.dumps(args)+'\n')
 if args[0]=='context':
  if os.environ.get('FIXTURE_DAEMON_FAIL'): print('synthetic daemon failure',file=sys.stderr);sys.exit(1)
  print('desktop-linux')
@@ -163,6 +187,8 @@ elif args[0]=='exec':
  # Docker exec addresses immutable IDs; a removed ID cannot redirect to a name replacement.
  if args[1] != json.loads(state.read_text())['Id']:
   print('No such container: '+args[1],file=sys.stderr);sys.exit(1)
+ if os.environ.get('FIXTURE_RUNTIME_DURING_WAIT') and 'bash' in args:
+  (Path(os.environ['FIXTURE_PACKET'])/'runtime-after-wait').write_text('guest900003, unchanged container identity')
  if os.environ.get('FIXTURE_IMAGE_DURING_WAIT') and 'bash' in args:
   value=json.loads(state.read_text());value['Image']='sha256:replacement';state.write_text(json.dumps(value))
  if 'psql' in args:
@@ -188,7 +214,7 @@ fi
 sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)!r}],cwd={str(self.root)!r}))
 ''')
         (self.packet / 'db_observation.py').write_text('# modeled external observations\n')
-        files = [self.verify / name for name in ('db-lock.py', 'resource-admission.mjs', 'local-db.mjs')]
+        files = [self.verify / name for name in ('db-lock.py', 'resource-admission.mjs', 'local-db.mjs', 'docker-runtime.mjs')]
         files += [self.packet / name for name in ('run.py', 'task.sh', 'db_observation.py')]
         self.authority = self.admin / 'operators/issue-463-phase-admission.json'
         data = {'version': 1, 'issue': 463, 'candidate_root': str(self.root), 'source_sha': self.head,
@@ -334,6 +360,74 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
         self.assertFalse(state.exists())
         events = [json.loads(line) for line in (self.directory / 'events').read_text().splitlines()]
         self.assertEqual([args for args in events if args[0] == 'rm'], [['rm', '-f', original['Id']]])
+
+    def test_replaced_or_absent_runtime_after_ready_refuses_before_local_docker(self):
+        for runtime in ('guest-replaced', 'guest-absent', 'backend-replaced'):
+            result = self.run_packet(FIXTURE_RUNTIME_AFTER_READY=runtime,
+                                     FITSY_VERIFY_ADMITTED_GUEST='900003', FITSY_VERIFY_ADMITTED_BACKEND='900009')
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertFalse((self.directory / 'resets').exists())
+            self.assertFalse(Path(self.env['FIXTURE_EVENTS'] + '.local').exists())
+
+    def test_runtime_replacement_before_reset_preserves_container_and_refuses_reset(self):
+        result = self.run_packet(FIXTURE_RUNTIME_DURING_WAIT='1')
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertFalse((self.directory / 'resets').exists())
+        state = json.loads(Path(self.env['FIXTURE_STATE']).read_text())
+        self.assertEqual((state['Id'], state['Image']), ('owned-container', 'sha256:fixture'))
+
+    def test_post_session_changed_runtime_refuses_before_stop_docker(self):
+        result = self.run_packet()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        local = Path(self.env['FIXTURE_EVENTS'] + '.local')
+        before = local.read_text()
+        environment = dict(self.env, FITSY_VERIFY_OWNED_DB='owned-container', FITSY_VERIFY_DB_IMAGE='sha256:fixture',
+                           FIXTURE_RUNTIME_AFTER_READY='guest-replaced', FIXTURE_RUNTIME_AT_STOP='1')
+        stopped = subprocess.run([NODE, str(self.verify / 'local-db.mjs'), '--stop-owned-db'], cwd=self.root,
+                                 env=environment, capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(stopped.returncode, 0, stopped.stdout)
+        self.assertEqual(local.read_text(), before)
+        self.assertTrue(Path(self.env['FIXTURE_STATE']).exists())
+
+    def test_actual_descendant_owned_assertion_reads_canonical_runtime_and_succeeds(self):
+        result = self.run_packet(FIXTURE_ASSERT_READER='1')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        reader = json.loads((self.packet / 'reader-proof.json').read_text())
+        self.assertEqual(reader['returncode'], 0)
+        self.assertNotEqual(reader['before'], reader['after'])
+
+    def test_actual_descendant_assertion_refuses_runtime_change_before_docker(self):
+        result = self.run_packet(FIXTURE_ASSERT_READER='1', FIXTURE_RUNTIME_BEFORE_READER='1')
+        self.assertNotEqual(result.returncode, 0)
+        reader = json.loads((self.packet / 'reader-proof.json').read_text())
+        self.assertNotEqual(reader['returncode'], 0)
+        self.assertEqual(reader['before'], reader['after'])
+
+    def test_complete_copied_reader_metadata_outside_session_refuses_before_docker(self):
+        self.assertEqual(self.run_packet().returncode, 0)
+        local = Path(self.env['FIXTURE_EVENTS'] + '.local')
+        before = local.read_text()
+        environment = dict(self.env, FITSY_VERIFY_DB_PHASE='1', FITSY_VERIFY_DB_LOCKED='1',
+                           FITSY_VERIFY_DB_LOCK_FD='3', FITSY_VERIFY_OWNED_DB='owned-container',
+                           FITSY_VERIFY_DB_IMAGE='sha256:fixture',
+                           POSTGRES_PRISMA_URL='postgresql://fitsy_test:fitsy_test@127.0.0.1:55432/fitsy_verify',
+                           POSTGRES_URL_NON_POOLING='postgresql://fitsy_test:fitsy_test@127.0.0.1:55432/fitsy_verify')
+        result = subprocess.run([NODE, str(self.verify / 'local-db.mjs'), '--assert-owned-db'], cwd=self.root,
+                                env=environment, capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(local.read_text(), before)
+
+    def test_complete_copied_cleanup_metadata_without_real_lock_refuses_before_docker(self):
+        self.assertEqual(self.run_packet().returncode, 0)
+        local = Path(self.env['FIXTURE_EVENTS'] + '.local')
+        before = local.read_text()
+        environment = dict(self.env, FITSY_VERIFY_DB_LOCKED='1', FITSY_VERIFY_DB_LOCK_FD='3',
+                           FITSY_VERIFY_OWNED_DB='owned-container', FITSY_VERIFY_DB_IMAGE='sha256:fixture')
+        result = subprocess.run([NODE, str(self.verify / 'local-db.mjs'), '--locked-stop'], cwd=self.root,
+                                env=environment, capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(local.read_text(), before)
+        self.assertTrue(Path(self.env['FIXTURE_STATE']).exists())
 
     def test_actual_phase_cancellation_releases_detached_child_and_guardian(self):
         ready = self.directory / 'held-child-ready'

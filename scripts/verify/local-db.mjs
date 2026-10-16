@@ -5,6 +5,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { statfsSync, writeFileSync, renameSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { repository } from './impact-plan.mjs';
+import { assertAdmittedDockerGuest } from './docker-runtime.mjs';
 
 const image = 'postgis/postgis:16-3.4';
 const runCommand = (file, args, options) => execFileSync(file, args, options);
@@ -24,13 +25,36 @@ export function assertPhaseLock(root = repository, env = process.env) {
   return JSON.parse(result.stdout);
 }
 
+function canonicalRuntimeContext(root, env, operation) {
+  const argv = ['-I', fileURLToPath(new URL('./db-lock.py', import.meta.url)),
+    operation === 'cleanup' ? '--phase-cleanup-runtime' : '--phase-reader-runtime', root];
+  const options = { env, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', timeout: 15000 };
+  if (operation === 'cleanup') {
+    const fd = Number(env.FITSY_VERIFY_DB_LOCK_FD);
+    if (!Number.isSafeInteger(fd) || fd < 3) throw Error('bound cleanup requires the actual inherited lock');
+    argv.push(String(process.ppid));
+    options.stdio.push(fd);
+  }
+  const result = spawnSync('/Applications/Xcode.app/Contents/Developer/usr/bin/python3', argv, options);
+  if (result.error || result.status !== 0) throw Error('canonical admitted runtime context was not verified');
+  return JSON.parse(result.stdout);
+}
+
 export function databaseControl({ root = repository, command = runCommand, spawn = spawnSync,
-  disk = statfsSync, env = process.env, assertLock = () => {
+  disk = statfsSync, env = process.env, runtimeContext = canonicalRuntimeContext,
+  runtimeCheck = assertAdmittedDockerGuest, assertLock = () => {
     if (env.FITSY_VERIFY_DB_LOCKED !== '1') throw new Error('owned verification database lock is missing');
   } } = {}) {
   const owner = createHash('sha256').update(root).digest('hex').slice(0, 16);
   const name = `fitsy-verify-${owner}`;
-  const docker = argv => command('docker', argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 }).trim();
+  let admittedRuntime;
+  let runtimeRequired = Boolean(env.FITSY_VERIFY_DB_PHASE);
+  const docker = argv => {
+    if (env.FITSY_VERIFY_DB_PHASE && env.FITSY_VERIFY_DB_PHASE !== '1') throw Error('invalid explicit DB phase');
+    if (!admittedRuntime && runtimeRequired) admittedRuntime = runtimeContext(root, env, 'reader');
+    if (runtimeRequired) runtimeCheck(admittedRuntime);
+    return command('docker', argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 }).trim();
+  };
   const inspect = () => JSON.parse(docker(['inspect', name]))[0];
   function owned(container, expectedId, requireLoopback = true, expectedImage) {
     if (container.Config?.Labels?.['fitsy.verify.owner'] !== owner || container.Config?.Image !== image ||
@@ -54,16 +78,21 @@ export function databaseControl({ root = repository, command = runCommand, spawn
   }
   function stop() {
     assertLock();
-    const container = inspect();
     const pinnedId = env.FITSY_VERIFY_OWNED_DB;
     const pinnedImage = env.FITSY_VERIFY_DB_IMAGE;
     if (Boolean(pinnedId) !== Boolean(pinnedImage)) throw Error('bound stop requires both acquired ID and image');
+    if (pinnedId) {
+      runtimeRequired = true;
+      admittedRuntime = runtimeContext(root, env, 'cleanup');
+    }
+    const container = inspect();
     owned(container, pinnedId, false, pinnedImage);
     docker(['rm', '-f', pinnedId || container.Id]);
   }
   function run(args) {
     assertLock();
     const phase = assertPhaseLock(root, env);
+    if (phase) admittedRuntime = phase.receipt.readiness?.identity;
     let createdId;
     try {
       const space = disk(root);

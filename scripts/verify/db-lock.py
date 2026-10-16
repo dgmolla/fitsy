@@ -86,7 +86,7 @@ def phase_authority(root):
     private(packet, True)
     if any(packet == path or path in packet.parents for path in (root, package, admin)):
         raise RuntimeError('phase receipt destination overlaps protected or source custody')
-    expected = [root / 'scripts/verify' / name for name in ('db-lock.py', 'resource-admission.mjs', 'local-db.mjs')]
+    expected = [root / 'scripts/verify' / name for name in ('db-lock.py', 'resource-admission.mjs', 'local-db.mjs', 'docker-runtime.mjs')]
     expected += [packet / name for name in ('run.py', 'task.sh', 'db_observation.py')]
     if not isinstance(data['files_sha256'], dict) or set(data['files_sha256']) != {str(path) for path in expected}:
         raise RuntimeError('phase executable identities are incomplete')
@@ -96,7 +96,7 @@ def phase_authority(root):
     return data
 
 
-def assert_phase_lock(root, lock_pid, descriptor):
+def assert_phase_lock(root, lock_pid, descriptor, operation='--locked-run'):
     path = root / '.evidence/verify/db.lock'
     actual = os.fstat(descriptor)
     expected = path.lstat()
@@ -124,20 +124,19 @@ def assert_phase_lock(root, lock_pid, descriptor):
         arguments = arguments[1:]
     if (len(arguments) < 5 or Path(arguments[0]).resolve() != Path(__file__).resolve()
             or arguments[1] != str(root) or Path(arguments[3]).resolve() != root / 'scripts/verify/local-db.mjs'
-            or arguments[4] != '--locked-run'):
+            or arguments[4] != operation):
         raise RuntimeError('phase lock supervisor is not the actual fixed DB launcher')
 
 
-def phase_context(root, lock_pid):
-    data = phase_authority(root)
+def bound_phase_receipt(root, data, lock_pid, live=True):
     directory = Path(data['receipt_directory'])
     receipt = directory / f'phase-admission-{lock_pid}.json'
     private(receipt)
     value = json.loads(receipt.read_text())
     account = Path(pwd.getpwuid(os.getuid()).pw_dir)
     authority = account / '.fitsy-review/operators' / f"issue-{data['issue']}-phase-admission.json"
-    started = ' '.join(subprocess.check_output(
-        ['/bin/ps', '-p', str(lock_pid), '-o', 'lstart='], text=True).split())
+    started = (' '.join(subprocess.check_output(
+        ['/bin/ps', '-p', str(lock_pid), '-o', 'lstart='], text=True).split()) if live else None)
     expected = {'state': 'phase-ready', 'issue': data['issue'], 'source_sha': data['source_sha'],
                 'selected_package_sha': data['selected_package_sha'], 'execution_id': data['execution_id'],
                 'completed_manifest_sha256': data['completed_manifest_sha256'],
@@ -146,13 +145,111 @@ def phase_context(root, lock_pid):
                 'authority_path': str(authority), 'receipt_path': str(receipt)}
     if (any(value.get(key) != expected_value for key, expected_value in expected.items())
             or value.get('lock_identity', {}).get('pid') != lock_pid
-            or not started or value.get('lock_identity', {}).get('lstart') != started):
+            or not value.get('lock_identity', {}).get('lstart')
+            or (live and (not started or value.get('lock_identity', {}).get('lstart') != started))):
         raise RuntimeError('phase receipt does not bind the current actual locked invocation')
-    acquired = directory / f'phase-acquisition-{lock_pid}.json'
-    if os.path.lexists(acquired) or os.path.lexists(str(acquired) + '.tmp'):
+    return value, receipt
+
+
+def phase_context(root, lock_pid, fresh=True):
+    data = phase_authority(root)
+    value, receipt = bound_phase_receipt(root, data, lock_pid)
+    acquired = Path(data['receipt_directory']) / f'phase-acquisition-{lock_pid}.json'
+    if fresh and (os.path.lexists(acquired) or os.path.lexists(str(acquired) + '.tmp')):
         raise RuntimeError('phase acquisition already exists; preserve prior invocation')
     return {'receipt': value, 'admission_sha256': hashlib.sha256(receipt.read_bytes()).hexdigest(),
             'acquisition_path': str(acquired)}
+
+
+def phase_reader_context(root):
+    rows = {}
+    for line in subprocess.check_output(['/bin/ps', '-axo', 'pid=,ppid=,lstart=,command='], text=True).splitlines():
+        match = re.fullmatch(r'\s*(\d+)\s+(\d+)\s+(.{24})\s+(.+)', line)
+        if match:
+            rows[int(match[1])] = {'pid': int(match[1]), 'ppid': int(match[2]),
+                                   'lstart': match[3].strip(), 'command': match[4]}
+    ancestors = []
+    pid = os.getppid()
+    while pid in rows and len(ancestors) < 64:
+        if any(row['pid'] == pid for row in ancestors):
+            raise RuntimeError('phase reader process ancestry is cyclic')
+        ancestors.append(rows[pid])
+        pid = rows[pid]['ppid']
+    for parent in ancestors:
+        arguments = shlex.split(parent['command'])[1:]
+        if arguments[:1] == ['-I']:
+            arguments = arguments[1:]
+        if (len(arguments) >= 5 and arguments[0] == str(Path(__file__).resolve())
+                and arguments[1] == str(root) and arguments[3] == str(root / 'scripts/verify/local-db.mjs')
+                and arguments[4] == '--locked-run'):
+            context = phase_context(root, parent['pid'], fresh=False)
+            shipping = context['receipt'].get('shipping_identity', {})
+            if not any(row['pid'] == shipping.get('pid') and row['lstart'] == shipping.get('lstart') for row in ancestors):
+                raise RuntimeError('phase reader lacks the actual admitted shipping ancestry')
+            # The actual admitted supervisor is an ancestor and still holds the
+            # exact canonical kernel lock; no caller-selected PID grants this.
+            lock = root / '.evidence/verify/db.lock'
+            private(lock)
+            descriptor = os.open(lock, os.O_RDWR | os.O_NOFOLLOW)
+            try:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    pass
+                else:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+                    raise RuntimeError('phase reader lock is not held')
+            finally:
+                os.close(descriptor)
+            result = subprocess.run([str(root / 'scripts/verify/shipping-session.mjs'), '--check'],
+                                    cwd=root, stdin=subprocess.DEVNULL, capture_output=True, timeout=15)
+            if result.returncode:
+                raise RuntimeError('phase reader shipping session is unverified')
+            return context['receipt']['readiness']['identity']
+    raise RuntimeError('phase reader is not descended from the actual fixed DB supervisor')
+
+
+def phase_cleanup_context(root):
+    data = phase_authority(root)
+    directory = Path(data['receipt_directory'])
+    expected_id = os.environ.get('FITSY_VERIFY_OWNED_DB')
+    expected_image = os.environ.get('FITSY_VERIFY_DB_IMAGE')
+    if not expected_id or not expected_image:
+        raise RuntimeError('phase cleanup requires both acquired container identities')
+    for acquired in directory.glob('phase-acquisition-*.json'):
+        private(acquired)
+        value = json.loads(acquired.read_text())
+        if value.get('container') != {'id': expected_id, 'image_id': expected_image}:
+            continue
+        lock_pid = value.get('lock_pid')
+        if type(lock_pid) is not int or acquired.name != f'phase-acquisition-{lock_pid}.json':
+            raise RuntimeError('phase cleanup acquisition identity is malformed')
+        ready, receipt = bound_phase_receipt(root, data, lock_pid, live=False)
+        if (value.get('state') != 'phase-acquired'
+                or value.get('admission_sha256') != hashlib.sha256(receipt.read_bytes()).hexdigest()
+                or any(value.get(key) != item for key, item in ready.items() if key not in ('state', 'at'))
+                or value.get('at', 0) < ready['at']):
+            raise RuntimeError('phase cleanup acquisition is not bound to canonical admission')
+        return ready['readiness']['identity']
+    raise RuntimeError('phase cleanup lacks a canonical actual acquisition')
+
+
+if sys.argv[1:2] == ['--phase-reader-runtime']:
+    try:
+        print(json.dumps(phase_reader_context(Path(sys.argv[2]))))
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+        sys.exit(str(error))
+    sys.exit(0)
+
+
+if sys.argv[1:2] == ['--phase-cleanup-runtime']:
+    try:
+        root = Path(sys.argv[2])
+        assert_phase_lock(root, int(sys.argv[3]), 3, '--locked-stop')
+        print(json.dumps(phase_cleanup_context(root)))
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+        sys.exit(str(error))
+    sys.exit(0)
 
 
 if sys.argv[1:2] in (['--assert-phase-lock'], ['--phase-context']):
@@ -185,7 +282,7 @@ try:
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 except BlockingIOError:
     sys.exit(75)
-environment = dict(os.environ, FITSY_VERIFY_DB_LOCKED="1")
+environment = dict(os.environ, FITSY_VERIFY_DB_LOCKED="1", FITSY_VERIFY_DB_LOCK_FD=str(fd))
 if environment.get("FITSY_VERIFY_DB_PHASE"):
     # This opt-in phase uses only a fixed source-controlled admission command.
     # The flock is already held; an arbitrary caller-selected command or path

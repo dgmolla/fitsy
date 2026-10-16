@@ -46,7 +46,8 @@ function scenario(name: string) {
       spawned.push({ args, env: opts.env, resetBeforeSpawn: calls.some(call => call[0] === 'exec' && call.includes('psql')) });
       return { status: mode === 'migration_failure' && args[1] === 'migrate' ? 1 : 0 };
     }, disk: () => ({ bavail: mode === 'low_disk' ? 1 : 3 * 1024 ** 3, bsize: 1 }),
-    assertLock: () => {}, env: { ...(mode === 'forged_phase' ? { FITSY_VERIFY_DB_PHASE: '1',
+    // This owned-container unit seam models runtime; combined Python cases exercise real canonical context.
+    runtimeContext: () => ({ fixture: true }), runtimeCheck: () => {}, assertLock: () => {}, env: { ...(mode === 'forged_phase' ? { FITSY_VERIFY_DB_PHASE: '1',
       FITSY_VERIFY_DB_LOCKED: '1', FITSY_VERIFY_OWNED_DB: 'owned-container-id',
       FITSY_VERIFY_DB_IMAGE: 'sha256:image', FITSY_VERIFY_DB_HOST: loopback,
       FITSY_SHIPPING_SOCKET: '/unowned/session.sock', FITSY_SHIPPING_TOKEN: 'plausible-complete-token' } : {}),

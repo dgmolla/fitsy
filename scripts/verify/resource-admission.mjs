@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { parsePsIdentity } from './docker-runtime.mjs';
 import { existsSync, statfsSync, readFileSync, lstatSync, writeFileSync, renameSync, realpathSync, readdirSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -74,23 +75,6 @@ function readGit(root, ...args) { return execFileSync(GIT, ['-C', root, ...args]
   encoding: 'utf8', timeout: 15000,
   env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))),
 }).trim(); }
-function parsePsIdentity(raw) {
-  const found = { backend: [], guest: [] };
-  for (const line of raw.split('\n')) {
-    const match = /^\s*(\d+)\s+(\d+)\s+(.{24})\s+(.+)$/.exec(line);
-    if (!match) continue;
-    const command = match[4];
-    for (const [kind, exact] of [
-      ['backend', '/Applications/Docker.app/Contents/MacOS/com.docker.backend'],
-      ['guest', '/Applications/Docker.app/Contents/MacOS/com.docker.virtualization'],
-    ]) if (command === exact || command.startsWith(`${exact} `)) {
-      found[kind].push({ pid: Number(match[1]), ppid: Number(match[2]), started: match[3].trim() });
-    }
-  }
-  if (found.backend.length !== 1 || found.guest.length !== 1 ||
-      found.guest[0].ppid !== found.backend[0].pid) return null;
-  return { backend: found.backend[0], guest: found.guest[0] };
-}
 export function hostSnapshot(command = (binary, args) => execFileSync(binary, args,
   { encoding: 'utf8', timeout: 15000 }), disk = statfsSync,
   root = resolve(dirname(file), '../..')) {
@@ -215,7 +199,7 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
     throw Error('phase receipt destination overlaps candidate or operator custody');
   }
   privateDirectory(directory, uid);
-  const expectedFiles = [join(root, 'scripts/verify/db-lock.py'), file, join(root, 'scripts/verify/local-db.mjs'),
+  const expectedFiles = [join(root, 'scripts/verify/db-lock.py'), file, join(root, 'scripts/verify/local-db.mjs'), join(root, 'scripts/verify/docker-runtime.mjs'),
     join(directory, 'run.py'), join(directory, 'task.sh'), join(directory, 'db_observation.py')].sort();
   if (Object.keys(authority.files_sha256 ?? {}).sort().join('|') !== expectedFiles.join('|')) throw Error('phase caller/helper binding is incomplete');
   for (const path of expectedFiles) {
