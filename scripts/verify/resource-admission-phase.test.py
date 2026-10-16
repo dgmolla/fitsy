@@ -116,6 +116,19 @@ process.exitCode=result.status ?? 1;
 import {spawnSync} from 'node:child_process';
 console.log('remaining canonical selection modeled');
 if(process.env.FIXTURE_ASSERT_READER) {
+ if(process.env.FIXTURE_READER_REPLACEMENT) {
+  const value=JSON.parse(fs.readFileSync(process.env.FIXTURE_STATE,'utf8'));
+  value.Id='complete-same-owner-replacement';value.Image='sha256:complete-replacement';
+  fs.writeFileSync(process.env.FIXTURE_STATE,JSON.stringify(value));
+  process.env.FITSY_VERIFY_OWNED_DB=value.Id;process.env.FITSY_VERIFY_DB_IMAGE=value.Image;
+ }
+ if(process.env.FIXTURE_LIMIT_STAGE==='reader') {
+  const value=JSON.parse(fs.readFileSync(process.env.FIXTURE_STATE,'utf8'));
+  const [field,kind]=process.env.FIXTURE_LIMIT_CASE.split(':');
+  if(kind==='missing') delete value.HostConfig[field];
+  else value.HostConfig[field]=kind==='malformed' ? 'unlimited' : 0;
+  fs.writeFileSync(process.env.FIXTURE_STATE,JSON.stringify(value));
+ }
  if(process.env.FIXTURE_RUNTIME_BEFORE_READER) fs.writeFileSync(process.env.FIXTURE_PACKET+'/runtime-before-reader','changed guest');
  const local=process.env.FIXTURE_EVENTS+'.local';
  const before=fs.existsSync(local)?fs.readFileSync(local,'utf8'):'';
@@ -123,6 +136,13 @@ if(process.env.FIXTURE_ASSERT_READER) {
  const after=fs.existsSync(local)?fs.readFileSync(local,'utf8'):'';
  fs.writeFileSync(process.env.FIXTURE_PACKET+'/reader-proof.json',JSON.stringify({returncode:result.status,before,after,stderr:result.stderr}));
  process.exit(result.status ?? 1);
+}
+if(process.env.FIXTURE_LIMIT_STAGE==='reuse') {
+ const value=JSON.parse(fs.readFileSync(process.env.FIXTURE_STATE,'utf8'));
+ const [field,kind]=process.env.FIXTURE_LIMIT_CASE.split(':');
+ if(kind==='missing') delete value.HostConfig[field];
+ else value.HostConfig[field]=kind==='malformed'?'unlimited':0;
+ fs.writeFileSync(process.env.FIXTURE_STATE,JSON.stringify(value));
 }
 if(process.env.FIXTURE_FORGE_REUSE) {
  const value=JSON.parse(fs.readFileSync(process.env.FIXTURE_STATE,'utf8'));
@@ -142,7 +162,17 @@ if(process.env.FIXTURE_HOLD) {
         for name in ('prisma/build/index.js', 'tsx/dist/cli.mjs'):
             path = self.root / 'node_modules' / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('process.exit(0);\n')
+            path.write_text('''import fs from 'node:fs';
+const stage=process.argv.some(arg=>arg==='migrate')?'migrate':'seed';
+fs.appendFileSync(process.env.FIXTURE_PACKET+'/children',stage+'\\n');
+if(process.env.FIXTURE_LIMIT_STAGE===(stage==='migrate'?'seed':'selection')) {
+ const value=JSON.parse(fs.readFileSync(process.env.FIXTURE_STATE,'utf8'));
+ const [field,kind]=process.env.FIXTURE_LIMIT_CASE.split(':');
+ if(kind==='missing') delete value.HostConfig[field];
+ else value.HostConfig[field]=kind==='malformed'?'unlimited':0;
+ fs.writeFileSync(process.env.FIXTURE_STATE,JSON.stringify(value));
+}
+''')
         binding = self.root / '.evidence/delivery/binding.json'
         binding.parent.mkdir(parents=True)
         binding.write_text('{"issue":463}\n')
@@ -192,6 +222,11 @@ elif args[0]=='exec':
  if os.environ.get('FIXTURE_IMAGE_DURING_WAIT') and 'bash' in args:
   value=json.loads(state.read_text());value['Image']='sha256:replacement';state.write_text(json.dumps(value))
  if 'psql' in args:
+  if os.environ.get('FIXTURE_LIMIT_STAGE')=='migrate':
+   value=json.loads(state.read_text());field,kind=os.environ['FIXTURE_LIMIT_CASE'].split(':')
+   if kind=='missing': value['HostConfig'].pop(field,None)
+   else: value['HostConfig'][field]='unlimited' if kind=='malformed' else 0
+   state.write_text(json.dumps(value))
   with Path(os.environ['FIXTURE_RESETS']).open('a') as stream:stream.write('reset\n')
 elif args[0]=='rm':
  if args[-1] != json.loads(state.read_text())['Id']:
@@ -396,6 +431,20 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
         self.assertEqual(reader['returncode'], 0)
         self.assertNotEqual(reader['before'], reader['after'])
 
+    def test_same_session_complete_reader_metadata_cannot_replace_canonical_acquisition(self):
+        result = self.run_packet(FIXTURE_ASSERT_READER='1', FIXTURE_READER_REPLACEMENT='1')
+        self.assertNotEqual(result.returncode, 0)
+        proof = json.loads((self.packet / 'reader-proof.json').read_text())
+        self.assertNotEqual(proof['returncode'], 0)
+        self.assertIn('canonical acquired container', proof['stderr'])
+        acquired = json.loads(next(self.packet.glob('phase-acquisition-*.json')).read_text())
+        self.assertEqual(acquired['container'], {'id': 'owned-container', 'image_id': 'sha256:fixture'})
+        replacement = json.loads(Path(self.env['FIXTURE_STATE']).read_text())
+        self.assertEqual((replacement['Id'], replacement['Image']),
+                         ('complete-same-owner-replacement', 'sha256:complete-replacement'))
+        events = [json.loads(line) for line in Path(self.env['FIXTURE_EVENTS']).read_text().splitlines()]
+        self.assertFalse(any(args[0] == 'rm' for args in events))
+
     def test_actual_descendant_assertion_refuses_runtime_change_before_docker(self):
         result = self.run_packet(FIXTURE_ASSERT_READER='1', FIXTURE_RUNTIME_BEFORE_READER='1')
         self.assertNotEqual(result.returncode, 0)
@@ -509,6 +558,62 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
         os.link(target, self.authority)
         self.assertNotEqual(self.run_packet().returncode, 0)
         self.no_docker_or_reset()
+
+
+def limit_case(stage, field, kind):
+    def test(self):
+        options = {'FIXTURE_LIMIT_STAGE': stage, 'FIXTURE_LIMIT_CASE': f'{field}:{kind}'}
+        if stage == 'reader': options['FIXTURE_ASSERT_READER'] = '1'
+        if stage == 'reuse': options['FIXTURE_TWICE'] = '1'
+        if stage == 'stop': options = {}
+        result = self.run_packet(**options)
+        state = Path(self.env['FIXTURE_STATE'])
+        if stage == 'stop':
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            original = json.loads(state.read_text())
+            value = json.loads(json.dumps(original))
+            if kind == 'missing': value['HostConfig'].pop(field, None)
+            else: value['HostConfig'][field] = 'unlimited' if kind == 'malformed' else 0
+            state.write_text(json.dumps(value))
+            acquisition = json.loads(next(self.packet.glob('phase-acquisition-*.json')).read_text())
+            env = dict(self.env, FITSY_VERIFY_OWNED_DB=acquisition['container']['id'],
+                       FITSY_VERIFY_DB_IMAGE=acquisition['container']['image_id'])
+            argv = [NODE, str(self.verify / 'local-db.mjs'), '--stop-owned-db']
+            stopped = subprocess.run(argv, cwd=self.root, env=env, capture_output=True, text=True, timeout=10)
+            self.assertNotEqual(stopped.returncode, 0, stopped.stdout + stopped.stderr)
+            self.assertTrue(state.exists())
+            self.assertIn('effective limits', stopped.stderr)
+            # Only the disposable observation fixture restores its original inspected limits.
+            # This does not authorize a production repair or weaker cleanup fallback.
+            state.write_text(json.dumps(original))
+            stopped = subprocess.run(argv, cwd=self.root, env=env, capture_output=True, text=True, timeout=10)
+            self.assertEqual(stopped.returncode, 0, stopped.stderr)
+            self.assertFalse(state.exists())
+            return
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        proof = self.packet / 'reader-proof.json'
+        if stage == 'reader':
+            value = json.loads(proof.read_text())
+            self.assertNotEqual(value['returncode'], 0)
+            self.assertIn('effective limits', value['stderr'])
+            self.assertEqual(len(value['after'].splitlines()), len(value['before'].splitlines()) + 1)
+        else:
+            self.assertIn('effective limits', result.stdout + result.stderr)
+        children = (self.packet / 'children').read_text().splitlines() if (self.packet / 'children').exists() else []
+        self.assertEqual(children, {'migrate': [], 'seed': ['migrate'], 'selection': ['migrate','seed'],
+                                    'reader': ['migrate','seed'], 'reuse': ['migrate','seed']}[stage])
+        self.assertEqual(len(Path(self.env['FIXTURE_RESETS']).read_text().splitlines()), 1)
+        self.assertTrue(state.exists(), 'changed effective limits must not authorize cleanup mutation')
+        value = json.loads(state.read_text())
+        self.assertEqual((value['Id'], value['Image']), ('owned-container', 'sha256:fixture'))
+    return test
+
+
+for _stage in ('migrate', 'seed', 'selection', 'reader', 'reuse', 'stop'):
+    for _field in ('Memory', 'MemorySwap', 'NanoCpus'):
+        for _kind in ('changed', 'missing', 'malformed'):
+            setattr(PhaseBoundaryTests, f'test_effective_limits_{_stage}_{_field}_{_kind}',
+                    limit_case(_stage, _field, _kind))
 
 
 if __name__ == '__main__':

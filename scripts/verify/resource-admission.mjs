@@ -298,17 +298,15 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
       // Every API, including absence inspection, retains exact-warm identity.
       const existing = inspect(root, (_binary, args) => checkedDocker(args));
       if (existing) {
-        if (!priorAcquisitions.some(value => value.container.id === existing.Id && value.container.image_id === existing.Image) || !existing.State?.Running ||
-            existing.HostConfig?.Memory !== 805306368 || existing.HostConfig?.MemorySwap !== 1610612736 ||
-            existing.HostConfig?.NanoCpus !== 2000000000 || existing.HostConfig?.Binds?.length ||
-            existing.Mounts?.length || !existing.Image) throw Error('existing DB lacks current session acquired identity, ownership or effective limits');
+        if (!priorAcquisitions.some(value => value.container.id === existing.Id && value.container.image_id === existing.Image) ||
+            !existing.State?.Running || !existing.Image) throw Error('existing DB lacks current session acquired identity, ownership or effective limits');
         const port = existing.NetworkSettings?.Ports?.['5432/tcp']?.[0]?.HostPort;
         const url = `postgresql://fitsy_test:fitsy_test@127.0.0.1:${port}/fitsy_verify`;
         const { databaseControl } = await import('./local-db.mjs');
         databaseControl({ root, command: (_binary, args) => checkedDocker(args), env: {
           FITSY_VERIFY_OWNED_DB: existing.Id, FITSY_VERIFY_DB_IMAGE: existing.Image,
           POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url,
-        } }).assert();
+        } }).assert(undefined, { requireLimits: true });
       }
       const running = checkedDocker(['ps', '--no-trunc', '--format', '{{.ID}}|{{.Names}}|{{.Status}}']).trim().split('\n').filter(Boolean);
       if (running.length !== (existing ? 1 : 0) || (existing && !running[0].startsWith(`${existing.Id}|${exactOwnedName(root)}|`))) {

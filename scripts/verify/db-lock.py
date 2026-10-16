@@ -161,6 +161,20 @@ def phase_context(root, lock_pid, fresh=True):
             'acquisition_path': str(acquired)}
 
 
+def bound_phase_acquisition(ready, receipt, acquired):
+    private(acquired)
+    value = json.loads(acquired.read_text())
+    container = value.get('container')
+    if (value.get('state') != 'phase-acquired'
+            or value.get('admission_sha256') != hashlib.sha256(receipt.read_bytes()).hexdigest()
+            or any(value.get(key) != item for key, item in ready.items() if key not in ('state', 'at'))
+            or value.get('at', 0) < ready['at']
+            or not isinstance(container, dict) or set(container) != {'id', 'image_id'}
+            or any(not isinstance(item, str) or not item for item in container.values())):
+        raise RuntimeError('phase acquisition is not bound to canonical admission')
+    return container
+
+
 def phase_reader_context(root):
     rows = {}
     for line in subprocess.check_output(['/bin/ps', '-axo', 'pid=,ppid=,lstart=,command='], text=True).splitlines():
@@ -205,7 +219,10 @@ def phase_reader_context(root):
                                     cwd=root, stdin=subprocess.DEVNULL, capture_output=True, timeout=15)
             if result.returncode:
                 raise RuntimeError('phase reader shipping session is unverified')
-            return context['receipt']['readiness']['identity']
+            acquired = Path(context['acquisition_path'])
+            container = bound_phase_acquisition(context['receipt'],
+                                               Path(context['receipt']['receipt_path']), acquired)
+            return {'identity': context['receipt']['readiness']['identity'], 'container': container}
     raise RuntimeError('phase reader is not descended from the actual fixed DB supervisor')
 
 
@@ -225,12 +242,8 @@ def phase_cleanup_context(root):
         if type(lock_pid) is not int or acquired.name != f'phase-acquisition-{lock_pid}.json':
             raise RuntimeError('phase cleanup acquisition identity is malformed')
         ready, receipt = bound_phase_receipt(root, data, lock_pid, live=False)
-        if (value.get('state') != 'phase-acquired'
-                or value.get('admission_sha256') != hashlib.sha256(receipt.read_bytes()).hexdigest()
-                or any(value.get(key) != item for key, item in ready.items() if key not in ('state', 'at'))
-                or value.get('at', 0) < ready['at']):
-            raise RuntimeError('phase cleanup acquisition is not bound to canonical admission')
-        return ready['readiness']['identity']
+        container = bound_phase_acquisition(ready, receipt, acquired)
+        return {'identity': ready['readiness']['identity'], 'container': container}
     raise RuntimeError('phase cleanup lacks a canonical actual acquisition')
 
 

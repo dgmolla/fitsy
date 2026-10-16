@@ -8,6 +8,18 @@ import { repository } from './impact-plan.mjs';
 import { assertAdmittedDockerGuest } from './docker-runtime.mjs';
 
 const image = 'postgis/postgis:16-3.4';
+// The launcher and every admitted ownership assertion share the same limits.
+// Callers can request this stronger contract, but cannot select weaker values.
+const databaseLimits = Object.freeze({ Memory: 768 * 1024 ** 2, MemorySwap: 1536 * 1024 ** 2,
+  NanoCpus: 2 * 1000000000 });
+function assertDatabaseEnvelope(container) {
+  if (!container.Id || !container.Image || Object.entries(databaseLimits).some(
+    ([key, expected]) => container.HostConfig?.[key] !== expected) ||
+      (container.HostConfig.Binds != null && (!Array.isArray(container.HostConfig.Binds) || container.HostConfig.Binds.length)) ||
+      !Array.isArray(container.Mounts) || container.Mounts.length) {
+    throw Error('phase database effective limits or immutable identity changed');
+  }
+}
 const runCommand = (file, args, options) => execFileSync(file, args, options);
 
 // The explicit phase route is stronger than historical no-request CLI use.
@@ -47,18 +59,30 @@ export function databaseControl({ root = repository, command = runCommand, spawn
   } } = {}) {
   const owner = createHash('sha256').update(root).digest('hex').slice(0, 16);
   const name = `fitsy-verify-${owner}`;
-  let admittedRuntime;
+  let admittedRuntime, admittedContainer;
   let runtimeRequired = Boolean(env.FITSY_VERIFY_DB_PHASE);
+  function bindRuntimeContext(operation) {
+    const context = runtimeContext(root, env, operation);
+    if (!context?.identity || !context.container?.id || !context.container?.image_id) {
+      throw Error('canonical acquired database context is incomplete');
+    }
+    admittedRuntime = context.identity;
+    admittedContainer = context.container;
+  }
   const docker = argv => {
     if (env.FITSY_VERIFY_DB_PHASE && env.FITSY_VERIFY_DB_PHASE !== '1') throw Error('invalid explicit DB phase');
-    if (!admittedRuntime && runtimeRequired) admittedRuntime = runtimeContext(root, env, 'reader');
+    if (!admittedRuntime && runtimeRequired) bindRuntimeContext('reader');
     if (runtimeRequired) runtimeCheck(admittedRuntime);
     return command('docker', argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 }).trim();
   };
   const inspect = () => JSON.parse(docker(['inspect', name]))[0];
-  function owned(container, expectedId, requireLoopback = true, expectedImage) {
+  function owned(container, expectedId, requireLoopback = true, expectedImage, requireLimits = false) {
     if (container.Config?.Labels?.['fitsy.verify.owner'] !== owner || container.Config?.Image !== image ||
         (expectedId && container.Id !== expectedId) || (expectedImage && container.Image !== expectedImage)) throw new Error('refusing a database container with different ownership or image');
+    if (admittedContainer && (container.Id !== admittedContainer.id || container.Image !== admittedContainer.image_id)) {
+      throw Error('database identity differs from the canonical acquired container');
+    }
+    if (runtimeRequired || requireLimits) assertDatabaseEnvelope(container);
     if (!requireLoopback) return null;
     const binding = container.NetworkSettings?.Ports?.['5432/tcp'];
     if (binding?.length !== 1 || binding[0].HostIp !== '127.0.0.1' || !/^\d+$/.test(binding[0].HostPort)) {
@@ -66,9 +90,10 @@ export function databaseControl({ root = repository, command = runCommand, spawn
     }
     return binding[0].HostPort;
   }
-  function assert(envToCheck = env) {
+  function assert(envToCheck = env, { requireLimits = false } = {}) {
     const container = inspect();
-    const port = owned(container, envToCheck.FITSY_VERIFY_OWNED_DB);
+    const port = owned(container, envToCheck.FITSY_VERIFY_OWNED_DB, true,
+      envToCheck.FITSY_VERIFY_DB_IMAGE, requireLimits);
     const url = `postgresql://fitsy_test:fitsy_test@127.0.0.1:${port}/fitsy_verify`;
     if (!container.State?.Running || !envToCheck.FITSY_VERIFY_OWNED_DB ||
         container.Image !== envToCheck.FITSY_VERIFY_DB_IMAGE ||
@@ -83,7 +108,7 @@ export function databaseControl({ root = repository, command = runCommand, spawn
     if (Boolean(pinnedId) !== Boolean(pinnedImage)) throw Error('bound stop requires both acquired ID and image');
     if (pinnedId) {
       runtimeRequired = true;
-      admittedRuntime = runtimeContext(root, env, 'cleanup');
+      bindRuntimeContext('cleanup');
     }
     const container = inspect();
     owned(container, pinnedId, false, pinnedImage);
@@ -93,7 +118,7 @@ export function databaseControl({ root = repository, command = runCommand, spawn
     assertLock();
     const phase = assertPhaseLock(root, env);
     if (phase) admittedRuntime = phase.receipt.readiness?.identity;
-    let createdId;
+    let createdId, createdImage;
     try {
       const space = disk(root);
       if (space.bavail * space.bsize < 2 * 1024 ** 3) throw new Error('local verification needs 2 GiB free before starting its disposable DB');
@@ -104,7 +129,8 @@ export function databaseControl({ root = repository, command = runCommand, spawn
         if (phase && phase.receipt.readiness?.owned_db?.state !== 'absent') {
           throw Error('admitted existing database disappeared before mutation');
         }
-        createdId = docker(['run', '-d', '--name', name, '--memory', '768m', '--cpus', '2', '--label', `fitsy.verify.owner=${owner}`,
+        createdId = docker(['run', '-d', '--name', name, '--memory', String(databaseLimits.Memory),
+          '--memory-swap', String(databaseLimits.MemorySwap), '--cpus', String(databaseLimits.NanoCpus / 1000000000), '--label', `fitsy.verify.owner=${owner}`,
           '--publish', '127.0.0.1::5432', '--tmpfs', '/var/lib/postgresql/data',
           '--env', 'POSTGRES_USER=fitsy_test', '--env', 'POSTGRES_PASSWORD=fitsy_test',
           '--env', 'POSTGRES_DB=fitsy_test', image]);
@@ -119,16 +145,12 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       owned(container, createdId || admitted?.id, false, admitted?.image_id);
       const pinnedId = container.Id;
       const pinnedImage = container.Image;
+      if (createdId) createdImage = pinnedImage;
       const pinnedOwned = (value, loopback = true) => {
-        const port = owned(value, pinnedId, loopback, pinnedImage);
-        if (phase && (!pinnedId || !pinnedImage || value.HostConfig?.Memory !== 805306368 ||
-            value.HostConfig?.MemorySwap !== 1610612736 || value.HostConfig?.NanoCpus !== 2000000000 ||
-            value.HostConfig?.Binds?.length || value.Mounts?.length)) {
-          throw Error('phase database effective limits or immutable identity changed');
-        }
-        return port;
+        return owned(value, pinnedId, loopback, pinnedImage);
       };
       pinnedOwned(container, false);
+      if (phase) admittedContainer = { id: pinnedId, image_id: pinnedImage };
       if (!container.State?.Running) {
         docker(['start', pinnedId]);
         container = inspect();
@@ -144,7 +166,7 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       // The image's temporary initialization server accepts Unix sockets before
       // the published TCP server is ready for Prisma migrations.
       docker(['exec', pinnedId, 'bash', '-c', 'for i in {1..45}; do pg_isready -h 127.0.0.1 -U fitsy_test -d fitsy_test >/dev/null && exit 0; sleep 1; done; exit 1']);
-      // Recheck the owner and network immediately before the destructive reset.
+      // Recheck the acquired ownership, envelope and network before reset.
       container = inspect();
       port = pinnedOwned(container);
       if (!container.State?.Running) throw new Error('owned database stopped before reset');
@@ -164,7 +186,11 @@ export function databaseControl({ root = repository, command = runCommand, spawn
         stdio: 'inherit' }).status ?? 1;
     } catch (error) {
       if (createdId) {
-        try { owned(inspect(), createdId); docker(['rm', '-f', createdId]); }
+        try {
+          if (phase && !createdImage) throw Error('created database image was not acquired');
+          owned(inspect(), createdId, false, createdImage);
+          docker(['rm', '-f', createdId]);
+        }
         catch { /* Preserve the original error and refuse to remove a changed owner. */ }
       }
       throw error;
