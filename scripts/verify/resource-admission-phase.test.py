@@ -73,6 +73,15 @@ function fixtureCommand(binary, args) {
     const guest = process.env.FIXTURE_CHANGED_GUEST && identityReads > 1 ? 900003 : 900002;
     return `900001 1 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.backend\n${guest} 900001 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization\n`.replaceAll('\\n','\n');
   }
+  if (binary === '/bin/ps' && args.join(' ') === '-axo pid=,pgid=,command=') {
+    // External capacity is synthetic, like the VM and pressure observations.
+    // Real process ancestry and inherited flock assertions remain untouched.
+    const group=execFileSync('/bin/ps',['-p',String(process.pid),'-o','pgid='],{encoding:'utf8'}).trim();
+    const rows=execFileSync('/bin/ps',args,{encoding:'utf8'}).split('\n')
+      .filter(line=>line.trim().split(/\s+/)[1]===group);
+    if(process.env.FIXTURE_COMPETING_HEAVY) rows.push('900090 900090 node scripts/verify/run.mjs --layer=all');
+    return rows.join('\n');
+  }
   if (binary === '/usr/local/bin/docker') {
     if (!existsSync(join(process.env.FIXTURE_PACKET, `phase-intent-${process.ppid}.json`))) throw Error('Docker before atomic phase intent');
     return execFileSync(process.env.FIXTURE_DOCKER, args, {encoding:'utf8',env:process.env});
@@ -240,6 +249,12 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
         self.assertTrue(list(self.packet.glob('phase-intent-*.json')))
         self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
 
+    def test_external_heavy_execution_refuses_before_docker(self):
+        result = self.run_packet(FIXTURE_COMPETING_HEAVY='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('external heavy execution', result.stdout)
+        self.no_docker_or_reset()
+
     def test_forged_reused_container_is_rejected_by_canonical_owned_assertion(self):
         result = self.run_packet(FIXTURE_TWICE='1', FIXTURE_FORGE_REUSE='1')
         self.assertNotEqual(result.returncode, 0)
@@ -249,8 +264,10 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
     def test_actual_phase_cancellation_releases_detached_child_and_guardian(self):
         ready = self.directory / 'held-child-ready'
         environment = dict(self.env, FIXTURE_HOLD='1', FIXTURE_HOLD_READY=str(ready))
+        stdout = (self.directory / 'cancel-child.stdout').open('w')
+        stderr = (self.directory / 'cancel-child.stderr').open('w')
         child = subprocess.Popen([PYTHON, str(self.packet / 'run.py')], cwd=self.root,
-                                 env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 env=environment, stdout=stdout, stderr=stderr,
                                  start_new_session=True)
         groups = {child.pid}
         acquired = {child.pid: (child.pid, subprocess.check_output(
@@ -260,7 +277,9 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
                 if ready.exists() or child.poll() is not None:
                     break
                 time.sleep(0.05)
-            self.assertTrue(ready.exists())
+            self.assertTrue(ready.exists(), 'child rc=' + str(child.poll()) + '\n' +
+                            (self.directory / 'cancel-child.stdout').read_text() + '\n' +
+                            (self.directory / 'cancel-child.stderr').read_text())
             rows = []
             for line in subprocess.check_output(['/bin/ps', '-axo', 'pid=,ppid=,pgid=,lstart='], text=True).splitlines():
                 values = line.split(None, 3)
@@ -298,6 +317,8 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
                     pass
             if child.poll() is None:
                 child.wait(timeout=5)
+            stdout.close()
+            stderr.close()
 
     def test_warning_critical_and_unknown_pressure_refuse_before_docker(self):
         for pressure in ('2', '4', 'unknown'):
