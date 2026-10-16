@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -13,6 +13,83 @@ beforeEach(() => {
   symlinkSync(join(root, "node_modules"), join(directory, "node_modules"));
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
+
+test("scopes an optional build heap to the production build command", () => {
+  const bin = join(directory, "bin");
+  mkdirSync(bin);
+  const npm = join(bin, "npm");
+  writeFileSync(npm, `#!/bin/sh
+printf '%s' "\${NODE_OPTIONS-}" > "$FITSY_NPM_STUB_OUTPUT"
+exit "\${FITSY_NPM_STUB_EXIT:-0}"
+`);
+  chmodSync(npm, 0o700);
+  const run = (name: string, heap?: string, exit = 0) => {
+    const output = join(directory, name);
+    const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin}:${process.env.PATH}`, NODE_OPTIONS: "",
+      FITSY_NPM_STUB_OUTPUT: output, FITSY_NPM_STUB_EXIT: String(exit) };
+    delete env.FITSY_BUILD_HEAP_MIB;
+    if (heap !== undefined) env.FITSY_BUILD_HEAP_MIB = heap;
+    const result = spawnSync("/bin/bash", [join(root, "scripts/verify/build.sh")],
+      { cwd: root, env, encoding: "utf8", timeout: 10000 });
+    return { output, result };
+  };
+  const ordinary = run("ordinary");
+  expect(ordinary.result.status).toBe(0);
+  expect(readFileSync(ordinary.output, "utf8")).toBe("");
+  const bounded = run("bounded", "384");
+  expect(bounded.result.status).toBe(0);
+  expect(readFileSync(bounded.output, "utf8")).toBe("--max-old-space-size=384");
+  const invalid = run("invalid", "not-a-number");
+  expect(invalid.result.status).toBe(1);
+  expect(existsSync(invalid.output)).toBe(false);
+  const failed = run("failed", "384", 7);
+  expect(failed.result.status).toBe(1);
+  expect(failed.result.stdout).toContain('"name":"build","status":"fail"');
+});
+
+test("keeps the public typecheck uncapped while scoping the build heap", () => {
+  const verify = join(directory, "scripts/verify");
+  copyFileSync(join(root, "scripts/verify/typecheck.sh"), join(verify, "typecheck.sh"));
+  copyFileSync(join(root, "scripts/verify/build.sh"), join(verify, "build.sh"));
+  writeFileSync(join(verify, "registry.yml"), `checks:
+  - name: typecheck
+    script: typecheck.sh
+    layer: 1
+    blocking: true
+    runs: [ci]
+  - name: build
+    script: build.sh
+    layer: 3
+    blocking: true
+    runs: [ci]
+`);
+  mkdirSync(join(directory, "apps/mobile"), { recursive: true });
+  writeFileSync(join(directory, "apps/mobile/tsconfig.json"), "{}\n");
+  const bin = join(directory, "bin");
+  mkdirSync(bin);
+  for (const command of ["npx", "npm"]) {
+    const executable = join(bin, command);
+    writeFileSync(executable, `#!/bin/sh
+printf '%s:%s\\n' '${command}' "\${NODE_OPTIONS-}" >> "$FITSY_CHILD_STUB_LOG"
+`);
+    chmodSync(executable, 0o700);
+  }
+  const log = join(directory, "children.log");
+  const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin}:${process.env.PATH}`,
+    FITSY_BUILD_HEAP_MIB: "384", FITSY_CHILD_STUB_LOG: log };
+  delete env.NODE_OPTIONS;
+  const result = spawnSync(process.execPath,
+    [join(verify, "run.mjs"), "--only=typecheck,build", "--scope=all", "--runs=ci"],
+    { cwd: directory, env, encoding: "utf8", timeout: 10000 });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(0);
+  expect(result.stdout.trim().split("\n").map(line => JSON.parse(line))).toMatchObject([
+    { name: "typecheck", status: "pass" }, { name: "build", status: "pass" },
+  ]);
+  expect(readFileSync(log, "utf8").trim().split("\n")).toEqual([
+    "npx:", "npm:--max-old-space-size=384",
+  ]);
+});
 
 test.each([true, "shadow"])("drains a failed check's full piped diagnostics with blocking=%s", blocking => {
   const payload = "diagnostic detail\n".repeat(65536) + "FINAL_DIAGNOSTIC_SENTINEL\n";
