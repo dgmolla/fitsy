@@ -55,8 +55,11 @@ export function databaseControl({ root = repository, command = runCommand, spawn
   function stop() {
     assertLock();
     const container = inspect();
-    owned(container, undefined, false);
-    docker(['rm', '-f', container.Id]);
+    const pinnedId = env.FITSY_VERIFY_OWNED_DB;
+    const pinnedImage = env.FITSY_VERIFY_DB_IMAGE;
+    if (Boolean(pinnedId) !== Boolean(pinnedImage)) throw Error('bound stop requires both acquired ID and image');
+    owned(container, pinnedId, false, pinnedImage);
+    docker(['rm', '-f', pinnedId || container.Id]);
   }
   function run(args) {
     assertLock();

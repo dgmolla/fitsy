@@ -50,10 +50,14 @@ function scenario(name: string) {
       FITSY_VERIFY_DB_LOCKED: '1', FITSY_VERIFY_OWNED_DB: 'owned-container-id',
       FITSY_VERIFY_DB_IMAGE: 'sha256:image', FITSY_VERIFY_DB_HOST: loopback,
       FITSY_SHIPPING_SOCKET: '/unowned/session.sock', FITSY_SHIPPING_TOKEN: 'plausible-complete-token' } : {}),
+      ...(mode.startsWith('stop_bound_') ? { FITSY_VERIFY_OWNED_DB: 'owned-container-id',
+        FITSY_VERIFY_DB_IMAGE: mode === 'stop_bound_partial' ? '' : 'sha256:image' } : {}),
       POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
       POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' } });
-    if (['wrong_owner', 'external_url', 'forged_loopback_url', 'startup_failure', 'restart_stopped', 'hijack_before_write', 'replacement_before_write', 'existing_failure', 'stop_wrong_owner', 'stop_success', 'stop_stopped'].includes(mode)) container = makeContainer(control.owner);
-    if (mode === 'wrong_owner' || mode === 'stop_wrong_owner') container.Config.Labels['fitsy.verify.owner'] = 'another-owner';
+    if (['wrong_owner', 'external_url', 'forged_loopback_url', 'startup_failure', 'restart_stopped', 'hijack_before_write', 'replacement_before_write', 'existing_failure', 'stop_wrong_owner', 'stop_success', 'stop_stopped', 'stop_bound_valid', 'stop_bound_replaced', 'stop_bound_wrong_image', 'stop_bound_unowned', 'stop_bound_partial'].includes(mode)) container = makeContainer(control.owner);
+    if (mode === 'stop_bound_replaced') container.Id = 'replacement-id';
+    if (mode === 'stop_bound_wrong_image') container.Image = 'sha256:replacement';
+    if (mode === 'wrong_owner' || mode === 'stop_wrong_owner' || mode === 'stop_bound_unowned') container.Config.Labels['fitsy.verify.owner'] = 'another-owner';
     if (mode === 'startup_failure') container.State.Running = false;
     if (mode === 'restart_stopped') { container.State.Running = false; container.NetworkSettings.Ports = null; }
     if (mode === 'stop_stopped') { container.State.Running = false; container.NetworkSettings.Ports = null; }
@@ -260,4 +264,21 @@ time.sleep(20)`;
     try { process.kill(childPid, 'SIGTERM'); } catch { /* already exited */ }
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+
+test('bound post-session stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {
+  for (const mode of ['stop_bound_replaced', 'stop_bound_wrong_image', 'stop_bound_partial', 'stop_bound_unowned']) {
+    const result = scenario(mode);
+    expect(result.error).not.toBe('');
+    expect(result.calls.some(call => call[0] === 'rm')).toBe(false);
+    expect(result.containerExists).toBe(true);
+  }
+});
+
+test('bound post-session stop removes the genuine acquired immutable ID', () => {
+  const result = scenario('stop_bound_valid');
+  expect(result.error).toBe('');
+  expect(result.calls).toContainEqual(['rm', '-f', 'owned-container-id']);
+  expect(result.containerExists).toBe(false);
 });

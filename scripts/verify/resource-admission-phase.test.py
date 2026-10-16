@@ -167,7 +167,10 @@ elif args[0]=='exec':
   value=json.loads(state.read_text());value['Image']='sha256:replacement';state.write_text(json.dumps(value))
  if 'psql' in args:
   with Path(os.environ['FIXTURE_RESETS']).open('a') as stream:stream.write('reset\n')
-elif args[0]=='rm': state.unlink()
+elif args[0]=='rm':
+ if args[-1] != json.loads(state.read_text())['Id']:
+  print('No such container: '+args[-1],file=sys.stderr);sys.exit(1)
+ state.unlink()
 else: sys.exit(1)
 ''')
         self.docker.chmod(0o700)
@@ -305,6 +308,32 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
         events = [json.loads(line) for line in (self.directory / 'events').read_text().splitlines()]
         reset = next(args for args in events if args[0] == 'exec' and 'psql' in args)
         self.assertEqual(reset[1], 'owned-container')
+
+    def test_post_session_stop_rejects_replaced_and_unowned_then_releases_actual_acquisition(self):
+        result = self.run_packet()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        acquisition = json.loads(next(self.packet.glob('phase-acquisition-*.json')).read_text())
+        environment = dict(self.env, FITSY_VERIFY_OWNED_DB=acquisition['container']['id'],
+                           FITSY_VERIFY_DB_IMAGE=acquisition['container']['image_id'])
+        state = Path(self.env['FIXTURE_STATE'])
+        original = json.loads(state.read_text())
+        argv = [NODE, str(self.verify / 'local-db.mjs'), '--stop-owned-db']
+        for field, replacement in [('Id', 'replacement-container'), ('owner', 'unowned')]:
+            value = json.loads(json.dumps(original))
+            if field == 'owner':
+                value['Config']['Labels']['fitsy.verify.owner'] = replacement
+            else:
+                value[field] = replacement
+            state.write_text(json.dumps(value))
+            stopped = subprocess.run(argv, cwd=self.root, env=environment, capture_output=True, text=True, timeout=10)
+            self.assertNotEqual(stopped.returncode, 0, stopped.stdout)
+            self.assertTrue(state.exists())
+        state.write_text(json.dumps(original))
+        stopped = subprocess.run(argv, cwd=self.root, env=environment, capture_output=True, text=True, timeout=10)
+        self.assertEqual(stopped.returncode, 0, stopped.stderr)
+        self.assertFalse(state.exists())
+        events = [json.loads(line) for line in (self.directory / 'events').read_text().splitlines()]
+        self.assertEqual([args for args in events if args[0] == 'rm'], [['rm', '-f', original['Id']]])
 
     def test_actual_phase_cancellation_releases_detached_child_and_guardian(self):
         ready = self.directory / 'held-child-ready'
