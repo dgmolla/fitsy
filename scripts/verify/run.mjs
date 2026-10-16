@@ -79,6 +79,10 @@ function globToRegExp(glob) {
 }
 
 const registry = yaml.load(readFileSync(join(VERIFY_DIR, "registry.yml"), "utf8"));
+if (only) {
+  const unknown = [...only].filter(name => !registry.checks.some(check => check.name === name));
+  if (unknown.length) throw new Error(`unknown --only checks: ${unknown.join(',')}`);
+}
 const plan = impactPlan({ base: args.base, head: args.head });
 const files = scope === "changed" ? plan.files : null;
 
@@ -153,7 +157,7 @@ function closeWhole(status) {
   if (wholeAttempt) { endTiming(wholeAttempt, status); wholeAttempt = null; }
 }
 
-function runCheck(c) {
+function runCheck(c, { withoutDatabase = false } = {}) {
   const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
   if (c.missing) {
     endTiming(attempt, 'fail');
@@ -167,6 +171,11 @@ function runCheck(c) {
       FITSY_VERIFY_NEEDS_TEST_DEPS: selected.some(check => check.name === 'test') ? '1' : '0',
       ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
       ...(runsCtx === 'ci' && plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) };
+    if (withoutDatabase) {
+      for (const key of ['FITSY_VERIFY_DB_LOCKED', 'FITSY_VERIFY_OWNED_DB', 'FITSY_VERIFY_DB_IMAGE',
+        'FITSY_VERIFY_DB_HOST', 'FITSY_VERIFY_CALLER_NON_POOLING_URL', 'FITSY_LOCAL_DB',
+        'POSTGRES_PRISMA_URL', 'POSTGRES_URL_NON_POOLING']) delete checkEnv[key];
+    }
     if (c.name === 'dev-drift' && process.env.FITSY_VERIFY_OWNED_DB) {
       checkEnv.POSTGRES_URL_NON_POOLING = process.env.FITSY_VERIFY_CALLER_NON_POOLING_URL ?? '';
     }
@@ -272,22 +281,48 @@ if (!results.some(r => r.status === 'fail' && r.blocking)) {
 }
 if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
   summary: 'candidate changed during cheap checks', fix: 'freeze candidate source and rerun cheap/focused checks and review' });
-// Enter the owned disposable DB context before review admission. The wrapper
-// invokes this same public runner; reviewing in the parent would charge a second
-// fresh round when the child starts its required acceptance checks.
+// Review and build the selected database-free phase before acquiring the owned DB.
+// The child still runs its own required admission and every remaining selected check.
+let preDatabaseBuild = [];
+if (!results.some(result => result.status === 'fail' && result.blocking) &&
+    runsCtx === 'local' && remaining.some(c => c.database) && !process.env.FITSY_VERIFY_OWNED_DB) {
+  preDatabaseBuild = remaining.filter(c => c.name === 'build' && !c.database);
+  if (preDatabaseBuild.length) {
+    results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
+    if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
+      summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
+    if (!results.some(result => result.status === 'fail' && result.blocking)) {
+      for (const build of preDatabaseBuild) results.push(await runCheck(build, { withoutDatabase: true }));
+      if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
+        summary: 'candidate changed during production build', fix: 'revalidate the changed candidate' });
+    }
+  }
+}
 let delegated = false;
 if (!results.some(result => result.status === 'fail' && result.blocking) &&
     runsCtx === 'local' && remaining.some(c => c.database) && !process.env.FITSY_VERIFY_OWNED_DB) {
   const { runWithLocalDatabase } = await import('./local-db.mjs');
   delegated = true;
-  try { process.exitCode = runWithLocalDatabase(process.argv.slice(2)); }
+  try {
+    if (preDatabaseBuild.length) {
+      for (const result of results.filter(result => preDatabaseBuild.some(build => build.name === result.name))) {
+        const { stderr, ...line } = result;
+        console.log(JSON.stringify(line));
+      }
+    }
+    const forwarded = preDatabaseBuild.length
+      ? process.argv.slice(2).filter((arg, index, argv) => !/^--only(?:=|$)/.test(arg) && argv[index - 1] !== '--only')
+      : process.argv.slice(2);
+    const remainingNames = selected.filter(c => !preDatabaseBuild.includes(c)).map(c => c.name);
+    process.exitCode = runWithLocalDatabase(preDatabaseBuild.length ? [...forwarded, `--only=${remainingNames.join(',')}`] : forwarded);
+  }
   catch (error) {
     console.log(JSON.stringify({ name: 'local-database', status: 'fail', summary: error.message,
       fix: 'repair this worktree\'s owned disposable database and rerun verification' }));
     process.exitCode = 1;
   }
 }
-if (!delegated && !results.some(r => r.status === 'fail' && r.blocking)) {
+if (!delegated && !preDatabaseBuild.length && !results.some(r => r.status === 'fail' && r.blocking)) {
   results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
   if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
     summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
@@ -295,7 +330,8 @@ if (!delegated && !results.some(r => r.status === 'fail' && r.blocking)) {
 if (delegated) {
   // The owned child runs review, full acceptance and reports its actual status.
 } else if (results.some(result => result.status === 'fail' && result.blocking)) {
-  skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
+  skipped.push(...remaining.filter(c => !results.some(result => result.name === c.name))
+    .map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
 } else {
   if (runsCtx === 'local' && remaining.some(c => c.database)) {
     try {
