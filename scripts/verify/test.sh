@@ -14,7 +14,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/install-local-dispatcher.test
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/review/advisory-finding.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }advisory-finding"
 if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then
   # Jest can collect between suites in this single process when GC is exposed.
-  npm run test:coverage:gc --workspace=apps/api -- --runInBand --logHeapUsage >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
+  NODE_OPTIONS=--max-old-space-size=512 npm run test:coverage:gc --workspace=apps/api -- --runInBand --logHeapUsage >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
 else
   npm run test:coverage --workspace=apps/api >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
 fi
@@ -23,7 +23,7 @@ fi
 FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512 npm test --workspace=@fitsy/scripts -- --runInBand >&2 || FAIL="${FAIL:+$FAIL, }scripts"
 # One Jest worker keeps mobile suites serial while recycling its process after
 # large files; in-band mode retains every suite in one process.
-NODE_OPTIONS=--max-old-space-size=768 npm test --workspace=@fitsy/mobile -- --maxWorkers=1 --workerIdleMemoryLimit=512MB >&2 || FAIL="${FAIL:+$FAIL, }mobile"
+NODE_OPTIONS=--max-old-space-size=768 npm test --workspace=@fitsy/mobile -- --maxWorkers=1 --workerIdleMemoryLimit=256MB >&2 || FAIL="${FAIL:+$FAIL, }mobile"
 if [ -n "$FAIL" ]; then
   printf '{"name":"test","status":"fail","summary":"tests failed in: %s","fix":"run the failing workspace suite locally (npm run test:coverage -w apps/api or npm test -w @fitsy/scripts) and fix"}\n' "$FAIL"
   exit 1
