@@ -70,12 +70,20 @@ function fixtureCommand(binary, args) {
     : 'kern.memorystatus_vm_pressure_level: ' + (process.env.FIXTURE_PRESSURE || '1');
   if (binary === '/bin/ps' && args.join(' ') === '-axo pid=,ppid=,lstart=,command=') {
     identityReads++;
+    if(process.env.FIXTURE_INITIAL_RUNTIME==='unknown') return '900001 1 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.backend\n900002 999999 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization\n';
+    const transition=existsSync(join(process.env.FIXTURE_PACKET,'helper-runtime-transition'));
+    const coldAbsent=process.env.FIXTURE_COLD_START && !existsSync(join(process.env.FIXTURE_PACKET,'cold-guest-started'));
+    if(coldAbsent || (transition && process.env.FIXTURE_HELPER_RUNTIME==='guest-absent')) {
+      // Only this disposable helper copy expires the original bounded startup wait.
+      if(transition) Date.now=()=>5000000000000;
+      return '900001 1 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.backend\n';
+    }
     const ready=existsSync(join(process.env.FIXTURE_PACKET, `phase-admission-${process.ppid}.json`));
     const moved=process.env.FIXTURE_RUNTIME_AFTER_READY && (ready || process.env.FIXTURE_RUNTIME_AT_STOP);
     const during=(process.env.FIXTURE_RUNTIME_DURING_WAIT && existsSync(join(process.env.FIXTURE_PACKET,'runtime-after-wait'))) || existsSync(join(process.env.FIXTURE_PACKET,'runtime-before-reader'));
     if(moved && process.env.FIXTURE_RUNTIME_AFTER_READY==='guest-absent') return '900001 1 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.backend\n';
-    const backend=moved && process.env.FIXTURE_RUNTIME_AFTER_READY==='backend-replaced' ? 900009 : 900001;
-    const guest = moved || during || (process.env.FIXTURE_CHANGED_GUEST && identityReads > 1) ? 900003 : 900002;
+    const backend=(moved && process.env.FIXTURE_RUNTIME_AFTER_READY==='backend-replaced') || (transition && process.env.FIXTURE_HELPER_RUNTIME==='backend-replaced') ? 900009 : 900001;
+    const guest = moved || during || transition || (process.env.FIXTURE_CHANGED_GUEST && identityReads > 1) ? 900003 : 900002;
     return `${backend} 1 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.backend\n${guest} ${backend} Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization\n`.replaceAll('\\n','\n');
   }
   if (binary === '/bin/ps' && args.join(' ') === '-axo pid=,pgid=,command=') {
@@ -191,14 +199,22 @@ from pathlib import Path
 args=sys.argv[1:];state=Path(os.environ['FIXTURE_STATE']);root=os.environ['FIXTURE_ROOT']
 name='fitsy-verify-'+hashlib.sha256(root.encode()).hexdigest()[:16]
 events=Path(os.environ['FIXTURE_EVENTS'])
+packet=Path(os.environ['FIXTURE_PACKET']);transition=packet/'helper-runtime-transition'
+if os.environ.get('FIXTURE_IN_HELPER') and transition.exists():
+ with (packet/'changed-runtime-api').open('a') as stream:stream.write(json.dumps(args)+'\n')
+if os.environ.get('FIXTURE_IN_HELPER') and args[0]==os.environ.get('FIXTURE_HELPER_CHANGE_AFTER'):
+ transition.write_text('the observed live runtime changes after this API')
 with events.open('a') as stream:stream.write(json.dumps(args)+'\n')
 if not os.environ.get('FIXTURE_IN_HELPER'):
  with Path(str(events)+'.local').open('a') as stream:stream.write(json.dumps(args)+'\n')
 if args[0]=='context':
  if os.environ.get('FIXTURE_DAEMON_FAIL'): print('synthetic daemon failure',file=sys.stderr);sys.exit(1)
  print('desktop-linux')
-elif args[0]=='info': print('daemon-fixture|fixture-version|4294967296|2')
+elif args[0]=='info':
+ daemon='startup-daemon' if os.environ.get('FIXTURE_COLD_START') and not (packet/'cold-guest-started').exists() else 'daemon-fixture'
+ print(daemon+'|fixture-version|4294967296|2')
 elif args[0]=='ps':
+ if os.environ.get('FIXTURE_COLD_START'): (packet/'cold-guest-started').write_text('guest appears after startup inventory')
  if state.exists(): print(json.loads(state.read_text())['Id']+'|'+name+'|Up 1 second')
 elif args[0]=='inspect':
  if not state.exists(): print('No such object',file=sys.stderr);sys.exit(1)
@@ -315,6 +331,59 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
             self.assertEqual(value['container'], {'id': 'owned-container', 'image_id': 'sha256:fixture'})
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             self.assertTrue((self.packet / f"phase-intent-{phase['lock_pid']}.json").exists())
+
+
+    def test_sufficient_cold_budget_does_not_disable_observed_runtime_custody(self):
+        result = self.run_packet(FIXTURE_HELPER_CHANGE_AFTER='context', FIXTURE_HELPER_RUNTIME='guest-replaced')
+        self.assertFalse((self.packet / 'changed-runtime-api').exists(), result.stdout + result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
+        self.assertFalse((self.directory / 'resets').exists())
+
+    def test_sufficient_cold_budget_absent_guest_refuses_before_next_api(self):
+        result = self.run_packet(FIXTURE_HELPER_CHANGE_AFTER='info', FIXTURE_HELPER_RUNTIME='guest-absent')
+        self.assertFalse((self.packet / 'changed-runtime-api').exists(), result.stdout + result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
+        self.assertFalse((self.directory / 'resets').exists())
+
+    def test_absent_guest_cold_start_requires_fresh_runtime_bound_readiness_set(self):
+        result = self.run_packet(FIXTURE_COLD_START='1')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        ready = json.loads(next(self.packet.glob('phase-admission-*.json')).read_text())
+        self.assertEqual(ready['readiness']['daemon']['id'], 'daemon-fixture')
+        self.assertTrue(ready['startup_observations'])
+        preliminary = ready['startup_observations'][0]
+        self.assertEqual(preliminary['state'], 'preliminary')
+        self.assertEqual(preliminary['daemon']['id'], 'startup-daemon')
+        self.assertEqual([value['operation'] for value in preliminary['operations']],
+                         ['context', 'info', 'inspect', 'ps'])
+        self.assertEqual(preliminary['operations'][2]['result'], 'failed')
+        events = [json.loads(line)[0] for line in (self.directory / 'events').read_text().splitlines()]
+        self.assertEqual(events[:8], ['context','info','inspect','ps'] * 2)
+        self.assertEqual(len((self.directory / 'resets').read_text().splitlines()), 1)
+
+    def test_exact_warm_budget_valid_and_absent_guest_refusal(self):
+        authority = json.loads(self.authority.read_text())
+        # A larger declared synthetic cold startup allowance creates the actual
+        # supported warm-only interval without changing any production guard.
+        authority['cold_required_bytes'] += 512 * 1024**2
+        self.authority.write_text(json.dumps(authority))
+        result = self.run_packet(FIXTURE_PAGES='380000', FIXTURE_COLD_START='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.no_docker_or_reset()
+        result = self.run_packet(FIXTURE_PAGES='380000')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        ready = json.loads(next(self.packet.glob('phase-admission-*.json')).read_text())
+        self.assertEqual(ready['startup_observations'], [])
+        self.assertEqual(ready['readiness']['identity']['guest']['pid'], 900002)
+
+    def test_unknown_and_initially_changing_runtime_refuse_before_docker(self):
+        for options in ({'FIXTURE_INITIAL_RUNTIME': 'unknown'}, {'FIXTURE_CHANGED_GUEST': '1'}):
+            result = self.run_packet(**options)
+            self.assertNotEqual(result.returncode, 0)
+            self.no_docker_or_reset()
+            self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
 
     def test_wrong_session_refuses_before_helper_or_docker(self):
         self.assertNotEqual(self.run_packet(FIXTURE_DENY_SESSION='1').returncode, 0)
@@ -614,6 +683,22 @@ for _stage in ('migrate', 'seed', 'selection', 'reader', 'reuse', 'stop'):
         for _kind in ('changed', 'missing', 'malformed'):
             setattr(PhaseBoundaryTests, f'test_effective_limits_{_stage}_{_field}_{_kind}',
                     limit_case(_stage, _field, _kind))
+
+
+def runtime_api_case(operation, mode):
+    def test(self):
+        result = self.run_packet(FIXTURE_HELPER_CHANGE_AFTER=operation, FIXTURE_HELPER_RUNTIME=mode)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse((self.packet / 'changed-runtime-api').exists())
+        self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
+        self.assertFalse((self.directory / 'resets').exists())
+    return test
+
+
+for _operation in ('context', 'info', 'inspect', 'ps'):
+    for _mode in ('guest-replaced', 'guest-absent', 'backend-replaced'):
+        setattr(PhaseBoundaryTests, f'test_runtime_bound_api_{_operation}_{_mode}',
+                runtime_api_case(_operation, _mode))
 
 
 if __name__ == '__main__':

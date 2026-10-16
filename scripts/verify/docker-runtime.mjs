@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export function parsePsIdentity(raw) {
+export function parsePsRuntime(raw) {
   const found = { backend: [], guest: [] };
   for (const line of raw.split('\n')) {
     const match = /^\s*(\d+)\s+(\d+)\s+(.{24})\s+(.+)$/.exec(line);
@@ -15,9 +15,14 @@ export function parsePsIdentity(raw) {
       found[kind].push({ pid: Number(match[1]), ppid: Number(match[2]), started: match[3].trim() });
     }
   }
-  if (found.backend.length !== 1 || found.guest.length !== 1 ||
-      found.guest[0].ppid !== found.backend[0].pid) return null;
-  return { backend: found.backend[0], guest: found.guest[0] };
+  if (found.backend.length !== 1 || found.guest.length > 1) return { state: 'unverified' };
+  const backend = found.backend[0];
+  if (!found.guest.length) return { state: 'guest-absent', backend };
+  if (found.guest[0].ppid !== backend.pid) return { state: 'unverified' };
+  return { state: 'live', backend, identity: { backend, guest: found.guest[0] } };
+}
+export function parsePsIdentity(raw) {
+  return parsePsRuntime(raw).identity ?? null;
 }
 export function assertAdmittedDockerGuest(expected, command = (binary, args) => execFileSync(binary, args,
   { encoding: 'utf8', timeout: 15000 })) {

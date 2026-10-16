@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { parsePsIdentity } from './docker-runtime.mjs';
+import { parsePsIdentity, parsePsRuntime } from './docker-runtime.mjs';
 import { existsSync, statfsSync, readFileSync, lstatSync, writeFileSync, renameSync, realpathSync, readdirSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -242,15 +242,23 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
   });
   if (!Number.isSafeInteger(ownGroup) || ownGroup <= 0 || competitors.length) throw Error('external heavy execution or owned group identity is unverified');
   const identity = () => parsePsIdentity(command('/bin/ps', ['-axo', 'pid=,ppid=,lstart=,command=']));
-  const firstIdentity = identity();
+  const observeRuntime = () => parsePsRuntime(command('/bin/ps', ['-axo', 'pid=,ppid=,lstart=,command=']));
+  const firstRuntime = observeRuntime();
   sleep(250);
-  const secondIdentity = identity();
-  const warm = firstIdentity && JSON.stringify(firstIdentity) === JSON.stringify(secondIdentity);
+  const secondRuntime = observeRuntime();
+  if (firstRuntime.state === 'unverified' || JSON.stringify(firstRuntime) !== JSON.stringify(secondRuntime)) {
+    throw Error('initial Docker runtime is unknown or unstable');
+  }
+  const warm = firstRuntime.state === 'live';
   if (before.available_memory_bytes < authority.cold_required_bytes &&
       !(warm && before.available_memory_bytes >= native + reserve)) {
     throw Error('cold startup budget unavailable and no stable exact warm guest exists');
   }
   const exactWarm = before.available_memory_bytes < authority.cold_required_bytes;
+  // Capacity mode does not release custody of an already observed live guest.
+  let runtimeIdentity = firstRuntime.identity;
+  let startupAttempt;
+  const startupObservations = [];
   const context = { issue, source_sha: authority.source_sha, selected_package_sha: authority.selected_package_sha,
     completed_manifest_sha256: authority.completed_manifest_sha256, review_ledger_sha256: authority.review_ledger_sha256,
     execution_id: authority.execution_id, authority_sha256: hash(authorityPath), lock_pid: process.ppid,
@@ -260,12 +268,36 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
     writeFileSync(`${path}.tmp`, JSON.stringify(value) + '\n', { mode: 0o600, flag: 'wx' });
     renameSync(`${path}.tmp`, path);
   };
-  publish(intent, { ...context, state: 'phase-acquiring', before, exact_warm: exactWarm });
+  publish(intent, { ...context, state: 'phase-acquiring', before, exact_warm: exactWarm,
+    initial_runtime: firstRuntime });
+  function bindStartedRuntime(observed) {
+    runtimeIdentity = observed.identity;
+    const restart = Error('cold startup guest observed; restart complete runtime-bound readiness');
+    restart.restartBoundReadiness = true;
+    throw restart;
+  }
   const checkedDocker = args => {
-    if (exactWarm && JSON.stringify(identity()) !== JSON.stringify(firstIdentity)) {
-      throw Error('exact warm Docker guest changed before API call');
+    const observed = observeRuntime();
+    if (runtimeIdentity) {
+      if (observed.state !== 'live' || JSON.stringify(observed.identity) !== JSON.stringify(runtimeIdentity)) {
+        throw Error('admitted Docker backend or guest changed before API call');
+      }
+    } else {
+      if (observed.state === 'unverified' || JSON.stringify(observed.backend) !== JSON.stringify(firstRuntime.backend)) {
+        throw Error('cold startup Docker backend or guest is unknown or changed');
+      }
+      if (observed.state === 'live') bindStartedRuntime(observed);
     }
-    return dockerCall(args, command);
+    const preliminary = !runtimeIdentity ? { operation: args[0], at: Date.now() / 1000, result: 'attempted' } : null;
+    if (preliminary) startupAttempt.operations.push(preliminary);
+    try {
+      const result = dockerCall(args, command);
+      if (preliminary) preliminary.result = 'completed';
+      return result;
+    } catch (error) {
+      if (preliminary) preliminary.result = 'failed';
+      throw error;
+    }
   };
   const priorInvocations = readdirSync(directory).filter(name => /^phase-admission-\d+\.json$/.test(name)).map(name => {
     const path = join(directory, name); privateFile(path, uid, 0o600);
@@ -291,11 +323,15 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
   const deadline = Date.now() + (exactWarm ? 0 : 60000);
   let ready;
   do {
+    const bindingAtStart = runtimeIdentity;
+    startupAttempt = { at: Date.now() / 1000, operations: [] };
     try {
       if (checkedDocker(['context', 'show']).trim() !== 'desktop-linux') throw Error('selected Docker context unavailable');
+      startupAttempt.context = 'desktop-linux';
       const daemon = daemonInfo(checkedDocker(['info', '--format', '{{.ID}}|{{.ServerVersion}}|{{.MemTotal}}|{{.NCPU}}']));
+      startupAttempt.daemon = daemon;
       if (!daemon || daemon.memory_bytes < 1610612736 || daemon.cpus < 2) throw Error('Docker daemon identity or effective limits unavailable');
-      // Every API, including absence inspection, retains exact-warm identity.
+      // Every API retains observed live custody, regardless of capacity mode.
       const existing = inspect(root, (_binary, args) => checkedDocker(args));
       if (existing) {
         if (!priorAcquisitions.some(value => value.container.id === existing.Id && value.container.image_id === existing.Image) ||
@@ -312,10 +348,18 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
       if (running.length !== (existing ? 1 : 0) || (existing && !running[0].startsWith(`${existing.Id}|${exactOwnedName(root)}|`))) {
         throw Error('running Docker container inventory has an unrelated consumer');
       }
-      const currentIdentity = identity();
-      if (!currentIdentity || (exactWarm && JSON.stringify(currentIdentity) !== JSON.stringify(firstIdentity))) {
+      const observed = observeRuntime();
+      if (!runtimeIdentity) {
+        if (observed.state === 'unverified' || JSON.stringify(observed.backend) !== JSON.stringify(firstRuntime.backend)) {
+          throw Error('cold startup Docker backend or guest is unknown or changed');
+        }
+        if (observed.state === 'live') bindStartedRuntime(observed);
         throw Error('positive Docker backend and guest ancestry unavailable');
       }
+      if (observed.state !== 'live' || JSON.stringify(observed.identity) !== JSON.stringify(runtimeIdentity)) {
+        throw Error('admitted Docker backend or guest changed after API observations');
+      }
+      const currentIdentity = runtimeIdentity;
       if (existing && !priorAcquisitions.some(({ admission: value, container }) => container.id === existing.Id && container.image_id === existing.Image && JSON.stringify(value.readiness?.identity) === JSON.stringify(currentIdentity) &&
           value.readiness?.daemon?.id === daemon.id && value.readiness?.daemon?.version === daemon.version)) {
         throw Error('existing DB runtime differs from this session acquisition');
@@ -325,6 +369,9 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
           image_id: existing.Image } : { state: 'absent' }, running_containers: running };
       break;
     } catch (error) {
+      if (!bindingAtStart) startupObservations.push({ ...startupAttempt, state: 'preliminary', reason: error.message });
+      error.startupObservations = startupObservations;
+      if (error.restartBoundReadiness && Date.now() < deadline) continue;
       if (Date.now() >= deadline || !/daemon identity or effective limits unavailable|positive Docker backend and guest ancestry unavailable/.test(error.message)) throw error;
       sleep(2000);
     }
@@ -349,7 +396,8 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
   }
   const result = { ...context, state: 'phase-ready', authority_path: authorityPath,
     receipt_path: receipt, at: Date.now() / 1000, before, warm_first: warmFirst,
-    warm_second: warmSecond, readiness: ready, budget: { native_peak_bytes: native, host_reserve_bytes: reserve,
+    warm_second: warmSecond, readiness: ready, startup_observations: startupObservations,
+    budget: { native_peak_bytes: native, host_reserve_bytes: reserve,
       cold_required_bytes: authority.cold_required_bytes, host_stop_bytes: HOST_STOP, disk_floor_bytes: DISK_FLOOR } };
   publish(receipt, result);
   return result;
@@ -360,7 +408,8 @@ if (process.argv[1] && resolve(process.argv[1]) === file) {
     ? hostSnapshot()
     : process.argv[2] === '--owned-db-phase'
     ? await (async () => { try { return await admitOwnedDatabasePhase(); }
-      catch (error) { return { state: 'refused', reason: error.message }; } })()
+      catch (error) { return { state: 'refused', reason: error.message,
+        ...(error.startupObservations?.length ? { startup_observations: error.startupObservations } : {}) }; } })()
     : admitResources();
   console.log(JSON.stringify(result));
   process.exitCode = process.argv[2] === '--host-snapshot' || result.status === 'pass' || result.state === 'phase-ready' ? 0 : 1;
