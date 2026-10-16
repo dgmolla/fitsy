@@ -13,8 +13,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/sim/retire_task_device.test.py -q >&2 
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/install-local-dispatcher.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }install-local-dispatcher"
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/review/advisory-finding.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }advisory-finding"
 if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then
-  # Jest can collect between suites in this single process when GC is exposed.
-  NODE_OPTIONS=--max-old-space-size=512 npm run test:coverage:gc --workspace=apps/api -- --runInBand --logHeapUsage >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
+  # Keep shared-schema suites serial while recycling retained suite modules.
+  NODE_OPTIONS=--max-old-space-size=512 npm run test:coverage:gc --workspace=apps/api -- --maxWorkers=1 --workerIdleMemoryLimit=256MB --logHeapUsage >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
 else
   npm run test:coverage --workspace=apps/api >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
 fi
