@@ -46,7 +46,11 @@ function scenario(name: string) {
       spawned.push({ args, env: opts.env, resetBeforeSpawn: calls.some(call => call[0] === 'exec' && call.includes('psql')) });
       return { status: mode === 'migration_failure' && args[1] === 'migrate' ? 1 : 0 };
     }, disk: () => ({ bavail: mode === 'low_disk' ? 1 : 3 * 1024 ** 3, bsize: 1 }),
-    assertLock: () => {}, env: { POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
+    assertLock: () => {}, env: { ...(mode === 'forged_phase' ? { FITSY_VERIFY_DB_PHASE: '1',
+      FITSY_VERIFY_DB_LOCKED: '1', FITSY_VERIFY_OWNED_DB: 'owned-container-id',
+      FITSY_VERIFY_DB_IMAGE: 'sha256:image', FITSY_VERIFY_DB_HOST: loopback,
+      FITSY_SHIPPING_SOCKET: '/unowned/session.sock', FITSY_SHIPPING_TOKEN: 'plausible-complete-token' } : {}),
+      POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
       POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' } });
     if (['wrong_owner', 'external_url', 'forged_loopback_url', 'startup_failure', 'restart_stopped', 'hijack_before_write', 'replacement_before_write', 'existing_failure', 'stop_wrong_owner', 'stop_success', 'stop_stopped'].includes(mode)) container = makeContainer(control.owner);
     if (mode === 'wrong_owner' || mode === 'stop_wrong_owner') container.Config.Labels['fitsy.verify.owner'] = 'another-owner';
@@ -123,6 +127,13 @@ test('numeric DB suite host gate invokes the real owned assertion against inspec
     expect([current.dev, current.ino, current.uid]).toEqual([identity.dev, identity.ino, identity.uid]);
     rmSync(scratch, { recursive: true });
   }
+});
+
+test('complete forged phase metadata cannot reach a helper or Docker without the real inherited lock', () => {
+  const result = scenario('forged_phase');
+  expect(result.error).toMatch(/actual inherited lock descriptor/);
+  expect(result.calls).toHaveLength(0);
+  expect(result.spawned).toHaveLength(0);
 });
 
 test('forged numeric loopback metadata cannot pass the owned container assertion', () => {

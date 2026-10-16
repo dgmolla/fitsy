@@ -9,6 +9,20 @@ import { repository } from './impact-plan.mjs';
 const image = 'postgis/postgis:16-3.4';
 const runCommand = (file, args, options) => execFileSync(file, args, options);
 
+// The explicit phase route is stronger than historical no-request CLI use.
+// An inherited marker alone cannot authorize its first Docker inspection.
+export function assertPhaseLock(root = repository, env = process.env) {
+  if (!env.FITSY_VERIFY_DB_PHASE) return;
+  const fd = Number(env.FITSY_VERIFY_DB_LOCK_FD);
+  if (env.FITSY_VERIFY_DB_PHASE !== '1' || !Number.isSafeInteger(fd) || fd < 3) {
+    throw Error('explicit DB phase requires an actual inherited lock descriptor');
+  }
+  const result = spawnSync('/Applications/Xcode.app/Contents/Developer/usr/bin/python3', ['-I',
+    fileURLToPath(new URL('./db-lock.py', import.meta.url)), '--assert-phase-lock', root, String(process.ppid)],
+  { env, stdio: ['ignore', 'pipe', 'pipe', fd], encoding: 'utf8', timeout: 15000 });
+  if (result.error || result.status !== 0) throw Error('explicit DB phase lock ownership was not verified');
+}
+
 export function databaseControl({ root = repository, command = runCommand, spawn = spawnSync,
   disk = statfsSync, env = process.env, assertLock = () => {
     if (env.FITSY_VERIFY_DB_LOCKED !== '1') throw new Error('owned verification database lock is missing');
@@ -45,6 +59,7 @@ export function databaseControl({ root = repository, command = runCommand, spawn
   }
   function run(args) {
     assertLock();
+    assertPhaseLock(root, env);
     let createdId;
     try {
       const space = disk(root);
