@@ -63,6 +63,8 @@ class PhaseBoundaryTests(unittest.TestCase):
                                 'return await admitOwnedDatabasePhase({command: fixtureCommand, disk: () => ({bavail: 20*1024**3, bsize:1}), sleep: () => {}});')
         injection = r'''
 let identityReads = 0;
+const fixtureNow=Date.now;
+Date.now=()=>fixtureNow()+(existsSync(join(process.env.FIXTURE_PACKET,'startup-deadline-expired'))?60001:0);
 function fixtureCommand(binary, args) {
   if (binary === '/usr/bin/vm_stat') return 'Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free: ' + (process.env.FIXTURE_PAGES || 524288) + '.\nPages inactive: 0.\nPages speculative: 0.\n'.replaceAll('\\n','\n');
   if (binary === '/usr/sbin/sysctl') return args[0] === 'vm.swapusage'
@@ -211,6 +213,17 @@ if args[0]=='context':
  if os.environ.get('FIXTURE_DAEMON_FAIL'): print('synthetic daemon failure',file=sys.stderr);sys.exit(1)
  print('desktop-linux')
 elif args[0]=='info':
+ mode=os.environ.get('FIXTURE_INFO_ERROR')
+ counter=packet/'info-attempt-count';count=int(counter.read_text())+1 if counter.exists() else 1
+ counter.write_text(str(count))
+ if mode and (mode!='transient-once' or count==1):
+  errors={'transient-once':'Cannot connect to the Docker daemon at unix:///fixture/docker.sock. Is the docker daemon running?',
+          'persistent':'Cannot connect to the Docker daemon at unix:///fixture/docker.sock. Is the docker daemon running?',
+          'authentication':'unauthorized: authentication required',
+          'policy':'authorization denied by policy: Cannot connect to the Docker daemon',
+          'unknown':'unexpected daemon failure with unknown cause'}
+  if mode=='persistent' and count==2: (packet/'startup-deadline-expired').write_text('same bounded startup expired')
+  print(errors[mode],file=sys.stderr);sys.exit(1)
  daemon='startup-daemon' if os.environ.get('FIXTURE_COLD_START') and not (packet/'cold-guest-started').exists() else 'daemon-fixture'
  print(daemon+'|fixture-version|4294967296|2')
 elif args[0]=='ps':
@@ -384,6 +397,45 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
             self.assertNotEqual(result.returncode, 0)
             self.no_docker_or_reset()
             self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
+
+
+    def test_absent_guest_transient_info_failure_recovers_with_failed_preliminary_evidence(self):
+        result = self.run_packet(FIXTURE_COLD_START='1', FIXTURE_INFO_ERROR='transient-once')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        ready = json.loads(next(self.packet.glob('phase-admission-*.json')).read_text())
+        first = ready['startup_observations'][0]
+        self.assertEqual(first['operations'][-1]['operation'], 'info')
+        self.assertEqual(first['operations'][-1]['result'], 'failed')
+        self.assertEqual(first['operations'][-1]['failure_kind'], 'connection-not-ready')
+        self.assertEqual(ready['readiness']['daemon']['id'], 'daemon-fixture')
+        self.assertGreaterEqual(int((self.packet / 'info-attempt-count').read_text()), 3)
+        self.assertEqual(len((self.directory / 'resets').read_text().splitlines()), 1)
+
+    def test_persistent_cold_start_connection_failure_stops_at_original_deadline(self):
+        result = self.run_packet(FIXTURE_COLD_START='1', FIXTURE_INFO_ERROR='persistent')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(int((self.packet / 'info-attempt-count').read_text()), 2)
+        self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
+        self.assertFalse((self.directory / 'resets').exists())
+        refused = json.loads(result.stdout.splitlines()[-1])
+        self.assertEqual(len(refused['startup_observations']), 2)
+
+    def test_cold_start_policy_authentication_and_unknown_failures_are_not_retried(self):
+        for mode in ('authentication', 'policy', 'unknown'):
+            counter = self.packet / 'info-attempt-count'
+            before = int(counter.read_text()) if counter.exists() else 0
+            result = self.run_packet(FIXTURE_COLD_START='1', FIXTURE_INFO_ERROR=mode)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(int(counter.read_text()), before + 1)
+            self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
+            self.assertFalse((self.directory / 'resets').exists())
+
+    def test_observed_live_guest_connection_failure_does_not_gain_startup_retry(self):
+        result = self.run_packet(FIXTURE_INFO_ERROR='transient-once')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(int((self.packet / 'info-attempt-count').read_text()), 1)
+        self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
+        self.assertFalse((self.directory / 'resets').exists())
 
     def test_wrong_session_refuses_before_helper_or_docker(self):
         self.assertNotEqual(self.run_packet(FIXTURE_DENY_SESSION='1').returncode, 0)

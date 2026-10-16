@@ -296,6 +296,17 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
       return result;
     } catch (error) {
       if (preliminary) preliminary.result = 'failed';
+      const detail = error.stderr?.toString().trim() ?? '';
+      if (preliminary && args[0] === 'info' && error.status === 1 && !error.signal &&
+          !/authentication|unauthorized|authorization|forbidden|permission|access denied|policy|certificate|x509|tls/i.test(detail) &&
+          /^Cannot connect to the Docker daemon(?: at [^\r\n]+)?\. Is the docker daemon running\?$/.test(detail)) {
+        preliminary.failure_kind = 'connection-not-ready';
+        preliminary.exit_status = error.status;
+        preliminary.stderr_sha256 = createHash('sha256').update(detail).digest('hex');
+        const pending = Error('cold startup Docker info connection not ready');
+        pending.coldStartupConnectionNotReady = true;
+        throw pending;
+      }
       throw error;
     }
   };
@@ -372,6 +383,10 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
       if (!bindingAtStart) startupObservations.push({ ...startupAttempt, state: 'preliminary', reason: error.message });
       error.startupObservations = startupObservations;
       if (error.restartBoundReadiness && Date.now() < deadline) continue;
+      if (error.coldStartupConnectionNotReady && !bindingAtStart && !runtimeIdentity && Date.now() < deadline) {
+        sleep(2000);
+        continue;
+      }
       if (Date.now() >= deadline || !/daemon identity or effective limits unavailable|positive Docker backend and guest ancestry unavailable/.test(error.message)) throw error;
       sleep(2000);
     }
