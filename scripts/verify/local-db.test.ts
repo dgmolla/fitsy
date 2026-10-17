@@ -231,30 +231,69 @@ test('explicit stop can retire an owned stopped container without an active port
   expect(result.containerExists).toBe(false);
 });
 
+type FixtureProcess = { pid: number; pgid: number; started: string };
+function fixtureProcess(pid: number, parent?: number): FixtureProcess | undefined {
+  if (!Number.isSafeInteger(pid) || pid <= 1) return undefined;
+  const result = spawnSync('/bin/ps', ['-p', String(pid), '-o', 'pid=,ppid=,pgid=,lstart='], { encoding: 'utf8' });
+  const fields = result.stdout.trim().split(/\s+/);
+  if (result.status !== 0 || Number(fields[0]) !== pid || fields.length < 8 ||
+      (parent !== undefined && Number(fields[1]) !== parent)) return undefined;
+  return { pid, pgid: Number(fields[2]), started: fields.slice(3).join(' ') };
+}
+function signalFixtureProcess(acquired: FixtureProcess | undefined, signal: NodeJS.Signals, group = false) {
+  if (!acquired || !Number.isSafeInteger(acquired.pid) || acquired.pid <= 1) return false;
+  const current = fixtureProcess(acquired.pid);
+  if (!current || current.pgid !== acquired.pgid || current.started !== acquired.started ||
+      (group && current.pgid !== acquired.pid)) return false;
+  try { process.kill(group ? -acquired.pid : acquired.pid, signal); return true; }
+  catch { return false; }
+}
+
+test('lock fixture refuses unacquired and zero process cleanup without signaling its caller', () => {
+  const kill = jest.spyOn(process, 'kill');
+  try {
+    expect(fixtureProcess(0)).toBeUndefined();
+    expect(signalFixtureProcess(undefined, 'SIGKILL', true)).toBe(false);
+    for (const pid of [0, 1, -1, NaN]) {
+      expect(signalFixtureProcess({ pid, pgid: pid, started: '' }, 'SIGKILL', true)).toBe(false);
+    }
+    expect(kill).not.toHaveBeenCalled();
+  } finally { kill.mockRestore(); }
+});
+
 test('concurrent CLI attempts cannot reset DB, even when a coordinator dies with a live child', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'fitsy-db-flock-'));
   const lockScript = resolve(__dirname, 'db-lock.py');
   const marker = resolve(root, 'pids');
-  const contender = () => spawnSync('python3', [lockScript, root, 'python3', '-c', 'print("acquired")'], { encoding: 'utf8' });
+  // This generic flock fixture is not the caller's admitted shipping DB phase.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+    !key.startsWith('FITSY_VERIFY_') && !key.startsWith('FITSY_SHIPPING_') && key !== 'FITSY_LOCAL_DB'));
+  const contender = () => spawnSync('python3', [lockScript, root, 'python3', '-c', 'print("acquired")'], { encoding: 'utf8', env });
   const holderCode = `import os,subprocess,sys,time
 child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(20)'],
   stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 open(${JSON.stringify(marker)},'w').write(f'{os.getpid()} {child.pid}')
 time.sleep(20)`;
-  const holder = spawn('python3', [lockScript, root, 'python3', '-c', holderCode], { stdio: 'ignore' });
-  let workerPid = 0, childPid = 0;
+  const holder = spawn('python3', [lockScript, root, 'python3', '-c', holderCode], { stdio: 'ignore', env });
+  let worker: FixtureProcess | undefined, child: FixtureProcess | undefined;
   try {
     for (let i = 0; i < 40 && !existsSync(marker); i++) await new Promise(resolve => setTimeout(resolve, 25));
     expect(existsSync(marker)).toBe(true);
-    workerPid = Number(readFileSync(marker, 'utf8').split(' ')[0]);
-    childPid = Number(readFileSync(marker, 'utf8').split(' ')[1]);
+    const pids = readFileSync(marker, 'utf8').split(' ');
+    const workerPid = Number(pids[0]), childPid = Number(pids[1]);
+    if (!holder.pid) throw new Error('lock fixture holder did not start');
+    worker = fixtureProcess(workerPid, holder.pid);
+    expect(worker).toBeDefined();
+    expect(worker?.pgid).toBe(workerPid);
+    child = fixtureProcess(childPid, workerPid);
+    expect(child).toBeDefined();
     expect(contender().status).toBe(75);
     holder.kill('SIGKILL');
     expect(contender().status).toBe(75);
-    process.kill(workerPid, 'SIGKILL');
+    expect(signalFixtureProcess(worker, 'SIGKILL')).toBe(true);
     expect(() => process.kill(childPid, 0)).not.toThrow();
     expect(contender().status).toBe(75);
-    process.kill(childPid, 'SIGTERM');
+    expect(signalFixtureProcess(child, 'SIGTERM')).toBe(true);
     let result = contender();
     for (let i = 0; i < 40 && result.status === 75; i++) {
       spawnSync('sleep', ['0.05']);
@@ -263,8 +302,8 @@ time.sleep(20)`;
     expect(result.status).toBe(0);
   } finally {
     holder.kill('SIGTERM');
-    try { process.kill(-workerPid, 'SIGKILL'); } catch { /* already exited */ }
-    try { process.kill(childPid, 'SIGTERM'); } catch { /* already exited */ }
+    signalFixtureProcess(worker, 'SIGKILL', true);
+    signalFixtureProcess(child, 'SIGTERM');
     rmSync(root, { recursive: true, force: true });
   }
 });
