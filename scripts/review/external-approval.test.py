@@ -561,7 +561,7 @@ class DispatchBoundaryTests(PublishBoundaryTests):
             return {'total_count': 1, 'repositories': [{'id': 42, 'full_name': self.scope_name}]}
         if endpoint == 'apps/fixture': return self.identity['app']
         if endpoint == 'users/fixture[bot]': return self.actor
-        if endpoint == 'user': return {'id': 18452532}
+        if endpoint == 'user': return {'id': 18452532, 'type': 'User'}
         if endpoint == f'repos/{external.REPO}': return {'default_branch': self.default_branch}
         if '/contents/' in endpoint:
             path = endpoint.split('/contents/')[1].split('?')[0]
@@ -606,12 +606,66 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         with patch.object(external, 'github', side_effect=self.transport):
             return external.release_ready(self.config, 30, 20)
 
+    def test_ruleset_metadata_uses_verified_human_credential_before_dispatch(self):
+        metadata_calls = []
+        def transport(config, endpoint, payload=None, release=False):
+            if endpoint == 'user':
+                metadata_calls.append((endpoint, release))
+                return {'id': 18452532, 'type': 'User'}
+            if endpoint.endswith('/rulesets/12'):
+                metadata_calls.append((endpoint, release))
+                value = dict(self.ruleset)
+                if not release:
+                    value.pop('bypass_actors')
+                return value
+            return self.transport(config, endpoint, payload, release)
+        with patch.object(external, 'github', side_effect=transport):
+            external.dispatch_release(self.config, 20)
+        self.assertEqual(metadata_calls, [('user', True),
+                         (f'repos/{external.REPO}/rulesets/12', True)])
+        self.assertEqual(len(self.writes), 1)
+
     def test_valid_single_human_path_binds_dispatch_and_reports_pending_without_approval(self):
         self.dispatch()
         self.assertEqual(self.writes, [{'ref': 'main', 'inputs': {'release_sha': self.main,
                           'verify_run': '20', 'acceptance_sha256': external.acceptance(self.body)}}])
         self.assertEqual(self.ready()['environment_ids'], [5])
         self.assertEqual(len(self.writes), 1)
+
+    def test_wrong_custody_actor_refuses_before_ruleset_read_or_dispatch(self):
+        for actor in ({'id': 999, 'type': 'User'}, {'id': 18452532, 'type': 'Bot'},
+                      {'id': '18452532', 'type': 'User'}, {}):
+            with self.subTest(actor=actor):
+                calls = []
+                def transport(config, endpoint, payload=None, release=False):
+                    calls.append((endpoint, release))
+                    if endpoint == 'user': return actor
+                    return self.transport(config, endpoint, payload, release)
+                with patch.object(external, 'github', side_effect=transport):
+                    with self.assertRaisesRegex(ValueError, 'pinned human operator'):
+                        external.dispatch_release(self.config, 20)
+                self.assertNotIn((f'repos/{external.REPO}/rulesets/12', True), calls)
+                self.assertFalse(self.writes)
+
+    def test_missing_or_changed_human_ruleset_refuses_before_dispatch(self):
+        import copy
+        original = copy.deepcopy(self.ruleset)
+        invalid = [None, [],
+                   original['bypass_actors'] + [{'actor_id': 999, 'actor_type': 'User', 'bypass_mode': 'pull_request'}],
+                   [{'actor_id': 18452532, 'actor_type': 'User', 'bypass_mode': 'always'}]]
+        for actors in invalid:
+            with self.subTest(actors=actors):
+                self.ruleset = copy.deepcopy(original)
+                if actors is None: self.ruleset.pop('bypass_actors')
+                else: self.ruleset['bypass_actors'] = actors
+                with self.assertRaisesRegex(ValueError, 'merge custody unavailable'):
+                    self.dispatch()
+                self.assertFalse(self.writes)
+        self.ruleset = copy.deepcopy(original)
+        self.ruleset['rules'] = [{'type': 'update', 'parameters': {'update_allows_fetch_and_merge': True}}]
+        with self.assertRaisesRegex(ValueError, 'merge custody unavailable'):
+            self.dispatch()
+        self.assertFalse(self.writes)
 
     def test_human_initiation_or_rerun_refuses_even_with_same_release_title(self):
         for field in ('actor', 'triggering_actor'):
@@ -765,6 +819,27 @@ class TokenTransportTests(unittest.TestCase):
         with patch.object(external.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='{}')) as outbound:
             self.assertEqual(external.github(self.config, 'repos/dgmolla/fitsy/check-runs', {'name': external.CHECK}), {})
         self.assertEqual(outbound.call_args.kwargs['env']['GH_TOKEN'], self.original)
+
+    def test_custody_reader_uses_protected_human_token_for_identity_and_ruleset_only(self):
+        from types import SimpleNamespace
+        fixture = DispatchBoundaryTests(); fixture.setUp()
+        try:
+            config = {**fixture.config, 'gh_path': '/fixture/gh',
+                      'release_token_file': str(fixture.root / 'human-token')}
+            Path(config['release_token_file']).write_text('synthetic-human-token')
+            Path(config['release_token_file']).chmod(0o600)
+            def transport(argv, **kwargs):
+                self.assertEqual(kwargs['env']['GH_TOKEN'], 'synthetic-human-token')
+                self.assertNotIn('--method', argv)
+                self.assertEqual(kwargs['env']['GH_CONFIG_DIR'], '/var/empty')
+                value = {'id': 18452532, 'type': 'User'} if argv[-1] == 'user' else fixture.ruleset
+                return SimpleNamespace(returncode=0, stdout=json.dumps(value))
+            with patch.object(external.subprocess, 'run', side_effect=transport) as outbound:
+                self.assertEqual(external.merge_custody(config), fixture.ruleset)
+            self.assertEqual([call.args[0][-1] for call in outbound.call_args_list],
+                             ['user', f'repos/{external.REPO}/rulesets/12'])
+        finally:
+            fixture.tearDown()
 
 
 class WorkflowGateTests(unittest.TestCase):

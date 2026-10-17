@@ -501,10 +501,22 @@ def validate_merge_custody(ruleset, config):
         valid_update = valid_update and set(update_rule) == {'type'}
     require(ruleset['target'] == 'branch' and ruleset['enforcement'] == 'active'
             and ruleset['conditions']['ref_name'] == {'include': ['refs/heads/main'], 'exclude': []}
-            and ruleset['bypass_actors'] == [{'actor_id': config['merge_operator_user_id'],
+            and ruleset.get('bypass_actors') == [{'actor_id': config['merge_operator_user_id'],
                                              'actor_type': 'User', 'bypass_mode': 'pull_request'}]
             and valid_update,
             'exclusive independent merge custody unavailable')
+
+
+def merge_custody(config):
+    # GitHub hides bypass actors from read-only App credentials.
+    actor = github(config, 'user', release=True)
+    require(actor.get('type') == 'User' and type(actor.get('id')) is int
+            and actor['id'] == config['merge_operator_user_id'],
+            'merge custody credential must identify the pinned human operator')
+    ruleset = github(config, f'repos/{REPO}/rulesets/{config["merge_custody_ruleset_id"]}',
+                     release=True)
+    validate_merge_custody(ruleset, config)
+    return ruleset
 
 
 def validate_release_reviewer(environment, actor_ids, reviewer_id, config):
@@ -535,8 +547,7 @@ def release_context(config, verify_id):
     require(latest['workflow_runs'] and latest['workflow_runs'][0]['id'] == verify_id,
             'superseded main Verify cannot authorize release')
     protection = github(config, f'{endpoint}/branches/main/protection')
-    ruleset = github(config, f'{endpoint}/rulesets/{config["merge_custody_ruleset_id"]}')
-    validate_merge_custody(ruleset, config)
+    merge_custody(config)
     # Refuse pagination rather than silently truncate protection evidence.
     checks = github(config, f'{endpoint}/commits/{main}/check-runs?filter=latest&per_page=100')
     require(checks['total_count'] <= 100, 'release check pagination requires operator inspection')
