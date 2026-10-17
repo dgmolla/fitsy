@@ -20,7 +20,7 @@ else
 fi
 # Real decoder and attachment cases run in the required local media lane;
 # their deterministic contract cases remain registered here.
-FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512 npm test --workspace=@fitsy/scripts -- --runInBand >&2 || FAIL="${FAIL:+$FAIL, }scripts"
+FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512 npm test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB >&2 || FAIL="${FAIL:+$FAIL, }scripts"
 # One Jest worker keeps mobile suites serial while recycling its process after
 # large files; in-band mode retains every suite in one process.
 NODE_OPTIONS=--max-old-space-size=768 npm test --workspace=@fitsy/mobile -- --maxWorkers=1 --workerIdleMemoryLimit=256MB >&2 || FAIL="${FAIL:+$FAIL, }mobile"
