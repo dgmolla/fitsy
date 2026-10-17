@@ -77,8 +77,9 @@ export function runWithLocalDatabase(args) {
     expect(git.status).toBe(0);
   }
   const command = [join(verify, "run.mjs"), "--layer=all", "--scope=all", "--runs=local"];
-  // This copied target models its own acquisition, independently of the caller's live session.
+  // This copied target owns its Git comparison and acquisition, independently of the caller.
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+    !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$)/.test(key) &&
     !key.startsWith("FITSY_VERIFY_") && !key.startsWith("FITSY_SHIPPING_") &&
     !["FITSY_LOCAL_DB", "POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING"].includes(key)));
   const run = (extra: NodeJS.ProcessEnv = {}, extraArgs: string[] = []) => spawnSync(process.execPath, [...command, ...extraArgs],
@@ -87,7 +88,8 @@ export function runWithLocalDatabase(args) {
 
   const valid = run({ FITSY_VERIFY_DB_LOCKED: '1', POSTGRES_PRISMA_URL: 'postgresql://unowned' });
   expect(valid.error).toBeUndefined();
-  expect(valid.status).toBe(0);
+  expect({ status: valid.status, output: valid.status === 0 ? "" : `${valid.stdout}\n${valid.stderr}` })
+    .toEqual({ status: 0, output: "" });
   expect(readFileSync(join(directory, "order.log"), "utf8").trim().split("\n"))
     .toEqual(["build", "db-acquire", "db-assert", "test"]);
   expect(names(valid.stdout).filter(name => name === "build")).toHaveLength(1);
