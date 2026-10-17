@@ -115,7 +115,6 @@ print("\n".join(kept))')" || fail
 fi
 if [ "$REPO_ROOT" != "$CONTROL_ROOT" ]; then
   [ -f "$COMPLETED_AUTH" ] || fail
-  [ "$(git -C "$CONTROL_ROOT" rev-parse HEAD)" = "$BASE_SHA" ] || fail
   [ -z "$(git -C "$CONTROL_ROOT" status --porcelain --untracked-files=all)" ] || fail
 fi
 RUNTIME_CONTROL_SHA="$BASE_SHA"
@@ -136,6 +135,11 @@ PYCONTROL
   )" || fail
 else
   [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] || fail
+fi
+if [ "$REPO_ROOT" != "$CONTROL_ROOT" ]; then
+  # A separately reviewed installed composition control is not current main.
+  # Only the authenticated private context above can select that exact source.
+  [ "$(git -C "$CONTROL_ROOT" rev-parse HEAD)" = "$RUNTIME_CONTROL_SHA" ] || fail
 fi
 export FITSY_DIFF_BASE="${COMPARE_SHA:-$BASE_SHA}" FITSY_DIFF_HEAD="$HEAD_SHA"
 BRANCH="$(git symbolic-ref --quiet --short HEAD)"

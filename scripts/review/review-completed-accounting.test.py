@@ -1017,6 +1017,14 @@ class CompletedAdmission(CompletedAccounting):
                     auth.chmod(0o600)
         if composition:
             frozen = head
+            if distinct_control:
+                before_normal = (budgets / 'issue-443.jsonl').read_bytes()
+                git('fetch', '-q', str(product), head, cwd=runtime)
+                git('checkout', '-q', head, cwd=runtime)
+                invalid_normal = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
+                self.assertNotEqual(invalid_normal.returncode, 0, 'unapproved noncomposition runtime')
+                self.assertEqual(before_normal, (budgets / 'issue-443.jsonl').read_bytes())
+                git('checkout', '-q', base, cwd=runtime)
             first = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
             self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
             retained = auth.read_bytes()
@@ -1040,6 +1048,7 @@ class CompletedAdmission(CompletedAccounting):
                 approved_control = git('rev-parse', 'HEAD')
                 self.assertNotEqual(approved_control, main)
                 git('fetch', '-q', str(product), approved_control, cwd=runtime)
+                git('checkout', '-q', approved_control, cwd=runtime)
             git('checkout', '-q', 'frozen')
             git('merge', '-qm', 'compose frozen product with approved main', approved_control)
             head = git('rev-parse', 'HEAD')
@@ -1070,9 +1079,33 @@ class CompletedAdmission(CompletedAccounting):
             self.assertNotEqual(refused.returncode, 0, 'wrong approved control source')
             self.assertEqual(before_composition, (budgets / 'issue-443.jsonl').read_bytes())
             auth.write_text(json.dumps(approval))
+            if distinct_control:
+                git('checkout', '-q', main, cwd=runtime)
+                refused = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
+                self.assertNotEqual(refused.returncode, 0, 'stale installed control checkout')
+                self.assertEqual(before_composition, (budgets / 'issue-443.jsonl').read_bytes())
+                git('checkout', '-q', approved_control, cwd=runtime)
+                self.assertTrue(runtime.resolve().is_relative_to(self.root.resolve()),
+                                'runtime mutation fixture requires actual owned target')
+                marker = runtime / 'scripts/review/control.py'
+                marker.write_text('dirty installed runtime')
+                refused = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
+                self.assertNotEqual(refused.returncode, 0, 'dirty installed control checkout')
+                self.assertEqual(before_composition, (budgets / 'issue-443.jsonl').read_bytes())
+                git('restore', '--', 'scripts/review/control.py', cwd=runtime)
         result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         if composition:
+            if distinct_control:
+                self.assertTrue(runtime.resolve().is_relative_to(self.root.resolve()),
+                                'live runtime mutation requires actual owned target')
+                import shlex
+                change = 'printf changed >> ' + shlex.quote(str(runtime / 'scripts/review/control.py')) + '; npm run verify'
+                drift = command[:command.index('--') + 1] + ['bash', '-c', change]
+                refused = subprocess.run(drift, env=env, capture_output=True, text=True, timeout=40)
+                self.assertNotEqual(refused.returncode, 0, 'runtime changed during owned session')
+                self.assertEqual(before_composition, (budgets / 'issue-443.jsonl').read_bytes())
+                git('restore', '--', 'scripts/review/control.py', cwd=runtime)
             again = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
             self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
             self.assertEqual(before_composition, (budgets / 'issue-443.jsonl').read_bytes())
