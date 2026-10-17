@@ -81,6 +81,23 @@ const defaultGetItem = (AsyncStorage.getItem as jest.Mock).getMockImplementation
 export function response(body: unknown) { return { ok: true, status: 200, json: async () => body } as Response; }
 type AccountProfile = ProfileResponse<UserGoalV2>;
 const accountProfiles = new Map<string, AccountProfile>();
+function defaultAccountProfile(id: string): AccountProfile {
+  return {
+    user: { id, email: `${id}@example.test`, name: null, birthday: null, age: null,
+      heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null, onboardingStep: 0 },
+    macroTarget: null,
+  };
+}
+export function seedAccountProfile(id: string, seed: {
+  user?: Partial<Omit<AccountProfile['user'], 'id'>>;
+  macroTarget?: AccountProfile['macroTarget'];
+}) {
+  const profile = accountProfiles.get(id) ?? defaultAccountProfile(id);
+  accountProfiles.set(id, {
+    user: { ...profile.user, ...seed.user },
+    macroTarget: seed.macroTarget === undefined ? profile.macroTarget : seed.macroTarget,
+  });
+}
 // Synthetic transport only. Real profileSync still owns claiming, conversion,
 // persistence and reconciliation; auth/subscription failures remain independent.
 export function withAccountProfile(other: (url: string, init?: RequestInit) => Promise<Response>,
@@ -94,11 +111,7 @@ export function withAccountProfile(other: (url: string, init?: RequestInit) => P
     if (method !== 'GET' && method !== 'PATCH')
       return { ...response({ error: 'Method not allowed' }), ok: false, status: 405 };
     if (profileOverride) return profileOverride(url, init);
-    const profile: AccountProfile = accountProfiles.get(id) ?? {
-      user: { id, email: `${id}@example.test`, name: null, birthday: null, age: null,
-        heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null, onboardingStep: 0 },
-      macroTarget: null,
-    };
+    const profile = accountProfiles.get(id) ?? defaultAccountProfile(id);
     if (method === 'PATCH') {
       const update = JSON.parse(String(init?.body)) as Partial<AccountProfile['user']> & {
         macroTarget?: AccountProfile['macroTarget']; preserveMacroTarget?: boolean;

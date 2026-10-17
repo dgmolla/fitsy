@@ -1,4 +1,4 @@
-import { withAccountProfile, mockState, selected, response, deferred, routes, installEligibleTrialOffer, renderJourney, Alert, AsyncStorage, act, fireEvent, waitFor, MacroSetup, getPaywallIntent, rememberPaywallIntent, getStoredToken, saveMacroTargets, saveOnboardingField, hasPaymentSignInContinuation, rememberPaymentSignInContinuation, hasPendingMealClaim, rememberPendingMealClaim } from './OnboardingNavigationHarness';
+import { withAccountProfile, seedAccountProfile, mockState, selected, response, deferred, routes, installEligibleTrialOffer, renderJourney, Alert, AsyncStorage, act, fireEvent, waitFor, MacroSetup, getPaywallIntent, rememberPaywallIntent, getStoredToken, saveMacroTargets, saveOnboardingField, hasPaymentSignInContinuation, rememberPaymentSignInContinuation, hasPendingMealClaim, rememberPendingMealClaim } from './OnboardingNavigationHarness';
 import { installHardwareBackFixture } from './hardwareBackHarness';
 import { BOOT_VERDICT_CAP_MS } from '../lib/usePurchases';
 import { storeToken } from '../lib/authClient';
@@ -204,6 +204,7 @@ it('resumes an interrupted signed-in waitlist signup without replaying stale che
 });
 
 it('replays an interrupted active checkout after missing targets are saved', async () => {
+  seedAccountProfile('buyer', { user: { goal: 'lose_fat' }, macroTarget: null });
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
   global.fetch = jest.fn(withAccountProfile(async () => response({ active: true, synced: true, verdict: 'active',
     lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' })));
@@ -221,6 +222,7 @@ it('replays an interrupted active checkout after missing targets are saved', asy
 });
 
 it('opens payment when a selected-meal entitlement becomes never subscribed during macro setup', async () => {
+  seedAccountProfile('buyer', { user: { goal: 'lose_fat' }, macroTarget: null });
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
   global.fetch = jest.fn(withAccountProfile(async () => response({ active: true, synced: true, verdict: 'active',
     lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' })));
@@ -240,6 +242,7 @@ it('opens payment when a selected-meal entitlement becomes never subscribed duri
 });
 
 it('recovers from a stalled account verdict after macro setup without losing the meal', async () => {
+  seedAccountProfile('buyer', { user: { goal: 'lose_fat' }, macroTarget: null });
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
   global.fetch = jest.fn(withAccountProfile(async () => response({ active: true, synced: true, verdict: 'active',
     lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' })));
