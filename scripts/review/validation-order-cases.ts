@@ -75,7 +75,7 @@ export function validationOrderCases(f: Fixture) {
   function verify(args: string[] = [], hook = false) {
     const reviewed = prepare();
     if (reviewed.status !== 0) return reviewed;
-    return spawnSync(hook ? 'bash' : 'npm', hook ? ['.evidence/pre-push'] : ['run', 'verify', '--', ...args], {
+    return spawnSync(hook ? process.execPath : 'npm', hook ? ['scripts/verify/shipping-session.mjs', '--', 'bash', '.evidence/pre-push'] : ['run', 'verify', '--', ...args], {
       cwd: f.root(), encoding: 'utf8', timeout: 15000,
       env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' },
     });
@@ -151,20 +151,16 @@ export function validationOrderCases(f: Fixture) {
     expect(callCount()).toBe(2);
     expect(order()).not.toContain('full');
   });
-  test('broken production build blocks pre-push and one repair permits full acceptance', () => {
+  test('CI-first publication defers a broken local build but explicit acceptance still fails', () => {
     setup();
     const root = f.root();
     writeFileSync(join(root, 'scripts/verify/registry.yml'), readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8') + '  - name: build\n    script: build.sh\n    layer: 3\n    blocking: true\n    runs: [local, ci]\n');
-    writeFileSync(join(root, 'scripts/verify/build.sh'), "echo build >> .evidence/order\n[ ! -f .evidence/build-fail ]\n");
-    f.git('add', '-A'); f.git('commit', '-qm', 'pre-push build fixture');
-    writeFileSync(join(root, '.evidence/build-fail'), 'fail');
-    const broken = verify([], true);
-    expect(broken.status).toBe(1); expect(order()).toContain('build'); expect(order()).not.toContain('full');
-    expect(callCount()).toBe(1);
-    rmSync(join(root, '.evidence/build-fail'));
+    writeFileSync(join(root, 'scripts/verify/build.sh'), "echo build >> .evidence/order\nexit 1\n");
+    f.git('add', '-A'); f.git('commit', '-qm', 'CI-first build fixture');
     expect(verify([], true).status).toBe(0);
-    expect(order().split('\n').filter(line => line === 'full')).toHaveLength(1);
-    expect(callCount()).toBe(2);
+    expect(order().split('\n')).not.toContain('build'); expect(order().split('\n')).not.toContain('full');
+    const explicit = verify(['--layer=all']);
+    expect(explicit.status).toBe(1); expect(order()).toContain('build');
   });
   test('cheap failure prevents actual reviewer, full suites and pre-push', () => {
     setup(); writeFileSync(join(f.root(), '.evidence/cheap-fail'), 'fail');
@@ -185,9 +181,9 @@ export function validationOrderCases(f: Fixture) {
     writeFileSync(join(f.root(), 'app.ts'), 'export const value = 3;\n');
     f.git('add', 'app.ts'); f.git('commit', '-qm', 'repair');
     writeFileSync(join(f.root(), 'verdict'), passingVerdict);
-    // The repaired shipping entry point performs review and full acceptance once.
+    // The repaired publication entry point revalidates review without local full.
     expect(verify([], true).status).toBe(0);
-    expect(order()).toContain('full'); expect(callCount()).toBe(2);
+    expect(order().split('\n')).not.toContain('full'); expect(callCount()).toBe(2);
     expect(readFileSync(ledger, 'utf8').startsWith(failedHistory)).toBe(true);
     expect(readFileSync(ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ verdict: 'fail' }));
     expect(readdirSync(join(f.root(), '.evidence/verify/attempts')).length).toBeGreaterThanOrEqual(2);
@@ -196,7 +192,7 @@ export function validationOrderCases(f: Fixture) {
     expect(verify(['--reuse']).status).toBe(1);
     expect(callCount()).toBe(2);
     expect(readFileSync(ledger, 'utf8')).toBe(retained);
-    expect(order().split('\n').filter(line => line === 'full')).toHaveLength(1);
+    expect(order().split('\n').filter(line => line === 'full')).toHaveLength(0);
   });
   test('source drift and changed heads require fresh review before full acceptance', () => {
     setup(); const review = f.run();
@@ -210,12 +206,6 @@ export function validationOrderCases(f: Fixture) {
     f.git('add', '-A'); f.git('commit', '-qm', 'stable candidate');
     writeFileSync(join(f.root(), 'verdict'), failingVerdict);
     expect(verify().status).toBe(1); expect(order()).not.toContain('full'); expect(callCount()).toBe(2);
-  });
-  test('failed full acceptance blocks the actual pre-push entry point', () => {
-    setup();
-    writeFileSync(join(f.root(), '.evidence/full-fail'), 'fail');
-    const result = verify([], true); expect(result.status).toBe(1); expect(order()).toContain('full');
-    expect(result.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ name: 'test', status: 'fail' })); expect(callCount()).toBe(1);
   });
   test('PR source stability never imports candidate-owned modules in authenticated controls', () => {
     const root = f.root();

@@ -13,9 +13,9 @@ flowchart LR
     A[Implement and freeze candidate] --> B[Cheap canonical checks and focused regressions]
     B --> C[One source-bound independent review]
     C -->|Repair findings| A
-    C -->|Pass| T[Full suites and affected E2E acceptance]
-    T --> D[Pre-push and PR checks with canonical reuse]
-    D --> E[Authorized merge and deploy]
+    C -->|Pass| D[Reviewed cheap-plus-focused publication]
+    D --> T[Trusted exact-tree Verify plus applicable media/native acceptance]
+    T --> E[Protected authorized merge and deploy]
     E --> F[Main Verify plus Deploy plus product smoke]
 ```
 
@@ -48,13 +48,13 @@ export FITSY_REVIEW_MODEL=gpt-6-sol
 export FITSY_REVIEW_REASONING_EFFORT=high
 # Execute only the independently authorized review of the frozen candidate.
 /bin/bash -p scripts/verify/review-admission.sh --execute-review
-# Revalidate that evidence and own final acceptance plus pre-push live.
+# Revalidate that evidence and own ordinary pre-push publication live.
 scripts/verify/shipping-session.mjs -- bash <task-owned-shipping-script>
 ```
 
 Replace the focused test and task script with the accepted issue's meaningful regressions and applicable final acceptance commands.
 Focused selection supports Jest, Node `.test.mjs` and Python `.test.py` through the canonical runner.
-The task script must fail immediately on an acceptance failure before push.
+The task script must stop on failed cheap checks or matching review before push; applicable final acceptance remains mandatory before protected merge.
 A focused selection is not full acceptance; correctness review still judges scenario relevance.
 
 Admission checks out the frozen candidate in a disposable directory and restores immutable reviewer controls from the managed external review repository main.
@@ -82,13 +82,18 @@ Reuse unchanged receipts only through the canonical runners; review-budget attem
 Verification retains each stage attempt under `.evidence/verify/attempts/` and archives retired test receipts under `check-cache/history/`.
 UI signoff and development walkthroughs precede final UI acceptance.
 The publishable `final-candidate` simulator entry point requires the live shipping session's matching canonical review before native journeys.
-Keep native journeys, finish, full verification and push in one session command, using `set -e` or `&&` to stop after a failed acceptance command.
-For example, prepare a task-owned ignored shell script containing the affected final-candidate simulator commands, `finish`, `npm run verify -- --layer=0-3 --reuse`, then `git push -u origin HEAD`, and run `scripts/verify/shipping-session.mjs -- bash <task-script>`.
+Keep each publishable native journey and its finish inside live matching-review ownership, using `set -e` or `&&` to stop on failure.
+For ordinary publication, run `scripts/verify/shipping-session.mjs -- git push -u origin HEAD` after freezing and reviewing the candidate.
+The existing trusted public Verify supplies heavy validation before protected merge; applicable local media/native evidence may be completed separately against that same frozen head.
 Development walkthroughs and UI signoff happen before that session.
 Source or focused-selection drift invalidates the live admission and requires revalidation of cheap checks and affected review evidence; it never silently starts another reviewer.
 Apple account, legal and submission approvals, required product-flow status, pre-push, PR, main Verify, Deploy and actual release acceptance remain required.
 
-The pre-push hook runs layers 0-3, including the required source-bound production build, plus size/domain checks.
+The pre-push hook revalidates the live source-bound independent review, runs cheap/focused checks plus size/domain checks, then rechecks live ownership.
+It does not run local tests/builds as a publication prerequisite.
+The independently installed external approval operator validates the existing Verify workflow bytes, approved candidate tree, PR base/head/merge tree, exact run/attempt/checksuite and successful standard-runner jobs from the GitHub Actions issuer before publishing required acceptance.
+The existing per-issue `local_acceptance` policy pins `source_tree_sha` from the independently reviewed candidate and retains only the applicable local receipt/recipe/required checks, including real media when affected.
+An empty local required-check set means no applicable local receipt, not permission to skip trusted CI or product-flow/release protections.
 A hook pass does not replace the applicable product-flow verification or independent review.
 The registry determines which checks apply and whether a check is blocking or shadow.
 Removing obsolete structural exceptions belongs to the changed product domain only when every removed entry names a file in the same diff.
@@ -103,7 +108,7 @@ The `product-flow/local` publisher checks that receipt before setting its exact-
 
 **Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes.
 CI runs static checks, unit tests and builds; its optional simulator workflow remains experimental.
-`npm run verify` and pre-push require fresh `.evidence/product-flow/report.json` when impact selection applies.
+Applicable product acceptance and its exact-head publisher require fresh `.evidence/product-flow/report.json` when impact selection applies; ordinary publication does not claim that proof.
 Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
 
 Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID.
@@ -218,7 +223,8 @@ bash scripts/verify/review-admission.sh
 
 Group material defects and mandatory acceptance failures into one repair pass, while preserving bounded P2 debt as owned, source-bound follow-ups.
 After repair, review the affected behavior and its consequences against the current source; do not reopen unrelated adjudicated questions without new evidence.
-After cheap/focused checks and a passing independent review, run every required full suite and affected E2E flow on stable source, and reuse only receipts whose source, environment and test identity still match.
+After cheap/focused checks and a passing independent review, publish the frozen candidate through the ordinary hook.
+Before protected merge, require trusted existing Verify and every applicable real-media/native flow, reusing only receipts whose source, environment and test identity still match.
 Rerun invalidated checks and lenses after a source change; never reuse an old-head verdict as a fresh pass.
 Review requirements are independent of the implementing agent, model vendor and subscription.
 The runner supports `claude` and `codex` adapters; choose an authenticated provider explicitly with `FITSY_REVIEW_PROVIDER`.

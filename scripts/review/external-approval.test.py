@@ -526,7 +526,24 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         acceptance = AcceptanceTests(); acceptance.setUp()
         receipt = self.root / 'acceptance.json'; receipt.write_text(json.dumps(acceptance.receipt))
         self.config['local_acceptance'] = {'443': {**acceptance.policy, 'receipt_path': str(receipt),
-                                                  'receipt_sha256': external.digest(receipt.read_bytes())}}
+                                                  'receipt_sha256': external.digest(receipt.read_bytes()),
+                                                  'source_tree_sha': 'equal-reviewed-product-tree'}}
+        self.pr.update(number=9, merge_commit_sha='d' * 40)
+        self.pr['base']['sha'] = 'b' * 40
+        self.candidate_verify = {**self.verify, 'id': 21, 'event': 'pull_request', 'head_sha': self.source,
+                                 'run_attempt': 1, 'check_suite_id': 100,
+                                 'pull_requests': [{'number': 9, 'base': {'sha': 'b' * 40},
+                                                    'head': {'sha': self.source}}]}
+        self.candidate_jobs = [{'id': 1000 + i, 'name': name, 'run_id': 21, 'run_attempt': 1,
+                                'head_sha': self.source, 'status': 'completed', 'conclusion': 'success',
+                                'labels': ['ubuntu-latest'],
+                                'check_run_url': f'https://api.github.com/repos/{external.REPO}/check-runs/{1000+i}'}
+                               for i, name in enumerate(external.VERIFY_JOBS)]
+        self.candidate_checks = {job['id']: {'id': job['id'], 'name': job['name'], 'head_sha': self.source,
+                                            'status': 'completed', 'conclusion': 'success',
+                                            'check_suite': {'id': 100},
+                                            'app': {'id': 15368, 'slug': 'github-actions'}}
+                                 for job in self.candidate_jobs}
         self.product_status = {'sha': self.source, 'total_count': 1,
                                'statuses': [{'context': 'product-flow/local', 'state': 'success'}]}
         self.latest_verify = 20
@@ -555,8 +572,14 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         if endpoint.endswith('/git/ref/heads/main'): return {'object': {'sha': self.main}}
         if endpoint.endswith(f'/commits/{self.source}/status?per_page=100'): return self.product_status
         if endpoint.endswith('/actions/runs/20'): return self.verify
+        if endpoint.endswith('/actions/runs/21'): return self.candidate_verify
+        if endpoint.endswith('/actions/runs/21/jobs?filter=latest&per_page=100'):
+            return {'total_count': len(self.candidate_jobs), 'jobs': self.candidate_jobs}
+        if '/check-runs/' in endpoint and int(endpoint.rsplit('/', 1)[1]) in self.candidate_checks:
+            return self.candidate_checks[int(endpoint.rsplit('/', 1)[1])]
         if endpoint.endswith('/actions/runs/30'): return self.run
-        if '/actions/workflows/10/runs?' in endpoint: return {'workflow_runs': [{'id': self.latest_verify}]}
+        if '/actions/workflows/10/runs?' in endpoint:
+            return {'workflow_runs': [{'id': 21 if 'event=pull_request' in endpoint else self.latest_verify}]}
         if endpoint.endswith('/branches/main/protection'): return self.protection
         if endpoint.endswith('/rulesets/12'): return self.ruleset
         if '/check-runs?filter=latest' in endpoint: return {'total_count': len(self.checks), 'check_runs': self.checks}
@@ -565,7 +588,10 @@ class DispatchBoundaryTests(PublishBoundaryTests):
             return {'total_count': 1, 'branch_policies': [{'name': 'main', 'type': 'branch'}]}
         if endpoint.endswith('/pulls?per_page=100'):
             return [{**self.pr, 'merged_at': 'fixture', 'merge_commit_sha': self.main}]
-        if '/git/commits/' in endpoint: return {'tree': {'sha': 'equal-reviewed-product-tree'}}
+        if '/git/commits/' in endpoint:
+            return {'tree': {'sha': 'equal-reviewed-product-tree'},
+                    'parents': [{'sha': 'b' * 40}, {'sha': self.source}]}
+        if '/git/trees/' in endpoint: return {'truncated': False, 'tree': []}
         if endpoint.endswith('/pending_deployments'):
             return [{'environment': {'id': 5, 'name': 'production-release'}, 'current_user_can_approve': self.can_approve}]
         if endpoint.endswith('/actions/workflows/11/dispatches'):
@@ -664,10 +690,8 @@ class DispatchBoundaryTests(PublishBoundaryTests):
                 self.assertFalse(self.writes)
 
     def test_valid_installation_can_publish_source_bound_acceptance(self):
-        self.api_override[f'repos/{external.REPO}/actions/runs/20'] = {
-            **self.verify, 'event': 'pull_request', 'head_sha': self.source}
         with patch.object(external, 'github', side_effect=self.transport):
-            result = external.publish_acceptance(self.config, 443, 9, 20)
+            result = external.publish_acceptance(self.config, 443, 9, 21)
         self.assertEqual(result['source_sha'], self.source)
         self.assertEqual(self.writes[0]['name'], external.ACCEPTANCE_CHECK)
 
@@ -952,6 +976,114 @@ class ProfileCustodyTests(unittest.TestCase):
         for issue, source in ((443, 'a'*40), (463, 'c'*40)):
             with self.assertRaisesRegex(ValueError, 'issue/source'):
                 external.review_inputs(self.config, issue, source, 'fixture')
+
+
+class CIAcceptanceTests(unittest.TestCase):
+    """Actual existing publication consumer with fake GitHub only, never real CI."""
+    def setUp(self):
+        self.f = DispatchBoundaryTests()
+        self.f.setUp()
+        self.addCleanup(self.f.tearDown)
+        self.f.config['local_acceptance']['443']['required_checks'] = {}
+
+    def publish(self):
+        with patch.object(external, 'github', side_effect=self.f.transport):
+            return external.publish_acceptance(self.f.config, 443, 9, 21)
+
+    def test_ci_first_valid_without_local_full_receipt(self):
+        policy = self.f.config['local_acceptance']['443']
+        Path(policy.pop('receipt_path')).unlink()
+        policy.pop('receipt_sha256')
+        self.assertEqual(self.publish()['source_sha'], self.f.source)
+        self.assertEqual(len(self.f.writes), 1)
+        self.assertEqual(self.f.writes[0]['name'], external.ACCEPTANCE_CHECK)
+
+    def test_wrong_run_identity_event_base_head_and_attempt_refuse(self):
+        import copy
+        original = copy.deepcopy(self.f.candidate_verify)
+        for key, value in [('id', 22), ('workflow_id', 99), ('path', '.github/workflows/other.yml'),
+                           ('event', 'push'), ('head_sha', 'f' * 40), ('conclusion', 'failure'),
+                           ('status', 'in_progress'), ('run_attempt', True), ('pull_requests', [])]:
+            with self.subTest(key=key):
+                self.f.candidate_verify = {**copy.deepcopy(original), key: value}
+                with self.assertRaises(ValueError): self.publish()
+                self.assertFalse(self.f.writes)
+        for side in ('base', 'head'):
+            self.f.candidate_verify = copy.deepcopy(original)
+            self.f.candidate_verify['pull_requests'][0][side]['sha'] = 'f' * 40
+            with self.assertRaisesRegex(ValueError, 'event PR/base/head'): self.publish()
+        self.assertFalse(self.f.writes)
+
+    def test_missing_failed_skipped_wrong_attempt_and_nonstandard_jobs_refuse(self):
+        import copy
+        original = copy.deepcopy(self.f.candidate_jobs)
+        self.f.candidate_jobs = original[:-1]
+        with self.assertRaisesRegex(ValueError, 'job missing'): self.publish()
+        for key, value in [('conclusion', 'skipped'), ('status', 'queued'), ('run_attempt', 2),
+                           ('head_sha', 'f' * 40), ('run_id', 99), ('labels', ['ubuntu-latest-8-cores']),
+                           ('check_run_url', 'https://candidate.invalid/check')]:
+            with self.subTest(key=key):
+                self.f.candidate_jobs = copy.deepcopy(original)
+                self.f.candidate_jobs[0][key] = value
+                with self.assertRaisesRegex(ValueError, 'job failed'): self.publish()
+        self.assertFalse(self.f.writes)
+
+    def test_forged_issuer_suite_or_source_cannot_replace_real_execution(self):
+        import copy
+        original = copy.deepcopy(self.f.candidate_checks)
+        for key, value in [('app', {'id': 999, 'slug': 'github-actions'}),
+                           ('check_suite', {'id': 999}), ('head_sha', 'f' * 40),
+                           ('conclusion', 'failure')]:
+            self.f.candidate_checks = copy.deepcopy(original)
+            self.f.candidate_checks[1000][key] = value
+            with self.assertRaisesRegex(ValueError, 'issuer/execution'): self.publish()
+        self.assertFalse(self.f.writes)
+
+    def test_changed_workflow_or_coverage_suppressing_source_tree_refuses(self):
+        import base64
+        endpoint = f'repos/{external.REPO}'
+        self.f.api_override[f'{endpoint}/contents/.github/workflows/verify.yml?ref={self.f.source}'] = {
+            'type': 'file', 'path': '.github/workflows/verify.yml', 'encoding': 'base64',
+            'content': base64.b64encode(b'jobs: {tests: {steps: [{run: true}]}}').decode()}
+        with self.assertRaisesRegex(ValueError, 'candidate-controlled'): self.publish()
+        self.f.api_override.clear()
+        self.f.api_override[f'{endpoint}/git/commits/{self.f.source}'] = {
+            'tree': {'sha': 'candidate-registry-or-test-script-skipping-coverage'}}
+        with self.assertRaisesRegex(ValueError, 'verification/source tree'): self.publish()
+        self.assertFalse(self.f.writes)
+
+    def test_stale_run_merge_tree_or_comparison_refuses(self):
+        endpoint = f'repos/{external.REPO}'
+        self.f.api_override[f'{endpoint}/actions/workflows/10/runs?head_sha={self.f.source}&event=pull_request&per_page=1'] = {'workflow_runs': [{'id': 22}]}
+        with self.assertRaisesRegex(ValueError, 'superseded'): self.publish()
+        self.f.api_override.clear()
+        self.f.api_override[f'{endpoint}/git/commits/{self.f.pr["merge_commit_sha"]}'] = {
+            'tree': {'sha': 'different-merge-tree'}, 'parents': [{'sha': 'b' * 40}, {'sha': self.f.source}]}
+        with self.assertRaisesRegex(ValueError, 'merge tree/base/head'): self.publish()
+        self.f.api_override.clear()
+        self.f.pr['base']['sha'] = 'f' * 40
+        with self.assertRaisesRegex(ValueError, 'comparison base'): self.publish()
+        self.assertFalse(self.f.writes)
+
+    def test_applicable_real_media_still_requires_exact_local_evidence(self):
+        f = self.f; endpoint = f'repos/{external.REPO}'
+        f.api_override[f'{endpoint}/git/commits/' + 'b' * 40] = {'tree': {'sha': 'base-tree'}}
+        for tree, sha in [('base-tree', 'old'), ('equal-reviewed-product-tree', 'new')]:
+            f.api_override[f'{endpoint}/git/trees/{tree}?recursive=1'] = {
+                'truncated': False, 'tree': [{'path': 'scripts/verify/test.sh', 'mode': '100755', 'type': 'blob', 'sha': sha}]}
+        with self.assertRaisesRegex(ValueError, 'real-media'): self.publish()
+        policy = f.config['local_acceptance']['443']
+        receipt = {'head_sha': f.source, 'source_identity': 'identity', 'stage': 'full',
+                   'finished_at': 'fixture-only', 'arguments': ['--only=media-integration'],
+                   'results': [{'name': 'media-integration', 'status': 'pass', 'blocking': True}]}
+        file = f.root / 'media-only.json'; file.write_text(json.dumps(receipt))
+        policy.update(required_checks={'media-integration': 'pass'}, arguments=['--only=media-integration'],
+                      receipt_path=str(file), receipt_sha256=external.digest(file.read_bytes()))
+        self.assertEqual(self.publish()['source_sha'], f.source)
+        f.writes.clear(); receipt['head_sha'] = 'f' * 40; file.write_text(json.dumps(receipt))
+        policy['receipt_sha256'] = external.digest(file.read_bytes())
+        with self.assertRaisesRegex(ValueError, 'source/recipe'): self.publish()
+        self.assertFalse(f.writes)
 
 
 if __name__ == '__main__':

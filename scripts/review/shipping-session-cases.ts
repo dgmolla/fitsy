@@ -40,6 +40,20 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command.ends
     expect(callCount()).toBe(1);
     expect(readFileSync(ledger, 'utf8')).toBe(retained);
   });
+  test('CI-first ordinary push publishes after cheap and review without local full', () => {
+    setup();
+    const root = f.root(), remote = join(root, '.evidence/publication.git');
+    f.git('init', '-q', '--bare', remote);
+    f.git('config', 'core.hooksPath', '.evidence');
+    chmodSync(join(root, '.evidence/pre-push'), 0o700);
+    writeFileSync(join(root, '.evidence/full-fail'), 'full must remain pre-merge CI work');
+    const accepted = session(`git push ${JSON.stringify(remote)} HEAD:refs/heads/candidate`);
+    if (accepted.status !== 0) throw Error(String(accepted.stdout) + String(accepted.stderr));
+    expect(callCount()).toBe(1);
+    expect(order()).toContain('cheap'); expect(order()).toContain('focused');
+    expect(order().split('\n')).not.toContain('full');
+    expect(f.git('--git-dir=' + remote, 'rev-parse', 'refs/heads/candidate').trim()).toBe(f.git('rev-parse', 'HEAD').trim());
+  });
   test('missing retained result never launches a reviewer while establishing ownership', () => {
     setup();
     expect(session('echo shipped >> .evidence/order', false).status).toBe(1);
@@ -51,7 +65,6 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command.ends
     if (accepted.status !== 0) throw Error(String(accepted.stderr));
     expect(callCount()).toBe(1);
     expect(order().split('\n').filter(line => line === 'full')).toHaveLength(1);
-    expect(accepted.stdout).toContain('"cached":true');
     expect(order()).toContain('shipped');
     expect(verify().status).toBe(0); // The closed session cannot admit later commands.
     expect(callCount()).toBe(2);

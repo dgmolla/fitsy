@@ -29,6 +29,9 @@ export function timingHook(root: string, directory: string, env: NodeJS.ProcessE
   };
   write('scripts/delivery/phase-events.mjs', readFileSync(join(root, 'scripts/delivery/phase-events.mjs'), 'utf8'));
   write('package.json', JSON.stringify({ private: true, scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed' } }));
+  // Auth is exercised by the real shipping-session fixtures; these hook/cache fixtures model a reviewed live owner.
+  write('scripts/verify/shipping-session.mjs', '#!/usr/bin/env node\nif (process.argv[2] !== \'--check\') process.exit(1);\n');
+  chmodSync(join(directory, 'scripts/verify/shipping-session.mjs'), 0o755);
   const bound = spawnSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'],
     { cwd: directory, env, encoding: 'utf8' });
   expect(bound.status).toBe(0);

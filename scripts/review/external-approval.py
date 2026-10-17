@@ -22,6 +22,9 @@ INSTALL = Path('/opt/fitsy-approval/external-approval.py')
 REPO = 'dgmolla/fitsy'
 CHECK = 'delivery/independent-review'
 ACCEPTANCE_CHECK = 'delivery/acceptance'
+ACTIONS_APP = 15368
+VERIFY_JOBS = ('classify', 'Static (L0-L1)', 'Tests (L2)', 'Build (L3)',
+               'Single-domain PR check')
 CONTROL_AREAS = ('scripts/review/', 'scripts/verify/', 'scripts/delivery/',
                  'scripts/deploy/native-compatibility.test.ts',
                  'docs/engineering/devops/', '.githooks/', 'AGENTS.md',
@@ -353,6 +356,80 @@ def validate_acceptance(receipt, policy, source):
                     for row in results.values()), 'blocking local acceptance failed')
 
 
+def ci_acceptance(config, issue, pr, review, verify_id):
+    """Bind the existing public Verify to the independently approved candidate tree.
+
+    GitHub's PR run head_sha is the branch head, while default checkout executes
+    its synthetic merge. The immutable event base/head and merge parents must
+    describe that same tree; a same-named green check is not execution evidence.
+    """
+    endpoint = f'repos/{REPO}'
+    source, base = pr['head']['sha'], pr['base']['sha']
+    policy = config['local_acceptance'][str(issue)]
+    require(base == review['base_sha'], 'CI comparison base changed')
+    candidate = github(config, f'{endpoint}/git/commits/{source}')
+    require(candidate['tree']['sha'] == policy['source_tree_sha'], 'approved verification/source tree changed')
+    merge = github(config, f'{endpoint}/git/commits/{pr["merge_commit_sha"]}')
+    require([parent['sha'] for parent in merge['parents']] == [base, source]
+            and merge['tree']['sha'] == candidate['tree']['sha'], 'CI merge tree/base/head changed')
+    workflow = github(config, f'{endpoint}/actions/workflows/{config["verify_workflow_id"]}')
+    require(workflow['path'] == '.github/workflows/verify.yml' and workflow['state'] == 'active',
+            'trusted Verify workflow changed')
+    for ref in (base, source, pr['merge_commit_sha']):
+        blob = github(config, f'{endpoint}/contents/.github/workflows/verify.yml?ref={ref}')
+        require(blob['type'] == 'file' and blob['path'] == '.github/workflows/verify.yml'
+                and blob['encoding'] == 'base64'
+                and digest(base64.b64decode(blob['content'])) == config['verify_workflow_sha256'],
+                'candidate-controlled Verify definition changed')
+    run = github(config, f'{endpoint}/actions/runs/{verify_id}')
+    require(run['id'] == verify_id and run['workflow_id'] == config['verify_workflow_id']
+            and run['path'] == '.github/workflows/verify.yml' and run['event'] == 'pull_request'
+            and run['repository']['full_name'] == REPO and run['head_sha'] == source
+            and run['status'] == 'completed' and run['conclusion'] == 'success'
+            and type(run['run_attempt']) is int and run['run_attempt'] > 0,
+            'exact candidate Verify did not pass')
+    associated = run['pull_requests']
+    require(len(associated) == 1 and associated[0]['number'] == pr['number']
+            and associated[0]['base']['sha'] == base and associated[0]['head']['sha'] == source,
+            'Verify event PR/base/head mismatch')
+    latest = github(config, f'{endpoint}/actions/workflows/{config["verify_workflow_id"]}/runs?head_sha={source}&event=pull_request&per_page=1')
+    require(latest['workflow_runs'] and latest['workflow_runs'][0]['id'] == verify_id,
+            'superseded Verify cannot authorize acceptance')
+    jobs = github(config, f'{endpoint}/actions/runs/{verify_id}/jobs?filter=latest&per_page=100')
+    require(0 < jobs['total_count'] <= 100 and jobs['total_count'] == len(jobs['jobs']),
+            'complete Verify jobs required')
+    for name in VERIFY_JOBS:
+        matches = [job for job in jobs['jobs'] if job['name'] == name]
+        require(len(matches) == 1, 'required Verify job missing or ambiguous')
+        job = matches[0]
+        require(job['run_id'] == verify_id and job['run_attempt'] == run['run_attempt']
+                and job['head_sha'] == source and job['status'] == 'completed'
+                and job['conclusion'] == 'success' and job['labels'] == ['ubuntu-latest']
+                and job['check_run_url'] == f'https://api.github.com/{endpoint}/check-runs/{job["id"]}',
+                'required Verify job failed, skipped or mismatched')
+        check = github(config, f'{endpoint}/check-runs/{job["id"]}')
+        require(check['id'] == job['id'] and check['name'] == name and check['head_sha'] == source
+                and check['app']['id'] == ACTIONS_APP and check['app']['slug'] == 'github-actions'
+                and check['check_suite']['id'] == run['check_suite_id']
+                and check['status'] == 'completed' and check['conclusion'] == 'success',
+                'Verify job issuer/execution mismatch')
+    return policy
+
+
+def local_acceptance(config, issue, source, review, policy):
+    """Keep applicable local media/native proof without requiring whole local full."""
+    before, after = git_tree(config, review['base_sha']), git_tree(config, source)
+    changed = [path for path in set(before) | set(after) if before.get(path) != after.get(path)]
+    media = any(re.match(r'^scripts/sim/|^scripts/verify/(?:product-flow|media-integration|test\.sh|registry\.yml)',
+                         path) for path in changed)
+    required = policy['required_checks']
+    require(not media or required.get('media-integration') == 'pass', 'applicable real-media acceptance missing')
+    if required:
+        raw = protected_bytes(policy['receipt_path'], config['operator_uid'])
+        require(digest(raw) == policy['receipt_sha256'], 'unverified local acceptance receipt')
+        validate_acceptance(json.loads(raw), policy, source)
+
+
 def publish_acceptance(config, issue, pr_number, verify_id):
     installation_identity(config)
     endpoint = f'repos/{REPO}'
@@ -361,25 +438,18 @@ def publish_acceptance(config, issue, pr_number, verify_id):
     validate_pr(pr, issue, source)
     body = github(config, f'{endpoint}/issues/{issue}')['body']
     review = review_inputs(config, issue, source, body)
-    policy = config['local_acceptance'][str(issue)]
-    raw = protected_bytes(policy['receipt_path'], config['operator_uid'])
-    require(digest(raw) == policy['receipt_sha256'], 'unverified local acceptance receipt')
-    validate_acceptance(json.loads(raw), policy, source)
-    verify = github(config, f'{endpoint}/actions/runs/{verify_id}')
-    require(verify['workflow_id'] == config['verify_workflow_id']
-            and verify['head_sha'] == source and verify['event'] == 'pull_request'
-            and verify['repository']['full_name'] == REPO and verify['status'] == 'completed'
-            and verify['conclusion'] == 'success', 'exact candidate Verify did not pass')
-    runs = github(config, f'{endpoint}/actions/workflows/{config["verify_workflow_id"]}/runs?head_sha={source}&event=pull_request&per_page=1')
-    require(runs['workflow_runs'] and runs['workflow_runs'][0]['id'] == verify_id,
-            'superseded Verify cannot authorize acceptance')
-    validate_pr(github(config, f'{endpoint}/pulls/{pr_number}'), issue, source)
+    policy = ci_acceptance(config, issue, pr, review, verify_id)
+    local_acceptance(config, issue, source, review, policy)
+    current = github(config, f'{endpoint}/pulls/{pr_number}')
+    validate_pr(current, issue, source)
+    require(current['base']['sha'] == pr['base']['sha']
+            and current['merge_commit_sha'] == pr['merge_commit_sha'], 'PR merge evidence changed during acceptance')
     require(acceptance(github(config, f'{endpoint}/issues/{issue}')['body']) == review['acceptance_sha256'],
             'acceptance changed during publication')
     check = github(config, f'{endpoint}/check-runs', {
         'name': ACCEPTANCE_CHECK, 'head_sha': source, 'status': 'completed', 'conclusion': 'success',
         'output': {'title': 'Required acceptance validated',
-                   'summary': f'Operator-observed local receipt {digest(raw)}; exact-source Verify run {verify_id}.'}})
+                   'summary': f'Approved tree {policy["source_tree_sha"]}; trusted Verify run {verify_id}; applicable local evidence validated.'}})
     require(check['app']['id'] == config['app_id'] and check['head_sha'] == source
             and check['conclusion'] == 'success', 'actual acceptance issuer mismatch')
     return {'source_sha': source, 'check_url': check['html_url'], 'verify_run': verify_id}
@@ -492,10 +562,10 @@ def release_context(config, verify_id):
     issue = int(issues[0])
     body = github(config, f'{endpoint}/issues/{issue}')['body']
     approval = review_inputs(config, issue, source, body)
-    policy = config['local_acceptance'][str(issue)]
-    receipt = protected_bytes(policy['receipt_path'], config['operator_uid'])
-    require(digest(receipt) == policy['receipt_sha256'], 'unverified local acceptance receipt')
-    validate_acceptance(json.loads(receipt), policy, source)
+    candidate_runs = github(config, f'{endpoint}/actions/workflows/{config["verify_workflow_id"]}/runs?head_sha={source}&event=pull_request&per_page=1')
+    require(candidate_runs['workflow_runs'], 'required candidate Verify missing')
+    policy = ci_acceptance(config, issue, pr, approval, candidate_runs['workflow_runs'][0]['id'])
+    local_acceptance(config, issue, source, approval, policy)
     reviewed_tree = github(config, f'{endpoint}/git/commits/{source}')['tree']['sha']
     release_tree = github(config, f'{endpoint}/git/commits/{main}')['tree']['sha']
     require(reviewed_tree == release_tree, 'merged tree differs from independently reviewed candidate')

@@ -1,5 +1,6 @@
 #!/bin/bash -p
-# Run the same local gate, reusing only successful source-bound acceptance receipts.
+# Publish only a frozen, independently reviewed candidate after cheap/focused checks.
+# Trusted existing Verify owns heavy pre-merge acceptance; local media/native proof remains separate.
 # Size and domain checks still run on every push.
 set -euo pipefail
 unset NODE_OPTIONS NODE_PATH BASH_ENV ENV
@@ -47,7 +48,9 @@ node "$ROOT/scripts/delivery/phase-events.mjs" summary >/dev/null || {
   echo 'pre-push: bind this worktree first with node scripts/delivery/phase-events.mjs bind --issue N' >&2
   exit 1
 }
-"$ROOT/scripts/verify/run.mjs" --layer=0-3 --runs=local --reuse
+"$ROOT/scripts/verify/shipping-session.mjs" --check
+"$ROOT/scripts/verify/run.mjs" --stage=cheap --layer=0-1 --runs=local
+"$ROOT/scripts/verify/shipping-session.mjs" --check
 # exit 2 = skipped (not applicable), which must not block the push
 for check in size-check domain-check; do
   if /bin/bash -p "$ROOT/scripts/verify/$check.sh"; then code=0; else code=$?; fi
