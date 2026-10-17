@@ -134,11 +134,15 @@ test('actual production helper prevents unsafe publication and exports only veri
   const yaml = require('js-yaml') as { load: (input: string) => {
     jobs: { changes: { steps: { id?: string; run?: string }[] }; ota: { if: string }; smoke: { if: string } } } };
   const workflow = yaml.load(readFileSync(join(repo, '.github/workflows/deploy.yml'), 'utf8'));
-  const changes = workflow.jobs.changes.steps.find(step => step.id === 'f')!.run!
-    .replaceAll('${{ github.event.before }}', mobileHead).replaceAll('${{ github.sha }}', apiHead);
+  const changes = workflow.jobs.changes.steps.find(step => step.id === 'f')!.run!;
+  // workflow_dispatch supplies the reviewed release SHA, not a push-event before ref.
+  // The API fixture returns the same current main ref that the protected job checks.
+  const classifyBin = join(root, '.git/classify-bin'); mkdirSync(classifyBin);
+  writeFileSync(join(classifyBin, 'gh'), `#!/bin/bash\n[ "$1" = api ] || exit 99\nprintf '%s' '${apiHead}'\n`, { mode: 0o755 });
   const output = join(root, '.git/change-outputs');
   const classified = spawnSync('bash', ['-e', '-c', changes], { cwd: root,
-    env: { ...cleanEnv, GITHUB_OUTPUT: output } });
+    env: { ...cleanEnv, PATH: `${classifyBin}:${process.env.PATH}`, GITHUB_OUTPUT: output,
+      GITHUB_REPOSITORY: 'dgmolla/fitsy', RELEASE_SHA: apiHead } });
   expect(classified.status).toBe(0);
   expect(readFileSync(output, 'utf8')).toContain('mobile=false');
   const queuedPublication = run('expected.apps.googleusercontent.com');

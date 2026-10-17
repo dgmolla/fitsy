@@ -45,20 +45,23 @@ Link related PRs, Actions runs, deployment receipts, and source-bound follow-up 
 Apply existing PR scope and review rules from [shipping.md](shipping.md); this contract adds no approval or review gate.
 
 One dispatcher assigns the execution owner before starting a worker.
-An FM task delegated to a Codex coordinator remains owned by that coordinator until explicit transfer or completion; FM must not dispatch a competing implementation.
+The selected coordinator retains execution custody until explicit transfer or completion; legacy entry points must not dispatch a competing implementation.
 Parallel subtasks have explicit file/behavior boundaries and report to that owner.
 Freeze the accepted outcome during validation and keep optional improvements in owned follow-ups.
 When human steering changes active scope, the coordinator delivers it at the existing owner's next safe boundary and records that owner's acknowledgment before claiming the change was applied.
 Editing a board field, issue body or handoff alone does not prove that a running worker received the instruction.
 Do not interrupt an active command or create a second owner to deliver steering.
 Before transfer, persist current source, evidence, running operations, blockers and next action, confirm the prior owner stopped or released ownership, then record the successor.
-An issue assignment alone is not an atomic process lock; use FM's supported ownership/session controls for runtime exclusion.
+An issue assignment alone is not an atomic process lock; use the existing supported claim controls for runtime exclusion.
+Ordinary `local-dispatcher.py tick` admission refuses new work with `selected-brief-required` unless the selected coordinator supplies its in-process brief renderer.
+Disabled-config ticks still reconcile existing claims and the sole publisher.
+Claims, resource protections, lifecycle reconciliation and verified terminal receipts remain executable contracts.
 If ownership cannot be established, reconcile it before launching another worker.
 
 For Codex-led work, one coordinator claims the issue and assigns one Sol implementation owner by default.
 Add agents only for bounded independent tasks with explicit file ownership; another lane's blocker does not hold unrelated work.
 Freeze and commit the candidate, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, then complete one independent canonical review before full suites and affected E2E acceptance.
-Repair findings and revalidate cheap checks and review before full acceptance; use fresh canonical shipping review admission and retain the original issue review budget.
+Repair findings and revalidate cheap checks and review before full acceptance; revalidate matching canonical review evidence through live shipping admission and retain the original issue review budget.
 Use the review domains, UI signoff, release approvals and shipping gates in [shipping.md](shipping.md).
 Send a separate Slack alert headed `🚨 *BLOCKED*` only when live evidence establishes a concrete action that requires the human.
 Keep agent-owned review, required-gate, execution and dependency recovery on the issue and handoff without human mentions.

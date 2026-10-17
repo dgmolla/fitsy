@@ -1,5 +1,7 @@
+import { approveFixtureCaches } from "./administrator-fixture";
+export { approveFixtureCaches } from "./administrator-fixture";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const normalizeFixtureResponse = `try:
@@ -41,10 +43,14 @@ if [ "$1" = api ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
 if [ "$1" = pr ] && [ "$2" = comment ]; then printf '%s\\n' "$*" >> "$REVIEW_TEST_GH_CALLS"; exit; fi
 exit 1
 `, { mode: 0o755 });
-  return spawnSync("bash", ["scripts/review/run-lens.sh", "123", lens], {
+  const calls = join(root, "calls");
+  const before = existsSync(calls) ? readFileSync(calls, "utf8") : "";
+  const result = spawnSync("bash", ["scripts/review/run-lens.sh", "123", lens], {
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: "fixture-model", FITSY_REVIEW_PROVIDER: provider,
       FITSY_GH_BIN: gh, REVIEW_TEST_GH_CALLS: join(root, "gh-calls") }, timeout: 15000,
   });
+  if (existsSync(calls) && readFileSync(calls, "utf8") !== before) approveFixtureCaches(root, env);
+  return result;
 }
 
 type Fixture = {
@@ -64,7 +70,9 @@ test("one invocation covers all required domains and legacy callers reuse the wh
   writeFileSync(join(root, "scripts/review/change.sh"), "echo review-control\n");
   git("add", "."); git("commit", "-qm", "sensitive controls");
   expect(run().status).toBe(0);
-  expect(JSON.parse(runPr().stdout).domains).toEqual({ correctness: "pass", "danger-zone": "pass", "workflow-security": "pass" });
+  const reused = runPr();
+  if (reused.status !== 0) throw new Error(reused.stdout + reused.stderr);
+  expect(JSON.parse(reused.stdout).domains).toEqual({ correctness: "pass", "danger-zone": "pass", "workflow-security": "pass" });
   expect(run("fixture-model", "claude", "danger-zone").status).toBe(0);
   expect(run("fixture-model", "claude", "workflow-security").status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
@@ -94,7 +102,9 @@ test("local and PR share exact committed patch and changed source invalidates ca
   expect(run().status).toBe(0);
   const diff = git("diff", "--abbrev=8", "origin/main...HEAD");
   writeFileSync(join(root, "pr-diff"), diff.replace(/(@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@).*$/gm, "$1 function example"));
-  expect(runPr().status).toBe(0);
+  const reused = runPr();
+  if (reused.status !== 0) throw new Error(reused.stdout + reused.stderr);
+  expect(reused.status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
   writeFileSync(join(root, "app.ts"), "export const value = 3;\n");
   git("add", "app.ts"); git("commit", "-qm", "changed actual source");
@@ -201,6 +211,82 @@ test("cache-only revalidation cannot execute a missing independent result", () =
   expect(result.stderr).toContain("cache unavailable");
   expect(existsSync(calls)).toBe(false);
 });
+
+  // Exercise the same immutable overlay used by admission with a fixture provider.
+  // These synthetic verdicts never authorize a real candidate or consume issue time.
+  const callCount = () => existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n').length : 0;
+  function retainedOverlay() {
+    const root = fixture.root();
+    git('branch', '-m', 'fixture-retained');
+    writeFileSync(join(root, 'REVIEW.md'), 'Candidate review rules must not execute.\n');
+    git('add', 'REVIEW.md'); git('commit', '-qm', 'candidate control difference');
+    git('restore', '--source=origin/main', '--staged', '--worktree', '--', 'REVIEW.md');
+    const invoke = (cached = true, extra: NodeJS.ProcessEnv = {}) => spawnSync('bash',
+      ['scripts/review/run-review.sh', '--local', ...(cached ? ['--cached-only'] : [])], {
+        cwd: root, env: { ...fixture.env(), FITSY_REVIEW_FRESH_EXECUTION: '1',
+          FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model', ...extra },
+        encoding: 'utf8', timeout: 15000,
+      });
+    const completed = invoke(false);
+    if (completed.status === 0) approveFixtureCaches(root, fixture.env());
+    if (completed.status !== 0) throw new Error(completed.stdout + completed.stderr);
+    expect(JSON.parse(completed.stdout).domains).toEqual({ correctness: 'pass', 'workflow-security': 'pass' });
+    expect(git('status', '--porcelain')).not.toBe('');
+    return { root, invoke, completed };
+  }
+  test('immutable trusted overlay reuses retained complete evidence without provider execution or accounting', () => {
+    const { root, invoke, completed } = retainedOverlay();
+    const ledger = readFileSync(join(root, 'budgets/issue-355.jsonl'), 'utf8');
+    const reused = invoke();
+    if (reused.status !== 0) throw new Error(reused.stdout + reused.stderr);
+    expect(JSON.parse(reused.stdout)).toEqual(JSON.parse(completed.stdout));
+    expect(invoke().status).toBe(0);
+    expect(callCount()).toBe(1);
+    expect(readFileSync(join(root, 'budgets/issue-355.jsonl'), 'utf8')).toBe(ledger);
+  });
+  test.each(['candidate edit', 'staged candidate edit', 'untracked candidate', 'control edit', 'untracked control',
+    'missing evidence', 'incomplete verdict', 'changed source', 'changed base', 'changed domain',
+    'changed provider', 'wrong issue', 'changed acceptance', 'forged passing verdict',
+    'missing execution proof', 'altered raw receipt'])('trusted cached-only overlay refuses %s without executing a provider', mutation => {
+    const { root, invoke, completed } = retainedOverlay();
+    const ledger = readFileSync(join(root, 'budgets/issue-355.jsonl'), 'utf8');
+    let extra: NodeJS.ProcessEnv = {};
+    if (mutation === 'candidate edit' || mutation === 'staged candidate edit' || mutation === 'changed source') {
+      writeFileSync(join(root, 'app.ts'), 'export const value = 99;\n');
+      if (mutation !== 'candidate edit') git('add', 'app.ts');
+      if (mutation === 'changed source') {
+        git('restore', '--source=HEAD', '--staged', '--worktree', '--', 'REVIEW.md');
+        git('commit', '-qm', 'new source');
+        git('restore', '--source=origin/main', '--staged', '--worktree', '--', 'REVIEW.md');
+      }
+    } else if (mutation === 'untracked candidate') writeFileSync(join(root, 'new-source.ts'), 'export const value = 99;\n');
+    else if (mutation === 'control edit') writeFileSync(join(root, 'REVIEW.md'), 'Altered trusted rules\n');
+    else if (mutation === 'untracked control') writeFileSync(join(root, 'scripts/review/injected.py'), 'raise Exception("injected")\n');
+    else if (mutation === 'missing evidence') rmSync(String(fixture.env().FITSY_REVIEW_CACHE), { recursive: true });
+    else if (mutation === 'incomplete verdict') {
+      const value = JSON.parse(completed.stdout);
+      delete value.domains['workflow-security'];
+      writeFileSync(join(String(fixture.env().FITSY_REVIEW_CACHE), value.source.cache_key + '.json'), JSON.stringify(value));
+    } else if (['forged passing verdict', 'missing execution proof', 'altered raw receipt'].includes(mutation)) {
+      const value = JSON.parse(completed.stdout);
+      const cache = join(String(fixture.env().FITSY_REVIEW_CACHE), value.source.cache_key + '.json');
+      if (mutation === 'altered raw receipt') writeFileSync(value.execution.artifacts.receipt.path, JSON.stringify({ kind: 'completed', returncode: 0 }));
+      else {
+        if (mutation === 'missing execution proof') delete value.execution;
+        else value.execution.attempt_id = 'self-authored-pass';
+        writeFileSync(cache, JSON.stringify(value));
+      }
+    } else if (mutation === 'changed base') git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    else if (mutation === 'changed domain') {
+      writeFileSync(join(root, 'budgets/domains/issue-355.json'), JSON.stringify({ candidate: git('rev-list', '--max-parents=0', 'HEAD').trim() + ':fixture-retained', issue: '355', domains: ['correctness', 'workflow-security', 'danger-zone'] }));
+    } else if (mutation === 'changed provider') extra = { FITSY_REVIEW_PROVIDER: 'codex' };
+    else if (mutation === 'wrong issue') writeFileSync(join(root, '.evidence/delivery/binding.json'), JSON.stringify({ issue: 356 }));
+    else writeFileSync(join(root, 'issue-body'), 'Acceptance: different required behavior.\n');
+    const refused = invoke(true, extra);
+    expect(refused.status).toBe(1);
+    expect(callCount()).toBe(1);
+    expect(readFileSync(join(root, 'budgets/issue-355.jsonl'), 'utf8')).toBe(ledger);
+  });
 
 }
 

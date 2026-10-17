@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Publish an exact-head local verdict; no simulator or credential executes in CI.
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createReadStream, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createReadStream, existsSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { root, inputHash, impact, changedPaths, validate, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts } from './publication-artifacts.mjs';
+import { assertShippingSession } from '../verify/shipping-session.mjs';
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 16 * 1024 * 1024, ...opts })?.trim() || '';
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 async function fileDigest(file) {
@@ -78,8 +79,19 @@ export async function publishProductFlow(prNumber, {
   head = candidate;
   status('pending', 'Validating local candidate evidence', pr.url);
   assert(!execute('git', ['status', '--porcelain']), 'Commit all candidate inputs before publishing evidence');
-  execute('git', ['fetch', 'origin', 'main']);
-  execute('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
+  if (process.env.FITSY_PRODUCT_ROOT) {
+    // A live externally admitted frozen comparison may use newer trusted
+    // controls. Do not mutate its comparison ref or its source-bound receipts.
+    await assertShippingSession(root);
+    const controls = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+    const trusted = run('git', ['rev-parse', 'HEAD'], { cwd: controls });
+    assert(trusted === run('git', ['rev-parse', 'origin/main'], { cwd: controls }), 'Publisher controls must be exact main');
+    assert(!run('git', ['status', '--porcelain'], { cwd: controls }), 'Publisher controls must be clean');
+    assert(execute('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s+/)[0] === trusted, 'Trusted main advanced; revalidate frozen comparison');
+  } else {
+    execute('git', ['fetch', 'origin', 'main']);
+    execute('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
+  }
   const media = validateMediaEvidence(candidate);
   const plan = resolvePlan();
   const evidenceRequired = plan.required || process.argv.includes('--include-baseline');
@@ -126,7 +138,7 @@ export async function publishProductFlow(prNumber, {
   throw e;
   }
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     console.log(JSON.stringify(await publishProductFlow(process.argv[2])));
   } catch (e) {

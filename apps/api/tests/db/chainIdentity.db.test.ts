@@ -1,3 +1,4 @@
+import { isLocalDatabaseHost } from '../fixtures/localDatabaseHost';
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, statSync, rmSync } from "node:fs";
@@ -14,7 +15,7 @@ import { persistHex } from "../../../../scripts/hex-persist";
 import { validateHexInTx } from "../../../../scripts/preload-invariants";
 const url = process.env["POSTGRES_PRISMA_URL"];
 // This suite invokes the mutating CLI, so only an explicit local DB is allowed.
-const suite = url && ["localhost", "postgres"].includes(new URL(url).hostname) ? describe : describe.skip;
+const suite = isLocalDatabaseHost(url) ? describe : describe.skip;
 const facts = { calories: 500, proteinG: 30, carbsG: 50, fatG: 20 };
 const evidence = { url: "https://example.com/synthetic-identity", sha256: "1".repeat(64), locator: "Synthetic identity fixture, not nutrition ground truth" };
 const identity = (b: Brand) => ({ id: b.id, slug: b.slug, displayName: b.displayName, aliases: b.aliases, detectionConf: b.detectionConf, menuKind: b.menuKind });

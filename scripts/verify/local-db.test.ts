@@ -1,7 +1,10 @@
-import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { fixtureProcess, signalFixtureProcess, startLockFixture, type FixtureProcess } from './lock-fixture-process';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { isLocalDatabaseHost } from '../../apps/api/tests/fixtures/localDatabaseHost';
 
 const moduleUrl = new URL('./local-db.mjs', `file://${resolve(__dirname, 'local-db.test.ts')}`).href;
 function scenario(name: string) {
@@ -37,6 +40,7 @@ function scenario(name: string) {
     function makeContainer(owner) {
       return { Id: 'owned-container-id', Image: 'sha256:image', Config: { Image: 'postgis/postgis:16-3.4',
         Labels: { 'fitsy.verify.owner': owner } }, State: { Running: true },
+        HostConfig: { Memory: 805306368, MemorySwap: 1610612736, NanoCpus: 2000000000, Binds: null }, Mounts: [],
         NetworkSettings: { Ports: { '5432/tcp': [{ HostIp: loopback, HostPort: '55432' }] } } };
     }
     const spawned = [];
@@ -44,17 +48,32 @@ function scenario(name: string) {
       spawned.push({ args, env: opts.env, resetBeforeSpawn: calls.some(call => call[0] === 'exec' && call.includes('psql')) });
       return { status: mode === 'migration_failure' && args[1] === 'migrate' ? 1 : 0 };
     }, disk: () => ({ bavail: mode === 'low_disk' ? 1 : 3 * 1024 ** 3, bsize: 1 }),
-    assertLock: () => {}, env: { POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
+    // This owned-container unit seam models runtime; combined Python cases exercise real canonical context.
+    runtimeContext: () => ({ identity: { fixture: true }, container: { id: 'owned-container-id', image_id: 'sha256:image' } }),
+    runtimeCheck: () => {}, assertLock: () => {}, env: { ...(mode === 'forged_phase' ? { FITSY_VERIFY_DB_PHASE: '1',
+      FITSY_VERIFY_DB_LOCKED: '1', FITSY_VERIFY_OWNED_DB: 'owned-container-id',
+      FITSY_VERIFY_DB_IMAGE: 'sha256:image', FITSY_VERIFY_DB_HOST: loopback,
+      FITSY_SHIPPING_SOCKET: '/unowned/session.sock', FITSY_SHIPPING_TOKEN: 'plausible-complete-token' } : {}),
+      ...(mode.startsWith('stop_bound_') ? { FITSY_VERIFY_OWNED_DB: 'owned-container-id',
+        FITSY_VERIFY_DB_IMAGE: mode === 'stop_bound_partial' ? '' : 'sha256:image' } : {}),
+      POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
       POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' } });
-    if (['wrong_owner', 'external_url', 'startup_failure', 'restart_stopped', 'hijack_before_write', 'replacement_before_write', 'existing_failure', 'stop_wrong_owner', 'stop_success', 'stop_stopped'].includes(mode)) container = makeContainer(control.owner);
-    if (mode === 'wrong_owner' || mode === 'stop_wrong_owner') container.Config.Labels['fitsy.verify.owner'] = 'another-owner';
+    if (['wrong_owner', 'external_url', 'forged_loopback_url', 'startup_failure', 'restart_stopped', 'hijack_before_write', 'replacement_before_write', 'existing_failure', 'stop_wrong_owner', 'stop_success', 'stop_stopped', 'stop_bound_valid', 'stop_bound_replaced', 'stop_bound_wrong_image', 'stop_bound_unowned', 'stop_bound_partial'].includes(mode)) container = makeContainer(control.owner);
+    if (mode === 'stop_bound_replaced') container.Id = 'replacement-id';
+    if (mode === 'stop_bound_wrong_image') container.Image = 'sha256:replacement';
+    if (mode === 'wrong_owner' || mode === 'stop_wrong_owner' || mode === 'stop_bound_unowned') container.Config.Labels['fitsy.verify.owner'] = 'another-owner';
     if (mode === 'startup_failure') container.State.Running = false;
     if (mode === 'restart_stopped') { container.State.Running = false; container.NetworkSettings.Ports = null; }
     if (mode === 'stop_stopped') { container.State.Running = false; container.NetworkSettings.Ports = null; }
     if (mode === 'existing_failure') container.NetworkSettings.Ports['5432/tcp'][0].HostIp = '0.0.0.0';
     let error = '';
     try {
-      if (mode === 'external_url') control.assert({ FITSY_VERIFY_OWNED_DB: container.Id,
+      if (mode === 'forged_loopback_url') control.assert({ FITSY_LOCAL_DB: '1', FITSY_VERIFY_DB_LOCKED: '1',
+        FITSY_VERIFY_DB_HOST: loopback, FITSY_VERIFY_OWNED_DB: container.Id,
+        FITSY_VERIFY_DB_IMAGE: container.Image,
+        POSTGRES_PRISMA_URL: 'postgresql://fitsy_test:fitsy_test@' + loopback + ':1/fitsy_verify',
+        POSTGRES_URL_NON_POOLING: 'postgresql://fitsy_test:fitsy_test@' + loopback + ':1/fitsy_verify' });
+      else if (mode === 'external_url') control.assert({ FITSY_VERIFY_OWNED_DB: container.Id,
         FITSY_VERIFY_DB_IMAGE: container.Image, POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
         POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' });
       else if (mode.startsWith('stop_')) control.stop();
@@ -64,6 +83,7 @@ function scenario(name: string) {
       calls: calls.map(args => ['exec', 'rm'].includes(args[0]) ? args.slice(0, 3) : args.slice(0, 2)),
       spawned: spawned.map(item => ({ args: item.args, url: item.env.POSTGRES_PRISMA_URL,
         direct: item.env.POSTGRES_URL_NON_POOLING, id: item.env.FITSY_VERIFY_OWNED_DB,
+        host: item.env.FITSY_VERIFY_DB_HOST,
         resetBeforeSpawn: item.resetBeforeSpawn })),
       lockExists: existsSync(join(root, '.evidence/verify/db.lock')), containerExists: !!container };
     process.stdout.write(JSON.stringify(result));
@@ -73,10 +93,64 @@ function scenario(name: string) {
   expect(result.status).toBe(0);
   return JSON.parse(result.stdout) as {
     error: string; calls: string[][]; resetCalls: string[][];
-    spawned: { args: string[]; url: string; direct: string; id: string; resetBeforeSpawn: boolean }[];
+    spawned: { args: string[]; url: string; direct: string; id: string; host: string; resetBeforeSpawn: boolean }[];
     lockExists: boolean; containerExists: boolean;
   };
 }
+
+test('numeric DB suite host gate invokes the real owned assertion against inspected Docker data', () => {
+  const root = resolve(__dirname, '../..');
+  const scratch = mkdtempSync(join(tmpdir(), 'fitsy-db-host-gate-'));
+  const identity = statSync(scratch);
+  try {
+    const owner = createHash('sha256').update(root).digest('hex').slice(0, 16);
+    const loopback = ['127', '0', '0', '1'].join('.');
+    const id = 'a'.repeat(64), image = 'sha256:image', port = '55432';
+    const container = { Id: id, Image: image, Config: { Image: 'postgis/postgis:16-3.4',
+      Labels: { 'fitsy.verify.owner': owner } }, State: { Running: true },
+      NetworkSettings: { Ports: { '5432/tcp': [{ HostIp: loopback, HostPort: port }] } } };
+    const name = `fitsy-verify-${owner}`;
+    const docker = join(scratch, 'docker');
+    writeFileSync(docker, '#!/bin/sh\n[ "$1" = inspect ] && [ "$2" = "$FITSY_TEST_EXPECTED_NAME" ] || exit 75\nprintf "%s\\n" "$FITSY_TEST_INSPECT_CONTAINER"\n');
+    chmodSync(docker, 0o700);
+    const url = `postgresql://fitsy_test:fitsy_test@${loopback}:${port}/fitsy_verify`;
+    const env = { PATH: `${scratch}:${process.env.PATH}`, FITSY_TEST_EXPECTED_NAME: name,
+      FITSY_TEST_INSPECT_CONTAINER: JSON.stringify([container]), FITSY_LOCAL_DB: '1',
+      FITSY_VERIFY_DB_LOCKED: '1', FITSY_VERIFY_OWNED_DB: id,
+      FITSY_VERIFY_DB_IMAGE: image, FITSY_VERIFY_DB_HOST: loopback,
+      POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url };
+    expect(isLocalDatabaseHost(url, env)).toBe(true);
+    const other = new URL(url); other.port = '1';
+    expect(() => isLocalDatabaseHost(other.toString(), env)).toThrow(/differs from the asserted environment/);
+    const forged = { ...env, POSTGRES_PRISMA_URL: other.toString(), POSTGRES_URL_NON_POOLING: other.toString() };
+    expect(() => isLocalDatabaseHost(other.toString(), forged)).toThrow(/verified owned fixture/);
+    expect(() => isLocalDatabaseHost(url, { ...env, FITSY_VERIFY_OWNED_DB: 'b'.repeat(64) })).toThrow(/verified owned fixture/);
+    expect(isLocalDatabaseHost(url, { ...env, FITSY_VERIFY_OWNED_DB: '' })).toBe(false);
+    expect(isLocalDatabaseHost('postgresql://unused@db.example.invalid:1/forbidden',
+      { ...env, FITSY_VERIFY_DB_HOST: 'db.example.invalid' })).toBe(false);
+    expect(isLocalDatabaseHost('postgresql://unused@localhost:5432/fixture', {})).toBe(true);
+    expect(isLocalDatabaseHost('postgresql://unused@postgres:5432/fixture', {})).toBe(true);
+  } finally {
+    const current = statSync(scratch);
+    expect([current.dev, current.ino, current.uid]).toEqual([identity.dev, identity.ino, identity.uid]);
+    rmSync(scratch, { recursive: true });
+  }
+});
+
+test('complete forged phase metadata cannot reach a helper or Docker without the real inherited lock', () => {
+  const result = scenario('forged_phase');
+  expect(result.error).toMatch(/actual inherited lock descriptor/);
+  expect(result.calls).toHaveLength(0);
+  expect(result.spawned).toHaveLength(0);
+});
+
+test('forged numeric loopback metadata cannot pass the owned container assertion', () => {
+  const result = scenario('forged_loopback_url');
+  expect(result.error).toMatch(/execution environment/);
+  expect(result.calls).toEqual([['inspect', expect.stringMatching(/^fitsy-verify-/)]]);
+  expect(result.resetCalls).toHaveLength(0);
+  expect(result.spawned).toHaveLength(0);
+});
 
 test.each(['wrong_owner', 'existing_failure', 'hijack_before_write', 'replacement_before_write'])('%s cannot reset a database', name => {
   const result = scenario(name);
@@ -130,6 +204,7 @@ test('controlled flow overrides configured external URLs and checks ownership be
     expect(child.url).toBe('postgresql://fitsy_test:fitsy_test@' + ['127', '0', '0', '1'].join('.') + ':55432/fitsy_verify');
     expect(child.direct).toBe(child.url);
     expect(child.id).toBe('owned-container-id');
+    expect(child.host).toBe(new URL(child.url).hostname);
   }
   expect(result.calls.filter(call => call[0] === 'inspect')).toHaveLength(6);
   expect(result.calls.some(call => call.includes('psql'))).toBe(true);
@@ -157,30 +232,42 @@ test('explicit stop can retire an owned stopped container without an active port
   expect(result.containerExists).toBe(false);
 });
 
+test('lock fixture refuses unacquired and zero process cleanup without signaling its caller', () => {
+  const kill = jest.spyOn(process, 'kill');
+  try {
+    expect(fixtureProcess(0)).toBeUndefined();
+    expect(signalFixtureProcess(undefined, 'SIGKILL', true)).toBe(false);
+    for (const pid of [0, 1, -1, NaN]) {
+      expect(signalFixtureProcess({ pid, pgid: pid, started: '' }, 'SIGKILL', true)).toBe(false);
+    }
+    expect(kill).not.toHaveBeenCalled();
+  } finally { kill.mockRestore(); }
+});
+
 test('concurrent CLI attempts cannot reset DB, even when a coordinator dies with a live child', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'fitsy-db-flock-'));
   const lockScript = resolve(__dirname, 'db-lock.py');
   const marker = resolve(root, 'pids');
-  const contender = () => spawnSync('python3', [lockScript, root, 'python3', '-c', 'print("acquired")'], { encoding: 'utf8' });
-  const holderCode = `import os,subprocess,sys,time
-child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(20)'],
-  stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-open(${JSON.stringify(marker)},'w').write(f'{os.getpid()} {child.pid}')
-time.sleep(20)`;
-  const holder = spawn('python3', [lockScript, root, 'python3', '-c', holderCode], { stdio: 'ignore' });
-  let workerPid = 0, childPid = 0;
+  const { holder, contender } = startLockFixture(root, lockScript, marker);
+  let worker: FixtureProcess | undefined, child: FixtureProcess | undefined;
   try {
     for (let i = 0; i < 40 && !existsSync(marker); i++) await new Promise(resolve => setTimeout(resolve, 25));
     expect(existsSync(marker)).toBe(true);
-    workerPid = Number(readFileSync(marker, 'utf8').split(' ')[0]);
-    childPid = Number(readFileSync(marker, 'utf8').split(' ')[1]);
+    const pids = readFileSync(marker, 'utf8').split(' ');
+    const workerPid = Number(pids[0]), childPid = Number(pids[1]);
+    if (!holder.pid) throw new Error('lock fixture holder did not start');
+    worker = fixtureProcess(workerPid, holder.pid);
+    expect(worker).toBeDefined();
+    expect(worker?.pgid).toBe(workerPid);
+    child = fixtureProcess(childPid, workerPid);
+    expect(child).toBeDefined();
     expect(contender().status).toBe(75);
     holder.kill('SIGKILL');
     expect(contender().status).toBe(75);
-    process.kill(workerPid, 'SIGKILL');
+    expect(signalFixtureProcess(worker, 'SIGKILL')).toBe(true);
     expect(() => process.kill(childPid, 0)).not.toThrow();
     expect(contender().status).toBe(75);
-    process.kill(childPid, 'SIGTERM');
+    expect(signalFixtureProcess(child, 'SIGTERM')).toBe(true);
     let result = contender();
     for (let i = 0; i < 40 && result.status === 75; i++) {
       spawnSync('sleep', ['0.05']);
@@ -189,8 +276,24 @@ time.sleep(20)`;
     expect(result.status).toBe(0);
   } finally {
     holder.kill('SIGTERM');
-    try { process.kill(-workerPid, 'SIGKILL'); } catch { /* already exited */ }
-    try { process.kill(childPid, 'SIGTERM'); } catch { /* already exited */ }
+    signalFixtureProcess(worker, 'SIGKILL', true);
+    signalFixtureProcess(child, 'SIGTERM');
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('bound post-session stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {
+  for (const mode of ['stop_bound_replaced', 'stop_bound_wrong_image', 'stop_bound_partial', 'stop_bound_unowned']) {
+    const result = scenario(mode);
+    expect(result.error).not.toBe('');
+    expect(result.calls.some(call => call[0] === 'rm')).toBe(false);
+    expect(result.containerExists).toBe(true);
+  }
+});
+
+test('bound post-session stop removes the genuine acquired immutable ID', () => {
+  const result = scenario('stop_bound_valid');
+  expect(result.error).toBe('');
+  expect(result.calls).toContainEqual(['rm', '-f', 'owned-container-id']);
+  expect(result.containerExists).toBe(false);
 });

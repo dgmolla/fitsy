@@ -2,13 +2,13 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appleGitHookPrologue } from './apple-git-hook-env';
+import { installedFixtureHook, timingHook, installVerificationFixture } from './hook-fixture';
 
 const root = resolve(__dirname, '../..');
 const yaml = require('js-yaml') as { load(value: string): unknown };
 let directory: string;
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-  !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$)/.test(key)));
+  !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$|NODE_OPTIONS$|NODE_PATH$)/.test(key)));
 const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, encoding: 'utf8', env }).trim();
 const write = (file: string, value: string) => {
   mkdirSync(join(directory, file, '..'), { recursive: true });
@@ -20,22 +20,10 @@ const cli = (file: string, args: string[] = [], extra: Record<string, string> = 
     [`scripts/verify/${file}`, ...args], { cwd: directory, encoding: 'utf8', env: { ...env, ...extra }, timeout: 30000 });
 const plan = (extra: Record<string, string> = {}) => JSON.parse(cli('impact-plan.mjs', [], extra).stdout);
 const event = (name: string, data: object) => { const path = join(directory, `.evidence/${name}.json`); write(`.evidence/${name}.json`, JSON.stringify(data)); return path; };
-function timingHook() {
-  write('scripts/delivery/phase-events.mjs', readFileSync(join(root, 'scripts/delivery/phase-events.mjs'), 'utf8'));
-  write('package.json', JSON.stringify({ private: true, scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed' } }));
-  const bound = spawnSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'],
-    { cwd: directory, env, encoding: 'utf8' });
-  expect(bound.status).toBe(0);
-  write('bin/gh', '#!/bin/sh\necho "$3 $4" >> .evidence/gh-calls\ncase "$4" in user) echo \'{"login":"fixture"}\' ;; *"/comments?"*) echo \'[]\' ;; */comments) cat >/dev/null; echo \'{"id":1}\' ;; *) exit 1 ;; esac\n');
-  chmodSync(join(directory, 'bin/gh'), 0o755);
-  return { ...env, PATH: `${join(directory, 'bin')}:${env.PATH}` };
-}
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'fitsy-impact-'));
-  for (const file of ['impact-plan.mjs', 'local-db.mjs', 'db-lock.py', 'receipt-cache.mjs', 'run.mjs', 'run.sh', 'secrets.sh', 'migration-safety.sh']) {
-    write(`scripts/verify/${file}`, readFileSync(join(root, 'scripts/verify', file), 'utf8'));
-  }
+  installVerificationFixture(root, directory);
   write('.gitignore', 'node_modules\n.evidence/\n');
   symlinkSync(join(root, 'node_modules'), join(directory, 'node_modules'));
   git('init', '-q');
@@ -62,6 +50,18 @@ test('actual main push selects a matching advisory check after origin/main advan
   const result = cli('run.mjs', ['--layer=2', '--runs=ci', '--scope=changed'], extra);
   expect(result.status).toBe(0);
   expect(result.stdout).toContain('L2 ran');
+});
+
+test('local caller comparison cannot hide code or dirty files; explicit CI range remains supported', () => {
+  const before = git('rev-parse', 'HEAD');
+  write('apps/mobile/committed.ts', 'export const committed = true;\n'); const head = commit();
+  write('apps/mobile/dirty.ts', 'export const dirty = true;\n');
+  const selectors = { FITSY_DIFF_BASE: 'HEAD', FITSY_DIFF_HEAD: 'HEAD' };
+  expect(plan(selectors)).toMatchObject({ code: true, native: true,
+    files: expect.arrayContaining(['apps/mobile/committed.ts', 'apps/mobile/dirty.ts']) });
+  git('update-ref', 'refs/remotes/origin/main', head);
+  expect(plan({ CI: 'true', FITSY_DIFF_BASE: before, FITSY_DIFF_HEAD: head })).toMatchObject({
+    code: true, native: true, files: ['apps/mobile/committed.ts'] });
 });
 
 test('nested Markdown outside low-risk documentation paths keeps code jobs', () => {
@@ -217,47 +217,31 @@ test('source mutation during a cached run retires the prior receipt', () => {
   expect(retry.status).toBe(0); expect(retry.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
 });
 
-test('real Git push reuses local unit receipts and preserves custom environment identity', () => {
+test('CI-first real push preserves prior unit receipt without rerunning heavy checks', () => {
   cacheFixture();
-  const hookEnv = timingHook();
-  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8')
-    .replace('git_core="${PATH%%:*}"', appleGitHookPrologue + 'git_core="${PATH%%:*}"'));
+  const hookEnv = timingHook(root, directory, env);
+  write('.githooks/pre-push', installedFixtureHook(root, directory, true));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-  const local = (extra: Record<string, string> = {}) => spawnSync('npm', ['run', 'verify', '--', '--runs=local', '--reuse'],
-    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 30000 });
+  const local = spawnSync('npm', ['run', 'verify', '--', '--runs=local'],
+    { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
+  expect(local.status).toBe(0); expect(calls()).toBe(1);
+  const receiptFile = join(directory, '.evidence/verify/check-cache/test.json');
+  const receipt = readFileSync(receiptFile, 'utf8');
   const remote = join(directory, '.evidence/remote.git');
   execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
-  const push = (ref: string, extra: Record<string, string> = {}) => spawnSync('git',
-    ['-c', 'core.hooksPath=.githooks', 'push', remote, `HEAD:refs/heads/${ref}`],
-    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 30000 });
-  expect(local().status).toBe(0); expect(calls()).toBe(1);
-  const first = push('main'); expect(first.status).toBe(0);
-  expect(first.stdout + first.stderr).toMatch(/"name":"test"[^\n]*"duration_ms":0[^\n]*"cached":true/);
-  expect(calls()).toBe(1);
+  const pushed = spawnSync('git', ['-c', 'core.hooksPath=.githooks', 'push', remote, 'HEAD:refs/heads/candidate'],
+    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, FEATURE_FLAG: 'different' }, timeout: 30000 });
+  expect(pushed.status).toBe(0); expect(calls()).toBe(1);
+  expect(readFileSync(receiptFile, 'utf8')).toBe(receipt);
+  expect(pushed.stdout + pushed.stderr).not.toMatch(/"name":"test"/);
   expect(readFileSync(join(directory, '.evidence/gh-calls'), 'utf8')).toContain('POST repos/dgmolla/fitsy/issues/355/comments');
-  const changed = push('changed-env', { FITSY_TEST_CHANGED: '1' });
-  expect(changed.status).toBe(0); expect(changed.stdout + changed.stderr).not.toContain('"cached":true');
-  expect(calls()).toBe(2);
-  const custom = { CPATH: '/opt/fixture/include', LIBRARY_PATH: '/opt/fixture/lib', MANPATH: '/opt/fixture/man' };
-  expect(local(custom).status).toBe(0); expect(calls()).toBe(3);
-  const matching = push('matching-custom-env', custom); expect(matching.status).toBe(0);
-  expect(matching.stdout + matching.stderr).toMatch(/"name":"test"[^\n]*"duration_ms":0[^\n]*"cached":true/);
-  expect(calls()).toBe(3);
-  const changedCustom = push('different-custom-env', { ...custom, CPATH: '/opt/fixture/other' });
-  expect(changedCustom.status).toBe(0); expect(changedCustom.stdout + changedCustom.stderr).not.toContain('"cached":true');
-  expect(calls()).toBe(4);
-  git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD~2')); expect(local(custom).status).toBe(0); expect(calls()).toBe(5);
-  const sourceBaseline = push('source-baseline', custom); expect(sourceBaseline.status).toBe(0); expect(sourceBaseline.stdout + sourceBaseline.stderr).toContain('"cached":true'); expect(calls()).toBe(5);
-  write('scripts/example.mjs', 'export const x = 2;\n'); commit();
-  const changedSource = push('different-source', custom); expect(changedSource.status).toBe(0);
-  expect(changedSource.stdout + changedSource.stderr).not.toContain('"cached":true'); expect(calls()).toBe(6);
 });
 
 test('pre-push refuses an unbound issue before checks or publication', () => {
   cacheFixture();
-  const hookEnv = timingHook();
-  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
+  const hookEnv = timingHook(root, directory, env);
+  write('.githooks/pre-push', installedFixtureHook(root, directory));
   rmSync(join(directory, '.evidence/delivery/binding.json'));
   const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
   expect(hook.status).toBe(1); expect(hook.stderr).toContain('bind --issue N');
@@ -266,8 +250,8 @@ test('pre-push refuses an unbound issue before checks or publication', () => {
 
 test('pre-push accepts an inapplicable domain gate but refuses its real failure', () => {
   cacheFixture();
-  const hookEnv = timingHook();
-  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
+  const hookEnv = timingHook(root, directory, env);
+  write('.githooks/pre-push', installedFixtureHook(root, directory));
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"skipped"}\'\nexit 2\n');
   const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
   expect(hook().status).toBe(0);
@@ -277,11 +261,11 @@ test('pre-push accepts an inapplicable domain gate but refuses its real failure'
   expect(readFileSync(join(directory, '.evidence/gh-calls'), 'utf8').split('\n').filter(line => line.startsWith('POST '))).toHaveLength(before);
 });
 
-test('real Git push hook preserves outer refs, isolates nested Git, reuses L2, and reruns size/domain gates', () => {
+test('real Git push hook preserves outer refs, isolates Git and reruns cheap size/domain gates', () => {
   cacheFixture();
-  const hookEnv = timingHook();
+  const hookEnv = timingHook(root, directory, env);
   write('scripts/verify/fixture.sh', `mkdir -p .evidence/inner\ngit -C .evidence/inner init -q\ngit -C .evidence/inner config user.name fixture\ngit -C .evidence/inner config user.email fixture@example.test\necho nested > .evidence/inner/file\ngit -C .evidence/inner add file\ngit -C .evidence/inner commit -qm nested\ngit -C .evidence/inner checkout -qb nested\ntest "$(git -C .evidence/inner branch --show-current)" = nested\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\n`);
-  write('.githooks/pre-push', readFileSync(join(root, '.githooks/pre-push'), 'utf8'));
+  write('.githooks/pre-push', installedFixtureHook(root, directory));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);
   git('add', '.'); git('commit', '-qm', 'hook fixture'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   git('config', 'core.hooksPath', '.githooks');
@@ -290,9 +274,9 @@ test('real Git push hook preserves outer refs, isolates nested Git, reuses L2, a
   execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
   const push = (ref: string) => spawnSync('git', ['push', remote, `HEAD:refs/heads/${ref}`],
     { cwd: directory, env: hookEnv, encoding: 'utf8', timeout: 30000 });
-  const first = push('first'); expect(first.status).toBe(0); expect(calls()).toBe(1);
+  const first = push('first'); expect(first.status).toBe(0); expect(existsSync(join(directory, '.evidence/calls'))).toBe(false);
   const second = push('second'); expect(second.status).toBe(0);
-  expect(second.stdout + second.stderr).toContain('"cached":true'); expect(calls()).toBe(1);
+  expect(second.stdout + second.stderr).not.toMatch(/"name":"test"/); expect(existsSync(join(directory, '.evidence/calls'))).toBe(false);
   expect(calls('size-calls')).toBe(2); expect(calls('domain-calls')).toBe(2);
   expect(git('rev-parse', 'HEAD')).toBe(before);
   expect(git('branch', '--show-current')).toBe(branch);

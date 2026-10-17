@@ -17,6 +17,14 @@ done
 LENS=review-round
 CACHE_DIR="${FITSY_REVIEW_CACHE:-$HOME/.cache/fitsy-review}"
 GH_BIN="${FITSY_GH_BIN:-gh}"
+github() {
+  if [ "${FITSY_REVIEW_ADMIN_GH:-0}" = 1 ]; then
+    /usr/bin/env -i HOME="$(python3 -I -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')" \
+      PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin GH_HOST=github.com GH_REPO=dgmolla/fitsy "$GH_BIN" "$@"
+  else
+    "$GH_BIN" "$@"
+  fi
+}
 mkdir -p "$CACHE_DIR"
 umask 077
 
@@ -47,22 +55,6 @@ for raw in sorted(set(filter(None,paths))):
 print(hash.hexdigest())
 PYSOURCE
 }
-# The fresh mode is used by shipping admission after restoring immutable main
-# controls, matching the authenticated poller's existing overlay contract.
-if [ "$FRESH_EXECUTION" = 1 ]; then
-  [ "$CACHED_ONLY" = 0 ] || { echo '[run-review] fresh execution cannot consume cached-only evidence' >&2; exit 1; }
-  python3 -I - "$(git rev-parse origin/main)" <<'PYOVERLAY'
-import subprocess,sys
-paths=['scripts/review','scripts/delivery/phase-events.mjs','scripts/verify/risk-tiers.yml','REVIEW.md','.claude/lenses']
-def git(*args): return subprocess.check_output(['git',*args])
-changed=git('diff','--name-only','HEAD','-z').split(b'\0')+git('ls-files','--others','--exclude-standard','-z').split(b'\0')
-for raw in filter(None,changed):
-    path=raw.decode()
-    if not any(path==allowed or path.startswith(allowed+'/') for allowed in paths): sys.exit('fresh execution requires frozen candidate source')
-for args in [('diff','--quiet',sys.argv[1],'--',*paths),('diff','--cached','--quiet',sys.argv[1],'--',*paths)]:
-    if subprocess.run(['git',*args]).returncode: sys.exit('fresh execution requires immutable main reviewer controls')
-PYOVERLAY
-fi
 FROZEN_SOURCE=""
 FROZEN_HEAD=""
 if [ "$PROBE" = 0 ]; then
@@ -92,16 +84,16 @@ if [ "$TARGET" = "--local" ]; then
   TITLE="$(git log -1 --format=%s)"; BODY=""
   HEAD_BRANCH="$(git symbolic-ref --quiet --short HEAD)"
 else
-  TITLE="$("$GH_BIN" pr view "$TARGET" --json title --jq .title)"
-  BODY="$("$GH_BIN" pr view "$TARGET" --json body --jq .body)"
-  HEAD_SHA="$("$GH_BIN" pr view "$TARGET" --json headRefOid --jq .headRefOid)"
-  HEAD_BRANCH="$("$GH_BIN" pr view "$TARGET" --json headRefName --jq .headRefName)"
+  TITLE="$(github pr view "$TARGET" --json title --jq .title)"
+  BODY="$(github pr view "$TARGET" --json body --jq .body)"
+  HEAD_SHA="$(github pr view "$TARGET" --json headRefOid --jq .headRefOid)"
+  HEAD_BRANCH="$(github pr view "$TARGET" --json headRefName --jq .headRefName)"
   [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] || { echo "PR context is not the requested source head" >&2; exit 1; }
-  BASE_SHA="$("$GH_BIN" pr view "$TARGET" --json baseRefOid --jq .baseRefOid)"
+  BASE_SHA="$(github pr view "$TARGET" --json baseRefOid --jq .baseRefOid)"
   [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "PR base identity unavailable" >&2; exit 1; }
   git cat-file -e "$BASE_SHA^{commit}" || git fetch -q origin "$BASE_SHA"
   DIFF="$(git diff --abbrev=8 "$BASE_SHA...$HEAD_SHA")"
-  [ "$("$GH_BIN" pr view "$TARGET" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA" ] || { echo "PR source changed during input gathering" >&2; exit 1; }
+  [ "$(github pr view "$TARGET" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA" ] || { echo "PR source changed during input gathering" >&2; exit 1; }
 fi
 [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] || { echo "checkout source changed during input gathering" >&2; exit 1; }
 # Optional hunk-heading labels are not code; retain every patch body/index line.
@@ -115,9 +107,41 @@ else
   ISSUE="$(printf '%s\n' "$BODY" | sed -nE 's/^Delivery-Issue: #([1-9][0-9]*)[[:space:]]*$/\1/p')"
 fi
 [[ "$ISSUE" =~ ^[1-9][0-9]*$ ]] || { echo '[run-review] timing gap: review budget requires one bound Delivery-Issue candidate' >&2; exit 1; }
+CONTROL_SHA="$(git rev-parse origin/main)"
+COMPLETED_AUTH="${FITSY_REVIEW_COMPLETED_HOME:-${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/completed}/issue-$ISSUE.json"
+if [ -f "$COMPLETED_AUTH" ]; then
+  BASE_SHA="$(python3 -I scripts/review/review-budget.py completed-context --ledger "$CACHE_DIR/unused" \
+    --authorization-file "$COMPLETED_AUTH" --issue "$ISSUE" --source-sha "$HEAD_SHA")" || exit 1
+  # completed-context authenticated the frozen review and exact composed trees.
+  # Only that private installation authority may select successor controls.
+  CONTROL_SHA="$(python3 -I - "$COMPLETED_AUTH" "$HEAD_SHA" "$CONTROL_SHA" <<'PYCONTROL'
+import json,sys
+value=json.load(open(sys.argv[1]))
+print(value['control_sha'] if value.get('composition', {}).get('source_sha') == sys.argv[2]
+      and value['source_sha'] != sys.argv[2] else sys.argv[3])
+PYCONTROL
+  )" || exit 1
+  DIFF="$(git diff --abbrev=8 "$BASE_SHA...$HEAD_SHA" | python3 -I -c 'import re,sys; print(re.sub(r"(?m)^(@@ -[0-9]+(?:,[0-9]+)? \+[0-9]+(?:,[0-9]+)? @@).*$",r"\1",sys.stdin.read()),end="")')"
+fi
+# Authenticate the authenticated control overlay independently of whether a new
+# reviewer may execute. Explicit cached-only validation still checks this overlay.
+if [ "$FRESH_EXECUTION" = 1 ]; then
+  python3 -I - "$CONTROL_SHA" <<'PYOVERLAY'
+import subprocess,sys
+paths=['scripts/review','scripts/delivery/phase-events.mjs','scripts/verify/risk-tiers.yml','REVIEW.md','.claude/lenses']
+def git(*args): return subprocess.check_output(['git',*args])
+if git('ls-files','--others','--exclude-standard','-z'): sys.exit('trusted overlay requires frozen candidate source without untracked inputs')
+changed=git('diff','--name-only','HEAD','-z').split(b'\0')
+for raw in filter(None,changed):
+    path=raw.decode()
+    if not any(path==allowed or path.startswith(allowed+'/') for allowed in paths): sys.exit('fresh execution requires frozen candidate source')
+for args in [('diff','--quiet',sys.argv[1],'--',*paths),('diff','--cached','--quiet',sys.argv[1],'--',*paths)]:
+    if subprocess.run(['git',*args]).returncode: sys.exit('fresh execution requires immutable approved reviewer controls')
+PYOVERLAY
+fi
 # The bound issue supplies release intent, never reviewer instructions or proof.
 # Ignore changing task status so local and PR reviews reuse the same acceptance.
-if ! ISSUE_BRIEF="$("$GH_BIN" issue view "$ISSUE" --json body --jq .body 2>/dev/null)"; then
+if ! ISSUE_BRIEF="$(github issue view "$ISSUE" --json body --jq .body 2>/dev/null)"; then
   echo '[run-review] bound issue brief unavailable; review cannot verify release acceptance' >&2
   exit 1
 fi
@@ -139,12 +163,13 @@ BUDGET_LEDGER="$BUDGET_HOME/issue-$ISSUE.jsonl"
 # A candidate branch has one issue even when its first PR changes the body/head.
 [ -n "$HEAD_BRANCH" ] || { echo '[run-review] review requires a named candidate branch' >&2; exit 1; }
 CANDIDATE="$(git rev-list --max-parents=0 HEAD | sort):$HEAD_BRANCH"
-BUDGET_ARGS=(--ledger "$BUDGET_LEDGER" --candidate "$CANDIDATE" --issue "$ISSUE" --optional-import-ledger "$REPO_ROOT/.evidence/review-budget.jsonl")
+BUDGET_ARGS=(--ledger "$BUDGET_LEDGER" --candidate "$CANDIDATE" --issue "$ISSUE")
+if [ ! -f "$COMPLETED_AUTH" ]; then BUDGET_ARGS+=(--optional-import-ledger "$REPO_ROOT/.evidence/review-budget.jsonl"); fi
 if [ -n "${FITSY_REVIEW_EXECUTION_POLICY:-}" ]; then BUDGET_ARGS+=(--execution-policy "$FITSY_REVIEW_EXECUTION_POLICY"); fi
 for LEGACY_LEDGER in "${FITSY_REVIEW_BUDGET_LEDGER:-}" "${FITSY_REVIEW_BUDGET_IMPORT_LEDGER:-}"; do
-  [ -z "$LEGACY_LEDGER" ] || BUDGET_ARGS+=(--import-ledger "$LEGACY_LEDGER")
+  [ -z "$LEGACY_LEDGER" ] || [ -f "$COMPLETED_AUTH" ] || BUDGET_ARGS+=(--import-ledger "$LEGACY_LEDGER")
 done
-if [ "$TARGET" != "--local" ]; then
+if [ "$TARGET" != "--local" ] && [ ! -f "$COMPLETED_AUTH" ]; then
   BUDGET_ARGS+=(--optional-import-ledger "${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/budgets/$TARGET.jsonl")
 fi
 if ! python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" >&2; then
@@ -210,7 +235,7 @@ fi
 
 # Classify both sides, including deleted and renamed sensitive files.
 CHANGED="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")"
-DOMAINS="$(printf '%s\n' "$CHANGED" | python3 -I scripts/review/review-domains.py --state-file "$BUDGET_HOME/domains/issue-$ISSUE.json" --candidate "$CANDIDATE" --issue "$ISSUE" "${DOMAIN_ARGS[@]}")"
+DOMAINS="$(printf '%s\n' "$CHANGED" | python3 -I scripts/review/review-domains.py --state-file "$BUDGET_HOME/domains/issue-$ISSUE.json" --candidate "$CANDIDATE" --issue "$ISSUE" ${DOMAIN_ARGS[@]+"${DOMAIN_ARGS[@]}"})"
 DOMAIN_FILES=()
 for DOMAIN in $DOMAINS; do
   [ -f ".claude/lenses/$DOMAIN.md" ] || { echo "missing domain instructions: $DOMAIN" >&2; exit 1; }
@@ -223,7 +248,7 @@ PROVIDER="${FITSY_REVIEW_PROVIDER:-codex}"
 incomplete_status() {
   [ "$TARGET" != --local ] || return 0
   for CONTEXT in $(printf 'lens/%s\n' $DOMAINS) review/round; do
-    "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state=error -f context="$CONTEXT" -f description="execution/$1: independent review incomplete" >/dev/null || true
+    github api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state=error -f context="$CONTEXT" -f description="execution/$1: independent review incomplete" >/dev/null || true
   done
 }
 preflight_error() { echo '[run-review] reviewer configuration failed; diagnose before retrying' >&2; incomplete_status configuration; exit 1; }
@@ -240,19 +265,47 @@ if ! IDENTITY="$(python3 -I scripts/review/execute-review.py --identity "$PROVID
 # deadlines stay in its provenance, not the semantic reviewer/cache identity.
 CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d.pop("timeout_seconds"); print(json.dumps(d,sort_keys=True))')"
 
+COMPLETED_IDENTITY=""
+if [ -f "$COMPLETED_AUTH" ]; then
+  COMPLETED_IDENTITY="$(python3 -I -c 'import hashlib,json,pathlib,sys; p=pathlib.Path(sys.argv[1]); raw=p.read_bytes(); d=json.loads(raw); h=hashlib.sha256(raw); [(h.update(k.encode()),h.update(pathlib.Path(v["path"]).read_bytes())) for k,v in sorted(d["artifacts"].items())]; print(h.hexdigest())' "$COMPLETED_AUTH")" || { incomplete_status completed_evidence; exit 1; }
+fi
 # Key on reviewed content and the bound release brief. PR title/body can change
 # without altering acceptance, while an issue acceptance edit must rerun review.
-KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" <(printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF") | shasum -a 256 | cut -d' ' -f1)"
+KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" <(printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF:$COMPLETED_IDENTITY") | shasum -a 256 | cut -d' ' -f1)"
 DIFF_SHA256="$(printf '%s' "$DIFF" | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
-if [ "$PROBE" = 1 ]; then
+if [ "$PROBE" = 1 ] && [ ! -f "$COMPLETED_AUTH" ]; then
   python3 -I -c 'import json,sys; print(json.dumps({"cache_key":sys.argv[1],"domains":sys.argv[2].split(),"head_sha":sys.argv[3]}))' "$KEY" "$DOMAINS" "$HEAD_SHA"
   exit 0
 fi
-if [ "$FRESH_EXECUTION" != 1 ] && [ -f "$CACHE_FILE" ]; then
+if [ -f "$COMPLETED_AUTH" ]; then
+  [ "$PROVIDER" = codex ] && [ "$MODEL" = gpt-6-sol ] && [ "${FITSY_REVIEW_REASONING_EFFORT:-high}" = high ] || {
+    echo '[run-review] completed reviewer profile does not match selected provider/model/effort' >&2; exit 1;
+  }
+  COMPLETED_ARGS=(--authorization-file "$COMPLETED_AUTH" --candidate-root "$REPO_ROOT"
+    --control-sha "$CONTROL_SHA" --source-sha "$HEAD_SHA" --base-sha "$BASE_SHA"
+    --acceptance-sha256 "$(printf '%s' "$ISSUE_BRIEF" | shasum -a 256 | cut -d' ' -f1)")
+  for DOMAIN in $DOMAINS; do COMPLETED_ARGS+=(--required-domain "$DOMAIN"); done
+  COMPLETED_ACTION=admit-completed
+  if [ "$PROBE" = 1 ]; then COMPLETED_ACTION=validate-completed; fi
+  ADMIN_HOME="$(python3 -I -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
+  INSTALLED_OPERATOR="$ADMIN_HOME/.fitsy-review/operators/review-budget.py"
+  if [ ! -f "$INSTALLED_OPERATOR" ]; then INSTALLED_OPERATOR="$ADMIN_HOME/.fitsy-review/repo/scripts/review/review-budget.py"; fi
+  RESULT_JSON="$(python3 -I "$INSTALLED_OPERATOR" "$COMPLETED_ACTION" "${BUDGET_ARGS[@]}" "${COMPLETED_ARGS[@]}")" || { incomplete_status completed_evidence; exit 1; }
+  if [ "$PROBE" = 1 ]; then
+    python3 -I -c 'import json,sys; print(json.dumps({"cache_key":sys.argv[1],"domains":sys.argv[2].split(),"head_sha":sys.argv[3]}))' "$KEY" "$DOMAINS" "$HEAD_SHA"
+    exit 0
+  fi
+  # Project only the validated original result through the existing domain gates.
+  # No provider, new cache or persisted admission is created on this path.
+elif { [ "$FRESH_EXECUTION" != 1 ] || [ "$CACHED_ONLY" = 1 ]; } && [ -f "$CACHE_FILE" ]; then
   TELEMETRY_CACHE_HIT=1
   echo "[run-review] cache hit ($KEY)" >&2
-  RESULT_JSON="$(python3 -I scripts/review/review-round.py "$DOMAINS" < "$CACHE_FILE")"
+  CACHE_ARGS=(--result-file "$CACHE_FILE" --cache-key "$KEY" --base-sha "$BASE_SHA" --source-sha "$HEAD_SHA")
+  for DOMAIN in $DOMAINS; do CACHE_ARGS+=(--required-domain "$DOMAIN"); done
+  RESULT_JSON="$(python3 -I scripts/review/review-budget.py admit-cache "${BUDGET_ARGS[@]}" "${CACHE_ARGS[@]}")" || {
+    incomplete_status cache_provenance; exit 1;
+  }
 else
   if [ "$CACHED_ONLY" = 1 ]; then
     echo "[run-review] required complete review cache unavailable; no execution authorized" >&2
@@ -325,17 +378,23 @@ else
   if [ "$BUDGET_OUTCOME" = pass ]; then
     BUDGET_VERDICT="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["verdict"])')"
   fi
-  python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --failure-kind "$FAILURE_KIND" --round-id "$HEAD_SHA" \
-    --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" >&2
-  BUDGET_OPEN=0
   cp "$RAW_FILE" "$CACHE_DIR/$KEY.raw"
   rm -f "$PROMPT_FILE" "$RAW_FILE"
   PROMPT_FILE=""; RAW_FILE=""
   RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c '
 import json,sys
 result=json.load(sys.stdin)
+import hashlib,pathlib
 result["reviewer"]=json.loads(sys.argv[1])
-print(json.dumps(result))' "$IDENTITY")"
+result["execution"]={"attempt_id":sys.argv[2],"cache_key":sys.argv[3],"base_sha":sys.argv[4],
+ "artifacts":{key:{"path":path,"sha256":hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()}
+ for key,path in (("raw",sys.argv[5]),("receipt",sys.argv[6]))}}
+print(json.dumps(result))' "$IDENTITY" "$ATTEMPT_ID" "$KEY" "$BASE_SHA" "$CACHE_DIR/$KEY.raw" "$EXECUTION_FILE")"
+  RESULT_DIGEST="$(printf '%s' "$RESULT_JSON" | shasum -a 256 | cut -d' ' -f1)"
+  python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --failure-kind "$FAILURE_KIND" --round-id "$HEAD_SHA" \
+    --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" \
+    --result-sha256 "$RESULT_DIGEST" >&2
+  BUDGET_OPEN=0
   require_stable_candidate || { echo "$RESULT_JSON"; exit 1; }
   # Never cache incomplete reviews or historical runner findings. Both are
   # transient infrastructure failures, not reusable independent verdicts.
@@ -365,20 +424,20 @@ for DOMAIN in $DOMAINS; do
   if [ "$TARGET" != --local ]; then
     DESCRIPTION="$N_FINDINGS round finding(s), gate $GATE, $PROVIDER/$MODEL"
     if [ "$VERDICT" = incomplete ]; then DESCRIPTION="execution/${FAILURE_KIND:-invalid_output}: independent review incomplete"; fi
-    "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$STATE" -f context="lens/$DOMAIN" -f description="$DESCRIPTION" >/dev/null
+    github api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$STATE" -f context="lens/$DOMAIN" -f description="$DESCRIPTION" >/dev/null
   fi
 done
 if [ "$TARGET" != --local ]; then
   if [ "$VERDICT" = incomplete ]; then ROUND_STATE=error; ROUND_DESCRIPTION="execution/${FAILURE_KIND:-invalid_output}: independent review incomplete"
   else ROUND_STATE=$([ "$ROUND_GATE" = pass ] && echo success || echo failure); ROUND_DESCRIPTION="round-key:$KEY complete:$ROUND_GATE"; fi
-  "$GH_BIN" api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$ROUND_STATE" -f context=review/round -f description="$ROUND_DESCRIPTION" >/dev/null
+  github api "repos/{owner}/{repo}/statuses/$HEAD_SHA" -f state="$ROUND_STATE" -f context=review/round -f description="$ROUND_DESCRIPTION" >/dev/null
 fi
 # Persist source provenance without converting raw adverse findings to passes.
 RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["source"]={"head_sha":sys.argv[1],"base_sha":sys.argv[4],"diff_sha256":sys.argv[2],"cache_key":sys.argv[3]}; print(json.dumps(d))' "$HEAD_SHA" "$DIFF_SHA256" "$KEY" "$BASE_SHA")"
 echo "$RESULT_JSON"
 if [ "$TARGET" != --local ] && [ "$CACHED_ONLY" = 0 ] && { [ "$N_FINDINGS" -gt 0 ] || [ "$VERDICT" = incomplete ]; }; then
   COMMENT="$(printf '%s' "$RESULT_JSON" | python3 -I scripts/review/format-comment.py)"
-  "$GH_BIN" pr comment "$TARGET" --body "$COMMENT" >/dev/null
+  github pr comment "$TARGET" --body "$COMMENT" >/dev/null
 fi
 if [ "$TELEMETRY_CACHE_HIT" = 1 ]; then TELEMETRY_RESULT=cached
 elif [ "$ROUND_GATE" = pass ]; then TELEMETRY_RESULT=pass

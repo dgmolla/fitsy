@@ -1,7 +1,7 @@
 """Process-level dispatcher checks with a disposable Git repository and fake transports."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import os
 from pathlib import Path
@@ -98,10 +98,16 @@ with p.with_suffix('.args').open('a') as f: f.write(json.dumps(sys.argv[1:])+'\n
 p.with_suffix('.worker-budget').write_text(os.environ.get('FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS','missing'))
 mode=os.environ.get('FAKE_WORKER_MODE','done')
 if mode=='sleep': time.sleep(float(os.environ.get('FAKE_WORKER_SLEEP','2')))
-if mode=='spawn_child':
+if mode in ('spawn_child', 'child_success', 'child_fail'):
  child=subprocess.Popen(['sleep','30'])
  p.with_suffix('.childpid').write_text(str(child.pid))
- time.sleep(30)
+ if mode=='spawn_child': time.sleep(30)
+ if os.environ.get('FAKE_WORKER_STATE'):
+  deadline=time.monotonic()+5
+  while time.monotonic()<deadline:
+   if json.loads(Path(os.environ['FAKE_WORKER_STATE']).read_text()).get('active',{}).get('pid')==os.getpid(): break
+   time.sleep(.01)
+ if mode=='child_fail': raise SystemExit(7)
 if mode=='fail': raise SystemExit(7)
 with p.with_suffix('.lock').open('a') as f:
  fcntl.flock(f,fcntl.LOCK_EX); d=json.loads(p.read_text())
@@ -115,8 +121,19 @@ with p.with_suffix('.lock').open('a') as f:
 '''
 
 
+def selected_tick_args(*args):
+    # Simulate the selected coordinator's in-process renderer, never a real brief.
+    if len(args) > 2 and args[1] == str(SCRIPT) and args[2] == 'tick':
+        code = ("import importlib.util,sys; p=sys.argv.pop(1); "
+                "s=importlib.util.spec_from_file_location('fixture_dispatcher',p); "
+                "m=importlib.util.module_from_spec(s); s.loader.exec_module(m); "
+                "m.make_prompt=lambda claim: 'Synthetic selected coordinator brief'; m.main()")
+        args = (args[0], '-c', code, *args[1:])
+    return args
+
+
 def run(*args, cwd=None, env=None):
-    return subprocess.run(args, cwd=cwd, env=env, text=True, capture_output=True, timeout=20, check=True)
+    return subprocess.run(selected_tick_args(*args), cwd=cwd, env=env, text=True, capture_output=True, timeout=20, check=True)
 
 
 def item(number, *, status='Queued', labels=None, dependencies=None, priority='Next'):
@@ -197,6 +214,14 @@ class DispatcherProcessTest(unittest.TestCase):
         log = self.board.with_suffix('.workers')
         return log.read_text().splitlines() if log.exists() else []
 
+    def assert_receipt_group_settled(self, active):
+        # finished_at is written by the launcher after child settlement, before
+        # its own exit. Children must already be gone; only the writer may linger.
+        pgid, launcher = active['worker_pgid'], active['launcher_pid']
+        self.assertFalse(dispatcher.other_group_members(pgid, launcher))
+        self.until(lambda: launcher not in dispatcher.group_members(pgid, os.getpid()))
+        self.assertFalse(dispatcher.other_group_members(pgid, os.getpid()))
+
     def test_exhausted_live_queue_defers_without_claim_or_repeated_read(self):
         self.env['FAKE_QUEUE_QUOTA_RESET'] = '4070908800'
         first = self.tick()
@@ -243,23 +268,15 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.workers(), [])
         self.assertEqual(self.board_data()['items'][0]['status'], 'Queued')
 
-    def test_worker_prompt_bounds_review_and_preserves_newer_human_scope(self):
-        self.env['FAKE_WORKER_MODE'] = 'fail'
-        self.tick()
-        claim = self.state_data()['active']
-        prompt = dispatcher.make_prompt(claim)
-        self.assertIn('review-policy-human-relaxed-20261004.json', prompt)
-        self.assertIn('two combined rounds, at most 900 seconds each and 1800 cumulative seconds per issue', prompt)
-        self.assertIn('newer narrower human instructions take precedence over older grants', prompt)
-        self.assertIn('Do not expand automatically', prompt)
-        self.assertNotIn('top up only', prompt)
-        self.assertIn('one consolidated repair and affected rereview', prompt)
-        self.assertIn('Acknowledge human scope steering at the next safe command boundary', prompt)
-        self.assertIn('use source-bound owned P2 deferrals and P3 advisories', prompt)
-        self.assertIn('proceed directly to required acceptance and authorized shipping', prompt)
-        self.assertIn('Retain every historical attempt and required review domain', prompt)
-        self.assertNotIn('plus at most one durable', prompt)
-        self.assertLess(prompt.index('--stage=cheap'), prompt.index('then use scripts/verify/shipping-session.mjs'))
+    def test_default_admission_requires_selected_brief_without_claiming(self):
+        result = subprocess.run([sys.executable, str(SCRIPT), 'tick', '--config', str(self.config)],
+                                cwd=self.base, env=self.env, text=True, capture_output=True, check=True)
+        self.assertEqual(json.loads(result.stdout)['state'], 'selected-brief-required')
+        self.assertIsNone(self.state_data().get('active'))
+        self.assertEqual(self.board_data()['items'][0]['status'], 'Queued')
+        self.assertEqual(self.workers(), [])
+        with self.assertRaisesRegex(RuntimeError, 'selected coordinator-owned brief'):
+            dispatcher.make_prompt({})
 
     def test_worker_exports_configured_native_completion_budget(self):
         config = json.loads(self.config.read_text()); config['worker_timeout_seconds'] = 5400
@@ -276,6 +293,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.until(lambda: self.state_data()['active'].get('finished_at'))
         old = self.state_data()['active'].copy()
         self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        self.age_finished_fixture(release_age_seconds=5 * 3600)
         checkout = Path(old['worktree'])
         scratch = checkout / '.evidence/product-build/Build/Intermediates.noindex'
         app = checkout / '.evidence/product-build/Build/Products/Fitsy.app'
@@ -318,6 +336,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.until(lambda: self.state_data()['active'].get('finished_at'))
         old = self.state_data()['active'].copy()
         self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        self.age_finished_fixture(release_age_seconds=5 * 3600)
         scratch = Path(old['worktree']) / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('keep')
         (self.base / 'fake-lsof').write_text('#!/bin/sh\necho owned-open-file\nexit 0\n')
@@ -327,7 +346,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertIn('ownership', self.state_data()['resource_releases'][old['id']]['reason'])
 
     def test_deferred_release_retries_after_holder_ends_with_failure_history(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
         state['resource_releases'].pop(old['id'])
@@ -349,7 +368,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.state_data()['history'][-1]['exit_code'], 7)
 
     def deferred_scratch(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
         state['resource_releases'][old['id']] = {
@@ -565,7 +584,7 @@ class DispatcherProcessTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('lsof'), 'real process open-file fixture requires lsof')
     def test_open_source_process_protects_scratch_before_first_release_assessment(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         state['resource_releases'] = {}
         (self.state / 'state.json').write_text(json.dumps(state))
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
@@ -585,18 +604,29 @@ class DispatcherProcessTest(unittest.TestCase):
         finally:
             child.terminate(); child.wait(); child.stdout.close()
 
-    def ended_checkout(self):
+    def age_finished_fixture(self, *, release_age_seconds):
+        # Age only this completed disposable claim, before archive writes its
+        # matching durable receipt and checkout-release observation.
+        state = self.state_data()
+        self.assertTrue(state['active'].get('finished_at'))
+        state['active']['finished_at'] = datetime.fromtimestamp(
+            time.time() - release_age_seconds, timezone.utc).isoformat()
+        (self.state / 'state.json').write_text(json.dumps(state))
+
+    def ended_checkout(self, *, release_age_seconds=None):
         self.env['FAKE_WORKER_MODE'] = 'fail'
         self.tick()
         self.until(lambda: self.state_data()['active'].get('finished_at'))
         old = self.state_data()['active'].copy()
         self.until(lambda: dispatcher.pid_identity(old['launcher_pid']) is None)
+        if release_age_seconds is not None:
+            self.age_finished_fixture(release_age_seconds=release_age_seconds)
         self.tick()
         state = self.state_data()
         return state, state['history'][-1], Path(old['worktree'])
 
     def test_interrupted_delete_intent_is_reconciled_before_next_release(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'module').write_text('rebuildable')
         state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
@@ -610,7 +640,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertIn(str(scratch.resolve()), result['removed'])
 
     def test_absent_interrupted_delete_gets_uncertain_reconciliation_receipt(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         state['resource_releases'][old['id']] = {'issue': old['issue'], 'claim': old['id'],
             'removed': [], 'removal_intent': str(scratch.resolve())}
@@ -622,7 +652,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertIn(str(scratch.resolve()), result['reconciled_absent'])
 
     def test_interrupted_intent_cannot_delete_external_symlink_target(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         outside = self.base / 'outside-module-cache'; outside.mkdir()
         (outside / 'keep').write_text('not task owned')
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
@@ -648,7 +678,7 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.state_data()['resource_retention'][str(checkout)]['state'], 'assessment-due')
 
     def test_changed_terminal_receipt_refuses_release(self):
-        state, old, checkout = self.ended_checkout()
+        state, old, checkout = self.ended_checkout(release_age_seconds=5 * 3600)
         scratch = checkout / '.evidence/product-build/ModuleCache.noindex'
         scratch.mkdir(parents=True); (scratch / 'keep').write_text('retained')
         state['resource_releases'].pop(old['id'])
@@ -938,9 +968,9 @@ class DispatcherProcessTest(unittest.TestCase):
         self.set_board([item(385), item(351, dependencies='#385')])
         self.env['FAKE_WORKER_MODE'] = 'sleep'
         self.env['FAKE_WORKER_SLEEP'] = '1'
-        p1 = subprocess.Popen([sys.executable, str(SCRIPT), 'tick', '--config', str(self.config)],
+        p1 = subprocess.Popen(selected_tick_args(sys.executable, str(SCRIPT), 'tick', '--config', str(self.config)),
                               cwd=self.base, env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p2 = subprocess.Popen([sys.executable, str(SCRIPT), 'tick', '--config', str(self.config)],
+        p2 = subprocess.Popen(selected_tick_args(sys.executable, str(SCRIPT), 'tick', '--config', str(self.config)),
                               cwd=self.base, env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         r1 = p1.communicate(timeout=20); r2 = p2.communicate(timeout=20)
         self.assertEqual((p1.returncode, p2.returncode), (0, 0), (r1, r2))
@@ -1247,6 +1277,55 @@ class DispatcherProcessTest(unittest.TestCase):
         self.assertEqual(self.tick()['state'], 'idle')
         self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
 
+    def test_success_and_failure_stop_unneeded_children_before_release(self):
+        # Each subcase owns a fresh fixture; real process inventory and teardown are required.
+        for mode, code in (('child_success', 0), ('child_fail', 7)):
+            with self.subTest(mode=mode):
+                fixture = DispatcherProcessTest()
+                fixture.setUp()
+                try:
+                    fixture.env['FAKE_WORKER_MODE'] = mode
+                    fixture.env['FAKE_WORKER_STATE'] = str(fixture.state / 'state.json')
+                    fixture.tick()
+                    fixture.until(lambda: fixture.state_data()['active'].get('finished_at'), seconds=8)
+                    active = fixture.state_data()['active']
+                    self.assertEqual(active['exit_code'], code)
+                    self.assertNotEqual(active['stage'], 'ownership-uncertain')
+                    self.assertEqual(active['resources']['worker-process']['state'], 'released')
+                    fixture.assert_receipt_group_settled(active)
+                finally:
+                    fixture.doCleanups()
+
+    def test_cancelled_launcher_settles_group_and_cannot_accept_late_success(self):
+        self.env['FAKE_WORKER_MODE'] = 'spawn_child'
+        self.tick()
+        self.until(lambda: self.board.with_suffix('.childpid').exists())
+        active = self.state_data()['active']
+        os.kill(active['launcher_pid'], signal.SIGTERM)
+        self.until(lambda: self.state_data()['active'].get('finished_at'), seconds=8)
+        active = self.state_data()['active']
+        self.assertTrue(active['cancelled'])
+        self.assertNotEqual(active['stage'], 'ownership-uncertain')
+        self.assert_receipt_group_settled(active)
+        self.assertEqual(active['resources']['worker-process']['state'], 'released')
+        self.assertEqual(self.tick()['state'], 'idle')
+        self.assertIn('dispatch-hold', self.board_data()['items'][0]['labels'])
+
+    def test_cancel_during_acquisition_preserves_original_intent_without_new_worker(self):
+        config = json.loads(self.config.read_text())
+        config['test_pause_before_child_seconds'] = 30
+        self.config.write_text(json.dumps(config))
+        self.tick()
+        self.until(lambda: self.state_data()['active'].get('resources', {}).get('worker-process'))
+        os.kill(self.state_data()['active']['launcher_pid'], signal.SIGTERM)
+        self.until(lambda: self.state_data()['active'].get('finished_at'), seconds=8)
+        active = self.state_data()['active']
+        self.assertTrue(active['cancelled'])
+        self.assertEqual(active['resources']['worker-process']['state'], 'acquiring')
+        self.assertNotIn('identity', active['resources']['worker-process'])
+        self.assertEqual(self.workers(), [])
+        self.assertEqual(self.tick()['state'], 'idle')
+
     def test_timeout_cannot_be_overwritten_by_late_verified_receipt(self):
         delivered = item(385, status='Done')
         delivered.update({'issue_state': 'CLOSED', 'verified at': '2026-09-27T00:10:00Z',
@@ -1421,6 +1500,45 @@ class DispatcherProcessTest(unittest.TestCase):
         receipt = json.loads((self.state / 'claims/claim-101/receipt.json').read_text())
         self.assertEqual(receipt['terminal'], 'verified')
         self.assertEqual(receipt['worker_profile']['provider'], 'claude')
+
+
+class ReceiptGroupSettlementTest(unittest.TestCase):
+    def setUp(self):
+        # Exercise the lifecycle assertion without native inventory or fixtures.
+        self.fixture = DispatcherProcessTest()
+        self.active = {'worker_pgid': 101, 'launcher_pid': 101}
+
+    def test_receipt_writer_can_exit_after_publication(self):
+        with mock.patch.object(dispatcher, 'group_members', side_effect=[[], [101], [], []]), \
+                mock.patch.object(time, 'sleep'):
+            self.fixture.assert_receipt_group_settled(self.active)
+
+    def test_surviving_child_fails_before_waiting_for_launcher(self):
+        with mock.patch.object(dispatcher, 'group_members', return_value=[102]), \
+                mock.patch.object(self.fixture, 'until') as wait:
+            with self.assertRaises(AssertionError):
+                self.fixture.assert_receipt_group_settled(self.active)
+            wait.assert_not_called()
+
+    def test_launcher_that_never_exits_fails_at_existing_deadline(self):
+        with mock.patch.object(dispatcher, 'group_members', side_effect=[[], [101]]), \
+                mock.patch.object(time, 'monotonic', side_effect=[0, 0, 9]), \
+                mock.patch.object(time, 'sleep'):
+            with self.assertRaisesRegex(AssertionError, 'condition did not become true'):
+                self.fixture.assert_receipt_group_settled(self.active)
+
+    def test_unavailable_inventory_fails_before_waiting(self):
+        with mock.patch.object(dispatcher, 'group_members', side_effect=RuntimeError('unavailable')), \
+                mock.patch.object(self.fixture, 'until') as wait:
+            with self.assertRaises(AssertionError):
+                self.fixture.assert_receipt_group_settled(self.active)
+            wait.assert_not_called()
+
+    def test_child_observed_after_launcher_exit_still_fails(self):
+        with mock.patch.object(dispatcher, 'group_members', side_effect=[[], [102], [102]]):
+            with self.assertRaises(AssertionError):
+                self.fixture.assert_receipt_group_settled(self.active)
+
 
 class ResourceRetentionTest(unittest.TestCase):
     def setUp(self):

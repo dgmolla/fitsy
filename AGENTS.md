@@ -128,7 +128,9 @@ vercel env add KEY prod    # Add/update a secret
 
 ## Agent routing
 
-Follow [model routing and delegation](docs/engineering/devops/agent-model-routing.md) for model choice, worker ownership, compact handoffs and independent review.
+The human-selected standalone Pstack orchestrate-delivery, ship-branch and verify-fitsy skills supplied by the coordinator control orchestration and shipping.
+Repository documents retain product, supported command, security/data and release contracts.
+Follow [model routing and delegation](docs/engineering/devops/agent-model-routing.md) for configured model and independent review protections.
 
 ## Session Discipline
 
@@ -138,16 +140,16 @@ Follow [model routing and delegation](docs/engineering/devops/agent-model-routin
 
 ## Pre-PR Gate
 
-Follow `docs/engineering/devops/shipping.md` for the canonical shipping procedure and review dispositions.
+Follow `docs/engineering/devops/shipping.md` for supported commands, acceptance, release protections and review dispositions under the selected skills.
 
-CI is a safety net, not a first pass.
-Run cheap checks and meaningful focused regressions, commit the frozen candidate, and obtain a passing independent review before expensive full acceptance.
-Run all required acceptance locally before push. Fix all failures in your session. Do not open a PR that
-you haven't verified passes locally.
+Publish after meaningful cheap checks, focused regressions and a matching independent review of the frozen candidate.
+The trusted existing public Verify workflow supplies heavy validation before protected merge.
+Keep applicable real-media/native journeys and release approvals explicit; a hook pass or a same-named CI status is not acceptance.
 
 ```bash
 npm run verify -- --stage=cheap   # structural, safety, lint, types and selected focused tests before review
-# Freeze/commit and run the canonical independent review, then full acceptance:
+# Freeze/commit, obtain canonical independent review, then publish inside the live shipping session.
+# Optional local full diagnostics retain their normal contracts:
 npm run verify         # layers 0-2 on your changes (structural, secrets, lint, types, tests)
 npm run verify:all     # everything, including the production build
 # E2E: use mobile MCP tools to verify critical flows in the simulator
@@ -156,7 +158,7 @@ npm run verify:all     # everything, including the production build
 The check list lives in `scripts/verify/registry.yml`; CI (`verify.yml`), the
 pre-push hook, and agents all run the same scripts.
 
-**The rule**: if CI would catch it, you should have caught it first.
+Protected merge requires current trusted CI plus applicable local media/native evidence; old-head CI and candidate-controlled workflow changes cannot substitute.
 
 ## Post-PR Gate
 

@@ -19,7 +19,8 @@ import urllib.request
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from resource_lifecycle import cleanup_released, resume_checkout, assess_retention, retention, read_claims
+from resource_lifecycle import (cleanup_released, resume_checkout, assess_retention, retention,
+                                read_claims, resource_intent, resource_acquired, execution_capacity)
 from cold_retention import recover as recover_pressure
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'sim'))
@@ -574,13 +575,18 @@ def group_owned(active, pgid):
 
 
 def group_members(pgid, own_pid):
-    result = subprocess.run(['ps', '-axo', 'pid=,pgid=,stat='], text=True, capture_output=True,
-                            start_new_session=True)
+    try:
+        result = subprocess.run(['ps', '-axo', 'pid=,pgid=,stat='], text=True, capture_output=True,
+                                start_new_session=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError('process group inventory unavailable') from error
     if result.returncode:
         raise RuntimeError('process group inventory unavailable')
     members = []
     for line in result.stdout.splitlines():
         fields = line.split()
+        if len(fields) != 3 or not fields[0].isdigit() or not fields[1].isdigit():
+            raise RuntimeError('process group inventory malformed')
         if len(fields) >= 3 and int(fields[1]) == pgid and int(fields[0]) != own_pid and not fields[2].startswith('Z'):
             members.append(int(fields[0]))
     return members
@@ -594,77 +600,80 @@ def other_group_members(pgid, own_pid):
 
 
 def stop_owned_group(pgid, own_pid):
-    """On timeout, stop all remaining members without terminating the receipt writer."""
+    """Stop confirmed members without terminating the original receipt writer."""
     for sig, seconds in ((signal.SIGTERM, 10), (signal.SIGKILL, 10)):
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             try:
                 members = group_members(pgid, own_pid)
-            except RuntimeError:
+            except (RuntimeError, OSError, subprocess.SubprocessError):
                 return False
             if not members:
                 return True
             for pid in members:
                 try:
+                    started = pid_identity(pid)
+                    if started is None:
+                        if pid in group_members(pgid, own_pid):
+                            return False  # Missing inventory cannot authorize signaling a numeric PID.
+                        continue
+                    if os.getpgid(pid) != pgid or pid_identity(pid) != started:
+                        return False
                     os.kill(pid, sig)
                 except ProcessLookupError:
                     pass
+                except (PermissionError, RuntimeError, subprocess.SubprocessError):
+                    return False
             time.sleep(0.1)
     return not other_group_members(pgid, own_pid)
 
 
 def make_prompt(claim):
-    task = claim['input']
-    return (f"Deliver Fitsy issue #{task['issue']}: {task['title']}\n\n{task['body']}\n\n"
-            'You are the only implementation owner for this issue. Work only in this isolated checkout. '
-            'Read AGENTS.md, package instructions, docs/engineering/devops/task-management.md, shipping.md, '
-            'and the ship-branch skill. Bind the issue phase-events before edits. Reproduce the actual bug before fixing it. '
-            'Use canonical exact-head tests and independent reviews with retained issue budget, then authorized push/PR/merge, '
-            'main Verify and Deploy, actual acceptance, issue and board closeout. Preserve P0/P1 gates and review history. '
-            'Do not start another issue, restart FM, change unrelated source, or send a second periodic Slack digest. '
-            'Report blockers on this issue with a stable incident key; the dispatcher owns any Slack blocker alert. '
-            f"Planning classification is advisory: {claim['classification']['task_type']}, "
-            f"risk {claim['classification']['planning_risk']}, profile {claim['classification']['profile']}. "
-            f"The configured implementation provider/model is {claim['worker_profile']['provider']}/"
-            f"{claim['worker_profile']['model']}; record actual use. "
-            f"Run one canonical scripts/review/run-review.sh round with all required domains and the snapshotted reviewer provider/model "
-            f"{claim['review_profile']['provider']}/{claim['review_profile']['model']} "
-            f"at {claim['review_profile']['effort']} effort. "
-            'The canonical diff-based review tier is authoritative. '
-            f"This dispatcher claim ID is {claim['id']} and its source branch is {claim['branch']}. "
-            'At completion, set board Verified at and Done only after acceptance, then post exactly one issue comment '
-            'starting `<!-- fitsy-dispatch-terminal:v1 -->` followed by compact JSON containing '
-            '`{"issue":number,"claim_id":"this-claim-id","branch":"this-branch","pr":number,"head_sha":"40-hex","merge_sha":"40-hex","verify_run":number,"deploy_run":number,"acceptance":"verified"}`. '
-            'The dispatcher independently checks the merged PR and successful main Verify and Deploy run IDs at the merge SHA; '
-            'missing evidence does not satisfy dependencies. '
-            'if blocked, add dispatch-hold with a concrete reason and stop. '
-            'Freeze and commit the candidate, select meaningful focused tests with scripts/verify/focused-tests.mjs --set, '
-            'run npm run verify -- --stage=cheap, then use scripts/verify/shipping-session.mjs -- <shipping command> for one live fresh admission across affected final E2E, full verification and pre-push. '
-            'Keep those commands in one fail-fast session; closing it or source drift requires fresh bounded admission, never a saved review pass. '
-            'Freeze the accepted outcome during validation; optional improvements stay in owned follow-ups. '
-            'A blocker needs a reachable trigger, evidence, concrete impact and violated contract. '
-            'Preserve confirmed P0/P1 blockers, use source-bound owned P2 deferrals and P3 advisories, and never rewrite raw verdicts. '
-            'Consolidate findings into one repair pass, rerun affected cheap/focused checks and one affected rereview. '
-            'Do not reopen unrelated adjudicated behavior without new evidence. '
-            'After a passing review, proceed directly to required acceptance and authorized shipping; preserve UI signoff and release approvals. '
-            'Acknowledge human scope steering at the next safe command boundary; an issue or board edit alone is not receipt. '
-            'Measure request-to-verified delivery elapsed time and repeated review/repair cycles, not activity alone. '
-            'Before expensive checks, confirm both root and workspace-local dependencies match the lockfile and generated schema; '
-            'reuse only a verified matching seed and never mutate shared dependencies. '
-            'Default review is bounded to two combined rounds, at most 900 seconds each and 1800 cumulative seconds per issue. '
-            'Failed, interrupted and timed-out attempts count; allow at most one consolidated repair and affected rereview. '
-            'Do not expand automatically. Explicit human-approved issue-specific exceptions retain their boundary, '
-            'but newer narrower human instructions take precedence over older grants. '
-            'Read current issue-bound instructions and existing external authorization receipts before another reservation. '
-            'The historical policy remains at /Users/dawitmolla/.fitsy-dispatcher/authorizations/review-policy-human-relaxed-20261004.json; '
-            'it is not authority to override a newer bound or automatically top up. '
-            'Retain every historical attempt and required review domain. Never reset the ledger or infer review acceptance. '
-            'At the boundary, stop with the concrete finding or execution failure, its owner and next action, and release the lane.\n')
+    raise RuntimeError('new admission requires the selected coordinator-owned brief')
+
+
+DEFAULT_PROMPT_RENDERER = make_prompt
+
+
+class WorkerCancelled(Exception):
+    pass
+
+
+def wait_worker(child, timeout):
+    """Keep the original launcher alive to verify and settle its group on every exit."""
+    timed_out, cancelled, code = False, False, None
+    previous = signal.getsignal(signal.SIGTERM)
+    def cancel(signum, frame):
+        raise WorkerCancelled('worker launcher cancelled')
+    signal.signal(signal.SIGTERM, cancel)
+    try:
+        try:
+            code = child.wait(timeout=timeout)
+        except (subprocess.TimeoutExpired, WorkerCancelled, KeyboardInterrupt) as error:
+            timed_out = isinstance(error, subprocess.TimeoutExpired)
+            cancelled = not timed_out
+    finally:
+        # Ignore repeated cancellation while settling; SIGKILL remains interruption and is recovered by tick.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        try:
+            if os.getpgrp() == os.getpid():
+                stop_owned_group(os.getpgrp(), os.getpid())
+            if child.poll() is not None:
+                code = child.wait()
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+    return code, timed_out, cancelled, other_group_members(os.getpgrp(), os.getpid())
 
 
 def archive(state, claim, status, state_path):
     claim['terminal'] = status
     claim['reconciled_at'] = utc()
+    checkout = claim.get('resources', {}).get('checkout')
+    if checkout and checkout.get('state') == 'acquired' and claim.get('finished_at'):
+        checkout.update(state='released', released_at=datetime.fromisoformat(
+            claim['finished_at'].replace('Z', '+00:00')).timestamp())
+        checkout['observations'].append({'event': 'execution-released', 'at': checkout['released_at'],
+                                         'source_retained': True, 'terminal': status})
     write_json(state_path.parent / 'claims' / claim['id'] / 'receipt.json', claim)
     state.setdefault('history', []).append(claim)
     state['history'] = state['history'][-100:]
@@ -857,7 +866,7 @@ def tick(config, state, state_path, script):
         if active:
             items = board(config)
             item = next((entry for entry in items if entry.get('content', {}).get('number') == active['issue']), None)
-            if item and not active.get('timed_out') and terminal_verified(config, item, active):
+            if item and not active.get('timed_out') and not active.get('cancelled') and terminal_verified(config, item, active):
                 state.setdefault('verified', {})[str(active['issue'])] = {
                     'id': active['id'], 'issue': active['issue'], 'branch': active['branch']}
                 resolve_incidents(state, active['issue'])
@@ -923,6 +932,23 @@ def tick(config, state, state_path, script):
     if available < required:
         return {'state': 'resource-hold', 'reason': 'disk below floor plus scratch reserve',
                 'free_bytes': available, 'required_free_bytes': required}
+    if config.get('execution_budget') is not None:
+        observation_path = Path(config.get('resource_observation_path', ''))
+        if (not observation_path.is_absolute() or observation_path.is_symlink()
+                or not observation_path.is_file() or observation_path.stat().st_uid != os.getuid()
+                or observation_path.stat().st_mode & 0o077
+                or observation_path.resolve().is_relative_to(Path(config['worktree_root']).resolve())
+                or any(parent.is_symlink() or parent.stat().st_uid not in (0, os.getuid())
+                       or parent.stat().st_mode & 0o022 for parent in observation_path.parents)):
+            return {'state': 'resource-hold', 'reason': 'private coordinator resource observation unavailable'}
+        observation = json.loads(observation_path.read_text())
+        admission = execution_capacity(config['execution_budget'], observation, time.time())
+        if admission['state'] != 'admitted':
+            return admission
+    else:
+        admission = {'state': 'light-only', 'reason': 'no measured heavy execution budget'}
+    if make_prompt is DEFAULT_PROMPT_RENDERER:
+        return {'state': 'selected-brief-required'}
     items = board(config)
     candidates = eligible(items, state.setdefault('readiness', {}), state.setdefault('readiness_source', {}),
                           config, state.setdefault('verified', {}))
@@ -950,6 +976,7 @@ def tick(config, state, state_path, script):
                  'classification': classification,
                  'worker_profile': dict(config['profiles'][classification['profile']]),
                  'review_profile': dict(config['review'])}
+        claim['resource_admission'] = admission
         state['active'] = claim
         write_json(state_path, state)  # Durable local claim precedes every remote claim and process.
         edit_item(config, item['id'], STATUS_FIELD, option=IN_FLIGHT)
@@ -970,12 +997,20 @@ def tick(config, state, state_path, script):
             if reused:
                 worktree, branch = Path(reused['worktree']), reused['branch']
                 claim.update(reused)
+                resource_intent(claim, 'checkout', 'checkout', 'implementation',
+                                [config['git_bin'], 'worktree', 'add', str(worktree), branch])
+                resource_acquired(claim, 'checkout', {'path': str(worktree), 'branch': branch,
+                    'head': command([config['git_bin'], '-C', str(worktree), 'rev-parse', 'HEAD'])}, time.time())
             else:
+                resource_intent(claim, 'checkout', 'checkout', 'implementation',
+                                [config['git_bin'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'])
                 claim.update({'worktree': str(worktree), 'branch': branch,
                               'worktree_origin_claim': claim_id, 'worktree_creation_intent': True})
                 write_json(state_path, state)
                 command([config['git_bin'], '-C', config['repo_root'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'], timeout=60)
                 claim['worktree_creation_intent'] = False
+                resource_acquired(claim, 'checkout', {'path': str(worktree), 'branch': branch,
+                    'head': command([config['git_bin'], '-C', str(worktree), 'rev-parse', 'HEAD'])}, time.time())
         except Exception as error:
             reason = f"Worktree preparation failed ({type(error).__name__}); inspect claim {claim_id}"
             gh(config, 'issue', 'edit', str(number), '-R', 'dgmolla/fitsy', '--add-label', 'dispatch-hold')
@@ -1012,6 +1047,41 @@ def tick(config, state, state_path, script):
 
 
 def worker(config, state_path, lock_path, claim_id):
+    """Cover interruption during acquisition/receipt writes as well as child.wait."""
+    previous = signal.getsignal(signal.SIGTERM)
+    def cancel(signum, frame):
+        raise WorkerCancelled('worker launcher cancelled')
+    signal.signal(signal.SIGTERM, cancel)
+    try:
+        _worker(config, state_path, lock_path, claim_id)
+    except BaseException as error:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        # No group signal is authorized when this invocation is not its original session leader.
+        remaining = True
+        if os.getpgrp() == os.getpid():
+            stop_owned_group(os.getpgrp(), os.getpid())
+            remaining = other_group_members(os.getpgrp(), os.getpid())
+        with lock_path.open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            state = read_json(state_path, {})
+            active = state.get('active')
+            if active and active['id'] == claim_id and active.get('launcher_pid') == os.getpid():
+                active.update(finished_at=utc(), exit_code=None,
+                              cancelled=isinstance(error, (WorkerCancelled, KeyboardInterrupt)),
+                              stage='ownership-uncertain' if remaining else 'finished',
+                              failure='launcher interrupted: ' + type(error).__name__)
+                record = active.get('resources', {}).get('worker-process')
+                if record and record.get('state') == 'acquired' and not remaining:
+                    record.update(state='released', released_at=time.time())
+                    record['observations'].append({'event': 'interrupted-launcher-stopped',
+                                                   'at': record['released_at']})
+                write_json(state_path, state)
+        raise
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _worker(config, state_path, lock_path, claim_id):
     with lock_path.open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         state = read_json(state_path, {})
@@ -1021,6 +1091,8 @@ def worker(config, state_path, lock_path, claim_id):
         claim['stage'] = 'running'
         claim['launcher_pid'] = os.getpid()
         claim['launcher_started'] = pid_identity(os.getpid())
+        resource_intent(claim, 'worker-process', 'process', 'implementation',
+                        [sys.executable, 'local-dispatcher.py', 'worker', '--claim-id', claim_id])
         write_json(state_path, state)
     worktree = claim['worktree']
     profile = claim['worker_profile']
@@ -1057,27 +1129,12 @@ def worker(config, state_path, lock_path, claim_id):
             state['active']['pid_started'] = pid_identity(child.pid)
             state['active']['worker_pgid'] = os.getpgrp()
             state['active']['started_at'] = utc()
+            if state['active']['pid_started']:
+                resource_acquired(state['active'], 'worker-process', {'pid': child.pid,
+                    'started': state['active']['pid_started'], 'pgid': os.getpgrp()}, time.time())
             write_json(state_path, state)
-        try:
-            code = child.wait(timeout=config.get('worker_timeout_seconds', 90 * 60))
-            timed_out = False
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            try:
-                child.terminate()
-            except ProcessLookupError:
-                pass
-            try:
-                code = child.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                try:
-                    child.kill()
-                except ProcessLookupError:
-                    pass
-                code = child.wait(timeout=10)
-        if timed_out:
-            stop_owned_group(os.getpgrp(), os.getpid())
-        remaining_group = other_group_members(os.getpgrp(), os.getpid())
+        code, timed_out, cancelled, remaining_group = wait_worker(
+            child, config.get('worker_timeout_seconds', 90 * 60))
     with lock_path.open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         state = read_json(state_path, {})
@@ -1085,10 +1142,18 @@ def worker(config, state_path, lock_path, claim_id):
             state['active']['finished_at'] = utc()
             state['active']['exit_code'] = code
             state['active']['timed_out'] = timed_out
+            state['active']['cancelled'] = cancelled
+            if cancelled:
+                state['active']['failure'] = 'worker launcher cancelled; owned compute settled'
             if timed_out:
                 state['active']['failure'] = f"worker exceeded {config.get('worker_timeout_seconds', 90 * 60)}s wall-clock budget"
             if remaining_group:
                 state['active']['stage'] = 'ownership-uncertain'
+            record = state['active'].get('resources', {}).get('worker-process')
+            if record and not remaining_group and record.get('state') == 'acquired':
+                record.update(state='released', released_at=time.time())
+                record['observations'].append({'event': 'stopped', 'at': record['released_at'],
+                                               'exit_code': code, 'timed_out': timed_out, 'cancelled': cancelled})
             write_json(state_path, state)
 
 

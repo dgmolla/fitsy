@@ -1,9 +1,10 @@
+import { installAdmissionFixture } from "./administrator-fixture";
 import { shippingSessionCases } from './shipping-session-cases';
-import { runPrFixture } from './round-runner-cases';
+import { runPrFixture, approveFixtureCaches } from './round-runner-cases';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-
+import { tmpdir } from 'node:os';
 interface Fixture {
   root(): string;
   env(): NodeJS.ProcessEnv;
@@ -14,9 +15,18 @@ interface Fixture {
   calls(): string;
 }
 export function validationOrderCases(f: Fixture) {
+  let admissionCache: string | undefined;
+  afterEach(() => { if (admissionCache) rmSync(admissionCache, { recursive: true, force: true }); admissionCache = undefined; });
   function setup() {
+    admissionCache = undefined;
+    const admin = f.env().REVIEW_TEST_ADMIN!;
+    const cache = f.env().REVIEW_TEST_CACHE!;
+    const clean = { ...f.env() };
+    for (const key of ['FITSY_REVIEW_HOME', 'FITSY_REVIEW_CACHE', 'FITSY_REVIEW_BUDGET_HOME', 'FITSY_REVIEW_COMPLETED_HOME']) delete clean[key];
+    f.setEnv(clean);
     const root = f.root();
     for (const name of ['receipt-cache.mjs', 'review-admission.sh', 'shipping-session.mjs']) copyFileSync(join(f.source, 'scripts/verify', name), join(root, 'scripts/verify', name));
+    installAdmissionFixture(root, admin, cache, f.git);
     writeFileSync(join(root, '.claude/lenses/workflow-security.md'), 'Review shipping controls.\n');
     writeFileSync(join(root, 'scripts/verify/registry.yml'), `checks:
   - name: structural
@@ -43,7 +53,8 @@ export function validationOrderCases(f: Fixture) {
     writeFileSync(join(root, 'scripts/verify/focused.sh'), `echo focused >> .evidence/order\necho '{"summary":"focused tests"}'\n`);
     writeFileSync(join(root, 'scripts/verify/full.sh'), `echo full >> .evidence/order\nif [ -f .evidence/full-fail ]; then exit 1; fi\necho '{"summary":"full tests"}'\n`);
     writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed', 'verify:all': 'node scripts/verify/run.mjs --layer=all --scope=all' } }));
-    copyFileSync(join(f.source, '.githooks/pre-push'), join(root, '.evidence/pre-push'));
+    writeFileSync(join(root, '.evidence/pre-push'), readFileSync(join(f.source, '.githooks/pre-push'), 'utf8')
+      .replace('export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', `export PATH=${join(root, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`));
     // The actual hook keeps its issue binding and timing publication contracts.
     mkdirSync(join(root, 'scripts/delivery'), { recursive: true });
     copyFileSync(join(f.source, 'scripts/delivery/phase-events.mjs'), join(root, 'scripts/delivery/phase-events.mjs'));
@@ -53,21 +64,32 @@ export function validationOrderCases(f: Fixture) {
     const bind = spawnSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'], { cwd: root, env: f.env(), encoding: 'utf8' });
     expect(bind.status).toBe(0);
   }
+  function prepare() {
+    const result = spawnSync('bash', ['scripts/verify/review-admission.sh', '--execute-review'], {
+      cwd: f.root(), encoding: 'utf8', timeout: 15000,
+      env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' },
+    });
+    if (result.status === 0) approveFixtureCaches(f.root(), f.env());
+    return result;
+  }
   function verify(args: string[] = [], hook = false) {
-    return spawnSync(hook ? 'bash' : 'npm', hook ? ['.evidence/pre-push'] : ['run', 'verify', '--', ...args], {
+    const reviewed = prepare();
+    if (reviewed.status !== 0) return reviewed;
+    return spawnSync(hook ? process.execPath : 'npm', hook ? ['scripts/verify/shipping-session.mjs', '--', 'bash', '.evidence/pre-push'] : ['run', 'verify', '--', ...args], {
       cwd: f.root(), encoding: 'utf8', timeout: 15000,
       env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' },
     });
   }
   const passingVerdict = JSON.stringify({ lens: 'correctness', verdict: 'pass', findings: [] });
   const failingVerdict = JSON.stringify({ lens: 'correctness', verdict: 'fail', findings: [{ severity: 'CONFIRMED', priority: 'P1', impact: 'shipping skips acceptance', file: 'app.ts', line: 1, summary: 'regression', scenario: 'bad candidate', fix: 'repair' }] });
-  const order = () => readFileSync(join(f.root(), '.evidence/order'), 'utf8');
+  const order = () => existsSync(join(f.root(), '.evidence/order')) ? readFileSync(join(f.root(), '.evidence/order'), 'utf8') : '';
   const callCount = () => existsSync(f.calls()) ? readFileSync(f.calls(), 'utf8').trim().split('\n').length : 0;
 
-  shippingSessionCases(f, setup, verify, order, callCount, passingVerdict, failingVerdict);
+  shippingSessionCases(f, setup, verify, order, callCount, passingVerdict, failingVerdict, prepare);
   test('persistently exported Claude profile runs fresh review before normal full verification', () => {
     setup();
     f.setEnv({ ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' });
+    expect(prepare().status).toBe(0);
     const result = spawnSync('npm', ['run', 'verify'], { cwd: f.root(), env: f.env(), encoding: 'utf8', timeout: 15000 });
     expect(result.status).toBe(0); expect(order()).toContain('full'); expect(callCount()).toBe(1);
   });
@@ -83,7 +105,7 @@ export function validationOrderCases(f: Fixture) {
     expect(callCount()).toBe(0);
     const result = verify();
     expect(result.status).toBe(1);
-    expect(result.stdout).toContain('required before verification');
+    expect(result.stdout + result.stderr).toContain('required before verification');
     expect(existsSync(join(root, '.evidence/order'))).toBe(false);
   });
   test.each([['local', 'tracked edit'], ['local', 'committed head change'], ['PR', 'tracked edit']])('reviewer-window source drift blocks caching and full acceptance: %s %s', (mode, drift) => {
@@ -101,7 +123,7 @@ export function validationOrderCases(f: Fixture) {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('candidate changed during independent review');
     expect(callCount()).toBe(1);
-    expect(readdirSync(join(root, 'cache')).filter(name => name.endsWith('.json'))).toHaveLength(0);
+    expect(readdirSync(f.env().REVIEW_TEST_CACHE!).filter(name => name.endsWith('.json'))).toHaveLength(0);
     const history = readFileSync(join(root, 'budgets/issue-355.jsonl'), 'utf8');
     expect(history).toContain('"event": "finish"');
     expect(verify().status).toBe(1);
@@ -119,7 +141,7 @@ export function validationOrderCases(f: Fixture) {
     writeFileSync(join(root, 'scripts/verify/registry.yml'), readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8') + '  - name: build\n    script: build.sh\n    layer: 3\n    blocking: true\n    runs: [local, ci]\n');
     writeFileSync(join(root, 'scripts/verify/build.sh'), "echo build >> .evidence/order\n[ ! -f .evidence/build-fail ]\n");
     f.git('add', '-A'); f.git('commit', '-qm', 'local build acceptance fixture');
-    const full = () => spawnSync('npm', ['run', 'verify:all'], { cwd: root, env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' }, encoding: 'utf8', timeout: 15000 });
+    const full = () => { const reviewed = prepare(); if (reviewed.status !== 0) return reviewed; return spawnSync('npm', ['run', 'verify:all'], { cwd: root, env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' }, encoding: 'utf8', timeout: 15000 }); };
     writeFileSync(join(root, 'verdict'), failingVerdict);
     expect(full().status).toBe(1); expect(order()).not.toContain('build');
     writeFileSync(join(root, 'verdict'), passingVerdict);
@@ -129,20 +151,16 @@ export function validationOrderCases(f: Fixture) {
     expect(callCount()).toBe(2);
     expect(order()).not.toContain('full');
   });
-  test('broken production build blocks pre-push and one repair permits full acceptance', () => {
+  test('CI-first publication defers a broken local build but explicit acceptance still fails', () => {
     setup();
     const root = f.root();
     writeFileSync(join(root, 'scripts/verify/registry.yml'), readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8') + '  - name: build\n    script: build.sh\n    layer: 3\n    blocking: true\n    runs: [local, ci]\n');
-    writeFileSync(join(root, 'scripts/verify/build.sh'), "echo build >> .evidence/order\n[ ! -f .evidence/build-fail ]\n");
-    f.git('add', '-A'); f.git('commit', '-qm', 'pre-push build fixture');
-    writeFileSync(join(root, '.evidence/build-fail'), 'fail');
-    const broken = verify([], true);
-    expect(broken.status).toBe(1); expect(order()).toContain('build'); expect(order()).not.toContain('full');
-    expect(callCount()).toBe(1);
-    rmSync(join(root, '.evidence/build-fail'));
+    writeFileSync(join(root, 'scripts/verify/build.sh'), "echo build >> .evidence/order\nexit 1\n");
+    f.git('add', '-A'); f.git('commit', '-qm', 'CI-first build fixture');
     expect(verify([], true).status).toBe(0);
-    expect(order().split('\n').filter(line => line === 'full')).toHaveLength(1);
-    expect(callCount()).toBe(2);
+    expect(order().split('\n')).not.toContain('build'); expect(order().split('\n')).not.toContain('full');
+    const explicit = verify(['--layer=all']);
+    expect(explicit.status).toBe(1); expect(order()).toContain('build');
   });
   test('cheap failure prevents actual reviewer, full suites and pre-push', () => {
     setup(); writeFileSync(join(f.root(), '.evidence/cheap-fail'), 'fail');
@@ -163,9 +181,9 @@ export function validationOrderCases(f: Fixture) {
     writeFileSync(join(f.root(), 'app.ts'), 'export const value = 3;\n');
     f.git('add', 'app.ts'); f.git('commit', '-qm', 'repair');
     writeFileSync(join(f.root(), 'verdict'), passingVerdict);
-    // The repaired shipping entry point performs review and full acceptance once.
+    // The repaired publication entry point revalidates review without local full.
     expect(verify([], true).status).toBe(0);
-    expect(order()).toContain('full'); expect(callCount()).toBe(2);
+    expect(order().split('\n')).not.toContain('full'); expect(callCount()).toBe(2);
     expect(readFileSync(ledger, 'utf8').startsWith(failedHistory)).toBe(true);
     expect(readFileSync(ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ verdict: 'fail' }));
     expect(readdirSync(join(f.root(), '.evidence/verify/attempts')).length).toBeGreaterThanOrEqual(2);
@@ -174,13 +192,13 @@ export function validationOrderCases(f: Fixture) {
     expect(verify(['--reuse']).status).toBe(1);
     expect(callCount()).toBe(2);
     expect(readFileSync(ledger, 'utf8')).toBe(retained);
-    expect(order().split('\n').filter(line => line === 'full')).toHaveLength(1);
+    expect(order().split('\n').filter(line => line === 'full')).toHaveLength(0);
   });
   test('source drift and changed heads require fresh review before full acceptance', () => {
     setup(); const review = f.run();
     if (review.status !== 0) throw new Error(String(review.stderr));
     writeFileSync(join(f.root(), '.evidence/drift'), 'drift');
-    const drift = verify(); expect(drift.status).toBe(1); expect(drift.stdout).toContain('candidate changed during cheap checks');
+    const drift = verify(); expect(drift.status).toBe(1); expect(String(drift.stdout) + String(drift.stderr)).toContain('candidate changed during cheap checks');
     expect(order()).not.toContain('full');
     f.git('add', 'app.ts'); f.git('commit', '-qm', 'new candidate');
     // Stop the intentional edit but keep its raw failed attempt.
@@ -189,13 +207,6 @@ export function validationOrderCases(f: Fixture) {
     writeFileSync(join(f.root(), 'verdict'), failingVerdict);
     expect(verify().status).toBe(1); expect(order()).not.toContain('full'); expect(callCount()).toBe(2);
   });
-  test('failed full acceptance blocks the actual pre-push entry point', () => {
-    setup();
-    writeFileSync(join(f.root(), '.evidence/full-fail'), 'fail');
-    const result = verify([], true); expect(result.status).toBe(1); expect(order()).toContain('full');
-    expect(result.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({ name: 'test', status: 'fail' })); expect(callCount()).toBe(1);
-  });
-
   test('PR source stability never imports candidate-owned modules in authenticated controls', () => {
     const root = f.root();
     writeFileSync(join(root, 'scripts/verify/receipt-cache.mjs'), "import fs from 'node:fs'; fs.writeFileSync('candidate-import-marker', 'executed'); throw Error('candidate module executed');\n");
@@ -220,8 +231,8 @@ export function validationOrderCases(f: Fixture) {
       env: { ...f.env(), FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' }, encoding: 'utf8' });
     expect(identity.status).toBe(0);
     const key = JSON.parse(identity.stdout).cache_key;
-    mkdirSync(String(f.env().FITSY_REVIEW_CACHE), { recursive: true });
-    writeFileSync(join(String(f.env().FITSY_REVIEW_CACHE), key + '.json'), JSON.stringify({ verdict: 'pass',
+    mkdirSync(String(f.env().REVIEW_TEST_CACHE), { recursive: true });
+    writeFileSync(join(String(f.env().REVIEW_TEST_CACHE), key + '.json'), JSON.stringify({ verdict: 'pass',
       domains: { correctness: 'pass', 'workflow-security': 'pass' }, findings: [] }));
     writeFileSync(join(root, 'verdict'), JSON.stringify({ lens: 'correctness', verdict: 'fail', findings: [{ severity: 'CONFIRMED',
       priority: 'P1', impact: 'shipping skips review', file: 'app.ts', line: 1, summary: 'regression', scenario: 'bad candidate', fix: 'repair' }] }));

@@ -33,12 +33,17 @@ while read -r NUM SHA; do
   fi
   STATE="$(printf '%s' "$STATUS_ROWS" | jq -r --arg lens review/round -f scripts/review/poller-status.jq)"
   PRIOR_DESCRIPTION="$(printf '%s' "$STATUS_ROWS" | jq -r '[.[] | select(.context == "review/round")] | sort_by(.created_at,.id) | last | .description // ""')"
-  if [ "$STATE" = failure ]; then
+  # An externally authorized completed result is validated by run-review itself.
+  # Old execution errors must not schedule another provider ahead of that adapter.
+  COMPLETED=0
+  ISSUE="$("$GH_BIN" pr view "$NUM" --json body --jq .body | sed -nE 's/^Delivery-Issue: #([1-9][0-9]*)[[:space:]]*$/\1/p')"
+  if [[ "$ISSUE" =~ ^[1-9][0-9]*$ ]] && [ -f "${FITSY_REVIEW_COMPLETED_HOME:-$REVIEW_HOME/completed}/issue-$ISSUE.json" ]; then COMPLETED=1; fi
+  if [ "$COMPLETED" = 0 ] && [ "$STATE" = failure ]; then
     case "$PRIOR_DESCRIPTION" in needs-coordinator:*) continue ;; esac
   fi
   ROUND_MODE=normal
   ATTEMPT_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-900}"
-  if [ "$STATE" = error ]; then
+  if [ "$COMPLETED" = 0 ] && [ "$STATE" = error ]; then
     ERRORS="$(printf '%s' "$STATUS_ROWS" | jq '[.[] | select(.context == "review/round" and .state == "error")] | length')"
     ERROR_DESCRIPTION="$(printf '%s' "$STATUS_ROWS" | jq -r '[.[] | select(.context == "review/round" and .state == "error")][0].description // ""')"
     RETRYABLE=0

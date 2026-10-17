@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S -u NODE_OPTIONS -u NODE_PATH PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node
 /**
  * Registry-driven check runner. One implementation, every caller:
  * the pre-push hook, CI jobs, agents, and `npm run verify` all come here.
@@ -7,8 +7,9 @@
  *                               [--runs=local|ci|scheduled] [--only=name,...]
  *
  * Reads scripts/verify/registry.yml, filters checks by layer, run context and
- * (for advisory checks with --scope=changed) path globs against origin/main, runs them
- * in parallel, and prints one JSON result line per check plus a summary.
+ * (for advisory checks with --scope=changed) path globs against origin/main, runs cheap
+ * checks sequentially within the local resource envelope, and prints one JSON result
+ * line per check plus a summary.
  * Exit 1 if any BLOCKING check fails; shadow failures are reported only.
  *
  * Check contract (scripts/verify/README.md): exit 0 pass / 1 fail / 2 skipped;
@@ -21,6 +22,11 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import { impactPlan, git, focusedDatabaseRequired } from "./impact-plan.mjs";
+
+// Clear shell startup selectors before checks launch nested npm or Bash shells.
+for (const key of Object.keys(process.env)) {
+  if (key === 'BASH_ENV' || key === 'ENV' || key.startsWith('BASH_FUNC_')) delete process.env[key];
+}
 
 const VERIFY_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(VERIFY_DIR, "..", "..");
@@ -73,6 +79,10 @@ function globToRegExp(glob) {
 }
 
 const registry = yaml.load(readFileSync(join(VERIFY_DIR, "registry.yml"), "utf8"));
+if (only) {
+  const unknown = [...only].filter(name => !registry.checks.some(check => check.name === name));
+  if (unknown.length) throw new Error(`unknown --only checks: ${unknown.join(',')}`);
+}
 const plan = impactPlan({ base: args.base, head: args.head });
 const files = scope === "changed" ? plan.files : null;
 
@@ -147,7 +157,7 @@ function closeWhole(status) {
   if (wholeAttempt) { endTiming(wholeAttempt, status); wholeAttempt = null; }
 }
 
-function runCheck(c) {
+function runCheck(c, { withoutDatabase = false } = {}) {
   const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
   if (c.missing) {
     endTiming(attempt, 'fail');
@@ -161,10 +171,15 @@ function runCheck(c) {
       FITSY_VERIFY_NEEDS_TEST_DEPS: selected.some(check => check.name === 'test') ? '1' : '0',
       ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
       ...(runsCtx === 'ci' && plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) };
+    if (withoutDatabase) {
+      for (const key of ['FITSY_VERIFY_DB_LOCKED', 'FITSY_VERIFY_OWNED_DB', 'FITSY_VERIFY_DB_IMAGE',
+        'FITSY_VERIFY_DB_HOST', 'FITSY_VERIFY_CALLER_NON_POOLING_URL', 'FITSY_LOCAL_DB',
+        'POSTGRES_PRISMA_URL', 'POSTGRES_URL_NON_POOLING']) delete checkEnv[key];
+    }
     if (c.name === 'dev-drift' && process.env.FITSY_VERIFY_OWNED_DB) {
       checkEnv.POSTGRES_URL_NON_POOLING = process.env.FITSY_VERIFY_CALLER_NON_POOLING_URL ?? '';
     }
-    execFile("bash", [join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
+    execFile("/bin/bash", ["-p", join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
       env: checkEnv }, (err, stdout, stderr) => {
       const code = err ? (err.code ?? 1) : 0;
       let parsed;
@@ -189,7 +204,7 @@ function runCheck(c) {
   });
 }
 
-async function runChecks(checks) {
+async function runChecks(checks, sequential = false) {
   const completedResults = [];
   const cacheable = checks.filter(c => c.cache && runsCtx === 'local');
   let cache;
@@ -205,7 +220,7 @@ async function runChecks(checks) {
   if (completedResults.some(result => result.status === 'fail' && result.blocking)) {
     completedResults.push(...checks.map(c => ({ name: c.name, status: 'skipped', summary: 'receipt cache admission failed' })));
   } else {
-    const completed = await Promise.all(checks.map(c => {
+    const runSelected = c => {
       const prior = args.reuse && c.cache && cache?.read(c);
       if (prior) {
         const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
@@ -213,7 +228,11 @@ async function runChecks(checks) {
       }
       if (!prior && c.cache && cache) cache.invalidate(c);
       return prior || runCheck(c);
-    }));
+    };
+    const completed = sequential ? [] : await Promise.all(checks.map(runSelected));
+    if (sequential) {
+      for (const check of checks) completed.push(await runSelected(check));
+    }
     if (cache) {
       if (cache.unchanged() && sourceStable()) {
         for (const check of cacheable) {
@@ -236,7 +255,9 @@ const results = [...preflight];
 // Cheap failures stop expensive work in local and combined CI invocations.
 if (!results.some(r => r.status === 'fail' && r.blocking)) {
   const focused = cheap.filter(c => c.name === 'focused-tests');
-  results.push(...await runChecks(cheap.filter(c => c.name !== 'focused-tests')));
+  // Cheap static checks include lint and typecheck, whose concurrent memory peaks
+  // can prevent the same full acceptance command from clearing host admission.
+  results.push(...await runChecks(cheap.filter(c => c.name !== 'focused-tests'), true));
   if (!results.some(r => r.status === 'fail' && r.blocking)) {
     if (runsCtx === 'local' && (focused.some(c => c.database) || (focused.length && focusedDatabaseRequired([])))) {
       const { runWithLocalDatabase, assertOwnedDatabase } = await import('./local-db.mjs');
@@ -260,22 +281,48 @@ if (!results.some(r => r.status === 'fail' && r.blocking)) {
 }
 if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
   summary: 'candidate changed during cheap checks', fix: 'freeze candidate source and rerun cheap/focused checks and review' });
-// Enter the owned disposable DB context before review admission. The wrapper
-// invokes this same public runner; reviewing in the parent would charge a second
-// fresh round when the child starts its required acceptance checks.
+// Review and build the selected database-free phase before acquiring the owned DB.
+// The child still runs its own required admission and every remaining selected check.
+let preDatabaseBuild = [];
+if (!results.some(result => result.status === 'fail' && result.blocking) &&
+    runsCtx === 'local' && remaining.some(c => c.database) && !process.env.FITSY_VERIFY_OWNED_DB) {
+  preDatabaseBuild = remaining.filter(c => c.name === 'build' && !c.database);
+  if (preDatabaseBuild.length) {
+    results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
+    if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
+      summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
+    if (!results.some(result => result.status === 'fail' && result.blocking)) {
+      for (const build of preDatabaseBuild) results.push(await runCheck(build, { withoutDatabase: true }));
+      if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
+        summary: 'candidate changed during production build', fix: 'revalidate the changed candidate' });
+    }
+  }
+}
 let delegated = false;
 if (!results.some(result => result.status === 'fail' && result.blocking) &&
     runsCtx === 'local' && remaining.some(c => c.database) && !process.env.FITSY_VERIFY_OWNED_DB) {
   const { runWithLocalDatabase } = await import('./local-db.mjs');
   delegated = true;
-  try { process.exitCode = runWithLocalDatabase(process.argv.slice(2)); }
+  try {
+    if (preDatabaseBuild.length) {
+      for (const result of results.filter(result => preDatabaseBuild.some(build => build.name === result.name))) {
+        const { stderr, ...line } = result;
+        console.log(JSON.stringify(line));
+      }
+    }
+    const forwarded = preDatabaseBuild.length
+      ? process.argv.slice(2).filter((arg, index, argv) => !/^--only(?:=|$)/.test(arg) && argv[index - 1] !== '--only')
+      : process.argv.slice(2);
+    const remainingNames = selected.filter(c => !preDatabaseBuild.includes(c)).map(c => c.name);
+    process.exitCode = runWithLocalDatabase(preDatabaseBuild.length ? [...forwarded, `--only=${remainingNames.join(',')}`] : forwarded);
+  }
   catch (error) {
     console.log(JSON.stringify({ name: 'local-database', status: 'fail', summary: error.message,
       fix: 'repair this worktree\'s owned disposable database and rerun verification' }));
     process.exitCode = 1;
   }
 }
-if (!delegated && !results.some(r => r.status === 'fail' && r.blocking)) {
+if (!delegated && !preDatabaseBuild.length && !results.some(r => r.status === 'fail' && r.blocking)) {
   results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
   if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
     summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
@@ -283,7 +330,8 @@ if (!delegated && !results.some(r => r.status === 'fail' && r.blocking)) {
 if (delegated) {
   // The owned child runs review, full acceptance and reports its actual status.
 } else if (results.some(result => result.status === 'fail' && result.blocking)) {
-  skipped.push(...remaining.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
+  skipped.push(...remaining.filter(c => !results.some(result => result.name === c.name))
+    .map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
 } else {
   if (runsCtx === 'local' && remaining.some(c => c.database)) {
     try {
@@ -300,7 +348,7 @@ if (delegated) {
     // Build and tests share the API workspace; compile first rather than race its outputs.
     const builds = remaining.filter(c => c.name === 'build');
     results.push(...await runChecks(builds));
-    if (!results.some(r => r.status === 'fail' && r.blocking)) results.push(...await runChecks(remaining.filter(c => c.name !== 'build')));
+    if (!results.some(r => r.status === 'fail' && r.blocking)) results.push(...await runChecks(remaining.filter(c => c.name !== 'build'), runsCtx === 'local'));
     else skipped.push(...remaining.filter(c => c.name !== 'build').map(c => ({ name: c.name, status: 'skipped', summary: 'production build failed' })));
   }
 }

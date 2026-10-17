@@ -221,7 +221,7 @@ test('verify CLI records whole run, L2 check, reuse and SIGTERM in an owned fixt
   symlinkSync(join(source, 'node_modules'), join(root, 'node_modules'));
   writeFileSync(join(root, '.gitignore'), '.evidence/\nnode_modules/\n');
   writeFileSync(join(root, 'scripts/verify/registry.yml'), `checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 2\n    cache: true\n    blocking: true\n    runs: [local]\n`);
-  writeFileSync(join(root, 'scripts/verify/fixture.sh'), `#!/bin/bash\nif test -e .evidence/slow; then\n  touch .evidence/check-started\n  while test ! -e .evidence/release; do sleep .05; done\nfi\nprintf '%s\\n' '{"name":"fixture","summary":"passed"}'\n`);
+  writeFileSync(join(root, 'scripts/verify/fixture.sh'), `#!/bin/bash\nif test -e .evidence/slow; then\n  printf '%s\\n' "$$" > .evidence/check-pid\n  touch .evidence/check-started\n  ORIGINAL_PARENT="$PPID"\n  while test ! -e .evidence/release; do\n    if ! kill -0 "$ORIGINAL_PARENT" 2>/dev/null; then break; fi\n    sleep .05\n  done\n  touch .evidence/check-exited\nfi\nprintf '%s\\n' '{"name":"fixture","summary":"passed"}'\n`);
   execFileSync('git', ['add', 'scripts', '.gitignore'], { cwd: root });
   execFileSync('git', ['commit', '-qm', 'add fixture'], { cwd: root });
   execFileSync('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd: root });
@@ -248,9 +248,19 @@ test('verify CLI records whole run, L2 check, reuse and SIGTERM in an owned fixt
   for (let i = 0; i < 100 && !existsSync(join(root, '.evidence/check-started')); i++)
     await new Promise(resolve => setTimeout(resolve, 25));
   assert.equal(existsSync(join(root, '.evidence/check-started')), true, 'owned L2 check did not start');
+  const fixturePid = Number(readFileSync(join(root, '.evidence/check-pid'), 'utf8'));
+  assert.ok(Number.isSafeInteger(fixturePid) && fixturePid > 0);
   child.kill('SIGTERM');
   const exit = await new Promise(resolve => child.once('close', (code, signal) => resolve({ code, signal })));
   writeFileSync(join(root, '.evidence/release'), '');
+  const fixtureAlive = () => {
+    try { process.kill(fixturePid, 0); return true; }
+    catch (error) { if (error.code === 'ESRCH') return false; throw error; }
+  };
+  for (let i = 0; i < 100 && (fixtureAlive() || !existsSync(join(root, '.evidence/check-exited'))); i++)
+    await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(fixtureAlive(), false, 'interrupted fixture child remained alive');
+  assert.equal(existsSync(join(root, '.evidence/check-exited')), true);
   assert.deepEqual(exit, { code: null, signal: 'SIGTERM' });
   const interrupted = buildSummary(355, binding.run_id, readRows(root), new Date().toISOString()).events.slice(-2);
   assert.deepEqual(interrupted.map(event => [event.phase, event.check, event.status]),

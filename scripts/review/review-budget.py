@@ -4,13 +4,20 @@ import argparse
 from datetime import datetime, timezone
 import fcntl
 import hashlib
+import io
 import json
 import math
 import os
 import re
+import pwd
 import subprocess
 from pathlib import Path
 import time
+
+ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
+ADMIN_REVIEW = ADMIN_HOME / ".fitsy-review"
+ADMIN_CACHE = ADMIN_HOME / ".cache/fitsy-review"
+ADMIN_BUDGET = ADMIN_CACHE / "budgets"
 
 CAP_SECONDS = 1800
 EXTENSION_SECONDS = 900
@@ -42,6 +49,25 @@ def read_events(handle):
         if not isinstance(rows, list):
             raise ValueError("invalid imported review history")
         for row in rows:
+            if isinstance(row, dict) and row.get("event") == "review-allocation":
+                if (type(row.get("issue")) is not int or row["issue"] <= 0
+                        or not number(row.get("previous_cap_seconds"))
+                        or not number(row.get("additional_seconds")) or not 0 < row["additional_seconds"] <= 300
+                        or row.get("cumulative_stop_seconds") != row["previous_cap_seconds"] + row["additional_seconds"]
+                        or not re.fullmatch(r"[0-9a-f]{40}", row.get("source_sha", ""))
+                        or not re.fullmatch(r"[0-9a-f]{64}", row.get("authorization_sha256", ""))):
+                    raise ValueError("invalid bounded permanent review allocation")
+                events.append(row)
+                continue
+            if isinstance(row, dict) and row.get("event") == "count-reconciliation":
+                if (row.get("attempt_id") != "issue-count-reconciliation"
+                        or type(row.get("issue")) is not int or row["issue"] <= 0
+                        or row.get("new_rounds_max", "missing") is not None
+                        or not re.fullmatch(r"[0-9a-f]{64}", row.get("limit_sha256", ""))
+                        or not re.fullmatch(r"[0-9a-f]{64}", row.get("authorization_sha256", ""))):
+                    raise ValueError("invalid coordinator count reconciliation")
+                events.append(row)
+                continue
             if isinstance(row, dict) and row.get("event") == "execution-limit":
                 if (row.get("attempt_id") != "issue-execution-limit"
                         or type(row.get("issue")) is not int or row["issue"] <= 0
@@ -110,7 +136,7 @@ def append(handle, event):
     os.fsync(handle.fileno())
 
 
-def import_history(handle, ledger, paths, optional_paths):
+def import_history(handle, ledger, paths, optional_paths, allow_new=True):
     """Retain original events and flags; copied histories count exactly once."""
     events = indexed(read_events(handle))
     pending = []
@@ -132,11 +158,13 @@ def import_history(handle, ledger, paths, optional_paths):
             if key in events and events[key] != event:
                 raise ValueError(f"conflicting retained review history in {source}")
             if key not in events:
-                if event["event"] in ("authorized-grant", "liberal-grant", "recovery_extension", "execution-limit"):
+                if event["event"] in ("authorized-grant", "liberal-grant", "recovery_extension", "execution-limit", "count-reconciliation", "review-allocation"):
                     raise ValueError("imported history cannot grant new review authority; verify authorization through the external operator manifest")
                 new.append(event)
                 events[key] = event
         if new:
+            if not allow_new:
+                raise ValueError("privileged accounting requires retained canonical history; caller imports cannot mutate it")
             pending.append({"event": "import", "at": utc(), "source": str(source.resolve()),
                             "sha256": digest, "events": new})
     usage(list(events.values()))
@@ -187,6 +215,20 @@ def usage(events):
     if len(limits) > 1:
         raise ValueError("issue review execution limit cannot be replaced")
     limit = limits[0] if limits else None
+    reconciliations = [e for e in events if e["event"] == "count-reconciliation"]
+    if reconciliations:
+        if (len(reconciliations) != 1 or not limit or limit["new_rounds_max"] != 1
+                or reconciliations[0]["issue"] != limit["issue"]
+                or reconciliations[0]["limit_sha256"] != hashlib.sha256(json.dumps(limit, sort_keys=True).encode()).hexdigest()):
+            raise ValueError("reconciliation must retain the original coordinator limit")
+        limit = {**limit, "new_rounds_max": reconciliations[0]["new_rounds_max"]}
+    allocations = [e for e in events if e["event"] == "review-allocation"]
+    for allocation in allocations:
+        if (not limit or allocation["issue"] != limit["issue"]
+                or allocation["previous_cap_seconds"] != limit["completed_seconds_stop_at"]):
+            raise ValueError("review allocation must extend the retained authority additively")
+        limit = {**limit, "completed_seconds_stop_at": allocation["cumulative_stop_seconds"],
+                 "new_rounds_max": None, "per_round_timeout_seconds_max": 300}
     cap = sum(e["seconds"] for e in grants) + CAP_SECONDS + (EXTENSION_SECONDS if extensions else 0) + (RECOVERY_SECONDS if recoveries else 0)
     starts = {e["attempt_id"]: e for e in events if e["event"] == "start"}
     finishes = {e["attempt_id"]: e for e in events if e["event"] == "finish"}
@@ -207,6 +249,10 @@ def usage(events):
                 or not math.isclose(sum(finishes[key]["elapsed_seconds"] for key in baseline),
                                     limit["baseline_completed_seconds"], abs_tol=1e-6)):
             raise ValueError("execution limit baseline does not match retained history")
+        # Independently approved bounded permanent allocations supersede the
+        # generic ceiling only by their exact retained additive stop.
+        if allocations:
+            cap = max(cap, allocations[-1]["cumulative_stop_seconds"])
         cap = min(cap, limit["completed_seconds_stop_at"])
     # An interrupted new attempt retains its full reservation until reconciled.
     # An unbounded legacy attempt has unknown completion and fails closed at the cap.
@@ -273,9 +319,535 @@ def prospective_policy(path, ledger, candidate, issue, events):
             "prospective_cap_seconds": policy["seconds"]}
 
 
+def canonical_authority(path, expected):
+    # Administrator/coordinator custody is trusted, as in execute-review.py.
+    # Candidate environment and copies of controls cannot select this authority.
+    if path is None:
+        raise ValueError("canonical coordinator authority is required")
+    if path.absolute() != expected.absolute() or path.resolve() != expected.resolve():
+        raise ValueError("admission requires canonical coordinator authority, not caller-selected proof")
+    probe = path
+    while probe != ADMIN_HOME:
+        if probe.is_symlink() or probe.stat().st_uid != os.getuid() or probe.stat().st_mode & 0o022:
+            raise ValueError("coordinator authority must remain administrator managed")
+        probe = probe.parent
+    return completed_context(path)
+
+
+def canonical_ledger(ledger, issue):
+    expected = ADMIN_BUDGET / f"issue-{issue}.jsonl"
+    if ledger.absolute() != expected.absolute() or ledger.resolve() != expected.resolve():
+        raise ValueError("admission requires original canonical issue ledger")
+
+
+def operator_authority(args, kind):
+    canonical_ledger(args.ledger, args.issue)
+    operator = Path(__file__).absolute()
+    installations = {ADMIN_REVIEW / "operators/review-budget.py",
+                     ADMIN_REVIEW / "repo/scripts/review/review-budget.py"}
+    if operator not in installations or operator.is_symlink():
+        raise ValueError("privileged actions require canonical operator installation")
+    probe = operator
+    while probe != ADMIN_HOME:
+        if probe.is_symlink() or probe.stat().st_uid != os.getuid() or probe.stat().st_mode & 0o022:
+            raise ValueError("privileged actions require canonical operator installation custody")
+        probe = probe.parent
+    expected = (ADMIN_REVIEW / "completed" / f"issue-{args.issue}.json" if kind == "completed"
+                else ADMIN_REVIEW / "operators" / f"issue-{args.issue}-{kind}.json")
+    approval = canonical_authority(args.authorization_file, expected)
+    if (not re.fullmatch(r"[0-9a-f]{40}", approval.get("control_sha", ""))
+            or approval.get("operator_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+            or (getattr(args, "control_sha", None) is not None
+                and approval["control_sha"] != args.control_sha)):
+        raise ValueError("coordinator has not approved this exact independently reviewed operator installation")
+    return approval
+
+
+def completed_authority(args):
+    approval = operator_authority(args, "completed")
+    expected = subprocess.check_output(["git", "-C", str(args.candidate_root), "show",
+                                        args.control_sha + ":scripts/review/review-budget.py"],
+                                       env={k:v for k,v in os.environ.items() if not k.startswith("GIT_")})
+    if hashlib.sha256(expected).hexdigest() != approval["operator_sha256"]:
+        raise ValueError("installed operator differs from coordinator-approved committed source")
+    return approval
+
+
+def completed_history_prefix(raw_history, attempt, rows, source, digest, accounted):
+    """Locate the unique exact adoption without normalizing historical bytes."""
+    lines = raw_history.splitlines(keepends=True)
+    imports = []
+    for offset, line in enumerate(lines):
+        if not line.strip():
+            continue
+        event = json.loads(line)
+        if event.get("event") == "import" and any(
+                row.get("attempt_id") == attempt for row in event.get("events", [])):
+            imports.append((offset, event))
+    if accounted:
+        if (len(imports) != 1 or imports[0][1].get("events") != rows
+                or imports[0][1].get("source") != source
+                or imports[0][1].get("sha256") != digest):
+            raise ValueError("ambiguous or mismatched original completed import")
+        return b"".join(lines[:imports[0][0]])
+    if imports:
+        raise ValueError("conflicting original completed import")
+    return raw_history
+
+
+def account_completed(handle, ledger, args, events, record=True):
+    """Record an operator-attested execution, without granting admission or time.
+
+    The operator attests raw artifact identity after independent inspection.
+    This accounting action never makes a reviewer verdict a shipping receipt.
+    """
+    operator_authority(args, "completed")
+    path = args.authorization_file.resolve() if args.authorization_file else None
+    if (not path or not path.is_file() or path.stat().st_uid != os.getuid()
+            or path.stat().st_mode & 0o077 or not args.candidate
+            or ledger.name != f"issue-{args.issue}.jsonl"):
+        raise ValueError("completed accounting requires a private external operator manifest")
+    git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    if subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"],
+                      env=git_env, capture_output=True).returncode == 0:
+        raise ValueError("completed accounting authorization must be outside every Git checkout")
+    raw = path.read_bytes()
+    approval = json.loads(raw)
+    has_original_manifest = "original_manifest" in approval
+    fields = {"issue", "candidate", "source_sha", "base_sha", "domains", "provider",
+              "model", "reasoning_effort", "acceptance_sha256", "provenance", "artifacts",
+              "original_ledger_sha256", "prior_completed_seconds", "completed_seconds_stop_at",
+              "completed_at", "control_sha", "operator_sha256"}
+    # Installation approval may advance; the original accounting attestation
+    # and its adoption digest must never advance with it.
+    if has_original_manifest:
+        reference = approval["original_manifest"]
+        if (set(approval) != fields | {"original_manifest"} | ({"composition"} if "composition" in approval else set())
+                or not isinstance(reference, dict) or set(reference) != {"path", "sha256"}
+                or not isinstance(reference["path"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", reference.get("sha256", ""))):
+            raise ValueError("invalid original completed manifest reference")
+        original_path = Path(reference["path"])
+        if (not original_path.is_absolute() or original_path == path
+                or not original_path.is_relative_to(ADMIN_REVIEW)
+                or ".." in original_path.parts):
+            raise ValueError("original completed authority must remain private and administrator managed")
+        original_approval = canonical_authority(original_path, original_path)
+        original_raw = original_path.read_bytes()
+        if (hashlib.sha256(original_raw).hexdigest() != reference["sha256"]
+                or set(original_approval) != fields
+                or any(original_approval[key] != approval[key]
+                       for key in fields - {"control_sha", "operator_sha256"})
+                or not re.fullmatch(r"[0-9a-f]{40}", original_approval.get("control_sha", ""))
+                or not re.fullmatch(r"[0-9a-f]{64}", original_approval.get("operator_sha256", ""))):
+            raise ValueError("original completed accounting attestation mismatch")
+        raw = original_raw
+        approval = original_approval
+    if (set(approval) != fields or approval["issue"] != args.issue
+            or approval["candidate"] != args.candidate or approval["source_sha"] != args.source_sha
+            or approval["base_sha"] != args.base_sha
+            or approval["domains"] != sorted(set(args.required_domain)) or not args.required_domain
+            or approval["acceptance_sha256"] != args.acceptance_sha256
+            or not re.fullmatch(r"[0-9a-f]{64}", args.acceptance_sha256 or "")
+            or any(not re.fullmatch(r"[0-9a-f]{40}", approval[key] or "") for key in ("source_sha", "base_sha"))
+            or (approval["provider"], approval["model"], approval["reasoning_effort"]) != ("codex", "gpt-6-sol", "high")
+            or not re.fullmatch(r"https://github.com/dgmolla/fitsy/issues/" + str(args.issue)
+                               + r"#issuecomment-[1-9][0-9]*", approval["provenance"])):
+        raise ValueError("completed accounting source/acceptance/policy binding mismatch")
+    artifacts = approval["artifacts"]
+    if not isinstance(artifacts, dict) or set(artifacts) != {"verdict", "execution", "prompt", "stderr"}:
+        raise ValueError("completed accounting requires all original raw artifacts")
+    contents = {}
+    for key, artifact in artifacts.items():
+        if not isinstance(artifact, dict) or set(artifact) != {"path", "sha256"}:
+            raise ValueError("invalid completed artifact identity")
+        contents[key] = Path(artifact["path"]).read_bytes()
+        if hashlib.sha256(contents[key]).hexdigest() != artifact["sha256"]:
+            raise ValueError("completed raw artifact changed")
+    execution = json.loads(contents["execution"])
+    verdict = json.loads(contents["verdict"])
+    seconds = execution.get("elapsed_seconds")
+    if (execution.get("kind") != "completed" or execution.get("returncode") != 0
+            or not number(seconds) or not 0 < seconds <= 300
+            or execution.get("stdout_bytes") != len(contents["verdict"])
+            or execution.get("stderr_bytes") != len(contents["stderr"])
+            or verdict.get("source_sha") != args.source_sha or verdict.get("base_sha") != args.base_sha
+            or set(verdict.get("domains", {})) != set(args.required_domain)
+            or any(not isinstance(row, dict) or row.get("verdict") not in ("pass", "fail")
+                   or not isinstance(row.get("findings"), list)
+                   or (row["verdict"] == "pass" and row["findings"])
+                   or (row["verdict"] == "fail" and not row["findings"])
+                   for row in verdict["domains"].values())
+            or not isinstance(verdict.get("summary"), str) or not verdict["summary"].strip()
+            or not isinstance(verdict.get("limitations"), list)):
+        raise ValueError("completed execution lacks a complete exact-source verdict")
+    review_verdict = "fail" if any(row["verdict"] == "fail" for row in verdict["domains"].values()) else "pass"
+    starts, finishes, total = usage(list(indexed(events).values()))
+    if total["unfinished_attempts"]:
+        raise ValueError("completed accounting requires released original execution ownership")
+    attempt = "completed-" + artifacts["execution"]["sha256"]
+    completed_at = datetime.fromisoformat(approval["completed_at"])
+    if completed_at.tzinfo is None:
+        raise ValueError("completed accounting requires an observed timezone-bound completion")
+    rows = [{"event": "start", "attempt_id": attempt, "epoch": completed_at.timestamp() - seconds,
+             "round_id": args.source_sha, "source_sha": args.source_sha, "lens": "review-round",
+             "adoption": hashlib.sha256(raw).hexdigest()},
+            {"event": "finish", "attempt_id": attempt, "elapsed_seconds": seconds,
+             "round_id": args.source_sha, "source_sha": args.source_sha, "lens": "review-round",
+             "outcome": "pass", "verdict": review_verdict, "failure_kind": "completed",
+             "adoption": hashlib.sha256(raw).hexdigest()}]
+    original = indexed(events)
+    present = [(row["event"], attempt) in original for row in rows]
+    if any(present) and not (all(present) and all(original[(row["event"], attempt)] == row for row in rows)):
+        raise ValueError("conflicting or duplicate completed execution accounting")
+    # Bind the unique original import to the exact bytes preceding it. Later
+    # executions/allocations are validated and counted separately, never removed.
+    if not all(present) and has_original_manifest:
+        raise ValueError("original completed manifest reference requires retained accounting")
+    prefix = completed_history_prefix(ledger.read_bytes(), attempt, rows, str(path),
+                                      hashlib.sha256(raw).hexdigest(), all(present))
+    prior_total = usage(list(indexed(read_events(io.StringIO(prefix.decode()))).values()))[2]
+    prior = prior_total["completed_seconds"]
+    if (hashlib.sha256(prefix).hexdigest() != approval["original_ledger_sha256"]
+            or not number(approval["prior_completed_seconds"])
+            or not math.isclose(prior, approval["prior_completed_seconds"], abs_tol=1e-6)
+            or not number(approval["completed_seconds_stop_at"])
+            or not math.isclose(prior_total["cap_seconds"], approval["completed_seconds_stop_at"], abs_tol=1e-6)
+            or prior_total["unfinished_attempts"] or prior + seconds > prior_total["cap_seconds"]):
+        raise ValueError("completed accounting original history or authorized stop mismatch")
+    if total["completed_seconds"] + (0 if all(present) else seconds) > total["cap_seconds"]:
+        raise ValueError("completed accounting exceeds current authorized capacity")
+    if not all(present) and record:
+        append(handle, {"event": "import", "at": utc(), "source": str(path),
+                        "sha256": hashlib.sha256(raw).hexdigest(), "events": rows})
+    return {"allowed": True, "reason": "completed execution accounted; shipping admission unchanged",
+            "accounted_seconds": seconds, "idempotent": all(present),
+            **usage(list(indexed(read_events(handle)).values()))[2]}
+
+
+def composed_context(approval, source, root):
+    """Verify a private installation upgrade without changing original review identity."""
+    context = approval.get("composition")
+    if (approval.get("issue") != 443 or not isinstance(context, dict)
+            or set(context) != {"source_sha", "comparison_base", "comparison_tree_sha", "control_paths"}
+            or context["source_sha"] != source
+            or any(not re.fullmatch(r"[0-9a-f]{40}", context.get(key, ""))
+                   for key in ("source_sha", "comparison_base", "comparison_tree_sha"))):
+        raise ValueError("completed composition source/main authority mismatch")
+    reference = approval["original_manifest"]
+    path = Path(reference["path"])
+    if not path.is_absolute() or not path.is_relative_to(ADMIN_REVIEW):
+        raise ValueError("original composition review must remain administrator managed")
+    original = canonical_authority(path, path)
+    if (hashlib.sha256(path.read_bytes()).hexdigest() != reference["sha256"]
+            or "original_manifest" in original or "composition" in original
+            or any(approval.get(key) != value for key, value in original.items()
+                   if key not in {"control_sha", "operator_sha256"})
+            or set(approval) != set(original) | {"original_manifest", "composition"}):
+        raise ValueError("original frozen review authority changed")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    def git(*args):
+        return subprocess.check_output(["git", "-C", str(root), *args], env=env)
+    for ancestor, descendant in ((approval["base_sha"], approval["source_sha"]),
+            (approval["base_sha"], context["comparison_base"]),
+            (approval["source_sha"], source), (context["comparison_base"], source),
+            (approval["control_sha"], source)):
+        git("merge-base", "--is-ancestor", ancestor, descendant)
+    if git("rev-parse", context["comparison_base"] + "^{tree}").decode().strip() != context["comparison_tree_sha"]:
+        raise ValueError("approved composition main tree changed")
+    allowed = context["control_paths"]
+    # Exact paths are operator-selected, but they still cannot classify product as controls.
+    areas = ("scripts/review/", "scripts/verify/", "scripts/delivery/", "docs/engineering/devops/",
+             ".githooks/", "AGENTS.md", "scripts/deploy/native-compatibility.test.ts",
+             "scripts/sim/product-flow.mjs", "scripts/sim/publish-product-flow.mjs",
+             "scripts/sim/runner-controls.test.mjs", ".github/workflows/deploy.yml",
+             ".github/workflows/eas-build.yml", ".github/workflows/dev-maintenance.yml", "vercel.json")
+    if (not isinstance(allowed, list) or not allowed or len(set(allowed)) != len(allowed)
+            or any(not any(p == a or (a.endswith("/") and p.startswith(a)) for a in areas) for p in allowed)):
+        raise ValueError("explicit approved composition control paths required")
+    def tree(ref):
+        entries = {}
+        for row in git("ls-tree", "-rz", ref).split(b"\0"):
+            if row:
+                meta, name = row.split(b"\t", 1)
+                entries[name.decode()] = meta
+        return entries
+    base, frozen, main, controls, candidate = map(tree, (approval["base_sha"], approval["source_sha"],
+        context["comparison_base"], approval["control_sha"], source))
+    product_delta = {p for p in base.keys() | frozen.keys() if p not in allowed and base.get(p) != frozen.get(p)}
+    main_delta = {p for p in base.keys() | main.keys() if p not in allowed and base.get(p) != main.get(p)}
+    if product_delta & main_delta:
+        raise ValueError("frozen product and approved main overlap")
+    for p in base.keys() | frozen.keys() | main.keys() | controls.keys() | candidate.keys():
+        expected = (controls if p in allowed else frozen if p in product_delta else main).get(p)
+        if candidate.get(p) != expected:
+            raise ValueError("completed composition product/main/control changed: " + p)
+    return context["comparison_base"]
+
+
+def completed_context(path):
+    """Read operator authority outside source control, never candidate policy."""
+    path = path.resolve()
+    if (not path.is_file() or path.stat().st_uid != os.getuid()
+            or path.stat().st_mode & 0o077):
+        raise ValueError("completed review requires private operator authority")
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    if subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"],
+                      env=env, capture_output=True).returncode == 0:
+        raise ValueError("completed review authority must be outside every checkout")
+    return json.loads(path.read_text())
+
+
+def reconcile_allocation(handle, args, events, total):
+    """Recognize current human authority without rewriting historical limits."""
+    approval = operator_authority(args, "allocation")
+    if approval.get("issue") != args.issue or approval.get("candidate_source") != args.source_sha:
+        raise ValueError("review allocation source or issue mismatch")
+    digest = hashlib.sha256(args.authorization_file.read_bytes()).hexdigest()
+    previous = next((e for e in events if e.get("event") == "review-allocation"
+                     and e.get("authorization_sha256") == digest), None)
+    if previous:
+        return {"allowed": True, "idempotent": True, **total}
+    authority = completed_context(Path(approval["authority_file"]))
+    if (approval.get("issue") != args.issue
+            or approval.get("candidate_source") != args.source_sha
+            or authority.get("human_instruction") != "Add global exception permanently"
+            or approval.get("human_instruction") != authority["human_instruction"]
+            or (approval.get("provider"), approval.get("model"), approval.get("effort")) != ("codex", "gpt-6-sol", "high")
+            or approval.get("original_cap_seconds") != total["cap_seconds"]
+            or not math.isclose(approval.get("original_completed_seconds", -1), total["completed_seconds"], abs_tol=1e-6)
+            or not approval.get("reason") or total["unfinished_attempts"]
+            or approval.get("per_execution_timeout_seconds") != 300):
+        raise ValueError("bounded allocation does not match current human authority and retained history")
+    event = {"event": "review-allocation", "attempt_id": "allocation-" + digest, "at": utc(),
+             "issue": args.issue, "source_sha": args.source_sha,
+             "previous_cap_seconds": approval["original_cap_seconds"],
+             "additional_seconds": approval["additional_seconds"],
+             "cumulative_stop_seconds": approval["cumulative_stop_seconds"],
+             "reason": approval["reason"], "authorization_sha256": digest,
+             "authority_sha256": hashlib.sha256(Path(approval["authority_file"]).read_bytes()).hexdigest()}
+    import io
+    read_events(io.StringIO(json.dumps(event)))
+    proposed = usage(events + [event])[2]
+    if proposed["cap_seconds"] != approval["cumulative_stop_seconds"]:
+        raise ValueError("allocation stop disagrees with effective original ledger capacity")
+    append(handle, event)
+    return {"allowed": True, "idempotent": False, **proposed}
+
+
+def admit_cache(args, events):
+    """A cache entry is data; only retained execution can authenticate it."""
+    canonical_ledger(args.ledger, args.issue)
+    if not re.fullmatch(r"[0-9a-f]{64}", args.cache_key or ""):
+        raise ValueError("invalid canonical cache identity")
+    if args.result_file.absolute() != ADMIN_CACHE / (args.cache_key + ".json") or args.result_file.is_symlink():
+        raise ValueError("cache must use canonical administrator-managed location")
+    approval = canonical_authority(ADMIN_REVIEW / "operators" / f"issue-{args.issue}-cache-{args.cache_key}.json",
+                                   ADMIN_REVIEW / "operators" / f"issue-{args.issue}-cache-{args.cache_key}.json")
+    raw = args.result_file.read_bytes()
+    expected = dict(issue=args.issue, source_sha=args.source_sha, base_sha=args.base_sha,
+                    domains=sorted(set(args.required_domain)), cache_key=args.cache_key,
+                    result_sha256=hashlib.sha256(raw).hexdigest(),
+                    ledger_sha256=hashlib.sha256(args.ledger.read_bytes()).hexdigest())
+    if any(approval.get(key) != value for key, value in expected.items()):
+        raise ValueError("cache lacks exact coordinator-verified independent execution approval")
+    value = json.loads(raw)
+    proof = value.get("execution", {})
+    starts, finishes, total = usage(events)
+    if total["unfinished_attempts"] or total["completed_seconds"] > total["cap_seconds"]:
+        raise ValueError("cached execution exceeds effective original ledger authority")
+    attempt = proof.get("attempt_id")
+    start, finish = starts.get(attempt, {}), finishes.get(attempt, {})
+    if (proof.get("cache_key") != args.cache_key or proof.get("base_sha") != args.base_sha
+            or start.get("source_sha") != args.source_sha or finish.get("source_sha") != args.source_sha
+            or finish.get("outcome") != "pass" or finish.get("failure_kind") != "completed"
+            or finish.get("verdict") != value.get("verdict")
+            or finish.get("result_sha256") != hashlib.sha256(raw).hexdigest()):
+        raise ValueError("cache lacks matching retained source-bound reviewer execution")
+    artifacts = proof.get("artifacts", {})
+    if set(artifacts) != {"raw", "receipt"}:
+        raise ValueError("cache lacks original reviewer artifacts")
+    for artifact in artifacts.values():
+        if hashlib.sha256(Path(artifact["path"]).read_bytes()).hexdigest() != artifact["sha256"]:
+            raise ValueError("cached reviewer artifact changed")
+    execution = json.loads(Path(artifacts["receipt"]["path"]).read_text())
+    if execution.get("kind") != "completed" or execution.get("returncode") != 0:
+        raise ValueError("cache execution is incomplete")
+    import importlib.util
+    import sys
+    sys.dont_write_bytecode = True
+    spec = importlib.util.spec_from_file_location("review_round", Path(__file__).with_name("review-round.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    original = module.extract(Path(artifacts["raw"]["path"]).read_text(), args.required_domain)
+    if original is None or any(value.get(key) != original.get(key) for key in ("verdict", "domains", "findings")):
+        raise ValueError("cache differs from complete original independent verdict")
+    return value
+
+
+def git_changed_paths(root, *comparison, env):
+    """Enumerate both sides of moves without rename heuristics or path quoting."""
+    raw = subprocess.check_output(
+        ["git", "-C", str(root), "diff", "--no-renames", "--name-only", "-z", *comparison],
+        env=env)
+    return raw.decode().split("\0")[:-1]
+
+
+def admit_completed(handle, ledger, args, events):
+    """Consume original authorized evidence directly, without writing a pass cache."""
+    approval = completed_authority(args)
+    root = args.candidate_root.resolve()
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    def git(*command):
+        return subprocess.check_output(["git", "-C", str(root), *command], env=env).decode().strip()
+    if git("rev-parse", "HEAD") != args.source_sha:
+        raise ValueError("completed review candidate head mismatch")
+    if args.source_sha != approval["source_sha"]:
+        comparison = composed_context(approval, args.source_sha, root)
+        if args.base_sha != comparison or args.control_sha != approval["control_sha"]:
+            raise ValueError("completed composition comparison/control mismatch")
+        if git("status", "--porcelain", "--untracked-files=all"):
+            raise ValueError("completed composition requires clean owned source")
+        # Validate original evidence/accounting read-only; composition is not a new review.
+        from copy import copy
+        original_args = copy(args)
+        original_args.source_sha, original_args.base_sha = approval["source_sha"], approval["base_sha"]
+        original_args.candidate = approval["candidate"]
+        original_args.required_domain = approval["domains"]
+        prompt = Path(approval["artifacts"]["prompt"]["path"]).read_text()
+        trace = Path(approval["artifacts"]["stderr"]["path"]).read_text()
+        if (approval["source_sha"] not in prompt or approval["base_sha"] not in prompt
+                or f"issue{args.issue}" not in prompt or any(d not in prompt for d in approval["domains"])
+                or any(marker not in trace for marker in ("model: gpt-6-sol\n", "sandbox: read-only\n",
+                    "approval: never\n", "reasoning effort: high\n"))):
+            raise ValueError("completed composition original provider context mismatch")
+        accounting = account_completed(handle, ledger, original_args, events, record=False)
+        if not accounting["idempotent"]:
+            raise ValueError("composition requires already accounted original review")
+        verdict = json.loads(Path(approval["artifacts"]["verdict"]["path"]).read_text())
+        if any(row != {"verdict": "pass", "findings": []} for row in verdict["domains"].values()):
+            raise ValueError("completed composition requires passing frozen review")
+        return {"verdict": "pass", "domains": {domain: "pass" for domain in args.required_domain},
+                "findings": [], "accounting": accounting, "evidence": {"artifacts": approval["artifacts"],
+                "reviewed_source_sha": approval["source_sha"], "comparison_base": comparison,
+                "control_sha": args.control_sha}}
+    # Runtime may overlay only immutable current-main controls, as the existing
+    # authenticated poller does. All product files remain the frozen commit.
+    controls = ["scripts/review", "scripts/delivery/phase-events.mjs",
+                "scripts/verify/risk-tiers.yml", "REVIEW.md", ".claude/lenses"]
+    control_directories = ("scripts/review", ".claude/lenses")
+    git("merge-base", "--is-ancestor", args.base_sha, args.source_sha)
+    git("merge-base", "--is-ancestor", args.base_sha, args.control_sha)
+    changed = git_changed_paths(root, args.base_sha, args.control_sha, env=env)
+    # A control-only trusted-main advance cannot expand the product comparison.
+    allowed = controls + ["scripts/verify/shipping-session.mjs", "scripts/verify/review-admission.sh",
+                          "scripts/verify/product-flow.mjs", "scripts/sim/publish-product-flow.mjs",
+                          "scripts/sim/product-flow.mjs", "scripts/sim/runner-controls.test.mjs",
+                          "scripts/verify/run.mjs", "scripts/verify/run-output.test.ts",
+                          "scripts/verify/test.sh", "scripts/delivery/phase-events.test.mjs",
+                          "scripts/verify/receipt-cache.mjs", "scripts/verify/README.md",
+                          ".githooks/pre-push",
+                          "scripts/delivery/local-dispatcher.py", "scripts/delivery/local-dispatcher.test.py",
+                          "scripts/delivery/cold_retention.py", "scripts/delivery/pressure-retention.test.py",
+                          "scripts/delivery/resource-controls.test.py", "scripts/delivery/resource_lifecycle.py",
+                          "scripts/verify/hook-fixture.ts", "scripts/verify/impact-plan.mjs",
+                          "scripts/verify/impact-plan.test.ts", "scripts/verify/product-flow-impact.test.ts",
+                          "scripts/verify/product-flow-public-env.test.ts",
+                          "scripts/deploy/native-compatibility.test.ts",
+                          "AGENTS.md", "docs/engineering/devops/shipping.md",
+                          "docs/engineering/devops/resource-control-continuation.md",
+                          "docs/engineering/devops/task-management.md",
+                          "docs/engineering/devops/review-dispositions.md",
+                          "docs/engineering/devops/agent-model-routing.md",
+                          "docs/engineering/devops/shipping-control-cutover.md",
+                          "docs/engineering/devops/shipping-control-setup",
+                          "docs/engineering/devops/ios-release-runbook.md",
+                          ".github/workflows/deploy.yml", ".github/workflows/eas-build.yml",
+                          ".github/workflows/dev-maintenance.yml",
+                          "vercel.json"]
+    allowed_directories = control_directories + ("docs/engineering/devops/shipping-control-setup",)
+    if any(name not in allowed and not any(name.startswith(path + "/") for path in allowed_directories)
+           for name in changed):
+        raise ValueError("trusted main changed product or unrelated inputs; frozen comparison invalid")
+    dirty = (git_changed_paths(root, "HEAD", env=env)
+             + git_changed_paths(root, "--cached", "HEAD", env=env))
+    untracked = git("ls-files", "--others", "--exclude-standard").splitlines()
+    if untracked or any(name not in controls and not any(name.startswith(path + "/")
+                       for path in control_directories) for name in dirty):
+        raise ValueError("completed review requires complete frozen source")
+    for command in [("diff", "--quiet", args.control_sha, "--", *controls),
+                    ("diff", "--cached", "--quiet", args.control_sha, "--", *controls)]:
+        if subprocess.run(["git", "-C", str(root), *command], env=env).returncode:
+            raise ValueError("completed review runtime controls mismatch")
+    prompt = Path(approval["artifacts"]["prompt"]["path"]).read_text()
+    trace = Path(approval["artifacts"]["stderr"]["path"]).read_text()
+    if (args.source_sha not in prompt or args.base_sha not in prompt
+            or f"issue{args.issue}" not in prompt
+            or any(domain not in prompt for domain in args.required_domain)
+            or "model: gpt-6-sol\n" not in trace or "sandbox: read-only\n" not in trace
+            or "approval: never\n" not in trace or "reasoning effort: high\n" not in trace):
+        raise ValueError("completed review raw execution/provider context mismatch")
+    verdict = json.loads(Path(approval["artifacts"]["verdict"]["path"]).read_text())
+    if any(row != {"verdict": "pass", "findings": []} for row in verdict.get("domains", {}).values()):
+        raise ValueError("completed admission requires a passing independent verdict")
+    accounting = account_completed(handle, ledger, args, events, record=getattr(args, "action", None) != "validate-completed")
+    return {"verdict": "pass", "domains": {domain: "pass" for domain in args.required_domain},
+            "findings": [], "accounting": accounting,
+            "reviewer": {key: approval[key] for key in ("provider", "model", "reasoning_effort")},
+            "evidence": {"authorization_sha256": hashlib.sha256(args.authorization_file.read_bytes()).hexdigest(),
+                         "artifacts": approval["artifacts"], "control_sha": args.control_sha}}
+
+
+def reconcile_count(handle, args, events, total):
+    """Operator-attested coordinator error correction, without changing capacity."""
+    operator_authority(args, "count")
+    path = args.authorization_file.resolve() if args.authorization_file else None
+    if (not path or not path.is_file() or path.stat().st_uid != os.getuid()
+            or path.stat().st_mode & 0o077 or not args.candidate
+            or args.ledger.name != f"issue-{args.issue}.jsonl"):
+        raise ValueError("count reconciliation requires private external operator authorization")
+    git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    if subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"],
+                      env=git_env, capture_output=True).returncode == 0:
+        raise ValueError("reconciliation authorization must be outside every Git checkout")
+    raw = path.read_bytes()
+    approval = json.loads(raw)
+    required = {"issue", "candidate", "limit_sha256", "ledger_sha256", "count_origin",
+                "coordinator_provenance", "human_provenance", "new_rounds_max", "control_sha", "operator_sha256"}
+    if (set(approval) != required or approval["issue"] != args.issue
+            or approval["candidate"] != args.candidate or approval["count_origin"] != "coordinator"
+            or approval["new_rounds_max"] is not None):
+        raise ValueError("reconciliation cannot change explicit human count or issue authority")
+    for key in ("coordinator_provenance", "human_provenance"):
+        if not re.fullmatch(r"https://github.com/dgmolla/fitsy/issues/" + str(args.issue)
+                            + r"#issuecomment-[1-9][0-9]*", approval[key]):
+            raise ValueError("reconciliation requires issue-bound authority provenance")
+    previous = next((e for e in events if e["event"] == "count-reconciliation"), None)
+    digest = hashlib.sha256(raw).hexdigest()
+    if previous:
+        if previous["authorization_sha256"] != digest:
+            raise ValueError("count reconciliation already bound to different authority")
+        return {"allowed": True, "reason": "count already reconciled", **total}
+    original = next((e for e in events if e["event"] == "execution-limit"), None)
+    handle.seek(0)
+    if (not original or original["new_rounds_max"] != 1
+            or approval["limit_sha256"] != hashlib.sha256(json.dumps(original, sort_keys=True).encode()).hexdigest()
+            or approval["ledger_sha256"] != hashlib.sha256(handle.read().encode()).hexdigest()
+            or total["unfinished_attempts"]
+            or any(e.get("verdict") == "incomplete" or e.get("failure_kind") not in (None, "completed")
+                   for e in events if e["event"] == "finish")):
+        raise ValueError("reconciliation requires unchanged completed history and original coordinator limit")
+    event = {"event": "count-reconciliation", "attempt_id": "issue-count-reconciliation", "at": utc(),
+             "authorization_sha256": digest, **approval}
+    usage(events + [event])
+    append(handle, event)
+    return {"allowed": True, "reason": "coordinator count reconciled; cumulative ceiling unchanged",
+            **usage(events + [event])[2]}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit"))
+    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit", "reconcile-count", "reconcile-allocation", "account-completed", "admit-completed", "validate-completed", "completed-context", "admit-cache"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
     parser.add_argument("--optional-import-ledger", action="append", default=[])
@@ -289,19 +861,45 @@ def main():
     parser.add_argument("--required", action="store_true")
     parser.add_argument("--candidate")
     parser.add_argument("--issue", type=int)
+    parser.add_argument("--base-sha")
+    parser.add_argument("--candidate-root", type=Path)
+    parser.add_argument("--control-sha")
+    parser.add_argument("--acceptance-sha256")
+    parser.add_argument("--required-domain", action="append", default=[])
     parser.add_argument("--execution-policy", type=Path)
     parser.add_argument("--authorization-file", type=Path)
+    parser.add_argument("--result-file", type=Path)
+    parser.add_argument("--result-sha256")
+    parser.add_argument("--cache-key")
     parser.add_argument("--failure-kind", choices=FAILURE_KINDS)
     parser.add_argument("--outcome", choices=("pass", "fail", "interrupted"), default="interrupted")
     parser.add_argument("--verdict", choices=("pass", "fail", "incomplete"))
     args = parser.parse_args()
-    args.ledger.parent.mkdir(parents=True, exist_ok=True)
+    if args.action == "completed-context":
+        try:
+            value = canonical_authority(args.authorization_file, ADMIN_REVIEW / "completed" / f"issue-{args.issue}.json")
+            if value["issue"] != args.issue:
+                raise ValueError("completed review context issue/source mismatch")
+            print(value["base_sha"] if value["source_sha"] == args.source_sha else
+                  composed_context(value, args.source_sha, args.candidate_root or Path.cwd()))
+            return 0
+        except (ValueError, OSError, KeyError) as error:
+            print(str(error), file=__import__("sys").stderr)
+            return 1
+    privileged = {"account-completed": "completed", "admit-completed": "completed",
+                  "validate-completed": "completed", "reconcile-allocation": "allocation",
+                  "reconcile-count": "count"}
     try:
+        if args.action in privileged:
+            # Check custody before candidate binding, imports or any ledger write.
+            operator_authority(args, privileged[args.action])
+        args.ledger.parent.mkdir(parents=True, exist_ok=True)
         if args.candidate is not None:
             bind_candidate(args.ledger, args.candidate, args.issue)
         with args.ledger.open("a+") as handle:
             fcntl.flock(handle, fcntl.LOCK_EX)
-            events = import_history(handle, args.ledger, args.import_ledger, args.optional_import_ledger)
+            events = import_history(handle, args.ledger, args.import_ledger, args.optional_import_ledger,
+                                    allow_new=args.action not in privileged)
             starts, finishes, total = usage(events)
             if total["extension_issue"] is not None and args.issue is not None and total["extension_issue"] != args.issue:
                 raise ValueError("review extension issue mismatch")
@@ -312,6 +910,21 @@ def main():
             limit = total["execution_limit"]
             if limit and args.issue != limit["issue"]:
                 raise ValueError("execution limit requires the original bound issue")
+            if args.action == "admit-cache":
+                print(json.dumps(admit_cache(args, events)))
+                return 0
+            if args.action == "reconcile-allocation":
+                print(json.dumps(reconcile_allocation(handle, args, events, total)))
+                return 0
+            if args.action == "reconcile-count":
+                print(json.dumps(reconcile_count(handle, args, events, total)))
+                return 0
+            if args.action in ("admit-completed", "validate-completed"):
+                print(json.dumps(admit_completed(handle, args.ledger, args, events)))
+                return 0
+            if args.action == "account-completed":
+                print(json.dumps(account_completed(handle, args.ledger, args, events)))
+                return 0
             if limit and args.action in ("grant-authorized", "extend", "bind-limit"):
                 raise ValueError("issue execution limit forbids top-ups or allowance resets")
             if args.execution_policy and args.action == "grant-authorized":
@@ -381,7 +994,23 @@ def main():
                 append(handle, event)
                 starts, finishes, total = usage(events + [event])
             limit = total["execution_limit"]
-            if args.action == "begin" and limit and (total["bounded_executions_used"] >= limit["new_rounds_max"]
+            if args.action == "begin" and any(e["event"] == "count-reconciliation" for e in events):
+                incomplete = [index for index, event in enumerate(events) if event["event"] == "finish"
+                    and (event.get("verdict") == "incomplete" or event.get("failure_kind") not in (None, "completed"))]
+                if incomplete:
+                    allocations = [event for index, event in enumerate(events) if index > max(incomplete)
+                        and event["event"] == "review-allocation" and event["issue"] == args.issue
+                        and event["source_sha"] == args.source_sha]
+                    if not allocations:
+                        raise ValueError("reconciled incomplete history requires a later source-bound review allocation")
+                    allocation_args = argparse.Namespace(**vars(args))
+                    allocation_args.authorization_file = ADMIN_REVIEW / "operators" / f"issue-{args.issue}-allocation.json"
+                    approval = operator_authority(allocation_args, "allocation")
+                    if (approval.get("candidate_source") != args.source_sha
+                            or hashlib.sha256(allocation_args.authorization_file.read_bytes()).hexdigest()
+                            != allocations[-1]["authorization_sha256"]):
+                        raise ValueError("incomplete recovery allocation requires matching installed approval")
+            if args.action == "begin" and limit and (limit["new_rounds_max"] is not None and total["bounded_executions_used"] >= limit["new_rounds_max"]
                     or total["unfinished_attempts"]):
                 print(json.dumps({"allowed": False, "reason": "issue execution limit exhausted or prior reservation unfinished", **total}))
                 return 1
@@ -421,10 +1050,10 @@ def main():
                 minimum, observed = required_window(starts, finishes, args.lens)
                 if limit:
                     minimum = min(minimum, limit["per_round_timeout_seconds_max"])
-                if policy:
+                if policy or any(e["event"] == "count-reconciliation" for e in events):
                     minimum = 1
                 result.update(required_window_seconds=minimum, recent_completed_seconds=observed,
-                              can_admit=(not limit or (total["bounded_executions_used"] < limit["new_rounds_max"] and not total["unfinished_attempts"])) and (not policy or not policy["prospective_stopped"]) and min(total["remaining_seconds"], policy["prospective_remaining_seconds"] if policy else total["remaining_seconds"]) >= minimum + CLOSEOUT_SECONDS)
+                              can_admit=(not limit or ((limit["new_rounds_max"] is None or total["bounded_executions_used"] < limit["new_rounds_max"]) and not total["unfinished_attempts"])) and (not policy or not policy["prospective_stopped"]) and min(total["remaining_seconds"], policy["prospective_remaining_seconds"] if policy else total["remaining_seconds"]) >= minimum + CLOSEOUT_SECONDS)
             if args.action == "begin":
                 if args.attempt_id in starts:
                     result.update(allowed=False, reason="duplicate attempt")
@@ -443,7 +1072,7 @@ def main():
                     minimum, observed = required_window(starts, finishes, args.lens) if args.required else (1, [])
                     if limit:
                         minimum = min(minimum, limit["per_round_timeout_seconds_max"])
-                    if policy:
+                    if policy or any(e["event"] == "count-reconciliation" for e in events):
                         minimum = 1
                     result.update(required_window_seconds=minimum, recent_completed_seconds=observed)
                     if grant < minimum:
@@ -471,11 +1100,14 @@ def main():
                     if args.outcome == "pass" and args.failure_kind not in (None, "completed"):
                         raise ValueError("incomplete or timed out execution cannot produce a passing outcome")
                     seconds = elapsed(start)
+                    if args.result_sha256 and not re.fullmatch(r"[0-9a-f]{64}", args.result_sha256):
+                        raise ValueError("invalid independent result digest")
                     append(handle, {"event": "finish", "at": utc(), "attempt_id": args.attempt_id,
                         "round_id": args.round_id, "lens": args.lens, "source_sha": args.source_sha,
                         "elapsed_seconds": seconds, "outcome": args.outcome,
                         **({"verdict": args.verdict} if args.verdict else {}),
                         **({"failure_kind": args.failure_kind} if args.failure_kind else {}),
+                        **({"result_sha256": args.result_sha256} if args.result_sha256 else {}),
                         **{key: start[key] for key in ("exception", "adoption", "closeout") if key in start}})
                     result.update(reason="recorded", elapsed_seconds=seconds)
         print(json.dumps(result))
