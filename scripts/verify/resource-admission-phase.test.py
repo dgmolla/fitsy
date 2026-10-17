@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import socket
+import threading
 import subprocess
 import tempfile
 import time
@@ -60,16 +62,36 @@ class PhaseBoundaryTests(unittest.TestCase):
             'const account = userInfo();',
             f'const account = {{ homedir: {json.dumps(str(self.account))} }}; // disposable synthetic account')
         helper = helper.replace('return await admitOwnedDatabasePhase();',
-                                'return await admitOwnedDatabasePhase({command: fixtureCommand, disk: () => ({bavail: 20*1024**3, bsize:1}), sleep: () => {}});')
+                                'return await admitOwnedDatabasePhase({command: fixtureCommand, disk: () => ({bavail: fixtureSample.disk ?? 20*1024**3, bsize:1}), sleep: fixtureSleep});')
         injection = r'''
 let identityReads = 0;
+let fixtureElapsed = 0, fixtureHostReads = 0, fixtureSample = {};
+const fixtureSamples = JSON.parse(process.env.FIXTURE_WARM_SAMPLES || '[]');
+function fixtureSleep(ms) {
+  if (!fixtureSamples.length) return;
+  // Successful producer and consumer receipts share the real clock.
+  // Only failure-only cutoff cases accelerate time in this disposable copy.
+  if (fixtureSamples.length && fixtureHostReads >= 3 && ms > 1000) {
+    const mode = process.env.FIXTURE_SETTLE_DRIFT;
+    if (mode === 'deadline') fixtureElapsed += 60000;
+    if (mode === 'socket') unlinkSync(process.env.FITSY_SHIPPING_SOCKET);
+    if (mode === 'source') writeFileSync(join(process.cwd(),'drift'),'unreviewed');
+    if (mode === 'authority') writeFileSync(process.env.FIXTURE_AUTHORITY, '\\n', {flag:'a'});
+    if (mode === 'runtime') writeFileSync(join(process.env.FIXTURE_PACKET,'runtime-before-reader'),'changed');
+  }
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms);
+}
 const fixtureNow=Date.now;
-Date.now=()=>fixtureNow()+(existsSync(join(process.env.FIXTURE_PACKET,'startup-deadline-expired'))?60001:0);
+Date.now=()=>fixtureNow()+fixtureElapsed+(existsSync(join(process.env.FIXTURE_PACKET,'startup-deadline-expired'))?60001:0);
 function fixtureCommand(binary, args) {
-  if (binary === '/usr/bin/vm_stat') return 'Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free: ' + (process.env.FIXTURE_PAGES || 524288) + '.\nPages inactive: 0.\nPages speculative: 0.\n'.replaceAll('\\n','\n');
+  if (binary === '/usr/bin/vm_stat') {
+    fixtureSample=fixtureSamples[Math.min(fixtureHostReads++,fixtureSamples.length-1)] || {};
+    if(process.env.FIXTURE_FINISH_DEADLINE && fixtureHostReads===3) writeFileSync(join(process.env.FIXTURE_PACKET,'warm-pair-complete'),'two samples');
+    return 'Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free: ' + (fixtureSample.pages ?? process.env.FIXTURE_PAGES ?? 524288) + '.\nPages inactive: 0.\nPages speculative: 0.\n'.replaceAll('\\n','\n');
+  }
   if (binary === '/usr/sbin/sysctl') return args[0] === 'vm.swapusage'
-    ? 'vm.swapusage: total = 0.00M used = 0.00M free = 0.00M'
-    : 'kern.memorystatus_vm_pressure_level: ' + (process.env.FIXTURE_PRESSURE || '1');
+    ? `vm.swapusage: total = 0.00M used = ${fixtureSample.swap ?? '0.00'}M free = 0.00M`
+    : 'kern.memorystatus_vm_pressure_level: ' + (fixtureSample.pressure ?? process.env.FIXTURE_PRESSURE ?? '1');
   if (binary === '/bin/ps' && args.join(' ') === '-axo pid=,ppid=,lstart=,command=') {
     identityReads++;
     if(process.env.FIXTURE_INITIAL_RUNTIME==='unknown') return '900001 1 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.backend\n900002 999999 Fri Oct 16 00:00:00 2026 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization\n';
@@ -99,13 +121,17 @@ function fixtureCommand(binary, args) {
   }
   if (binary === '/usr/local/bin/docker') {
     if (!existsSync(join(process.env.FIXTURE_PACKET, `phase-intent-${process.ppid}.json`))) throw Error('Docker before atomic phase intent');
-    return execFileSync(process.env.FIXTURE_DOCKER, args, {encoding:'utf8',env:{...process.env,FIXTURE_IN_HELPER:'1'}});
+    try { return execFileSync(process.env.FIXTURE_DOCKER, args, {encoding:'utf8',env:{...process.env,FIXTURE_IN_HELPER:'1'}}); }
+    finally {
+      if(args[0]==='ps') fixtureElapsed+=Number(process.env.FIXTURE_READINESS_ELAPSED || 0);
+      writeFileSync(join(process.env.FIXTURE_PACKET,'api-completions'), JSON.stringify({args,completed_at:Date.now()/1000})+'\n',{flag:'a'}); }
   }
   return execFileSync(binary, args, {encoding:'utf8',timeout:15000});
 }
 '''
         helper = helper.replace('if (process.argv[1] && resolve(process.argv[1]) === file)',
                                 injection + '\nif (process.argv[1] && resolve(process.argv[1]) === file)')
+        helper = helper.replace('existsSync, statfsSync', 'existsSync, unlinkSync, statfsSync')
         (self.verify / 'resource-admission.mjs').write_text(helper)
         runtime = (SOURCE / 'docker-runtime.mjs').read_text()
         runtime = runtime.replace("export function assertAdmittedDockerGuest(expected, command = (binary, args) => execFileSync(binary, args,\n  { encoding: 'utf8', timeout: 15000 }))",
@@ -117,9 +143,24 @@ function fixtureCommand(binary, args) {
         shipping = self.verify / 'shipping-session.mjs'
         shipping.write_text("""#!/opt/homebrew/bin/node
 import {spawnSync} from 'node:child_process';
-if(process.argv[2]==='--check') process.exit(process.env.FIXTURE_DENY_SESSION ? 1 : 0);
+if(process.argv[2]==='--check') {
+ if(process.env.FIXTURE_FINISH_DEADLINE) {
+  const fs=await import('node:fs');
+  if(fs.existsSync(process.env.FIXTURE_PACKET+'/warm-pair-complete'))
+   fs.writeFileSync(process.env.FIXTURE_PACKET+'/startup-deadline-expired','cutoff during final live assertion');
+ }
+ if(process.env.FIXTURE_DENY_SESSION) process.exit(1);
+ if(!process.env.FIXTURE_REAL_SOCKET) process.exit(0);
+ const {connect}=await import('node:net');
+ const client=connect(process.env.FITSY_SHIPPING_SOCKET);
+ client.setTimeout(1000,()=>process.exit(1));
+ client.on('error',()=>process.exit(1));
+ client.on('connect',()=>client.write(process.env.FITSY_SHIPPING_TOKEN));
+ client.on('data',data=>process.exit(data.toString()==='valid' ? 0 : 1));
+} else {
 const result=spawnSync(process.argv[3],process.argv.slice(4),{stdio:'inherit',env:process.env});
 process.exitCode=result.status ?? 1;
+}
 """)
         shipping.chmod(0o700)
         (self.verify / 'run.mjs').write_text('''import fs from 'node:fs';
@@ -297,7 +338,7 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
                         FITSY_SHIPPING_TOKEN='explicitly-synthetic-session', FIXTURE_PACKET=str(self.packet),
                         FIXTURE_DOCKER=str(self.docker), FIXTURE_ROOT=str(self.root),
                         FIXTURE_STATE=str(self.directory / 'state.json'), FIXTURE_EVENTS=str(self.directory / 'events'),
-                        FIXTURE_RESETS=str(self.directory / 'resets'))
+                        FIXTURE_RESETS=str(self.directory / 'resets'), FIXTURE_AUTHORITY=str(self.authority))
 
     @staticmethod
     def sha(path):
@@ -321,12 +362,136 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
         shutil.rmtree(self.directory)
 
     def run_packet(self, **extra):
-        return subprocess.run([PYTHON, str(self.packet / 'run.py')], cwd=self.root,
-                              env=dict(self.env, **extra), capture_output=True, text=True, timeout=20)
+        # A short checked command scratch supports a real socket and hook;
+        # private approval custody remains in separate secure OS-temp ancestry.
+        raw = tempfile.mkdtemp(prefix='fp-', dir='/private/tmp')
+        scratch = Path(raw)
+        try:
+            identity = scratch.stat()
+            self.assertEqual(identity.st_mode & 0o777, 0o700)
+            hook = scratch / 'h'
+            hook.write_text('#!/bin/sh\nexit 0\n')
+            hook.chmod(0o700)
+            self.assertEqual(subprocess.call([str(hook)]), 0)
+            address = str(scratch / 's')
+            done = threading.Event()
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(address)
+                server.listen()
+                server.settimeout(.1)
+                def serve():
+                    while not done.is_set():
+                        try:
+                            connection, _ = server.accept()
+                            with connection:
+                                token = connection.recv(256).decode()
+                                connection.sendall(b'valid' if token == self.env['FITSY_SHIPPING_TOKEN'] else b'invalid')
+                        except socket.timeout:
+                            continue
+                worker = threading.Thread(target=serve)
+                worker.start()
+                try:
+                    environment = dict(self.env, **extra, FITSY_SHIPPING_SOCKET=address, FIXTURE_REAL_SOCKET='1')
+                    result = subprocess.run([PYTHON, str(self.packet / 'run.py')], cwd=self.root,
+                                            env=environment, capture_output=True, text=True, timeout=20)
+                finally:
+                    done.set()
+                    worker.join(timeout=2)
+                    self.assertFalse(worker.is_alive())
+        finally:
+            self.assertEqual((scratch.stat().st_dev, scratch.stat().st_ino, scratch.stat().st_uid, scratch.stat().st_mode & 0o777), (identity.st_dev, identity.st_ino, os.getuid(), 0o700))
+            shutil.rmtree(scratch)
+        evidence = os.environ.get('FITSY_PHASE_TEST_EVIDENCE')
+        if evidence:
+            destination = Path(evidence) / (self._testMethodName + '-' + str(time.time_ns()))
+            destination.mkdir(mode=0o700)
+            (destination / 'stdout').write_text(result.stdout)
+            (destination / 'stderr').write_text(result.stderr)
+            for path in self.packet.iterdir():
+                if path.is_file(): shutil.copyfile(path, destination / path.name)
+            (destination / 'command.json').write_text(json.dumps({'argv':[PYTHON,str(self.packet/'run.py')],
+                'cwd':str(self.root),'modeled_external_capacity':extra,'socket_scratch':raw,
+                'socket_hook_released':not scratch.exists(),'returncode':result.returncode}))
+        return result
 
     def no_docker_or_reset(self):
         self.assertFalse((self.directory / 'events').exists())
         self.assertFalse((self.directory / 'resets').exists())
+
+    def warm_packet(self, samples, **extra):
+        return self.run_packet(FIXTURE_WARM_SAMPLES=json.dumps(samples), **extra)
+
+    def test_transient_warm_capacity_settles_without_repeating_docker(self):
+        result = self.warm_packet([{}, {'pages':350000}, {}, {}, {}], FIXTURE_ASSERT_READER='1')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        ready = json.loads(next(self.packet.glob('phase-admission-*.json')).read_text())
+        self.assertEqual(len(ready['warm_observations']), 2)
+        self.assertEqual(ready['warm_observations'][0]['first']['available_memory_bytes'], 350000*16384)
+        operations = [json.loads(line) for line in (self.packet/'api-completions').read_text().splitlines()]
+        self.assertEqual([row['args'][0] for row in operations], ['context','info','inspect','ps'])
+        self.assertGreaterEqual(ready['last_docker_activity_at'], operations[-1]['completed_at'])
+        self.assertLessEqual(ready['last_docker_activity_at'], ready['warm_observations'][0]['first']['at']/1000)
+        self.assertEqual(len((self.directory/'resets').read_text().splitlines()), 1)
+        self.assertEqual(json.loads((self.packet/'reader-proof.json').read_text())['returncode'], 0)
+
+    def test_capacity_settle_deadline_retains_failed_samples_and_last_api(self):
+        result = self.warm_packet([{}, {'pages':350000}], FIXTURE_SETTLE_DRIFT='deadline')
+        self.assertNotEqual(result.returncode, 0)
+        refused = json.loads(result.stdout.splitlines()[-1])
+        self.assertIn('native peak plus host reserve', refused['reason'])
+        self.assertEqual(len(refused['warm_observations']), 1)
+        self.assertEqual(refused['warm_observations'][0]['first']['available_memory_bytes'],350000*16384)
+        completed=json.loads((self.packet/'api-completions').read_text().splitlines()[-1])['completed_at']
+        self.assertGreaterEqual(refused['last_docker_activity_at'], completed)
+        self.assertFalse((self.directory/'resets').exists())
+        self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
+
+    def test_permanent_warm_shortage_uses_only_remaining_startup_window(self):
+        result = self.warm_packet([{}, {'pages':350000}], FIXTURE_READINESS_ELAPSED='55000')
+        self.assertNotEqual(result.returncode, 0)
+        refused = json.loads(result.stdout.splitlines()[-1])
+        self.assertIn('native peak plus host reserve', refused['reason'])
+        self.assertLessEqual(len(refused['warm_observations']), 2)
+        self.assertFalse((self.directory/'resets').exists())
+        operations = (self.packet/'api-completions').read_text().splitlines()
+        self.assertEqual(len(operations), 4)
+
+    def test_cold_cutoff_during_final_live_assertion_cannot_publish(self):
+        result = self.warm_packet([{}], FIXTURE_FINISH_DEADLINE='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
+        self.assertFalse((self.directory/'resets').exists())
+        refused=json.loads(result.stdout.splitlines()[-1])
+        self.assertIn('deadline expired',refused['reason'])
+
+    def test_exact_warm_shortage_has_no_settle_retry(self):
+        authority = json.loads(self.authority.read_text())
+        authority['cold_required_bytes'] += 2*1024**3
+        self.authority.write_text(json.dumps(authority))
+        result = self.warm_packet([{'pages':380000}, {'pages':350000}, {}, {}, {}])
+        self.assertNotEqual(result.returncode, 0)
+        refused = json.loads(result.stdout.splitlines()[-1])
+        self.assertEqual(len(refused['warm_observations']), 1)
+        self.assertFalse((self.directory/'resets').exists())
+
+    def settle_drift_case(self):
+        # Separate fixtures keep each immutable authority and source independent.
+        result = self.warm_packet([{}, {'pages':350000}, {}, {}, {}],
+                                  FIXTURE_SETTLE_DRIFT=self.drift_case)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertFalse((self.directory/'resets').exists())
+        self.assertFalse(list(self.packet.glob('phase-admission-*.json')))
+        refused = json.loads(result.stdout.splitlines()[-1])
+        self.assertEqual(len(refused['warm_observations']), 1)
+
+    def second_fixed_case(self):
+        failure = self.fixed_case
+        result = self.warm_packet([{}, {'pages':350000}, failure, {}, {}])
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        refused = json.loads(result.stdout.splitlines()[-1])
+        self.assertNotIn('native peak plus host reserve', refused['reason'])
+        self.assertEqual(len(refused['warm_observations']), 1)
+        self.assertFalse((self.directory/'resets').exists())
 
     def test_valid_owned_path_and_same_session_second_invocation(self):
         result = self.run_packet(FIXTURE_TWICE='1')
@@ -679,6 +844,19 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
         os.link(target, self.authority)
         self.assertNotEqual(self.run_packet().returncode, 0)
         self.no_docker_or_reset()
+
+
+for _drift in ('socket', 'source', 'authority', 'runtime'):
+    def test(self, mode=_drift):
+        self.drift_case = mode
+        self.settle_drift_case()
+    setattr(PhaseBoundaryTests, 'test_capacity_settle_drift_' + _drift, test)
+for _name, _failure in [('stop', {'pages':270000}), ('disk', {'disk':1024}),
+                         ('swap', {'swap':1}), ('pressure', {'pressure':'2'})]:
+    def test(self, failure=_failure):
+        self.fixed_case = failure
+        self.second_fixed_case()
+    setattr(PhaseBoundaryTests, 'test_capacity_then_fixed_' + _name, test)
 
 
 def limit_case(stage, field, kind):

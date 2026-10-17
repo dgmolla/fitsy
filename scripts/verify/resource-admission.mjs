@@ -93,11 +93,14 @@ export function hostSnapshot(command = (binary, args) => execFileSync(binary, ar
     free_disk_bytes: filesystem.bavail * filesystem.bsize, used_swap_mb: usedSwap,
     memory_pressure: kernelPressure(pressureRaw), pressure_raw: pressureRaw.trim() };
 }
-function requireHost(snapshot, native, reserve) {
+function requireHostSafety(snapshot) {
   if (snapshot.available_memory_bytes < HOST_STOP) throw Error('host approached fixed 4.25 GiB stop');
   if (snapshot.free_disk_bytes < DISK_FLOOR) throw Error('host disk is below fixed 12 GiB floor');
   if (snapshot.used_swap_mb !== 0) throw Error('host swap is not flat zero');
   if (snapshot.memory_pressure !== 'normal') throw Error('normal kernel memory pressure is unverified');
+}
+function requireHost(snapshot, native, reserve) {
+  requireHostSafety(snapshot);
   if (snapshot.available_memory_bytes < native + reserve) throw Error('phase native peak plus host reserve unavailable');
 }
 function daemonInfo(raw) {
@@ -258,6 +261,7 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
   // Capacity mode does not release custody of an already observed live guest.
   let runtimeIdentity = firstRuntime.identity;
   let startupAttempt;
+  let lastDockerActivityAt;
   const startupObservations = [];
   const context = { issue, source_sha: authority.source_sha, selected_package_sha: authority.selected_package_sha,
     completed_manifest_sha256: authority.completed_manifest_sha256, review_ledger_sha256: authority.review_ledger_sha256,
@@ -308,6 +312,9 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
         throw pending;
       }
       throw error;
+    } finally {
+      lastDockerActivityAt = Date.now() / 1000;
+      if (preliminary) preliminary.completed_at = lastDockerActivityAt;
     }
   };
   const priorInvocations = readdirSync(directory).filter(name => /^phase-admission-\d+\.json$/.test(name)).map(name => {
@@ -382,6 +389,7 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
     } catch (error) {
       if (!bindingAtStart) startupObservations.push({ ...startupAttempt, state: 'preliminary', reason: error.message });
       error.startupObservations = startupObservations;
+      error.lastDockerActivityAt = lastDockerActivityAt;
       if (error.restartBoundReadiness && Date.now() < deadline) continue;
       if (error.coldStartupConnectionNotReady && !bindingAtStart && !runtimeIdentity && Date.now() < deadline) {
         sleep(2000);
@@ -392,26 +400,58 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
     }
   } while (Date.now() < deadline);
   if (!ready) throw Error('Docker readiness deadline expired');
-  const warmFirst = hostSnapshot(command, disk, root);
-  sleep(1000);
-  const warmSecond = hostSnapshot(command, disk, root);
-  requireHost(warmFirst, native, reserve);
-  requireHost(warmSecond, native, reserve);
-  if (JSON.stringify(identity()) !== JSON.stringify(ready.identity)) throw Error('Docker guest changed after warm admission');
-  // Revalidate immutable source, evidence and callers immediately before release
-  // to the first local-db API. A readiness response cannot approve source drift.
-  if (readGit(root, 'rev-parse', 'HEAD') !== authority.source_sha ||
-      readGit(root, 'rev-parse', 'origin/main') !== authority.base_sha ||
-      readGit(root, 'status', '--porcelain', '--untracked-files=all') ||
-      readGit(packageRoot, 'rev-parse', 'HEAD') !== authority.selected_package_sha ||
-      readGit(packageRoot, 'status', '--porcelain', '--untracked-files=all') ||
-      hash(manifestPath) !== authority.completed_manifest_sha256 || hash(ledgerPath) !== authority.review_ledger_sha256 ||
-      hash(authorityPath) !== context.authority_sha256 || expectedFiles.some(path => hash(path) !== authority.files_sha256[path])) {
-    throw Error('source, authority or evidence changed during DB readiness');
+  function assertCurrentPhase() {
+    assertPhaseLock(root);
+    const active = sessionCheck();
+    if (active.error || active.status !== 0) throw Error('live shipping and canonical review assertion failed');
+    if (readGit(root, 'rev-parse', 'HEAD') !== authority.source_sha ||
+        readGit(root, 'rev-parse', 'origin/main') !== authority.base_sha ||
+        readGit(root, 'status', '--porcelain', '--untracked-files=all') ||
+        readGit(packageRoot, 'rev-parse', 'HEAD') !== authority.selected_package_sha ||
+        readGit(packageRoot, 'status', '--porcelain', '--untracked-files=all') ||
+        hash(manifestPath) !== authority.completed_manifest_sha256 || hash(ledgerPath) !== authority.review_ledger_sha256 ||
+        hash(authorityPath) !== context.authority_sha256 || expectedFiles.some(path => hash(path) !== authority.files_sha256[path])) {
+      throw Error('source, authority or evidence changed during DB readiness');
+    }
+    if (JSON.stringify(identity()) !== JSON.stringify(ready.identity)) throw Error('Docker guest changed after warm admission');
+  }
+  const warmObservations = [];
+  let warmFirst, warmSecond;
+  try {
+    for (;;) {
+      if (warmObservations.length && Date.now() >= deadline) throw Error('phase native peak plus host reserve unavailable');
+      assertCurrentPhase();
+      warmFirst = hostSnapshot(command, disk, root);
+      const observation = { first: warmFirst };
+      warmObservations.push(observation);
+      sleep(1000);
+      warmSecond = hostSnapshot(command, disk, root);
+      observation.second = warmSecond;
+      // A shortage in the first sample must never mask a fixed failure in the second.
+      requireHostSafety(warmFirst);
+      requireHostSafety(warmSecond);
+      const sufficient = [warmFirst, warmSecond].every(value => value.available_memory_bytes >= native + reserve);
+      if (sufficient) {
+        if (!exactWarm && Date.now() >= deadline) throw Error('Docker readiness deadline expired');
+        break;
+      }
+      if (exactWarm || Date.now() >= deadline) throw Error('phase native peak plus host reserve unavailable');
+      // Only host observations repeat, within the original cold readiness cutoff.
+      sleep(Math.min(2000, deadline - Date.now()));
+    }
+    assertCurrentPhase();
+    if (!exactWarm && Date.now() >= deadline) throw Error('Docker readiness deadline expired');
+  } catch (error) {
+    error.startupObservations = startupObservations;
+    error.warmObservations = warmObservations;
+    error.readiness = ready;
+    error.lastDockerActivityAt = lastDockerActivityAt;
+    throw error;
   }
   const result = { ...context, state: 'phase-ready', authority_path: authorityPath,
     receipt_path: receipt, at: Date.now() / 1000, before, warm_first: warmFirst,
     warm_second: warmSecond, readiness: ready, startup_observations: startupObservations,
+    warm_observations: warmObservations, last_docker_activity_at: lastDockerActivityAt,
     budget: { native_peak_bytes: native, host_reserve_bytes: reserve,
       cold_required_bytes: authority.cold_required_bytes, host_stop_bytes: HOST_STOP, disk_floor_bytes: DISK_FLOOR } };
   publish(receipt, result);
@@ -424,7 +464,9 @@ if (process.argv[1] && resolve(process.argv[1]) === file) {
     : process.argv[2] === '--owned-db-phase'
     ? await (async () => { try { return await admitOwnedDatabasePhase(); }
       catch (error) { return { state: 'refused', reason: error.message,
-        ...(error.startupObservations?.length ? { startup_observations: error.startupObservations } : {}) }; } })()
+        ...(error.startupObservations?.length ? { startup_observations: error.startupObservations } : {}),
+        ...(error.warmObservations ? { warm_observations: error.warmObservations, readiness: error.readiness } : {}),
+        ...(error.lastDockerActivityAt !== undefined ? { last_docker_activity_at: error.lastDockerActivityAt } : {}) }; } })()
     : admitResources();
   console.log(JSON.stringify(result));
   process.exitCode = process.argv[2] === '--host-snapshot' || result.status === 'pass' || result.state === 'phase-ready' ? 0 : 1;
