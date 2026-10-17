@@ -118,10 +118,22 @@ if [ "$REPO_ROOT" != "$CONTROL_ROOT" ]; then
   [ "$(git -C "$CONTROL_ROOT" rev-parse HEAD)" = "$BASE_SHA" ] || fail
   [ -z "$(git -C "$CONTROL_ROOT" status --porcelain --untracked-files=all)" ] || fail
 fi
+RUNTIME_CONTROL_SHA="$BASE_SHA"
 if [ -f "$COMPLETED_AUTH" ]; then
-  COMPARE_SHA="$(python3 -I "$CONTROL_ROOT/scripts/review/review-budget.py" completed-context \
-    --ledger /dev/null --authorization-file "$COMPLETED_AUTH" --issue "$ISSUE" --source-sha "$HEAD_SHA")" || fail
+  CONTEXT_OPERATOR="$ADMIN_HOME/.fitsy-review/operators/review-budget.py"
+  if [ ! -f "$CONTEXT_OPERATOR" ]; then CONTEXT_OPERATOR="$CONTROL_ROOT/scripts/review/review-budget.py"; fi
+  COMPARE_SHA="$(python3 -I "$CONTEXT_OPERATOR" completed-context \
+    --ledger /dev/null --authorization-file "$COMPLETED_AUTH" --issue "$ISSUE" --source-sha "$HEAD_SHA" --candidate-root "$REPO_ROOT")" || fail
   [ "$(git rev-parse origin/main)" = "$COMPARE_SHA" ] || fail
+  # The context was just validated against local trees and private original evidence.
+  # Approved controls and the live PR comparison are different immutable inputs.
+  RUNTIME_CONTROL_SHA="$(python3 -I - "$COMPLETED_AUTH" "$HEAD_SHA" "$BASE_SHA" <<'PYCONTROL'
+import json,sys
+value=json.load(open(sys.argv[1]))
+print(value['control_sha'] if value.get('composition', {}).get('source_sha') == sys.argv[2]
+      and value['source_sha'] != sys.argv[2] else sys.argv[3])
+PYCONTROL
+  )" || fail
 else
   [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] || fail
 fi
@@ -150,8 +162,8 @@ git -C "$ATTEMPT/candidate" fetch --quiet "$REPO_ROOT" "$HEAD_SHA" >&2 || fail
 git -C "$ATTEMPT/candidate" checkout --quiet -B "$BRANCH" "$HEAD_SHA" >&2 || fail
 git -C "$ATTEMPT/candidate" update-ref refs/remotes/origin/main "$BASE_SHA"
 CONTROLS=(scripts/review scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses)
-if git cat-file -e "$BASE_SHA:scripts/delivery/phase-events.mjs" 2>/dev/null; then CONTROLS+=(scripts/delivery/phase-events.mjs); fi
-git -C "$ATTEMPT/candidate" restore --source="$BASE_SHA" --staged --worktree --no-overlay -- "${CONTROLS[@]}" >&2 || fail
+if git cat-file -e "$RUNTIME_CONTROL_SHA:scripts/delivery/phase-events.mjs" 2>/dev/null; then CONTROLS+=(scripts/delivery/phase-events.mjs); fi
+git -C "$ATTEMPT/candidate" restore --source="$RUNTIME_CONTROL_SHA" --staged --worktree --no-overlay -- "${CONTROLS[@]}" >&2 || fail
 git -C "$ATTEMPT/candidate" clean -qfdx -- scripts/review .claude/lenses
 mkdir -p "$ATTEMPT/candidate/.evidence/delivery"
 cp .evidence/delivery/binding.json "$ATTEMPT/candidate/.evidence/delivery/binding.json" || fail

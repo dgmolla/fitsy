@@ -280,14 +280,40 @@ def review_inputs(config, issue, source, body):
     require(digest(raw) == policy['manifest_sha256'], 'unapproved execution manifest')
     approval = json.loads(raw)
     if boundary is not None:
-        require(approval['base_sha'] == boundary['comparison_base'], 'candidate boundary comparison mismatch')
+        require((approval['composition']['comparison_base']
+                 if source != approval['source_sha'] and approval.get('composition') else approval['base_sha'])
+                == boundary['comparison_base'], 'candidate boundary comparison mismatch')
     artifacts = {name: protected_bytes(row['path'], uid) for name, row in approval['artifacts'].items()}
     ledger = protected_bytes(Path(config['budget_home']) / f'issue-{issue}.jsonl', uid)
     validate_review(approval, artifacts, ledger, policy, issue, approval['source_sha'], body)
     if source != approval['source_sha']:
         require(issue == 443, 'changed controls require fresh independent control review')
-        validate_composition(git_tree(config, approval['source_sha']), git_tree(config, source),
-                             git_tree(config, config['control_sha']), config['control_paths'])
+        composition = approval.get('composition')
+        if composition is None:
+            validate_composition(git_tree(config, approval['source_sha']), git_tree(config, source),
+                                 git_tree(config, config['control_sha']), config['control_paths'])
+        else:
+            require(set(composition) == {'source_sha', 'comparison_base', 'comparison_tree_sha', 'control_paths'}
+                    and composition['source_sha'] == source and approval['control_sha'] == config['control_sha']
+                    and composition['control_paths'] == config['control_paths'], 'composition authority mismatch')
+            require(all(isinstance(composition.get(key), str)
+                        and re.fullmatch(r'[0-9a-f]{40}', composition[key])
+                        for key in ('source_sha', 'comparison_base', 'comparison_tree_sha')),
+                    'composition source/main identity invalid')
+            original = protected_bytes(approval['original_manifest']['path'], uid, private=True)
+            original_approval = json.loads(original)
+            require(digest(original) == approval['original_manifest']['sha256']
+                    and 'composition' not in original_approval and 'original_manifest' not in original_approval
+                    and set(approval) == set(original_approval) | {'composition', 'original_manifest'}
+                    and all(approval[key] == value for key, value in original_approval.items()
+                            if key not in ('control_sha', 'operator_sha256')),
+                    'original frozen review authority changed')
+            main = github(config, f'repos/{REPO}/git/commits/{composition["comparison_base"]}')
+            require(main['tree']['sha'] == composition['comparison_tree_sha'], 'approved main tree changed')
+            validate_composition(git_tree(config, approval['source_sha']), git_tree(config, source),
+                git_tree(config, config['control_sha']), config['control_paths'],
+                reviewed_base=git_tree(config, approval['base_sha']),
+                main=git_tree(config, composition['comparison_base']))
     return approval
 
 
@@ -301,13 +327,24 @@ def git_tree(config, source):
             for row in result['tree'] if row['type'] != 'tree'}
 
 
-def validate_composition(reviewed, candidate, controls, allowed):
+def validate_composition(reviewed, candidate, controls, allowed, *, reviewed_base=None, main=None):
     """Reuse frozen443 only for exact product blobs with approved control blobs."""
     require(bool(allowed) and len(set(allowed)) == len(allowed), 'explicit approved control paths required')
     require(all(any(path == area or (area.endswith('/') and path.startswith(area))
                     for area in CONTROL_AREAS) for path in allowed), 'product path cannot be a control')
-    for path in set(reviewed) | set(candidate) | set(allowed):
-        expected = controls.get(path) if path in allowed else reviewed.get(path)
+    expected_product = reviewed
+    if main is not None or reviewed_base is not None:
+        require(main is not None and reviewed_base is not None, 'complete approved main context required')
+        product_delta = {p for p in set(reviewed_base) | set(reviewed)
+                         if p not in allowed and reviewed_base.get(p) != reviewed.get(p)}
+        main_delta = {p for p in set(reviewed_base) | set(main)
+                      if p not in allowed and reviewed_base.get(p) != main.get(p)}
+        require(not product_delta & main_delta, 'frozen product and approved main overlap')
+        expected_product = {**main, **{p: reviewed[p] for p in product_delta if p in reviewed}}
+        for path in product_delta - reviewed.keys():
+            expected_product.pop(path, None)
+    for path in set(expected_product) | set(candidate) | set(allowed):
+        expected = controls.get(path) if path in allowed else expected_product.get(path)
         require(candidate.get(path) == expected, f'frozen product or approved control changed: {path}')
 
 
@@ -367,7 +404,14 @@ def ci_acceptance(config, issue, pr, review, verify_id, *, merged_main=None):
     endpoint = f'repos/{REPO}'
     source, base = pr['head']['sha'], pr['base']['sha']
     policy = config['local_acceptance'][str(issue)]
-    require(base == review['base_sha'], 'CI comparison base changed')
+    comparison = review['base_sha']
+    if review.get('composition') is not None:
+        context = review['composition']
+        require(issue == 443 and context['source_sha'] == source
+                and review['control_sha'] == config['control_sha']
+                and context['control_paths'] == config['control_paths'], 'CI composition authority mismatch')
+        comparison = context['comparison_base']
+    require(base == comparison, 'CI comparison base changed')
     candidate = github(config, f'{endpoint}/git/commits/{source}')
     require(candidate['tree']['sha'] == policy['source_tree_sha'], 'approved verification/source tree changed')
     merge = github(config, f'{endpoint}/git/commits/{pr["merge_commit_sha"]}')
@@ -432,7 +476,7 @@ def ci_acceptance(config, issue, pr, review, verify_id, *, merged_main=None):
 
 def local_acceptance(config, issue, source, review, policy):
     """Keep applicable local media/native proof without requiring whole local full."""
-    before, after = git_tree(config, review['base_sha']), git_tree(config, source)
+    before, after = git_tree(config, (review.get('composition') or {}).get('comparison_base', review['base_sha'])), git_tree(config, source)
     changed = [path for path in set(before) | set(after) if before.get(path) != after.get(path)]
     media = any(re.match(r'^scripts/sim/|^scripts/verify/(?:product-flow|media-integration|test\.sh|registry\.yml)',
                          path) for path in changed)

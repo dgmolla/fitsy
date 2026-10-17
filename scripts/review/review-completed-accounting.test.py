@@ -781,7 +781,80 @@ class CompletedAdmission(CompletedAccounting):
     def test_bootstrap_accepts_distinct_reviewed_control_and_refuses_stale_main(self):
         self.external_session(bootstrap=True)
 
-    def external_session(self, bootstrap=False):
+    def composed_fixture(self, target=None, overlap=False):
+        target = target or self.repo
+        self.assertEqual(target.resolve(), self.repo.resolve(), 'composition fixture requires owned target')
+        self.assertTrue(target.resolve().is_relative_to(self.root.resolve()))
+        self.accounting()
+        original = self.upgrade()
+        self.git('reset', '--hard', 'HEAD')
+        self.git('checkout', '-qb', 'approved-main', self.args.control_sha)
+        (self.repo / ('app.ts' if overlap else 'api.ts')).write_text('approved main')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'approved main')
+        main = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-q', 'product')
+        if overlap:
+            # Preserve main ancestry while explicitly resolving a conflicting product edit.
+            subprocess.run(['git', '-C', str(self.repo), 'merge', '--no-commit', main],
+                           env=fixture_env(), capture_output=True)
+            (self.repo / 'app.ts').write_text('frozen product')
+            self.git('add', '.')
+            self.git('commit', '-qm', 'conflicting composition must refuse')
+        else:
+            self.git('merge', '-qm', 'compose', main)
+        source = self.git('rev-parse', 'HEAD')
+        self.args.source_sha, self.args.base_sha, self.args.control_sha = source, main, main
+        self.approval['composition'] = dict(source_sha=source, comparison_base=main,
+            comparison_tree_sha=self.git('rev-parse', main + '^{tree}'),
+            control_paths=self.git('ls-tree', '-r', '--name-only', main, '--', 'scripts/review').splitlines())
+        self.save()
+        return original
+
+    def test_composed_context_valid_and_original_accounting_remains_immutable(self):
+        self.composed_fixture()
+        saved = self.ledger.read_bytes()
+        self.assertEqual(budget.composed_context(self.approval, self.args.source_sha, self.repo), self.args.base_sha)
+        self.assertTrue(self.call()['accounting']['idempotent'])
+        self.assertTrue(self.call()['accounting']['idempotent'])
+        self.assertEqual(saved, self.ledger.read_bytes())
+
+    def test_composition_forged_caller_and_changed_bindings_refuse(self):
+        import copy
+        original = self.composed_fixture()
+        saved = self.ledger.read_bytes()
+        initial = copy.deepcopy(self.approval)
+        for key, value in [('source_sha', '0' * 40), ('comparison_base', '0' * 40),
+                           ('comparison_tree_sha', '0' * 40), ('control_paths', ['app.ts'])]:
+            with self.subTest(key=key):
+                self.approval = copy.deepcopy(initial)
+                self.approval['composition'][key] = value
+                self.save()
+                with self.assertRaises((ValueError, subprocess.CalledProcessError)): self.call()
+                self.assertEqual(saved, self.ledger.read_bytes())
+        self.approval = initial
+        self.save()
+        original.write_bytes(original.read_bytes() + b'\n')
+        with self.assertRaisesRegex(ValueError, 'original frozen'): self.call()
+        self.assertEqual(saved, self.ledger.read_bytes())
+        copy_path = self.root / 'forged-complete-authority.json'
+        copy_path.write_bytes(self.args.authorization_file.read_bytes()); copy_path.chmod(0o600)
+        self.args.authorization_file = copy_path
+        with self.assertRaisesRegex(ValueError, 'canonical coordinator'): self.call()
+
+    def test_composition_overlapping_main_and_unowned_fixture_refuse(self):
+        with self.assertRaisesRegex(AssertionError, 'owned target'):
+            self.composed_fixture(self.root.parent)
+        self.composed_fixture(overlap=True)
+        with self.assertRaisesRegex(ValueError, 'overlap'): self.call()
+
+    def test_composed_frozen_product_ordinary_session_reuses_original_execution(self):
+        self.external_session(composition=True)
+
+    def test_composed_distinct_control_preserves_current_main_comparison(self):
+        self.external_session(composition=True, distinct_control=True)
+
+    def external_session(self, bootstrap=False, composition=False, distinct_control=False):
         issue = 463 if bootstrap else 443
         domains = ['correctness', 'workflow-security'] if bootstrap else ['correctness']
         if bootstrap:
@@ -790,6 +863,11 @@ class CompletedAdmission(CompletedAccounting):
             self.ledger.write_text(original)
             self.approval['original_ledger_sha256'] = sha(original.encode())
         source = Path(__file__).resolve().parents[2]
+        modules = source / 'node_modules'
+        if not modules.is_dir():
+            common = subprocess.check_output(['git', '-C', str(source), 'rev-parse', '--path-format=absolute', '--git-common-dir'], env=fixture_env()).decode().strip()
+            modules = Path(common).parent / 'node_modules'
+        self.assertTrue((modules / 'js-yaml').is_dir(), 'installed fixture dependencies required')
         product = self.root / 'session-product'
         product.mkdir()
         def git(*args, cwd=product):
@@ -846,7 +924,7 @@ class CompletedAdmission(CompletedAccounting):
         git('clone', '-q', str(product), str(home / 'repo'))
         runtime = home / 'repo'
         git('update-ref', 'refs/remotes/origin/main', base, cwd=runtime)
-        (runtime / 'node_modules').symlink_to(source / 'node_modules')
+        (runtime / 'node_modules').symlink_to(modules)
         git('checkout', '-qb', 'frozen')
         control = base
         if bootstrap:
@@ -860,7 +938,7 @@ class CompletedAdmission(CompletedAccounting):
         head = git('rev-parse', 'HEAD')
         if bootstrap:
             self.assertNotEqual(control, head)
-        (product / 'node_modules').symlink_to(source / 'node_modules')
+        (product / 'node_modules').symlink_to(modules)
         git('remote', 'add', 'origin', str(runtime))
         (product / '.evidence').mkdir()
         subprocess.check_call(['node', 'scripts/delivery/phase-events.mjs', 'bind', '--issue', str(issue)], cwd=product, env=fixture_env(), stdout=subprocess.DEVNULL)
@@ -937,8 +1015,76 @@ class CompletedAdmission(CompletedAccounting):
                 finally:
                     auth.write_bytes(original_authority)
                     auth.chmod(0o600)
+        if composition:
+            frozen = head
+            first = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            retained = auth.read_bytes()
+            prior = auth.with_name('issue-443-original.json')
+            prior.write_bytes(retained)
+            prior.chmod(0o600)
+            git('checkout', '-qb', 'approved-main', base)
+            (product / 'api.ts').write_text('independently approved main API')
+            git('add', 'api.ts')
+            git('commit', '-qm', 'approved main product change')
+            main = git('rev-parse', 'HEAD')
+            git('fetch', '-q', str(product), main, cwd=runtime)
+            git('checkout', '-q', main, cwd=runtime)
+            git('update-ref', 'refs/remotes/origin/main', main, cwd=runtime)
+            approved_control = main
+            if distinct_control:
+                git('checkout', '-qb', 'separately-reviewed-controls')
+                (product / 'scripts/review/control.py').write_text('separately reviewed control')
+                git('add', 'scripts/review/control.py')
+                git('commit', '-qm', 'independent control source')
+                approved_control = git('rev-parse', 'HEAD')
+                self.assertNotEqual(approved_control, main)
+                git('fetch', '-q', str(product), approved_control, cwd=runtime)
+            git('checkout', '-q', 'frozen')
+            git('merge', '-qm', 'compose frozen product with approved main', approved_control)
+            head = git('rev-parse', 'HEAD')
+            git('update-ref', 'refs/remotes/origin/main', main)
+            paths = ['scripts/review/' + name for name in
+                     git('ls-tree', '-r', '--name-only', approved_control, '--', 'scripts/review').splitlines()
+                     for name in [name.removeprefix('scripts/review/')]]
+            approval.update(control_sha=approved_control, original_manifest=dict(path=str(prior), sha256=sha(retained)),
+                composition=dict(source_sha=head, comparison_base=main,
+                    comparison_tree_sha=git('rev-parse', main + '^{tree}'), control_paths=paths))
+            auth.write_text(json.dumps(approval))
+            before_composition = (budgets / 'issue-443.jsonl').read_bytes()
+            # Actual ordinary shell/session must consume this upgraded private authority.
+            # A copied complete object in the candidate cannot select it.
+            command = ['node', str(runtime / 'scripts/verify/shipping-session.mjs'), '--root', str(product),
+                       '--', 'npm', 'run', 'verify']
+            for fault, patch in [('source', dict(source_sha='0' * 40)),
+                                 ('main', dict(comparison_base=base)),
+                                 ('tree', dict(comparison_tree_sha='0' * 40)),
+                                 ('controls', dict(control_paths=['app.ts']))]:
+                bad = dict(approval, composition=dict(approval['composition'], **patch))
+                auth.write_text(json.dumps(bad))
+                refused = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
+                self.assertNotEqual(refused.returncode, 0, fault)
+                self.assertEqual(before_composition, (budgets / 'issue-443.jsonl').read_bytes())
+            auth.write_text(json.dumps(dict(approval, control_sha='0' * 40)))
+            refused = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
+            self.assertNotEqual(refused.returncode, 0, 'wrong approved control source')
+            self.assertEqual(before_composition, (budgets / 'issue-443.jsonl').read_bytes())
+            auth.write_text(json.dumps(approval))
         result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        if composition:
+            again = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
+            self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
+            self.assertEqual(before_composition, (budgets / 'issue-443.jsonl').read_bytes())
+            self.assertEqual(json.loads(auth.read_text())['source_sha'], frozen)
+            results = [json.loads(path.read_text()) for path in
+                       (product / '.evidence/review-admission').glob('attempt.*/result.json')
+                       if path.read_text().strip()]
+            self.assertTrue(any(row.get('evidence', {}).get('control_sha') == approved_control
+                                and row.get('evidence', {}).get('comparison_base') == main
+                                and row.get('evidence', {}).get('reviewed_source_sha') == frozen
+                                for row in results), 'actual run-review arguments must bind distinct approved controls')
+            return
         self.assertIn('full', (product / '.evidence/order').read_text())
         self.assertNotIn('unexpected-review', result.stderr)
         if bootstrap:
