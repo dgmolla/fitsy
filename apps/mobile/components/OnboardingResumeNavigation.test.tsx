@@ -1,8 +1,11 @@
-import { mockState, selected, response, deferred, routes, installEligibleTrialOffer, renderJourney, Alert, AsyncStorage, act, fireEvent, waitFor, MacroSetup, getPaywallIntent, rememberPaywallIntent, getStoredToken, saveMacroTargets, saveOnboardingField, hasPaymentSignInContinuation, rememberPaymentSignInContinuation, hasPendingMealClaim, rememberPendingMealClaim } from './OnboardingNavigationHarness';
+import { withAccountProfile, mockState, selected, response, deferred, routes, installEligibleTrialOffer, renderJourney, Alert, AsyncStorage, act, fireEvent, waitFor, MacroSetup, getPaywallIntent, rememberPaywallIntent, getStoredToken, saveMacroTargets, saveOnboardingField, hasPaymentSignInContinuation, rememberPaymentSignInContinuation, hasPendingMealClaim, rememberPendingMealClaim } from './OnboardingNavigationHarness';
 import { installHardwareBackFixture } from './hardwareBackHarness';
 import { BOOT_VERDICT_CAP_MS } from '../lib/usePurchases';
 import { storeToken } from '../lib/authClient';
 import Purchases from 'react-native-purchases';
+import { api } from '../lib/api';
+import { getMacroTargets } from '../lib/macroStorage';
+import type { ProfileResponse } from '@fitsy/shared';
 
 it('offers retry without consuming checkout when a cold-start session read stalls', async () => {
   await storeToken('test-token');
@@ -14,8 +17,8 @@ it('offers retry without consuming checkout when a cold-start session read stall
   const stalled = deferred<{ data: { session: typeof mockState.session } }>();
   mockState.sessionRead = jest.fn().mockResolvedValueOnce({ data: { session: mockState.session } })
     .mockImplementation(() => stalled.promise);
-  global.fetch = jest.fn().mockResolvedValue(response({ active: false, verdict: 'never_subscribed',
-    synced: true, lastRcVerifiedAt: new Date().toISOString(), stale: false }));
+  global.fetch = jest.fn(withAccountProfile(async () => response({ active: false, verdict: 'never_subscribed',
+    synced: true, lastRcVerifiedAt: new Date().toISOString(), stale: false })));
   const screen = renderJourney('/');
   await waitFor(() => expect((mockState.sessionRead as jest.Mock).mock.calls.length).toBeGreaterThan(1));
   await act(async () => { await jest.advanceTimersByTimeAsync(BOOT_VERDICT_CAP_MS + 100); });
@@ -70,8 +73,8 @@ it('claims an anonymous meal when checkout restarts after the session is saved',
   await saveMacroTargets({ calories: '600', protein: '40', carbs: '50', fat: '20' });
   await AsyncStorage.setItem('@fitsy/onboardingStep', 'signin');
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
-  global.fetch = jest.fn().mockResolvedValue(response({ active: true, synced: true, verdict: 'active',
-    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' }));
+  global.fetch = jest.fn(withAccountProfile(async () => response({ active: true, synced: true, verdict: 'active',
+    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' })));
   expect(await getPaywallIntent()).toBeNull();
   const screen = renderJourney('/');
   await waitFor(() => expect(screen.getPathname()).toBe('/restaurant/varilla'));
@@ -79,6 +82,10 @@ it('claims an anonymous meal when checkout restarts after the session is saved',
   expect(await AsyncStorage.getItem('onboardingComplete')).toBe('true');
   await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
     expect.stringContaining('/api/user/profile?goalSchema=2'), expect.objectContaining({ method: 'PATCH' })));
+  const profile = await api.get<ProfileResponse>('/api/user/profile?goalSchema=2', true);
+  expect(profile.user.id).toBe('buyer');
+  expect(profile.macroTarget).toEqual({ calories: 1890, proteinG: 140, carbsG: 175, fatG: 70, source: 'manual' });
+  expect(await getMacroTargets()).toEqual({ calories: '540', protein: '40', carbs: '50', fat: '20' });
   expect(await hasPaymentSignInContinuation()).toBe(false);
 });
 
@@ -115,10 +122,10 @@ it.each(['@fitsy/pendingMealClaim', '@fitsy/paymentSignInContinuation'])(
   await rememberPendingMealClaim();
   await rememberPaymentSignInContinuation();
   await saveMacroTargets({ calories: '600', protein: '40', carbs: '50', fat: '20' });
-  global.fetch = jest.fn((url: RequestInfo | URL) => Promise.resolve(String(url).endsWith('/api/auth/login')
+  global.fetch = jest.fn(withAccountProfile((url: RequestInfo | URL) => Promise.resolve(String(url).endsWith('/api/auth/login')
     ? response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false })
     : response({ active: true, synced: true, verdict: 'active',
-      lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' })));
+      lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' }))));
   const originalRemove = (AsyncStorage.removeItem as jest.Mock).getMockImplementation() as typeof AsyncStorage.removeItem;
   (AsyncStorage.removeItem as jest.Mock).mockImplementation(async (key: string) => {
     await originalRemove(key);
@@ -142,8 +149,8 @@ it('restores an active account\'s selected meal after first-time sign-in and mac
   await saveOnboardingField('goal', 'lose_fat');
   await AsyncStorage.setItem('@fitsy/onboardingStep', 'signin');
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
-  global.fetch = jest.fn().mockResolvedValue(response({ active: true, synced: true, verdict: 'active',
-    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' }));
+  global.fetch = jest.fn(withAccountProfile(async () => response({ active: true, synced: true, verdict: 'active',
+    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' })));
   const screen = renderJourney('/', { ...routes, 'macro-setup': MacroSetup });
   await waitFor(() => expect(screen.getPathname()).toBe('/macro-setup'));
   await screen.findByTestId('macro-setup-save');
@@ -156,9 +163,9 @@ it('keeps checkout through an unknown account verdict and its later retry', asyn
   await rememberPaywallIntent(selected);
   await rememberPaymentSignInContinuation();
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
-  global.fetch = jest.fn((url: RequestInfo | URL) => Promise.resolve(String(url).endsWith('/api/auth/login')
+  global.fetch = jest.fn(withAccountProfile((url: RequestInfo | URL) => Promise.resolve(String(url).endsWith('/api/auth/login')
     ? response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false })
-    : response({ active: false, synced: false, verdict: 'unknown', stale: true })));
+    : response({ active: false, synced: false, verdict: 'unknown', stale: true }))));
   const screen = renderJourney('/welcome/signin?returnTo=payment');
   await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/subscription-check'));
@@ -198,8 +205,8 @@ it('resumes an interrupted signed-in waitlist signup without replaying stale che
 
 it('replays an interrupted active checkout after missing targets are saved', async () => {
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
-  global.fetch = jest.fn().mockResolvedValue(response({ active: true, synced: true, verdict: 'active',
-    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' }));
+  global.fetch = jest.fn(withAccountProfile(async () => response({ active: true, synced: true, verdict: 'active',
+    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' })));
   await saveOnboardingField('goal', 'lose_fat');
   await rememberPaywallIntent(selected);
   await rememberPaymentSignInContinuation();
@@ -215,8 +222,8 @@ it('replays an interrupted active checkout after missing targets are saved', asy
 
 it('opens payment when a selected-meal entitlement becomes never subscribed during macro setup', async () => {
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
-  global.fetch = jest.fn().mockResolvedValue(response({ active: true, synced: true, verdict: 'active',
-    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' }));
+  global.fetch = jest.fn(withAccountProfile(async () => response({ active: true, synced: true, verdict: 'active',
+    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' })));
   await saveOnboardingField('goal', 'lose_fat');
   await rememberPaywallIntent(selected);
   await rememberPaymentSignInContinuation();
@@ -224,8 +231,8 @@ it('opens payment when a selected-meal entitlement becomes never subscribed duri
   const screen = renderJourney('/', { ...routes, 'macro-setup': MacroSetup });
   await waitFor(() => expect(screen.getPathname()).toBe('/macro-setup'));
   await screen.findByTestId('macro-setup-skip');
-  (global.fetch as jest.Mock).mockResolvedValue(response({ active: false, synced: true, verdict: 'never_subscribed',
-    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: null }));
+  (global.fetch as jest.Mock).mockImplementation(withAccountProfile(async () => response({ active: false, synced: true, verdict: 'never_subscribed',
+    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: null })));
   await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-skip')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(await getPaywallIntent()).toEqual(selected);
@@ -234,8 +241,8 @@ it('opens payment when a selected-meal entitlement becomes never subscribed duri
 
 it('recovers from a stalled account verdict after macro setup without losing the meal', async () => {
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
-  global.fetch = jest.fn().mockResolvedValue(response({ active: true, synced: true, verdict: 'active',
-    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' }));
+  global.fetch = jest.fn(withAccountProfile(async () => response({ active: true, synced: true, verdict: 'active',
+    lastRcVerifiedAt: new Date().toISOString(), stale: false, expiresAt: '2030-01-08T12:00:00Z' })));
   await saveOnboardingField('goal', 'lose_fat');
   await rememberPaywallIntent(selected);
   await rememberPaymentSignInContinuation();
@@ -243,7 +250,7 @@ it('recovers from a stalled account verdict after macro setup without losing the
   const screen = renderJourney('/', { ...routes, 'macro-setup': MacroSetup });
   await waitFor(() => expect(screen.getPathname()).toBe('/macro-setup'));
   await screen.findByTestId('macro-setup-skip');
-  global.fetch = jest.fn(() => new Promise<Response>(() => {}));
+  global.fetch = jest.fn(withAccountProfile(() => new Promise<Response>(() => {})));
   await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-skip')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/subscription-check'), { timeout: 5000 });
   expect(global.fetch).toHaveBeenCalled();
@@ -275,9 +282,9 @@ it.each([
 ] as const)('continues %s (%s) only when still on sign-in: success=%s, Back=%s', async (provider, path, success, back) => {
   const exchange = deferred<Response>();
   const alert = jest.spyOn(Alert, 'alert');
-  (global.fetch as jest.Mock).mockImplementation((url: string) => url.endsWith(path) || url.endsWith('/api/auth/register') ? exchange.promise
+  (global.fetch as jest.Mock).mockImplementation(withAccountProfile((url: string) => url.endsWith(path) || url.endsWith('/api/auth/register') ? exchange.promise
     : Promise.resolve(response({ active: false, verdict: 'never_subscribed', status: null, expiresAt: null,
-      lastRcVerifiedAt: new Date().toISOString(), stale: false, synced: true })));
+      lastRcVerifiedAt: new Date().toISOString(), stale: false, synced: true }))));
   await rememberPaywallIntent(selected);
   const screen = renderJourney('/welcome/preview');
   await act(async () => { fireEvent.press(screen.getByText('Open selected menu')); });

@@ -266,7 +266,7 @@ export function validationOrderCases(f: Fixture) {
     f.git('add', 'REVIEW.md'); f.git('commit', '-qm', 'candidate rules fixture');
     const rejected = spawnSync('bash', ['scripts/review/run-review.sh', '--local'], { cwd: f.root(),
       env: { ...f.env(), FITSY_REVIEW_FRESH_EXECUTION: '1', FITSY_REVIEW_PROVIDER: 'claude', FITSY_REVIEW_MODEL: 'fixture-model' }, encoding: 'utf8' });
-    expect(rejected.status).toBe(1); expect(rejected.stderr).toContain('immutable main reviewer controls'); expect(callCount()).toBe(0);
+    expect(rejected.status).toBe(1); expect(rejected.stderr).toContain('immutable approved reviewer controls'); expect(callCount()).toBe(0);
   });
   test('candidate main refs cannot replace managed trusted reviewer controls', () => {
     setup();
