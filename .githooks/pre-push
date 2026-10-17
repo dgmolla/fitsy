@@ -1,21 +1,27 @@
-#!/usr/bin/env bash
-# Run the same local gate, reusing only successful source-bound acceptance receipts.
+#!/bin/bash -p
+# Publish only a frozen, independently reviewed candidate after cheap/focused checks.
+# Trusted existing Verify owns heavy pre-merge acceptance; local media/native proof remains separate.
 # Size and domain checks still run on every push.
 set -euo pipefail
-ROOT="$(git rev-parse --show-toplevel)"
+unset NODE_OPTIONS NODE_PATH BASH_ENV ENV
+hook_path="$PATH"
+export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+# The canonical hook lives in a direct child of its reviewed checkout.
+# Caller Git worktree selectors cannot choose the verification source.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT"
 # Git exports repository-local pointers into hooks. Child Git fixtures must
 # resolve their own repositories rather than the outer push checkout.
 while IFS= read -r name; do
   unset "$name"
 done < <(git rev-parse --local-env-vars)
+[ "$(git rev-parse --show-toplevel)" = "$ROOT" ] || exit 1
 # Apple's Git launcher prepends its private executables and supplies default
 # Xcode paths to hooks. Restore the ordinary shell environment before running
 # the same local verification; keep caller-supplied nondefault values bound.
-git_core="${PATH%%:*}"
+git_core="${hook_path%%:*}"
 if [[ "$git_core" == */usr/libexec/git-core ]]; then
   developer_dir="${git_core%/usr/libexec/git-core}"
-  export PATH="${PATH#*:}"
   if [[ "${CPATH-}" == /usr/local/include ]]; then unset CPATH
   elif [[ "${CPATH-}" == *:/usr/local/include ]]; then export CPATH="${CPATH%:/usr/local/include}"
   fi
@@ -28,15 +34,26 @@ if [[ "$git_core" == */usr/libexec/git-core ]]; then
   elif [[ "${MANPATH-}" == "$default_manpath"* ]]; then export MANPATH="${MANPATH#"$default_manpath"}"
   fi
 fi
+# Privileged Bash ignores exported functions but retains their environment
+# entries for ordinary child shells. Remove them before any verification child.
+function_environment=()
+while IFS= read -r -d '' name; do
+  function_environment+=(-u "$name")
+done < <(node -e 'for (const key of Object.keys(process.env)) if (key.startsWith("BASH_FUNC_")) process.stdout.write(key + "\0")')
+if [ "${#function_environment[@]}" -gt 0 ]; then
+  exec /usr/bin/env "${function_environment[@]}" /bin/bash -p "$0" "$@"
+fi
 # A push must name the issue whose local evidence this hook is about to run.
 node "$ROOT/scripts/delivery/phase-events.mjs" summary >/dev/null || {
   echo 'pre-push: bind this worktree first with node scripts/delivery/phase-events.mjs bind --issue N' >&2
   exit 1
 }
-npm run verify -- --layer=0-3 --runs=local --reuse
+"$ROOT/scripts/verify/shipping-session.mjs" --check
+"$ROOT/scripts/verify/run.mjs" --stage=cheap --layer=0-1 --runs=local
+"$ROOT/scripts/verify/shipping-session.mjs" --check
 # exit 2 = skipped (not applicable), which must not block the push
 for check in size-check domain-check; do
-  if bash "$ROOT/scripts/verify/$check.sh"; then code=0; else code=$?; fi
+  if /bin/bash -p "$ROOT/scripts/verify/$check.sh"; then code=0; else code=$?; fi
   if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
     echo "pre-push: $check failed (see above)" >&2
     exit 1

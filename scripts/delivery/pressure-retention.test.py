@@ -128,7 +128,7 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.assertFalse(self.path.exists())
         self.assertEqual(self.c.workers(), [])
 
-    def test_pressure_uses_one_hour_grace_for_superseded_verified_checkout(self):
+    def test_pressure_preserves_four_hour_floor_for_superseded_verified_checkout(self):
         from datetime import datetime, timedelta, timezone
         config = json.loads(self.c.config.read_text()); config.pop('superseded_checkout_grace_seconds')
         self.c.config.write_text(json.dumps(config))
@@ -141,7 +141,14 @@ class PressureRetentionProcessTest(unittest.TestCase):
         self.state['simulator_retirement'] = {'ended-device': {'status': 'retired', 'issue': 385}}
         (self.c.state / 'state.json').write_text(json.dumps(self.state))
         self.c.tick()
-        self.assertFalse(self.path.exists(), 'pressure grace should recover a superseded verified checkout after one hour')
+        self.assertTrue(self.path.exists(), 'pressure cannot shorten the strict four-hour retention floor')
+        self.old['finished_at'] = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+        (self.c.state / 'claims' / self.old['id'] / 'receipt.json').write_text(json.dumps(self.old))
+        self.state = self.c.state_data()
+        self.state['history'][0] = self.old
+        (self.c.state / 'state.json').write_text(json.dumps(self.state))
+        self.c.tick()
+        self.assertFalse(self.path.exists(), 'proven disposable source may be archived after the strict cutoff')
         self.assertTrue(Path(self.new['worktree']).exists())
 
     def test_reverified_issue_keeps_old_durable_device_retirement_route(self):

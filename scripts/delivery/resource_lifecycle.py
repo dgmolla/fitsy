@@ -11,6 +11,120 @@ import time
 
 
 SCRATCH = ('Intermediates.noindex', 'ModuleCache.noindex', 'CompilationCache.noindex', 'SDKStatCaches.noindex', 'Index.noindex')
+STALE_SECONDS = 14400
+
+
+def resource_intent(claim, key, kind, phase, recreation, dependencies=()):
+    """Called under the existing claim lock, before creating an owned resource."""
+    if not claim.get('id') or not claim.get('issue') or kind not in (
+            'checkout', 'process', 'simulator', 'container', 'image', 'volume', 'network', 'builder'):
+        raise ValueError('resource intent requires exact claim and supported kind')
+    if not key or not phase or not recreation or not isinstance(recreation, list):
+        raise ValueError('resource intent requires phase and recreation argv')
+    resources = claim.setdefault('resources', {})
+    if key in resources:
+        raise ValueError('resource acquisition already recorded; reconcile original intent')
+    resources[key] = {'claim': claim['id'], 'issue': claim['issue'], 'kind': kind,
+                      'phase': phase, 'state': 'acquiring', 'intent_at': time.time(),
+                      'recreation': recreation, 'dependencies': list(dependencies),
+                      'consumers': [], 'observations': []}
+
+
+def resource_acquired(claim, key, identity, now):
+    record = claim['resources'][key]
+    required = {'checkout': ('path', 'head', 'branch'), 'process': ('pid', 'started', 'pgid'),
+                'simulator': ('udid',), 'container': ('context', 'daemon', 'id', 'image'),
+                'image': ('context', 'daemon', 'id'), 'volume': ('context', 'daemon', 'name', 'created_at'),
+                'network': ('context', 'daemon', 'id'), 'builder': ('context', 'daemon', 'name', 'created_at')}
+    if record['state'] != 'acquiring' or any(not identity.get(field) for field in required[record['kind']]):
+        raise ValueError('acquisition identity is incomplete or already settled')
+    if type(now) not in (int, float) or not math.isfinite(now) or now < record['intent_at']:
+        raise ValueError('invalid acquisition clock')
+    record.update(state='acquired', identity=dict(identity), last_owner_use=now)
+    record['observations'].append({'event': 'acquired', 'at': now, 'identity': dict(identity)})
+
+
+def execution_capacity(budget, observed, now):
+    """Admission over coordinator observations, never candidate env or a failed inventory."""
+    def number(value, positive=False):
+        return type(value) in (int, float) and math.isfinite(value) and value >= (1 if positive else 0)
+    if not isinstance(budget, dict) or not isinstance(observed, dict) or not number(now):
+        return {'state': 'resource-hold', 'reason': 'invalid resource observation'}
+    required = ('peak_memory_bytes', 'host_reserve_bytes', 'cpus', 'scratch_bytes')
+    if any(not number(budget.get(key), True) for key in required):
+        return {'state': 'resource-hold', 'reason': 'missing numeric execution budget'}
+    if (observed.get('state') != 'available' or not number(observed.get('at'))
+            or not 0 <= now - observed['at'] <= 60
+            or any(not number(observed.get(key)) for key in (
+                'free_disk_bytes', 'disk_floor_bytes', 'available_memory_bytes', 'heavy_jobs',
+                'swap_growth_bytes', 'host_memory_bytes', 'available_cpus'))):
+        return {'state': 'resource-hold', 'reason': 'missing or stale host inventory'}
+    if observed['swap_growth_bytes'] or observed.get('memory_pressure') != 'normal':
+        return {'state': 'resource-hold', 'reason': 'host memory pressure or growing swap'}
+    # One heavy job initially, including jobs outside this claim. Expansion needs separate measured authority.
+    if observed['heavy_jobs']:
+        return {'state': 'resource-hold', 'reason': 'heavy execution already active'}
+    if observed['free_disk_bytes'] < observed['disk_floor_bytes'] + budget['scratch_bytes']:
+        return {'state': 'resource-hold', 'reason': 'disk floor plus scratch reserve unavailable'}
+    if (budget['peak_memory_bytes'] + budget['host_reserve_bytes'] > observed['available_memory_bytes']
+            or budget['cpus'] > observed['available_cpus']):
+        return {'state': 'resource-hold', 'reason': 'host memory or CPU headroom unavailable'}
+    if budget.get('docker'):
+        docker = observed.get('docker') or {}
+        keys = ('vm_memory_bytes', 'vm_swap_bytes', 'vm_cpus', 'used_memory_budget_bytes',
+                'used_memory_swap_budget_bytes', 'used_cpus',
+                'effective_memory_bytes', 'effective_memory_swap_bytes', 'effective_cpus')
+        if docker.get('state') != 'available' or any(not number(docker.get(key)) for key in keys):
+            return {'state': 'resource-hold', 'reason': 'Docker inventory or effective limits unavailable'}
+        if (not number(budget.get('memory_swap_bytes'), True)
+                or budget['memory_swap_bytes'] < budget['peak_memory_bytes']
+                or docker['effective_memory_bytes'] != budget['peak_memory_bytes']
+                or docker['effective_memory_swap_bytes'] != budget['memory_swap_bytes']
+                or docker['effective_cpus'] != budget['cpus']
+                or docker['used_memory_budget_bytes'] + budget['peak_memory_bytes'] > docker['vm_memory_bytes']
+                or docker['used_memory_swap_budget_bytes'] + budget['memory_swap_bytes'] > docker['vm_memory_bytes'] + docker['vm_swap_bytes']
+                or docker['used_cpus'] + budget['cpus'] > docker['vm_cpus']
+                or docker['vm_memory_bytes'] + budget['host_reserve_bytes'] > observed['host_memory_bytes']):
+            return {'state': 'resource-hold', 'reason': 'Docker effective limits or aggregate VM budget mismatch'}
+    return {'state': 'admitted', 'observed_at': observed['at'], 'budget': dict(budget)}
+
+
+def docker_retention(record, inventory, now):
+    """Eligibility only. Destructive commands require separately validated runtime operations."""
+    if inventory.get('state') != 'available' or inventory.get('complete') is not True:
+        return {'state': 'retained', 'reason': 'Docker inventory unavailable or incomplete'}
+    if (type(inventory.get('at')) not in (int, float) or not math.isfinite(inventory['at'])
+            or not 0 <= now - inventory['at'] <= 60):
+        return {'state': 'retained', 'reason': 'Docker inventory stale'}
+    identity = record.get('identity')
+    if (not identity or record.get('state') != 'released' or record.get('disposable') is not True
+            or not record.get('recreation') or record.get('dependencies') or record.get('consumers')
+            or not record.get('claim') or not record.get('issue')):
+        return {'state': 'retained', 'reason': 'ownership, release, disposal or dependency proof missing'}
+    used, released_at = record.get('last_owner_use'), record.get('released_at')
+    if (any(type(value) not in (int, float) or not math.isfinite(value) for value in (used, released_at))
+            or not 0 <= used <= released_at <= now or now - released_at <= STALE_SECONDS):
+        return {'state': 'retained', 'reason': 'strict four-hour owner-use/release cutoff not met'}
+    objects = inventory.get('objects')
+    containers = inventory.get('containers')
+    if not isinstance(objects, list) or not isinstance(containers, list):
+        return {'state': 'retained', 'reason': 'complete stopped-container dependencies unavailable'}
+    matches = [obj for obj in objects if obj.get('kind') == record.get('kind') and obj.get('identity') == identity]
+    if len(matches) != 1 or matches[0].get('shared') is not False or matches[0].get('active') is not False:
+        return {'state': 'retained', 'reason': 'exact identity absent, reused, active or shared'}
+    kind = record['kind']
+    if kind not in ('container', 'image', 'volume', 'network', 'builder'):
+        return {'state': 'retained', 'reason': 'unsupported Docker kind'}
+    # Stopped containers also pin images, volumes and networks. Unknown references retain everything.
+    for container in containers:
+        if not isinstance(container.get('references'), list):
+            return {'state': 'retained', 'reason': 'container reference inventory incomplete'}
+        if identity in container['references']:
+            return {'state': 'retained', 'reason': 'container dependency, including stopped container'}
+    if kind == 'builder' and matches[0].get('dedicated') is not True:
+        return {'state': 'retained', 'reason': 'builder cache not dedicated'}
+    return {'state': 'assessment-due', 'identity': dict(identity),
+            'next_action': 'fresh identity recheck and exact validated cleanup operation; measure disk and RAM'}
 
 
 def execute(args, timeout=30):
@@ -322,6 +436,9 @@ def cleanup_released(config, state, save):
                 save()
                 return
             raise RuntimeError('checkout release requires its latest durable owner')
+        age = elapsed(latest.get('finished_at'), now)
+        if age is None or age <= STALE_SECONDS:
+            raise RuntimeError('scratch deletion requires release strictly more than four hours ago')
         intent = Path(result['removal_intent']) if result.get('removal_intent') else None
         if intent:
             if not owned_scratch(path, intent):
@@ -401,7 +518,7 @@ def retention(config, kind, record, now):
         return {'state': 'unknown', 'reason': 'missing trusted owner-use/release timestamp; backfill required'}
     budget = config.get('build_cache_max_bytes', 4 * 1024**3)
     over_budget = kind == 'build_cache' and isinstance(record.get('bytes'), int) and record['bytes'] > budget
-    if age < seconds and not over_budget:
+    if (kind != 'booted_simulator' and age <= STALE_SECONDS) or (age < seconds and not over_budget):
         return {'state': 'retained', 'reason': 'within retention grace', 'age_seconds': int(age)}
     action = {'integrated_checkout': 'verify ownership/integration/references then preserve evidence and retire',
               'unfinished_checkout': 'assess cold retention; preserve branch, source and dirty work',

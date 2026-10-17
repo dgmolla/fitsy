@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   build-and-submit:
+    environment: production-native
     name: iOS build → TestFlight
     runs-on: ubuntu-latest
     steps:

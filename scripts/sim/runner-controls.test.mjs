@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, flowFailureReason, recordFlowOutcome, recordedFlowFailureKey, recordRunFailure, requireMetro, runOwnedMaestro, runRecordedFlow, saveRecordedFlowReceipts, startOwnedRecorder, stopOwnedRecorder, summarizeCommands, summarizeFlowTiming, nearestFailure, matchingFailureKey, needsDiagnosis } from './runner-controls.mjs';
 import { runSelection } from './evidence-mode.mjs';
 import { validate } from '../verify/product-flow.mjs';
@@ -1551,7 +1552,8 @@ test('final simulator admission requires the live reviewed shipping execution wh
   const calls = [];
   const command = (cmd, args) => calls.push([cmd, args]);
   admitFinalCandidate(runSelection(['fixture', '--mode=final-candidate']).mode, command);
-  assert.deepEqual(calls, [[process.execPath, ['scripts/verify/shipping-session.mjs', '--check']]]);
+  assert.equal(calls[0][0], fileURLToPath(new URL('../verify/shipping-session.mjs', import.meta.url)));
+  assert.deepEqual(calls[0][1], ['--check']);
   calls.length = 0;
   admitFinalCandidate(runSelection(['fixture', '--mode=development']).mode, command);
   assert.equal(calls.length, 0);
@@ -1563,5 +1565,5 @@ test('expired or changed shipping execution stops final simulator admission befo
     calls.push([cmd, args]); throw new Error('shipping session is no longer active');
   }), /shipping session is no longer active/);
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0][1], ['scripts/verify/shipping-session.mjs', '--check']);
+  assert.deepEqual(calls[0][1], ['--check']);
 });

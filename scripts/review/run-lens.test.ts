@@ -1,21 +1,23 @@
 import { validationOrderCases } from "./validation-order-cases";
-import { roundRunnerCases, normalizeFixtureResponse, runPrFixture, seedManagedFixture } from "./round-runner-cases";
+import { fixtureNodeUnderProtectedPath } from "../verify/hook-fixture";
+import { roundRunnerCases, normalizeFixtureResponse, runPrFixture, seedManagedFixture, approveFixtureCaches } from "./round-runner-cases";
 import { executionFailureCases } from "./execution-failure-cases";
 import { policyRunnerCases } from "./policy-runner-cases";
 import { deliveryTimingCases } from "./delivery-timing-cases";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 const source = resolve(__dirname, "../..");
 let root: string;
+let admin: string;
 let guard: string;
 let guardHead: string;
 let inheritedGit: NodeJS.ProcessEnv;
 function isolatedEnv() {
   // Synthetic checkouts must establish their own shipping session ownership.
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|FITSY_SHIPPING_(SOCKET|TOKEN)$|POSTGRES_)/.test(key)));
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|FITSY_REVIEW_BOOTSTRAP_OPERATOR$|FITSY_SHIPPING_(SOCKET|TOKEN)$|POSTGRES_)/.test(key)));
 }
 let calls: string;
 let cache: string;
@@ -25,9 +27,12 @@ function git(...args: string[]) {
   return execFileSync("git", args, { cwd: root, env: isolatedEnv(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 function run(model = "fixture-model", provider = "claude", lens = "correctness") {
-  return spawnSync("bash", ["scripts/review/run-lens.sh", "--local", lens], {
+  const before = existsSync(calls) ? readFileSync(calls, "utf8") : "";
+  const result = spawnSync("bash", ["scripts/review/run-lens.sh", "--local", lens], {
     cwd: root, encoding: "utf8", env: { ...env, FITSY_REVIEW_MODEL: model, FITSY_REVIEW_PROVIDER: provider }, timeout: 15000,
   });
+  if (existsSync(calls) && readFileSync(calls, "utf8") !== before) approveFixtureCaches(root, env);
+  return result;
 }
 function runPr(lens = "correctness", body = "Delivery-Issue: #355\n", provider = "claude") {
   return runPrFixture(root, env, lens, body, provider);
@@ -43,7 +48,8 @@ beforeEach(() => {
   guardHead = execFileSync("git", ["rev-parse", "HEAD"], options).trim();
   Object.assign(process.env, { GIT_DIR: join(guard, ".git"), GIT_WORK_TREE: guard, GIT_INDEX_FILE: join(guard, ".git/index"), GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "fixture.owner", GIT_CONFIG_VALUE_0: "caller" });
   root = mkdtempSync(join(tmpdir(), "fitsy-review-runner-"));
-  calls = join(root, "calls"); cache = join(root, "cache");
+  admin = mkdtempSync(join(tmpdir(), "fitsy-review-admin-"));
+  calls = join(root, "calls"); cache = join(admin, ".cache/fitsy-review");
   mkdirSync(join(root, "scripts/review"), { recursive: true });
   mkdirSync(join(root, "scripts/verify"), { recursive: true });
   mkdirSync(join(root, ".claude/lenses"), { recursive: true });
@@ -51,6 +57,11 @@ beforeEach(() => {
   for (const name of ["run-lens.sh", "run-review.sh", "review-round.py", "review-domains.py", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
     cpSync(join(source, "scripts/review", name), join(root, "scripts/review", name));
   }
+  const budgetScript = join(root, 'scripts/review/review-budget.py');
+  writeFileSync(budgetScript, readFileSync(budgetScript, 'utf8')
+    .replace('ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)', `ADMIN_HOME = Path(${JSON.stringify(admin)})`)
+    .replace('ADMIN_CACHE = ADMIN_HOME / ".cache/fitsy-review"', `ADMIN_CACHE = Path(${JSON.stringify(cache)})`)
+    .replace('ADMIN_BUDGET = ADMIN_CACHE / "budgets"', `ADMIN_BUDGET = Path(${JSON.stringify(join(root, 'budgets'))})`));
   for (const name of ["run.mjs", "impact-plan.mjs", "receipt-cache.mjs"]) cpSync(join(source, "scripts/verify", name), join(root, "scripts/verify", name));
   symlinkSync(join(source, "node_modules"), join(root, "node_modules"));
   writeFileSync(join(root, "scripts/verify/registry.yml"), "checks: []\n");
@@ -85,8 +96,9 @@ sys.exit(int(pathlib.Path(${JSON.stringify(join(root, 'exit'))}).read_text()))
 `;
   writeFileSync(join(root, "verdict"), verdict); writeFileSync(join(root, "exit"), "0");
   for (const name of ["claude", "codex"]) writeFileSync(join(root, "bin", name), cli, { mode: 0o755 });
-  env = { ...isolatedEnv(), PATH: join(root, "bin") + ":" + process.env.PATH, FITSY_REVIEW_CACHE: cache, FITSY_REVIEW_HOME: join(root, "old-poller"), FITSY_REVIEW_BUDGET_HOME: join(root, "budgets"),
-    REVIEW_TEST_CALLS: calls, REVIEW_TEST_VERDICT: verdict };
+  const baseEnv = isolatedEnv();
+  env = { ...baseEnv, NODE: fixtureNodeUnderProtectedPath(baseEnv), PATH: join(root, "bin") + ":" + process.env.PATH, FITSY_REVIEW_CACHE: cache, FITSY_REVIEW_HOME: join(root, "old-poller"), FITSY_REVIEW_BUDGET_HOME: join(root, "budgets"),
+    REVIEW_TEST_ADMIN: admin, REVIEW_TEST_CACHE: cache, REVIEW_TEST_CALLS: calls, REVIEW_TEST_VERDICT: verdict };
   git("init", "-q"); git("config", "user.name", "Review fixture"); git("config", "user.email", "fixture@example.test");
   git("add", "."); git("commit", "-qm", "base"); git("update-ref", "refs/remotes/origin/main", "HEAD");
   seedManagedFixture(root, git);
@@ -104,6 +116,7 @@ afterEach(() => {
     expect(execFileSync("git", ["config", "--local", "--list"], options)).not.toContain("fixture@example.test");
   } finally {
     rmSync(root, { recursive: true, force: true });
+    rmSync(admin, { recursive: true, force: true });
     rmSync(guard, { recursive: true, force: true });
   }
 });

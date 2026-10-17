@@ -23,7 +23,7 @@ test.each([
   const marker = join(directory, 'test-ran');
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env, encoding: 'utf8' });
   try {
-    for (const file of ['run.mjs', 'impact-plan.mjs', 'resource-admission.mjs']) {
+    for (const file of ['run.mjs', 'impact-plan.mjs', 'resource-admission.mjs', 'docker-runtime.mjs']) {
       const target = `scripts/verify/${file}`;
       write(target, readFileSync(join(source, target), 'utf8'));
     }

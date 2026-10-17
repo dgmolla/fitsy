@@ -1,3 +1,4 @@
+import { approveFixtureCaches } from "./administrator-fixture";
 import { execFileSync, spawn, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -191,6 +192,9 @@ test("a completed verdict reuses cache after remaining time is exhausted", () =>
     { event: "finish", elapsed_seconds: spent, round_id: "old", lens: "correctness", source_sha: "old", attempt_id: "old", outcome: "fail", failure_kind: "timeout" },
   ];
   writeFileSync(ledger, readFileSync(ledger, "utf8") + rows.map(row => JSON.stringify(row)).join("\n") + "\n");
+  // Changed accounting requires coordinator reconciliation before reuse.
+  expect(runPr().status).toBe(1);
+  approveFixtureCaches(root, env);
   expect(runPr().status).toBe(0);
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(1);
   expect(run("new-model").status).toBe(1);
