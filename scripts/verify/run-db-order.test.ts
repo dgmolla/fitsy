@@ -77,8 +77,12 @@ export function runWithLocalDatabase(args) {
     expect(git.status).toBe(0);
   }
   const command = [join(verify, "run.mjs"), "--layer=all", "--scope=all", "--runs=local"];
+  // This copied target models its own acquisition, independently of the caller's live session.
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+    !key.startsWith("FITSY_VERIFY_") && !key.startsWith("FITSY_SHIPPING_") &&
+    !["FITSY_LOCAL_DB", "POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING"].includes(key)));
   const run = (extra: NodeJS.ProcessEnv = {}, extraArgs: string[] = []) => spawnSync(process.execPath, [...command, ...extraArgs],
-    { cwd: directory, encoding: "utf8", timeout: 10000, env: { ...process.env, ...extra } });
+    { cwd: directory, encoding: "utf8", timeout: 10000, env: { ...environment, ...extra } });
   const names = (stdout: string) => stdout.trim().split("\n").map(line => JSON.parse(line).name);
 
   const valid = run({ FITSY_VERIFY_DB_LOCKED: '1', POSTGRES_PRISMA_URL: 'postgresql://unowned' });
