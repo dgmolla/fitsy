@@ -1,4 +1,5 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { fixtureProcess, signalFixtureProcess, startLockFixture, type FixtureProcess } from './lock-fixture-process';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -231,24 +232,6 @@ test('explicit stop can retire an owned stopped container without an active port
   expect(result.containerExists).toBe(false);
 });
 
-type FixtureProcess = { pid: number; pgid: number; started: string };
-function fixtureProcess(pid: number, parent?: number): FixtureProcess | undefined {
-  if (!Number.isSafeInteger(pid) || pid <= 1) return undefined;
-  const result = spawnSync('/bin/ps', ['-p', String(pid), '-o', 'pid=,ppid=,pgid=,lstart='], { encoding: 'utf8' });
-  const fields = result.stdout.trim().split(/\s+/);
-  if (result.status !== 0 || Number(fields[0]) !== pid || fields.length < 8 ||
-      (parent !== undefined && Number(fields[1]) !== parent)) return undefined;
-  return { pid, pgid: Number(fields[2]), started: fields.slice(3).join(' ') };
-}
-function signalFixtureProcess(acquired: FixtureProcess | undefined, signal: NodeJS.Signals, group = false) {
-  if (!acquired || !Number.isSafeInteger(acquired.pid) || acquired.pid <= 1) return false;
-  const current = fixtureProcess(acquired.pid);
-  if (!current || current.pgid !== acquired.pgid || current.started !== acquired.started ||
-      (group && current.pgid !== acquired.pid)) return false;
-  try { process.kill(group ? -acquired.pid : acquired.pid, signal); return true; }
-  catch { return false; }
-}
-
 test('lock fixture refuses unacquired and zero process cleanup without signaling its caller', () => {
   const kill = jest.spyOn(process, 'kill');
   try {
@@ -265,16 +248,7 @@ test('concurrent CLI attempts cannot reset DB, even when a coordinator dies with
   const root = mkdtempSync(resolve(tmpdir(), 'fitsy-db-flock-'));
   const lockScript = resolve(__dirname, 'db-lock.py');
   const marker = resolve(root, 'pids');
-  // This generic flock fixture is not the caller's admitted shipping DB phase.
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-    !key.startsWith('FITSY_VERIFY_') && !key.startsWith('FITSY_SHIPPING_') && key !== 'FITSY_LOCAL_DB'));
-  const contender = () => spawnSync('python3', [lockScript, root, 'python3', '-c', 'print("acquired")'], { encoding: 'utf8', env });
-  const holderCode = `import os,subprocess,sys,time
-child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(20)'],
-  stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-open(${JSON.stringify(marker)},'w').write(f'{os.getpid()} {child.pid}')
-time.sleep(20)`;
-  const holder = spawn('python3', [lockScript, root, 'python3', '-c', holderCode], { stdio: 'ignore', env });
+  const { holder, contender } = startLockFixture(root, lockScript, marker);
   let worker: FixtureProcess | undefined, child: FixtureProcess | undefined;
   try {
     for (let i = 0; i < 40 && !existsSync(marker); i++) await new Promise(resolve => setTimeout(resolve, 25));
@@ -307,7 +281,6 @@ time.sleep(20)`;
     rmSync(root, { recursive: true, force: true });
   }
 });
-
 
 test('bound post-session stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {
   for (const mode of ['stop_bound_replaced', 'stop_bound_wrong_image', 'stop_bound_partial', 'stop_bound_unowned']) {
