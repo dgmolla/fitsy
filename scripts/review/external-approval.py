@@ -356,12 +356,13 @@ def validate_acceptance(receipt, policy, source):
                     for row in results.values()), 'blocking local acceptance failed')
 
 
-def ci_acceptance(config, issue, pr, review, verify_id):
+def ci_acceptance(config, issue, pr, review, verify_id, *, merged_main=None):
     """Bind the existing public Verify to the independently approved candidate tree.
 
     GitHub's PR run head_sha is the branch head, while default checkout executes
-    its synthetic merge. The immutable event base/head and merge parents must
-    describe that same tree; a same-named green check is not execution evidence.
+    its synthetic merge. REST PR associations can disappear after merge; only
+    release_context may replace an empty association with verified merged-main
+    provenance. A same-named green check is not execution evidence.
     """
     endpoint = f'repos/{REPO}'
     source, base = pr['head']['sha'], pr['base']['sha']
@@ -388,10 +389,23 @@ def ci_acceptance(config, issue, pr, review, verify_id):
             and run['status'] == 'completed' and run['conclusion'] == 'success'
             and type(run['run_attempt']) is int and run['run_attempt'] > 0,
             'exact candidate Verify did not pass')
-    associated = run['pull_requests']
-    require(len(associated) == 1 and associated[0]['number'] == pr['number']
-            and associated[0]['base']['sha'] == base and associated[0]['head']['sha'] == source,
-            'Verify event PR/base/head mismatch')
+    if merged_main is not None:
+        require(isinstance(merged_main, str) and re.fullmatch(r'[0-9a-f]{40}', merged_main)
+                and pr.get('state') == 'closed' and isinstance(pr.get('merged_at'), str)
+                and bool(pr['merged_at'])
+                and pr['merge_commit_sha'] == merged_main and pr['base']['ref'] == 'main'
+                and pr['base']['repo']['full_name'] == REPO
+                and pr['head']['repo']['full_name'] == REPO,
+                'release merged-main PR provenance mismatch')
+    associated = run.get('pull_requests')
+    require(type(associated) is list, 'Verify PR association unavailable or malformed')
+    if not (merged_main is not None and associated == []):
+        require(len(associated) == 1 and isinstance(associated[0], dict)
+                and associated[0].get('number') == pr['number']
+                and all(isinstance(associated[0].get(side), dict) for side in ('base', 'head'))
+                and associated[0]['base'].get('sha') == base
+                and associated[0]['head'].get('sha') == source,
+                'Verify event PR/base/head mismatch')
     latest = github(config, f'{endpoint}/actions/workflows/{config["verify_workflow_id"]}/runs?head_sha={source}&event=pull_request&per_page=1')
     require(latest['workflow_runs'] and latest['workflow_runs'][0]['id'] == verify_id,
             'superseded Verify cannot authorize acceptance')
@@ -575,7 +589,8 @@ def release_context(config, verify_id):
     approval = review_inputs(config, issue, source, body)
     candidate_runs = github(config, f'{endpoint}/actions/workflows/{config["verify_workflow_id"]}/runs?head_sha={source}&event=pull_request&per_page=1')
     require(candidate_runs['workflow_runs'], 'required candidate Verify missing')
-    policy = ci_acceptance(config, issue, pr, approval, candidate_runs['workflow_runs'][0]['id'])
+    policy = ci_acceptance(config, issue, pr, approval, candidate_runs['workflow_runs'][0]['id'],
+                           merged_main=main)
     local_acceptance(config, issue, source, approval, policy)
     reviewed_tree = github(config, f'{endpoint}/git/commits/{source}')['tree']['sha']
     release_tree = github(config, f'{endpoint}/git/commits/{main}')['tree']['sha']

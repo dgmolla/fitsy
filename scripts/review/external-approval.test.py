@@ -553,6 +553,60 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         self.api_override = {}
 
 
+    def test_merged_release_accepts_empty_mutable_run_association(self):
+        # Captured GitHub behavior: the same successful PR run loses this list after merge.
+        self.pr.update(state='closed', merged_at='2026-10-17T18:56:04Z')
+        self.candidate_verify['pull_requests'] = []
+        context = self.dispatch()
+        self.assertEqual(context['source_sha'], self.main)
+        self.assertEqual(context['reviewed_source_sha'], self.source)
+        self.assertEqual(len(self.writes), 1)
+
+    def test_merged_release_rejects_missing_malformed_or_wrong_association(self):
+        import copy
+        original = copy.deepcopy(self.candidate_verify)
+        for value in (None, {}, 'missing', [{'number': 99}],
+                      [{'number': 9, 'base': None, 'head': {}}],
+                      original['pull_requests'] * 2):
+            with self.subTest(association=value):
+                self.candidate_verify = {**copy.deepcopy(original), 'pull_requests': value}
+                with self.assertRaises(ValueError): self.dispatch()
+                self.assertFalse(self.writes)
+        self.candidate_verify = copy.deepcopy(original)
+        del self.candidate_verify['pull_requests']
+        with self.assertRaisesRegex(ValueError, 'association unavailable'): self.dispatch()
+        for side in ('base', 'head'):
+            self.candidate_verify = copy.deepcopy(original)
+            self.candidate_verify['pull_requests'][0][side]['sha'] = 'f' * 40
+            with self.assertRaisesRegex(ValueError, 'event PR/base/head'): self.dispatch()
+            self.assertFalse(self.writes)
+
+    def test_empty_association_requires_actual_merged_main_provenance(self):
+        import copy
+        self.candidate_verify['pull_requests'] = []
+        endpoint = f'repos/{external.REPO}'
+        valid = {**copy.deepcopy(self.pr), 'state': 'closed', 'merged_at': 'fixture',
+                 'merge_commit_sha': self.main}
+        for key, value in (('state', 'open'), ('merged_at', None), ('merged_at', True),
+                           ('merge_commit_sha', 'f' * 40)):
+            with self.subTest(field=key):
+                self.api_override[f'{endpoint}/commits/{self.main}/pulls?per_page=100'] = [{**valid, key: value}]
+                with self.assertRaises(ValueError): self.dispatch()
+                self.assertFalse(self.writes)
+        for side in ('base', 'head'):
+            changed = copy.deepcopy(valid)
+            changed[side]['repo']['full_name'] = 'foreign/repository'
+            self.api_override[f'{endpoint}/commits/{self.main}/pulls?per_page=100'] = [changed]
+            with self.assertRaisesRegex(ValueError, 'merged-main PR'): self.dispatch()
+        self.api_override[f'{endpoint}/commits/{self.main}/pulls?per_page=100'] = [valid, valid]
+        with self.assertRaisesRegex(ValueError, 'unique protected PR'): self.dispatch()
+        self.api_override.clear()
+        for value in ({'tree': {'sha': 'wrong'}, 'parents': [{'sha': 'b' * 40}, {'sha': self.source}]},
+                      {'tree': {'sha': 'equal-reviewed-product-tree'}, 'parents': [{'sha': self.source}, {'sha': 'b' * 40}]}):
+            self.api_override[f'{endpoint}/git/commits/{self.main}'] = value
+            with self.assertRaisesRegex(ValueError, 'merge tree/base/head'): self.dispatch()
+            self.assertFalse(self.writes)
+
     def transport(self, config, endpoint, payload=None, release=False):
         import base64
         if endpoint in self.api_override:
@@ -587,7 +641,7 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         if endpoint.endswith('/deployment-branch-policies'):
             return {'total_count': 1, 'branch_policies': [{'name': 'main', 'type': 'branch'}]}
         if endpoint.endswith('/pulls?per_page=100'):
-            return [{**self.pr, 'merged_at': 'fixture', 'merge_commit_sha': self.main}]
+            return [{**self.pr, 'state': 'closed', 'merged_at': 'fixture', 'merge_commit_sha': self.main}]
         if '/git/commits/' in endpoint:
             return {'tree': {'sha': 'equal-reviewed-product-tree'},
                     'parents': [{'sha': 'b' * 40}, {'sha': self.source}]}
