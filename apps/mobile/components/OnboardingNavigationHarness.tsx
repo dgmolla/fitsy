@@ -80,7 +80,7 @@ export const selected = { action: 'menu' as const, restaurantId: 'varilla', rest
 const defaultGetItem = (AsyncStorage.getItem as jest.Mock).getMockImplementation() as typeof AsyncStorage.getItem;
 export function response(body: unknown) { return { ok: true, status: 200, json: async () => body } as Response; }
 type AccountProfile = ProfileResponse<UserGoalV2>;
-const accountProfiles = new Map<string, AccountProfile>();
+let accountProfiles: Record<string, AccountProfile | undefined> = Object.create(null);
 function defaultAccountProfile(id: string): AccountProfile {
   return {
     user: { id, email: `${id}@example.test`, name: null, birthday: null, age: null,
@@ -92,11 +92,11 @@ export function seedAccountProfile(id: string, seed: {
   user?: Partial<Omit<AccountProfile['user'], 'id'>>;
   macroTarget?: AccountProfile['macroTarget'];
 }) {
-  const profile = accountProfiles.get(id) ?? defaultAccountProfile(id);
-  accountProfiles.set(id, {
+  const profile = accountProfiles[id] ?? defaultAccountProfile(id);
+  accountProfiles[id] = {
     user: { ...profile.user, ...seed.user },
     macroTarget: seed.macroTarget === undefined ? profile.macroTarget : seed.macroTarget,
-  });
+  };
 }
 // Synthetic transport only. Real profileSync still owns claiming, conversion,
 // persistence and reconciliation; auth/subscription failures remain independent.
@@ -111,7 +111,7 @@ export function withAccountProfile(other: (url: string, init?: RequestInit) => P
     if (method !== 'GET' && method !== 'PATCH')
       return { ...response({ error: 'Method not allowed' }), ok: false, status: 405 };
     if (profileOverride) return profileOverride(url, init);
-    const profile = accountProfiles.get(id) ?? defaultAccountProfile(id);
+    const profile = accountProfiles[id] ?? defaultAccountProfile(id);
     if (method === 'PATCH') {
       const update = JSON.parse(String(init?.body)) as Partial<AccountProfile['user']> & {
         macroTarget?: AccountProfile['macroTarget']; preserveMacroTarget?: boolean;
@@ -119,7 +119,7 @@ export function withAccountProfile(other: (url: string, init?: RequestInit) => P
       for (const key of ['birthday', 'heightCm', 'weightKg', 'sex', 'activityLevel', 'goal', 'onboardingStep'] as const)
         if (update[key] !== undefined) Object.assign(profile.user, { [key]: update[key] });
       if (update.macroTarget) profile.macroTarget = { ...update.macroTarget };
-      accountProfiles.set(id, profile);
+      accountProfiles[id] = profile;
     }
     // Snapshot the response so a later PATCH cannot mutate an earlier read.
     return response(JSON.parse(JSON.stringify(method === 'PATCH' ? { user: profile.user } : profile)));
@@ -158,7 +158,7 @@ beforeEach(async () => {
   await SecureStore.deleteItemAsync('fitsy_authToken');
   mockState.session = null;
   mockState.sessionRead = undefined;
-  accountProfiles.clear();
+  accountProfiles = Object.create(null);
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
