@@ -422,7 +422,7 @@ def account_completed(handle, ledger, args, events, record=True):
     # and its adoption digest must never advance with it.
     if has_original_manifest:
         reference = approval["original_manifest"]
-        if (set(approval) != fields | {"original_manifest"}
+        if (set(approval) != fields | {"original_manifest"} | ({"composition"} if "composition" in approval else set())
                 or not isinstance(reference, dict) or set(reference) != {"path", "sha256"}
                 or not isinstance(reference["path"], str)
                 or not re.fullmatch(r"[0-9a-f]{64}", reference.get("sha256", ""))):
@@ -523,6 +523,66 @@ def account_completed(handle, ledger, args, events, record=True):
     return {"allowed": True, "reason": "completed execution accounted; shipping admission unchanged",
             "accounted_seconds": seconds, "idempotent": all(present),
             **usage(list(indexed(read_events(handle)).values()))[2]}
+
+
+def composed_context(approval, source, root):
+    """Verify a private installation upgrade without changing original review identity."""
+    context = approval.get("composition")
+    if (approval.get("issue") != 443 or not isinstance(context, dict)
+            or set(context) != {"source_sha", "comparison_base", "comparison_tree_sha", "control_paths"}
+            or context["source_sha"] != source
+            or any(not re.fullmatch(r"[0-9a-f]{40}", context.get(key, ""))
+                   for key in ("source_sha", "comparison_base", "comparison_tree_sha"))):
+        raise ValueError("completed composition source/main authority mismatch")
+    reference = approval["original_manifest"]
+    path = Path(reference["path"])
+    if not path.is_absolute() or not path.is_relative_to(ADMIN_REVIEW):
+        raise ValueError("original composition review must remain administrator managed")
+    original = canonical_authority(path, path)
+    if (hashlib.sha256(path.read_bytes()).hexdigest() != reference["sha256"]
+            or "original_manifest" in original or "composition" in original
+            or any(approval.get(key) != value for key, value in original.items()
+                   if key not in {"control_sha", "operator_sha256"})
+            or set(approval) != set(original) | {"original_manifest", "composition"}):
+        raise ValueError("original frozen review authority changed")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    def git(*args):
+        return subprocess.check_output(["git", "-C", str(root), *args], env=env)
+    for ancestor, descendant in ((approval["base_sha"], approval["source_sha"]),
+            (approval["base_sha"], context["comparison_base"]),
+            (approval["source_sha"], source), (context["comparison_base"], source),
+            (approval["control_sha"], source)):
+        git("merge-base", "--is-ancestor", ancestor, descendant)
+    if git("rev-parse", context["comparison_base"] + "^{tree}").decode().strip() != context["comparison_tree_sha"]:
+        raise ValueError("approved composition main tree changed")
+    allowed = context["control_paths"]
+    # Exact paths are operator-selected, but they still cannot classify product as controls.
+    areas = ("scripts/review/", "scripts/verify/", "scripts/delivery/", "docs/engineering/devops/",
+             ".githooks/", "AGENTS.md", "scripts/deploy/native-compatibility.test.ts",
+             "scripts/sim/product-flow.mjs", "scripts/sim/publish-product-flow.mjs",
+             "scripts/sim/runner-controls.test.mjs", ".github/workflows/deploy.yml",
+             ".github/workflows/eas-build.yml", ".github/workflows/dev-maintenance.yml", "vercel.json")
+    if (not isinstance(allowed, list) or not allowed or len(set(allowed)) != len(allowed)
+            or any(not any(p == a or (a.endswith("/") and p.startswith(a)) for a in areas) for p in allowed)):
+        raise ValueError("explicit approved composition control paths required")
+    def tree(ref):
+        entries = {}
+        for row in git("ls-tree", "-rz", ref).split(b"\0"):
+            if row:
+                meta, name = row.split(b"\t", 1)
+                entries[name.decode()] = meta
+        return entries
+    base, frozen, main, controls, candidate = map(tree, (approval["base_sha"], approval["source_sha"],
+        context["comparison_base"], approval["control_sha"], source))
+    product_delta = {p for p in base.keys() | frozen.keys() if p not in allowed and base.get(p) != frozen.get(p)}
+    main_delta = {p for p in base.keys() | main.keys() if p not in allowed and base.get(p) != main.get(p)}
+    if product_delta & main_delta:
+        raise ValueError("frozen product and approved main overlap")
+    for p in base.keys() | frozen.keys() | main.keys() | controls.keys() | candidate.keys():
+        expected = (controls if p in allowed else frozen if p in product_delta else main).get(p)
+        if candidate.get(p) != expected:
+            raise ValueError("completed composition product/main/control changed: " + p)
+    return context["comparison_base"]
 
 
 def completed_context(path):
@@ -642,6 +702,35 @@ def admit_completed(handle, ledger, args, events):
         return subprocess.check_output(["git", "-C", str(root), *command], env=env).decode().strip()
     if git("rev-parse", "HEAD") != args.source_sha:
         raise ValueError("completed review candidate head mismatch")
+    if args.source_sha != approval["source_sha"]:
+        comparison = composed_context(approval, args.source_sha, root)
+        if args.base_sha != comparison or args.control_sha != approval["control_sha"]:
+            raise ValueError("completed composition comparison/control mismatch")
+        if git("status", "--porcelain", "--untracked-files=all"):
+            raise ValueError("completed composition requires clean owned source")
+        # Validate original evidence/accounting read-only; composition is not a new review.
+        from copy import copy
+        original_args = copy(args)
+        original_args.source_sha, original_args.base_sha = approval["source_sha"], approval["base_sha"]
+        original_args.candidate = approval["candidate"]
+        original_args.required_domain = approval["domains"]
+        prompt = Path(approval["artifacts"]["prompt"]["path"]).read_text()
+        trace = Path(approval["artifacts"]["stderr"]["path"]).read_text()
+        if (approval["source_sha"] not in prompt or approval["base_sha"] not in prompt
+                or f"issue{args.issue}" not in prompt or any(d not in prompt for d in approval["domains"])
+                or any(marker not in trace for marker in ("model: gpt-6-sol\n", "sandbox: read-only\n",
+                    "approval: never\n", "reasoning effort: high\n"))):
+            raise ValueError("completed composition original provider context mismatch")
+        accounting = account_completed(handle, ledger, original_args, events, record=False)
+        if not accounting["idempotent"]:
+            raise ValueError("composition requires already accounted original review")
+        verdict = json.loads(Path(approval["artifacts"]["verdict"]["path"]).read_text())
+        if any(row != {"verdict": "pass", "findings": []} for row in verdict["domains"].values()):
+            raise ValueError("completed composition requires passing frozen review")
+        return {"verdict": "pass", "domains": {domain: "pass" for domain in args.required_domain},
+                "findings": [], "accounting": accounting, "evidence": {"artifacts": approval["artifacts"],
+                "reviewed_source_sha": approval["source_sha"], "comparison_base": comparison,
+                "control_sha": args.control_sha}}
     # Runtime may overlay only immutable current-main controls, as the existing
     # authenticated poller does. All product files remain the frozen commit.
     controls = ["scripts/review", "scripts/delivery/phase-events.mjs",
@@ -789,9 +878,10 @@ def main():
     if args.action == "completed-context":
         try:
             value = canonical_authority(args.authorization_file, ADMIN_REVIEW / "completed" / f"issue-{args.issue}.json")
-            if value["issue"] != args.issue or value["source_sha"] != args.source_sha:
+            if value["issue"] != args.issue:
                 raise ValueError("completed review context issue/source mismatch")
-            print(value["base_sha"])
+            print(value["base_sha"] if value["source_sha"] == args.source_sha else
+                  composed_context(value, args.source_sha, args.candidate_root or Path.cwd()))
             return 0
         except (ValueError, OSError, KeyError) as error:
             print(str(error), file=__import__("sys").stderr)

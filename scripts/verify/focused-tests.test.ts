@@ -29,6 +29,28 @@ test('persisted focused recipe executes real matching Jest tests and retains the
   expect(cli().status).toBe(0);
   expect(JSON.parse(readFileSync(join(root, '.evidence/verify/focused-tests.json'), 'utf8'))).toMatchObject({ pattern: 'fixture outcome' });
 });
+function mobileFixture(content: string) {
+  mkdirSync(join(root, 'apps/mobile'), { recursive: true });
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts', 'apps/mobile'] }));
+  writeFileSync(join(root, 'apps/mobile/package.json'), JSON.stringify({ name: 'mobile-fixture', scripts: { test: 'jest --config=jest.config.cjs' } }));
+  writeFileSync(join(root, 'apps/mobile/jest.config.cjs'), 'module.exports = { testMatch: ["**/*.test.ts"], transform: {} };\n');
+  writeFileSync(join(root, 'apps/mobile/fixture.test.ts'), content);
+}
+test.each([undefined, '--max-old-space-size=1536'])('mobile producer owns its bounded heap independently of incoming options %s', options => {
+  mobileFixture("test('bounded mobile heap', () => { expect(process.env.NODE_OPTIONS).toBe('--max-old-space-size=768'); expect(require('v8').getHeapStatistics().heap_size_limit).toBeLessThan(1024 ** 3); });\n");
+  expect(cli('--set', 'apps/mobile/fixture.test.ts').status).toBe(0);
+  const result = spawnSync(process.execPath, ['scripts/verify/focused-tests.mjs'], { cwd: root,
+    env: { ...env, NODE_OPTIONS: options }, encoding: 'utf8', timeout: 30000 });
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain('selected reproduction/regression tests pass');
+});
+test('mobile heap binding preserves zero-selected and failed-case rejection', () => {
+  mobileFixture("test('mobile failure', () => expect(1).toBe(2));\n");
+  expect(cli('--set', 'apps/mobile/fixture.test.ts').status).toBe(0);
+  expect(cli().status).toBe(1);
+  expect(cli('--set', 'apps/mobile/fixture.test.ts', '--jest-pattern=absent case').status).toBe(0);
+  expect(cli().status).toBe(1);
+});
 test('missing or skipped focused selections cannot satisfy the cheap gate', () => {
   expect(cli().status).toBe(1);
   expect(cli('--set', 'scripts/fixture.test.ts', '--jest-pattern=absent outcome').status).toBe(0);
