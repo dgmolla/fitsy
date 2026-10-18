@@ -37,7 +37,7 @@ function mobileFixture(content: string) {
   writeFileSync(join(root, 'apps/mobile/fixture.test.ts'), content);
 }
 test.each([undefined, '--max-old-space-size=1536'])('mobile producer owns its bounded heap independently of incoming options %s', options => {
-  mobileFixture("test('bounded mobile heap', () => { expect(process.env.NODE_OPTIONS).toBe('--max-old-space-size=768'); expect(require('v8').getHeapStatistics().heap_size_limit).toBeLessThan(1024 ** 3); });\n");
+  mobileFixture("test('bounded mobile heap', () => { expect(typeof process.send).toBe('function'); expect(process.env.NODE_OPTIONS).toBe('--max-old-space-size=768'); expect(require('v8').getHeapStatistics().heap_size_limit).toBeLessThan(1024 ** 3); });\n");
   expect(cli('--set', 'apps/mobile/fixture.test.ts').status).toBe(0);
   const result = spawnSync(process.execPath, ['scripts/verify/focused-tests.mjs'], { cwd: root,
     env: { ...env, NODE_OPTIONS: options }, encoding: 'utf8', timeout: 30000 });
