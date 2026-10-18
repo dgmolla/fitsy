@@ -43,7 +43,7 @@ async function run(paths, pattern) {
     const report = join(repository, `.evidence/verify/focused-history/jest-${Date.now()}-${process.pid}.json`);
     const commands = key === 'node' ? [[process.execPath, ['--test', '--test-reporter=' + join(repository, 'scripts/verify/node-focused-reporter.mjs'), '--test-reporter-destination=' + report, ...tests]]]
       : key === 'python' ? tests.map((test, index) => ['python3', [join(repository, 'scripts/verify/python-focused.py'), test, report + '.' + index]])
-      : [['npm', ['test', '--workspace=' + key, '--', '--runInBand', '--runTestsByPath', ...tests.map(test => resolve(repository, test)), '--json', '--outputFile=' + report, ...(pattern === undefined ? [] : ['--testNamePattern=' + pattern])]]];
+      : [['npm', ['test', '--workspace=' + key, '--', ...(key === 'apps/mobile' ? ['--maxWorkers=1', '--workerIdleMemoryLimit=512MB'] : ['--runInBand']), '--runTestsByPath', ...tests.map(test => resolve(repository, test)), '--json', '--outputFile=' + report, ...(pattern === undefined ? [] : ['--testNamePattern=' + pattern])]]];
     for (const [command, args] of commands) {
       // Own the mobile heap after shipping entrypoints remove caller runtime options.
       const env = key === 'apps/mobile' ? { ...process.env, NODE_OPTIONS: '--max-old-space-size=768' }
