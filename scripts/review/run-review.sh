@@ -55,22 +55,6 @@ for raw in sorted(set(filter(None,paths))):
 print(hash.hexdigest())
 PYSOURCE
 }
-# Authenticate the immutable main overlay independently of whether a new
-# reviewer may execute. Explicit cached-only validation still checks this overlay.
-if [ "$FRESH_EXECUTION" = 1 ]; then
-  python3 -I - "$(git rev-parse origin/main)" <<'PYOVERLAY'
-import subprocess,sys
-paths=['scripts/review','scripts/delivery/phase-events.mjs','scripts/verify/risk-tiers.yml','REVIEW.md','.claude/lenses']
-def git(*args): return subprocess.check_output(['git',*args])
-if git('ls-files','--others','--exclude-standard','-z'): sys.exit('trusted overlay requires frozen candidate source without untracked inputs')
-changed=git('diff','--name-only','HEAD','-z').split(b'\0')
-for raw in filter(None,changed):
-    path=raw.decode()
-    if not any(path==allowed or path.startswith(allowed+'/') for allowed in paths): sys.exit('fresh execution requires frozen candidate source')
-for args in [('diff','--quiet',sys.argv[1],'--',*paths),('diff','--cached','--quiet',sys.argv[1],'--',*paths)]:
-    if subprocess.run(['git',*args]).returncode: sys.exit('fresh execution requires immutable main reviewer controls')
-PYOVERLAY
-fi
 FROZEN_SOURCE=""
 FROZEN_HEAD=""
 if [ "$PROBE" = 0 ]; then
@@ -128,7 +112,32 @@ COMPLETED_AUTH="${FITSY_REVIEW_COMPLETED_HOME:-${FITSY_REVIEW_HOME:-$HOME/.fitsy
 if [ -f "$COMPLETED_AUTH" ]; then
   BASE_SHA="$(python3 -I scripts/review/review-budget.py completed-context --ledger "$CACHE_DIR/unused" \
     --authorization-file "$COMPLETED_AUTH" --issue "$ISSUE" --source-sha "$HEAD_SHA")" || exit 1
+  # completed-context authenticated the frozen review and exact composed trees.
+  # Only that private installation authority may select successor controls.
+  CONTROL_SHA="$(python3 -I - "$COMPLETED_AUTH" "$HEAD_SHA" "$CONTROL_SHA" <<'PYCONTROL'
+import json,sys
+value=json.load(open(sys.argv[1]))
+print(value['control_sha'] if value.get('composition', {}).get('source_sha') == sys.argv[2]
+      and value['source_sha'] != sys.argv[2] else sys.argv[3])
+PYCONTROL
+  )" || exit 1
   DIFF="$(git diff --abbrev=8 "$BASE_SHA...$HEAD_SHA" | python3 -I -c 'import re,sys; print(re.sub(r"(?m)^(@@ -[0-9]+(?:,[0-9]+)? \+[0-9]+(?:,[0-9]+)? @@).*$",r"\1",sys.stdin.read()),end="")')"
+fi
+# Authenticate the authenticated control overlay independently of whether a new
+# reviewer may execute. Explicit cached-only validation still checks this overlay.
+if [ "$FRESH_EXECUTION" = 1 ]; then
+  python3 -I - "$CONTROL_SHA" <<'PYOVERLAY'
+import subprocess,sys
+paths=['scripts/review','scripts/delivery/phase-events.mjs','scripts/verify/risk-tiers.yml','REVIEW.md','.claude/lenses']
+def git(*args): return subprocess.check_output(['git',*args])
+if git('ls-files','--others','--exclude-standard','-z'): sys.exit('trusted overlay requires frozen candidate source without untracked inputs')
+changed=git('diff','--name-only','HEAD','-z').split(b'\0')
+for raw in filter(None,changed):
+    path=raw.decode()
+    if not any(path==allowed or path.startswith(allowed+'/') for allowed in paths): sys.exit('fresh execution requires frozen candidate source')
+for args in [('diff','--quiet',sys.argv[1],'--',*paths),('diff','--cached','--quiet',sys.argv[1],'--',*paths)]:
+    if subprocess.run(['git',*args]).returncode: sys.exit('fresh execution requires immutable approved reviewer controls')
+PYOVERLAY
 fi
 # The bound issue supplies release intent, never reviewer instructions or proof.
 # Ignore changing task status so local and PR reviews reuse the same acceptance.

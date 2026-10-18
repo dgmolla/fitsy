@@ -45,7 +45,10 @@ async function run(paths, pattern) {
       : key === 'python' ? tests.map((test, index) => ['python3', [join(repository, 'scripts/verify/python-focused.py'), test, report + '.' + index]])
       : [['npm', ['test', '--workspace=' + key, '--', '--runInBand', '--runTestsByPath', ...tests.map(test => resolve(repository, test)), '--json', '--outputFile=' + report, ...(pattern === undefined ? [] : ['--testNamePattern=' + pattern])]]];
     for (const [command, args] of commands) {
-      const result = spawnSync(command, args, { cwd: repository, stdio: ['ignore', 'inherit', 'inherit'], env: key === 'python' ? { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } : process.env });
+      // Own the mobile heap after shipping entrypoints remove caller runtime options.
+      const env = key === 'apps/mobile' ? { ...process.env, NODE_OPTIONS: '--max-old-space-size=768' }
+        : key === 'python' ? { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } : process.env;
+      const result = spawnSync(command, args, { cwd: repository, stdio: ['ignore', 'inherit', 'inherit'], env });
       if (result.error || result.status !== 0) throw new Error(`focused tests failed: ${tests.join(', ')}`);
       if (key === 'node') {
         const outcomes = JSON.parse(readFileSync(report, 'utf8').trim().split('\n').at(-1));

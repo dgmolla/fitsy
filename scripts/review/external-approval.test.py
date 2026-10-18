@@ -150,6 +150,22 @@ class CompositionTests(unittest.TestCase):
     def test_frozen_product_plus_approved_controls_reuses_review(self):
         self.validate()
 
+    def test_approved_main_disjoint_changes_preserve_frozen_product(self):
+        base = {**self.reviewed, self.product: ('100644', 'blob', 'original')}
+        main = {**base, 'apps/api/current.ts': ('100644', 'blob', 'approved-main')}
+        candidate = {**self.candidate, 'apps/api/current.ts': main['apps/api/current.ts']}
+        external.validate_composition(self.reviewed, candidate, self.controls, [self.path],
+                                      reviewed_base=base, main=main)
+        with self.assertRaisesRegex(ValueError, 'overlap'):
+            external.validate_composition(self.reviewed, candidate, self.controls, [self.path],
+                reviewed_base=base, main={**main, self.product: ('100644', 'blob', 'main-conflict')})
+        for path, value in [(self.product, ('100644', 'blob', 'wrong-product')),
+                            ('apps/api/current.ts', ('100644', 'blob', 'reverted-main')),
+                            (self.path, ('100755', 'blob', 'unknown-control'))]:
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                external.validate_composition(self.reviewed, {**candidate, path: value}, self.controls,
+                    [self.path], reviewed_base=base, main=main)
+
     def test_product_edit_refuses(self):
         self.candidate[self.product] = ('100644', 'blob', 'new')
         with self.assertRaisesRegex(ValueError, 'frozen product'):
@@ -553,6 +569,60 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         self.api_override = {}
 
 
+    def test_merged_release_accepts_empty_mutable_run_association(self):
+        # Captured GitHub behavior: the same successful PR run loses this list after merge.
+        self.pr.update(state='closed', merged_at='2026-10-17T18:56:04Z')
+        self.candidate_verify['pull_requests'] = []
+        context = self.dispatch()
+        self.assertEqual(context['source_sha'], self.main)
+        self.assertEqual(context['reviewed_source_sha'], self.source)
+        self.assertEqual(len(self.writes), 1)
+
+    def test_merged_release_rejects_missing_malformed_or_wrong_association(self):
+        import copy
+        original = copy.deepcopy(self.candidate_verify)
+        for value in (None, {}, 'missing', [{'number': 99}],
+                      [{'number': 9, 'base': None, 'head': {}}],
+                      original['pull_requests'] * 2):
+            with self.subTest(association=value):
+                self.candidate_verify = {**copy.deepcopy(original), 'pull_requests': value}
+                with self.assertRaises(ValueError): self.dispatch()
+                self.assertFalse(self.writes)
+        self.candidate_verify = copy.deepcopy(original)
+        del self.candidate_verify['pull_requests']
+        with self.assertRaisesRegex(ValueError, 'association unavailable'): self.dispatch()
+        for side in ('base', 'head'):
+            self.candidate_verify = copy.deepcopy(original)
+            self.candidate_verify['pull_requests'][0][side]['sha'] = 'f' * 40
+            with self.assertRaisesRegex(ValueError, 'event PR/base/head'): self.dispatch()
+            self.assertFalse(self.writes)
+
+    def test_empty_association_requires_actual_merged_main_provenance(self):
+        import copy
+        self.candidate_verify['pull_requests'] = []
+        endpoint = f'repos/{external.REPO}'
+        valid = {**copy.deepcopy(self.pr), 'state': 'closed', 'merged_at': 'fixture',
+                 'merge_commit_sha': self.main}
+        for key, value in (('state', 'open'), ('merged_at', None), ('merged_at', True),
+                           ('merge_commit_sha', 'f' * 40)):
+            with self.subTest(field=key):
+                self.api_override[f'{endpoint}/commits/{self.main}/pulls?per_page=100'] = [{**valid, key: value}]
+                with self.assertRaises(ValueError): self.dispatch()
+                self.assertFalse(self.writes)
+        for side in ('base', 'head'):
+            changed = copy.deepcopy(valid)
+            changed[side]['repo']['full_name'] = 'foreign/repository'
+            self.api_override[f'{endpoint}/commits/{self.main}/pulls?per_page=100'] = [changed]
+            with self.assertRaisesRegex(ValueError, 'merged-main PR'): self.dispatch()
+        self.api_override[f'{endpoint}/commits/{self.main}/pulls?per_page=100'] = [valid, valid]
+        with self.assertRaisesRegex(ValueError, 'unique protected PR'): self.dispatch()
+        self.api_override.clear()
+        for value in ({'tree': {'sha': 'wrong'}, 'parents': [{'sha': 'b' * 40}, {'sha': self.source}]},
+                      {'tree': {'sha': 'equal-reviewed-product-tree'}, 'parents': [{'sha': self.source}, {'sha': 'b' * 40}]}):
+            self.api_override[f'{endpoint}/git/commits/{self.main}'] = value
+            with self.assertRaisesRegex(ValueError, 'merge tree/base/head'): self.dispatch()
+            self.assertFalse(self.writes)
+
     def transport(self, config, endpoint, payload=None, release=False):
         import base64
         if endpoint in self.api_override:
@@ -587,7 +657,7 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         if endpoint.endswith('/deployment-branch-policies'):
             return {'total_count': 1, 'branch_policies': [{'name': 'main', 'type': 'branch'}]}
         if endpoint.endswith('/pulls?per_page=100'):
-            return [{**self.pr, 'merged_at': 'fixture', 'merge_commit_sha': self.main}]
+            return [{**self.pr, 'state': 'closed', 'merged_at': 'fixture', 'merge_commit_sha': self.main}]
         if '/git/commits/' in endpoint:
             return {'tree': {'sha': 'equal-reviewed-product-tree'},
                     'parents': [{'sha': 'b' * 40}, {'sha': self.source}]}
@@ -1064,6 +1134,94 @@ class CIAcceptanceTests(unittest.TestCase):
     def publish(self):
         with patch.object(external, 'github', side_effect=self.f.transport):
             return external.publish_acceptance(self.f.config, 443, 9, 21)
+
+    def composed(self):
+        f = self.f
+        manifest = Path(f.config['review_home']) / 'completed/issue-443.json'
+        approval = json.loads(manifest.read_text())
+        frozen = 'f' * 40
+        approval['source_sha'] = frozen
+        approval.update(control_sha='6' * 40, operator_sha256='0' * 64)
+        for key in ('prompt', 'verdict'):
+            path = Path(approval['artifacts'][key]['path'])
+            path.write_text(path.read_text().replace(f.source, frozen))
+            approval['artifacts'][key]['sha256'] = external.digest(path.read_bytes())
+        original = manifest.with_name('original-443.json')
+        original.write_text(json.dumps(approval)); original.chmod(0o600)
+        base = '9' * 40
+        allowed = ['scripts/review/run-review.sh']
+        context = dict(source_sha=f.source, comparison_base=base,
+                       comparison_tree_sha='approved-main-tree', control_paths=allowed)
+        # Tree IDs are real-shaped immutable identities even in synthetic transport.
+        context['comparison_tree_sha'] = '8' * 40
+        approval.update(composition=context,
+                        original_manifest=dict(path=str(original), sha256=external.digest(original.read_bytes())))
+        manifest.write_text(json.dumps(approval))
+        f.config['reviews']['443']['manifest_sha256'] = external.digest(manifest.read_bytes())
+        f.config.update(control_sha=approval['control_sha'], control_paths=allowed)
+        f.pr['base']['sha'] = base
+        f.candidate_verify['pull_requests'][0]['base']['sha'] = base
+        endpoint = f'repos/{external.REPO}'
+        def entries(mapping):
+            return dict(truncated=False, tree=[dict(path=p, mode='100644', type='blob', sha=v) for p,v in mapping.items()])
+        trees = {'original-base-tree': {'app.ts': 'original'},
+                 'frozen-tree': {'app.ts': 'nutrition'},
+                 context['comparison_tree_sha']: {'app.ts': 'original', 'api.ts': 'approved-main'},
+                 'controls-tree': {allowed[0]: 'approved-control'},
+                 'equal-reviewed-product-tree': {'app.ts': 'nutrition', 'api.ts': 'approved-main', allowed[0]: 'approved-control'}}
+        for ref, tree in [(approval['base_sha'], 'original-base-tree'), (frozen, 'frozen-tree'),
+                          (base, context['comparison_tree_sha']), (approval['control_sha'], 'controls-tree')]:
+            f.api_override[f'{endpoint}/git/commits/{ref}'] = {'tree': {'sha': tree}}
+        f.api_override[f'{endpoint}/git/commits/{f.pr["merge_commit_sha"]}'] = {
+            'tree': {'sha': 'equal-reviewed-product-tree'}, 'parents': [{'sha': base}, {'sha': f.source}]}
+        for tree, mapping in trees.items():
+            f.api_override[f'{endpoint}/git/trees/{tree}?recursive=1'] = entries(mapping)
+        return manifest, approval, trees
+
+    def test_composed_review_and_current_ci_base_reach_actual_acceptance(self):
+        self.composed()
+        self.assertEqual(self.publish()['source_sha'], self.f.source)
+        self.assertEqual(len(self.f.writes), 1)
+
+    def test_composed_postmerge_dispatch_uses_live_base_without_relabeling_review(self):
+        manifest, approval, _ = self.composed()
+        endpoint = f'repos/{external.REPO}'
+        self.f.api_override[f'{endpoint}/git/commits/{self.f.main}'] = {
+            'tree': {'sha': 'equal-reviewed-product-tree'},
+            'parents': [{'sha': approval['composition']['comparison_base']}, {'sha': self.f.source}]}
+        self.f.candidate_verify['pull_requests'] = []
+        result = self.f.dispatch()
+        self.assertEqual(result['source_sha'], self.f.main)
+        self.assertEqual(json.loads(manifest.read_text())['base_sha'], 'b' * 40)
+        self.assertEqual(json.loads(manifest.read_text())['source_sha'], 'f' * 40)
+
+    def test_composed_overlap_and_wrong_live_pr_base_refuse_before_write(self):
+        _, approval, _ = self.composed()
+        self.f.pr['base']['sha'] = 'b' * 40
+        with self.assertRaisesRegex(ValueError, 'comparison base'): self.publish()
+        self.assertFalse(self.f.writes)
+        self.f.pr['base']['sha'] = approval['composition']['comparison_base']
+        self.f.api_override[f'repos/{external.REPO}/git/trees/'
+            + approval['composition']['comparison_tree_sha'] + '?recursive=1']['tree'][0]['sha'] = 'main-overlap'
+        with self.assertRaisesRegex(ValueError, 'overlap'): self.publish()
+        self.assertFalse(self.f.writes)
+
+    def test_composed_wrong_source_main_controls_original_and_tree_refuse(self):
+        manifest, approval, trees = self.composed()
+        import copy
+        f = self.f
+        for key, value in [('source_sha', '0' * 40), ('comparison_base', '0' * 40),
+                           ('comparison_tree_sha', '0' * 40), ('control_paths', ['app.ts'])]:
+            changed = copy.deepcopy(approval); changed['composition'][key] = value
+            manifest.write_text(json.dumps(changed))
+            f.config['reviews']['443']['manifest_sha256'] = external.digest(manifest.read_bytes())
+            with self.subTest(key=key), self.assertRaises((ValueError, AssertionError)): self.publish()
+            self.assertFalse(f.writes)
+        manifest.write_text(json.dumps(approval))
+        f.config['reviews']['443']['manifest_sha256'] = external.digest(manifest.read_bytes())
+        Path(approval['original_manifest']['path']).write_text('{}')
+        with self.assertRaisesRegex(ValueError, 'original frozen'): self.publish()
+        self.assertFalse(f.writes)
 
     def test_ci_first_valid_without_local_full_receipt(self):
         policy = self.f.config['local_acceptance']['443']
