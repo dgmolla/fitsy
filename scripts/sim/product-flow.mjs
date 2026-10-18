@@ -56,12 +56,16 @@ export function environment() {
   assert(!process.env.EXPO_PUBLIC_SUPABASE_URL.includes('zaxkmjqozvmbifiwbxps'), 'Production Supabase is forbidden');
   return { backend: process.env.EXPO_PUBLIC_API_URL, ...publicConfigIdentity(root) };
 }
-function backend() {
-  const d = JSON.parse(run('vercel', ['api', '/v13/deployments/dev.fitsy.org', '--raw']));
+export function backend(command = run) {
+  const selector = process.env.FITSY_NATIVE_BACKEND_METADATA;
+  assert(!selector || selector === 'operator-dev', 'Unknown native backend metadata selector');
+  const d = JSON.parse(selector === 'operator-dev'
+    ? command('/opt/fitsy-approval/native-dev-metadata', [])
+    : command('vercel', ['api', '/v13/deployments/dev.fitsy.org', '--raw']));
   const revision = backendRevision(d);
   // A different backend revision is safe only if its API/shared/schema contents match.
-  const diff = run('git', ['diff', '--name-only', revision, '--', 'apps/api', 'packages/shared', 'prisma', 'package.json', 'package-lock.json']);
-  const untracked = run('git', ['ls-files', '--others', '--exclude-standard', '--', 'apps/api', 'packages/shared', 'prisma']);
+  const diff = command('git', ['diff', '--name-only', revision, '--', 'apps/api', 'packages/shared', 'prisma', 'package.json', 'package-lock.json']);
+  const untracked = command('git', ['ls-files', '--others', '--exclude-standard', '--', 'apps/api', 'packages/shared', 'prisma']);
   assert(!diff && !untracked, 'Deploy candidate backend/shared/schema changes to dev before running product flows');
   return { backendRevision: revision, backendDeployment: d.id };
 }
