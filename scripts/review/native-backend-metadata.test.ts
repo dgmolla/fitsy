@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { lstatSync, mkdtempSync, readdirSync, realpathSync, rmdirSync } from 'node:fs';
+import { platform } from 'node:os';
+import { join, resolve } from 'node:path';
 
 const caller = resolve(__dirname, '../sim/product-flow.mjs');
 const envModule = resolve(__dirname, '../verify/product-flow.mjs');
@@ -70,21 +72,58 @@ test.each([{ readyState: 'BUILDING' }, { target: 'production' }, { gitSource: { 
   expect(invoke('operator-dev', { deployment: value }).status).toBe(1);
 });
 
-test('actual caller compares an owned disposable Git checkout, including tracked and untracked drift', () => {
-  const program = `
+test.each([
+  ['unset', false], ['shared', false], ['private', false], ['private', true],
+] as const)('actual caller compares an owned disposable Git checkout, including tracked and untracked drift (TMPDIR=%s, assertion failure=%s)', (temp, fail) => {
+  // Inherited command scratch is not authority to acquire a disposable checkout.
+  const parent = realpathSync(platform() === 'darwin' ? '/private/tmp' : '/tmp');
+  const parentStat = lstatSync(parent);
+  if (!parentStat.isDirectory() || parentStat.isSymbolicLink() || parentStat.uid !== 0
+      || (parentStat.mode & 0o1777) !== 0o1777) throw Error('Unsafe OS temp parent');
+  const scratch = mkdtempSync(join(parent, 'native-metadata-'));
+  const acquired = lstatSync(scratch);
+  const assertScratch = () => {
+    const current = lstatSync(scratch);
+    if (!current.isDirectory() || current.isSymbolicLink() || current.uid !== process.getuid!()
+        || current.uid !== acquired.uid || current.dev !== acquired.dev || current.ino !== acquired.ino
+        || (current.mode & 0o077) || realpathSync(scratch) !== scratch) throw Error('Scratch identity changed');
+  };
+  try {
+    assertScratch();
+    const program = `
+    import assert from 'node:assert/strict';
     import { execFileSync } from 'node:child_process';
-    import { mkdtempSync, realpathSync, lstatSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+    import { mkdtempSync, realpathSync, lstatSync, writeFileSync, mkdirSync, rmSync, unlinkSync, chmodSync, symlinkSync, existsSync } from 'node:fs';
     import { join } from 'node:path';
     import { backend } from ${JSON.stringify(caller)};
     import { repoEnv } from ${JSON.stringify(envModule)};
-    const parent = process.env.TMPDIR;
+    const parent = ${JSON.stringify(scratch)};
     if (!parent || realpathSync(parent) !== parent || lstatSync(parent).isSymbolicLink()
         || lstatSync(parent).uid !== process.getuid() || (lstatSync(parent).mode & 0o077)) throw Error('Unowned scratch');
     const fixture = mkdtempSync(join(parent, 'native-metadata-git-'));
     const owned = lstatSync(fixture);
-    if (owned.uid !== process.getuid() || (owned.mode & 0o077) || realpathSync(fixture) !== fixture) throw Error('Unowned fixture');
-    const git = args => execFileSync('git', args, { cwd: fixture, env: repoEnv(), encoding: 'utf8' }).trim();
+    const assertFixture = (path = fixture, identity = owned) => {
+      const current = lstatSync(path);
+      if (!current.isDirectory() || current.isSymbolicLink() || current.uid !== process.getuid()
+          || current.uid !== identity.uid || current.dev !== identity.dev || current.ino !== identity.ino
+          || (current.mode & 0o077) || realpathSync(path) !== path) throw Error('Unowned fixture');
+    };
+    const git = args => {
+      assertFixture();
+      return execFileSync('git', args, { cwd: fixture, env: repoEnv(), encoding: 'utf8' }).trim();
+    };
     try {
+      assertFixture();
+      chmodSync(fixture, 0o755);
+      assert.throws(() => git(['init', '--quiet']), /Unowned fixture/);
+      assert.equal(existsSync(join(fixture, '.git')), false);
+      chmodSync(fixture, 0o700);
+      const alias = join(parent, 'symlink');
+      symlinkSync(fixture, alias);
+      try { assert.throws(() => assertFixture(alias), /Unowned fixture/); }
+      finally { unlinkSync(alias); }
+      assert.throws(() => assertFixture(fixture, { ...owned, ino: owned.ino + 1 }), /Unowned fixture/);
+      assert.equal(existsSync(join(fixture, '.git')), false);
       git(['init', '--quiet', '--initial-branch=fixture']);
       git(['config', 'user.name', 'Synthetic metadata test']);
       git(['config', 'user.email', 'synthetic@example.invalid']);
@@ -105,15 +144,29 @@ test('actual caller compares an owned disposable Git checkout, including tracked
       writeFileSync(join(fixture, 'apps/api/untracked.ts'), 'new');
       let rejected = false; try { backend(command); } catch { rejected = true; }
       if (!rejected) throw Error('Untracked drift accepted');
+      if (${fail}) assert.fail('Synthetic assertion failure');
       process.stdout.write('owned Git fixture passed\\n');
     } finally {
-      const current = lstatSync(fixture);
-      if (current.ino !== owned.ino || current.uid !== owned.uid || current.isSymbolicLink()) throw Error('Fixture identity changed');
+      assertFixture();
       rmSync(fixture, { recursive: true });
     }
   `;
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e', program], { encoding: 'utf8', env: process.env });
-  expect(result.stderr).toBe('');
-  expect(result.status).toBe(0);
-  expect(result.stdout).toContain('owned Git fixture passed');
+    const env = { ...process.env };
+    if (temp === 'unset') delete env.TMPDIR;
+    else env.TMPDIR = temp === 'shared' ? parent : scratch;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', program], { encoding: 'utf8', env });
+    assertScratch();
+    expect(readdirSync(scratch)).toEqual([]);
+    if (fail) {
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('Synthetic assertion failure');
+    } else {
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('owned Git fixture passed');
+    }
+  } finally {
+    assertScratch();
+    rmdirSync(scratch);
+  }
 });
