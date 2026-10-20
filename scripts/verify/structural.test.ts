@@ -36,7 +36,7 @@ function verify() {
 test("a cohesive source module passes the canonical structural caller regardless of file length", () => {
   const result = verify();
   expect(result.error).toBeUndefined();
-  expect({ status: result.status, stdout: result.stdout, stderr: result.stderr }).toMatchObject({ status: 0 });
+  if (result.status !== 0) throw new Error(result.stdout + "\n" + result.stderr);
   expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: "pass", blocking: true });
 });
 
