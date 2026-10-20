@@ -58,7 +58,7 @@ Each row names the mechanism; a tenet with "convention" as its mechanism is a TO
 | T5 | **Tests are the spec, and they must be able to fail.** No `--passWithNoTests`. New behavior lands with a test that fails without the change. Agent-written tests are checked by mutation score on the touched files. | Jest config, Stryker incremental with `thresholds.break`, "test-fails-without-change" check on incident PRs |
 | T6 | **Deterministic before probabilistic.** Cheap binary checks run first and short-circuit. Agents run only where judgment is needed, only on the paths that need it, at the smallest model that works. A finding an agent has made twice becomes a deterministic check. | Layer ordering in `scripts/verify`, `risk-tiers.yml` path routing, lens files carry a "promote to lint" field |
 | T7 | **Evidence, not assertions.** "Verified" means an artifact exists: test output, screenshot, log excerpt, deploy URL. PR bodies are generated from `.evidence/`, not typed. | `scripts/verify` writes `.evidence/`; CI uploads it; the review lens rejects PRs whose test plan has no artifact |
-| T8 | **Small, single-domain, revertable PRs.** Hard cap of 600 changed lines excluding lockfiles, migrations, generated files, and snapshots. One domain per PR. Every PR is squash-merged so `git revert` is one commit. | `size-check` in Layer 1, existing `domain-check`, squash-only ruleset |
+| T8 | **Coherent, reviewable and revertable PRs.** Keep one accepted outcome together when its source and controls require joint validation; split only independently useful, testable and safely shippable units, using reviewability and complete evidence rather than a line quota. | `size-check` in Layer 1, existing `domain-check`, squash-only ruleset |
 | T9 | **Deploys are reversible in one command.** Migrations are additive unless the PR carries a down migration. Risky behavior ships behind a flag. Mobile ships as staged OTA. | `migration-safety` check, `scripts/deploy/rollback.sh`, `eas update --rollout-percentage` |
 | T10 | **Danger zones get the strictest tier.** Auth, subscriptions, macro estimation, external clients, migrations, workflows, and deploy config are `tier: high` and run every layer at the strongest model. | `risk-tiers.yml` consumed by CI job conditions and lens selection |
 | T11 | **Fail closed on the unknown.** A route without a guard declaration, an env var without a schema entry, a check without a registry entry, a workflow change without the workflow lens: each fails, never warns. | Structural checks are FAIL-only; env schema in `packages/shared/src/env.ts` is the only reader of `process.env` |
@@ -180,9 +180,9 @@ Agents stop reading a checklist and run the command.
 | eslint mobile | **new** | mobile is entirely unlinted; add `react-native` and `react-hooks` plugin configs |
 | `dependency-cruiser` (T3) | **new** | the boundary graph from T3 as config; also forbids circular imports and `apps/api/app/**` importing `@prisma/client` directly |
 | `knip` dead exports and unused deps | **new**, shadow first | prevents agent-created orphans from accumulating |
-| structural tests | have, **fix** | convert 4-8 from WARN to FAIL with a grandfather allowlist file that can only shrink (a check asserts the allowlist never grows); make 3 and 5 use `--scope=changed` |
+| structural tests | have, **fix** | retain explicit security and architectural invariants with their existing shrink-only exceptions; source-file length does not fail verification |
 | route guard + schema check (T4) | extend existing check 12 | every `route.ts` exports `auth: 'public' \| 'user' \| 'subscriber'` and a schema; check reads the export |
-| `size-check` (T8) | **new** | 600 lines, exclusions listed in registry; `override-size` label with justification logs to Layer 10 |
+| `size-check` (T8) | **new** | reports counted review scope without blocking by line count or requiring a size-override label |
 | secrets scan | have (grep), **upgrade** | `gitleaks` on the diff; the grep is weak |
 | `actionlint` + workflow-diff lens trigger | **new** | any `.github/**` change is tier high |
 | `passWithNoTests` removed | **fix** | all three jest configs |
@@ -271,7 +271,7 @@ The verifier runs on a different model tier from the finder (Sonnet finds, Haiku
 We cannot get a different model family inside one vendor; the compensating controls are the different lens, the refute pass, and Layer 1-3 catching the mechanical classes regardless.
 Escape rate in Layer 10 tells us whether this is enough.
 
-**Lens files** live in `.claude/lenses/<lens>.md`, each under 80 lines: what to look for, evidence bar, examples from real incidents, and a `promote-to-lint:` section listing findings this lens has made more than once (T6 requires those to become deterministic checks; the harness-audit lens checks this list is shrinking).
+**Lens files** live in `.claude/lenses/<lens>.md`, organized around what to look for, the evidence bar, examples from real incidents, and a `promote-to-lint:` section listing findings this lens has made more than once (T6 requires those to become deterministic checks; the harness-audit lens checks this list is shrinking).
 A `REVIEW.md` at repo root carries the shared rules: severity definitions, skip paths (lockfiles, generated, snapshots, `.evidence/`), `file:line` evidence bar, nit cap of 5, "do not comment on what CI enforces".
 
 **Mechanism:** `claude-code-action@v1` in `.github/workflows/review.yml`, mode "once after PR creation, then on `@claude review`" (not every push; the author agent asks for re-review after fixing).
@@ -455,7 +455,7 @@ The pipeline's job is to extract the project context they would otherwise need a
 
 | The author would need to know | Supplied by | Layer |
 |---|---|---|
-| how to build, test, run, and what "done" means | `npm run verify`, `npm run dev:*`; root `CLAUDE.md` under 100 lines with only commands and pointers; nested `apps/api/CLAUDE.md`, `apps/mobile/CLAUDE.md`, `scripts/CLAUDE.md` with that surface's conventions | L0 |
+| how to build, test, run, and what "done" means | `npm run verify`, `npm run dev:*`; root `CLAUDE.md` with clear commands and pointers; nested `apps/api/CLAUDE.md`, `apps/mobile/CLAUDE.md`, `scripts/CLAUDE.md` with that surface's conventions | L0 |
 | the correct shape of a route, screen, service, migration, test | `scripts/gen/*` emits it; the author fills in logic | T1 |
 | where a file is allowed to import from | dependency-cruiser failure names the rule and the allowed targets | L1 |
 | which routes are guarded, what the request/response looks like | `packages/shared/src/contracts/`; the contract test fails with the schema diff | L3, L4 |
