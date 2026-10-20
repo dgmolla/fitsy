@@ -31,7 +31,7 @@ touch multiple domains will be rejected.
 - Positioning, launch strategy (GTM)
 
 ## Constraints
-- CLAUDE.md stays under 200 lines. Link to docs/ for depth.
+- Keep CLAUDE.md focused on project context; link to docs/ for supporting detail.
 - Every harness change must have a clear reason (metric, bug, or gap)
 - Don't over-engineer the harness — start strict on danger zones, light elsewhere
 - Specs must be approved by human + relevant domain agent before breaking into tasks
