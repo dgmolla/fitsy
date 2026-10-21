@@ -97,6 +97,8 @@ test('uses the real Deploy step to deny an incompatible binary', () => {
 });
 
 test('actual production helper prevents unsafe publication and exports only verified iOS', () => {
+  const appliedHead = git('rev-parse', 'HEAD');
+  write('apps/mobile/app/pending.tsx', 'unapplied JavaScript');
   copyFileSync(join(repo, 'scripts/deploy/ota.sh'), join(root, 'scripts/deploy/ota.sh'));
   copyFileSync(join(repo, 'scripts/deploy/ota-hold.sh'), join(root, 'scripts/deploy/ota-hold.sh'));
   copyFileSync(join(repo, 'scripts/deploy/ota-lock.sh'), join(root, 'scripts/deploy/ota-lock.sh'));
@@ -106,12 +108,13 @@ test('actual production helper prevents unsafe publication and exports only veri
   git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
   const bin = join(root, '.git/bin'); mkdirSync(bin);
   const log = join(root, '.git/eas-calls');
+  writeFileSync(log, '');
   const holdState = join(root, '.git/hold-state');
   writeFileSync(holdState, '[[]]');
   const leaseState = join(root, '.git/lease-state');
   installGithubFixture(bin, holdState, leaseState);
   writeFileSync(join(bin, 'curl'), "#!/bin/bash\nprintf '%s' '{\"runtimeVersion\":\"1.0.0\",\"launchAsset\":{\"hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"contentType\":\"application/javascript\"},\"assets\":[],\"extra\":{}}'\n", { mode: 0o755 });
-  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\n[ -z "\${GH_TOKEN:-}" ] && [ -z "\${GITHUB_TOKEN:-}" ] || exit 88\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nenv:exec) bash -c "$4" ;;\nupdate:view) printf '[{"group":"%s","platform":"ios","runtimeVersion":"1.0.0","manifestPermalink":"https://u.expo.dev/update/11111111-1111-1111-1111-111111111111"}]' "$3" ;;\nupdate) [ ! -f '${log}.fail' ] || exit 7; printf '[{"group":"test-group"}]' ;;\nupdate:list) printf '{"currentPage":[{"group":"test-group"}]}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
+  writeFileSync(join(bin, 'npx'), `#!/bin/bash\nset -eu\n[ -z "\${GH_TOKEN:-}" ] && [ -z "\${GITHUB_TOKEN:-}" ] || exit 88\nprintf '%s\\n' "$*" >> '${log}'\ncase "$2" in\nenv:exec) bash -c "$4" ;;\nupdate:view) printf '[{"group":"%s","platform":"ios","gitCommitHash":"%s","runtimeVersion":"1.0.0","manifestPermalink":"https://u.expo.dev/update/11111111-1111-1111-1111-111111111111"}]' "$3" "$(cat '${log}.applied' 2>/dev/null || printf %s '${appliedHead}')" ;;\nupdate) [ ! -f '${log}.fail' ] || exit 7; printf '[{"group":"test-group"}]' ;;\nupdate:list) printf '{"currentPage":[{"group":"test-group"}]}' ;;\n*) exit 99 ;;\nesac\n`, { mode: 0o755 });
   writeFileSync(join(bin, 'sleep'), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
   const run = (google: string) => spawnSync('bash', ['scripts/deploy/ota.sh', 'test release'], {
     cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}`,
@@ -120,6 +123,7 @@ test('actual production helper prevents unsafe publication and exports only veri
   expect(run('different.apps.googleusercontent.com').status).toBe(1);
   expect(readFileSync(log, 'utf8')).not.toContain('update --platform');
   const accepted = run('expected.apps.googleusercontent.com');
+  expect(accepted.status === 0 ? '' : accepted.stdout + accepted.stderr).toBe('');
   expect(accepted.status).toBe(0);
   expect(accepted.stdout).toContain('verified: production branch serves group test-group');
   expect(readFileSync(log, 'utf8')).toContain('update --platform ios --branch production --environment production');
@@ -134,17 +138,6 @@ test('actual production helper prevents unsafe publication and exports only veri
   const yaml = require('js-yaml') as { load: (input: string) => {
     jobs: { changes: { steps: { id?: string; run?: string }[] }; ota: { if: string }; smoke: { if: string } } } };
   const workflow = yaml.load(readFileSync(join(repo, '.github/workflows/deploy.yml'), 'utf8'));
-  const changes = workflow.jobs.changes.steps.find(step => step.id === 'f')!.run!;
-  // workflow_dispatch supplies the reviewed release SHA, not a push-event before ref.
-  // The API fixture returns the same current main ref that the protected job checks.
-  const classifyBin = join(root, '.git/classify-bin'); mkdirSync(classifyBin);
-  writeFileSync(join(classifyBin, 'gh'), `#!/bin/bash\n[ "$1" = api ] || exit 99\nprintf '%s' '${apiHead}'\n`, { mode: 0o755 });
-  const output = join(root, '.git/change-outputs');
-  const classified = spawnSync('bash', ['-e', '-c', changes], { cwd: root,
-    env: { ...cleanEnv, PATH: `${classifyBin}:${process.env.PATH}`, GITHUB_OUTPUT: output,
-      GITHUB_REPOSITORY: 'dgmolla/fitsy', RELEASE_SHA: apiHead } });
-  expect(classified.status).toBe(0);
-  expect(readFileSync(output, 'utf8')).toContain('mobile=false');
   const queuedPublication = run('expected.apps.googleusercontent.com');
   expect(queuedPublication.status).toBe(0);
   expect(queuedPublication.stdout).toContain('verified: production branch serves group test-group');
@@ -152,26 +145,25 @@ test('actual production helper prevents unsafe publication and exports only veri
   // the current mobile contents without requiring B to retry A's missing OTA.
   // GitHub may replace pending A entirely while another Deploy is active.
   // Evaluate the actual surviving B job guard and run the actual helper: its
-  // API-only classification must not suppress publication of A's mobile JS.
+  // API-only source must not suppress publication of A's unapplied mobile JS.
   git('checkout', '-q', '--detach', apiHead);
-  const runSurvivor = (migration: string, smoke: string) => {
+  const runSurvivor = (smoke: string) => {
     const condition = workflow.jobs.ota.if.replaceAll('always()', 'true')
       .replaceAll('needs.changes.outputs.mobile', "'false'")
-      .replaceAll('needs.migrate.result', `'${migration}'`)
       .replaceAll('needs.smoke.result', `'${smoke}'`);
     return spawnSync('bash', ['-e', '-c', `if [[ ${condition} ]]; then bash scripts/deploy/ota.sh 'surviving API push'; fi`], {
       cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}`,
         EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 'expected.apps.googleusercontent.com' },
     });
   };
-  const survivingPublication = runSurvivor('success', 'success');
+  const survivingPublication = runSurvivor('success');
   expect(survivingPublication.status).toBe(0);
   expect(survivingPublication.stdout).toContain(`"source_sha":"${apiHead}"`);
   expect(survivingPublication.stdout).toContain('verified: production branch serves group test-group');
   const safeCalls = readFileSync(log, 'utf8');
-  const blockedStates: Array<[string, string]> = [['failure', 'skipped'], ['cancelled', 'skipped'], ['success', 'failure'], ['success', 'cancelled'], ['success', 'skipped']];
-  for (const [migration, smoke] of blockedStates) {
-    expect(runSurvivor(migration, smoke).status).toBe(0);
+  const blockedStates = ['failure', 'cancelled', 'skipped'];
+  for (const smoke of blockedStates) {
+    expect(runSurvivor(smoke).status).toBe(0);
     expect(readFileSync(log, 'utf8')).toBe(safeCalls);
   }
   // A later docs-only survivor includes B's API change but has api=false.
@@ -179,20 +171,25 @@ test('actual production helper prevents unsafe publication and exports only veri
   git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
   const smokeCondition = workflow.jobs.smoke.if.replaceAll('always()', 'true')
     .replaceAll('needs.changes.outputs.api', "'false'")
-    .replaceAll('needs.migrate.result', "'success'");
+    .replaceAll('needs.changes.result', "'success'");
   const smokeDecision = spawnSync('bash', ['-c', `[[ ${smokeCondition} ]]`], { cwd: root });
   expect(smokeDecision.status).toBe(0);
-  expect(runSurvivor('success', 'success').stdout).toContain('verified: production branch serves group test-group');
+  expect(runSurvivor('success').stdout).toContain('verified: production branch serves group test-group');
+  writeFileSync(`${log}.applied`, git('rev-parse', 'HEAD'));
+  const alreadyApplied = runSurvivor('success');
+  expect(alreadyApplied.status).toBe(0);
+  expect(alreadyApplied.stdout).toContain('OTA not applicable');
+  rmSync(`${log}.applied`);
   // A durable operator rollback hold suppresses every surviving publication.
   const beforeHold = readFileSync(log, 'utf8');
   writeFileSync(holdState, '[[{"number":99,"title":"release: iOS OTA rollback hold"}]]');
-  const held = runSurvivor('success', 'success');
+  const held = runSurvivor('success');
   expect(held.status).toBe(0);
   expect(held.stdout).toContain('OTA skipped: rollback recovery hold');
   expect(readFileSync(log, 'utf8')).toBe(beforeHold);
   // Read failure must not silently drop the hold.
   writeFileSync(holdState, 'invalid JSON');
-  expect(runSurvivor('success', 'success').status).not.toBe(0);
+  expect(runSurvivor('success').status).not.toBe(0);
   expect(readFileSync(log, 'utf8')).toBe(beforeHold);
   writeFileSync(holdState, '[[]]');
   git('checkout', '-q', '--detach', mobileHead);

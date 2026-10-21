@@ -730,10 +730,17 @@ def ci_acceptance(config, issue, pr, review, verify_id, *, merged_main=None):
     latest = github(config, f'{endpoint}/actions/workflows/{config["verify_workflow_id"]}/runs?head_sha={source}&event=pull_request&per_page=1')
     require(latest['workflow_runs'] and latest['workflow_runs'][0]['id'] == verify_id,
             'superseded Verify cannot authorize acceptance')
+    validate_verify_jobs(config, run, source)
+    return policy
+
+
+def validate_verify_jobs(config, run, source, names=VERIFY_JOBS):
+    """Shared execution/issuer proof for candidate and automatic main releases."""
+    endpoint, verify_id = f'repos/{REPO}', run['id']
     jobs = github(config, f'{endpoint}/actions/runs/{verify_id}/jobs?filter=latest&per_page=100')
     require(0 < jobs['total_count'] <= 100 and jobs['total_count'] == len(jobs['jobs']),
             'complete Verify jobs required')
-    for name in VERIFY_JOBS:
+    for name in names:
         matches = [job for job in jobs['jobs'] if job['name'] == name]
         require(len(matches) == 1, 'required Verify job missing or ambiguous')
         job = matches[0]
@@ -748,7 +755,6 @@ def ci_acceptance(config, issue, pr, review, verify_id, *, merged_main=None):
                 and check['check_suite']['id'] == run['check_suite_id']
                 and check['status'] == 'completed' and check['conclusion'] == 'success',
                 'Verify job issuer/execution mismatch')
-    return policy
 
 
 def local_acceptance(config, issue, source, review, policy):

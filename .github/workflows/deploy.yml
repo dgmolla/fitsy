@@ -1,39 +1,14 @@
-# Protected App-initiated release of one verified main commit (L8-L9).
-# Runs NO model and holds the production secrets only in release jobs
-# (T12: agent jobs and deploy jobs never mix).
-#
-#   migrate  - reconcile pending Prisma migrations on every authorized dispatch.
-#              Old code runs on the new schema while Vercel builds; guardrails
-#              are structural check 13 (no NOT NULL without default) plus
-#              migration review - NOT a full additive-only proof. If a
-#              migration still breaks old code: rollback.sh api + incident.
-#   smoke    - waits for Vercel's production deployment of this commit, then
-#              runs the prod-safe API smoke; failure files an incident issue.
-#              Rollback is one local command: scripts/deploy/rollback.sh api
-#   ota      - attempts guarded iOS publication after migration and smoke,
-#              including when the verified commit changes only API files;
-#              native drift still blocks publication.
+# Automatic routine release of one independently reviewed protected main tree.
+# Sensitive maintenance and native/Apple releases retain their separate environments.
 name: Deploy
 on:
-  workflow_dispatch:
-    inputs:
-      release_sha:
-        description: Exact verified protected main source
-        required: true
-        type: string
-      verify_run:
-        description: Successful main push Verify run ID
-        required: true
-        type: string
-      acceptance_sha256:
-        description: Operator-validated issue acceptance digest
-        required: true
-        type: string
+  workflow_run:
+    workflows: [Verify]
+    types: [completed]
+    branches: [main]
 
-run-name: 'Release ${{ inputs.release_sha }} Verify ${{ inputs.verify_run }} Acceptance ${{ inputs.acceptance_sha256 }}'
+run-name: 'Release Verify ${{ github.event.workflow_run.id }}'
 
-# Serialize active deploys. Each surviving authorized dispatch reconciles
-# mobile delivery regardless of its individual commit diff.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -41,163 +16,86 @@ concurrency:
 permissions:
   actions: read
   contents: read
+  checks: read
+  deployments: read
   issues: write
   statuses: read
-  deployments: read
+  pull-requests: read
 
 jobs:
   changes:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
-      migrations: ${{ steps.f.outputs.migrations }}
-      mobile: ${{ steps.f.outputs.mobile }}
-      api: ${{ steps.f.outputs.api }}
+      release_sha: ${{ steps.f.outputs.release_sha }}
     steps:
-      - name: Require independently installed App initiation and exact Verify
-        env:
-          RELEASE_SHA: ${{ inputs.release_sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERIFY_RUN: ${{ inputs.verify_run }}
-          ACCEPTANCE_SHA: ${{ inputs.acceptance_sha256 }}
-          # Authenticated App/bot readback; final resolved bytes require independent review.
-          DISPATCH_ACTOR_ID: '341457831'
-          DISPATCH_ACTOR_LOGIN: 'fitsy-delivery-approval[bot]'
-        run: |
-          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$ACCEPTANCE_SHA" =~ ^[0-9a-f]{64}$ && "$VERIFY_RUN" =~ ^[1-9][0-9]*$ ]] || exit 1
-          [[ "$DISPATCH_ACTOR_ID" =~ ^[1-9][0-9]*$ ]] || { echo "App identity not installed"; exit 1; }
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" > "$RUNNER_TEMP/release-run.json"
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${VERIFY_RUN}" > "$RUNNER_TEMP/verify-run.json"
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/352020416/runs?head_sha=${RELEASE_SHA}&event=push&per_page=1" > "$RUNNER_TEMP/latest-verify.json"
-          python3 - <<'PYCODE'
-          import json, os
-          from pathlib import Path
-          root = Path(os.environ['RUNNER_TEMP'])
-          run = json.loads((root / 'release-run.json').read_text())
-          verify = json.loads((root / 'verify-run.json').read_text())
-          latest = json.loads((root / 'latest-verify.json').read_text())
-          actor = {'id': int(os.environ['DISPATCH_ACTOR_ID']), 'login': os.environ['DISPATCH_ACTOR_LOGIN'], 'type': 'Bot'}
-          assert all(all(run[field][key] == value for key, value in actor.items()) for field in ('actor', 'triggering_actor'))
-          assert run['workflow_id'] == 352171272 and run['event'] == 'workflow_dispatch' and run['head_branch'] == 'main'
-          assert run['head_sha'] == os.environ['RELEASE_SHA'] and run['path'] == '.github/workflows/deploy.yml'
-          assert verify['workflow_id'] == 352020416 and verify['path'] == '.github/workflows/verify.yml'
-          assert verify['event'] == 'push' and verify['head_branch'] == 'main' and verify['repository']['full_name'] == os.environ['GITHUB_REPOSITORY']
-          assert verify['head_sha'] == os.environ['RELEASE_SHA'] and verify['status'] == 'completed' and verify['conclusion'] == 'success'
-          assert latest['workflow_runs'] and latest['workflow_runs'][0]['id'] == int(os.environ['VERIFY_RUN'])
-          PYCODE
+      # Admission code comes from this protected workflow revision, never an
+      # unvalidated upstream checkout, artifact or cache.
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          ref: ${{ inputs.release_sha }}
-      - id: f
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Validate exact main Verify and independently reviewed PR provenance
+        id: f
         env:
-          RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Verify completed for this frozen main source; reconcile every release surface.
-          CURRENT=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
-          [ "$CURRENT" = "$RELEASE_SHA" ] || { echo "superseded main source"; exit 1; }
-          CHANGED=$(git diff --name-only "${RELEASE_SHA}^" "$RELEASE_SHA")
-          echo "$CHANGED"
-          {
-            echo "migrations=$(echo "$CHANGED" | grep -q '^prisma/migrations/' && echo true || echo false)"
-            echo "mobile=$(echo "$CHANGED" | grep -qE '^(apps/mobile/|packages/shared/|scripts/deploy/(native-compatibility\.mjs|ios-binary-baseline\.json|ota\.sh)$)' && echo true || echo false)"
-            echo "api=$(echo "$CHANGED" | grep -qE '^(apps/api/|packages/|prisma/|scripts/|vercel\.json|package\.json|package-lock\.json)' && echo true || echo false)"
-          } >> "$GITHUB_OUTPUT"
+        run: python3 scripts/deploy/routine-release.py
 
-  migrate:
-    environment: production-release
-    # Runs on every authorized dispatch: migrate deploy is a no-op when
-    # nothing is pending, and gating it on this commit's diff can lose
-    # migrations from commits whose pending dispatch was superseded.
+  smoke:
     needs: changes
+    if: needs.changes.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_sha }}
+          ref: ${{ needs.changes.outputs.release_sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
-      - name: Migrate production
+      # Vercel's existing Git integration builds, migrates and assigns domains.
+      # Verify is required for release completion, not for provider build timing.
+      - name: Observe the exact successful Vercel Git deployment and serving source
         env:
-          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
-        run: bash scripts/deploy/migrate-prod.sh
-      - name: File incident on failure
-        if: failure()
-        env:
-          RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
         run: |
-          gh issue create --label incident \
-            --title "incident: prod migration failed at ${RELEASE_SHA:0:7}" \
-            --body "prisma migrate deploy against prod failed for $RELEASE_SHA. Production promotion must remain withheld; if the new code needs the new schema, roll back: \`scripts/deploy/rollback.sh api\`. Closing PR must add fix + detector + constraint."
-
-  smoke:
-    environment: production-release
-    needs: [changes, migrate]
-    # Replaced pending pushes can contain API changes absent from this push's diff.
-    if: always() && needs.migrate.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.release_sha }}
-      - name: Wait for Vercel PRODUCTION deployment of this commit
-        env:
-          RELEASE_SHA: ${{ inputs.release_sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Use the Deployments API filtered to environment=Production: the same
-          # sha also gets a Preview deployment via the dev-branch mirror, and a
-          # bare commit status cannot tell them apart.
-          for i in $(seq 1 60); do
-            DID=$(gh api "repos/${GITHUB_REPOSITORY}/deployments?sha=${RELEASE_SHA}&environment=Production" --jq '.[0].id' 2>/dev/null || true)
-            if [ -n "$DID" ] && [ "$DID" != "null" ]; then
-              STATE=$(gh api "repos/${GITHUB_REPOSITORY}/deployments/$DID/statuses" --jq '.[0].state' 2>/dev/null || true)
-              echo "production deployment $DID: ${STATE:-pending} ($i)"
-              [ "$STATE" = "success" ] && exit 0
-              case "$STATE" in failure|error) echo "vercel production deploy failed"; exit 1 ;; esac
-            else
-              echo "no Production deployment yet ($i)"
-            fi
-            sleep 20
-          done
-          echo "timed out waiting for the Vercel production deployment"; exit 1
+          python3 scripts/deploy/routine-release.py observe "$RELEASE_SHA" > "$RUNNER_TEMP/vercel-deployment.json"
+          cat "$RUNNER_TEMP/vercel-deployment.json"
       - name: Prod-safe API smoke
         env:
-          # optional: set these secrets to activate the entitled-account probe
           PROD_SMOKE_EMAIL: ${{ secrets.PROD_SMOKE_EMAIL }}
           PROD_SMOKE_PASSWORD: ${{ secrets.PROD_SMOKE_PASSWORD }}
         run: bash scripts/verify/api-e2e.sh --base=https://fitsy.org --prod-safe
+      - name: Verify serving identity after smoke
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
+        run: python3 scripts/deploy/routine-release.py health "$RELEASE_SHA" "$RUNNER_TEMP/vercel-deployment.json"
       - name: File incident on failure
         if: failure()
         env:
-          RELEASE_SHA: ${{ inputs.release_sha }}
+          RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh issue create --label incident \
-            --title "incident: prod smoke failed at ${RELEASE_SHA:0:7}" \
-            --body "Post-deploy smoke failed for $RELEASE_SHA (see the Deploy workflow logs). ROLL BACK FIRST: \`scripts/deploy/rollback.sh api\`, diagnose second. Closing PR must add fix + detector + constraint."
+          gh issue create --label incident --title "incident: prod release failed at ${RELEASE_SHA:0:7}" \
+            --body "**TL;DR:** Production verification stopped. Inspect Vercel's Git deployment, migration/build logs and actual fitsy.org serving source before resuming. If needed, use the retained known-good URL: scripts/deploy/rollback.sh api https://KNOWN_GOOD_URL. Source $RELEASE_SHA; see Deploy logs."
 
   ota:
-    environment: production-release
     # Trusted main release jobs coordinate with local rollback through a Git ref.
     permissions:
       contents: write
       issues: write
       statuses: read
-    needs: [changes, migrate, smoke]
-    # Every surviving source must pass migration and production API smoke.
-    if: always() && needs.migrate.result == 'success' && needs.smoke.result == 'success'
+    needs: [changes, smoke]
+    # Exact Git production build (including migration) and API smoke must pass.
+    if: always() && needs.smoke.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.release_sha }}
+          ref: ${{ needs.changes.outputs.release_sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -220,7 +118,7 @@ jobs:
       - name: File a release reminder when OTA is unsafe
         if: steps.nativecheck.outputs.unsafe == 'true'
         env:
-          RELEASE_SHA: ${{ inputs.release_sha }}
+          RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REASON: ${{ steps.nativecheck.outputs.reason }}
         run: |
@@ -247,19 +145,20 @@ jobs:
       - name: Missing protected EXPO_TOKEN
         if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'false'
         env:
-          RELEASE_SHA: ${{ inputs.release_sha }}
+          RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh issue list --label release --state open --search "OTA pending" --json number --jq length | grep -qv '^0$'; then
-            echo "open OTA-pending issue already exists"; exit 0
+            echo "open OTA-pending issue already exists"; exit 1
           fi
           gh issue create --label release \
             --title "release: OTA pending for ${RELEASE_SHA:0:7} (no EXPO_TOKEN in CI)" \
-            --body "**TL;DR:** OTA publication stopped because the protected release token is missing. Restore EXPO_TOKEN in the production-release environment, preserve independent approval, and resume the authorized release. Native builds require their separate production-native environment copy. Do not add a repository secret." || true
+            --body "**TL;DR:** OTA publication stopped because EXPO_TOKEN is missing from the existing CI route. Restore the authorized credential and resume the release. Native builds retain their separate production-native protection." || true
+          exit 1
       - name: File incident on OTA failure
         if: failure()
         env:
-          RELEASE_SHA: ${{ inputs.release_sha }}
+          RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue create --label incident \

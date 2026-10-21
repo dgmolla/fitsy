@@ -975,6 +975,21 @@ class DispatcherProcessTest(unittest.TestCase):
         r1 = p1.communicate(timeout=20); r2 = p2.communicate(timeout=20)
         self.assertEqual((p1.returncode, p2.returncode), (0, 0), (r1, r2))
         self.until(lambda: len(self.workers()) == 1)
+        # The child marker precedes the launcher's lock-protected PID receipt.
+        # Wait for that real protocol boundary, not merely child startup.
+        import fcntl
+        def launcher_ready():
+            with (self.state / 'dispatcher.lock').open('a') as lock:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    return False
+                active = self.state_data().get('active') or {}
+                return (active.get('stage') == 'running' and not active.get('finished_at')
+                        and active.get('pid_started') and active.get('launcher_started')
+                        and dispatcher.pid_identity(active['pid']) == active['pid_started']
+                        and dispatcher.pid_identity(active['launcher_pid']) == active['launcher_started'])
+        self.until(launcher_ready)
         self.assertIn(self.tick()['state'], ('running', 'uncertain-launch'))
         self.until(lambda: self.state_data()['active'].get('finished_at'))
         self.assertEqual(self.tick()['issue'], 351)
