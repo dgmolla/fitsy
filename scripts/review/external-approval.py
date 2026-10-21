@@ -726,6 +726,27 @@ def publish(config, issue, pr_number):
 
 
 def validate_acceptance(receipt, policy, source):
+    if receipt.get('id') == 'media-integration':
+        require(policy['required_checks'] == {'media-integration': 'pass'},
+                'media receipt cannot replace other acceptance checks')
+        require(receipt.get('source_sha') == source == policy.get('source_sha')
+                and isinstance(policy.get('input_hash'), str)
+                and re.fullmatch(r'[0-9a-f]{64}', policy['input_hash'])
+                and receipt.get('input_hash') == policy['input_hash'],
+                'media acceptance source/input mismatch')
+        command = ('FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- '
+                   '--runInBand --runTestsByPath verify/product-flow.test.ts '
+                   'sim/xctest-attachments.test.ts sim/runner-controls.test.ts')
+        require(receipt.get('command') == command and receipt.get('result') == 'pass'
+                and type(receipt.get('exit_code')) is int and receipt['exit_code'] == 0,
+                'media acceptance recipe/result mismatch')
+        try:
+            finished = datetime.fromisoformat(receipt['finished_at'].replace('Z', '+00:00'))
+            age = (datetime.now(timezone.utc) - finished).total_seconds()
+        except (KeyError, AttributeError, TypeError, ValueError):
+            raise ValueError('media acceptance timestamp invalid') from None
+        require(0 <= age <= 24 * 3600, 'media acceptance stale or future')
+        return
     require(receipt['head_sha'] == source and receipt['source_identity'] == policy['source_identity']
             and receipt['stage'] == 'full' and receipt['finished_at']
             and receipt['arguments'] == policy['arguments'], 'local acceptance source/recipe mismatch')

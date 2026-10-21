@@ -41,7 +41,7 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command.ends
     expect(readFileSync(ledger, 'utf8')).toBe(retained);
   });
   test('protected publication launcher authority covers fixed commands and live custody', () => {
-    const result = spawnSync('python3', ['-B', join(f.source, 'scripts/review/external-approval.test.py'), 'ProfileCustodyTests', '-v'],
+    const result = spawnSync('python3', ['-B', join(f.source, 'scripts/review/external-approval.test.py'), 'ProfileCustodyTests', 'AcceptanceTests', 'CIAcceptanceTests', '-v'],
       { cwd: f.source, encoding: 'utf8', env: f.env(), timeout: 20000 });
     if (result.status !== 0) throw Error(String(result.stdout) + String(result.stderr));
     expect(result.stderr).toContain('OK');

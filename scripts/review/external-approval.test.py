@@ -1546,6 +1546,92 @@ class CIAcceptanceTests(unittest.TestCase):
         self.assertFalse(f.writes)
 
 
+    def canonical_media(self):
+        # Real producer bytes in an isolated protocol fixture, not a media pass.
+        f = self.f; endpoint = f'repos/{external.REPO}'
+        f.api_override[f'{endpoint}/git/commits/' + 'b' * 40] = {'tree': {'sha': 'base-tree'}}
+        for tree, sha in [('base-tree', 'old'), ('equal-reviewed-product-tree', 'new')]:
+            f.api_override[f'{endpoint}/git/trees/{tree}?recursive=1'] = {
+                'truncated': False, 'tree': [{'path': 'scripts/verify/test.sh', 'mode': '100755', 'type': 'blob', 'sha': sha}]}
+        file = f.root / 'canonical-media.json'; input_hash = 'c' * 64
+        producer = REPO_ROOT / 'scripts/verify/media-integration.mjs'
+        command = ('import {writeMediaReceipt} from ' + json.dumps(producer.as_uri())
+                   + '; writeMediaReceipt(process.argv[1],process.argv[2],process.argv[3]);')
+        subprocess.run(['node', '--input-type=module', '-e', command, str(file), f.source, input_hash],
+                       cwd=REPO_ROOT, check=True, capture_output=True)
+        policy = f.config['local_acceptance']['443']
+        policy.update(required_checks={'media-integration': 'pass'}, source_sha=f.source,
+                      input_hash=input_hash, receipt_path=str(file), receipt_sha256=external.digest(file.read_bytes()))
+        return json.loads(file.read_text()), policy, file
+
+    def test_canonical_media_writer_reaches_actual_ci_first_acceptance(self):
+        receipt, policy, file = self.canonical_media()
+        original = file.read_bytes()
+        self.assertEqual(self.publish()['source_sha'], self.f.source)
+        self.assertEqual(self.f.writes[0]['name'], external.ACCEPTANCE_CHECK)
+        self.assertEqual(file.read_bytes(), original, 'consume original canonical bytes without conversion')
+
+    def test_canonical_media_rejects_missing_source_hash_recipe_result_and_time(self):
+        receipt, policy, file = self.canonical_media()
+        now = external.datetime.now(external.timezone.utc).timestamp()
+        cases = [{key: value} for key, value in (
+            ('id', 'other'), ('source_sha', 'f' * 40), ('input_hash', 'd' * 64),
+            ('command', receipt['command'] + ' --testNamePattern=one'), ('result', 'fail'),
+            ('exit_code', 1), ('exit_code', False), ('exit_code', '0'),
+            ('finished_at', 'invalid'), ('finished_at', None),
+            ('finished_at', external.datetime.fromtimestamp(now - 25 * 3600, external.timezone.utc).isoformat()),
+            ('finished_at', external.datetime.fromtimestamp(now + 3600, external.timezone.utc).isoformat()),
+            ('finished_at', external.datetime.fromtimestamp(now).isoformat()))]
+        for changed in [dict(receipt, **case) for case in cases] + [
+                {key: value for key, value in receipt.items() if key != missing} for missing in receipt]:
+            with self.subTest(receipt=changed):
+                file.write_text(json.dumps(changed))
+                policy['receipt_sha256'] = external.digest(file.read_bytes())
+                if changed.get('id') == 'media-integration':
+                    with self.assertRaises(ValueError): self.publish()
+                else:
+                    with self.assertRaisesRegex(KeyError, 'head_sha'): self.publish()
+                self.assertFalse(self.f.writes)
+
+    def test_canonical_media_cannot_replace_other_checks_or_unbound_policy(self):
+        receipt, policy, file = self.canonical_media()
+        original = dict(policy)
+        changes = [{'required_checks': checks} for checks in (
+            {}, {'tests': 'pass'}, {'media-integration': 'fail'},
+            {'media-integration': 'pass', 'tests': 'pass'},
+            {'media-integration': 'pass', 'product-flow': 'pass'})]
+        changes += [{'source_sha': 'f' * 40}, {'source_sha': None},
+                    {'input_hash': 'd' * 64}, {'input_hash': None}, {'input_hash': 'c' * 63}]
+        for change in changes:
+            with self.subTest(policy=change):
+                policy.clear(); policy.update(original); policy.update(change)
+                with self.assertRaises(ValueError): self.publish()
+                self.assertFalse(self.f.writes)
+        # Matching malformed expected/observed hashes and stale source still refuse.
+        for key, value in (('input_hash', 'g' * 64), ('source_sha', 'f' * 40)):
+            policy.clear(); policy.update(original); policy[key] = value
+            file.write_text(json.dumps(dict(receipt, **{key: value})))
+            policy['receipt_sha256'] = external.digest(file.read_bytes())
+            with self.assertRaises(ValueError): self.publish()
+            self.assertFalse(self.f.writes)
+
+    def test_canonical_media_keeps_protected_path_and_raw_hash_custody(self):
+        receipt, policy, file = self.canonical_media()
+        original = file.read_bytes()
+        file.write_bytes(original + b'\n')
+        with self.assertRaisesRegex(ValueError, 'unverified local acceptance'): self.publish()
+        file.write_bytes(original)
+        file.chmod(0o666)
+        with self.assertRaisesRegex(ValueError, 'custody'): self.publish()
+        file.chmod(0o600)
+        retained = file.with_suffix('.original'); file.rename(retained); file.symlink_to(retained)
+        with self.assertRaisesRegex(ValueError, 'custody'): self.publish()
+        file.unlink(); retained.rename(file)
+        file.unlink()
+        with self.assertRaises(FileNotFoundError): self.publish()
+        self.assertFalse(self.f.writes)
+
+
 class AppRenewalTests(unittest.TestCase):
     """Actual CLI admission/publication with private synthetic operator custody."""
     def setUp(self):
