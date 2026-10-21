@@ -7,8 +7,9 @@ import { installedFixtureHook, timingHook, installVerificationFixture } from './
 const root = resolve(__dirname, '../..');
 const yaml = require('js-yaml') as { load(value: string): unknown };
 let directory: string;
+// Registry fixtures own their inputs and never acquire the outer CI database.
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-  !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$|NODE_OPTIONS$|NODE_PATH$)/.test(key)));
+  !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$|NODE_OPTIONS$|NODE_PATH$|POSTGRES_PRISMA_URL$|POSTGRES_URL_NON_POOLING$)/.test(key)));
 const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, encoding: 'utf8', env }).trim();
 const write = (file: string, value: string) => {
   mkdirSync(join(directory, file, '..'), { recursive: true });
@@ -67,6 +68,93 @@ test('local caller comparison cannot hide code or dirty files; explicit CI range
 test('nested Markdown outside low-risk documentation paths keeps code jobs', () => {
   write('apps/api/README.md', 'API operations.\n');
   expect(plan()).toMatchObject({ documentationOnly: false, code: true, tests: true, build: true });
+});
+
+
+const ciBaselineNames = ['structural', 'secrets', 'context-freshness', 'size-check'];
+function ciBaselineFixture(code = true) {
+  type Step = { name?: string; run?: string };
+  const workflow = yaml.load(readFileSync(join(root, '.github/workflows/verify.yml'), 'utf8')) as {
+    jobs: Record<'classify' | 'static' | 'test' | 'build', { needs?: string | string[]; steps: Step[] }> };
+  const baseline = workflow.jobs.classify.steps.find(step => step.name?.startsWith('Baseline checks'))?.run;
+  const staticCommand = workflow.jobs.static.steps.find(step => step.name?.startsWith('Run L0-L1 checks'))?.run;
+  expect(baseline).toBeTruthy(); expect(staticCommand).toBeTruthy();
+  for (const job of ['static', 'test', 'build'] as const) {
+    expect([workflow.jobs[job].needs].flat()).toContain('classify');
+  }
+  const registryText = readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8');
+  const registry = yaml.load(registryText) as { checks: { name: string; script: string }[] };
+  write('scripts/verify/registry.yml', registryText);
+  for (const check of registry.checks) write(`scripts/verify/${check.script}`, `#!/bin/bash
+printf '%s\n' '${check.name}' >> .evidence/baseline-calls
+[ "\${FAIL_BASELINE:-}" != '${check.name}' ] || exit 1
+[ '${check.name}' != size-check ] || [ "\${SIZE_NOT_APPLICABLE:-0}" != 1 ] || exit 2
+printf '%s\n' '{"summary":"counted ${check.name}"}'
+`);
+  const before = commit();
+  write(code ? 'apps/api/lib/changed.ts' : 'docs/changed.md', code ? 'export const changed = true;\n' : 'Documentation.\n');
+  const after = commit();
+  git('update-ref', 'refs/remotes/origin/main', after);
+  const eventEnv = { CI: 'true', GITHUB_EVENT_NAME: 'push',
+    GITHUB_EVENT_PATH: event('baseline-push', { before, after }) };
+  expect(plan(eventEnv).code).toBe(code);
+  const calls = () => readFileSync(join(directory, '.evidence/baseline-calls'), 'utf8').trim().split('\n');
+  const run = (extra: Record<string, string> = {}) => {
+    write('.evidence/baseline-calls', '');
+    const baselineResult = spawnSync('bash', ['-c', baseline!],
+      { cwd: directory, env: { ...env, ...eventEnv, ...extra }, encoding: 'utf8', timeout: 30000 });
+    // This is the actual workflow needs/if route, not a fabricated passing status.
+    const staticResult = baselineResult.status === 0 && code ? spawnSync('bash', ['-c', staticCommand!],
+      { cwd: directory, env: { ...env, ...eventEnv, ...extra }, encoding: 'utf8', timeout: 30000 }) : null;
+    return { baselineResult, staticResult };
+  };
+  return { run, calls };
+}
+
+test.each([true, false])('CI baseline checks execute once for code=%s', code => {
+  const fixture = ciBaselineFixture(code);
+  const { baselineResult, staticResult } = fixture.run();
+  expect({ status: baselineResult.status, stderr: baselineResult.stderr }).toEqual({ status: 0, stderr: '' });
+  if (code) expect(staticResult?.status).toBe(0);
+  else expect(staticResult).toBeNull();
+  for (const name of ciBaselineNames) expect(fixture.calls().filter(call => call === name)).toHaveLength(1);
+  expect(fixture.calls().includes('lint')).toBe(code);
+});
+
+test.each(ciBaselineNames)('CI baseline failure in %s prevents static checks', name => {
+  const fixture = ciBaselineFixture();
+  const { baselineResult, staticResult } = fixture.run({ FAIL_BASELINE: name });
+  expect(baselineResult.status).toBe(1); expect(staticResult).toBeNull();
+  expect(fixture.calls().at(-1)).toBe(name);
+  expect(fixture.calls()).not.toContain('lint');
+});
+
+test('CI ownership preserves size N/A, local safety checks and explicit standalone calls', () => {
+  const fixture = ciBaselineFixture();
+  const result = fixture.run({ SIZE_NOT_APPLICABLE: '1' });
+  expect(result.baselineResult.status).toBe(0); expect(result.staticResult?.status).toBe(0);
+  expect(fixture.calls().filter(name => name === 'size-check')).toHaveLength(1);
+  write('.evidence/baseline-calls', '');
+  const local = cli('run.mjs', ['--stage=cheap', '--layer=0-1', '--runs=local']);
+  expect({ status: local.status, stderr: local.status === 0 ? '' : local.stderr }).toEqual({ status: 0, stderr: '' });
+  for (const name of ciBaselineNames.filter(name => name !== 'size-check')) {
+    expect(fixture.calls().filter(call => call === name)).toHaveLength(1);
+  }
+  write('.evidence/baseline-calls', '');
+  expect(cli('run.mjs', ['--only=size-check', '--runs=ci']).status).toBe(0);
+  expect(fixture.calls()).toEqual(['size-check']);
+});
+
+test('actual domain gate uses owned temporary storage and preserves routing', () => {
+  for (const file of ['scripts/verify/domain-check.sh', 'scripts/verify/domain-allowlist-paths.mjs', 'scripts/route-reviewers.sh']) {
+    write(file, readFileSync(join(root, file), 'utf8'));
+  }
+  const base = commit(); git('update-ref', 'refs/remotes/origin/main', base);
+  write('apps/api/lib/example.ts', 'export const changed = true;\n'); commit();
+  const result = cli('domain-check.sh');
+  expect({ status: result.status, stderr: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(result.stdout).toContain('"status":"pass"');
+  expect(result.stderr).toContain('domains:');
 });
 
 test('the actual workflow baseline stops when its secret check fails', () => {
@@ -225,7 +313,7 @@ test('CI-first real push preserves prior unit receipt without rerunning heavy ch
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   const local = spawnSync('npm', ['run', 'verify', '--', '--runs=local'],
     { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
-  expect(local.status).toBe(0); expect(calls()).toBe(1);
+  expect({ status: local.status, output: local.status === 0 ? '' : `${local.error?.message}\n${local.stdout}\n${local.stderr}` }).toEqual({ status: 0, output: '' }); expect(calls()).toBe(1);
   const receiptFile = join(directory, '.evidence/verify/check-cache/test.json');
   const receipt = readFileSync(receiptFile, 'utf8');
   const remote = join(directory, '.evidence/remote.git');
@@ -244,7 +332,7 @@ test('pre-push refuses an unbound issue before checks or publication', () => {
   write('.githooks/pre-push', installedFixtureHook(root, directory));
   rmSync(join(directory, '.evidence/delivery/binding.json'));
   const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
-  expect(hook.status).toBe(1); expect(hook.stderr).toContain('bind --issue N');
+  expect({ status: hook.status, output: hook.status === 1 ? '' : `${hook.error?.message}\n${hook.stdout}\n${hook.stderr}` }).toEqual({ status: 1, output: '' }); expect(hook.stderr).toContain('bind --issue N');
   expect(existsSync(join(directory, '.evidence/gh-calls'))).toBe(false);
 });
 
@@ -254,7 +342,8 @@ test('pre-push accepts an inapplicable domain gate but refuses its real failure'
   write('.githooks/pre-push', installedFixtureHook(root, directory));
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"skipped"}\'\nexit 2\n');
   const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
-  expect(hook().status).toBe(0);
+  const initial = hook();
+  expect({ status: initial.status, output: initial.status === 0 ? '' : `${initial.error?.message}\n${initial.stdout}\n${initial.stderr}` }).toEqual({ status: 0, output: '' });
   const before = readFileSync(join(directory, '.evidence/gh-calls'), 'utf8').split('\n').filter(line => line.startsWith('POST ')).length;
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"fail"}\'\nexit 1\n');
   expect(hook().status).toBe(1);

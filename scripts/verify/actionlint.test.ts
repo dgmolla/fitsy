@@ -49,7 +49,7 @@ test.each(["ci", "local"])("workflow lint cannot be scoped away for an API-only 
 });
 test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
-  expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+  expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer, name === "context-freshness" ? "local" : "ci")).toMatchObject({ name, status: "pass", blocking: true });
 });
 test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;

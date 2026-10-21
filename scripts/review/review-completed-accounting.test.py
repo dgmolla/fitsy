@@ -10,6 +10,7 @@ import subprocess
 import unittest
 import sys
 import time
+import shlex
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -897,6 +898,12 @@ class CompletedAdmission(CompletedAccounting):
                 'CANONICAL_ADAPTER=' + str(adapter)))
         session_path = product / 'scripts/verify/shipping-session.mjs'
         session_path.write_text(session_path.read_text().replace("const administratorPath = '/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';", 'const administratorPath = ' + json.dumps(fixed_path) + ';'))
+        if canonical:
+            production_call = "execute('/usr/bin/python3', ['-I', '-B', '/opt/fitsy-approval/external-approval.py',"
+            fixture_call = "execute(" + json.dumps(sys.executable) + ", ['-I', '-B', " + json.dumps(str(adapter)) + ","
+            session = session_path.read_text()
+            self.assertEqual(session.count(production_call), 1, 'canonical fixture shipping transport changed')
+            session_path.write_text(session.replace(production_call, fixture_call))
         git('add', '.')
         git('commit', '-qm', 'fixture trusted runtime')
         base = git('rev-parse', 'HEAD')
@@ -905,6 +912,11 @@ class CompletedAdmission(CompletedAccounting):
         git('clone', '-q', str(product), str(home / 'repo'))
         runtime = home / 'repo'
         git('update-ref', 'refs/remotes/origin/main', base, cwd=runtime)
+        if canonical:
+            for checkout in (product, runtime):
+                installed_session = git('show', 'HEAD:scripts/verify/shipping-session.mjs', cwd=checkout)
+                self.assertEqual(installed_session.count(fixture_call), 1)
+                self.assertNotIn(production_call, installed_session)
         (runtime / 'node_modules').symlink_to(source / 'node_modules')
         git('checkout', '-qb', 'frozen')
         control = base
@@ -1032,6 +1044,48 @@ class CompletedAdmission(CompletedAccounting):
                 gh_path=str(protected_gh), gh_sha256=sha(protected_gh.read_bytes()),
                 app_token_file=str(token), app_identity_file=str(identity), app_identity_sha256=sha(identity.read_bytes()),
                 review_home=str(review_home), budget_home=str(budgets.resolve()), reviews={str(issue): policy})
+            # This isolated protocol fixture uses real owned process identity and
+            # harmless command transport; it does not attest a production sandbox.
+            candidate_home = product / '.evidence/candidate-home'
+            candidate_home.mkdir(mode=0o700)
+            launcher = adapter.parent / 'candidate-launcher.sh'
+            launcher.write_text('#!/bin/bash\nset -eu\n[ "$1" = --candidate-command ]\nshift\n'
+                + 'printf "%s\n" "$1" >> ' + shlex.quote(str(product / '.evidence/candidate-commands')) + '\n'
+                + 'exec /usr/bin/env -i PATH=' + shlex.quote(fixed_path)
+                + ' HOME=' + shlex.quote(str(candidate_home))
+                + ' TMPDIR=' + shlex.quote(tempfile.gettempdir())
+                + ' PYTHONDONTWRITEBYTECODE=1 "$@"\n')
+            launcher.chmod(0o600)
+            profile = adapter.parent / 'candidate-profile'
+            profile.write_text('Isolated fixture transport only; outer test owns confinement.\n')
+            profile.chmod(0o600)
+            worker = subprocess.Popen([sys.executable, '-I', '-c', 'import time; time.sleep(120)'],
+                                      env=fixture_env(), start_new_session=True)
+            def stop_worker():
+                worker.terminate()
+                worker.wait(timeout=5)
+            self.addCleanup(stop_worker)
+            started = subprocess.check_output(['/bin/ps', '-p', str(worker.pid), '-o', 'lstart='],
+                                              env=fixture_env()).decode().strip()
+            boundary = dict(kind='codex-permission-profile', claim_id='accounting-fixture', issue=issue,
+                source_sha=head, comparison_base=base, launcher_path=str(launcher),
+                launcher_sha256=sha(launcher.read_bytes()), profile_path=str(profile),
+                profile_sha256=sha(profile.read_bytes()))
+            receipt = dict(boundary, version=1, independently_approved=True,
+                worker_pid=worker.pid, worker_started=started,
+                live_denials=dict.fromkeys(('operator_files', 'approval_credentials', 'claim_write',
+                    'other_branch_write', 'workspace_secrets', 'command_network', 'operator_execution'), True))
+            receipt_path = adapter.parent / 'candidate-receipt.json'
+            receipt_path.write_text(json.dumps(receipt)); receipt_path.chmod(0o600)
+            claim_path = adapter.parent / 'candidate-claim.json'
+            claim_path.write_text(json.dumps(dict(active=dict(id=boundary['claim_id'], issue=issue,
+                worktree=str(product), stage='running', pid=worker.pid, pid_started=started,
+                worker_pgid=os.getpgid(worker.pid), worker_boundary=dict(kind=boundary['kind'],
+                    config_sha256=boundary['profile_sha256'], operator_home_read=False, network=False)))))
+            claim_path.chmod(0o600)
+            boundary.update(receipt_path=str(receipt_path), receipt_sha256=sha(receipt_path.read_bytes()),
+                            claim_state_path=str(claim_path))
+            config.update(candidate_uid=os.getuid(), candidate_boundary=boundary)
             config_path.write_text(json.dumps(config)); config_path.chmod(0o600)
         (product / '.evidence/hook').write_text((source / '.githooks/pre-push').read_text().replace(
             'export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
@@ -1074,6 +1128,9 @@ class CompletedAdmission(CompletedAccounting):
         self.assertIn('full', (product / '.evidence/order').read_text())
         self.assertNotIn('unexpected-review', result.stderr)
         if canonical:
+            candidate_commands = (product / '.evidence/candidate-commands').read_text().splitlines()
+            self.assertIn('/usr/bin/env', candidate_commands, 'cheap must use the pinned launcher')
+            self.assertIn('/bin/bash', candidate_commands, 'hook push-gates must use the same pinned launcher')
             self.assertEqual(original_selector, auth.read_bytes())
             before = (budgets / f'issue-{issue}.jsonl').read_bytes()
             direct = ['/bin/bash', '-p', str(runtime / 'scripts/verify/review-admission.sh'), '--revalidate-session']
@@ -1090,7 +1147,7 @@ class CompletedAdmission(CompletedAccounting):
                         if name == 'candidate selected evidence':
                             changed_env['FITSY_REVIEW_HOME'] = str(product / '.evidence')
                         elif name == 'candidate authority':
-                            config_path.write_text(json.dumps(dict(config, candidate_uid=os.getuid())))
+                            config_path.write_text(json.dumps(dict(config, candidate_uid=os.getuid() + 1)))
                         elif name == 'changed ledger':
                             (budgets / f'issue-{issue}.jsonl').write_bytes(before + b'changed')
                         else:

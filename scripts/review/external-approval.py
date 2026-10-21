@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import signal
 import subprocess
 import sys
 import urllib.request
@@ -119,6 +120,7 @@ def candidate_custody(config, uid):
     require(process.returncode == 0 and bool(claim.get('pid_started'))
             and process.stdout.strip() == claim['pid_started']
             and os.getpgid(claim['pid']) == claim['worker_pgid'], 'candidate process identity changed')
+    return claim
 
 
 def authority():
@@ -134,6 +136,71 @@ def authority():
     require(type(config['app_id']) is int and config['app_id'] > 0,
             'real check issuer App ID is required')
     return config
+
+
+def candidate_checks(config, issue, source, base, root, check):
+    """Run fixed publication checks through the independently pinned live boundary."""
+    boundary = config.get('candidate_boundary')
+    require(boundary is not None, 'isolated candidate launcher is required')
+    claim = candidate_custody(config, config['operator_uid'])
+    require(isinstance(claim.get('worktree'), str) and Path(claim['worktree']).is_absolute(),
+            'active candidate claim requires its owned worktree')
+    root = Path(root).resolve(strict=True)
+    require(root == Path(claim['worktree']).resolve(strict=True)
+            and boundary['issue'] == issue and boundary['source_sha'] == source
+            and boundary['comparison_base'] == base, 'candidate check source/root/issue mismatch')
+    environment = {'PATH': '/usr/bin:/bin', 'HOME': '/var/empty', 'LANG': 'en_US.UTF-8'}
+    git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+    def snapshot():
+        def read(*args):
+            return subprocess.check_output([git, '-C', str(root), *args], env=environment, timeout=10).strip()
+        require(read('rev-parse', 'HEAD').decode() == source
+                and read('rev-parse', 'origin/main').decode() == base
+                and not read('status', '--porcelain', '--untracked-files=all'),
+                'candidate checks require frozen exact source/base')
+        return tuple(path.read_bytes() if path.exists() else None for path in (
+            root / '.evidence/verify/focused-tests.json', root / '.evidence/delivery/binding.json'))
+    frozen = snapshot()
+    require(frozen[1] is not None and json.loads(frozen[1]).get('issue') == issue,
+            'candidate check delivery issue differs from active authority')
+    commands = {
+        'cheap': ['/usr/bin/env', 'node', 'scripts/verify/run.mjs', '--layer=0-2',
+                  '--stage=cheap', '--scope=changed', '--runs=local'],
+        'push-gates': ['/bin/bash', '-p', '-c',
+            'set -eu; for check in size-check domain-check; do '
+            'if /bin/bash -p "scripts/verify/$check.sh"; then code=0; else code=$?; fi; '
+            '[ "$code" -eq 0 ] || [ "$code" -eq 2 ] || exit "$code"; done'],
+    }
+    require(check in commands, 'unsupported candidate check')
+    child = None
+    interrupted = None
+    def stop(signum, _frame):
+        nonlocal interrupted
+        interrupted = signum
+        raise KeyboardInterrupt
+    previous = {sig: signal.signal(sig, stop) for sig in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        child = subprocess.Popen(['/bin/bash', boundary['launcher_path'], '--candidate-command',
+                                  *commands[check]], cwd=root, env=environment, start_new_session=True)
+        try:
+            code = child.wait(timeout=245)
+        except KeyboardInterrupt:
+            code = 128 + (interrupted or signal.SIGINT)
+    finally:
+        if child is not None:
+            # The pinned launcher forwards termination to its owned runner, whose
+            # finally block tears down the separate sandbox payload group.
+            try: os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError: pass
+            try: child.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                try: os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError: pass
+                child.wait(timeout=5)
+        for sig, handler in previous.items(): signal.signal(sig, handler)
+    candidate_custody(config, config['operator_uid'])
+    require(snapshot() == frozen, 'candidate or focused selection changed during isolated checks')
+    return code
 
 
 def app_auth(config):
@@ -659,6 +726,27 @@ def publish(config, issue, pr_number):
 
 
 def validate_acceptance(receipt, policy, source):
+    if receipt.get('id') == 'media-integration':
+        require(policy['required_checks'] == {'media-integration': 'pass'},
+                'media receipt cannot replace other acceptance checks')
+        require(receipt.get('source_sha') == source == policy.get('source_sha')
+                and isinstance(policy.get('input_hash'), str)
+                and re.fullmatch(r'[0-9a-f]{64}', policy['input_hash'])
+                and receipt.get('input_hash') == policy['input_hash'],
+                'media acceptance source/input mismatch')
+        command = ('FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- '
+                   '--runInBand --runTestsByPath verify/product-flow.test.ts '
+                   'sim/xctest-attachments.test.ts sim/runner-controls.test.ts')
+        require(receipt.get('command') == command and receipt.get('result') == 'pass'
+                and type(receipt.get('exit_code')) is int and receipt['exit_code'] == 0,
+                'media acceptance recipe/result mismatch')
+        try:
+            finished = datetime.fromisoformat(receipt['finished_at'].replace('Z', '+00:00'))
+            age = (datetime.now(timezone.utc) - finished).total_seconds()
+        except (KeyError, AttributeError, TypeError, ValueError):
+            raise ValueError('media acceptance timestamp invalid') from None
+        require(0 <= age <= 24 * 3600, 'media acceptance stale or future')
+        return
     require(receipt['head_sha'] == source and receipt['source_identity'] == policy['source_identity']
             and receipt['stage'] == 'full' and receipt['finished_at']
             and receipt['arguments'] == policy['arguments'], 'local acceptance source/recipe mismatch')
@@ -978,6 +1066,12 @@ def main():
     local.add_argument('--source', required=True)
     local.add_argument('--base', required=True)
     local.add_argument('--domain', action='append', default=[])
+    checks = commands.add_parser('candidate-checks')
+    checks.add_argument('--issue', type=int, required=True)
+    checks.add_argument('--source', required=True)
+    checks.add_argument('--base', required=True)
+    checks.add_argument('--root', required=True)
+    checks.add_argument('--check', choices=['cheap', 'push-gates'], required=True)
     accepted = commands.add_parser('publish-acceptance')
     accepted.add_argument('--issue', type=int, required=True)
     accepted.add_argument('--pr', type=int, required=True)
@@ -990,6 +1084,8 @@ def main():
     args = parser.parse_args()
     try:
         config = authority()
+        if args.action == 'candidate-checks':
+            return candidate_checks(config, args.issue, args.source, args.base, args.root, args.check)
         if args.action == 'validate-review':
             result = validate_local_review(config, args.issue, args.source, args.base, args.domain)
             if result is None:

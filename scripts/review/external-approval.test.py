@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import ssl
 import stat
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -1304,6 +1305,121 @@ class ProfileCustodyTests(unittest.TestCase):
                 external.review_inputs(self.config, issue, source, 'fixture')
 
 
+    def prepare_candidate_checks(self, exit_code=0, post_profile=False):
+        self.checkout = Path(self.temporary.name) / 'checkout'
+        self.checkout.mkdir()
+        git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+        env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+        def command(*args):
+            return subprocess.check_output([git, '-C', str(self.checkout), *args], env=env).strip().decode()
+        command('init', '-q'); command('config', 'user.name', 'fixture'); command('config', 'user.email', 'fixture@example.test')
+        command('config', 'core.hooksPath', '/dev/null')
+        (self.checkout / '.gitignore').write_text('.evidence/\n')
+        scripts = self.checkout / 'scripts/verify'; scripts.mkdir(parents=True)
+        (scripts / 'run.mjs').write_text("import fs from 'node:fs'; console.log('child stdout'); console.error('child stderr'); "
+            "fs.writeFileSync('.evidence/child.json',JSON.stringify({home:process.env.HOME,token:'GH_TOKEN' in process.env,args:process.argv.slice(2)})); "
+            f"process.exit({exit_code});\n")
+        for check in ('size-check', 'domain-check'): (scripts / (check+'.sh')).write_text('exit 2\n')
+        command('add', '.'); command('commit', '-qm', 'frozen candidate')
+        source = command('rev-parse', 'HEAD'); command('update-ref', 'refs/remotes/origin/main', source)
+        self.boundary.update(source_sha=source, comparison_base=source)
+        self.receipt.update(source_sha=source, comparison_base=source)
+        self.claim['worktree'] = str(self.checkout)
+        evidence = self.checkout / '.evidence/delivery'; evidence.mkdir(parents=True)
+        (evidence / 'binding.json').write_text('{"issue":463}')
+        # Harmless fixture interface, not a kernel isolation or installation proof.
+        launcher = '#!/bin/bash\nset -eu\n[ "$1" = --candidate-command ]\nshift\n'
+        launcher += 'export PATH='+shlex.quote(os.environ['PATH'])+'\n'
+        if post_profile: launcher += 'printf changed >> '+shlex.quote(str(self.paths['profile']))+'\n'
+        launcher += 'exec "$@"\n'
+        self.paths['launcher'].write_text(launcher)
+        self.boundary['launcher_sha256'] = self.receipt['launcher_sha256'] = external.digest(launcher.encode())
+        self.save()
+        return source
+
+    def candidate_command(self, check='cheap', **overrides):
+        from types import SimpleNamespace
+        def observed(args, **kwargs):
+            if args[0] == '/bin/ps': return SimpleNamespace(returncode=0, stdout='fixture-start\n')
+            return REAL_RUN(args, **kwargs)
+        args = dict(issue=463, source=self.boundary['source_sha'], base=self.boundary['comparison_base'],
+                    root=str(self.checkout), check=check)
+        args.update(overrides)
+        with patch.object(external.subprocess, 'run', side_effect=observed), \
+             patch.object(external.os, 'getpgid', return_value=999998):
+            return external.candidate_checks(self.config, **args)
+
+    def test_candidate_checks_fixed_argv_scrub_operator_environment_and_preserve_failure(self):
+        self.prepare_candidate_checks(exit_code=9)
+        with patch.dict(os.environ, {'GH_TOKEN':'synthetic-operator-token', 'HOME':'/operator-fixture'}):
+            self.assertEqual(self.candidate_command(), 9)
+        observed = json.loads((self.checkout / '.evidence/child.json').read_text())
+        self.assertEqual(observed['home'], '/var/empty'); self.assertFalse(observed['token'])
+        self.assertEqual(observed['args'], ['--layer=0-2', '--stage=cheap', '--scope=changed', '--runs=local'])
+
+    def test_candidate_push_gates_preserve_exit_two_and_real_failure(self):
+        source = self.prepare_candidate_checks()
+        self.assertEqual(self.candidate_command('push-gates'), 0)
+        # A separately frozen fixture with failure must propagate its real code.
+        (self.checkout / 'scripts/verify/domain-check.sh').write_text('exit 7\n')
+        git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+        env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
+        for args in (['add','.'], ['commit','-qm','failed gate']):
+            REAL_RUN([git,'-C',str(self.checkout),*args],env=env,check=True)
+        head = subprocess.check_output([git,'-C',str(self.checkout),'rev-parse','HEAD'],env=env).decode().strip()
+        self.boundary['source_sha'] = self.receipt['source_sha'] = head; self.save()
+        self.assertEqual(self.candidate_command('push-gates', source=head, base=source), 7)
+
+    def test_candidate_checks_refuse_wrong_or_missing_root_source_base_issue_and_binding(self):
+        self.prepare_candidate_checks()
+        for change in ({'root':self.temporary.name}, {'source':'c'*40}, {'base':'d'*40}, {'issue':458}, {'check':'caller-pass'}):
+            with self.subTest(change=change), self.assertRaises(ValueError): self.candidate_command(**change)
+        self.claim.pop('worktree'); self.save()
+        with self.assertRaisesRegex(ValueError, 'owned worktree'): self.candidate_command()
+        self.claim['worktree'] = str(self.checkout); self.save()
+        (self.checkout / '.evidence/delivery/binding.json').write_text('{"issue":458}')
+        with self.assertRaisesRegex(ValueError, 'delivery issue'): self.candidate_command()
+        self.assertFalse((self.checkout / '.evidence/child.json').exists())
+
+    def test_candidate_checks_revalidate_actual_profile_after_child(self):
+        self.prepare_candidate_checks(post_profile=True)
+        with self.assertRaisesRegex(ValueError, 'profile changed'): self.candidate_command()
+        self.assertTrue((self.checkout / '.evidence/child.json').exists())
+
+    def test_candidate_checks_refuse_source_or_focused_selection_drift_after_child(self):
+        self.prepare_candidate_checks()
+        original = self.paths['launcher'].read_text()
+        for command, message in (("printf changed >> scripts/verify/run.mjs", 'frozen exact source'),
+                                 ("mkdir -p .evidence/verify; printf changed > .evidence/verify/focused-tests.json", 'focused selection')):
+            changed = original.replace('exec "$@"', command+'\nexec "$@"')
+            self.paths['launcher'].write_text(changed)
+            self.boundary['launcher_sha256'] = self.receipt['launcher_sha256'] = external.digest(changed.encode())
+            self.save()
+            with self.assertRaisesRegex(ValueError, message): self.candidate_command('push-gates')
+            if 'source' in message:
+                git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+                REAL_RUN([git,'-C',str(self.checkout),'checkout','--','scripts/verify/run.mjs'],check=True,
+                         env={k:v for k,v in os.environ.items() if not k.startswith('GIT_')})
+
+    def test_candidate_checks_timeout_or_cancel_terminates_owned_launcher_before_return(self):
+        from types import SimpleNamespace
+        self.prepare_candidate_checks()
+        for failure, expected in ((subprocess.TimeoutExpired('fixture',245), None), (KeyboardInterrupt(),130)):
+            child = unittest.mock.Mock(pid=999997)
+            child.wait.side_effect = [failure,0]
+            with patch.object(external.subprocess,'Popen',return_value=child), \
+                 patch.object(external.subprocess,'check_output',side_effect=[self.boundary['source_sha'].encode(), self.boundary['comparison_base'].encode(), b'', self.boundary['source_sha'].encode(), self.boundary['comparison_base'].encode(), b'']), \
+                 patch.object(external,'candidate_custody',return_value=self.claim), \
+                 patch.object(external.os,'killpg') as terminate:
+                if expected is None:
+                    with self.assertRaises(subprocess.TimeoutExpired):
+                        external.candidate_checks(self.config,463,self.boundary['source_sha'],self.boundary['comparison_base'],str(self.checkout),'cheap')
+                else:
+                    self.assertEqual(external.candidate_checks(self.config,463,self.boundary['source_sha'],self.boundary['comparison_base'],str(self.checkout),'cheap'),expected)
+                terminate.assert_called_once_with(child.pid, external.signal.SIGTERM)
+                self.assertEqual(child.wait.call_count,2)
+
+
 class CIAcceptanceTests(unittest.TestCase):
     """Actual existing publication consumer with fake GitHub only, never real CI."""
     def setUp(self):
@@ -1428,6 +1544,92 @@ class CIAcceptanceTests(unittest.TestCase):
         policy['receipt_sha256'] = external.digest(file.read_bytes())
         with self.assertRaisesRegex(ValueError, 'source/recipe'): self.publish()
         self.assertFalse(f.writes)
+
+
+    def canonical_media(self):
+        # Real producer bytes in an isolated protocol fixture, not a media pass.
+        f = self.f; endpoint = f'repos/{external.REPO}'
+        f.api_override[f'{endpoint}/git/commits/' + 'b' * 40] = {'tree': {'sha': 'base-tree'}}
+        for tree, sha in [('base-tree', 'old'), ('equal-reviewed-product-tree', 'new')]:
+            f.api_override[f'{endpoint}/git/trees/{tree}?recursive=1'] = {
+                'truncated': False, 'tree': [{'path': 'scripts/verify/test.sh', 'mode': '100755', 'type': 'blob', 'sha': sha}]}
+        file = f.root / 'canonical-media.json'; input_hash = 'c' * 64
+        producer = REPO_ROOT / 'scripts/verify/media-integration.mjs'
+        command = ('import {writeMediaReceipt} from ' + json.dumps(producer.as_uri())
+                   + '; writeMediaReceipt(process.argv[1],process.argv[2],process.argv[3]);')
+        subprocess.run(['node', '--input-type=module', '-e', command, str(file), f.source, input_hash],
+                       cwd=REPO_ROOT, check=True, capture_output=True)
+        policy = f.config['local_acceptance']['443']
+        policy.update(required_checks={'media-integration': 'pass'}, source_sha=f.source,
+                      input_hash=input_hash, receipt_path=str(file), receipt_sha256=external.digest(file.read_bytes()))
+        return json.loads(file.read_text()), policy, file
+
+    def test_canonical_media_writer_reaches_actual_ci_first_acceptance(self):
+        receipt, policy, file = self.canonical_media()
+        original = file.read_bytes()
+        self.assertEqual(self.publish()['source_sha'], self.f.source)
+        self.assertEqual(self.f.writes[0]['name'], external.ACCEPTANCE_CHECK)
+        self.assertEqual(file.read_bytes(), original, 'consume original canonical bytes without conversion')
+
+    def test_canonical_media_rejects_missing_source_hash_recipe_result_and_time(self):
+        receipt, policy, file = self.canonical_media()
+        now = external.datetime.now(external.timezone.utc).timestamp()
+        cases = [{key: value} for key, value in (
+            ('id', 'other'), ('source_sha', 'f' * 40), ('input_hash', 'd' * 64),
+            ('command', receipt['command'] + ' --testNamePattern=one'), ('result', 'fail'),
+            ('exit_code', 1), ('exit_code', False), ('exit_code', '0'),
+            ('finished_at', 'invalid'), ('finished_at', None),
+            ('finished_at', external.datetime.fromtimestamp(now - 25 * 3600, external.timezone.utc).isoformat()),
+            ('finished_at', external.datetime.fromtimestamp(now + 3600, external.timezone.utc).isoformat()),
+            ('finished_at', external.datetime.fromtimestamp(now).isoformat()))]
+        for changed in [dict(receipt, **case) for case in cases] + [
+                {key: value for key, value in receipt.items() if key != missing} for missing in receipt]:
+            with self.subTest(receipt=changed):
+                file.write_text(json.dumps(changed))
+                policy['receipt_sha256'] = external.digest(file.read_bytes())
+                if changed.get('id') == 'media-integration':
+                    with self.assertRaises(ValueError): self.publish()
+                else:
+                    with self.assertRaisesRegex(KeyError, 'head_sha'): self.publish()
+                self.assertFalse(self.f.writes)
+
+    def test_canonical_media_cannot_replace_other_checks_or_unbound_policy(self):
+        receipt, policy, file = self.canonical_media()
+        original = dict(policy)
+        changes = [{'required_checks': checks} for checks in (
+            {}, {'tests': 'pass'}, {'media-integration': 'fail'},
+            {'media-integration': 'pass', 'tests': 'pass'},
+            {'media-integration': 'pass', 'product-flow': 'pass'})]
+        changes += [{'source_sha': 'f' * 40}, {'source_sha': None},
+                    {'input_hash': 'd' * 64}, {'input_hash': None}, {'input_hash': 'c' * 63}]
+        for change in changes:
+            with self.subTest(policy=change):
+                policy.clear(); policy.update(original); policy.update(change)
+                with self.assertRaises(ValueError): self.publish()
+                self.assertFalse(self.f.writes)
+        # Matching malformed expected/observed hashes and stale source still refuse.
+        for key, value in (('input_hash', 'g' * 64), ('source_sha', 'f' * 40)):
+            policy.clear(); policy.update(original); policy[key] = value
+            file.write_text(json.dumps(dict(receipt, **{key: value})))
+            policy['receipt_sha256'] = external.digest(file.read_bytes())
+            with self.assertRaises(ValueError): self.publish()
+            self.assertFalse(self.f.writes)
+
+    def test_canonical_media_keeps_protected_path_and_raw_hash_custody(self):
+        receipt, policy, file = self.canonical_media()
+        original = file.read_bytes()
+        file.write_bytes(original + b'\n')
+        with self.assertRaisesRegex(ValueError, 'unverified local acceptance'): self.publish()
+        file.write_bytes(original)
+        file.chmod(0o666)
+        with self.assertRaisesRegex(ValueError, 'custody'): self.publish()
+        file.chmod(0o600)
+        retained = file.with_suffix('.original'); file.rename(retained); file.symlink_to(retained)
+        with self.assertRaisesRegex(ValueError, 'custody'): self.publish()
+        file.unlink(); retained.rename(file)
+        file.unlink()
+        with self.assertRaises(FileNotFoundError): self.publish()
+        self.assertFalse(self.f.writes)
 
 
 class AppRenewalTests(unittest.TestCase):
