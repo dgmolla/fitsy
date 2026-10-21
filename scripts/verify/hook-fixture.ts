@@ -39,7 +39,7 @@ exec ${quoted} "$@"
   // Darwin's bare mktemp ignores TMPDIR; fixtures keep transient files owned.
   const temporary = join(directory, 'bin/mktemp');
   if (!existsSync(temporary)) {
-    writeFileSync(temporary, '#!/bin/sh\nif [ "$#" = 0 ]; then exec /usr/bin/mktemp "${TMPDIR%/}/fitsy-fixture.XXXXXX"; fi\nexec /usr/bin/mktemp "$@"\n');
+    writeFileSync(temporary, '#!/bin/sh\nif [ "$#" = 0 ]; then temporary=${TMPDIR:-/tmp}; exec /usr/bin/mktemp "${temporary%/}/fitsy-fixture.XXXXXX"; fi\nexec /usr/bin/mktemp "$@"\n');
     chmodSync(temporary, 0o755);
   }
 
@@ -74,7 +74,7 @@ process.exit(spawnSync(command[0],command[1],{stdio:'inherit',env:process.env}).
 
 
 export function installVerificationFixture(root: string, directory: string) {
-  for (const file of ['impact-plan.mjs', 'local-db.mjs', 'db-lock.py', 'receipt-cache.mjs', 'run.mjs', 'run.sh', 'secrets.sh', 'migration-safety.sh']) {
+  for (const file of ['impact-plan.mjs', 'local-db.mjs', 'docker-runtime.mjs', 'db-lock.py', 'receipt-cache.mjs', 'run.mjs', 'run.sh', 'secrets.sh', 'migration-safety.sh']) {
     mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
     copyFileSync(join(root, 'scripts/verify', file), join(directory, 'scripts/verify', file));
   }
