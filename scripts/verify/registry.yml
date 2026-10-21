@@ -35,14 +35,14 @@ checks:
     script: structural.sh
     layer: 0
     blocking: true
-    runs: [local, ci]
+    runs: [local] # CI classify owns this unconditional baseline.
     why: Growing invariant checklist (docs layout, route guards, routing-table sync, size/any/console warnings).
 
   - name: secrets
     script: secrets.sh
     layer: 0
     blocking: true
-    runs: [local, ci]
+    runs: [local] # CI classify owns this unconditional baseline.
     why: Hardcoded keys, committed .env files, committed build output. Moved from ci.yml security job 2026-09-07.
 
   - name: lint
@@ -78,6 +78,7 @@ checks:
     script: size-check.sh
     layer: 1
     blocking: true
+    standalone: true # CI classify runs it once; --only remains supported.
     runs: [ci]
     why: Report counted review size; a coherent outcome has no arbitrary line cap.
 
@@ -100,7 +101,7 @@ checks:
     script: context-freshness.sh
     layer: 1
     blocking: true
-    runs: [local, ci]
+    runs: [local] # CI classify owns this unconditional baseline.
     why: T14 - a stale command or path in a context file misleads every zero-context author; caught a dead root-CLAUDE.md pointer on its first run (2026-09-07).
 
   - name: migration-safety

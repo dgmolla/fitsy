@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { appleGitHookPrologue } from './apple-git-hook-env';
@@ -27,6 +27,18 @@ export function timingHook(root: string, directory: string, env: NodeJS.ProcessE
     mkdirSync(join(directory, file, '..'), { recursive: true });
     writeFileSync(join(directory, file), value);
   };
+  // Retain the parent suite's admitted Git and system Bash when the hook
+  // installs its protected PATH. Regular files remain safe to replace with stubs.
+  const git = execFileSync('/usr/bin/which', ['git'], { encoding: 'utf8' }).trim();
+  for (const [name, executable] of [['bash', '/bin/bash'], ['git', git]] as const) {
+    const file = join(directory, 'bin', name);
+    if (existsSync(file)) continue;
+    const quoted = "'" + executable.replace(/'/g, "'\"'\"'") + "'";
+    write(`bin/${name}`, `#!/bin/sh
+exec ${quoted} "$@"
+`);
+    chmodSync(file, 0o755);
+  }
   write('scripts/delivery/phase-events.mjs', readFileSync(join(root, 'scripts/delivery/phase-events.mjs'), 'utf8'));
   write('package.json', JSON.stringify({ private: true, scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed' } }));
   // Auth is exercised by the real shipping-session fixtures; these hook/cache fixtures model a reviewed live owner.
