@@ -866,7 +866,7 @@ class CompletedAdmission(CompletedAccounting):
         admission = product / 'scripts/verify/review-admission.sh'
         admission.write_text(admission.read_text().replace('TRUSTED_GH=/opt/homebrew/bin/gh',
             'TRUSTED_GH=' + str(self.root / 'session-bin/gh')))
-        fixed_path = str(self.root / 'session-bin') + ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+        fixed_path = str(self.root / 'session-bin') + ':/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
         admission.write_text(admission.read_text().replace('PATH=/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'PATH=' + fixed_path))
         if canonical:
             # Only protected operator data belongs here; source workspaces and
@@ -938,11 +938,13 @@ class CompletedAdmission(CompletedAccounting):
         auth.chmod(0o600)
         tools = self.root / 'session-bin'
         tools.mkdir()
+        # Nested sanitized callers must use the actual interpreter, not an OS shim.
+        (tools / 'python3').symlink_to(sys.executable)
         for name, raw in {'gh': '#!/bin/sh\n[ "$1" = issue ] && { echo "Frozen acceptance"; exit 0; }\nexit 1\n',
                           'codex': '#!/bin/sh\n[ "$1" = --version ] || { echo unexpected-review >&2; exit 90; }\necho fixture-cli\n'}.items():
             (tools / name).write_text(raw)
             (tools / name).chmod(0o700)
-        (tools / 'gh').write_text("#!/usr/bin/env python3\nimport json,sys\na=sys.argv\n"
+        (tools / 'gh').write_text(f"#!{sys.executable} -I\nimport json,sys\na=sys.argv\n"
             "if a[1]=='issue': print('Frozen acceptance')\n"
             "elif a[1]=='api' and '/issues/' in a[-1]: print(json.dumps(dict(body='Frozen acceptance')))\n"
             "elif a[1]=='pr' and '--jq' in a: print('Delivery-Issue: #443')\n"
@@ -971,6 +973,8 @@ class CompletedAdmission(CompletedAccounting):
             shutil.copy2(tools / 'gh', protected_gh)
             config_path = adapter.parent / 'authority.json'
             code = (source / 'scripts/review/external-approval.py').read_text()
+            code = code.replace('#!/usr/bin/env -S -i /usr/bin/python3 -I',
+                                f'#!/usr/bin/env -S -i {sys.executable} -I', 1)
             code = re.sub(r'CONFIG = Path\(.*?\)\nINSTALL', 'CONFIG = Path(' + repr(str(config_path)) + ')\nINSTALL', code, count=1, flags=re.S)
             code = code.replace("INSTALL = Path('/opt/fitsy-approval/external-approval.py')", 'INSTALL = Path(' + repr(str(adapter)) + ')')
             adapter.write_text(code)
@@ -999,7 +1003,16 @@ class CompletedAdmission(CompletedAccounting):
             token = adapter.parent / 'synthetic-token'
             token.write_text('isolated-token'); token.chmod(0o600)
             identity = adapter.parent / 'token-provenance.json'
-            identity.write_text(json.dumps({'token': {'sha256': sha(token.read_bytes()), 'expires_at': '2099-01-01T00:00:00Z'}}))
+            permissions = {'metadata': 'read', 'checks': 'write', 'contents': 'read', 'issues': 'read',
+                           'pull_requests': 'read', 'actions': 'write', 'administration': 'read'}
+            identity.write_text(json.dumps({
+                'app': {'id': 5285837, 'slug': 'fitsy-delivery-approval'},
+                'installation': {'id': 170592990, 'app_id': 5285837,
+                    'account': {'login': 'dgmolla'}, 'repository_selection': 'selected',
+                    'permissions': permissions},
+                'repository_id': 1188934600,
+                'token': {'sha256': sha(token.read_bytes()), 'permissions': permissions,
+                          'expires_at': '2099-01-01T00:00:00Z'}}))
             identity.chmod(0o600)
             policy = dict(domains=domains, manifest_sha256=sha(manifest.read_bytes()),
                 ledger_sha256=sha((budgets / f'issue-{issue}.jsonl').read_bytes()), execution_timeout_seconds=180,
@@ -1007,7 +1020,8 @@ class CompletedAdmission(CompletedAccounting):
                 canonical_review=dict(validators=validators, diff_sha256='d' * 64,
                     evidence_root=str(evidence_root), dispositions={}))
             config = dict(operator_uid=os.getuid(), candidate_uid=os.getuid() + 1,
-                adapter_sha256=sha(adapter.read_bytes()), repository='dgmolla/fitsy', app_id=123,
+                adapter_sha256=sha(adapter.read_bytes()), repository='dgmolla/fitsy',
+                app_id=5285837, installation_id=170592990,
                 gh_path=str(protected_gh), gh_sha256=sha(protected_gh.read_bytes()),
                 app_token_file=str(token), app_identity_file=str(identity), app_identity_sha256=sha(identity.read_bytes()),
                 review_home=str(review_home), budget_home=str(budgets.resolve()), reviews={str(issue): policy})
