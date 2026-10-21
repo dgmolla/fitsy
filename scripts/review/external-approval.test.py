@@ -12,6 +12,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+REAL_RUN = subprocess.run
 SCRIPT = Path(__file__).with_name('external-approval.py')
 REPO_ROOT = SCRIPT.parents[2]
 spec = importlib.util.spec_from_file_location('external', SCRIPT)
@@ -719,7 +720,7 @@ class PublishBoundaryTests(unittest.TestCase):
                                           'permissions': permissions},
                          'token': {'sha256': external.digest((self.root / 'token').read_bytes()),
                                    'permissions': permissions, 'expires_at': '2099-01-01T00:00:00Z'},
-                         'repository_id': 42}
+                         'repository_id': 1188934600}
         self.save_identity()
         self.actor = {'id': 888, 'login': 'fixture[bot]', 'type': 'Bot'}
 
@@ -734,7 +735,7 @@ class PublishBoundaryTests(unittest.TestCase):
     def transport(self, config, endpoint, payload=None, release=False):
         self.calls.append(endpoint)
         if endpoint == 'installation/repositories?per_page=100':
-            return {'total_count': 1, 'repositories': [{'id': 42, 'full_name': external.REPO}]}
+            return {'total_count': 1, 'repositories': [{'id': 1188934600, 'full_name': external.REPO}]}
         if endpoint == 'apps/fixture': return self.identity['app']
         if endpoint == 'users/fixture[bot]': return self.actor
         if endpoint.endswith('/pulls/9'):
@@ -854,7 +855,7 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         if endpoint in self.api_override:
             return self.api_override[endpoint]
         if endpoint == 'installation/repositories?per_page=100':
-            return {'total_count': 1, 'repositories': [{'id': 42, 'full_name': self.scope_name}]}
+            return {'total_count': 1, 'repositories': [{'id': 1188934600, 'full_name': self.scope_name}]}
         if endpoint == 'apps/fixture': return self.identity['app']
         if endpoint == 'users/fixture[bot]': return self.actor
         if endpoint == 'user': return {'id': 18452532, 'type': 'User'}
@@ -1240,17 +1241,20 @@ class ProductionTlsMaterialTests(unittest.TestCase):
 def custody_fixture_directory():
     # Protected fixture bytes need secure ancestry even when the command's
     # short TMPDIR is beneath a sticky system directory for Unix sockets.
-    if sys.platform == 'darwin':
-        raw = subprocess.check_output(['/usr/bin/getconf', 'DARWIN_USER_TEMP_DIR'], text=True).strip()
-        parent = Path(raw).resolve(strict=True)
-    else:
-        parent = Path.home().resolve(strict=True)
+    # This ignored data directory is never a reviewer or subprocess cwd.
+    parent = REPO_ROOT / '.evidence'
+    parent.mkdir(mode=0o700, exist_ok=True)
     for probe in (parent, *parent.parents):
         metadata = probe.lstat()
         if (probe.is_symlink() or metadata.st_uid not in (0, os.getuid())
-                or metadata.st_mode & 0o022
-                or (sys.platform == 'darwin' and (probe / '.codex/config.toml').exists())):
+                or metadata.st_mode & 0o022):
             raise RuntimeError('secure operator fixture temp ancestry unavailable')
+    git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+    ignored = REAL_RUN([git, '-C', str(REPO_ROOT), 'check-ignore', '--quiet',
+                        str(parent / 'custody-probe.json')], capture_output=True,
+                       env={'PATH': '/usr/bin:/bin', 'HOME': '/var/empty'}, timeout=10)
+    if ignored.returncode != 0:
+        raise RuntimeError('operator fixture storage must be ignored')
     temporary = tempfile.TemporaryDirectory(prefix='custody-', dir=parent)
     metadata = Path(temporary.name).lstat()
     if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) != 0o700:
@@ -1473,6 +1477,442 @@ class CIAcceptanceTests(unittest.TestCase):
         policy['receipt_sha256'] = external.digest(file.read_bytes())
         with self.assertRaisesRegex(ValueError, 'source/recipe'): self.publish()
         self.assertFalse(f.writes)
+
+
+class AppRenewalTests(unittest.TestCase):
+    """Actual CLI admission/publication with private synthetic operator custody."""
+    def setUp(self):
+        from types import SimpleNamespace
+        self.fixture = PublishBoundaryTests()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.tearDown)
+        self.root, self.config = self.fixture.root, self.fixture.config
+        self.fixture.identity['app']['slug'] = 'fitsy-delivery-approval'
+        self.fixture.identity['repository_id'] = 1188934600
+        self.fixture.actor['login'] = 'fitsy-delivery-approval[bot]'
+        self.config['dispatch_actor_login'] = self.fixture.actor['login']
+        self.fixture.identity['token']['expires_at'] = '2026-01-01T00:00:00Z'
+        self.fixture.save_identity()
+        self.install = self.root / 'external-approval.py'
+        self.install.write_bytes(SCRIPT.read_bytes())
+        self.gh = self.root / 'gh'
+        self.gh.write_bytes(b'synthetic outbound transport')
+        self.key = self.root / 'original-key.pem'
+        self.key.write_bytes(b'synthetic private key - never real credential')
+        self.key.chmod(0o600)
+        self.config.update(candidate_uid=os.getuid() + 1, repository=external.REPO,
+            adapter_sha256=external.digest(self.install.read_bytes()), gh_path=str(self.gh),
+            gh_sha256=external.digest(self.gh.read_bytes()),
+            app_key_custody={'private_key_file': str(self.key),
+                'public_fingerprint': 'SHA256:qD7XvlHIile2flN5AEavSX+P6ZVrlIDddPVus9YLkQg=',
+                'record': 'original-human-key-handoff-2026-10-14'})
+        self.config_path = self.root / 'delivery-authority.json'
+        self.save_config()
+        self.lock = self.root / '.fitsy-dispatcher' / 'dispatcher.lock'
+        self.lock.parent.mkdir()
+        self.lock.write_bytes(b'')
+        self.lock.chmod(0o600)
+        for name, value in [('app-response.json', self.fixture.identity['app']),
+                            ('installation-response.json', self.fixture.identity['installation'])]:
+            path = self.root / name
+            path.write_text(json.dumps(value))
+            path.chmod(0o600)
+        self.requests, self.tokens = [], []
+        self.patchers = [patch.object(external, 'CONFIG', self.config_path),
+            patch.object(external, 'INSTALL', self.install),
+            patch.object(external, '__file__', str(self.install)),
+            patch.object(external.pwd, 'getpwuid', return_value=SimpleNamespace(pw_dir=str(self.root))),
+            patch.object(external.subprocess, 'run', side_effect=self.transport)]
+        for patcher in self.patchers:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def save_config(self):
+        self.config_path.write_text(json.dumps(self.config))
+        self.config_path.chmod(0o600)
+
+    def issuer(self, jwt, endpoint, payload=None):
+        import copy
+        self.requests.append((endpoint, payload))
+        if endpoint == '/app':
+            return copy.deepcopy(self.fixture.identity['app'])
+        if endpoint == '/repos/dgmolla/fitsy/installation':
+            return copy.deepcopy(self.fixture.identity['installation'])
+        self.assertEqual(endpoint, '/app/installations/170592990/access_tokens')
+        self.assertEqual(payload, {'repository_ids': [1188934600],
+                                  'permissions': self.fixture.identity['token']['permissions']})
+        return {'token': 'renewed-synthetic-token', 'expires_at': '2099-01-01T00:00:00Z',
+                'permissions': self.fixture.identity['token']['permissions'],
+                'repository_selection': 'selected',
+                'repositories': [{'id': 1188934600, 'full_name': external.REPO}]}
+
+    def transport(self, argv, **kwargs):
+        from types import SimpleNamespace
+        if argv[0] == '/bin/ps':
+            return SimpleNamespace(returncode=0, stdout='fixture-start\n')
+        self.tokens.append(kwargs['env']['GH_TOKEN'])
+        endpoint = argv[argv.index('Accept: application/vnd.github+json') + 1]
+        payload = json.loads(kwargs['input']) if kwargs.get('input') is not None else None
+        if endpoint == 'installation/repositories?per_page=100':
+            value = {'total_count': 1, 'repositories': [{'id': 1188934600, 'full_name': external.REPO}]}
+        elif endpoint == 'apps/fitsy-delivery-approval':
+            value = self.fixture.identity['app']
+        elif endpoint == 'users/fitsy-delivery-approval[bot]':
+            value = self.fixture.actor
+        else:
+            value = self.fixture.transport(self.config, endpoint, payload)
+        return SimpleNamespace(returncode=0, stdout=json.dumps(value))
+
+    def cli(self, *arguments):
+        import contextlib
+        import io
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch.object(sys, 'argv', [str(self.install), *arguments]), contextlib.redirect_stdout(
+                stdout), contextlib.redirect_stderr(stderr):
+            status = external.main()
+        return status, stdout.getvalue(), stderr.getvalue()
+
+    def test_expired_publisher_cli_renews_and_preserves_source(self):
+        with patch.object(external, 'app_jwt', return_value='synthetic-jwt'), patch.object(
+                external, 'app_request', side_effect=self.issuer):
+            status, stdout, stderr = self.cli('publish-review', '--issue', '443', '--pr', '9')
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(json.loads(stdout)['source_sha'], self.fixture.source)
+        self.assertEqual(len(self.fixture.writes), 1)
+        self.assertEqual(self.tokens, ['renewed-synthetic-token'] * len(self.tokens))
+
+    def local_review(self):
+        canonical = CanonicalReviewTests()
+        canonical.setUp()
+        self.addCleanup(canonical.doCleanups)
+        canonical.install.stop()
+        config, _, _ = canonical.install_review_inputs()
+        self.config.update(config)
+        evidence = self.root / 'evidence' / 'issue-443' / self.fixture.source
+        evidence.mkdir(parents=True)
+        canonical.policy['canonical_review']['evidence_root'] = str(evidence)
+        for name in ('review-round', 'review-gate'):
+            (self.root / (name + '.py')).write_bytes(SCRIPT.with_name(name + '.py').read_bytes())
+        self.save_config()
+        return ['validate-review', '--issue', '443', '--source', self.fixture.source,
+                '--base', canonical.base, '--domain', 'correctness']
+
+    def test_expired_local_cli_renews_before_metadata_read(self):
+        arguments = self.local_review()
+        with patch.object(external, 'app_jwt', return_value='synthetic-jwt'), patch.object(
+                external, 'app_request', side_effect=self.issuer):
+            status, stdout, stderr = self.cli(*arguments)
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(json.loads(stdout)['canonical_review'], 'pass')
+        self.assertFalse(self.fixture.writes)
+        self.assertEqual(self.tokens, ['renewed-synthetic-token'] * len(self.tokens))
+
+    def publish_cli(self, issuer=None):
+        with patch.object(external, 'app_jwt', return_value='synthetic-jwt') as signer, patch.object(
+                external, 'app_request', side_effect=issuer or self.issuer):
+            result = self.cli('publish-review', '--issue', '443', '--pr', '9')
+        return result, signer
+
+    def generation(self):
+        return {path: path.read_bytes() for path in (self.config_path,
+            Path(self.config['app_token_file']), Path(self.config['app_identity_file']),
+            self.root / 'app-response.json', self.root / 'installation-response.json')}
+
+    def test_fresh_credential_keeps_exact_bytes_without_signing_or_writes(self):
+        self.fixture.identity['token']['expires_at'] = '2099-01-01T00:00:00Z'
+        self.fixture.save_identity()
+        self.save_config()
+        before = self.generation()
+        (status, _, stderr), signer = self.publish_cli()
+        self.assertEqual(status, 0, stderr)
+        signer.assert_not_called()
+        self.assertFalse(self.requests)
+        self.assertEqual(self.generation(), before)
+        self.assertEqual(set(self.tokens), {'synthetic-installation-token'})
+
+    def test_successful_rotation_restarts_without_reissuing_or_changing_other_pins(self):
+        before = dict(self.config)
+        (status, _, stderr), _ = self.publish_cli()
+        self.assertEqual(status, 0, stderr)
+        after = json.loads(self.config_path.read_bytes())
+        self.assertEqual({k for k in before if before[k] != after[k]}, {'app_identity_sha256'})
+        self.assertEqual(after['app_identity_sha256'], external.digest(Path(after['app_identity_file']).read_bytes()))
+        self.assertEqual(len(self.requests), 3)
+        (status, _, stderr), signer = self.publish_cli()
+        self.assertEqual(status, 0, stderr)
+        signer.assert_not_called()
+        self.assertEqual(len(self.requests), 3)
+
+    def test_short_operation_lifetime_renews_without_sleep(self):
+        from datetime import datetime, timedelta, timezone
+        self.fixture.identity['token']['expires_at'] = (datetime.now(timezone.utc) + timedelta(seconds=45)).isoformat()
+        self.fixture.save_identity()
+        self.save_config()
+        (status, _, stderr), _ = self.publish_cli()
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(len(self.requests), 3)
+
+    def test_tampered_provenance_token_identity_and_scope_never_sign_or_publish(self):
+        import copy
+        original_identity = copy.deepcopy(self.fixture.identity)
+        original = self.generation()
+        for fault in ('provenance', 'token', 'app', 'installation', 'repository', 'permissions'):
+            with self.subTest(fault=fault):
+                for path, raw in original.items():
+                    path.write_bytes(raw)
+                self.fixture.identity = copy.deepcopy(original_identity)
+                if fault == 'provenance':
+                    Path(self.config['app_identity_file']).write_bytes(b'{"tampered":true}')
+                elif fault == 'token':
+                    Path(self.config['app_token_file']).write_bytes(b'wrong-secret')
+                else:
+                    if fault == 'app': self.fixture.identity['app']['id'] = 1
+                    if fault == 'installation': self.fixture.identity['installation']['id'] = 1
+                    if fault == 'repository': self.fixture.identity['repository_id'] = 1
+                    if fault == 'permissions': self.fixture.identity['token']['permissions']['contents'] = 'write'
+                    self.fixture.save_identity()
+                    self.save_config()
+                before = self.generation()
+                (status, stdout, stderr), signer = self.publish_cli()
+                self.assertEqual(status, 1)
+                self.assertFalse(stdout)
+                self.assertIn('refused', stderr)
+                signer.assert_not_called()
+                self.assertEqual(self.generation(), before)
+        self.assertFalse(self.fixture.writes)
+
+    def test_wrong_issued_identity_and_scope_are_not_committed(self):
+        for fault in ('app', 'installation', 'permissions', 'repository', 'repository-name', 'expiry'):
+            with self.subTest(fault=fault):
+                receipt = self.root / 'app-renewal-recovery.json'
+                receipt.unlink(missing_ok=True)
+                before = self.generation()
+                def wrong(jwt, endpoint, payload=None):
+                    value = self.issuer(jwt, endpoint, payload)
+                    if fault == 'app' and endpoint == '/app': value['id'] = 1
+                    if fault == 'installation' and endpoint.endswith('/installation'): value['id'] = 1
+                    if payload is not None:
+                        if fault == 'permissions': value['permissions'] = {'contents': 'write'}
+                        if fault == 'repository': value['repositories'][0]['id'] = 1
+                        if fault == 'repository-name': value['repositories'][0]['full_name'] = 'elsewhere/repository'
+                        if fault == 'expiry': value['expires_at'] = '2026-01-01T00:00:00Z'
+                    return value
+                (status, stdout, _), _ = self.publish_cli(wrong)
+                self.assertEqual(status, 1)
+                self.assertFalse(stdout)
+                self.assertEqual(self.generation(), before)
+                self.assertFalse(self.fixture.writes)
+
+    def test_original_lock_contention_refuses_without_issuing(self):
+        import fcntl
+        before = self.generation()
+        with self.lock.open('rb') as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            (status, _, _), signer = self.publish_cli()
+        self.assertEqual(status, 1)
+        signer.assert_not_called()
+        self.assertEqual(self.generation(), before)
+        self.assertFalse(self.fixture.writes)
+
+    def test_config_drift_during_issuance_is_preserved_and_requires_recovery(self):
+        def drift(jwt, endpoint, payload=None):
+            value = self.issuer(jwt, endpoint, payload)
+            if payload is not None:
+                current = json.loads(self.config_path.read_bytes())
+                current['unrelated_pin'] = 'another-owner'
+                self.config_path.write_text(json.dumps(current))
+            return value
+        (status, _, stderr), _ = self.publish_cli(drift)
+        self.assertEqual(status, 1)
+        self.assertIn('preimage changed', stderr)
+        self.assertEqual(json.loads(self.config_path.read_bytes())['unrelated_pin'], 'another-owner')
+        self.assertEqual(json.loads((self.root / 'app-renewal-recovery.json').read_bytes())['phase'], 'recovery-required')
+        self.assertFalse(self.fixture.writes)
+
+    def test_partial_file_failure_rolls_back_only_owned_bytes_and_restarts(self):
+        before = self.generation()
+        replace = external.private_replace
+        failed = []
+        def interrupt(path, raw):
+            if Path(path) == Path(self.config['app_identity_file']) and not failed:
+                failed.append(True)
+                raise OSError('synthetic partial-file failure')
+            replace(path, raw)
+        with patch.object(external, 'private_replace', side_effect=interrupt):
+            (status, _, stderr), _ = self.publish_cli()
+        self.assertEqual(status, 1)
+        self.assertIn('synthetic partial-file failure', stderr)
+        self.assertEqual(self.generation(), before)
+        self.assertEqual(json.loads((self.root / 'app-renewal-recovery.json').read_bytes())['phase'], 'rolled-back')
+        (status, _, stderr), _ = self.publish_cli()
+        self.assertEqual(status, 0, stderr)
+
+    def test_uncertain_issuance_is_not_retried_and_errors_contain_no_secrets(self):
+        def uncertain(jwt, endpoint, payload=None):
+            if payload is not None:
+                raise subprocess.TimeoutExpired('synthetic issuer', 20)
+            return self.issuer(jwt, endpoint, payload)
+        before = self.generation()
+        (status, stdout, stderr), _ = self.publish_cli(uncertain)
+        self.assertEqual(status, 1)
+        self.assertEqual(self.generation(), before)
+        (status, stdout2, stderr2), signer = self.publish_cli()
+        self.assertEqual(status, 1)
+        signer.assert_not_called()
+        self.assertIn('reconcile retained renewal evidence', stderr2)
+        for secret in ('synthetic-jwt', 'renewed-synthetic-token', self.key.read_text()):
+            self.assertNotIn(secret, stdout + stderr + stdout2 + stderr2 +
+                (self.root / 'app-renewal-recovery.json').read_text())
+
+    def test_changed_source_during_issuance_still_refuses_publication(self):
+        self.local_review()
+        def changed(jwt, endpoint, payload=None):
+            value = self.issuer(jwt, endpoint, payload)
+            if payload is not None:
+                self.fixture.pr['head']['sha'] = 'c' * 40
+            return value
+        (status, _, stderr), _ = self.publish_cli(changed)
+        self.assertEqual(status, 1)
+        self.assertIn('source mismatch', stderr)
+        self.assertFalse(self.fixture.writes)
+
+    def profile_claim(self):
+        fixture = ProfileCustodyTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        fixture.boundary['issue'] = fixture.claim['issue'] = fixture.receipt['issue'] = 443
+        fixture.save()
+        self.config.update(fixture.config)
+        self.save_config()
+        return fixture
+
+    def test_live_claim_survives_rotation_and_ended_claim_refuses_commit(self):
+        claim = self.profile_claim()
+        before = claim.paths['state'].read_bytes()
+        with patch.object(external.os, 'getpgid', return_value=999998):
+            (status, _, stderr), _ = self.publish_cli()
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(claim.paths['state'].read_bytes(), before)
+        self.fixture.identity = json.loads(Path(self.config['app_identity_file']).read_bytes())
+        self.fixture.identity['token']['expires_at'] = '2026-01-01T00:00:00Z'
+        self.fixture.save_identity()
+        self.save_config()
+        self.fixture.writes.clear()
+        original = self.generation()
+        def ended(jwt, endpoint, payload=None):
+            value = self.issuer(jwt, endpoint, payload)
+            if payload is not None:
+                claim.claim['stage'] = 'finished'
+                claim.save()
+            return value
+        with patch.object(external.os, 'getpgid', return_value=999998):
+            (status, _, stderr), _ = self.publish_cli(ended)
+        self.assertEqual(status, 1)
+        self.assertIn('boundary is inactive', stderr)
+        self.assertEqual(self.generation(), original)
+        self.assertFalse(self.fixture.writes)
+
+    def test_abrupt_exit_between_files_refuses_restart_until_original_owner_recovers(self):
+        original = self.generation()
+        replace = external.private_replace
+        child = os.fork()
+        if child == 0:
+            def crash(path, raw):
+                replace(path, raw)
+                if Path(path) == Path(self.config['app_token_file']):
+                    os._exit(73)
+            with patch.object(external, 'private_replace', side_effect=crash):
+                self.publish_cli()
+            os._exit(74)
+        _, status = os.waitpid(child, 0)
+        self.assertEqual(os.WEXITSTATUS(status), 73)
+        self.assertNotEqual(self.generation(), original)
+        (status, _, stderr), signer = self.publish_cli()
+        self.assertEqual(status, 1)
+        self.assertIn('renewal interrupted', stderr)
+        signer.assert_not_called()
+        self.assertFalse(self.fixture.writes)
+        # Explicit original-owner recovery from retained exact fixture preimages.
+        pending = self.root / 'app-renewal-recovery.json'
+        pending.rename(self.root / 'retained-crash-receipt.json')
+        for path, raw in original.items():
+            path.write_bytes(raw)
+        (status, _, stderr), _ = self.publish_cli()
+        self.assertEqual(status, 0, stderr)
+
+    def test_signer_rejects_wrong_key_binding_invalid_key_and_unsafe_custody(self):
+        from types import SimpleNamespace
+        for fault in ('binding', 'key', 'fingerprint', 'symlink'):
+            with self.subTest(fault=fault):
+                config = json.loads(self.config_path.read_bytes())
+                if fault == 'binding': config['app_key_custody']['public_fingerprint'] = 'wrong'
+                if fault == 'symlink':
+                    alias = self.root / 'key-link'
+                    alias.symlink_to(self.key)
+                    config['app_key_custody']['private_key_file'] = str(alias)
+                result = SimpleNamespace(returncode=1 if fault == 'key' else 0,
+                                         stdout=b'wrong-public-key', stderr=b'sensitive-error-not-forwarded')
+                with patch.object(external.subprocess, 'run', return_value=result):
+                    with self.assertRaises(ValueError):
+                        external.app_jwt(config)
+
+    def test_uncertain_check_post_is_not_retried_by_renewal(self):
+        transport = self.transport
+        attempts = []
+        def uncertain(argv, **kwargs):
+            if '--method' in argv:
+                attempts.append(argv)
+                raise subprocess.TimeoutExpired('synthetic check transport', 60)
+            return transport(argv, **kwargs)
+        with patch.object(external.subprocess, 'run', side_effect=uncertain):
+            (status, _, _), _ = self.publish_cli()
+        self.assertEqual(status, 1)
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(len(self.requests), 3)
+
+    def test_real_openssl_signer_binds_key_and_supported_jwt_claims(self):
+        import base64
+        import time
+        public_file, signature_file = self.root / 'public.pem', self.root / 'signature'
+        with patch.object(external.subprocess, 'run', side_effect=REAL_RUN):
+            REAL_RUN(['/usr/bin/openssl', 'genrsa', '-out', str(self.key), '2048'],
+                     capture_output=True, check=True, timeout=20, env={'PATH': '/usr/bin:/bin'})
+            public = REAL_RUN(['/usr/bin/openssl', 'pkey', '-in', str(self.key), '-pubout', '-outform', 'DER'],
+                              capture_output=True, check=True, timeout=20).stdout
+            fingerprint = 'SHA256:' + base64.b64encode(hashlib.sha256(public).digest()).decode()
+            config = {**self.config, 'app_key_custody': {**self.config['app_key_custody'],
+                                                       'public_fingerprint': fingerprint}}
+            # Synthetic key authority is confined to this fixture, never installation proof.
+            with patch.object(external, 'APP_KEY_FINGERPRINT', fingerprint), patch.dict(
+                    os.environ, {'OPENSSL_CONF': '/untrusted/candidate-config', 'PATH': '/untrusted/bin'}):
+                jwt = external.app_jwt(config)
+            header, claims, signature = jwt.split('.')
+            decode = lambda value: base64.urlsafe_b64decode(value + '=' * (-len(value) % 4))
+            self.assertEqual(json.loads(decode(header)), {'alg': 'RS256', 'typ': 'JWT'})
+            body = json.loads(decode(claims))
+            self.assertEqual(body['iss'], '5285837')
+            self.assertLessEqual(body['iat'], int(time.time()))
+            self.assertEqual(body['exp'] - body['iat'], 600)
+            public_file.write_bytes(REAL_RUN(['/usr/bin/openssl', 'pkey', '-in', str(self.key), '-pubout'],
+                                            capture_output=True, check=True, timeout=20).stdout)
+            signature_file.write_bytes(decode(signature))
+            result = REAL_RUN(['/usr/bin/openssl', 'dgst', '-sha256', '-verify', str(public_file),
+                               '-signature', str(signature_file)], input=(header + '.' + claims).encode(),
+                              capture_output=True, timeout=20)
+            self.assertEqual(result.returncode, 0)
+
+    def test_changed_acceptance_and_failed_review_remain_blocking_after_renewal(self):
+        for fault in ('acceptance', 'failed-review'):
+            with self.subTest(fault=fault):
+                if fault == 'acceptance':
+                    self.fixture.body += 'Changed essential requirement.\n'
+                else:
+                    self.fixture.body = self.fixture.body.replace('Changed essential requirement.\n', '')
+                    execution = self.root / 'execution'
+                    execution.write_text('{"kind":"timeout"}')
+                (status, _, _), _ = self.publish_cli()
+                self.assertEqual(status, 1)
+                self.assertFalse(self.fixture.writes)
 
 
 if __name__ == '__main__':
