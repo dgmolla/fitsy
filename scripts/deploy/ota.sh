@@ -38,7 +38,7 @@ APPLIED_LIST="$(mktemp "$COMMAND_TMP/fitsy-ota-applied-list.XXXXXX")"
 APPLIED_VIEW="$(mktemp "$COMMAND_TMP/fitsy-ota-applied-view.XXXXXX")"
 env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:list --branch production --limit 1 --json --non-interactive > "$APPLIED_LIST"
 APPLIED_GROUP="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); rows=d.get("currentPage") or d.get("updates") or [] if isinstance(d,dict) else d; assert len(rows)==1; print(rows[0]["group"])' "$APPLIED_LIST")"
-env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:view "$APPLIED_GROUP" --json --non-interactive > "$APPLIED_VIEW"
+env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:view "$APPLIED_GROUP" --json > "$APPLIED_VIEW"
 APPLICABLE=0
 python3 - "$APPLIED_VIEW" "$APPLIED_GROUP" "$HEAD_SHA" "$REPO_ROOT" <<'PYCODE' || APPLICABLE=$?
 import json, re, subprocess, sys
