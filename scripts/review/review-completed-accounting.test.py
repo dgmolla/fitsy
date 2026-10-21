@@ -51,7 +51,9 @@ def install_fixture_admin(repo, home):
         p.write_text(p.read_text().replace('ADMIN_HOME="$(python3 -I -c \'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)\')"',
                                          'ADMIN_HOME=' + repr(str(home))).replace(
             'CANONICAL_ADAPTER=/opt/fitsy-approval/external-approval.py',
-            'CANONICAL_ADAPTER=' + str(home / '.fitsy-review/operators/external-approval.py')))
+            'CANONICAL_ADAPTER=' + str(home / '.fitsy-review/operators/external-approval.py')).replace(
+                '/usr/bin/python3 -I -B "$CANONICAL_ADAPTER"',
+                '"' + sys.executable + '" -I -B "$CANONICAL_ADAPTER"'))
     p = repo / 'scripts/verify/shipping-session.mjs'
     if p.exists():
         p.write_text(p.read_text().replace('userInfo().homedir', json.dumps(str(home))))
@@ -730,6 +732,8 @@ class CompletedAdmission(CompletedAccounting):
         self.save()
         tools = self.root / 'bin'
         tools.mkdir()
+        (tools / 'bash').symlink_to('/bin/bash')
+        (tools / 'python3').symlink_to(sys.executable)
         for name, text in {'gh': '#!/bin/sh\nprintf "Frozen acceptance\\n"\n',
                            'codex': '#!/bin/sh\n[ "$1" = --version ] || { echo unexpected-review >&2; exit 90; }\necho fixture-cli\n'}.items():
             (tools / name).write_text(text)
@@ -752,7 +756,7 @@ class CompletedAdmission(CompletedAccounting):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(saved, (budget_home / 'issue-443.jsonl').read_bytes())
         # The same original evidence reaches actual GitHub projection code.
-        (tools / 'gh').write_text("#!/usr/bin/env python3\nimport sys\na=sys.argv\n"
+        (tools / 'gh').write_text(f"#!{sys.executable} -I\nimport sys\na=sys.argv\n"
             "if a[1]=='issue': print('Frozen acceptance')\n"
             "elif a[1]=='pr':\n"
             " field=a[a.index('--jq')+1]\n"
@@ -868,6 +872,10 @@ class CompletedAdmission(CompletedAccounting):
             'TRUSTED_GH=' + str(self.root / 'session-bin/gh')))
         fixed_path = str(self.root / 'session-bin') + ':/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
         admission.write_text(admission.read_text().replace('PATH=/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'PATH=' + fixed_path))
+        runner = product / 'scripts/verify/run.mjs'
+        runner.write_text(runner.read_text().replace(
+            'PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node',
+            'PATH=' + fixed_path + ' node', 1))
         if canonical:
             # Only protected operator data belongs here; source workspaces and
             # legacy completed authority must remain outside every checkout.
@@ -940,6 +948,7 @@ class CompletedAdmission(CompletedAccounting):
         tools.mkdir()
         # Nested sanitized callers must use the actual interpreter, not an OS shim.
         (tools / 'python3').symlink_to(sys.executable)
+        (tools / 'bash').symlink_to('/bin/bash')
         for name, raw in {'gh': '#!/bin/sh\n[ "$1" = issue ] && { echo "Frozen acceptance"; exit 0; }\nexit 1\n',
                           'codex': '#!/bin/sh\n[ "$1" = --version ] || { echo unexpected-review >&2; exit 90; }\necho fixture-cli\n'}.items():
             (tools / name).write_text(raw)
@@ -973,8 +982,6 @@ class CompletedAdmission(CompletedAccounting):
             shutil.copy2(tools / 'gh', protected_gh)
             config_path = adapter.parent / 'authority.json'
             code = (source / 'scripts/review/external-approval.py').read_text()
-            code = code.replace('#!/usr/bin/env -S -i /usr/bin/python3 -I',
-                                f'#!/usr/bin/env -S -i {sys.executable} -I', 1)
             code = re.sub(r'CONFIG = Path\(.*?\)\nINSTALL', 'CONFIG = Path(' + repr(str(config_path)) + ')\nINSTALL', code, count=1, flags=re.S)
             code = code.replace("INSTALL = Path('/opt/fitsy-approval/external-approval.py')", 'INSTALL = Path(' + repr(str(adapter)) + ')')
             adapter.write_text(code)
@@ -1026,7 +1033,9 @@ class CompletedAdmission(CompletedAccounting):
                 app_token_file=str(token), app_identity_file=str(identity), app_identity_sha256=sha(identity.read_bytes()),
                 review_home=str(review_home), budget_home=str(budgets.resolve()), reviews={str(issue): policy})
             config_path.write_text(json.dumps(config)); config_path.chmod(0o600)
-        shutil.copyfile(source / '.githooks/pre-push', product / '.evidence/hook')
+        (product / '.evidence/hook').write_text((source / '.githooks/pre-push').read_text().replace(
+            'export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+            'export PATH=' + fixed_path))
         (product / '.evidence/native.mjs').write_text(
             "import {admitFinalCandidate} from '../scripts/sim/product-flow.mjs';\n"
             "admitFinalCandidate({publishable:true});\n")
