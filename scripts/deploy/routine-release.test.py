@@ -3,8 +3,10 @@
 import base64
 import copy
 import importlib.util
+import io
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -171,6 +173,13 @@ class AdmissionTests(unittest.TestCase):
 
 
 class GitDeploymentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        command = "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))"
+        workflow = json.loads(subprocess.check_output(['node', '-e', command, str(ROOT / '.github/workflows/deploy.yml')],
+                                                      cwd=ROOT, text=True))
+        cls.steps = workflow['jobs']['smoke']['steps']
+
     def setUp(self):
         self.source = 'a' * 40
         bot = {'id': 35613825, 'login': 'vercel[bot]', 'type': 'Bot'}
@@ -179,6 +188,119 @@ class GitDeploymentTests(unittest.TestCase):
         self.url = 'https://fitsy-brnzbu5lq-dawits-projects-74b6e00f.vercel.app'
         self.status = {'id': 13, 'state': 'success', 'creator': bot, 'environment': 'Production',
                        'environment_url': self.url, 'target_url': self.url}
+
+    def post_smoke(self, change, snapshot=None, during_health=None, missing=False):
+        """Drive the real CLI selected by the workflow, replacing only transport."""
+        self.trace = []
+        self.post_phase = False
+        self.health_response = {'status': 'ok', 'db': 'connected', 'deploymentSha': self.source}
+        def github(config, endpoint):
+            self.trace.append(endpoint)
+            if endpoint.endswith('git/ref/heads/main'):
+                return {'object': {'sha': self.source}}
+            return [self.status] if '/statuses?' in endpoint else [self.row]
+        def read(request, **kwargs):
+            self.trace.append(request.full_url)
+            if self.post_phase and during_health and request.full_url == 'https://fitsy.org/api/health':
+                during_health()
+            return io.StringIO(json.dumps(self.health_response))
+        with tempfile.TemporaryDirectory(prefix='fitsy-post-smoke-') as directory, \
+                patch.object(gate, 'github', side_effect=github), \
+                patch.object(gate.urllib.request, 'urlopen', side_effect=read):
+            output = io.StringIO()
+            with patch.object(sys, 'argv', ['routine-release.py', 'observe', self.source]), patch('sys.stdout', output):
+                gate.main()
+            path = Path(directory) / 'vercel-deployment.json'
+            path.write_text(output.getvalue() if snapshot is None else snapshot)
+            if missing:
+                path.unlink()
+            change()
+            self.trace.clear()
+            self.post_phase = True
+            command = next(step['run'] for step in self.steps if step.get('name') == 'Verify serving identity after smoke')
+            args = [arg.replace('$RELEASE_SHA', self.source).replace('$RUNNER_TEMP', directory)
+                    for arg in shlex.split(command)]
+            self.assertEqual(args[:2], ['python3', 'scripts/deploy/routine-release.py'])
+            final = io.StringIO()
+            with patch.object(sys, 'argv', args[1:]), patch('sys.stdout', final):
+                gate.main()
+            return json.loads(final.getvalue())
+
+    def test_actual_post_smoke_cli_refuses_new_pending_attempt_despite_healthy_old_source(self):
+        def retry():
+            self.row = dict(self.row, id=14)
+            self.status = dict(self.status, state='pending')
+        with self.assertRaises(ValueError):
+            self.post_smoke(retry)
+
+    def test_actual_post_smoke_cli_passes_unchanged_and_rechecks_after_health(self):
+        result = self.post_smoke(lambda: None)
+        self.assertEqual(result['deployment']['id'], 12)
+        checks = [index for index, call in enumerate(self.trace) if '/deployments?' in call]
+        self.assertEqual(len(checks), 2)
+        self.assertLess(checks[0], self.trace.index(self.url + '/api/health'))
+        self.assertGreater(checks[1], self.trace.index('https://fitsy.org/api/health'))
+        self.assertTrue(self.trace[-1].endswith('git/ref/heads/main'))
+
+    def test_actual_post_smoke_cli_refuses_failed_replaced_and_mid_health_attempts(self):
+        original = copy.deepcopy((self.row, self.status))
+        for replacement, state in ((False, 'pending'), (False, 'failure'), (True, 'failure'), (True, 'success')):
+            self.row, self.status = copy.deepcopy(original)
+            def change():
+                self.status['state'] = state
+                if replacement:
+                    self.row['id'] = 14
+                    self.status.update(environment_url=self.url.replace('brnzbu5lq', 'new'),
+                                       target_url=self.url.replace('brnzbu5lq', 'new'))
+            with self.subTest(replacement=replacement, state=state), self.assertRaises(ValueError):
+                self.post_smoke(change)
+        self.row, self.status = copy.deepcopy(original)
+        def change_url():
+            self.status.update(environment_url=self.url.replace('brnzbu5lq', 'new'),
+                               target_url=self.url.replace('brnzbu5lq', 'new'))
+        with self.assertRaises(ValueError):
+            self.post_smoke(change_url)
+        self.row, self.status = copy.deepcopy(original)
+        def started_during_health():
+            self.row['id'] = 14
+            self.status['state'] = 'pending'
+        with self.assertRaises(ValueError):
+            self.post_smoke(lambda: None, during_health=started_during_health)
+        self.assertEqual(sum('/deployments?' in call for call in self.trace), 2)
+
+    def test_actual_post_smoke_cli_requires_readable_raw_snapshot_and_healthy_source(self):
+        for value in ('', '{}', '[]', 'null'):
+            with self.subTest(snapshot=value), self.assertRaises((ValueError, KeyError, TypeError)):
+                self.post_smoke(lambda: None, snapshot=value)
+        with self.assertRaises(FileNotFoundError):
+            self.post_smoke(lambda: None, missing=True)
+        with patch.object(sys, 'argv', ['routine-release.py', 'health', self.source]), \
+                patch.object(gate, 'github') as read, self.assertRaises(ValueError):
+            gate.main()
+        read.assert_not_called()
+        for value in ({'deploymentSha': 'b' * 40}, {'db': 'unreachable'}):
+            with self.subTest(health=value), self.assertRaises(ValueError):
+                self.post_smoke(lambda: self.health_response.update(value))
+
+    def test_actual_workflow_preserves_snapshot_and_cannot_mask_observer_failure(self):
+        observe = next(step['run'] for step in self.steps if step.get('name', '').startswith('Observe the exact'))
+        lines = observe.strip().splitlines()
+        snapshot = '$RUNNER_TEMP/vercel-deployment.json'
+        self.assertEqual(shlex.split(lines[0])[-2:], ['>', snapshot])
+        self.assertEqual(shlex.split(lines[1]), ['cat', snapshot])
+        final = next(step['run'] for step in self.steps if step.get('name') == 'Verify serving identity after smoke')
+        self.assertEqual(shlex.split(final)[-2:], ['$RELEASE_SHA', snapshot])
+        with tempfile.TemporaryDirectory(prefix='fitsy-observe-failure-') as directory:
+            root = Path(directory)
+            (root / 'python3').write_text('#!/bin/bash\nprintf partial-json\nexit 7\n')
+            (root / 'cat').write_text('#!/bin/bash\ntouch "$RUNNER_TEMP/display-ran"\n')
+            for name in ('python3', 'cat'):
+                (root / name).chmod(0o700)
+            result = subprocess.run(['bash', '-e', '-c', observe], text=True, capture_output=True,
+                                    env={**os.environ, 'RUNNER_TEMP': directory, 'RELEASE_SHA': self.source,
+                                         'PATH': directory + ':' + os.environ['PATH']})
+            self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertFalse((root / 'display-ran').exists())
 
     def result(self):
         with patch.object(gate, 'github', side_effect=[[self.row], [self.status]]):

@@ -102,6 +102,24 @@ def observe(source):
     raise ValueError('exact successful Git deployment and serving health not observed within 20 minutes')
 
 
+def verify_after_smoke(source, observed):
+    def unchanged():
+        latest = deployment(source)
+        require(latest is not None
+                and latest['deployment']['id'] == observed['deployment']['id']
+                and latest['status']['environment_url'] == observed['status']['environment_url'],
+                'production deployment changed or is no longer successful after smoke')
+        return latest
+    latest = unchanged()
+    health(source, latest['status']['environment_url'])
+    health(source)
+    # A retry can begin during the health reads. Recheck the existing producer
+    # after those reads, without waiting for or adopting a replacement attempt.
+    latest = unchanged()
+    current(source)
+    print(json.dumps(latest))
+
+
 def admit(event, run_id):
     require(os.environ.get('GITHUB_EVENT_NAME') == 'workflow_run'
             and os.environ.get('GITHUB_REPOSITORY') == REPO
@@ -178,14 +196,15 @@ def admit(event, run_id):
 
 
 def main():
-    if len(sys.argv) == 3 and sys.argv[1] in ('current', 'observe', 'health'):
+    if len(sys.argv) > 1:
+        require(sys.argv[1] in ('current', 'observe', 'health'), 'unsupported release command')
+        require(len(sys.argv) == (4 if sys.argv[1] == 'health' else 3), 'release command arguments missing')
         require(re.fullmatch('[0-9a-f]{40}', sys.argv[2]), 'invalid source')
         current(sys.argv[2])
         if sys.argv[1] == 'observe':
             observe(sys.argv[2])
         elif sys.argv[1] == 'health':
-            health(sys.argv[2])
-            current(sys.argv[2])
+            verify_after_smoke(sys.argv[2], json.loads(Path(sys.argv[3]).read_text()))
         return
     result = admit(json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text()), int(os.environ['GITHUB_RUN_ID']))
     with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
@@ -196,7 +215,7 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (ValueError, KeyError, TypeError, subprocess.CalledProcessError, subprocess.TimeoutExpired,
+    except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired,
             urllib.error.URLError) as error:
         print(f'Routine release refused: {error}', file=sys.stderr)
         sys.exit(1)

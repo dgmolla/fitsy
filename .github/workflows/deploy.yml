@@ -59,7 +59,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
-        run: python3 scripts/deploy/routine-release.py observe "$RELEASE_SHA"
+        run: |
+          python3 scripts/deploy/routine-release.py observe "$RELEASE_SHA" > "$RUNNER_TEMP/vercel-deployment.json"
+          cat "$RUNNER_TEMP/vercel-deployment.json"
       - name: Prod-safe API smoke
         env:
           PROD_SMOKE_EMAIL: ${{ secrets.PROD_SMOKE_EMAIL }}
@@ -69,7 +71,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
-        run: python3 scripts/deploy/routine-release.py health "$RELEASE_SHA"
+        run: python3 scripts/deploy/routine-release.py health "$RELEASE_SHA" "$RUNNER_TEMP/vercel-deployment.json"
       - name: File incident on failure
         if: failure()
         env:
