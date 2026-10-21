@@ -136,6 +136,243 @@ class ReviewTests(unittest.TestCase):
         self.assertTrue(external.protected_bytes(system_file, os.getuid()))
 
 
+class CanonicalReviewTests(unittest.TestCase):
+    """Real parser/gate and protected file reads; no publishing authority is granted."""
+    def setUp(self):
+        ReviewTests.setUp(self)
+        self.scratch = tempfile.TemporaryDirectory(prefix='approval-canonical-', dir=REPO_ROOT / '.evidence')
+        self.addCleanup(self.scratch.cleanup)
+        self.operator = Path(self.scratch.name) / 'operator'
+        self.operator.mkdir()
+        self.install = patch.object(external, 'INSTALL', self.operator / 'external-approval.py')
+        self.install.start()
+        self.addCleanup(self.install.stop)
+        validators = {}
+        for name in ('review-round', 'review-gate'):
+            raw = SCRIPT.with_name(name + '.py').read_bytes()
+            (self.operator / (name + '.py')).write_bytes(raw)
+            validators[name] = external.digest(raw)
+        self.root = self.operator / 'evidence' / 'issue-443' / self.source
+        self.receipt = self.root / '.evidence' / 'tests' / 'cheap.json'
+        self.receipt.parent.mkdir(parents=True)
+        self.receipt.write_text(json.dumps({'id': 'cheap', 'source_sha': self.source,
+            'result': 'pass', 'exit_code': 0, 'command': 'npm run verify -- --stage=cheap',
+            'finished_at': '2026-10-21T06:10:18+00:00'}))
+        self.policy['canonical_review'] = {'validators': validators, 'diff_sha256': 'd' * 64,
+            'evidence_root': str(self.root), 'dispositions': {}}
+        self.verdict = {key: self.approval[key] for key in (
+            'issue', 'source_sha', 'base_sha', 'acceptance_sha256', 'provider', 'model', 'reasoning_effort')}
+        self.verdict.update(verdict='pass', domains={domain: 'pass' for domain in self.policy['domains']}, findings=[])
+        self.store_verdict()
+
+    def validate(self):
+        external.validate_review(self.approval, self.artifacts, self.ledger, self.policy,
+                                 443, self.source, self.body, os.getuid())
+
+    def store_verdict(self):
+        self.artifacts['verdict'] = ('Review response\n```json\n' + json.dumps(self.verdict) + '\n```\n').encode()
+        self.approval['artifacts']['verdict']['sha256'] = external.digest(self.artifacts['verdict'])
+        ReviewTests.replace_artifact(self, 'execution', {**self.execution,
+            'stdout_bytes': len(self.artifacts['verdict']), 'stderr_bytes': len(self.artifacts['stderr'])})
+
+    def add_p2(self):
+        self.verdict.update(verdict='fail', findings=[{
+            'severity': 'CONFIRMED', 'priority': 'P2', 'domains': ['correctness'],
+            'file': 'scripts/review/review-budget.py', 'line': 860,
+            'summary': 'Optional receipt compatibility', 'scenario': 'Historical native receipt only',
+            'fix': 'Preserve supported receipt binding', 'impact': 'Owned optional recovery'}])
+        self.verdict['domains']['correctness'] = 'fail'
+        self.store_verdict()
+        finding = {key: value for key, value in self.verdict['findings'][0].items() if key != 'domains'}
+        canonical_hash = lambda value: external.digest(json.dumps(value, sort_keys=True, separators=(',', ':')).encode())
+        self.sidecar = {'version': 1, 'lens': 'correctness', 'source_sha': self.source,
+            'diff_sha256': 'd' * 64,
+            'review_sha256': canonical_hash({'lens': 'correctness', 'verdict': 'fail', 'findings': [finding]}),
+            'findings': [{'index': 0, 'finding_sha256': canonical_hash(finding), 'priority': 'P2',
+                'disposition': 'defer', 'owner': 'Original outcome owner, existing issue330',
+                'acceptance': 'Resume when an actual native-only receipt requires correction',
+                'impact': {key: 'Bounded optional historical compatibility' for key in
+                           ('user_outcome', 'trigger', 'scope', 'evidence', 'contract')},
+                'required_tests': [{'id': 'cheap', 'receipt': '.evidence/tests/cheap.json',
+                                   'sha256': external.digest(self.receipt.read_bytes())}]}]}
+        self.sidecar_path = self.root / '.evidence' / 'correctness.json'
+        self.store_sidecar()
+
+    def store_sidecar(self):
+        self.sidecar_path.write_text(json.dumps(self.sidecar))
+        self.policy['canonical_review']['dispositions']['correctness'] = {
+            'path': str(self.sidecar_path), 'sha256': external.digest(self.sidecar_path.read_bytes())}
+
+    def test_complete_string_domains_pass_without_changing_raw_bytes(self):
+        before = dict(self.artifacts)
+        self.validate()
+        self.assertEqual(self.artifacts, before)
+
+    def test_owned_p2_uses_real_gate_and_preserves_raw_fail(self):
+        self.add_p2()
+        before = dict(self.artifacts)
+        self.validate()
+        self.assertEqual(self.artifacts, before)
+        self.assertIn(b'"verdict": "fail"', self.artifacts['verdict'])
+
+    def test_missing_forged_stale_unowned_dispositions_refuse(self):
+        self.add_p2()
+        row = self.policy['canonical_review']['dispositions'].pop('correctness')
+        with self.assertRaisesRegex(ValueError, 'missing dispositions'):
+            self.validate()
+        self.policy['canonical_review']['dispositions']['correctness'] = row
+        self.sidecar_path.write_text('{}')
+        with self.assertRaisesRegex(ValueError, 'disposition changed'):
+            self.validate()
+        for field, value, reason in (('source_sha', 'c' * 40, 'stale disposition'),
+                                     ('owner', '', 'unowned'), ('finding_sha256', '0' * 64, 'stale finding')):
+            with self.subTest(field=field):
+                self.add_p2()
+                target = self.sidecar if field == 'source_sha' else self.sidecar['findings'][0]
+                target[field] = value
+                self.store_sidecar()
+                with self.assertRaisesRegex(ValueError, reason):
+                    self.validate()
+
+    def test_changed_or_stale_required_test_refuses(self):
+        self.add_p2()
+        original = self.receipt.read_bytes()
+        self.receipt.write_bytes(original + b'\n')
+        with self.assertRaisesRegex(ValueError, 'test receipt changed'):
+            self.validate()
+        receipt = json.loads(original)
+        receipt['source_sha'] = 'c' * 40
+        self.receipt.write_text(json.dumps(receipt))
+        self.sidecar['findings'][0]['required_tests'][0]['sha256'] = external.digest(self.receipt.read_bytes())
+        self.store_sidecar()
+        with self.assertRaisesRegex(ValueError, 'failed or stale required test'):
+            self.validate()
+
+    def test_p0_p1_cannot_be_dispositioned(self):
+        for priority in ('P0', 'P1'):
+            with self.subTest(priority=priority):
+                self.add_p2()
+                self.verdict['findings'][0]['priority'] = priority
+                self.store_verdict()
+                with self.assertRaisesRegex(ValueError, 'P0/P1 finding blocks'):
+                    self.validate()
+
+    def test_incomplete_missing_wrong_domains_or_inconsistent_verdict_refuse(self):
+        for update in ({'verdict': 'incomplete'}, {'domains': {'correctness': 'pass'}},
+                       {'domains': {'correctness': 'pass', 'other': 'pass'}}, {'verdict': 'fail'}):
+            with self.subTest(update=update):
+                original = dict(self.verdict)
+                self.verdict.update(update)
+                self.store_verdict()
+                with self.assertRaisesRegex(ValueError, 'incomplete or invalid'):
+                    self.validate()
+                self.verdict = original
+
+    def test_wrong_source_issue_base_acceptance_or_provider_refuse(self):
+        for field, value in (('source_sha', 'c' * 40), ('base_sha', 'c' * 40), ('issue', 346),
+                             ('acceptance_sha256', 'c' * 64), ('provider', 'claude'),
+                             ('model', 'other'), ('reasoning_effort', 'low')):
+            with self.subTest(field=field):
+                original = self.verdict[field]
+                self.verdict[field] = value
+                self.store_verdict()
+                with self.assertRaisesRegex(ValueError, 'binding mismatch'):
+                    self.validate()
+                self.verdict[field] = original
+
+    def test_original_stream_hashes_and_byte_counts_remain_required(self):
+        self.artifacts['verdict'] = self.artifacts['verdict'].rstrip(b'\n')
+        with self.assertRaisesRegex(ValueError, 'artifact changed'):
+            self.validate()
+        self.approval['artifacts']['verdict']['sha256'] = external.digest(self.artifacts['verdict'])
+        with self.assertRaisesRegex(ValueError, 'incomplete provider'):
+            self.validate()
+
+    def test_provider_failure_or_incomplete_execution_refuses(self):
+        for update in ({'kind': 'timeout'}, {'returncode': 1}):
+            with self.subTest(update=update):
+                execution = json.loads(self.artifacts['execution'])
+                ReviewTests.replace_artifact(self, 'execution', {**execution, **update})
+                with self.assertRaisesRegex(ValueError, 'incomplete provider'):
+                    self.validate()
+
+    def test_candidate_root_symlink_or_writable_test_refuses(self):
+        self.add_p2()
+        canonical = self.policy['canonical_review']
+        canonical['evidence_root'] = str(REPO_ROOT)
+        with self.assertRaisesRegex(ValueError, 'operator-held'):
+            self.validate()
+        canonical['evidence_root'] = str(self.root)
+        self.receipt.chmod(0o666)
+        with self.assertRaisesRegex(ValueError, 'custody'):
+            self.validate()
+        self.receipt.chmod(0o600)
+        target = self.receipt.with_suffix('.original')
+        self.receipt.rename(target)
+        self.receipt.symlink_to(target)
+        with self.assertRaisesRegex(ValueError, 'custody'):
+            self.validate()
+
+    def test_changed_or_candidate_selected_companion_refuses_before_execution(self):
+        helper = self.operator / 'review-gate.py'
+        helper.write_text('raise AssertionError("candidate code executed")')
+        with self.assertRaisesRegex(ValueError, 'validator changed'):
+            self.validate()
+        helper.unlink()
+        helper.symlink_to(SCRIPT.with_name('review-gate.py'))
+        with self.assertRaisesRegex(ValueError, 'custody'):
+            self.validate()
+
+    def test_lexically_relative_disposition_cannot_escape_protected_root(self):
+        self.add_p2()
+        escaped = self.root.parent / 'escaped.json'
+        escaped.write_bytes(self.sidecar_path.read_bytes())
+        row = self.policy['canonical_review']['dispositions']['correctness']
+        row['path'] = str(self.root / '.evidence' / '..' / '..' / 'escaped.json')
+        with self.assertRaisesRegex(ValueError, 'outside protected evidence'):
+            self.validate()
+
+    def test_disposition_symlink_or_writable_ancestor_refuses(self):
+        self.add_p2()
+        original = self.sidecar_path.with_suffix('.original')
+        self.sidecar_path.rename(original)
+        self.sidecar_path.symlink_to(original)
+        with self.assertRaisesRegex(ValueError, 'custody'):
+            self.validate()
+        self.sidecar_path.unlink()
+        original.rename(self.sidecar_path)
+        self.sidecar_path.parent.chmod(0o777)
+        with self.assertRaisesRegex(ValueError, 'custody'):
+            self.validate()
+        self.sidecar_path.parent.chmod(0o700)
+
+    def test_actual_review_inputs_checks_manifest_and_original_ledger(self):
+        self.add_p2()
+        review_home = self.operator / 'review-home'
+        budget_home = self.operator / 'budget-home'
+        (review_home / 'completed').mkdir(parents=True)
+        budget_home.mkdir()
+        for name, raw in self.artifacts.items():
+            path = self.operator / name
+            path.write_bytes(raw)
+            self.approval['artifacts'][name]['path'] = str(path)
+        manifest = review_home / 'completed' / 'issue-443.json'
+        manifest.write_text(json.dumps(self.approval))
+        self.policy['manifest_sha256'] = external.digest(manifest.read_bytes())
+        ledger = budget_home / 'issue-443.jsonl'
+        ledger.write_bytes(self.ledger)
+        config = {'operator_uid': os.getuid(), 'reviews': {'443': self.policy},
+                  'review_home': str(review_home), 'budget_home': str(budget_home)}
+        self.assertEqual(external.review_inputs(config, 443, self.source, self.body), self.approval)
+        ledger.write_bytes(self.ledger + b'changed history')
+        with self.assertRaisesRegex(ValueError, 'history changed'):
+            external.review_inputs(config, 443, self.source, self.body)
+        ledger.write_bytes(self.ledger)
+        manifest.write_bytes(manifest.read_bytes() + b'\n')
+        with self.assertRaisesRegex(ValueError, 'manifest'):
+            external.review_inputs(config, 443, self.source, self.body)
+
+
 class CompositionTests(unittest.TestCase):
     def setUp(self):
         self.path = 'scripts/review/run-review.sh'
@@ -173,6 +410,28 @@ class CompositionTests(unittest.TestCase):
     def test_cannot_label_nutrition_a_control(self):
         with self.assertRaisesRegex(ValueError, 'product path'):
             external.validate_composition(self.reviewed, self.candidate, self.controls, [self.product])
+
+    def test_approved_disjoint_main_changes_preserve_frozen_product_and_deletions(self):
+        base = {self.path: self.reviewed[self.path], self.product: ('100644', 'blob', 'before'),
+                'removed-product': ('100644', 'blob', 'removed')}
+        main = {**base, 'approved-main': ('100644', 'blob', 'independent')}
+        candidate = {**self.candidate, 'approved-main': main['approved-main']}
+        external.validate_composition(self.reviewed, candidate, self.controls, [self.path],
+                                      reviewed_base=base, main=main)
+        candidate['removed-product'] = base['removed-product']
+        with self.assertRaisesRegex(ValueError, 'frozen product'):
+            external.validate_composition(self.reviewed, candidate, self.controls, [self.path],
+                                          reviewed_base=base, main=main)
+
+    def test_overlapping_or_partial_main_context_refuses(self):
+        with self.assertRaisesRegex(ValueError, 'complete approved main'):
+            external.validate_composition(self.reviewed, self.candidate, self.controls, [self.path],
+                                          main=self.reviewed)
+        base = {self.product: ('100644', 'blob', 'before')}
+        main = {self.product: ('100644', 'blob', 'competing')}
+        with self.assertRaisesRegex(ValueError, 'overlap'):
+            external.validate_composition(self.reviewed, self.candidate, self.controls, [self.path],
+                                          reviewed_base=base, main=main)
 
     def test_reviewed_maintenance_control_reuses_frozen_product_without_allowing_other_workflows(self):
         path = '.github/workflows/dev-maintenance.yml'
@@ -587,7 +846,7 @@ class DispatchBoundaryTests(PublishBoundaryTests):
         if endpoint.endswith('/deployment-branch-policies'):
             return {'total_count': 1, 'branch_policies': [{'name': 'main', 'type': 'branch'}]}
         if endpoint.endswith('/pulls?per_page=100'):
-            return [{**self.pr, 'merged_at': 'fixture', 'merge_commit_sha': self.main}]
+            return [{**self.pr, 'state': 'closed', 'merged_at': 'fixture', 'merge_commit_sha': self.main}]
         if '/git/commits/' in endpoint:
             return {'tree': {'sha': 'equal-reviewed-product-tree'},
                     'parents': [{'sha': 'b' * 40}, {'sha': self.source}]}
@@ -1072,6 +1331,24 @@ class CIAcceptanceTests(unittest.TestCase):
         self.assertEqual(self.publish()['source_sha'], self.f.source)
         self.assertEqual(len(self.f.writes), 1)
         self.assertEqual(self.f.writes[0]['name'], external.ACCEPTANCE_CHECK)
+
+    def test_only_verified_merged_main_can_use_empty_rest_pr_association(self):
+        f = self.f
+        f.candidate_verify['pull_requests'] = []
+        closed = {**f.pr, 'state': 'closed', 'merged_at': 'fixture', 'merge_commit_sha': f.main}
+        review = {'base_sha': 'b' * 40}
+        with patch.object(external, 'github', side_effect=f.transport):
+            result = external.ci_acceptance(f.config, 443, closed, review, 21, merged_main=f.main)
+            self.assertEqual(result, f.config['local_acceptance']['443'])
+            with self.assertRaisesRegex(ValueError, 'event PR/base/head'):
+                external.ci_acceptance(f.config, 443, closed, review, 21)
+            for update in ({'state': 'open'}, {'merged_at': None}, {'merge_commit_sha': 'f' * 40}):
+                with self.subTest(update=update), self.assertRaisesRegex(ValueError, 'merged-main PR provenance'):
+                    external.ci_acceptance(f.config, 443, {**closed, **update}, review, 21, merged_main=f.main)
+            for association in (None, {}, [{'number': 99}], [{'number': 9, 'base': None}]):
+                f.candidate_verify['pull_requests'] = association
+                with self.subTest(association=association), self.assertRaises(ValueError):
+                    external.ci_acceptance(f.config, 443, closed, review, 21, merged_main=f.main)
 
     def test_wrong_run_identity_event_base_head_and_attempt_refuse(self):
         import copy
