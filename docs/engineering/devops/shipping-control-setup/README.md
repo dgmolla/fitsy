@@ -3,7 +3,7 @@
 **TL;DR:** This packet prepares an isolated approval issuer and protected release using existing review, GitHub and release commands.
 
 The current automatic routine release setup is [routine production](routine-production.md).
-It supersedes the routine App dispatch and blanket environment-review portions of the earlier [App dispatch packet](single-human-dispatch.md).
+It supersedes the routine App dispatch, staged token deployment, pre-build Verify timing gate and blanket routine environment-review portions of the earlier [App dispatch packet](single-human-dispatch.md).
 The earlier packet retains historical custody and independent review context; do not reinstall its routine trigger patch over the reviewed automatic workflow.
 The human withdrew account switching; retain the created account and earlier custody
 evidence without requesting login or deletion. Candidate custody continuation is the
@@ -20,11 +20,13 @@ flowchart LR
     R --> O[Separate operator checks genuine raw execution and original accounting]
     O --> C[App-bound review and acceptance checks]
     C --> M[Protected PR merge]
+    M --> G[Existing Vercel Git build, guarded migration and promotion]
     M --> V[Exact main Verify]
     V --> A[Exact-source workflow_run admission]
-    A --> E[Main-only routine environment]
-    E --> D[Existing migration, staged Vercel promotion and applicable guarded iOS OTA]
-    D --> P[Main Deploy and observed product acceptance]
+    G --> D[Observe serving source and production API smoke]
+    A --> D
+    D --> E[Applicable guarded iOS OTA]
+    E --> P[Main Deploy and observed product acceptance]
 ```
 
 ## Observed boundary and concrete identity inputs
@@ -173,12 +175,13 @@ Apply the same approval protection to `production-native`, adding only explicitl
 Environment approval cannot substitute for human Apple, legal, submission or product authorization.
 Read back actual reviewers, self-review prevention, bypass setting and branch/tag policies using the [environment API](https://docs.github.com/en/rest/deployments/environments).
 
-Move `PROD_DATABASE_URL`, `EXPO_TOKEN` and production smoke credentials into protected environment custody.
+The following `PROD_DATABASE_URL` setup applies only to sensitive monthly maintenance in `production-release`.
+Routine production migration uses existing Vercel Production bindings through the guarded Git build; routine Expo and smoke credentials retain their existing CI route.
 For `PROD_DATABASE_URL`, use the verified production Supabase session pooler on `aws-1-us-east-1.pooler.supabase.com:5432`, database `postgres`, and user `postgres.zaxkmjqozvmbifiwbxps`.
 Construct the private URI from the already held production password and append `sslmode=require&sslaccept=strict&sslcert=../docs/engineering/devops/shipping-control-setup/supabase-root-2021-ca.crt`.
 Prisma 6 resolves `sslcert` relative to `prisma/schema.prisma`, so the committed public certificate remains available after checkout on the Linux runner.
 The certificate came from [Supabase's published 2021 production CA](https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt); its PEM SHA-256 is `700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7`.
-The production migration and monthly snapshot both consume this same protected secret; the transaction pooler on port 6543 and a Mac-local certificate path are not valid inputs for these jobs.
+The monthly snapshot consumes this protected secret; the transaction pooler on port 6543 and a Mac-local certificate path are not valid inputs for these jobs.
 Before installing the secret, verify a read-only Prisma CLI and Prisma Client query with the exact private URI in a neutral Linux runtime, and require both an unrelated CA and a wrong hostname to fail.
 Do not put the URI, password, or a live query result in the repository or candidate environment.
 The existing monthly dev snapshot uses a production credential even though its code starts a read-only transaction; this is not a read-only credential grant.
@@ -186,32 +189,17 @@ Its job requires `production-release` and branch `main`; nightly reset and drift
 If self-review prevention holds a scheduled or human-initiated monthly run, the isolated App operator can initiate the existing `workflow_dispatch` on reviewed main before the human approves the protected job.
 That dispatch also runs the nightly dev reset, so coordinate the existing dev test window before execution.
 This does not add a scheduler or waive environment approval.
-Place `EXPO_TOKEN` in both `production-release` for OTA and `production-native` for native delivery before removing its repository-scoped copy.
-Inventory `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `JWT_SECRET` and other existing repository/Vercel credentials by their real privilege before relocation; names alone do not prove dev or production identity.
-Copy each required secret securely from its current holder into the correct environment, validate presence without exposing values, then delete or revoke its repository/shared-host alternate route.
-Never delete an unknown secret merely because its name resembles a production credential.
-Candidate CI receives only ephemeral/dev credentials and its normal read/test transport.
-App and environment approval credentials stay outside every candidate-controlled workflow and dependency installation.
+Native release credentials remain protected by `production-native`.
+Routine OTA retains the existing repository credential route; no new environment or credential migration is required by issue 471.
+Inventory existing credentials by actual privilege before any separately authorized custody change; secret names do not establish their target.
+Never delete or relocate an unknown credential as an incidental routine deployment change.
+App, environment approval and operator credentials remain outside candidate execution.
 
-`deploy.patch` is an inactive, reviewable change to the existing Deploy workflow.
-The original patch files retain their preparation bytes after application to the repository targets.
-The resolved workflow binds the authenticated App actor `341457831` / `fitsy-delivery-approval[bot]`.
-Independently review the final resolved workflow bytes before integration or installation; local application does not establish remote enforcement.
-It accepts only source-bound App `workflow_dispatch` after successful main push Verify, verifies both actual initiating actors before production jobs, and checks out that exact input source in every job.
-Unresolved App actor placeholders fail closed; installation requires independently approved resolved bytes and pinned deploy/verify workflow digests on default main.
-It rejects a superseded main source before proceeding, binds `RELEASE_SHA` to the verified source and retains existing release serialization.
-Every surviving release conservatively reconciles migration, API and mobile surfaces so pending-run replacement cannot hide a release.
-Migration, smoke and OTA jobs enter `production-release` before they can receive environment secrets.
-The independent reviewer rechecks the source and immutable workflow bytes for each pending environment job.
-Existing migration safeguards, production API smoke, iOS binary compatibility, OTA leases and rollback commands remain intact.
-
-Disable automatic Vercel production builds before cutover with the prepared `vercel.patch` main-branch deployment setting and corresponding verified project settings for both `fitsy-api` and `fitsy`.
-Disabling only domain auto-assignment still exposes production build credentials before main Verify, so it is insufficient for this boundary.
-Keep preview builds dev-only and verify no alternate production deployment hook or shared-host Vercel token remains available to candidate execution.
-After successful main Verify and independent environment authorization, the isolated release operator uses the existing Vercel CLI on the exact reviewed release source with `vercel deploy --prod --skip-domain --yes`, verifies the resulting project/source/environment identity, then uses `vercel promote DEPLOYMENT_URL --yes`.
-The existing smoke job observes that exact production deployment and exercises the production-safe API checks.
-The installed CLI help and [Vercel deployment documentation](https://vercel.com/docs/cli/deploying-from-cli) support staged production and promotion.
-No production command is executed to test setup preparation.
+`deploy.patch`, `vercel.patch` and the App-dispatch packets retain historical preparation context.
+Do not apply their superseded routine trigger, Git-disable or staged promotion instructions over the current reviewed workflow.
+The active [routine production](routine-production.md) caller uses the existing Vercel Git integration, production migration/build and post-Verify deployment observer.
+Main Verify remains required for completion, without an invented pre-build timing gate.
+Sensitive maintenance and native/Apple approval protections remain in place.
 
 ## One controlled cutover and rollback
 

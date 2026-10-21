@@ -1148,14 +1148,18 @@ class WorkflowGateTests(unittest.TestCase):
         cls.workflow = read("deploy.yml")
         cls.maintenance = read("dev-maintenance.yml")
 
-    def test_production_jobs_consume_admitted_source_and_main_only_routine_environment(self):
+    def test_production_observer_and_ota_consume_admitted_source_without_new_secret_route(self):
         jobs = self.workflow["jobs"]
         self.assertEqual(self.workflow["on"]["workflow_run"]["branches"], ["main"])
         self.assertNotIn("workflow_dispatch", self.workflow["on"])
         self.assertEqual(jobs["changes"]["steps"][0]["with"]["ref"], "${{ github.workflow_sha }}")
-        for name in ("migrate", "smoke", "ota"):
+        self.assertNotIn('migrate', jobs)
+        self.assertNotIn('VERCEL_TOKEN', json.dumps(self.workflow))
+        self.assertNotIn('PROD_DATABASE_URL', json.dumps(self.workflow))
+        self.assertEqual(self.workflow['permissions']['deployments'], 'read')
+        for name in ("smoke", "ota"):
             job = jobs[name]
-            self.assertEqual(job["environment"], "routine-production")
+            self.assertNotIn('environment', job)
             needs = job["needs"] if isinstance(job["needs"], list) else [job["needs"]]
             self.assertIn("changes", needs)
             self.assertTrue(any(step.get("with", {}).get("ref") == "${{ needs.changes.outputs.release_sha }}" for step in job["steps"]))

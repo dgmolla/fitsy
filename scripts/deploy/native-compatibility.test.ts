@@ -147,24 +147,23 @@ test('actual production helper prevents unsafe publication and exports only veri
   // Evaluate the actual surviving B job guard and run the actual helper: its
   // API-only source must not suppress publication of A's unapplied mobile JS.
   git('checkout', '-q', '--detach', apiHead);
-  const runSurvivor = (migration: string, smoke: string) => {
+  const runSurvivor = (smoke: string) => {
     const condition = workflow.jobs.ota.if.replaceAll('always()', 'true')
       .replaceAll('needs.changes.outputs.mobile', "'false'")
-      .replaceAll('needs.migrate.result', `'${migration}'`)
       .replaceAll('needs.smoke.result', `'${smoke}'`);
     return spawnSync('bash', ['-e', '-c', `if [[ ${condition} ]]; then bash scripts/deploy/ota.sh 'surviving API push'; fi`], {
       cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}`,
         EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 'expected.apps.googleusercontent.com' },
     });
   };
-  const survivingPublication = runSurvivor('success', 'success');
+  const survivingPublication = runSurvivor('success');
   expect(survivingPublication.status).toBe(0);
   expect(survivingPublication.stdout).toContain(`"source_sha":"${apiHead}"`);
   expect(survivingPublication.stdout).toContain('verified: production branch serves group test-group');
   const safeCalls = readFileSync(log, 'utf8');
-  const blockedStates: Array<[string, string]> = [['failure', 'skipped'], ['cancelled', 'skipped'], ['success', 'failure'], ['success', 'cancelled'], ['success', 'skipped']];
-  for (const [migration, smoke] of blockedStates) {
-    expect(runSurvivor(migration, smoke).status).toBe(0);
+  const blockedStates = ['failure', 'cancelled', 'skipped'];
+  for (const smoke of blockedStates) {
+    expect(runSurvivor(smoke).status).toBe(0);
     expect(readFileSync(log, 'utf8')).toBe(safeCalls);
   }
   // A later docs-only survivor includes B's API change but has api=false.
@@ -172,25 +171,25 @@ test('actual production helper prevents unsafe publication and exports only veri
   git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
   const smokeCondition = workflow.jobs.smoke.if.replaceAll('always()', 'true')
     .replaceAll('needs.changes.outputs.api', "'false'")
-    .replaceAll('needs.migrate.result', "'success'");
+    .replaceAll('needs.changes.result', "'success'");
   const smokeDecision = spawnSync('bash', ['-c', `[[ ${smokeCondition} ]]`], { cwd: root });
   expect(smokeDecision.status).toBe(0);
-  expect(runSurvivor('success', 'success').stdout).toContain('verified: production branch serves group test-group');
+  expect(runSurvivor('success').stdout).toContain('verified: production branch serves group test-group');
   writeFileSync(`${log}.applied`, git('rev-parse', 'HEAD'));
-  const alreadyApplied = runSurvivor('success', 'success');
+  const alreadyApplied = runSurvivor('success');
   expect(alreadyApplied.status).toBe(0);
   expect(alreadyApplied.stdout).toContain('OTA not applicable');
   rmSync(`${log}.applied`);
   // A durable operator rollback hold suppresses every surviving publication.
   const beforeHold = readFileSync(log, 'utf8');
   writeFileSync(holdState, '[[{"number":99,"title":"release: iOS OTA rollback hold"}]]');
-  const held = runSurvivor('success', 'success');
+  const held = runSurvivor('success');
   expect(held.status).toBe(0);
   expect(held.stdout).toContain('OTA skipped: rollback recovery hold');
   expect(readFileSync(log, 'utf8')).toBe(beforeHold);
   // Read failure must not silently drop the hold.
   writeFileSync(holdState, 'invalid JSON');
-  expect(runSurvivor('success', 'success').status).not.toBe(0);
+  expect(runSurvivor('success').status).not.toBe(0);
   expect(readFileSync(log, 'utf8')).toBe(beforeHold);
   writeFileSync(holdState, '[[]]');
   git('checkout', '-q', '--detach', mobileHead);

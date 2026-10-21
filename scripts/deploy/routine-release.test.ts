@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
-test('automatic release callers preserve exact-source and provider refusal boundaries', () => {
+test('automatic release callers preserve exact-source Git deployment and build refusal boundaries', () => {
   const result = spawnSync('python3', ['-B', join(__dirname, 'routine-release.test.py')], {
     encoding: 'utf8', timeout: 60_000,
     env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },

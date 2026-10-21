@@ -17,6 +17,7 @@ permissions:
   actions: read
   contents: read
   checks: read
+  deployments: read
   issues: write
   statuses: read
   pull-requests: read
@@ -40,45 +41,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/deploy/routine-release.py
 
-  migrate:
-    environment: routine-production
-    needs: changes
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.changes.outputs.release_sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Install without production credentials
-        run: npm ci
-      - name: Confirm current source before production mutation
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
-        run: python3 scripts/deploy/routine-release.py current "$RELEASE_SHA"
-      # Always reconcile pending tracked migrations, including replaced pushes.
-      # Structural SQL safety and independent migration review still apply.
-      - name: Migrate production
-        env:
-          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
-        run: bash scripts/deploy/migrate-prod.sh
-      - name: File incident on failure
-        if: failure()
-        env:
-          RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue create --label incident --title "incident: prod migration failed at ${RELEASE_SHA:0:7}" \
-            --body "**TL;DR:** Production migration stopped and promotion remains withheld. Inspect Deploy logs for $RELEASE_SHA; diagnose before resuming. Closing PR must add fix, detector and constraint."
-
   smoke:
-    environment: routine-production
-    needs: [changes, migrate]
-    if: always() && needs.migrate.result == 'success'
+    needs: changes
+    if: needs.changes.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -88,27 +53,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install pinned provider CLI without production credentials
-        run: npm install --prefix "$RUNNER_TEMP/vercel-cli" --ignore-scripts --no-audit --no-fund vercel@50.37.0
-      - name: Stage immutable production build without assigning domains
+      # Vercel's existing Git integration builds, migrates and assigns domains.
+      # Verify is required for release completion, not for provider build timing.
+      - name: Observe the exact successful Vercel Git deployment and serving source
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
-        run: |
-          export VERCEL_CLI="$RUNNER_TEMP/vercel-cli/node_modules/.bin/vercel"
-          python3 scripts/deploy/vercel-release.py stage "$RELEASE_SHA" "$RUNNER_TEMP/vercel-release.json"
-      - name: Promote only the verified target
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          export VERCEL_CLI="$RUNNER_TEMP/vercel-cli/node_modules/.bin/vercel"
-          python3 scripts/deploy/vercel-release.py promote "$RUNNER_TEMP/vercel-release.json"
-      - name: Verify serving identity before smoke
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: python3 scripts/deploy/vercel-release.py verify "$RUNNER_TEMP/vercel-release.json"
+        run: python3 scripts/deploy/routine-release.py observe "$RELEASE_SHA"
       - name: Prod-safe API smoke
         env:
           PROD_SMOKE_EMAIL: ${{ secrets.PROD_SMOKE_EMAIL }}
@@ -116,15 +67,9 @@ jobs:
         run: bash scripts/verify/api-e2e.sh --base=https://fitsy.org --prod-safe
       - name: Verify serving identity after smoke
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: python3 scripts/deploy/vercel-release.py verify "$RUNNER_TEMP/vercel-release.json"
-      - name: Retain exact target and previous serving target
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vercel-release-${{ github.run_id }}
-          path: ${{ runner.temp }}/vercel-release.json
-          if-no-files-found: ignore
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
+        run: python3 scripts/deploy/routine-release.py health "$RELEASE_SHA"
       - name: File incident on failure
         if: failure()
         env:
@@ -132,18 +77,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue create --label incident --title "incident: prod release failed at ${RELEASE_SHA:0:7}" \
-            --body "**TL;DR:** Production release stopped; inspect the retained target receipt before resuming. Read the actual fitsy.org alias before retrying any uncertain mutation. If promotion occurred and health failed, roll back using the receipt's previous_url: scripts/deploy/rollback.sh api https://PREVIOUS_URL. Source $RELEASE_SHA; see Deploy logs."
+            --body "**TL;DR:** Production verification stopped. Inspect Vercel's Git deployment, migration/build logs and actual fitsy.org serving source before resuming. If needed, use the retained known-good URL: scripts/deploy/rollback.sh api https://KNOWN_GOOD_URL. Source $RELEASE_SHA; see Deploy logs."
 
   ota:
-    environment: routine-production
     # Trusted main release jobs coordinate with local rollback through a Git ref.
     permissions:
       contents: write
       issues: write
       statuses: read
-    needs: [changes, migrate, smoke]
-    # Every surviving source must pass migration and production API smoke.
-    if: always() && needs.migrate.result == 'success' && needs.smoke.result == 'success'
+    needs: [changes, smoke]
+    # Exact Git production build (including migration) and API smoke must pass.
+    if: always() && needs.smoke.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -207,7 +151,7 @@ jobs:
           fi
           gh issue create --label release \
             --title "release: OTA pending for ${RELEASE_SHA:0:7} (no EXPO_TOKEN in CI)" \
-            --body "**TL;DR:** OTA publication stopped because the protected release token is missing. Restore EXPO_TOKEN in the routine-production environment and resume the authorized release. Native builds require their separate production-native environment copy. Do not add a repository secret." || true
+            --body "**TL;DR:** OTA publication stopped because EXPO_TOKEN is missing from the existing CI route. Restore the authorized credential and resume the release. Native builds retain their separate production-native protection." || true
           exit 1
       - name: File incident on OTA failure
         if: failure()

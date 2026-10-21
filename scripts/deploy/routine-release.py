@@ -6,6 +6,9 @@ import os
 import re
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 SPEC = importlib.util.spec_from_file_location('approval', Path(__file__).parents[1] / 'review/external-approval.py')
@@ -25,12 +28,78 @@ def require(value, message):
 
 def github(config, endpoint):
     # The workflow supplies only its read-only GitHub token, never the App key.
-    return json.loads(subprocess.check_output(['gh', 'api', endpoint], text=True))
+    return json.loads(subprocess.check_output(['gh', 'api', endpoint], text=True, timeout=30))
 
 
 def current(source):
     require(github({}, f'repos/{REPO}/git/ref/heads/main')['object']['sha'] == source,
             'superseded protected main source')
+
+
+def vercel_bot(value):
+    return value.get('id') == 35613825 and value.get('login') == 'vercel[bot]' and value.get('type') == 'Bot'
+
+
+def deployment(source):
+    """Observe the existing Git producer, without deployment credentials."""
+    rows = github({}, f'repos/{REPO}/deployments?sha={source}&environment=Production&per_page=100')
+    require(isinstance(rows, list) and len(rows) < 100, 'complete production deployment list required')
+    rows = [row for row in rows if row.get('sha') == source and row.get('environment') == 'Production'
+            and vercel_bot(row.get('creator') or {})]
+    if not rows:
+        return None
+    # GitHub returns newest first. Never substitute an older successful attempt
+    # for a newer failed deployment of the same source.
+    row = rows[0]
+    statuses = github({}, f'repos/{REPO}/deployments/{row["id"]}/statuses?per_page=1')
+    if not statuses:
+        return None
+    status = statuses[0]
+    require(vercel_bot(status.get('creator') or {}) and status.get('environment') == 'Production',
+            'untrusted production deployment status issuer/environment')
+    if status['state'] in ('queued', 'pending', 'in_progress'):
+        return None
+    require(status['state'] == 'success', 'Vercel Git production deployment failed or inactive')
+    url = status.get('environment_url', '')
+    require(status.get('target_url') == url and re.fullmatch(
+        r'https://fitsy-[a-z0-9]+-dawits-projects-74b6e00f\.vercel\.app', url),
+        'unexpected immutable Vercel deployment URL')
+    # Genuine Vercel Git records have production_environment=false and no App
+    # field. Bind the actual issuer, exact SHA, environment and immutable URL.
+    return {'deployment': row, 'status': status}
+
+
+def health(source, base='https://fitsy.org'):
+    request = urllib.request.Request(base + '/api/health', headers={'Cache-Control': 'no-cache'})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        value = json.load(response)
+    require(value.get('status') == 'ok' and value.get('db') == 'connected'
+            and value.get('deploymentSha') == source, 'production health/source mismatch')
+
+
+def observe(source):
+    deadline = time.monotonic() + 20 * 60
+    for attempt in range(60):
+        current(source)
+        result = deployment(source)
+        if result:
+            try:
+                health(source, result['status']['environment_url'])
+                health(source)
+            except (ValueError, urllib.error.URLError):
+                # Domain assignment and public health can lag the Git status.
+                # Keep the same exact source requirement until the bounded end.
+                pass
+            else:
+                current(source)
+                print(json.dumps(result))
+                return
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        if attempt < 59:
+            time.sleep(min(20, remaining))
+    raise ValueError('exact successful Git deployment and serving health not observed within 20 minutes')
 
 
 def admit(event, run_id):
@@ -109,9 +178,14 @@ def admit(event, run_id):
 
 
 def main():
-    if len(sys.argv) == 3 and sys.argv[1] == 'current':
+    if len(sys.argv) == 3 and sys.argv[1] in ('current', 'observe', 'health'):
         require(re.fullmatch('[0-9a-f]{40}', sys.argv[2]), 'invalid source')
         current(sys.argv[2])
+        if sys.argv[1] == 'observe':
+            observe(sys.argv[2])
+        elif sys.argv[1] == 'health':
+            health(sys.argv[2])
+            current(sys.argv[2])
         return
     result = admit(json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text()), int(os.environ['GITHUB_RUN_ID']))
     with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
@@ -122,6 +196,7 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
+    except (ValueError, KeyError, TypeError, subprocess.CalledProcessError, subprocess.TimeoutExpired,
+            urllib.error.URLError) as error:
         print(f'Routine release refused: {error}', file=sys.stderr)
         sys.exit(1)

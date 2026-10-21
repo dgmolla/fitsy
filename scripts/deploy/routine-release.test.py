@@ -3,9 +3,9 @@
 import base64
 import copy
 import importlib.util
-import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,12 +24,11 @@ def load(name):
 
 
 gate = load('routine-release')
-vercel = load('vercel-release')
 
 
 class AdmissionTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(dir=ROOT / '.evidence')
+        self.temp = tempfile.TemporaryDirectory(prefix='fitsy-release-')
         self.root = Path(self.temp.name)
         self.source, self.reviewed, self.base, self.tree = (c * 40 for c in 'abcd')
         self.prefix = f'repos/{gate.REPO}/'
@@ -171,138 +170,154 @@ class AdmissionTests(unittest.TestCase):
         self.assertIn('immutable merge parent/reviewed head mismatch', result.stderr)
 
 
-class ProviderTests(unittest.TestCase):
+class GitDeploymentTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(dir=ROOT / '.evidence')
-        self.root = Path(self.temp.name)
-        self.receipt = self.root / 'release.json'
         self.source = 'a' * 40
-        self.serving = 'dpl_previous'
-        self.calls = []
-        self.target = {'id': 'dpl_target', 'url': 'target.vercel.app', 'projectId': vercel.PROJECT, 'ownerId': vercel.TEAM,
-                       'target': 'production', 'readyState': 'READY', 'meta': {'githubCommitSha': self.source}}
-        self.previous = dict(self.target, id='dpl_previous', url='previous.vercel.app')
+        bot = {'id': 35613825, 'login': 'vercel[bot]', 'type': 'Bot'}
+        self.row = {'id': 12, 'sha': self.source, 'ref': self.source, 'environment': 'Production',
+                    'creator': bot, 'production_environment': False, 'performed_via_github_app': None}
+        self.url = 'https://fitsy-brnzbu5lq-dawits-projects-74b6e00f.vercel.app'
+        self.status = {'id': 13, 'state': 'success', 'creator': bot, 'environment': 'Production',
+                       'environment_url': self.url, 'target_url': self.url}
+
+    def result(self):
+        with patch.object(gate, 'github', side_effect=[[self.row], [self.status]]):
+            return gate.deployment(self.source)
+
+    def test_actual_git_producer_shape_does_not_require_invented_app_or_production_boolean(self):
+        self.assertEqual(self.result(), {'deployment': self.row, 'status': self.status})
+
+    def test_wrong_source_issuer_environment_url_or_failed_build_cannot_pass(self):
+        for key, value in [('sha', 'b' * 40), ('creator', {'id': 1}), ('environment', 'Preview')]:
+            original = self.row[key]
+            self.row[key] = value
+            self.assertIsNone(self.result())
+            self.row[key] = original
+        for key, value in [('state', 'failure'), ('state', 'error'), ('state', 'inactive'),
+                           ('creator', {'id': 1}), ('environment', 'Preview'),
+                           ('target_url', 'https://attacker.invalid'), ('environment_url', 'https://attacker.invalid')]:
+            original = self.status[key]
+            self.status[key] = value
+            with self.assertRaises(ValueError):
+                self.result()
+            self.status[key] = original
+        with patch.object(gate, 'github', side_effect=[[self.row, self.row], [dict(self.status, state='failure')]]) as read:
+            with self.assertRaises(ValueError):
+                gate.deployment(self.source)
+            self.assertEqual(read.call_count, 2)
+
+    def test_pending_then_ready_actual_observer_requires_both_health_reads_and_current_main(self):
+        result = self.result()
+        with patch.object(gate, 'deployment', side_effect=[None, result]), patch.object(gate, 'current') as current, \
+                patch.object(gate, 'health') as health, patch.object(gate.time, 'sleep'):
+            gate.observe(self.source)
+            self.assertEqual(health.call_args_list, [unittest.mock.call(self.source, self.url), unittest.mock.call(self.source)])
+            self.assertEqual(current.call_count, 3)
+        with patch.object(gate, 'deployment', return_value=result), patch.object(gate, 'current'), \
+                patch.object(gate, 'health', side_effect=ValueError('source mismatch')), patch.object(gate.time, 'sleep'):
+            with self.assertRaisesRegex(ValueError, 'not observed'):
+                gate.observe(self.source)
+
+    def test_public_health_must_report_exact_source_and_connected_database(self):
+        import io
+        healthy = {'status': 'ok', 'db': 'connected', 'deploymentSha': self.source}
+        for key, value in [(None, None), ('deploymentSha', 'b' * 40), ('db', 'unreachable')]:
+            data = dict(healthy)
+            if key:
+                data[key] = value
+            with patch.object(gate.urllib.request, 'urlopen', return_value=io.StringIO(json.dumps(data))) as read:
+                if key:
+                    with self.assertRaises(ValueError):
+                        gate.health(self.source)
+                else:
+                    gate.health(self.source)
+                self.assertEqual(read.call_args.args[0].full_url, 'https://fitsy.org/api/health')
+
+
+class VercelBuildTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='fitsy-vercel-build-')
+        self.root = Path(self.temp.name)
+        for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh'):
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, target)
+        self.bin = self.root / 'bin'
+        self.bin.mkdir()
+        for name in ('npx', 'npm'):
+            command = self.bin / name
+            command.write_text('#!/bin/bash\nset -eu\nprintf "%s %s\\n" "' + name + '" "$*" >> "$CALLS"\n'
+                               + ('if [[ "$*" == *"migrate deploy"* ]]; then exit "${MIGRATE_EXIT:-0}"; fi\n'
+                                  if name == 'npx' else 'exit "${BUILD_EXIT:-0}"\n'))
+            command.chmod(0o700)
+        self.calls = self.root / 'calls'
+        self.env = {key: value for key, value in os.environ.items()
+                    if not key.startswith(('VERCEL', 'POSTGRES', 'PROD_', 'FITSY_ALLOW_PROD', 'GITHUB_ACTIONS'))}
+        self.env.update(PATH=str(self.bin) + ':' + os.environ['PATH'], CALLS=str(self.calls),
+                        VERCEL='1', VERCEL_ENV='production', VERCEL_PROJECT_ID='prj_z1QTfOgbj4tlm91U2Hf8JXr5k4v4',
+                        VERCEL_GIT_PROVIDER='github', VERCEL_GIT_REPO_OWNER='dgmolla', VERCEL_GIT_REPO_SLUG='fitsy',
+                        VERCEL_GIT_COMMIT_REF='main', VERCEL_GIT_COMMIT_SHA='a' * 40,
+                        POSTGRES_URL_NON_POOLING='postgresql://postgres.zaxkmjqozvmbifiwbxps:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres',
+                        POSTGRES_PRISMA_URL='postgresql://postgres.zaxkmjqozvmbifiwbxps:fixture@aws-1-us-east-1.pooler.supabase.com:6543/postgres')
 
     def tearDown(self):
         self.temp.cleanup()
 
-    def api(self, path):
-        self.calls.append(path)
-        if path == '/v4/aliases/fitsy.org':
-            return {'alias': 'fitsy.org', 'projectId': vercel.PROJECT, 'deployment': {'id': self.serving}}
-        return self.previous if path.endswith('dpl_previous') else self.target
+    def drive(self, **changes):
+        self.calls.write_text('')
+        result = subprocess.run(['bash', 'scripts/dev/vercel-build.sh'], cwd=self.root,
+                                env={**self.env, **changes}, text=True, capture_output=True)
+        return result, self.calls.read_text().splitlines()
 
-    def stage(self):
-        with patch.object(vercel, 'api', side_effect=self.api), patch.object(vercel, 'current'), \
-                patch.object(vercel.subprocess, 'check_output', side_effect=[self.source + '\n', '']), \
-                patch.object(vercel, 'cli', return_value='https://target.vercel.app\n'):
-            vercel.stage(self.source, self.receipt)
+    def test_actual_production_build_migrates_before_build_using_existing_bindings(self):
+        result, calls = self.drive()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, ['npx prisma migrate status --schema prisma/schema.prisma',
+                                 'npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
 
-    def test_staged_target_and_actual_previous_serving_target_survive_rollback_history(self):
-        # No deployment-list ordering is used. The current alias can be an older rollback.
-        self.stage()
-        data = json.loads(self.receipt.read_text())
-        self.assertEqual((data['previous_id'], data['previous_url']), ('dpl_previous', 'previous.vercel.app'))
-        def promote(*args):
-            self.assertEqual(args, ('promote', 'target.vercel.app', '--yes'))
-            self.serving = 'dpl_target'
-        with patch.object(vercel, 'api', side_effect=self.api), patch.object(vercel, 'current'), \
-                patch.object(vercel, 'cli', side_effect=promote):
-            vercel.promote(self.receipt)
-        self.assertEqual(json.loads(self.receipt.read_text())['phase'], 'promoted')
+    def test_wrong_project_ref_repository_and_missing_credentials_withhold_build(self):
+        for name, value in [('VERCEL', ''), ('VERCEL_PROJECT_ID', 'other'), ('VERCEL_GIT_COMMIT_REF', 'feature'),
+                            ('VERCEL_GIT_REPO_OWNER', 'other'), ('VERCEL_GIT_REPO_SLUG', 'other'),
+                            ('VERCEL_GIT_PROVIDER', 'other'), ('VERCEL_GIT_COMMIT_SHA', ''),
+                            ('POSTGRES_URL_NON_POOLING', ''), ('POSTGRES_PRISMA_URL', '')]:
+            with self.subTest(name=name):
+                result, calls = self.drive(**{name: value})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
 
-    def test_failed_build_wrong_project_wrong_source_and_not_ready_never_promote(self):
-        with patch.object(vercel, 'api', side_effect=self.api), patch.object(vercel, 'current'), \
-                patch.object(vercel.subprocess, 'check_output', side_effect=[self.source, '']), \
-                patch.object(vercel, 'cli', side_effect=ValueError('build failed')) as cli:
-            with self.assertRaises(ValueError):
-                vercel.stage(self.source, self.receipt)
-            self.assertEqual(cli.call_args.args[0], 'deploy')
-            self.assertEqual(json.loads(self.receipt.read_text())['phase'], 'before-stage')
-        for key, value in [('projectId', 'other'), ('ownerId', 'other-team'), ('readyState', 'ERROR'), ('meta', {'githubCommitSha': 'b' * 40})]:
-            original = self.target[key]
-            self.target[key] = value
-            with self.assertRaises(ValueError):
-                self.stage()
-            self.target[key] = original
+    def test_wrong_database_and_misleading_password_cannot_pass_target_guard(self):
+        for name in ('POSTGRES_URL_NON_POOLING', 'POSTGRES_PRISMA_URL'):
+            for url in ('postgresql://postgres:zaxkmjqozvmbifiwbxps@db.other.supabase.co/postgres',
+                        'postgresql://postgres.other:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres',
+                        'postgresql://postgres.zaxkmjqozvmbifiwbxps:fixture@attacker.invalid/postgres',
+                        'postgresql://postgres.zaxkmjqozvmbifiwbxps:fixture@aws-1-us-east-1.pooler.supabase.com:5432/other'):
+                result, calls = self.drive(**{name: url})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
+                self.assertNotIn('fixture@', result.stderr)
+        result, calls = self.drive(POSTGRES_URL_NON_POOLING=self.env['POSTGRES_PRISMA_URL'])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls, [])
 
-    def test_uncertain_promotion_reads_actual_alias_without_retrying(self):
-        self.stage()
-        def uncertain(*args):
-            self.serving = 'dpl_target'
-            raise subprocess.TimeoutExpired('safe-fixture-command', 1)
-        with patch.object(vercel, 'api', side_effect=self.api), patch.object(vercel, 'current'), \
-                patch.object(vercel, 'cli', side_effect=uncertain) as cli:
-            vercel.promote(self.receipt)
-            self.assertEqual(cli.call_count, 1)
-        self.assertEqual(json.loads(self.receipt.read_text())['phase'], 'promoted')
-        self.stage_again_for_failure()
+    def test_preview_migrates_only_development_and_development_refuses_either_production_binding(self):
+        dev = 'postgresql://postgres.dev:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        result, calls = self.drive(VERCEL_ENV='preview', POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, ['npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
+        for env in ('preview', 'development', ''):
+            for name in ('POSTGRES_URL_NON_POOLING', 'POSTGRES_PRISMA_URL'):
+                values = {'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev, name: self.env[name]}
+                result, calls = self.drive(VERCEL_ENV=env, **values)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
 
-    def stage_again_for_failure(self):
-        self.serving = 'dpl_previous'
-        self.stage()
-        with patch.object(vercel, 'api', side_effect=self.api), patch.object(vercel, 'current'), \
-                patch.object(vercel, 'cli', side_effect=ValueError('transport failed')) as cli:
-            with self.assertRaisesRegex(ValueError, 'uncertain promotion'):
-                vercel.promote(self.receipt)
-            self.assertEqual(cli.call_count, 1)
-        self.assertEqual(json.loads(self.receipt.read_text())['phase'], 'promotion-started')
-
-    def test_stale_main_or_changed_serving_target_cannot_promote(self):
-        self.stage()
-        with patch.object(vercel, 'current', side_effect=ValueError('superseded main')), \
-                patch.object(vercel, 'cli') as cli:
-            with self.assertRaisesRegex(ValueError, 'superseded main'):
-                vercel.promote(self.receipt)
-            cli.assert_not_called()
-        self.serving = 'dpl_unexpected'
-        with patch.object(vercel, 'api', side_effect=self.api), patch.object(vercel, 'current'), \
-                patch.object(vercel, 'cli') as cli:
-            with self.assertRaisesRegex(ValueError, 'serving target changed'):
-                vercel.promote(self.receipt)
-            cli.assert_not_called()
-
-    def test_health_and_alias_must_match_exact_target_around_smoke(self):
-        self.stage()
-        data = json.loads(self.receipt.read_text())
-        data['phase'] = 'promoted'
-        self.receipt.write_text(json.dumps(data))
-        self.serving = 'dpl_target'
-        healthy = {'status': 'ok', 'db': 'connected', 'deploymentSha': self.source}
-        for source in (self.source, 'b' * 40):
-            health = dict(healthy, deploymentSha=source)
-            with patch.object(vercel, 'api', side_effect=self.api), \
-                    patch.object(vercel.urllib.request, 'urlopen', return_value=io.StringIO(json.dumps(health))) as read:
-                if source == self.source:
-                    vercel.verify(self.receipt)
-                else:
-                    with self.assertRaisesRegex(ValueError, 'health/source mismatch'):
-                        vercel.verify(self.receipt)
-                self.assertEqual(read.call_args.args, ('https://fitsy.org/api/health',))
-        self.serving = 'dpl_previous'
-        with patch.object(vercel, 'api', side_effect=self.api), patch.object(vercel.urllib.request, 'urlopen') as read:
-            with self.assertRaisesRegex(ValueError, 'serving deployment changed'):
-                vercel.verify(self.receipt)
-            read.assert_not_called()
-
-    def test_missing_credential_refuses_without_cli_or_network_and_cli_environment_is_clean(self):
-        with patch.dict(os.environ, {}, clear=True), patch.object(vercel.subprocess, 'run') as run:
-            with self.assertRaises(ValueError):
-                vercel.cli('deploy')
-            with self.assertRaises(ValueError):
-                vercel.api('/v4/aliases/fitsy.org')
-            run.assert_not_called()
-        env = {'VERCEL_TOKEN': 'fixture-secret', 'GH_TOKEN': 'fixture-gh', 'PROD_DATABASE_URL': 'fixture-db',
-               'EXPO_TOKEN': 'fixture-expo', 'HOME': '/broad-login', 'RUNNER_TEMP': str(self.root),
-               'VERCEL_CLI': '/pinned/vercel', 'PATH': '/usr/bin:/bin'}
-        with patch.dict(os.environ, env, clear=True), patch.object(vercel.subprocess, 'run') as run:
-            run.return_value = subprocess.CompletedProcess([], 0, 'https://target.vercel.app\n')
-            vercel.cli('deploy', '--prod', '--skip-domain', '--yes')
-            child = run.call_args.kwargs['env']
-            self.assertFalse(set(child) & {'GH_TOKEN', 'PROD_DATABASE_URL', 'EXPO_TOKEN'})
-            self.assertEqual(child['VERCEL_TOKEN'], 'fixture-secret')
-            self.assertNotIn('fixture-secret', run.call_args.args[0])
-            self.assertNotEqual(child['HOME'], '/broad-login')
+    def test_failed_migration_withholds_build_and_build_failure_is_not_success(self):
+        result, calls = self.drive(MIGRATE_EXIT='7')
+        self.assertEqual(result.returncode, 7)
+        self.assertFalse(any(call.startswith('npm') for call in calls))
+        result, calls = self.drive(BUILD_EXIT='9')
+        self.assertEqual(result.returncode, 9)
+        self.assertEqual(calls[-1], 'npm run build -w apps/api')
 
 
 if __name__ == '__main__':
