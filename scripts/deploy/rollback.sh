@@ -62,7 +62,7 @@ for x in u:
         if [ -z "$CURRENT_IDENTITY" ]; then CURRENT_IDENTITY="$IDENTITY"; continue; fi
         if [ "$IDENTITY" != "$CURRENT_IDENTITY" ]; then PREV_GROUP="$GROUP"; break; fi
       done <<< "$IOS_GROUP_IDS"
-      : "${PREV_GROUP:?no verified distinct prior iOS bundle; keep hold open and supply an explicit known-good group}"
+      [ -n "$PREV_GROUP" ] || { echo 'no verified distinct prior iOS bundle; keep hold open and supply an explicit known-good group' >&2; exit 1; }
     fi
     OTA_MUTATION_IN_PROGRESS=1
     RESULT="$(mktemp ../../.evidence/ota/rollback-result.XXXXXX)"
