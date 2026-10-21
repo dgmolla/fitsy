@@ -80,7 +80,7 @@ The operator must inventory existing shared routes, securely relocate required c
 Candidate CI and development receive only explicitly scoped ephemeral/dev credentials.
 The human controls login switching and removes any unattended route from candidate execution to an authenticated operator session.
 
-Install only independently approved immutable adapter bytes at `/opt/fitsy-approval/external-approval.py` and the fixed configuration at `/private/etc/fitsy/delivery-authority.json`.
+Install only independently approved immutable adapter bytes at `/opt/fitsy-approval/external-approval.py` and the fixed configuration at `/opt/fitsy-approval/delivery-authority.json`.
 Use canonical operator-controlled private paths under `/private/var/` or the operator's verified home; retain the ca7 ancestry and symlink restrictions.
 Pin the actual distinct UIDs, transport path/digest, reviewed control SHA/digest, App ID, verified installation scope, original evidence digests and additive accounting.
 Do not populate unresolved release identities with App or installation IDs.

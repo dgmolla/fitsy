@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 
-CONFIG = Path('/private/etc/fitsy/delivery-authority.json' if sys.platform == 'darwin'
+CONFIG = Path('/opt/fitsy-approval/delivery-authority.json' if sys.platform == 'darwin'
               else '/etc/fitsy/delivery-authority.json')
 INSTALL = Path('/opt/fitsy-approval/external-approval.py')
 REPO = 'dgmolla/fitsy'
@@ -230,7 +230,74 @@ def acceptance(body):
     return digest('\n'.join(lines).rstrip('\n').encode())
 
 
-def validate_review(approval, artifacts, ledger, policy, issue, source, body):
+def review_validator(name, expected, uid):
+    """Execute only verified installed bytes, never a candidate-selected import."""
+    require(name in ('review-round', 'review-gate'), 'unknown review validator')
+    path = INSTALL.with_name(name + '.py')
+    raw = protected_bytes(path, uid)
+    require(digest(raw) == expected, 'protected review validator changed')
+    namespace = {'__name__': 'fitsy_approval_' + name.replace('-', '_'), '__file__': str(path)}
+    exec(compile(raw, str(path), 'exec'), namespace)
+    return namespace
+
+
+def validate_canonical_review(approval, artifacts, policy, issue, source, uid):
+    """Apply the existing parser/gate using independently held evidence only."""
+    require(type(uid) is int, 'canonical review requires operator custody')
+    canonical = policy['canonical_review']
+    require(type(canonical) is dict and set(canonical) == {
+        'validators', 'diff_sha256', 'evidence_root', 'dispositions'}
+        and type(canonical['validators']) is dict
+        and set(canonical['validators']) == {'review-round', 'review-gate'},
+        'invalid canonical review policy')
+    parser = review_validator('review-round', canonical['validators']['review-round'], uid)
+    gate = review_validator('review-gate', canonical['validators']['review-gate'], uid)
+    verdict = parser['extract'](artifacts['verdict'].decode(), policy['domains'])
+    require(verdict is not None, 'incomplete or invalid canonical review')
+    require(all(verdict.get(key) == approval[key] for key in (
+        'issue', 'source_sha', 'base_sha', 'acceptance_sha256',
+        'provider', 'model', 'reasoning_effort')), 'canonical review binding mismatch')
+    require(isinstance(canonical['diff_sha256'], str)
+            and re.fullmatch(r'[0-9a-f]{64}', canonical['diff_sha256']), 'invalid review diff identity')
+    root = Path(canonical['evidence_root'])
+    require(root == INSTALL.parent / 'evidence' / f'issue-{issue}' / source,
+            'canonical evidence must be operator-held')
+    dispositions = canonical['dispositions']
+    require(type(dispositions) is dict and set(dispositions) <= set(policy['domains']),
+            'unexpected disposition domain')
+    for domain in policy['domains']:
+        sidecar = dispositions.get(domain)
+        path = None
+        if sidecar is not None:
+            path = Path(sidecar['path'])
+            require(path.is_relative_to(root / '.evidence') and '..' not in path.parts,
+                    'disposition outside protected evidence')
+            raw = protected_bytes(path, uid)
+            require(digest(raw) == sidecar['sha256'], 'protected disposition changed')
+            data = json.loads(raw)
+            require(type(data) is dict and type(data.get('findings')) is list,
+                    'invalid protected dispositions')
+            # The canonical gate validates test semantics and finding identities.
+            # Establish custody first for every file it may read.
+            for entry in data.get('findings', []):
+                require(type(entry) is dict and type(entry.get('required_tests', [])) is list,
+                        'invalid protected disposition tests')
+                for test in entry.get('required_tests', []):
+                    require(type(test) is dict and isinstance(test.get('receipt'), str),
+                            'invalid protected test reference')
+                    receipt = root / test['receipt']
+                    require(receipt.is_relative_to(root / '.evidence')
+                            and '..' not in receipt.parts, 'test outside protected evidence')
+                    content = protected_bytes(receipt, uid)
+                    require(digest(content) == test['sha256'], 'protected test receipt changed')
+        findings = [{key: value for key, value in finding.items() if key != 'domains'}
+                    for finding in verdict['findings'] if domain in finding['domains']]
+        projected = dict(verdict, lens=domain, verdict=verdict['domains'][domain], findings=findings)
+        result = gate['evaluate'](projected, domain, source, canonical['diff_sha256'], path, root)
+        require(result['gate'] == 'pass', f'canonical review gate refused {domain}: {result["reason"]}')
+
+
+def validate_review(approval, artifacts, ledger, policy, issue, source, body, uid=None):
     """Validate an operator-observed execution, never trust candidate receipts alone."""
     require(approval['issue'] == issue and approval['source_sha'] == source
             and re.fullmatch(r'[0-9a-f]{40}', source)
@@ -250,12 +317,15 @@ def validate_review(approval, artifacts, ledger, policy, issue, source, body):
             and type(seconds) in (float, int) and 0 < seconds <= policy['execution_timeout_seconds']
             and execution.get('stdout_bytes') == len(artifacts['verdict'])
             and execution.get('stderr_bytes') == len(artifacts['stderr']), 'incomplete provider execution')
-    verdict = json.loads(artifacts['verdict'])
-    require(verdict.get('source_sha') == source and verdict.get('base_sha') == approval['base_sha']
-            and set(verdict.get('domains', {})) == set(policy['domains'])
-            and all(row == {'verdict': 'pass', 'findings': []} for row in verdict['domains'].values())
-            and isinstance(verdict.get('summary'), str) and verdict['summary'].strip()
-            and isinstance(verdict.get('limitations'), list), 'review did not pass all required domains')
+    if 'canonical_review' in policy:
+        validate_canonical_review(approval, artifacts, policy, issue, source, uid)
+    else:
+        verdict = json.loads(artifacts['verdict'])
+        require(verdict.get('source_sha') == source and verdict.get('base_sha') == approval['base_sha']
+                and set(verdict.get('domains', {})) == set(policy['domains'])
+                and all(row == {'verdict': 'pass', 'findings': []} for row in verdict['domains'].values())
+                and isinstance(verdict.get('summary'), str) and verdict['summary'].strip()
+                and isinstance(verdict.get('limitations'), list), 'review did not pass all required domains')
     prompt, trace = artifacts['prompt'].decode(), artifacts['stderr'].decode()
     require(source in prompt and approval['base_sha'] in prompt and f'issue{issue}' in prompt
             and all(domain in prompt for domain in policy['domains'])
@@ -279,15 +349,43 @@ def review_inputs(config, issue, source, body):
     raw = protected_bytes(Path(config['review_home']) / 'completed' / f'issue-{issue}.json', uid)
     require(digest(raw) == policy['manifest_sha256'], 'unapproved execution manifest')
     approval = json.loads(raw)
+    if 'canonical_review' in policy:
+        require(approval['source_sha'] == source, 'canonical review source mismatch')
     if boundary is not None:
-        require(approval['base_sha'] == boundary['comparison_base'], 'candidate boundary comparison mismatch')
+        require((approval['composition']['comparison_base']
+                 if source != approval['source_sha'] and approval.get('composition') else approval['base_sha'])
+                == boundary['comparison_base'], 'candidate boundary comparison mismatch')
     artifacts = {name: protected_bytes(row['path'], uid) for name, row in approval['artifacts'].items()}
     ledger = protected_bytes(Path(config['budget_home']) / f'issue-{issue}.jsonl', uid)
-    validate_review(approval, artifacts, ledger, policy, issue, approval['source_sha'], body)
+    validate_review(approval, artifacts, ledger, policy, issue, approval['source_sha'], body, uid)
     if source != approval['source_sha']:
         require(issue == 443, 'changed controls require fresh independent control review')
-        validate_composition(git_tree(config, approval['source_sha']), git_tree(config, source),
-                             git_tree(config, config['control_sha']), config['control_paths'])
+        composition = approval.get('composition')
+        if composition is None:
+            validate_composition(git_tree(config, approval['source_sha']), git_tree(config, source),
+                                 git_tree(config, config['control_sha']), config['control_paths'])
+        else:
+            require(set(composition) == {'source_sha', 'comparison_base', 'comparison_tree_sha', 'control_paths'}
+                    and composition['source_sha'] == source and approval['control_sha'] == config['control_sha']
+                    and composition['control_paths'] == config['control_paths'], 'composition authority mismatch')
+            require(all(isinstance(composition.get(key), str)
+                        and re.fullmatch(r'[0-9a-f]{40}', composition[key])
+                        for key in ('source_sha', 'comparison_base', 'comparison_tree_sha')),
+                    'composition source/main identity invalid')
+            original = protected_bytes(approval['original_manifest']['path'], uid, private=True)
+            original_approval = json.loads(original)
+            require(digest(original) == approval['original_manifest']['sha256']
+                    and 'composition' not in original_approval and 'original_manifest' not in original_approval
+                    and set(approval) == set(original_approval) | {'composition', 'original_manifest'}
+                    and all(approval[key] == value for key, value in original_approval.items()
+                            if key not in ('control_sha', 'operator_sha256')),
+                    'original frozen review authority changed')
+            main = github(config, f'repos/{REPO}/git/commits/{composition["comparison_base"]}')
+            require(main['tree']['sha'] == composition['comparison_tree_sha'], 'approved main tree changed')
+            validate_composition(git_tree(config, approval['source_sha']), git_tree(config, source),
+                git_tree(config, config['control_sha']), config['control_paths'],
+                reviewed_base=git_tree(config, approval['base_sha']),
+                main=git_tree(config, composition['comparison_base']))
     return approval
 
 
@@ -301,13 +399,39 @@ def git_tree(config, source):
             for row in result['tree'] if row['type'] != 'tree'}
 
 
-def validate_composition(reviewed, candidate, controls, allowed):
+def validate_local_review(config, issue, source, base, domains):
+    """Read-only local admission through the same protected publication authority."""
+    policy = config.get('reviews', {}).get(str(issue))
+    if policy is None or 'canonical_review' not in policy:
+        return None
+    require(bool(domains) and len(set(domains)) == len(domains)
+            and set(domains) <= set(policy['domains']), 'required local domains mismatch')
+    body = github(config, f'repos/{REPO}/issues/{issue}')['body']
+    approval = review_inputs(config, issue, source, body)
+    require(approval['source_sha'] == source and approval['base_sha'] == base,
+            'local canonical source/base mismatch')
+    return {'canonical_review': 'pass', 'issue': issue, 'source_sha': source, 'base_sha': base,
+            'domains': approval['domains'], 'acceptance_sha256': approval['acceptance_sha256']}
+
+
+def validate_composition(reviewed, candidate, controls, allowed, *, reviewed_base=None, main=None):
     """Reuse frozen443 only for exact product blobs with approved control blobs."""
     require(bool(allowed) and len(set(allowed)) == len(allowed), 'explicit approved control paths required')
     require(all(any(path == area or (area.endswith('/') and path.startswith(area))
                     for area in CONTROL_AREAS) for path in allowed), 'product path cannot be a control')
-    for path in set(reviewed) | set(candidate) | set(allowed):
-        expected = controls.get(path) if path in allowed else reviewed.get(path)
+    expected_product = reviewed
+    if main is not None or reviewed_base is not None:
+        require(main is not None and reviewed_base is not None, 'complete approved main context required')
+        product_delta = {p for p in set(reviewed_base) | set(reviewed)
+                         if p not in allowed and reviewed_base.get(p) != reviewed.get(p)}
+        main_delta = {p for p in set(reviewed_base) | set(main)
+                      if p not in allowed and reviewed_base.get(p) != main.get(p)}
+        require(not product_delta & main_delta, 'frozen product and approved main overlap')
+        expected_product = {**main, **{p: reviewed[p] for p in product_delta if p in reviewed}}
+        for path in product_delta - reviewed.keys():
+            expected_product.pop(path, None)
+    for path in set(expected_product) | set(candidate) | set(allowed):
+        expected = controls.get(path) if path in allowed else expected_product.get(path)
         require(candidate.get(path) == expected, f'frozen product or approved control changed: {path}')
 
 
@@ -356,17 +480,25 @@ def validate_acceptance(receipt, policy, source):
                     for row in results.values()), 'blocking local acceptance failed')
 
 
-def ci_acceptance(config, issue, pr, review, verify_id):
+def ci_acceptance(config, issue, pr, review, verify_id, *, merged_main=None):
     """Bind the existing public Verify to the independently approved candidate tree.
 
     GitHub's PR run head_sha is the branch head, while default checkout executes
-    its synthetic merge. The immutable event base/head and merge parents must
-    describe that same tree; a same-named green check is not execution evidence.
+    its synthetic merge. REST PR associations can disappear after merge; only
+    release_context may replace an empty association with verified merged-main
+    provenance. A same-named green check is not execution evidence.
     """
     endpoint = f'repos/{REPO}'
     source, base = pr['head']['sha'], pr['base']['sha']
     policy = config['local_acceptance'][str(issue)]
-    require(base == review['base_sha'], 'CI comparison base changed')
+    comparison = review['base_sha']
+    if review.get('composition') is not None:
+        context = review['composition']
+        require(issue == 443 and context['source_sha'] == source
+                and review['control_sha'] == config['control_sha']
+                and context['control_paths'] == config['control_paths'], 'CI composition authority mismatch')
+        comparison = context['comparison_base']
+    require(base == comparison, 'CI comparison base changed')
     candidate = github(config, f'{endpoint}/git/commits/{source}')
     require(candidate['tree']['sha'] == policy['source_tree_sha'], 'approved verification/source tree changed')
     merge = github(config, f'{endpoint}/git/commits/{pr["merge_commit_sha"]}')
@@ -388,10 +520,23 @@ def ci_acceptance(config, issue, pr, review, verify_id):
             and run['status'] == 'completed' and run['conclusion'] == 'success'
             and type(run['run_attempt']) is int and run['run_attempt'] > 0,
             'exact candidate Verify did not pass')
-    associated = run['pull_requests']
-    require(len(associated) == 1 and associated[0]['number'] == pr['number']
-            and associated[0]['base']['sha'] == base and associated[0]['head']['sha'] == source,
-            'Verify event PR/base/head mismatch')
+    if merged_main is not None:
+        require(isinstance(merged_main, str) and re.fullmatch(r'[0-9a-f]{40}', merged_main)
+                and pr.get('state') == 'closed' and isinstance(pr.get('merged_at'), str)
+                and bool(pr['merged_at'])
+                and pr['merge_commit_sha'] == merged_main and pr['base']['ref'] == 'main'
+                and pr['base']['repo']['full_name'] == REPO
+                and pr['head']['repo']['full_name'] == REPO,
+                'release merged-main PR provenance mismatch')
+    associated = run.get('pull_requests')
+    require(type(associated) is list, 'Verify PR association unavailable or malformed')
+    if not (merged_main is not None and associated == []):
+        require(len(associated) == 1 and isinstance(associated[0], dict)
+                and associated[0].get('number') == pr['number']
+                and all(isinstance(associated[0].get(side), dict) for side in ('base', 'head'))
+                and associated[0]['base'].get('sha') == base
+                and associated[0]['head'].get('sha') == source,
+                'Verify event PR/base/head mismatch')
     latest = github(config, f'{endpoint}/actions/workflows/{config["verify_workflow_id"]}/runs?head_sha={source}&event=pull_request&per_page=1')
     require(latest['workflow_runs'] and latest['workflow_runs'][0]['id'] == verify_id,
             'superseded Verify cannot authorize acceptance')
@@ -418,7 +563,7 @@ def ci_acceptance(config, issue, pr, review, verify_id):
 
 def local_acceptance(config, issue, source, review, policy):
     """Keep applicable local media/native proof without requiring whole local full."""
-    before, after = git_tree(config, review['base_sha']), git_tree(config, source)
+    before, after = git_tree(config, (review.get('composition') or {}).get('comparison_base', review['base_sha'])), git_tree(config, source)
     changed = [path for path in set(before) | set(after) if before.get(path) != after.get(path)]
     media = any(re.match(r'^scripts/sim/|^scripts/verify/(?:product-flow|media-integration|test\.sh|registry\.yml)',
                          path) for path in changed)
@@ -575,7 +720,8 @@ def release_context(config, verify_id):
     approval = review_inputs(config, issue, source, body)
     candidate_runs = github(config, f'{endpoint}/actions/workflows/{config["verify_workflow_id"]}/runs?head_sha={source}&event=pull_request&per_page=1')
     require(candidate_runs['workflow_runs'], 'required candidate Verify missing')
-    policy = ci_acceptance(config, issue, pr, approval, candidate_runs['workflow_runs'][0]['id'])
+    policy = ci_acceptance(config, issue, pr, approval, candidate_runs['workflow_runs'][0]['id'],
+                           merged_main=main)
     local_acceptance(config, issue, source, approval, policy)
     reviewed_tree = github(config, f'{endpoint}/git/commits/{source}')['tree']['sha']
     release_tree = github(config, f'{endpoint}/git/commits/{main}')['tree']['sha']
@@ -631,6 +777,11 @@ def main():
     review = commands.add_parser('publish-review')
     review.add_argument('--issue', type=int, required=True)
     review.add_argument('--pr', type=int, required=True)
+    local = commands.add_parser('validate-review')
+    local.add_argument('--issue', type=int, required=True)
+    local.add_argument('--source', required=True)
+    local.add_argument('--base', required=True)
+    local.add_argument('--domain', action='append', default=[])
     accepted = commands.add_parser('publish-acceptance')
     accepted.add_argument('--issue', type=int, required=True)
     accepted.add_argument('--pr', type=int, required=True)
@@ -643,7 +794,12 @@ def main():
     args = parser.parse_args()
     try:
         config = authority()
-        if args.action == 'publish-review':
+        if args.action == 'validate-review':
+            result = validate_local_review(config, args.issue, args.source, args.base, args.domain)
+            if result is None:
+                print(json.dumps({'canonical_review': 'not_configured'}))
+                return 2
+        elif args.action == 'publish-review':
             result = publish(config, args.issue, args.pr)
         elif args.action == 'publish-acceptance':
             result = publish_acceptance(config, args.issue, args.pr, args.verify_run)

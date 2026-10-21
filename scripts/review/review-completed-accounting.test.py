@@ -9,7 +9,10 @@ import tempfile
 import subprocess
 import unittest
 import sys
+import time
+from datetime import datetime
 from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location('budget', Path(__file__).with_name('review-budget.py'))
@@ -46,7 +49,9 @@ def install_fixture_admin(repo, home):
     p = repo / 'scripts/verify/review-admission.sh'
     if p.exists():
         p.write_text(p.read_text().replace('ADMIN_HOME="$(python3 -I -c \'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)\')"',
-                                         'ADMIN_HOME=' + repr(str(home))))
+                                         'ADMIN_HOME=' + repr(str(home))).replace(
+            'CANONICAL_ADAPTER=/opt/fitsy-approval/external-approval.py',
+            'CANONICAL_ADAPTER=' + str(home / '.fitsy-review/operators/external-approval.py')))
     p = repo / 'scripts/verify/shipping-session.mjs'
     if p.exists():
         p.write_text(p.read_text().replace('userInfo().homedir', json.dumps(str(home))))
@@ -775,16 +780,43 @@ class CompletedAdmission(CompletedAccounting):
         self.assertNotEqual(probed.returncode, 0)
         self.assertIn('state=error', (self.root / 'statuses').read_text())
 
+    def append_runtime_correction(self):
+        start = dict(event='start', attempt_id='failed-clock', epoch=1,
+                     source_sha=self.args.source_sha, round_id='fixture', lens='correctness')
+        finish = dict(event='finish', attempt_id=start['attempt_id'], elapsed_seconds=.001,
+                      source_sha=start['source_sha'], round_id='fixture', lens='correctness',
+                      outcome='fail', verdict='incomplete', failure_kind='process_error')
+        correction = dict(event='runtime-reconciliation', attempt_id=start['attempt_id'], issue=443,
+                          source_sha=start['source_sha'], round_id='fixture', lens='correctness',
+                          original_elapsed_seconds=.001, corrected_elapsed_seconds=.251,
+                          additional_seconds=.25, finish_sha256=sha(json.dumps(finish, sort_keys=True).encode()),
+                          execution_sha256='1' * 64, authorization_sha256='2' * 64)
+        with self.ledger.open('a') as handle:
+            for row in (start, finish, correction):
+                handle.write(json.dumps(row) + '\n')
+        self.original = self.ledger.read_text()
+        self.approval.update(original_ledger_sha256=sha(self.original.encode()),
+                             prior_completed_seconds=self.approval['prior_completed_seconds'] + .251)
+        self.save()
+
+    def test_corrected_history_reaches_local_pr_and_identity_callers(self):
+        self.append_runtime_correction()
+        self.test_supported_runner_consumes_raw_result_without_provider_or_cache()
+
+    def test_corrected_history_reaches_shipping_session_and_hook(self):
+        self.append_runtime_correction()
+        self.external_session(canonical=True)
+
     def test_external_session_owns_native_gate_acceptance_hook_and_authority(self):
         self.external_session()
 
     def test_bootstrap_accepts_distinct_reviewed_control_and_refuses_stale_main(self):
         self.external_session(bootstrap=True)
 
-    def external_session(self, bootstrap=False):
-        issue = 463 if bootstrap else 443
-        domains = ['correctness', 'workflow-security'] if bootstrap else ['correctness']
-        if bootstrap:
+    def external_session(self, bootstrap=False, canonical=False):
+        issue = 463 if bootstrap or canonical else 443
+        domains = ['correctness', 'workflow-security'] if bootstrap or canonical else ['correctness']
+        if bootstrap or canonical:
             original = self.ledger.read_text().replace('443', '463')
             self.ledger = budget.ADMIN_BUDGET / 'issue-463.jsonl'
             self.ledger.write_text(original)
@@ -836,6 +868,25 @@ class CompletedAdmission(CompletedAccounting):
             'TRUSTED_GH=' + str(self.root / 'session-bin/gh')))
         fixed_path = str(self.root / 'session-bin') + ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
         admission.write_text(admission.read_text().replace('PATH=/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'PATH=' + fixed_path))
+        if canonical:
+            # Only protected operator data belongs here; source workspaces and
+            # legacy completed authority must remain outside every checkout.
+            evidence = source / '.evidence'
+            evidence.mkdir(mode=0o700, exist_ok=True)
+            for path in (evidence, *evidence.parents):
+                status = path.lstat()
+                self.assertTrue(path.is_dir() and not path.is_symlink()
+                                and status.st_uid in (0, os.getuid()) and not status.st_mode & 0o022,
+                                f'operator fixture requires protected ancestry: {path}')
+            operator_temp = tempfile.TemporaryDirectory(prefix='review-operator-', dir=evidence)
+            self.addCleanup(operator_temp.cleanup)
+            adapter = Path(operator_temp.name) / 'canonical-operator/external-approval.py'
+            ignored = subprocess.run(['git', '-C', str(source), 'check-ignore', '--quiet', '--', str(adapter)],
+                                     env=fixture_env(), capture_output=True)
+            self.assertEqual(ignored.returncode, 0, 'operator fixture evidence must be ignored by Git')
+            admission.write_text(admission.read_text().replace(
+                'CANONICAL_ADAPTER=' + str(budget.ADMIN_HOME / '.fitsy-review/operators/external-approval.py'),
+                'CANONICAL_ADAPTER=' + str(adapter)))
         session_path = product / 'scripts/verify/shipping-session.mjs'
         session_path.write_text(session_path.read_text().replace("const administratorPath = '/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';", 'const administratorPath = ' + json.dumps(fixed_path) + ';'))
         git('add', '.')
@@ -893,6 +944,7 @@ class CompletedAdmission(CompletedAccounting):
             (tools / name).chmod(0o700)
         (tools / 'gh').write_text("#!/usr/bin/env python3\nimport json,sys\na=sys.argv\n"
             "if a[1]=='issue': print('Frozen acceptance')\n"
+            "elif a[1]=='api' and '/issues/' in a[-1]: print(json.dumps(dict(body='Frozen acceptance')))\n"
             "elif a[1]=='pr' and '--jq' in a: print('Delivery-Issue: #443')\n"
             + f"elif a[1]=='pr': print(json.dumps(dict(headRefOid={head!r},baseRefName='main',headRepositoryOwner=dict(login='dgmolla'),state='OPEN',url='https://fixture.invalid/pr/443')))\n"
             + f"elif a[1]=='api':\n with open({str(self.root / 'published')!r},'a') as out: out.write(sys.stdin.read()+'\\n')\n")
@@ -906,6 +958,60 @@ class CompletedAdmission(CompletedAccounting):
             shutil.copyfile(product / 'scripts/review/review-budget.py', operator)
             operator.chmod(0o600)
             env['FITSY_REVIEW_BOOTSTRAP_OPERATOR'] = str(operator)
+        if canonical:
+            # Separate fixture installation, not a candidate environment selector.
+            # Production keeps its fixed /opt path and actual kernel custody gate.
+            import re
+            adapter.parent.mkdir()
+            protected_budgets = adapter.parent / 'budgets'
+            protected_budgets.mkdir()
+            shutil.copy2(budgets / f'issue-{issue}.jsonl', protected_budgets / f'issue-{issue}.jsonl')
+            budgets = protected_budgets
+            protected_gh = adapter.parent / 'gh'
+            shutil.copy2(tools / 'gh', protected_gh)
+            config_path = adapter.parent / 'authority.json'
+            code = (source / 'scripts/review/external-approval.py').read_text()
+            code = re.sub(r'CONFIG = Path\(.*?\)\nINSTALL', 'CONFIG = Path(' + repr(str(config_path)) + ')\nINSTALL', code, count=1, flags=re.S)
+            code = code.replace("INSTALL = Path('/opt/fitsy-approval/external-approval.py')", 'INSTALL = Path(' + repr(str(adapter)) + ')')
+            adapter.write_text(code)
+            validators = {}
+            for name in ('review-round', 'review-gate'):
+                raw = (source / f'scripts/review/{name}.py').read_bytes()
+                adapter.with_name(name + '.py').write_bytes(raw)
+                validators[name] = sha(raw)
+            review_home = adapter.parent / 'reviews'
+            (review_home / 'completed').mkdir(parents=True)
+            # Historical completed authority remains immutable and intentionally stale.
+            auth.write_text(json.dumps(dict(approval, source_sha='0' * 40)))
+            original_selector = auth.read_bytes()
+            normal = {key: approval[key] for key in ('issue', 'source_sha', 'base_sha', 'acceptance_sha256', 'provider', 'model', 'reasoning_effort')}
+            normal.update(verdict='pass', domains={domain: 'pass' for domain in domains}, findings=[])
+            raw_verdict = '```json\n' + json.dumps(normal) + '\n```\n'
+            paths = {}
+            for name, raw in dict(raws, verdict=raw_verdict, execution=json.dumps(dict(kind='completed', returncode=0, elapsed_seconds=139.4,
+                stdout_bytes=len(raw_verdict.encode()), stderr_bytes=len(raws['stderr'].encode())))).items():
+                path = adapter.parent / name
+                path.write_text(raw)
+                paths[name] = {'path': str(path), 'sha256': sha(raw.encode())}
+            manifest = review_home / f'completed/issue-{issue}.json'
+            manifest.write_text(json.dumps(dict(approval, artifacts=paths)))
+            evidence_root = adapter.parent / f'evidence/issue-{issue}/{head}'
+            token = adapter.parent / 'synthetic-token'
+            token.write_text('isolated-token'); token.chmod(0o600)
+            identity = adapter.parent / 'token-provenance.json'
+            identity.write_text(json.dumps({'token': {'sha256': sha(token.read_bytes()), 'expires_at': '2099-01-01T00:00:00Z'}}))
+            identity.chmod(0o600)
+            policy = dict(domains=domains, manifest_sha256=sha(manifest.read_bytes()),
+                ledger_sha256=sha((budgets / f'issue-{issue}.jsonl').read_bytes()), execution_timeout_seconds=180,
+                accounting_provenance=f'https://github.com/dgmolla/fitsy/issues/{issue}#issuecomment-fixture',
+                canonical_review=dict(validators=validators, diff_sha256='d' * 64,
+                    evidence_root=str(evidence_root), dispositions={}))
+            config = dict(operator_uid=os.getuid(), candidate_uid=os.getuid() + 1,
+                adapter_sha256=sha(adapter.read_bytes()), repository='dgmolla/fitsy', app_id=123,
+                gh_path=str(protected_gh), gh_sha256=sha(protected_gh.read_bytes()),
+                app_token_file=str(token), app_identity_file=str(identity), app_identity_sha256=sha(identity.read_bytes()),
+                review_home=str(review_home), budget_home=str(budgets.resolve()), reviews={str(issue): policy})
+            config_path.write_text(json.dumps(config)); config_path.chmod(0o600)
         shutil.copyfile(source / '.githooks/pre-push', product / '.evidence/hook')
         (product / '.evidence/native.mjs').write_text(
             "import {admitFinalCandidate} from '../scripts/sim/product-flow.mjs';\n"
@@ -937,10 +1043,52 @@ class CompletedAdmission(CompletedAccounting):
                 finally:
                     auth.write_bytes(original_authority)
                     auth.chmod(0o600)
+        if canonical:
+            command = ['node', str(runtime / 'scripts/verify/shipping-session.mjs'), '--root', str(product),
+                       '--', 'bash', '-c', 'set -e; npm run verify; bash .evidence/hook']
         result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('full', (product / '.evidence/order').read_text())
         self.assertNotIn('unexpected-review', result.stderr)
+        if canonical:
+            self.assertEqual(original_selector, auth.read_bytes())
+            before = (budgets / f'issue-{issue}.jsonl').read_bytes()
+            direct = ['/bin/bash', '-p', str(runtime / 'scripts/verify/review-admission.sh'), '--revalidate-session']
+            direct_env = dict(env, FITSY_SHIPPING_ROOT=str(product),
+                FITSY_SHIPPING_SOCKET='fixture-mode-still-requires-real-session-socket', FITSY_SHIPPING_TOKEN='fixture')
+            probe = subprocess.run(direct, env=direct_env, capture_output=True, text=True, timeout=15)
+            self.assertEqual(probe.returncode, 0, probe.stdout + probe.stderr)
+            git('fetch', '-q', str(product), head, cwd=runtime)
+            original_config = config_path.read_bytes()
+            for name in ('candidate selected evidence', 'candidate authority', 'changed ledger', 'stale managed main'):
+                with self.subTest(name=name):
+                    changed_env = dict(direct_env)
+                    try:
+                        if name == 'candidate selected evidence':
+                            changed_env['FITSY_REVIEW_HOME'] = str(product / '.evidence')
+                        elif name == 'candidate authority':
+                            config_path.write_text(json.dumps(dict(config, candidate_uid=os.getuid())))
+                        elif name == 'changed ledger':
+                            (budgets / f'issue-{issue}.jsonl').write_bytes(before + b'changed')
+                        else:
+                            git('update-ref', 'refs/remotes/origin/main', head, cwd=runtime)
+                        refused = subprocess.run(direct, env=changed_env, capture_output=True, text=True, timeout=15)
+                        self.assertNotEqual(refused.returncode, 0, name + refused.stdout + refused.stderr)
+                        self.assertNotIn('unexpected-review', refused.stderr)
+                    finally:
+                        config_path.write_bytes(original_config)
+                        (budgets / f'issue-{issue}.jsonl').write_bytes(before)
+                        git('update-ref', 'refs/remotes/origin/main', base, cwd=runtime)
+            git('commit', '--allow-empty', '-qm', 'fixture source drift')
+            refused = subprocess.run(direct, env=direct_env, capture_output=True, text=True, timeout=15)
+            self.assertNotEqual(refused.returncode, 0, refused.stdout + refused.stderr)
+            git('reset', '--hard', '-q', head)
+            # Session and hook revalidation must consume current protected authority.
+            drift = command[:-1] + ['echo " " >> ' + str(manifest) + '; npm run verify']
+            refused = subprocess.run(drift, env=env, capture_output=True, text=True, timeout=40)
+            self.assertNotEqual(refused.returncode, 0, refused.stdout + refused.stderr)
+            self.assertEqual(before, (budgets / f'issue-{issue}.jsonl').read_bytes())
+            return
         if bootstrap:
             before = (budgets / f'issue-{issue}.jsonl').read_bytes()
             git('config', 'user.email', 'fixture@example.test', cwd=runtime)
@@ -1139,6 +1287,163 @@ class CompletedAdmission(CompletedAccounting):
 
     def test_existing_named_file_cannot_become_unreviewed_directory(self):
         self.assert_allowed_file_cannot_become_unreviewed_directory('scripts/verify/run.mjs')
+
+
+class RuntimeAccounting(unittest.TestCase):
+    # Reuse isolated administrator setup without inheriting unrelated test cases.
+    save = CompletedAccounting.save
+    tearDown = CompletedAccounting.tearDown
+
+    def setUp(self):
+        CompletedAccounting.setUp(self)
+        self.repo = self.root / 'control'
+        (self.repo / 'scripts/review').mkdir(parents=True)
+        shutil.copyfile(budget.__file__, self.repo / 'scripts/review/review-budget.py')
+        for args in [('init', '-q'), ('config', 'user.email', 'fixture@example.test'),
+                     ('config', 'user.name', 'Fixture'), ('add', '.'), ('commit', '-qm', 'fixture controls')]:
+            subprocess.check_call(['git', '-C', str(self.repo), *args], env=fixture_env())
+        self.args.candidate_root = self.repo
+        self.args.control_sha = subprocess.check_output(
+            ['git', '-C', str(self.repo), 'rev-parse', 'HEAD'], env=fixture_env()).decode().strip()
+        self.args.round_id = 'fixture'
+        self.args.lens = 'correctness'
+        self.args.attempt_id = 'failed-clock'
+        start = dict(event='start', attempt_id=self.args.attempt_id,
+                     epoch=datetime.fromisoformat('2026-10-20T00:00:00+00:00').timestamp(),
+                     source_sha=self.args.source_sha, round_id=self.args.round_id, lens=self.args.lens)
+        finish = dict(event='finish', attempt_id=self.args.attempt_id, elapsed_seconds=.001,
+                      source_sha=self.args.source_sha, round_id=self.args.round_id, lens=self.args.lens,
+                      outcome='fail', verdict='incomplete', failure_kind='timeout',
+                      at='2026-10-20T00:00:02+00:00')
+        with self.ledger.open('a') as handle:
+            for row in (start, finish):
+                handle.write(json.dumps(row) + '\n')
+        self.original = self.ledger.read_bytes()
+        stdout, stderr = b'partial output\n', b'timed out\n'
+        execution = dict(issue=443, source_sha=self.args.source_sha, elapsed_seconds=.501,
+                         kind='timeout', returncode=124, complete_streams=True,
+                         started_at='2026-10-20T00:00:01+00:00',
+                         finished_at='2026-10-20T00:00:01.501000+00:00',
+                         raw_stdout_sha256=sha(stdout), raw_stderr_sha256=sha(stderr),
+                         stdout_bytes=len(stdout), stderr_bytes=len(stderr))
+        artifacts = {}
+        for key, raw in dict(stdout=stdout, stderr=stderr, execution=json.dumps(execution).encode()).items():
+            path = self.root / ('runtime-' + key)
+            path.write_bytes(raw)
+            artifacts[key] = dict(path=str(path), sha256=sha(raw))
+        self.args.authorization_file = budget.ADMIN_REVIEW / 'operators/issue-443-runtime.json'
+        self.approval = dict(issue=443, candidate=self.args.candidate, source_sha=self.args.source_sha,
+                             round_id=self.args.round_id, lens=self.args.lens, attempt_id=self.args.attempt_id,
+                             ledger_sha256=sha(self.original), finish_sha256=sha(json.dumps(finish, sort_keys=True).encode()),
+                             artifacts=artifacts, control_sha=self.args.control_sha,
+                             operator_sha256=sha(Path(budget.__file__).read_bytes()))
+        self.save()
+
+    def call(self):
+        with self.ledger.open('r+') as handle:
+            events = list(budget.indexed(budget.read_events(handle)).values())
+            return budget.reconcile_runtime(handle, self.args, events, budget.usage(events)[2])
+
+    def test_runtime_charge_preserves_original_attempt_and_capacity(self):
+        before = budget.usage(budget.read_events(io.StringIO(self.original.decode())))[2]
+        first = self.call()
+        self.assertFalse(first['idempotent'])
+        self.assertAlmostEqual(first['additional_seconds'], .5)
+        self.assertAlmostEqual(first['completed_seconds'], before['completed_seconds'] + .5)
+        for field in ('cap_seconds', 'bounded_executions_used', 'execution_outcomes', 'review_verdicts'):
+            self.assertEqual(first[field], before[field])
+        saved = self.ledger.read_bytes()
+        self.assertTrue(saved.startswith(self.original))
+        self.assertTrue(self.call()['idempotent'])
+        self.assertEqual(self.ledger.read_bytes(), saved)
+        events = budget.read_events(io.StringIO(saved.decode()))
+        correction = events[-1]
+        self.assertEqual(correction['event'], 'runtime-reconciliation')
+        self.assertEqual(budget.usage(list(budget.indexed(events + [correction]).values()))[2],
+                         budget.usage(events)[2])
+
+    def test_runtime_rejects_changed_identity_or_evidence_without_writes(self):
+        for field, wrong in dict(issue=444, source_sha='0' * 40, finish_sha256='0' * 64,
+                                 ledger_sha256='0' * 64, operator_sha256='0' * 64).items():
+            with self.subTest(field=field):
+                original = self.approval[field]
+                self.approval[field] = wrong
+                self.save()
+                with self.assertRaises(ValueError):
+                    self.call()
+                self.assertEqual(self.ledger.read_bytes(), self.original)
+                self.approval[field] = original
+                self.save()
+        self.call()
+        saved = self.ledger.read_bytes()
+        for key, artifact in self.approval['artifacts'].items():
+            with self.subTest(artifact=key):
+                path = Path(artifact['path'])
+                raw = path.read_bytes()
+                path.write_bytes(raw + b'changed')
+                with self.assertRaisesRegex(ValueError, 'runtime artifact changed'):
+                    self.call()
+                self.assertEqual(self.ledger.read_bytes(), saved)
+                path.write_bytes(raw)
+        original_file = budget.__file__
+        loose = self.root / 'loose-helper.py'
+        shutil.copyfile(original_file, loose)
+        try:
+            budget.__file__ = str(loose)
+            with self.assertRaisesRegex(ValueError, 'canonical operator installation'):
+                self.call()
+            self.assertEqual(self.ledger.read_bytes(), saved)
+        finally:
+            budget.__file__ = original_file
+
+    def test_executor_source_timing_and_complete_streams_are_required(self):
+        artifact = self.approval['artifacts']['execution']
+        path = Path(artifact['path'])
+        original = path.read_bytes()
+        for changed in ({'source_sha': '0' * 40}, {'issue': 444}, {'returncode': 0},
+                        {'complete_streams': False}, {'stdout_bytes': 0},
+                        {'raw_stderr_sha256': '0' * 64}, {'elapsed_seconds': .001},
+                        {'finished_at': '2026-10-20T00:00:03+00:00'}):
+            with self.subTest(changed=changed):
+                # Keep the artifact pin valid to reach the production semantic checks.
+                path.write_text(json.dumps(dict(json.loads(original), **changed)))
+                artifact['sha256'] = sha(path.read_bytes())
+                self.save()
+                with self.assertRaises(ValueError):
+                    self.call()
+                self.assertEqual(self.ledger.read_bytes(), self.original)
+        path.write_bytes(original)
+        artifact['sha256'] = sha(original)
+        self.save()
+        self.assertTrue(self.call()['allowed'])
+
+    def test_separate_process_clock_and_legacy_fallback(self):
+        script = Path(__file__).with_name('review-budget.py')
+        ledger = self.root / 'clock.jsonl'
+        identity = ['--ledger', str(ledger), '--issue', '999999', '--round-id', 'fixture',
+                    '--lens', 'clock', '--source-sha', '0' * 40, '--attempt-id', 'fixture']
+        def run(action, *args, startup=False):
+            prefix = [sys.executable, '-I', '-B']
+            if startup:
+                prefix += ['-c', 'import runpy,sys,time; time.sleep(.1); sys.argv=sys.argv[1:]; '
+                           'runpy.run_path(sys.argv[0],run_name="__main__")']
+            result = subprocess.run([*prefix, str(script), action, *identity, *args],
+                                    env=fixture_env(), capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            return json.loads(result.stdout)
+        run('begin', '--timeout-seconds', '2')
+        time.sleep(.25)
+        finish = run('finish', '--outcome', 'fail', '--verdict', 'incomplete',
+                     '--failure-kind', 'process_error', startup=True)
+        self.assertGreaterEqual(finish['elapsed_seconds'], .25)
+        events = budget.read_events(io.StringIO(ledger.read_text()))
+        self.assertEqual(events[-1]['verdict'], 'incomplete')
+        clock = budget.shared_clock()
+        clock['boot'] = 'different-boot'
+        with self.assertRaisesRegex(ValueError, 'clock domain changed'):
+            budget.elapsed(dict(shared_clock=clock, epoch=time.time()))
+        with patch.object(budget.time, 'time', return_value=12):
+            self.assertEqual(budget.elapsed(dict(epoch=10, monotonic=1)), 2)
 
 
 class PermanentAllocation(unittest.TestCase):
