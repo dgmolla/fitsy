@@ -29,8 +29,16 @@ for (const name of ['POSTGRES_URL_NON_POOLING', 'POSTGRES_PRISMA_URL']) {
   try {
     const url = new URL(process.env[name]);
     const direct = url.hostname === `db.${ref}.supabase.co` && url.username === 'postgres';
+    const username = decodeURIComponent(url.username);
+    const options = url.searchParams.getAll('options');
+    const keys = [...url.searchParams.keys()];
+    // Supavisor also routes a bare postgres role through an exact options reference.
+    const optionsRoute = username === 'postgres' && options.length === 1
+      && options[0] === `reference=${ref}`
+      && new Set(keys).size === keys.length
+      && keys.every(key => ['options', 'sslmode', 'pgbouncer'].includes(key));
     const pooler = /^[a-z0-9-]+\.pooler\.supabase\.com$/.test(url.hostname)
-      && decodeURIComponent(url.username) === `postgres.${ref}`;
+      && ((username === `postgres.${ref}` && options.length === 0) || optionsRoute);
     if (!['postgres:', 'postgresql:'].includes(url.protocol) || (!direct && !pooler)
         || url.pathname !== '/postgres' || !url.password
         || (name === 'POSTGRES_URL_NON_POOLING' && !['', '5432'].includes(url.port))) throw Error();

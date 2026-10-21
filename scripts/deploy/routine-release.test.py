@@ -392,10 +392,50 @@ class VercelBuildTests(unittest.TestCase):
         return result, self.calls.read_text().splitlines()
 
     def test_actual_production_build_migrates_before_build_using_existing_bindings(self):
-        result, calls = self.drive()
+        direct = 'postgresql://postgres:fixture@db.zaxkmjqozvmbifiwbxps.supabase.co/postgres'
+        for bindings in ({}, {'POSTGRES_URL_NON_POOLING': direct, 'POSTGRES_PRISMA_URL': direct}):
+            with self.subTest(route='direct' if bindings else 'qualified pooler'):
+                result, calls = self.drive(**bindings)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls, ['npx prisma migrate status --schema prisma/schema.prisma',
+                                         'npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
+
+    def test_actual_production_build_accepts_supavisor_options_reference_route(self):
+        route = ('postgresql://postgres:fixture@aws-1-us-east-1.pooler.supabase.com:{port}/postgres'
+                 '?sslmode=require&options=reference%3Dzaxkmjqozvmbifiwbxps')
+        result, calls = self.drive(POSTGRES_URL_NON_POOLING=route.format(port=5432),
+                                   POSTGRES_PRISMA_URL=route.format(port=6543) + '&pgbouncer=true')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, ['npx prisma migrate status --schema prisma/schema.prisma',
                                  'npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
+
+    def test_supavisor_options_route_rejects_ambiguous_or_overridden_targets(self):
+        base = 'postgresql://postgres:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        reference = 'options=reference%3Dzaxkmjqozvmbifiwbxps'
+        queries = ['', 'options=reference%3Dother', reference + '&' + reference,
+                   reference + '&options=reference%3Dother',
+                   reference + '%20reference%3Dother', reference + '%20-c%20reference%3Dother',
+                   'options=reference%253Dzaxkmjqozvmbifiwbxps',
+                   reference + '&sslmode=require&sslmode=disable']
+        queries += [reference + '&' + key + '=other'
+                    for key in ('host', 'hostaddr', 'port', 'user', 'dbname', 'database', 'service', 'reference')]
+        invalid = [base + '?' + query for query in queries]
+        invalid += [(base + '?' + reference).replace('postgres:fixture', 'postgres.other:fixture'),
+                    (base + '?' + reference).replace('postgres:fixture', 'postgres.zaxkmjqozvmbifiwbxps:fixture'),
+                    (base + '?' + reference).replace('fixture', ''),
+                    (base + '?' + reference).replace('pooler.supabase.com', 'attacker.invalid'),
+                    (base + '?' + reference).replace('/postgres?', '/other?'),
+                    (base + '?options=reference%3Dother').replace('fixture', 'zaxkmjqozvmbifiwbxps')]
+        for name in ('POSTGRES_URL_NON_POOLING', 'POSTGRES_PRISMA_URL'):
+            for url in invalid:
+                with self.subTest(name=name, url=url):
+                    result, calls = self.drive(**{name: url})
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(calls, [])
+                    self.assertNotIn('fixture@', result.stderr)
+        result, calls = self.drive(POSTGRES_URL_NON_POOLING=(base + '?' + reference).replace(':5432/', ':6543/'))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls, [])
 
     def test_wrong_project_ref_repository_and_missing_credentials_withhold_build(self):
         for name, value in [('VERCEL', ''), ('VERCEL_PROJECT_ID', 'other'), ('VERCEL_GIT_COMMIT_REF', 'feature'),
