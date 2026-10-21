@@ -869,7 +869,21 @@ class CompletedAdmission(CompletedAccounting):
         fixed_path = str(self.root / 'session-bin') + ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
         admission.write_text(admission.read_text().replace('PATH=/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'PATH=' + fixed_path))
         if canonical:
-            adapter = (self.root / 'canonical-operator/external-approval.py').resolve()
+            # Only protected operator data belongs here; source workspaces and
+            # legacy completed authority must remain outside every checkout.
+            evidence = source / '.evidence'
+            evidence.mkdir(mode=0o700, exist_ok=True)
+            for path in (evidence, *evidence.parents):
+                status = path.lstat()
+                self.assertTrue(path.is_dir() and not path.is_symlink()
+                                and status.st_uid in (0, os.getuid()) and not status.st_mode & 0o022,
+                                f'operator fixture requires protected ancestry: {path}')
+            operator_temp = tempfile.TemporaryDirectory(prefix='review-operator-', dir=evidence)
+            self.addCleanup(operator_temp.cleanup)
+            adapter = Path(operator_temp.name) / 'canonical-operator/external-approval.py'
+            ignored = subprocess.run(['git', '-C', str(source), 'check-ignore', '--quiet', '--', str(adapter)],
+                                     env=fixture_env(), capture_output=True)
+            self.assertEqual(ignored.returncode, 0, 'operator fixture evidence must be ignored by Git')
             admission.write_text(admission.read_text().replace(
                 'CANONICAL_ADAPTER=' + str(budget.ADMIN_HOME / '.fitsy-review/operators/external-approval.py'),
                 'CANONICAL_ADAPTER=' + str(adapter)))
@@ -949,6 +963,12 @@ class CompletedAdmission(CompletedAccounting):
             # Production keeps its fixed /opt path and actual kernel custody gate.
             import re
             adapter.parent.mkdir()
+            protected_budgets = adapter.parent / 'budgets'
+            protected_budgets.mkdir()
+            shutil.copy2(budgets / f'issue-{issue}.jsonl', protected_budgets / f'issue-{issue}.jsonl')
+            budgets = protected_budgets
+            protected_gh = adapter.parent / 'gh'
+            shutil.copy2(tools / 'gh', protected_gh)
             config_path = adapter.parent / 'authority.json'
             code = (source / 'scripts/review/external-approval.py').read_text()
             code = re.sub(r'CONFIG = Path\(.*?\)\nINSTALL', 'CONFIG = Path(' + repr(str(config_path)) + ')\nINSTALL', code, count=1, flags=re.S)
@@ -988,7 +1008,7 @@ class CompletedAdmission(CompletedAccounting):
                     evidence_root=str(evidence_root), dispositions={}))
             config = dict(operator_uid=os.getuid(), candidate_uid=os.getuid() + 1,
                 adapter_sha256=sha(adapter.read_bytes()), repository='dgmolla/fitsy', app_id=123,
-                gh_path=str((tools / 'gh').resolve()), gh_sha256=sha((tools / 'gh').read_bytes()),
+                gh_path=str(protected_gh), gh_sha256=sha(protected_gh.read_bytes()),
                 app_token_file=str(token), app_identity_file=str(identity), app_identity_sha256=sha(identity.read_bytes()),
                 review_home=str(review_home), budget_home=str(budgets.resolve()), reviews={str(issue): policy})
             config_path.write_text(json.dumps(config)); config_path.chmod(0o600)
