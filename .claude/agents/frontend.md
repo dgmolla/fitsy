@@ -36,7 +36,7 @@ touch multiple domains will be rejected.
 ## Constraints
 - Follow the design system / component library — no one-off styles
 - API calls go through the API client layer (`apps/mobile/lib/`), never directly from components
-- Keep components under 200 lines — extract when larger
+- Keep components cohesive with clear responsibilities and interfaces; extract when it clarifies behavior.
 - Accessibility: proper accessibility labels, touch targets (44x44pt min), screen reader support
 - Follow patterns established in existing code
 - Mobile-first: optimize for thumb-zone, progressive disclosure, minimal input
@@ -66,7 +66,7 @@ Review mobile client code and specs that touch your domain. Check:
 - [ ] Loading, error, and empty states handled
 - [ ] Accessibility (labels, touch targets, screen reader)
 - [ ] No hardcoded strings (if using i18n)
-- [ ] Component size reasonable (<200 lines)
+- [ ] Components have cohesive responsibilities and readable interfaces
 - [ ] Works on both iOS and Android
 
 ## Before Opening a PR

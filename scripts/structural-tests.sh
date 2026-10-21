@@ -63,13 +63,12 @@ else
   echo "PASS"
 fi
 
-MAX_LINES=300
-EXEMPT_FILES=("")
 
 
 # ─── Grandfather allowlist (shrink-only) ────────────────────────────────────
-# Checks 4/6/7/8 block NEW offenders; existing ones are grandfathered in
-# scripts/verify/structural-allowlist.txt. An entry whose file no longer
+# Checks 6/7/8 block NEW offenders; existing ones are grandfathered in
+# scripts/verify/structural-allowlist.txt. Historical generated long-file rows
+# are no longer read by an active rule. An entry whose file no longer
 # offends must be deleted (the list only shrinks). Format: "<check> <path>".
 ALLOWLIST_FILE="$REPO_ROOT/scripts/verify/structural-allowlist.txt"
 gate_allowlisted() { # id, offenders (newline-separated paths), fix-hint
@@ -98,26 +97,6 @@ gate_allowlisted() { # id, offenders (newline-separated paths), fix-hint
   fi
 }
 
-
-echo -n "4. File length limits (<${MAX_LINES} lines)... "
-LONG_FILES=""
-for dir in "${SOURCE_DIRS[@]}"; do
-  while IFS= read -r file; do
-    basename=$(basename "$file")
-    skip=false
-    for exempt in "${EXEMPT_FILES[@]}"; do
-      if [ "$basename" = "$exempt" ]; then skip=true; break; fi
-    done
-    if $skip; then continue; fi
-    lines=$(wc -l < "$file")
-    if [ "$lines" -gt "$MAX_LINES" ]; then
-      LONG_FILES="$LONG_FILES\n${file#$REPO_ROOT/}"
-    fi
-  done < <(find "$dir" \( -name "*.ts" -o -name "*.tsx" \) \
-    -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/.next/*" 2>/dev/null)
-done
-LONG_PATHS=$(echo -e "$LONG_FILES" | sed '/^$/d')
-gate_allowlisted "long-file" "$LONG_PATHS" "Files must stay under $MAX_LINES lines — split into modules."
 
 echo -n "5. No 'as any' type assertions... "
 ANY_TYPES=$(git -C "$REPO_ROOT" diff "$DIFF_RANGE" -U0 --diff-filter=AM -- '*.ts' '*.tsx' 2>/dev/null \

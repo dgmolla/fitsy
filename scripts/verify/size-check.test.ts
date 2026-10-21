@@ -1,12 +1,15 @@
 import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const root = resolve(__dirname, '../..');
-const fixtureEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+const fixtureEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') && !key.startsWith('FITSY_DIFF_')));
+const gitBinary = process.platform === 'darwin' ? '/Applications/Xcode.app/Contents/Developer/usr/bin/git'
+  : execFileSync('/bin/sh', ['-c', 'command -v git'], { env: fixtureEnv, encoding: 'utf8' }).trim();
+fixtureEnv.PATH = [dirname(gitBinary), dirname(process.execPath), '/bin', '/usr/bin', fixtureEnv.PATH].join(':');
 let directory: string;
-const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, encoding: 'utf8', env: fixtureEnv });
+const git = (...args: string[]) => execFileSync(gitBinary, args, { cwd: directory, encoding: 'utf8', env: fixtureEnv });
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'fitsy-size-'));
@@ -26,7 +29,7 @@ test('an oversized coherent change reports review size without blocking other ga
   mkdirSync(join(directory, 'apps/api'), { recursive: true });
   writeFileSync(join(directory, 'apps/api/contract.ts'), Array.from({ length: 601 }, (_, index) => `export const line${index} = ${index};`).join('\n') + '\n');
   git('add', '.'); git('commit', '-qm', 'API contract');
-  const result = spawnSync('bash', ['scripts/verify/size-check.sh'], { cwd: directory, encoding: 'utf8', env: fixtureEnv });
+  const result = spawnSync('/bin/bash', ['scripts/verify/size-check.sh'], { cwd: directory, encoding: 'utf8', env: fixtureEnv });
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ status: 'pass', summary: '601 changed lines exceeds the 600-line review signal' });
 });
