@@ -70,7 +70,7 @@ The human relocates required authority to operator-private storage and revokes e
 Use only authorized harmless sentinels and temporary-data denial probes from the candidate profile. The trusted coordinator verifies protected credential-route custody; the worker must not probe real Notes, keychain, browser or credential contents.
 Candidate execution may receive only scoped ephemeral/dev credentials and normal read/test transport, with no issue-acceptance administration, App check issuance, protected merge, environment approval or production route.
 Installed adapter, config, GitHub CLI and every ancestor must be root/operator owned, non-writable to candidate and non-symlinked.
-Use `/opt/fitsy-approval/external-approval.py`, `/private/etc/fitsy/delivery-authority.json` and canonical `/private/var/lib/fitsy-approval/` custody paths on this Mac.
+Use `/opt/fitsy-approval/external-approval.py`, `/opt/fitsy-approval/delivery-authority.json` and canonical `/private/var/lib/fitsy-approval/` custody paths on this Mac.
 Credentials and token-provenance files are private `0600` under operator-controlled ancestors.
 Pin actual CLI digest, reviewed adapter/control identity, UIDs, environment reviewer, ruleset ID and exact deploy/verify workflow digests.
 These instructions preserve existing ca7 transport and installed-location protections. Default same-UID rejection remains until independently approved profile custody is installed; local tests cannot prove OS isolation.

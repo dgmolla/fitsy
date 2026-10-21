@@ -130,10 +130,21 @@ class ReviewTests(unittest.TestCase):
 
     def test_real_system_config_directory_avoids_platform_aliases(self):
         import os
-        system_file = external.CONFIG.parent.parent / 'passwd'
+        system_file = Path('/private/etc/passwd' if sys.platform == 'darwin' else '/etc/passwd')
         if not system_file.is_file():
             self.skipTest('Unix system identity file unavailable')
         self.assertTrue(external.protected_bytes(system_file, os.getuid()))
+
+
+    def test_missing_fixed_configuration_has_no_environment_or_legacy_fallback(self):
+        expected = Path('/opt/fitsy-approval/delivery-authority.json' if sys.platform == 'darwin'
+                        else '/etc/fitsy/delivery-authority.json')
+        self.assertEqual(external.CONFIG, expected)
+        with patch.dict(os.environ, {'HOME': '/candidate-selected-home'}), \
+                patch.object(external, 'protected_bytes', side_effect=FileNotFoundError(expected)) as reader:
+            with self.assertRaises(FileNotFoundError):
+                external.authority()
+        reader.assert_called_once_with(expected, os.getuid())
 
 
 class CanonicalReviewTests(unittest.TestCase):

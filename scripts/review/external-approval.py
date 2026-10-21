@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 
-CONFIG = Path('/private/etc/fitsy/delivery-authority.json' if sys.platform == 'darwin'
+CONFIG = Path('/opt/fitsy-approval/delivery-authority.json' if sys.platform == 'darwin'
               else '/etc/fitsy/delivery-authority.json')
 INSTALL = Path('/opt/fitsy-approval/external-approval.py')
 REPO = 'dgmolla/fitsy'
