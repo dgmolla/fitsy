@@ -898,6 +898,12 @@ class CompletedAdmission(CompletedAccounting):
                 'CANONICAL_ADAPTER=' + str(adapter)))
         session_path = product / 'scripts/verify/shipping-session.mjs'
         session_path.write_text(session_path.read_text().replace("const administratorPath = '/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';", 'const administratorPath = ' + json.dumps(fixed_path) + ';'))
+        if canonical:
+            production_call = "execute('/usr/bin/python3', ['-I', '-B', '/opt/fitsy-approval/external-approval.py',"
+            fixture_call = "execute(" + json.dumps(sys.executable) + ", ['-I', '-B', " + json.dumps(str(adapter)) + ","
+            session = session_path.read_text()
+            self.assertEqual(session.count(production_call), 1, 'canonical fixture shipping transport changed')
+            session_path.write_text(session.replace(production_call, fixture_call))
         git('add', '.')
         git('commit', '-qm', 'fixture trusted runtime')
         base = git('rev-parse', 'HEAD')
@@ -906,6 +912,11 @@ class CompletedAdmission(CompletedAccounting):
         git('clone', '-q', str(product), str(home / 'repo'))
         runtime = home / 'repo'
         git('update-ref', 'refs/remotes/origin/main', base, cwd=runtime)
+        if canonical:
+            for checkout in (product, runtime):
+                installed_session = git('show', 'HEAD:scripts/verify/shipping-session.mjs', cwd=checkout)
+                self.assertEqual(installed_session.count(fixture_call), 1)
+                self.assertNotIn(production_call, installed_session)
         (runtime / 'node_modules').symlink_to(source / 'node_modules')
         git('checkout', '-qb', 'frozen')
         control = base
@@ -1117,7 +1128,9 @@ class CompletedAdmission(CompletedAccounting):
         self.assertIn('full', (product / '.evidence/order').read_text())
         self.assertNotIn('unexpected-review', result.stderr)
         if canonical:
-            self.assertGreaterEqual(len((product / '.evidence/candidate-commands').read_text().splitlines()), 2)
+            candidate_commands = (product / '.evidence/candidate-commands').read_text().splitlines()
+            self.assertIn('/usr/bin/env', candidate_commands, 'cheap must use the pinned launcher')
+            self.assertIn('/bin/bash', candidate_commands, 'hook push-gates must use the same pinned launcher')
             self.assertEqual(original_selector, auth.read_bytes())
             before = (budgets / f'issue-{issue}.jsonl').read_bytes()
             direct = ['/bin/bash', '-p', str(runtime / 'scripts/verify/review-admission.sh'), '--revalidate-session']
