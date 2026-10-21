@@ -78,6 +78,11 @@
   "installation_id": 170592990,
   "app_identity_file": "/private/var/lib/fitsy-approval/credentials/app-token-provenance.json",
   "app_identity_sha256": null,
+  "app_key_custody": {
+    "record": "original-human-key-handoff-2026-10-14",
+    "private_key_file": null,
+    "public_fingerprint": "SHA256:qD7XvlHIile2flN5AEavSX+P6ZVrlIDddPVus9YLkQg="
+  },
   "dispatch_actor_user_id": null,
   "dispatch_actor_login": null,
   "deploy_workflow_sha256": null,

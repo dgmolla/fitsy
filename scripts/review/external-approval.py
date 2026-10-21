@@ -7,6 +7,7 @@ This is not a reviewer, installer, scheduler, cache, or production deployer.
 import argparse
 import base64
 from datetime import datetime, timezone
+import fcntl
 import hashlib
 import json
 import os
@@ -15,6 +16,8 @@ import pwd
 import re
 import subprocess
 import sys
+import urllib.request
+import uuid
 
 CONFIG = Path('/opt/fitsy-approval/delivery-authority.json' if sys.platform == 'darwin'
               else '/etc/fitsy/delivery-authority.json')
@@ -23,6 +26,10 @@ REPO = 'dgmolla/fitsy'
 CHECK = 'delivery/independent-review'
 ACCEPTANCE_CHECK = 'delivery/acceptance'
 ACTIONS_APP = 15368
+APP_PERMISSIONS = {'metadata': 'read', 'checks': 'write', 'contents': 'read', 'issues': 'read',
+                   'pull_requests': 'read', 'actions': 'write', 'administration': 'read'}
+APP_KEY_FINGERPRINT = 'SHA256:qD7XvlHIile2flN5AEavSX+P6ZVrlIDddPVus9YLkQg='
+REPOSITORY_ID = 1188934600
 VERIFY_JOBS = ('classify', 'Static (L0-L1)', 'Tests (L2)', 'Build (L3)',
                'Single-domain PR check')
 CONTROL_AREAS = ('scripts/review/', 'scripts/verify/', 'scripts/delivery/',
@@ -129,16 +136,205 @@ def authority():
     return config
 
 
-def github(config, endpoint, payload=None, release=False):
-    token_path = config['release_token_file' if release else 'app_token_file']
-    token_raw = protected_bytes(token_path, config['operator_uid'], private=True)
-    if not release:
-        provenance = protected_bytes(config['app_identity_file'], config['operator_uid'], private=True)
-        require(digest(provenance) == config['app_identity_sha256'], 'unverified App token provenance')
-        issued = json.loads(provenance)['token']
-        require(digest(token_raw) == issued['sha256']
-                and datetime.fromisoformat(issued['expires_at'].replace('Z', '+00:00')) > datetime.now(timezone.utc),
-                'App token changed or expired before request')
+def app_auth(config):
+    """Read one pinned generation, preserving the exact validated token bytes."""
+    uid = config['operator_uid']
+    token_raw = protected_bytes(config['app_token_file'], uid, private=True)
+    provenance = protected_bytes(config['app_identity_file'], uid, private=True)
+    require(digest(provenance) == config['app_identity_sha256'], 'unverified App token provenance')
+    identity = json.loads(provenance)
+    app, installation, token = identity['app'], identity['installation'], identity['token']
+    require(config['app_id'] == 5285837 and config['installation_id'] == 170592990
+            and app['id'] == config['app_id'] and installation['app_id'] == app['id']
+            and installation['id'] == config['installation_id']
+            and installation['account']['login'] == 'dgmolla'
+            and installation['repository_selection'] == 'selected', 'App issuer/installation mismatch')
+    require(identity['repository_id'] == REPOSITORY_ID, 'App repository scope mismatch')
+    require(installation['permissions'] == APP_PERMISSIONS and token['permissions'] == APP_PERMISSIONS,
+            'App effective permissions mismatch')
+    require(digest(token_raw) == token['sha256'], 'App token changed')
+    expiry = datetime.fromisoformat(token['expires_at'].replace('Z', '+00:00'))
+    require(expiry.tzinfo is not None and bool(token_raw.decode().strip()), 'App token expiry/credential invalid')
+    return identity, token_raw, expiry
+
+
+def private_replace(path, raw):
+    """Atomic per file at existing locations; caller owns the exclusive lock."""
+    path = Path(path)
+    temporary = path.with_name('.' + path.name + '.renew-' + uuid.uuid4().hex)
+    try:
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'wb') as output:
+            output.write(raw)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def json_bytes(value):
+    return (json.dumps(value, indent=2) + '\n').encode()
+
+
+def app_key_path(config):
+    custody = config.get('app_key_custody') or {}
+    require(custody.get('public_fingerprint') == APP_KEY_FINGERPRINT
+            and custody.get('record') == 'original-human-key-handoff-2026-10-14'
+            and isinstance(custody.get('private_key_file'), str)
+            and Path(custody['private_key_file']).is_absolute(),
+            'App token renewal requires original operator key custody binding')
+    return Path(custody['private_key_file'])
+
+
+def app_jwt(config):
+    """Use only the original human-approved key in protected operator configuration."""
+    key = app_key_path(config)
+    protected_bytes(key, config['operator_uid'], private=True)
+
+    def openssl(arguments, raw=None):
+        result = subprocess.run(['/usr/bin/openssl', *arguments], input=raw, capture_output=True,
+                                timeout=20, env={'PATH': '/usr/bin:/bin'})
+        require(result.returncode == 0, 'App signing key unavailable or invalid; operator must restore original custody')
+        return result.stdout
+
+    public = openssl(['pkey', '-in', str(key), '-pubout', '-outform', 'DER'])
+    require('SHA256:' + base64.b64encode(hashlib.sha256(public).digest()).decode() == APP_KEY_FINGERPRINT,
+            'App signing key fingerprint mismatch')
+    encode = lambda raw: base64.urlsafe_b64encode(raw).decode().rstrip('=')
+    now = int(datetime.now(timezone.utc).timestamp())
+    unsigned = encode(json_bytes({'alg': 'RS256', 'typ': 'JWT'})) + '.' + encode(json_bytes(
+        {'iat': now - 60, 'exp': now + 540, 'iss': str(config['app_id'])}))
+    return unsigned + '.' + encode(openssl(['dgst', '-sha256', '-sign', str(key)], unsigned.encode()))
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def app_request(jwt, endpoint, payload=None):
+    request = urllib.request.Request('https://api.github.com' + endpoint,
+        data=json_bytes(payload) if payload is not None else None,
+        headers={'Authorization': 'Bearer ' + jwt, 'Accept': 'application/vnd.github+json',
+                 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'fitsy-approval-renewal',
+                 'Content-Type': 'application/json'})
+    try:
+        # Do not inherit proxy selectors or forward the JWT across redirects.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        with opener.open(request, timeout=20) as response:
+            return json.load(response)
+    except (OSError, ValueError):
+        raise ValueError('App credential renewal transport failed; operator must reconcile retained renewal evidence') from None
+
+
+def ensure_app_auth(config):
+    uid = config['operator_uid']
+    parent = Path(config['app_identity_file']).parent
+    receipt_path = parent / 'app-renewal-recovery.json'
+
+    def completed_attempt():
+        if receipt_path.exists() or receipt_path.is_symlink():
+            receipt = json.loads(protected_bytes(receipt_path, uid, private=True))
+            require(receipt.get('phase') in ('complete', 'rolled-back'),
+                    'App renewal interrupted; operator must reconcile retained renewal evidence')
+
+    completed_attempt()
+    identity, raw, expiry = app_auth(config)
+    if (expiry - datetime.now(timezone.utc)).total_seconds() > 60:
+        return identity, raw
+    app_key_path(config)
+    # Reuse the original operator's dispatcher lock, never a candidate selector.
+    lock_path = Path(pwd.getpwuid(uid).pw_dir) / '.fitsy-dispatcher/dispatcher.lock'
+    protected_bytes(lock_path, uid)
+    with lock_path.open('rb') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        completed_attempt()
+        current = authority()
+        require({k: v for k, v in current.items() if k != 'app_identity_sha256'}
+                == {k: v for k, v in config.items() if k != 'app_identity_sha256'},
+                'App renewal authority changed')
+        config.update(current)
+        identity, raw, expiry = app_auth(config)
+        if (expiry - datetime.now(timezone.utc)).total_seconds() > 60:
+            return identity, raw
+        require(identity['repository_id'] == REPOSITORY_ID
+                and identity['app']['slug'] == 'fitsy-delivery-approval', 'App renewal repository/issuer mismatch')
+        paths = [parent / 'app-response.json', parent / 'installation-response.json',
+                 Path(config['app_token_file']), Path(config['app_identity_file']), CONFIG]
+        require(len(set(paths)) == len(paths) and Path(config['app_token_file']).parent == parent,
+                'App renewal credential locations mismatch')
+        before = {path: protected_bytes(path, uid, private=(path != CONFIG)) for path in paths}
+        record = {'phase': 'issuing', 'observed_at': datetime.now(timezone.utc).isoformat(),
+                  'adapter_sha256': config['adapter_sha256'],
+                  'before': {str(path): digest(value) for path, value in before.items()}}
+        jwt = app_jwt(config)
+        private_replace(receipt_path, json_bytes(record))
+        staged = {}
+        issuance_started = False
+        try:
+            app = app_request(jwt, '/app')
+            installation = app_request(jwt, f'/repos/{REPO}/installation')
+            require(app['id'] == config['app_id'] and app['slug'] == identity['app']['slug']
+                    and installation['id'] == config['installation_id']
+                    and installation['app_id'] == app['id']
+                    and installation['account']['login'] == 'dgmolla'
+                    and installation['repository_selection'] == 'selected'
+                    and installation['permissions'] == APP_PERMISSIONS, 'App renewal issuer/scope mismatch')
+            if config.get('candidate_boundary') is not None:
+                candidate_custody(config, uid)
+            issuance_started = True
+            token = app_request(jwt, f'/app/installations/{config["installation_id"]}/access_tokens',
+                                {'repository_ids': [REPOSITORY_ID], 'permissions': APP_PERMISSIONS})
+            secret = token.pop('token').encode()
+            require(token['permissions'] == APP_PERMISSIONS and token['repository_selection'] == 'selected'
+                    and len(token['repositories']) == 1
+                    and token['repositories'][0]['id'] == REPOSITORY_ID
+                    and token['repositories'][0]['full_name'] == REPO, 'App renewed token scope mismatch')
+            require(bool(secret.strip()) and (datetime.fromisoformat(token['expires_at'].replace('Z', '+00:00'))
+                    - datetime.now(timezone.utc)).total_seconds() > 60, 'App renewed token lifetime invalid')
+            token['sha256'] = digest(secret)
+            renewed = {'app': app, 'installation': installation, 'token': token,
+                       'repository_id': REPOSITORY_ID, 'observed_at': datetime.now(timezone.utc).isoformat()}
+            verify_app_scope(config, renewed, secret)
+            provenance = json_bytes(renewed)
+            updated = {**config, 'app_identity_sha256': digest(provenance)}
+            staged = dict(zip(paths, [json_bytes(app), json_bytes(installation), secret,
+                                      provenance, json_bytes(updated)]))
+            require(all(protected_bytes(path, uid, private=(path != CONFIG)) == value
+                        for path, value in before.items()), 'App renewal preimage changed')
+            require(authority() == config, 'App renewal authority changed before commit')
+            record.update(phase='committing', after={str(path): digest(value) for path, value in staged.items()})
+            private_replace(receipt_path, json_bytes(record))
+            for path, value in staged.items():
+                require(protected_bytes(path, uid, private=(path != CONFIG)) == before[path],
+                        'App renewal preimage changed')
+                private_replace(path, value)
+            config.update(updated)
+            record['phase'] = 'complete'
+            private_replace(receipt_path, json_bytes(record))
+            return renewed, secret
+        except BaseException:
+            # Restore only this attempt's exact bytes; preserve any intervening write.
+            restored = True
+            for path, original in before.items():
+                observed = protected_bytes(path, uid, private=(path != CONFIG))
+                if observed == original:
+                    continue
+                if staged.get(path) == observed:
+                    private_replace(path, original)
+                else:
+                    restored = False
+            record['phase'] = ('rolled-back' if restored and (staged or not issuance_started)
+                               else 'recovery-required')
+            private_replace(receipt_path, json_bytes(record))
+            if restored:
+                config.update(json.loads(before[CONFIG]))
+            raise
+
+
+def github_token(config, endpoint, token_raw, payload=None):
     token = token_raw.decode().strip()
     require(bool(token), 'operator credential unavailable')
     # Never inherit candidate GitHub, proxy, loader, startup or executable selectors.
@@ -157,42 +353,36 @@ def github(config, endpoint, payload=None, release=False):
     return json.loads(result.stdout) if result.stdout.strip() else None
 
 
+def github(config, endpoint, payload=None, release=False):
+    if release:
+        raw = protected_bytes(config['release_token_file'], config['operator_uid'], private=True)
+    else:
+        _, raw = ensure_app_auth(config)
+    return github_token(config, endpoint, raw, payload)
 
-def installation_identity(config):
-    """Operator-pinned, observed token issuance, plus live scope readback.
 
-    Installation tokens cannot call JWT-only App identity endpoints.
-    The operator retains those actual responses at token renewal, never the key.
-    This manifest is credential provenance, not a review verdict or grant.
-    """
-    uid = config['operator_uid']
-    raw = protected_bytes(config['app_identity_file'], uid, private=True)
-    require(digest(raw) == config['app_identity_sha256'], 'unverified App token provenance')
-    identity = json.loads(raw)
-    app, installation, token = identity['app'], identity['installation'], identity['token']
-    require(config['app_id'] == 5285837 and config['installation_id'] == 170592990
-            and app['id'] == config['app_id'] and installation['app_id'] == app['id']
-            and installation['id'] == config['installation_id']
-            and installation['account']['login'] == 'dgmolla'
-            and installation['repository_selection'] == 'selected', 'App issuer/installation mismatch')
-    expected = {'metadata': 'read', 'checks': 'write', 'contents': 'read', 'issues': 'read',
-                'pull_requests': 'read', 'actions': 'write', 'administration': 'read'}
-    require(installation['permissions'] == expected and token['permissions'] == expected,
-            'App effective permissions mismatch')
-    require(token['sha256'] == digest(protected_bytes(config['app_token_file'], uid, private=True))
-            and datetime.fromisoformat(token['expires_at'].replace('Z', '+00:00')) > datetime.now(timezone.utc),
-            'App token changed or expired')
-    scope = github(config, 'installation/repositories?per_page=100')
+def verify_app_scope(config, identity, raw=None):
+    # Staged credentials use the same fixed transport before any protected write.
+    call = (lambda endpoint: github_token(config, endpoint, raw)) if raw is not None else (
+        lambda endpoint: github(config, endpoint))
+    app = identity['app']
+    scope = call('installation/repositories?per_page=100')
     require(scope['total_count'] == 1 and len(scope['repositories']) == 1
             and scope['repositories'][0]['full_name'] == REPO
             and scope['repositories'][0]['id'] == identity['repository_id'], 'App repository scope mismatch')
-    live_app = github(config, f'apps/{app["slug"]}')
-    actor = github(config, f'users/{app["slug"]}[bot]')
+    live_app = call(f'apps/{app["slug"]}')
+    actor = call(f'users/{app["slug"]}[bot]')
     require(live_app['id'] == app['id'] and actor['type'] == 'Bot'
             and actor['login'] == config['dispatch_actor_login']
             and type(config['dispatch_actor_user_id']) is int
             and actor['id'] == config['dispatch_actor_user_id']
             and actor['id'] != config['merge_operator_user_id'], 'App dispatch actor mismatch')
+
+
+def installation_identity(config):
+    """Credential provenance and live scope remain separate from review approval."""
+    identity, _ = ensure_app_auth(config)
+    verify_app_scope(config, identity)
 
 
 def workflow_identity(config, source):

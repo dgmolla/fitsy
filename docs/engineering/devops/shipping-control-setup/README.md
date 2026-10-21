@@ -70,6 +70,30 @@ Run the executable directly so its system Env launcher removes startup selectors
 The default adapter rejects caller copies, unsafe ancestry, same-UID candidate authority and changed installed bytes. The prepared explicit profile mode additionally requires operator-pinned independent/live boundary proof; it is not an installed exception merely because its fixtures pass.
 It ignores candidate GitHub configuration, tokens, proxy settings and executable selection.
 
+The independently installed publisher renews legitimate installation credentials when their remaining lifetime cannot cover its 60-second request deadline.
+Both check publication and local/session/hook `validate-review` metadata reads use that same protected routine.
+Local validation remains read-only for review and GitHub approval evidence, while credential maintenance can refresh the existing operator files.
+Fresh credentials reuse their exact validated bytes; a token or provenance mismatch refuses renewal.
+The human release credential and its transport are unchanged.
+
+Populate `app_key_custody.private_key_file` only from the canonical original human key handoff of October 14, 2026, retained by the coordinator in the existing issue handoff.
+Keep that exact private path and key in existing operator custody; do not copy the key into the repository, command scratch or evidence.
+The binding's public fingerprint must remain `SHA256:qD7XvlHIile2flN5AEavSX+P6ZVrlIDddPVus9YLkQg=`.
+This is the already-authorized App5285837, installation170592990 and repository1188934600, with the same exact permissions; an unresolved path grants no authority.
+No command-line or environment selector can replace the protected binding.
+The fixed system OpenSSL signs a short-lived App JWT, and GitHub's scoped installation-token API issues only those existing permissions for Fitsy.
+Before adoption, independently review and install these exact publisher bytes and the nonsecret custody binding, then verify a genuine renewal and live source-bound publication through the actual caller.
+
+Renewal reuses the operator's existing `.fitsy-dispatcher/dispatcher.lock` and compares every original byte before replacing the existing token, provenance and response files, with configuration last.
+It preserves the current live claim, boundary, review and accounting pins.
+A private `app-renewal-recovery.json` beside the existing provenance records phases and before/after digests, never the key, JWT or token.
+The files are atomic individually; an interrupted or uncertain issuance refuses another attempt until the coordinator reconciles the retained evidence.
+The coordinator retains the original five private preimages in the existing protected recovery custody before real adoption.
+If recovery is required, compare the receipt and current file digests under the same exclusive lock, preserve the failed receipt, and restore only exact attempt-owned bytes from those preimages or separately validate a complete issued generation.
+After restoring a consistent generation and rechecking installed authority, the coordinator archives the interrupted receipt in existing protected recovery evidence and removes its pending marker before retrying the normal caller.
+Never overwrite a drifted file, clear uncertainty without evidence, retry an uncertain check POST, or infer review approval from authentication success.
+Credential failures name the original key or retained renewal evidence and remain the coordinator's recovery action; they require no repeated human key handoff.
+
 Retain the existing `.fitsy-review/completed/issue-N.json`, raw provider files and original `.cache/fitsy-review/budgets/issue-N.jsonl` in isolated operator custody.
 The selected coordinator independently observes actual provider execution and checks all source/base/acceptance/domain/provider identities before approving their digests.
 Self-consistent hashes or a copied transcript do not establish genuine independent execution.
