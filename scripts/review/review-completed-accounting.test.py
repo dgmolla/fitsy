@@ -49,7 +49,9 @@ def install_fixture_admin(repo, home):
     p = repo / 'scripts/verify/review-admission.sh'
     if p.exists():
         p.write_text(p.read_text().replace('ADMIN_HOME="$(python3 -I -c \'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)\')"',
-                                         'ADMIN_HOME=' + repr(str(home))))
+                                         'ADMIN_HOME=' + repr(str(home))).replace(
+            'CANONICAL_ADAPTER=/opt/fitsy-approval/external-approval.py',
+            'CANONICAL_ADAPTER=' + str(home / '.fitsy-review/operators/external-approval.py')))
     p = repo / 'scripts/verify/shipping-session.mjs'
     if p.exists():
         p.write_text(p.read_text().replace('userInfo().homedir', json.dumps(str(home))))
@@ -803,7 +805,7 @@ class CompletedAdmission(CompletedAccounting):
 
     def test_corrected_history_reaches_shipping_session_and_hook(self):
         self.append_runtime_correction()
-        self.external_session()
+        self.external_session(canonical=True)
 
     def test_external_session_owns_native_gate_acceptance_hook_and_authority(self):
         self.external_session()
@@ -811,10 +813,10 @@ class CompletedAdmission(CompletedAccounting):
     def test_bootstrap_accepts_distinct_reviewed_control_and_refuses_stale_main(self):
         self.external_session(bootstrap=True)
 
-    def external_session(self, bootstrap=False):
-        issue = 463 if bootstrap else 443
-        domains = ['correctness', 'workflow-security'] if bootstrap else ['correctness']
-        if bootstrap:
+    def external_session(self, bootstrap=False, canonical=False):
+        issue = 463 if bootstrap or canonical else 443
+        domains = ['correctness', 'workflow-security'] if bootstrap or canonical else ['correctness']
+        if bootstrap or canonical:
             original = self.ledger.read_text().replace('443', '463')
             self.ledger = budget.ADMIN_BUDGET / 'issue-463.jsonl'
             self.ledger.write_text(original)
@@ -866,6 +868,11 @@ class CompletedAdmission(CompletedAccounting):
             'TRUSTED_GH=' + str(self.root / 'session-bin/gh')))
         fixed_path = str(self.root / 'session-bin') + ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
         admission.write_text(admission.read_text().replace('PATH=/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'PATH=' + fixed_path))
+        if canonical:
+            adapter = (self.root / 'canonical-operator/external-approval.py').resolve()
+            admission.write_text(admission.read_text().replace(
+                'CANONICAL_ADAPTER=' + str(budget.ADMIN_HOME / '.fitsy-review/operators/external-approval.py'),
+                'CANONICAL_ADAPTER=' + str(adapter)))
         session_path = product / 'scripts/verify/shipping-session.mjs'
         session_path.write_text(session_path.read_text().replace("const administratorPath = '/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';", 'const administratorPath = ' + json.dumps(fixed_path) + ';'))
         git('add', '.')
@@ -923,6 +930,7 @@ class CompletedAdmission(CompletedAccounting):
             (tools / name).chmod(0o700)
         (tools / 'gh').write_text("#!/usr/bin/env python3\nimport json,sys\na=sys.argv\n"
             "if a[1]=='issue': print('Frozen acceptance')\n"
+            "elif a[1]=='api' and '/issues/' in a[-1]: print(json.dumps(dict(body='Frozen acceptance')))\n"
             "elif a[1]=='pr' and '--jq' in a: print('Delivery-Issue: #443')\n"
             + f"elif a[1]=='pr': print(json.dumps(dict(headRefOid={head!r},baseRefName='main',headRepositoryOwner=dict(login='dgmolla'),state='OPEN',url='https://fixture.invalid/pr/443')))\n"
             + f"elif a[1]=='api':\n with open({str(self.root / 'published')!r},'a') as out: out.write(sys.stdin.read()+'\\n')\n")
@@ -936,6 +944,54 @@ class CompletedAdmission(CompletedAccounting):
             shutil.copyfile(product / 'scripts/review/review-budget.py', operator)
             operator.chmod(0o600)
             env['FITSY_REVIEW_BOOTSTRAP_OPERATOR'] = str(operator)
+        if canonical:
+            # Separate fixture installation, not a candidate environment selector.
+            # Production keeps its fixed /opt path and actual kernel custody gate.
+            import re
+            adapter.parent.mkdir()
+            config_path = adapter.parent / 'authority.json'
+            code = (source / 'scripts/review/external-approval.py').read_text()
+            code = re.sub(r'CONFIG = Path\(.*?\)\nINSTALL', 'CONFIG = Path(' + repr(str(config_path)) + ')\nINSTALL', code, count=1, flags=re.S)
+            code = code.replace("INSTALL = Path('/opt/fitsy-approval/external-approval.py')", 'INSTALL = Path(' + repr(str(adapter)) + ')')
+            adapter.write_text(code)
+            validators = {}
+            for name in ('review-round', 'review-gate'):
+                raw = (source / f'scripts/review/{name}.py').read_bytes()
+                adapter.with_name(name + '.py').write_bytes(raw)
+                validators[name] = sha(raw)
+            review_home = adapter.parent / 'reviews'
+            (review_home / 'completed').mkdir(parents=True)
+            # Historical completed authority remains immutable and intentionally stale.
+            auth.write_text(json.dumps(dict(approval, source_sha='0' * 40)))
+            original_selector = auth.read_bytes()
+            normal = {key: approval[key] for key in ('issue', 'source_sha', 'base_sha', 'acceptance_sha256', 'provider', 'model', 'reasoning_effort')}
+            normal.update(verdict='pass', domains={domain: 'pass' for domain in domains}, findings=[])
+            raw_verdict = '```json\n' + json.dumps(normal) + '\n```\n'
+            paths = {}
+            for name, raw in dict(raws, verdict=raw_verdict, execution=json.dumps(dict(kind='completed', returncode=0, elapsed_seconds=139.4,
+                stdout_bytes=len(raw_verdict.encode()), stderr_bytes=len(raws['stderr'].encode())))).items():
+                path = adapter.parent / name
+                path.write_text(raw)
+                paths[name] = {'path': str(path), 'sha256': sha(raw.encode())}
+            manifest = review_home / f'completed/issue-{issue}.json'
+            manifest.write_text(json.dumps(dict(approval, artifacts=paths)))
+            evidence_root = adapter.parent / f'evidence/issue-{issue}/{head}'
+            token = adapter.parent / 'synthetic-token'
+            token.write_text('isolated-token'); token.chmod(0o600)
+            identity = adapter.parent / 'token-provenance.json'
+            identity.write_text(json.dumps({'token': {'sha256': sha(token.read_bytes()), 'expires_at': '2099-01-01T00:00:00Z'}}))
+            identity.chmod(0o600)
+            policy = dict(domains=domains, manifest_sha256=sha(manifest.read_bytes()),
+                ledger_sha256=sha((budgets / f'issue-{issue}.jsonl').read_bytes()), execution_timeout_seconds=180,
+                accounting_provenance=f'https://github.com/dgmolla/fitsy/issues/{issue}#issuecomment-fixture',
+                canonical_review=dict(validators=validators, diff_sha256='d' * 64,
+                    evidence_root=str(evidence_root), dispositions={}))
+            config = dict(operator_uid=os.getuid(), candidate_uid=os.getuid() + 1,
+                adapter_sha256=sha(adapter.read_bytes()), repository='dgmolla/fitsy', app_id=123,
+                gh_path=str((tools / 'gh').resolve()), gh_sha256=sha((tools / 'gh').read_bytes()),
+                app_token_file=str(token), app_identity_file=str(identity), app_identity_sha256=sha(identity.read_bytes()),
+                review_home=str(review_home), budget_home=str(budgets.resolve()), reviews={str(issue): policy})
+            config_path.write_text(json.dumps(config)); config_path.chmod(0o600)
         shutil.copyfile(source / '.githooks/pre-push', product / '.evidence/hook')
         (product / '.evidence/native.mjs').write_text(
             "import {admitFinalCandidate} from '../scripts/sim/product-flow.mjs';\n"
@@ -967,10 +1023,52 @@ class CompletedAdmission(CompletedAccounting):
                 finally:
                     auth.write_bytes(original_authority)
                     auth.chmod(0o600)
+        if canonical:
+            command = ['node', str(runtime / 'scripts/verify/shipping-session.mjs'), '--root', str(product),
+                       '--', 'bash', '-c', 'set -e; npm run verify; bash .evidence/hook']
         result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=40)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('full', (product / '.evidence/order').read_text())
         self.assertNotIn('unexpected-review', result.stderr)
+        if canonical:
+            self.assertEqual(original_selector, auth.read_bytes())
+            before = (budgets / f'issue-{issue}.jsonl').read_bytes()
+            direct = ['/bin/bash', '-p', str(runtime / 'scripts/verify/review-admission.sh'), '--revalidate-session']
+            direct_env = dict(env, FITSY_SHIPPING_ROOT=str(product),
+                FITSY_SHIPPING_SOCKET='fixture-mode-still-requires-real-session-socket', FITSY_SHIPPING_TOKEN='fixture')
+            probe = subprocess.run(direct, env=direct_env, capture_output=True, text=True, timeout=15)
+            self.assertEqual(probe.returncode, 0, probe.stdout + probe.stderr)
+            git('fetch', '-q', str(product), head, cwd=runtime)
+            original_config = config_path.read_bytes()
+            for name in ('candidate selected evidence', 'candidate authority', 'changed ledger', 'stale managed main'):
+                with self.subTest(name=name):
+                    changed_env = dict(direct_env)
+                    try:
+                        if name == 'candidate selected evidence':
+                            changed_env['FITSY_REVIEW_HOME'] = str(product / '.evidence')
+                        elif name == 'candidate authority':
+                            config_path.write_text(json.dumps(dict(config, candidate_uid=os.getuid())))
+                        elif name == 'changed ledger':
+                            (budgets / f'issue-{issue}.jsonl').write_bytes(before + b'changed')
+                        else:
+                            git('update-ref', 'refs/remotes/origin/main', head, cwd=runtime)
+                        refused = subprocess.run(direct, env=changed_env, capture_output=True, text=True, timeout=15)
+                        self.assertNotEqual(refused.returncode, 0, name + refused.stdout + refused.stderr)
+                        self.assertNotIn('unexpected-review', refused.stderr)
+                    finally:
+                        config_path.write_bytes(original_config)
+                        (budgets / f'issue-{issue}.jsonl').write_bytes(before)
+                        git('update-ref', 'refs/remotes/origin/main', base, cwd=runtime)
+            git('commit', '--allow-empty', '-qm', 'fixture source drift')
+            refused = subprocess.run(direct, env=direct_env, capture_output=True, text=True, timeout=15)
+            self.assertNotEqual(refused.returncode, 0, refused.stdout + refused.stderr)
+            git('reset', '--hard', '-q', head)
+            # Session and hook revalidation must consume current protected authority.
+            drift = command[:-1] + ['echo " " >> ' + str(manifest) + '; npm run verify']
+            refused = subprocess.run(drift, env=env, capture_output=True, text=True, timeout=40)
+            self.assertNotEqual(refused.returncode, 0, refused.stdout + refused.stderr)
+            self.assertEqual(before, (budgets / f'issue-{issue}.jsonl').read_bytes())
+            return
         if bootstrap:
             before = (budgets / f'issue-{issue}.jsonl').read_bytes()
             git('config', 'user.email', 'fixture@example.test', cwd=runtime)

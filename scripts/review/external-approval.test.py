@@ -346,8 +346,7 @@ class CanonicalReviewTests(unittest.TestCase):
             self.validate()
         self.sidecar_path.parent.chmod(0o700)
 
-    def test_actual_review_inputs_checks_manifest_and_original_ledger(self):
-        self.add_p2()
+    def install_review_inputs(self):
         review_home = self.operator / 'review-home'
         budget_home = self.operator / 'budget-home'
         (review_home / 'completed').mkdir(parents=True)
@@ -363,6 +362,11 @@ class CanonicalReviewTests(unittest.TestCase):
         ledger.write_bytes(self.ledger)
         config = {'operator_uid': os.getuid(), 'reviews': {'443': self.policy},
                   'review_home': str(review_home), 'budget_home': str(budget_home)}
+        return config, manifest, ledger
+
+    def test_actual_review_inputs_checks_manifest_and_original_ledger(self):
+        self.add_p2()
+        config, manifest, ledger = self.install_review_inputs()
         self.assertEqual(external.review_inputs(config, 443, self.source, self.body), self.approval)
         ledger.write_bytes(self.ledger + b'changed history')
         with self.assertRaisesRegex(ValueError, 'history changed'):
@@ -371,6 +375,28 @@ class CanonicalReviewTests(unittest.TestCase):
         manifest.write_bytes(manifest.read_bytes() + b'\n')
         with self.assertRaisesRegex(ValueError, 'manifest'):
             external.review_inputs(config, 443, self.source, self.body)
+
+    def test_read_only_local_operation_reuses_p2_authority_without_pr_or_write(self):
+        self.add_p2()
+        config, _, _ = self.install_review_inputs()
+        observed = []
+        def transport(config, endpoint, payload=None, release=False):
+            self.assertIsNone(payload)
+            self.assertEqual(endpoint, 'repos/dgmolla/fitsy/issues/443')
+            observed.append(endpoint)
+            return {'body': self.body}
+        with patch.object(external, 'github', side_effect=transport):
+            result = external.validate_local_review(config, 443, self.source, self.base, ['correctness'])
+            self.assertEqual(result['canonical_review'], 'pass')
+            self.assertEqual(result['domains'], self.policy['domains'])
+            for source, base, domains in (('c' * 40, self.base, ['correctness']),
+                    (self.source, 'c' * 40, ['correctness']), (self.source, self.base, ['other']),
+                    (self.source, self.base, []), (self.source, self.base, ['correctness', 'correctness'])):
+                with self.subTest(source=source, base=base, domains=domains), self.assertRaises(ValueError):
+                    external.validate_local_review(config, 443, source, base, domains)
+            self.assertIsNone(external.validate_local_review(config, 346, self.source, self.base, ['correctness']))
+        self.assertTrue(observed)
+        self.assertIn(b'"verdict": "fail"', self.artifacts['verdict'])
 
 
 class CompositionTests(unittest.TestCase):

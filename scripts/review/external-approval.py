@@ -349,6 +349,8 @@ def review_inputs(config, issue, source, body):
     raw = protected_bytes(Path(config['review_home']) / 'completed' / f'issue-{issue}.json', uid)
     require(digest(raw) == policy['manifest_sha256'], 'unapproved execution manifest')
     approval = json.loads(raw)
+    if 'canonical_review' in policy:
+        require(approval['source_sha'] == source, 'canonical review source mismatch')
     if boundary is not None:
         require((approval['composition']['comparison_base']
                  if source != approval['source_sha'] and approval.get('composition') else approval['base_sha'])
@@ -395,6 +397,21 @@ def git_tree(config, source):
     require(not result['truncated'], 'complete source tree required')
     return {row['path']: (row['mode'], row['type'], row['sha'])
             for row in result['tree'] if row['type'] != 'tree'}
+
+
+def validate_local_review(config, issue, source, base, domains):
+    """Read-only local admission through the same protected publication authority."""
+    policy = config.get('reviews', {}).get(str(issue))
+    if policy is None or 'canonical_review' not in policy:
+        return None
+    require(bool(domains) and len(set(domains)) == len(domains)
+            and set(domains) <= set(policy['domains']), 'required local domains mismatch')
+    body = github(config, f'repos/{REPO}/issues/{issue}')['body']
+    approval = review_inputs(config, issue, source, body)
+    require(approval['source_sha'] == source and approval['base_sha'] == base,
+            'local canonical source/base mismatch')
+    return {'canonical_review': 'pass', 'issue': issue, 'source_sha': source, 'base_sha': base,
+            'domains': approval['domains'], 'acceptance_sha256': approval['acceptance_sha256']}
 
 
 def validate_composition(reviewed, candidate, controls, allowed, *, reviewed_base=None, main=None):
@@ -760,6 +777,11 @@ def main():
     review = commands.add_parser('publish-review')
     review.add_argument('--issue', type=int, required=True)
     review.add_argument('--pr', type=int, required=True)
+    local = commands.add_parser('validate-review')
+    local.add_argument('--issue', type=int, required=True)
+    local.add_argument('--source', required=True)
+    local.add_argument('--base', required=True)
+    local.add_argument('--domain', action='append', default=[])
     accepted = commands.add_parser('publish-acceptance')
     accepted.add_argument('--issue', type=int, required=True)
     accepted.add_argument('--pr', type=int, required=True)
@@ -772,7 +794,12 @@ def main():
     args = parser.parse_args()
     try:
         config = authority()
-        if args.action == 'publish-review':
+        if args.action == 'validate-review':
+            result = validate_local_review(config, args.issue, args.source, args.base, args.domain)
+            if result is None:
+                print(json.dumps({'canonical_review': 'not_configured'}))
+                return 2
+        elif args.action == 'publish-review':
             result = publish(config, args.issue, args.pr)
         elif args.action == 'publish-acceptance':
             result = publish_acceptance(config, args.issue, args.pr, args.verify_run)

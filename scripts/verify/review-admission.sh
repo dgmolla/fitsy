@@ -62,6 +62,42 @@ TRUSTED_REPO="$ADMIN_HOME/.fitsy-review/repo"
 BASE_SHA="$(git -C "$TRUSTED_REPO" rev-parse refs/remotes/origin/main)" || fail
 ISSUE="$(python3 -I -c 'import json; print(json.load(open(".evidence/delivery/binding.json"))["issue"])')" || fail
 COMPLETED_AUTH="$ADMIN_HOME/.fitsy-review/completed/issue-$ISSUE.json"
+# Canonical manifests are operator policy, not legacy completed authorizations.
+# Only the fixed installed adapter may select this route; a refused configured
+# authority never falls back to a different review or candidate-owned receipt.
+CANONICAL_ADAPTER=/opt/fitsy-approval/external-approval.py
+if [ -f "$CANONICAL_ADAPTER" ]; then
+  [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] || fail
+  if [ "$REPO_ROOT" != "$CONTROL_ROOT" ]; then
+    [ "$(git -C "$CONTROL_ROOT" rev-parse HEAD)" = "$BASE_SHA" ] && \
+      [ -z "$(git -C "$CONTROL_ROOT" status --porcelain --untracked-files=all)" ] || fail
+  fi
+  DOMAINS="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA" | python3 -I "$CONTROL_ROOT/scripts/review/review-domains.py")" || fail
+  CANONICAL_ARGS=(validate-review --issue "$ISSUE" --source "$HEAD_SHA" --base "$BASE_SHA")
+  for DOMAIN in $DOMAINS; do CANONICAL_ARGS+=(--domain "$DOMAIN"); done
+  CANONICAL_CODE=0
+  CANONICAL_RESULT="$(/usr/bin/python3 -I -B "$CANONICAL_ADAPTER" "${CANONICAL_ARGS[@]}")" || CANONICAL_CODE=$?
+  if [ "$CANONICAL_CODE" = 0 ]; then
+    if [ "$SESSION_REVALIDATION" = 0 ]; then
+      export FITSY_DIFF_BASE="$BASE_SHA" FITSY_DIFF_HEAD="$HEAD_SHA"
+      /usr/bin/env -u NODE_OPTIONS -u NODE_PATH node "$CONTROL_ROOT/scripts/verify/run.mjs" \
+        --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+      # Recheck protected authority after cheap checks, without provider execution.
+      CANONICAL_RESULT="$(/usr/bin/python3 -I -B "$CANONICAL_ADAPTER" "${CANONICAL_ARGS[@]}")" || fail
+    fi
+    printf '%s' "$CANONICAL_RESULT" | python3 -I -c '
+import json,sys
+d=json.load(sys.stdin)
+assert d.get("canonical_review") == "pass" and d.get("source_sha") == sys.argv[1] and d.get("base_sha") == sys.argv[2]
+' "$HEAD_SHA" "$BASE_SHA" || fail
+    [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] && \
+      [ "$(git -C "$TRUSTED_REPO" rev-parse origin/main)" = "$BASE_SHA" ] && \
+      [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
+    echo '{"name":"review-admission","status":"pass","summary":"protected canonical review and required tests admit this exact source","fix":""}'
+    exit 0
+  fi
+  [ "$CANONICAL_CODE" = 2 ] && [ "$CANONICAL_RESULT" = '{"canonical_review": "not_configured"}' ] || fail
+fi
 # The permanent human exception permits a separately installed, independently
 # reviewed operator to bootstrap this recovery outcome only. It is never main
 # identity, never a nutrition admission, and never permission to execute review.
