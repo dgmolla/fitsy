@@ -1142,76 +1142,23 @@ class TokenTransportTests(unittest.TestCase):
 class WorkflowGateTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp = tempfile.TemporaryDirectory(dir=SCRIPT.parents[2] / '.evidence')
-        cls.root = Path(cls.temp.name)
-        workflow = cls.root / 'deploy.yml'
-        workflow.write_bytes((SCRIPT.parents[2] / '.github/workflows/deploy.yml').read_bytes())
-        parsed = subprocess.run(['node', '-e',
-                                "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))",
-                                str(workflow)], cwd=SCRIPT.parents[2], text=True, capture_output=True, check=True)
-        cls.workflow = json.loads(parsed.stdout)
-        maintenance = SCRIPT.parents[2] / '.github/workflows/dev-maintenance.yml'
-        parsed = subprocess.run(['node', '-e',
-                                "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))",
-                                str(maintenance)], cwd=SCRIPT.parents[2], text=True, capture_output=True, check=True)
-        cls.maintenance = json.loads(parsed.stdout)
-        cls.gate = cls.workflow['jobs']['changes']['steps'][0]['run']
-        # Only the remote GitHub API boundary is replaced with synthetic files.
-        gh = cls.root / 'gh'
-        gh.write_text('#!/usr/bin/env python3\nimport os,sys\nfrom pathlib import Path\np="latest-input" if "/workflows/" in sys.argv[-1] else "verify-input" if sys.argv[-1].endswith("/20") else "release-input"\nprint((Path(os.environ["RUNNER_TEMP"])/(p+".json")).read_text())\n')
-        gh.chmod(0o700)
+        def read(name):
+            result = subprocess.run(["node", "-e", "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))", str(SCRIPT.parents[2] / ".github/workflows" / name)], cwd=SCRIPT.parents[2], text=True, capture_output=True, check=True)
+            return json.loads(result.stdout)
+        cls.workflow = read("deploy.yml")
+        cls.maintenance = read("dev-maintenance.yml")
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.temp.cleanup()
-
-    def setUp(self):
-        self.actor = {'id': 888, 'login': 'fixture[bot]', 'type': 'Bot'}
-        self.run = {'workflow_id': 352171272, 'event': 'workflow_dispatch', 'head_branch': 'main',
-                    'head_sha': 'a' * 40, 'path': '.github/workflows/deploy.yml',
-                    'actor': dict(self.actor), 'triggering_actor': dict(self.actor)}
-        self.verify = {'workflow_id': 352020416, 'path': '.github/workflows/verify.yml',
-                       'event': 'push', 'head_branch': 'main', 'repository': {'full_name': external.REPO},
-                       'head_sha': 'a' * 40, 'status': 'completed', 'conclusion': 'success'}
-        self.latest = {'workflow_runs': [{'id': 20}]}
-
-    def drive(self, **updates):
-        import os
-        for name, value in [('release-input', self.run), ('verify-input', self.verify), ('latest-input', self.latest)]:
-            (self.root / (name + '.json')).write_text(json.dumps(value))
-        env = {'PATH': str(self.root) + ':' + os.environ['PATH'], 'RUNNER_TEMP': str(self.root),
-               'GITHUB_RUN_ID': '30', 'GITHUB_REPOSITORY': external.REPO, 'RELEASE_SHA': 'a' * 40,
-               'ACCEPTANCE_SHA': 'b' * 64, 'VERIFY_RUN': '20',
-               'DISPATCH_ACTOR_ID': '888', 'DISPATCH_ACTOR_LOGIN': 'fixture[bot]', **updates}
-        return subprocess.run(['/bin/bash', '-e', '-c', self.gate], env=env, text=True, capture_output=True)
-
-    def test_valid_fixture_passes_actual_workflow_gate(self):
-        result = self.drive(); self.assertEqual(result.returncode, 0, result.stderr)
-
-    def test_human_run_and_human_rerun_fail_actual_gate(self):
-        for field in ('actor', 'triggering_actor'):
-            original = self.run[field]; self.run[field] = {'id': 18452532, 'login': 'dgmolla', 'type': 'User'}
-            self.assertNotEqual(self.drive().returncode, 0)
-            self.run[field] = original
-
-    def test_wrong_source_failed_verify_and_superseded_verify_fail_actual_gate(self):
-        self.run['head_sha'] = 'c' * 40; self.assertNotEqual(self.drive().returncode, 0)
-        self.run['head_sha'] = 'a' * 40; self.verify['conclusion'] = 'failure'; self.assertNotEqual(self.drive().returncode, 0)
-        self.verify['conclusion'] = 'success'; self.latest['workflow_runs'] = []; self.assertNotEqual(self.drive().returncode, 0)
-
-    def test_uninstalled_actor_and_injected_inputs_fail_before_api(self):
-        self.assertNotEqual(self.drive(DISPATCH_ACTOR_ID='INSTALLATION_PROBE_REQUIRED').returncode, 0)
-        self.assertNotEqual(self.drive(VERIFY_RUN='20; echo forged').returncode, 0)
-
-    def test_production_jobs_depend_on_gate_and_retain_protection(self):
-        # Walk the job DAG, because a gate without consumers proves no release boundary.
-        jobs = self.workflow['jobs']
-        for name in ('migrate', 'smoke', 'ota'):
+    def test_production_jobs_consume_admitted_source_and_main_only_routine_environment(self):
+        jobs = self.workflow["jobs"]
+        self.assertEqual(self.workflow["on"]["workflow_run"]["branches"], ["main"])
+        self.assertNotIn("workflow_dispatch", self.workflow["on"])
+        self.assertEqual(jobs["changes"]["steps"][0]["with"]["ref"], "${{ github.workflow_sha }}")
+        for name in ("migrate", "smoke", "ota"):
             job = jobs[name]
-            self.assertEqual(job['environment'], 'production-release')
-            needs = job['needs'] if isinstance(job['needs'], list) else [job['needs']]
-            self.assertIn('changes', needs)
-            self.assertTrue(any(step.get('with', {}).get('ref') == '${{ inputs.release_sha }}' for step in job['steps']))
+            self.assertEqual(job["environment"], "routine-production")
+            needs = job["needs"] if isinstance(job["needs"], list) else [job["needs"]]
+            self.assertIn("changes", needs)
+            self.assertTrue(any(step.get("with", {}).get("ref") == "${{ needs.changes.outputs.release_sha }}" for step in job["steps"]))
 
     def test_monthly_production_credential_requires_protected_main_while_nightly_stays_dev_only(self):
         jobs = self.maintenance['jobs']

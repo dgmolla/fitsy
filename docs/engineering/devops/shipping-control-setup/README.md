@@ -2,7 +2,9 @@
 
 **TL;DR:** This packet prepares an isolated approval issuer and protected release using existing review, GitHub and release commands.
 
-The single-human release proposal is [the App dispatch packet](single-human-dispatch.md).
+The current automatic routine release setup is [routine production](routine-production.md).
+It supersedes the routine App dispatch and blanket environment-review portions of the earlier [App dispatch packet](single-human-dispatch.md).
+The earlier packet retains historical custody and independent review context; do not reinstall its routine trigger patch over the reviewed automatic workflow.
 The human withdrew account switching; retain the created account and earlier custody
 evidence without requesting login or deletion. Candidate custody continuation is the
 uninstalled [profile-bound resource/control contract](../resource-control-continuation.md).
@@ -19,9 +21,9 @@ flowchart LR
     O --> C[App-bound review and acceptance checks]
     C --> M[Protected PR merge]
     M --> V[Exact main Verify]
-    V --> A[Isolated App dispatch of exact verified source]
-    A --> E[Human protected environment reviewer]
-    E --> D[Existing migration, Vercel promotion and guarded iOS OTA]
+    V --> A[Exact-source workflow_run admission]
+    A --> E[Main-only routine environment]
+    E --> D[Existing migration, staged Vercel promotion and applicable guarded iOS OTA]
     D --> P[Main Deploy and observed product acceptance]
 ```
 
@@ -114,8 +116,6 @@ After the operator has validated the actual receipt identities, use these one-sh
 ```sh
 /opt/fitsy-approval/external-approval.py publish-review --issue 463 --pr PR_NUMBER
 /opt/fitsy-approval/external-approval.py publish-acceptance --issue 463 --pr PR_NUMBER --verify-run PR_VERIFY_RUN
-/opt/fitsy-approval/external-approval.py dispatch-release --verify-run MAIN_VERIFY_RUN
-/opt/fitsy-approval/external-approval.py release-ready --run ACTUAL_APP_DEPLOY_RUN --verify-run MAIN_VERIFY_RUN
 ```
 
 Replace symbolic run/PR arguments with actual IDs; null configuration inputs deliberately fail closed.
