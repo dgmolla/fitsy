@@ -9,7 +9,10 @@ import tempfile
 import subprocess
 import unittest
 import sys
+import time
+from datetime import datetime
 from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location('budget', Path(__file__).with_name('review-budget.py'))
@@ -775,6 +778,33 @@ class CompletedAdmission(CompletedAccounting):
         self.assertNotEqual(probed.returncode, 0)
         self.assertIn('state=error', (self.root / 'statuses').read_text())
 
+    def append_runtime_correction(self):
+        start = dict(event='start', attempt_id='failed-clock', epoch=1,
+                     source_sha=self.args.source_sha, round_id='fixture', lens='correctness')
+        finish = dict(event='finish', attempt_id=start['attempt_id'], elapsed_seconds=.001,
+                      source_sha=start['source_sha'], round_id='fixture', lens='correctness',
+                      outcome='fail', verdict='incomplete', failure_kind='process_error')
+        correction = dict(event='runtime-reconciliation', attempt_id=start['attempt_id'], issue=443,
+                          source_sha=start['source_sha'], round_id='fixture', lens='correctness',
+                          original_elapsed_seconds=.001, corrected_elapsed_seconds=.251,
+                          additional_seconds=.25, finish_sha256=sha(json.dumps(finish, sort_keys=True).encode()),
+                          execution_sha256='1' * 64, authorization_sha256='2' * 64)
+        with self.ledger.open('a') as handle:
+            for row in (start, finish, correction):
+                handle.write(json.dumps(row) + '\n')
+        self.original = self.ledger.read_text()
+        self.approval.update(original_ledger_sha256=sha(self.original.encode()),
+                             prior_completed_seconds=self.approval['prior_completed_seconds'] + .251)
+        self.save()
+
+    def test_corrected_history_reaches_local_pr_and_identity_callers(self):
+        self.append_runtime_correction()
+        self.test_supported_runner_consumes_raw_result_without_provider_or_cache()
+
+    def test_corrected_history_reaches_shipping_session_and_hook(self):
+        self.append_runtime_correction()
+        self.external_session()
+
     def test_external_session_owns_native_gate_acceptance_hook_and_authority(self):
         self.external_session()
 
@@ -1139,6 +1169,163 @@ class CompletedAdmission(CompletedAccounting):
 
     def test_existing_named_file_cannot_become_unreviewed_directory(self):
         self.assert_allowed_file_cannot_become_unreviewed_directory('scripts/verify/run.mjs')
+
+
+class RuntimeAccounting(unittest.TestCase):
+    # Reuse isolated administrator setup without inheriting unrelated test cases.
+    save = CompletedAccounting.save
+    tearDown = CompletedAccounting.tearDown
+
+    def setUp(self):
+        CompletedAccounting.setUp(self)
+        self.repo = self.root / 'control'
+        (self.repo / 'scripts/review').mkdir(parents=True)
+        shutil.copyfile(budget.__file__, self.repo / 'scripts/review/review-budget.py')
+        for args in [('init', '-q'), ('config', 'user.email', 'fixture@example.test'),
+                     ('config', 'user.name', 'Fixture'), ('add', '.'), ('commit', '-qm', 'fixture controls')]:
+            subprocess.check_call(['git', '-C', str(self.repo), *args], env=fixture_env())
+        self.args.candidate_root = self.repo
+        self.args.control_sha = subprocess.check_output(
+            ['git', '-C', str(self.repo), 'rev-parse', 'HEAD'], env=fixture_env()).decode().strip()
+        self.args.round_id = 'fixture'
+        self.args.lens = 'correctness'
+        self.args.attempt_id = 'failed-clock'
+        start = dict(event='start', attempt_id=self.args.attempt_id,
+                     epoch=datetime.fromisoformat('2026-10-20T00:00:00+00:00').timestamp(),
+                     source_sha=self.args.source_sha, round_id=self.args.round_id, lens=self.args.lens)
+        finish = dict(event='finish', attempt_id=self.args.attempt_id, elapsed_seconds=.001,
+                      source_sha=self.args.source_sha, round_id=self.args.round_id, lens=self.args.lens,
+                      outcome='fail', verdict='incomplete', failure_kind='timeout',
+                      at='2026-10-20T00:00:02+00:00')
+        with self.ledger.open('a') as handle:
+            for row in (start, finish):
+                handle.write(json.dumps(row) + '\n')
+        self.original = self.ledger.read_bytes()
+        stdout, stderr = b'partial output\n', b'timed out\n'
+        execution = dict(issue=443, source_sha=self.args.source_sha, elapsed_seconds=.501,
+                         kind='timeout', returncode=124, complete_streams=True,
+                         started_at='2026-10-20T00:00:01+00:00',
+                         finished_at='2026-10-20T00:00:01.501000+00:00',
+                         raw_stdout_sha256=sha(stdout), raw_stderr_sha256=sha(stderr),
+                         stdout_bytes=len(stdout), stderr_bytes=len(stderr))
+        artifacts = {}
+        for key, raw in dict(stdout=stdout, stderr=stderr, execution=json.dumps(execution).encode()).items():
+            path = self.root / ('runtime-' + key)
+            path.write_bytes(raw)
+            artifacts[key] = dict(path=str(path), sha256=sha(raw))
+        self.args.authorization_file = budget.ADMIN_REVIEW / 'operators/issue-443-runtime.json'
+        self.approval = dict(issue=443, candidate=self.args.candidate, source_sha=self.args.source_sha,
+                             round_id=self.args.round_id, lens=self.args.lens, attempt_id=self.args.attempt_id,
+                             ledger_sha256=sha(self.original), finish_sha256=sha(json.dumps(finish, sort_keys=True).encode()),
+                             artifacts=artifacts, control_sha=self.args.control_sha,
+                             operator_sha256=sha(Path(budget.__file__).read_bytes()))
+        self.save()
+
+    def call(self):
+        with self.ledger.open('r+') as handle:
+            events = list(budget.indexed(budget.read_events(handle)).values())
+            return budget.reconcile_runtime(handle, self.args, events, budget.usage(events)[2])
+
+    def test_runtime_charge_preserves_original_attempt_and_capacity(self):
+        before = budget.usage(budget.read_events(io.StringIO(self.original.decode())))[2]
+        first = self.call()
+        self.assertFalse(first['idempotent'])
+        self.assertAlmostEqual(first['additional_seconds'], .5)
+        self.assertAlmostEqual(first['completed_seconds'], before['completed_seconds'] + .5)
+        for field in ('cap_seconds', 'bounded_executions_used', 'execution_outcomes', 'review_verdicts'):
+            self.assertEqual(first[field], before[field])
+        saved = self.ledger.read_bytes()
+        self.assertTrue(saved.startswith(self.original))
+        self.assertTrue(self.call()['idempotent'])
+        self.assertEqual(self.ledger.read_bytes(), saved)
+        events = budget.read_events(io.StringIO(saved.decode()))
+        correction = events[-1]
+        self.assertEqual(correction['event'], 'runtime-reconciliation')
+        self.assertEqual(budget.usage(list(budget.indexed(events + [correction]).values()))[2],
+                         budget.usage(events)[2])
+
+    def test_runtime_rejects_changed_identity_or_evidence_without_writes(self):
+        for field, wrong in dict(issue=444, source_sha='0' * 40, finish_sha256='0' * 64,
+                                 ledger_sha256='0' * 64, operator_sha256='0' * 64).items():
+            with self.subTest(field=field):
+                original = self.approval[field]
+                self.approval[field] = wrong
+                self.save()
+                with self.assertRaises(ValueError):
+                    self.call()
+                self.assertEqual(self.ledger.read_bytes(), self.original)
+                self.approval[field] = original
+                self.save()
+        self.call()
+        saved = self.ledger.read_bytes()
+        for key, artifact in self.approval['artifacts'].items():
+            with self.subTest(artifact=key):
+                path = Path(artifact['path'])
+                raw = path.read_bytes()
+                path.write_bytes(raw + b'changed')
+                with self.assertRaisesRegex(ValueError, 'runtime artifact changed'):
+                    self.call()
+                self.assertEqual(self.ledger.read_bytes(), saved)
+                path.write_bytes(raw)
+        original_file = budget.__file__
+        loose = self.root / 'loose-helper.py'
+        shutil.copyfile(original_file, loose)
+        try:
+            budget.__file__ = str(loose)
+            with self.assertRaisesRegex(ValueError, 'canonical operator installation'):
+                self.call()
+            self.assertEqual(self.ledger.read_bytes(), saved)
+        finally:
+            budget.__file__ = original_file
+
+    def test_executor_source_timing_and_complete_streams_are_required(self):
+        artifact = self.approval['artifacts']['execution']
+        path = Path(artifact['path'])
+        original = path.read_bytes()
+        for changed in ({'source_sha': '0' * 40}, {'issue': 444}, {'returncode': 0},
+                        {'complete_streams': False}, {'stdout_bytes': 0},
+                        {'raw_stderr_sha256': '0' * 64}, {'elapsed_seconds': .001},
+                        {'finished_at': '2026-10-20T00:00:03+00:00'}):
+            with self.subTest(changed=changed):
+                # Keep the artifact pin valid to reach the production semantic checks.
+                path.write_text(json.dumps(dict(json.loads(original), **changed)))
+                artifact['sha256'] = sha(path.read_bytes())
+                self.save()
+                with self.assertRaises(ValueError):
+                    self.call()
+                self.assertEqual(self.ledger.read_bytes(), self.original)
+        path.write_bytes(original)
+        artifact['sha256'] = sha(original)
+        self.save()
+        self.assertTrue(self.call()['allowed'])
+
+    def test_separate_process_clock_and_legacy_fallback(self):
+        script = Path(__file__).with_name('review-budget.py')
+        ledger = self.root / 'clock.jsonl'
+        identity = ['--ledger', str(ledger), '--issue', '999999', '--round-id', 'fixture',
+                    '--lens', 'clock', '--source-sha', '0' * 40, '--attempt-id', 'fixture']
+        def run(action, *args, startup=False):
+            prefix = [sys.executable, '-I', '-B']
+            if startup:
+                prefix += ['-c', 'import runpy,sys,time; time.sleep(.1); sys.argv=sys.argv[1:]; '
+                           'runpy.run_path(sys.argv[0],run_name="__main__")']
+            result = subprocess.run([*prefix, str(script), action, *identity, *args],
+                                    env=fixture_env(), capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            return json.loads(result.stdout)
+        run('begin', '--timeout-seconds', '2')
+        time.sleep(.25)
+        finish = run('finish', '--outcome', 'fail', '--verdict', 'incomplete',
+                     '--failure-kind', 'process_error', startup=True)
+        self.assertGreaterEqual(finish['elapsed_seconds'], .25)
+        events = budget.read_events(io.StringIO(ledger.read_text()))
+        self.assertEqual(events[-1]['verdict'], 'incomplete')
+        clock = budget.shared_clock()
+        clock['boot'] = 'different-boot'
+        with self.assertRaisesRegex(ValueError, 'clock domain changed'):
+            budget.elapsed(dict(shared_clock=clock, epoch=time.time()))
+        with patch.object(budget.time, 'time', return_value=12):
+            self.assertEqual(budget.elapsed(dict(epoch=10, monotonic=1)), 2)
 
 
 class PermanentAllocation(unittest.TestCase):

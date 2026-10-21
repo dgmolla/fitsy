@@ -11,6 +11,7 @@ import os
 import re
 import pwd
 import subprocess
+import sys
 from pathlib import Path
 import time
 
@@ -57,6 +58,19 @@ def read_events(handle):
                         or not re.fullmatch(r"[0-9a-f]{40}", row.get("source_sha", ""))
                         or not re.fullmatch(r"[0-9a-f]{64}", row.get("authorization_sha256", ""))):
                     raise ValueError("invalid bounded permanent review allocation")
+                events.append(row)
+                continue
+            if isinstance(row, dict) and row.get("event") == "runtime-reconciliation":
+                if (not isinstance(row.get("attempt_id"), str) or not row["attempt_id"]
+                        or type(row.get("issue")) is not int or row["issue"] <= 0
+                        or not number(row.get("original_elapsed_seconds"))
+                        or not number(row.get("corrected_elapsed_seconds"))
+                        or not number(row.get("additional_seconds")) or row["additional_seconds"] <= 0
+                        or not math.isclose(row["corrected_elapsed_seconds"] - row["original_elapsed_seconds"],
+                                            row["additional_seconds"], abs_tol=1e-9)
+                        or any(not re.fullmatch(r"[0-9a-f]{64}", row.get(key, ""))
+                               for key in ("finish_sha256", "execution_sha256", "authorization_sha256"))):
+                    raise ValueError("invalid runtime reconciliation")
                 events.append(row)
                 continue
             if isinstance(row, dict) and row.get("event") == "count-reconciliation":
@@ -158,7 +172,7 @@ def import_history(handle, ledger, paths, optional_paths, allow_new=True):
             if key in events and events[key] != event:
                 raise ValueError(f"conflicting retained review history in {source}")
             if key not in events:
-                if event["event"] in ("authorized-grant", "liberal-grant", "recovery_extension", "execution-limit", "count-reconciliation", "review-allocation"):
+                if event["event"] in ("authorized-grant", "liberal-grant", "recovery_extension", "execution-limit", "count-reconciliation", "review-allocation", "runtime-reconciliation"):
                     raise ValueError("imported history cannot grant new review authority; verify authorization through the external operator manifest")
                 new.append(event)
                 events[key] = event
@@ -192,10 +206,37 @@ def bind_candidate(ledger, candidate, issue):
             append(handle, {"candidate": candidate, "issue": issue, "at": utc()})
 
 
+def shared_clock():
+    """Use the kernel clock directly: Python 3.9 macOS monotonic is process-relative."""
+    if not hasattr(time, "clock_gettime") or not hasattr(time, "CLOCK_MONOTONIC"):
+        raise ValueError("shared monotonic clock is unavailable")
+    if sys.platform == "darwin":
+        raw = subprocess.check_output(["/usr/sbin/sysctl", "-n", "kern.boottime"],
+                                      text=True, timeout=2)
+        match = re.search(r"sec\s*=\s*(\d+),\s*usec\s*=\s*(\d+)", raw)
+        if not match:
+            raise ValueError("kernel boot identity is unavailable")
+        boot = "darwin:" + ":".join(match.groups())
+    elif sys.platform.startswith("linux"):
+        boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        if not re.fullmatch(r"[0-9a-f-]{36}", boot):
+            raise ValueError("kernel boot identity is unavailable")
+    else:
+        raise ValueError("shared clock identity is unsupported")
+    return {"kind": "clock_gettime:CLOCK_MONOTONIC", "boot": boot,
+            "value": time.clock_gettime(time.CLOCK_MONOTONIC)}
+
+
 def elapsed(start):
-    # Monotonic time measures new executions; legacy records retain epoch accounting.
-    if number(start.get("monotonic")) and time.monotonic() >= start["monotonic"]:
-        return time.monotonic() - start["monotonic"]
+    previous = start.get("shared_clock")
+    if previous is not None:
+        current = shared_clock()
+        if (not isinstance(previous, dict) or previous.get("kind") != current["kind"]
+                or previous.get("boot") != current["boot"]
+                or not number(previous.get("value")) or current["value"] < previous["value"]):
+            raise ValueError("review clock domain changed; original execution requires reconciliation")
+        return current["value"] - previous["value"]
+    # Legacy monotonic origins were not recorded; compare only their shared epoch.
     return max(0, time.time() - start["epoch"])
 
 
@@ -254,6 +295,19 @@ def usage(events):
         if allocations:
             cap = max(cap, allocations[-1]["cumulative_stop_seconds"])
         cap = min(cap, limit["completed_seconds_stop_at"])
+    # Correct only the charge view; original start/finish bytes and attempt count remain intact.
+    for correction in (e for e in events if e["event"] == "runtime-reconciliation"):
+        target = correction["attempt_id"]
+        original = finishes.get(target)
+        if (not original or correction["issue"] != (limit or {}).get("issue")
+                or original.get("source_sha") != correction.get("source_sha")
+                or original.get("round_id") != correction.get("round_id")
+                or original.get("lens") != correction.get("lens")
+                or original["elapsed_seconds"] != correction["original_elapsed_seconds"]
+                or hashlib.sha256(json.dumps(original, sort_keys=True).encode()).hexdigest() != correction["finish_sha256"]):
+            raise ValueError("runtime reconciliation differs from original finished execution")
+        finishes[target] = {**original, "elapsed_seconds": correction["corrected_elapsed_seconds"]}
+        completed += correction["additional_seconds"]
     # An interrupted new attempt retains its full reservation until reconciled.
     # An unbounded legacy attempt has unknown completion and fails closed at the cap.
     reserved = sum(e.get("reserved_seconds", cap) for e in active.values())
@@ -756,9 +810,86 @@ def reconcile_count(handle, args, events, total):
             **usage(events + [event])[2]}
 
 
+def reconcile_runtime(handle, args, events, total):
+    """Append one positive missing-runtime charge to the real failed attempt, never another review."""
+    operator_authority(args, "runtime")
+    raw = args.authorization_file.read_bytes()
+    approval = json.loads(raw)
+    fields = {"issue", "candidate", "source_sha", "round_id", "lens", "attempt_id",
+              "ledger_sha256", "finish_sha256", "artifacts", "control_sha", "operator_sha256"}
+    if (set(approval) != fields or not args.candidate
+            or any(approval[key] != getattr(args, key) for key in
+                   ("issue", "candidate", "source_sha", "round_id", "lens", "attempt_id"))):
+        raise ValueError("runtime reconciliation source/attempt authority mismatch")
+    digest = hashlib.sha256(raw).hexdigest()
+    previous = next((e for e in events if e["event"] == "runtime-reconciliation"
+                     and e["attempt_id"] == args.attempt_id), None)
+    finish = next((e for e in events if e["event"] == "finish" and e["attempt_id"] == args.attempt_id), None)
+    start = next((e for e in events if e["event"] == "start" and e["attempt_id"] == args.attempt_id), None)
+    if (not start or not finish or finish.get("outcome") not in ("fail", "interrupted")
+            or finish.get("verdict") != "incomplete"
+            or any(finish.get(key) != approval[key] for key in ("source_sha", "round_id", "lens"))
+            or hashlib.sha256(json.dumps(finish, sort_keys=True).encode()).hexdigest() != approval["finish_sha256"]):
+        raise ValueError("runtime correction requires the exact retained incomplete finish")
+    handle.seek(0)
+    if not previous and hashlib.sha256(handle.read().encode()).hexdigest() != approval["ledger_sha256"]:
+        raise ValueError("runtime reconciliation ledger changed")
+    artifacts = approval["artifacts"]
+    if not isinstance(artifacts, dict) or set(artifacts) != {"execution", "stdout", "stderr"}:
+        raise ValueError("runtime correction requires original executor streams and closeout")
+    execution_chunks = []
+    artifact_sizes = {}
+    for key, artifact in artifacts.items():
+        if not isinstance(artifact, dict) or set(artifact) != {"path", "sha256"}:
+            raise ValueError("invalid runtime artifact reference")
+        h = hashlib.sha256()
+        size = 0
+        with open(artifact["path"], "rb") as stream:
+            for block in iter(lambda: stream.read(1048576), b""):
+                h.update(block)
+                size += len(block)
+                if key == "execution":
+                    execution_chunks.append(block)
+        if h.hexdigest() != artifact["sha256"]:
+            raise ValueError("runtime artifact changed")
+        artifact_sizes[key] = size
+    execution = json.loads(b"".join(execution_chunks))
+    seconds = execution.get("elapsed_seconds")
+    if (not number(seconds) or seconds <= finish["elapsed_seconds"]
+            or execution.get("source_sha") != args.source_sha
+            or execution.get("issue") != args.issue or execution.get("complete_streams") is not True
+            or execution.get("kind") not in ("timeout", "process_error", "interrupted")
+            or execution.get("returncode") == 0
+            or any(execution.get("raw_" + key + "_sha256") != artifacts[key]["sha256"]
+                   or execution.get(key + "_bytes") != artifact_sizes[key]
+                   for key in ("stdout", "stderr"))):
+        raise ValueError("runtime executor identity, incomplete outcome or raw streams mismatch")
+    wall = (datetime.fromisoformat(execution["finished_at"]) -
+            datetime.fromisoformat(execution["started_at"])).total_seconds()
+    if (not math.isclose(wall, seconds, abs_tol=0.05)
+            or datetime.fromisoformat(execution["started_at"]).timestamp() < start["epoch"] - 0.01
+            or datetime.fromisoformat(execution["finished_at"]).timestamp() >
+               datetime.fromisoformat(finish["at"]).timestamp() + 0.01):
+        raise ValueError("runtime executor clock or original attempt interval mismatch")
+    event = {"event": "runtime-reconciliation", "at": utc(), "attempt_id": args.attempt_id,
+             "issue": args.issue, "source_sha": args.source_sha, "round_id": args.round_id,
+             "lens": args.lens, "original_elapsed_seconds": finish["elapsed_seconds"],
+             "corrected_elapsed_seconds": seconds, "additional_seconds": seconds - finish["elapsed_seconds"],
+             "finish_sha256": approval["finish_sha256"], "execution_sha256": artifacts["execution"]["sha256"],
+             "authorization_sha256": digest}
+    if previous:
+        if any(previous.get(key) != value for key, value in event.items() if key != "at"):
+            raise ValueError("runtime already reconciled with different evidence")
+        return {"allowed": True, "idempotent": True, **total}
+    usage(events + [event])
+    append(handle, event)
+    return {"allowed": True, "idempotent": False, "additional_seconds": event["additional_seconds"],
+            **usage(list(indexed(read_events(handle)).values()))[2]}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit", "reconcile-count", "reconcile-allocation", "account-completed", "admit-completed", "validate-completed", "completed-context", "admit-cache"))
+    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit", "reconcile-count", "reconcile-allocation", "reconcile-runtime", "account-completed", "admit-completed", "validate-completed", "completed-context", "admit-cache"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
     parser.add_argument("--optional-import-ledger", action="append", default=[])
@@ -798,7 +929,7 @@ def main():
             return 1
     privileged = {"account-completed": "completed", "admit-completed": "completed",
                   "validate-completed": "completed", "reconcile-allocation": "allocation",
-                  "reconcile-count": "count"}
+                  "reconcile-count": "count", "reconcile-runtime": "runtime"}
     try:
         if args.action in privileged:
             # Check custody before candidate binding, imports or any ledger write.
@@ -825,6 +956,9 @@ def main():
                 return 0
             if args.action == "reconcile-allocation":
                 print(json.dumps(reconcile_allocation(handle, args, events, total)))
+                return 0
+            if args.action == "reconcile-runtime":
+                print(json.dumps(reconcile_runtime(handle, args, events, total)))
                 return 0
             if args.action == "reconcile-count":
                 print(json.dumps(reconcile_count(handle, args, events, total)))
@@ -991,7 +1125,8 @@ def main():
                             result.update(action="park", notification_key=f"review-budget:{total['extension_issue']}:exhausted")
                     else:
                         append(handle, {"event": "start", "at": utc(), "epoch": time.time(),
-                            "monotonic": time.monotonic(), "round_id": args.round_id, "lens": args.lens,
+                            "monotonic": time.monotonic(), "shared_clock": shared_clock(),
+                            "round_id": args.round_id, "lens": args.lens,
                             "source_sha": args.source_sha, "attempt_id": args.attempt_id,
                             "timeout_seconds": grant, "reserved_seconds": grant + CLOSEOUT_SECONDS,
                             "legacy_permits": {key: getattr(args, key) for key in ("exception", "adoption", "closeout") if getattr(args, key)}})
