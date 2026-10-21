@@ -144,6 +144,18 @@ test('CI ownership preserves size N/A, local safety checks and explicit standalo
   expect(fixture.calls()).toEqual(['size-check']);
 });
 
+test('actual domain gate uses owned temporary storage and preserves routing', () => {
+  for (const file of ['scripts/verify/domain-check.sh', 'scripts/verify/domain-allowlist-paths.mjs', 'scripts/route-reviewers.sh']) {
+    write(file, readFileSync(join(root, file), 'utf8'));
+  }
+  const base = commit(); git('update-ref', 'refs/remotes/origin/main', base);
+  write('apps/api/lib/example.ts', 'export const changed = true;\n'); commit();
+  const result = cli('domain-check.sh');
+  expect({ status: result.status, stderr: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(result.stdout).toContain('"status":"pass"');
+  expect(result.stderr).toContain('domains:');
+});
+
 test('the actual workflow baseline stops when its secret check fails', () => {
   const workflow = yaml.load(readFileSync(join(root, '.github/workflows/verify.yml'), 'utf8')) as {
     jobs: { classify: { steps: { name?: string; run?: string }[] } } };

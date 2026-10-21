@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import ssl
 import stat
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -1302,6 +1303,121 @@ class ProfileCustodyTests(unittest.TestCase):
         for issue, source in ((443, 'a'*40), (463, 'c'*40)):
             with self.assertRaisesRegex(ValueError, 'issue/source'):
                 external.review_inputs(self.config, issue, source, 'fixture')
+
+
+    def prepare_candidate_checks(self, exit_code=0, post_profile=False):
+        self.checkout = Path(self.temporary.name) / 'checkout'
+        self.checkout.mkdir()
+        git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+        env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+        def command(*args):
+            return subprocess.check_output([git, '-C', str(self.checkout), *args], env=env).strip().decode()
+        command('init', '-q'); command('config', 'user.name', 'fixture'); command('config', 'user.email', 'fixture@example.test')
+        command('config', 'core.hooksPath', '/dev/null')
+        (self.checkout / '.gitignore').write_text('.evidence/\n')
+        scripts = self.checkout / 'scripts/verify'; scripts.mkdir(parents=True)
+        (scripts / 'run.mjs').write_text("import fs from 'node:fs'; console.log('child stdout'); console.error('child stderr'); "
+            "fs.writeFileSync('.evidence/child.json',JSON.stringify({home:process.env.HOME,token:'GH_TOKEN' in process.env,args:process.argv.slice(2)})); "
+            f"process.exit({exit_code});\n")
+        for check in ('size-check', 'domain-check'): (scripts / (check+'.sh')).write_text('exit 2\n')
+        command('add', '.'); command('commit', '-qm', 'frozen candidate')
+        source = command('rev-parse', 'HEAD'); command('update-ref', 'refs/remotes/origin/main', source)
+        self.boundary.update(source_sha=source, comparison_base=source)
+        self.receipt.update(source_sha=source, comparison_base=source)
+        self.claim['worktree'] = str(self.checkout)
+        evidence = self.checkout / '.evidence/delivery'; evidence.mkdir(parents=True)
+        (evidence / 'binding.json').write_text('{"issue":463}')
+        # Harmless fixture interface, not a kernel isolation or installation proof.
+        launcher = '#!/bin/bash\nset -eu\n[ "$1" = --candidate-command ]\nshift\n'
+        launcher += 'export PATH='+shlex.quote(os.environ['PATH'])+'\n'
+        if post_profile: launcher += 'printf changed >> '+shlex.quote(str(self.paths['profile']))+'\n'
+        launcher += 'exec "$@"\n'
+        self.paths['launcher'].write_text(launcher)
+        self.boundary['launcher_sha256'] = self.receipt['launcher_sha256'] = external.digest(launcher.encode())
+        self.save()
+        return source
+
+    def candidate_command(self, check='cheap', **overrides):
+        from types import SimpleNamespace
+        def observed(args, **kwargs):
+            if args[0] == '/bin/ps': return SimpleNamespace(returncode=0, stdout='fixture-start\n')
+            return REAL_RUN(args, **kwargs)
+        args = dict(issue=463, source=self.boundary['source_sha'], base=self.boundary['comparison_base'],
+                    root=str(self.checkout), check=check)
+        args.update(overrides)
+        with patch.object(external.subprocess, 'run', side_effect=observed), \
+             patch.object(external.os, 'getpgid', return_value=999998):
+            return external.candidate_checks(self.config, **args)
+
+    def test_candidate_checks_fixed_argv_scrub_operator_environment_and_preserve_failure(self):
+        self.prepare_candidate_checks(exit_code=9)
+        with patch.dict(os.environ, {'GH_TOKEN':'synthetic-operator-token', 'HOME':'/operator-fixture'}):
+            self.assertEqual(self.candidate_command(), 9)
+        observed = json.loads((self.checkout / '.evidence/child.json').read_text())
+        self.assertEqual(observed['home'], '/var/empty'); self.assertFalse(observed['token'])
+        self.assertEqual(observed['args'], ['--layer=0-2', '--stage=cheap', '--scope=changed', '--runs=local'])
+
+    def test_candidate_push_gates_preserve_exit_two_and_real_failure(self):
+        source = self.prepare_candidate_checks()
+        self.assertEqual(self.candidate_command('push-gates'), 0)
+        # A separately frozen fixture with failure must propagate its real code.
+        (self.checkout / 'scripts/verify/domain-check.sh').write_text('exit 7\n')
+        git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+        env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
+        for args in (['add','.'], ['commit','-qm','failed gate']):
+            REAL_RUN([git,'-C',str(self.checkout),*args],env=env,check=True)
+        head = subprocess.check_output([git,'-C',str(self.checkout),'rev-parse','HEAD'],env=env).decode().strip()
+        self.boundary['source_sha'] = self.receipt['source_sha'] = head; self.save()
+        self.assertEqual(self.candidate_command('push-gates', source=head, base=source), 7)
+
+    def test_candidate_checks_refuse_wrong_or_missing_root_source_base_issue_and_binding(self):
+        self.prepare_candidate_checks()
+        for change in ({'root':self.temporary.name}, {'source':'c'*40}, {'base':'d'*40}, {'issue':458}, {'check':'caller-pass'}):
+            with self.subTest(change=change), self.assertRaises(ValueError): self.candidate_command(**change)
+        self.claim.pop('worktree'); self.save()
+        with self.assertRaisesRegex(ValueError, 'owned worktree'): self.candidate_command()
+        self.claim['worktree'] = str(self.checkout); self.save()
+        (self.checkout / '.evidence/delivery/binding.json').write_text('{"issue":458}')
+        with self.assertRaisesRegex(ValueError, 'delivery issue'): self.candidate_command()
+        self.assertFalse((self.checkout / '.evidence/child.json').exists())
+
+    def test_candidate_checks_revalidate_actual_profile_after_child(self):
+        self.prepare_candidate_checks(post_profile=True)
+        with self.assertRaisesRegex(ValueError, 'profile changed'): self.candidate_command()
+        self.assertTrue((self.checkout / '.evidence/child.json').exists())
+
+    def test_candidate_checks_refuse_source_or_focused_selection_drift_after_child(self):
+        self.prepare_candidate_checks()
+        original = self.paths['launcher'].read_text()
+        for command, message in (("printf changed >> scripts/verify/run.mjs", 'frozen exact source'),
+                                 ("mkdir -p .evidence/verify; printf changed > .evidence/verify/focused-tests.json", 'focused selection')):
+            changed = original.replace('exec "$@"', command+'\nexec "$@"')
+            self.paths['launcher'].write_text(changed)
+            self.boundary['launcher_sha256'] = self.receipt['launcher_sha256'] = external.digest(changed.encode())
+            self.save()
+            with self.assertRaisesRegex(ValueError, message): self.candidate_command('push-gates')
+            if 'source' in message:
+                git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+                REAL_RUN([git,'-C',str(self.checkout),'checkout','--','scripts/verify/run.mjs'],check=True,
+                         env={k:v for k,v in os.environ.items() if not k.startswith('GIT_')})
+
+    def test_candidate_checks_timeout_or_cancel_terminates_owned_launcher_before_return(self):
+        from types import SimpleNamespace
+        self.prepare_candidate_checks()
+        for failure, expected in ((subprocess.TimeoutExpired('fixture',245), None), (KeyboardInterrupt(),130)):
+            child = unittest.mock.Mock(pid=999997)
+            child.wait.side_effect = [failure,0]
+            with patch.object(external.subprocess,'Popen',return_value=child), \
+                 patch.object(external.subprocess,'check_output',side_effect=[self.boundary['source_sha'].encode(), self.boundary['comparison_base'].encode(), b'', self.boundary['source_sha'].encode(), self.boundary['comparison_base'].encode(), b'']), \
+                 patch.object(external,'candidate_custody',return_value=self.claim), \
+                 patch.object(external.os,'killpg') as terminate:
+                if expected is None:
+                    with self.assertRaises(subprocess.TimeoutExpired):
+                        external.candidate_checks(self.config,463,self.boundary['source_sha'],self.boundary['comparison_base'],str(self.checkout),'cheap')
+                else:
+                    self.assertEqual(external.candidate_checks(self.config,463,self.boundary['source_sha'],self.boundary['comparison_base'],str(self.checkout),'cheap'),expected)
+                terminate.assert_called_once_with(child.pid, external.signal.SIGTERM)
+                self.assertEqual(child.wait.call_count,2)
 
 
 class CIAcceptanceTests(unittest.TestCase):

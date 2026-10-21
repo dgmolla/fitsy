@@ -25,7 +25,7 @@ ROUTING_HEAD=origin/main
 if echo "$CHANGED" | grep -q '^scripts/route-reviewers.sh$'; then
   ROUTING_HEAD="$COMPARE_HEAD"
 fi
-ROUTING_FILE="$(mktemp)" || fail_context
+ROUTING_FILE="$(mktemp "${TMPDIR:-/tmp}/fitsy-domain.XXXXXX")" || fail_context
 trap 'rm -f "$ROUTING_FILE"' EXIT
 git show "$ROUTING_HEAD:scripts/route-reviewers.sh" > "$ROUTING_FILE" 2>/dev/null || fail_context
 RESULT="$(echo "$CHANGED" | bash "$ROUTING_FILE")" || fail_context

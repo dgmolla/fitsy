@@ -33,6 +33,16 @@ function identity(root, env = process.env) {
     authorization: authorization && existsSync(authorization) ? readFileSync(authorization, 'utf8') : null,
     focused: existsSync(recipe) ? readFileSync(recipe, 'utf8') : null });
 }
+export async function candidateChecks(check, root = process.cwd(), env = process.env) {
+  if (!['cheap', 'push-gates'].includes(check)) throw Error('unsupported candidate check');
+  root = realpathSync(resolve(root));
+  const trustedEnv = executionEnvironment(env);
+  const issue = JSON.parse(readFileSync(join(root, '.evidence/delivery/binding.json'), 'utf8')).issue;
+  return execute('/usr/bin/python3', ['-I', '-B', '/opt/fitsy-approval/external-approval.py',
+    'candidate-checks', '--issue', String(issue), '--source', git(['rev-parse', 'HEAD'], root, trustedEnv).trim(),
+    '--base', git(['rev-parse', 'origin/main'], root, trustedEnv).trim(), '--root', root, '--check', check], root, env);
+}
+
 export function inShippingSession(env = process.env) {
   return Boolean(env.FITSY_SHIPPING_SOCKET || env.FITSY_SHIPPING_TOKEN);
 }
@@ -127,7 +137,8 @@ export async function shippingSession(command, args, { root = process.cwd(), env
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   try {
-    if (process.argv[2] === '--check') await assertShippingSession();
+    if (process.argv[2] === '--candidate-checks') process.exitCode = await candidateChecks(process.argv[3]);
+    else if (process.argv[2] === '--check') await assertShippingSession();
     else {
       const args = process.argv.slice(2);
       const root = args[0] === '--root' ? args.splice(0, 2)[1] : process.cwd();

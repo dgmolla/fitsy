@@ -66,6 +66,12 @@ COMPLETED_AUTH="$ADMIN_HOME/.fitsy-review/completed/issue-$ISSUE.json"
 # Only the fixed installed adapter may select this route; a refused configured
 # authority never falls back to a different review or candidate-owned receipt.
 CANONICAL_ADAPTER=/opt/fitsy-approval/external-approval.py
+candidate_checks() {
+  [ -f "$CANONICAL_ADAPTER" ] || { echo 'isolated candidate check authority unavailable' >&2; return 1; }
+  /usr/bin/python3 -I -B "$CANONICAL_ADAPTER" candidate-checks --issue "$ISSUE" \
+    --source "$HEAD_SHA" --base "$BASE_SHA" --root "$REPO_ROOT" --check cheap
+}
+
 if [ -f "$CANONICAL_ADAPTER" ]; then
   [ "$(git rev-parse origin/main)" = "$BASE_SHA" ] || fail
   if [ "$REPO_ROOT" != "$CONTROL_ROOT" ]; then
@@ -80,8 +86,7 @@ if [ -f "$CANONICAL_ADAPTER" ]; then
   if [ "$CANONICAL_CODE" = 0 ]; then
     if [ "$SESSION_REVALIDATION" = 0 ]; then
       export FITSY_DIFF_BASE="$BASE_SHA" FITSY_DIFF_HEAD="$HEAD_SHA"
-      /usr/bin/env -u NODE_OPTIONS -u NODE_PATH node "$CONTROL_ROOT/scripts/verify/run.mjs" \
-        --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+      candidate_checks >&2 || fail
       # Recheck protected authority after cheap checks, without provider execution.
       CANONICAL_RESULT="$(/usr/bin/python3 -I -B "$CANONICAL_ADAPTER" "${CANONICAL_ARGS[@]}")" || fail
     fi
@@ -124,7 +129,7 @@ PYBOOTSTRAP
   # admit-completed checks its canonical approval and digest before accounting.
   export FITSY_DIFF_BASE="$BASE_SHA" FITSY_DIFF_HEAD="$HEAD_SHA"
   if [ "$SESSION_REVALIDATION" = 0 ]; then
-    "$CONTROL_ROOT/scripts/verify/run.mjs" --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
+    candidate_checks >&2 || fail
   fi
   BRANCH="$(git symbolic-ref --quiet --short HEAD)"
   ACCEPTANCE="$(/usr/bin/env -i HOME="$ADMIN_HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin GH_HOST=github.com GH_REPO=dgmolla/fitsy "$TRUSTED_GH" issue view "$ISSUE" --json body --jq .body | python3 -I -c '
@@ -165,13 +170,7 @@ export FITSY_DIFF_BASE="${COMPARE_SHA:-$BASE_SHA}" FITSY_DIFF_HEAD="$HEAD_SHA"
 BRANCH="$(git symbolic-ref --quiet --short HEAD)"
 # Direct admission completes cheap checks before validating independent evidence.
 if [ "$SESSION_REVALIDATION" = 0 ]; then
-  if [ -x scripts/verify/run.mjs ]; then
-    scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
-  else
-    # Frozen pre-cutover source retains its original file mode. Use the same
-    # protected system Env startup wrapper without modifying that source.
-    /usr/bin/env -u NODE_OPTIONS -u NODE_PATH node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2 || fail
-  fi
+  candidate_checks >&2 || fail
 fi
 [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ] && [ -z "$(git status --porcelain --untracked-files=all)" ] || fail
 mkdir -p .evidence/review-admission

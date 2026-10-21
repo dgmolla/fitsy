@@ -49,16 +49,10 @@ node "$ROOT/scripts/delivery/phase-events.mjs" summary >/dev/null || {
   exit 1
 }
 "$ROOT/scripts/verify/shipping-session.mjs" --check
-"$ROOT/scripts/verify/run.mjs" --stage=cheap --layer=0-1 --runs=local
+"$ROOT/scripts/verify/shipping-session.mjs" --candidate-checks cheap
 "$ROOT/scripts/verify/shipping-session.mjs" --check
-# exit 2 = skipped (not applicable), which must not block the push
-for check in size-check domain-check; do
-  if /bin/bash -p "$ROOT/scripts/verify/$check.sh"; then code=0; else code=$?; fi
-  if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
-    echo "pre-push: $check failed (see above)" >&2
-    exit 1
-  fi
-done
+# The same isolated boundary owns routing-table execution and size/domain N/A.
+"$ROOT/scripts/verify/shipping-session.mjs" --candidate-checks push-gates
 # Publishing is recoverable; a GitHub outage must not erase a verified push.
 if ! node "$ROOT/scripts/delivery/phase-events.mjs" publish; then
   echo 'pre-push: delivery timing remains local; retry phase-events.mjs publish after reconciling GitHub' >&2
