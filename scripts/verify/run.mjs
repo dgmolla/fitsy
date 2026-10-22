@@ -181,7 +181,8 @@ function runCheck(c, { withoutDatabase = false } = {}) {
     if (c.name === 'dev-drift' && process.env.FITSY_VERIFY_OWNED_DB) {
       checkEnv.POSTGRES_URL_NON_POOLING = process.env.FITSY_VERIFY_CALLER_NON_POOLING_URL ?? '';
     }
-    const checkArgs = [`--scope=${scope}`];
+    // Unknown parent history must not become a narrower child comparison.
+    const checkArgs = [`--scope=${c.name === 'test' && plan.comparison.unknown ? 'all' : scope}`];
     if (c.name === 'test' && scope === 'changed' && !plan.comparison.unknown) {
       checkArgs.push(`--base=${plan.comparison.base}`);
       // Local selection must also include current dirty and untracked files.

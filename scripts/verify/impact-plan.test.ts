@@ -175,6 +175,30 @@ test('whole groups expand unknown history and explicit all scope, and direct inv
   expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
 });
 
+test.each([
+  ['scripts/review/example.py', 'base', ''],
+  ['scripts/review/example.py', 'head', ''],
+  ['docs/guide.md', 'base', ''],
+  ['docs/guide.md', 'head', ''],
+  ['docs/guide.md', 'base', 'mobile'],
+])('unknown parent %s comparison --%s stays full downstream, failure=%s', (path, invalid, failure) => {
+  const fixture = wholeGroupFixture();
+  write(path, 'changed fixture input\n'); const head = commit();
+  const extra = { CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head, FAIL_GROUP: failure };
+  const invalidArg = `--${invalid}=${'0'.repeat(40)}`;
+  expect(JSON.parse(cli('impact-plan.mjs', [invalidArg], extra).stdout).comparison.unknown).toBe(true);
+  const result = fixture.run(extra, ['--layer=2', '--runs=ci', '--scope=changed', invalidArg]);
+  expect(result.status).toBe(failure ? 1 : 0);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call)))
+    .toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls()).toContain('scripts-node');
+  expect(fixture.calls()).toContain('scripts-python');
+  if (failure) {
+    expect(result.stdout).toContain('"name":"test","status":"fail"');
+    expect(result.stderr).toContain('tests failed in: mobile');
+  }
+});
+
 test('forged subset selectors cannot hide whole groups and a failed planner cannot pass', () => {
   const fixture = wholeGroupFixture();
   write('packages/shared/src/example.ts', 'export const value = true;\n'); const head = commit();
