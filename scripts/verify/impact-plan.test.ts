@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -525,39 +525,65 @@ test('cheap reuse binds scope and the complete focused recipe including the name
 test('cheap reuse retains installed dependency and genuine environment identity', () => {
   cheapCacheFixture();
   // Own the fixture dependency lock rather than changing the shared installed tree.
-  rmSync(join(directory, 'node_modules'));
-  mkdirSync(join(directory, 'node_modules'));
+  const link = join(directory, 'node_modules');
+  expect(lstatSync(link).isSymbolicLink()).toBe(true);
+  expect(readlinkSync(link)).toBe(join(root, 'node_modules'));
+  const sharedLock = readFileSync(join(root, 'node_modules/.package-lock.json'), 'utf8');
+  unlinkSync(link);
+  mkdirSync(link);
   symlinkSync(join(root, 'node_modules/js-yaml'), join(directory, 'node_modules/js-yaml'));
   write('node_modules/.package-lock.json', '{"fixture":1}');
   expect(cli('run.mjs', cheapReuse).status).toBe(0);
   write('node_modules/.package-lock.json', '{"fixture":2}');
   expect(cli('run.mjs', cheapReuse).stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
   expect(cli('run.mjs', cheapReuse, { FEATURE_FLAG: 'changed' }).stdout).not.toContain('"cached":true'); expect(calls()).toBe(3);
+  expect(readFileSync(join(root, 'node_modules/.package-lock.json'), 'utf8')).toBe(sharedLock);
 });
 
-test('npm cheap results are reused by the real sanitized push hook and genuine environment changes rerun', () => {
+test('npm publication and sanitized push reuse the fixed payload; genuine child environment changes rerun', () => {
   cheapCacheFixture();
   const hookEnv = timingHook(root, directory, env);
-  // The fixture owner supplies the same fixed reuse flag as candidate_checks;
-  // production fixed argv and custody are exercised in external-approval tests.
-  const sessionFile = join(directory, 'scripts/verify/shipping-session.mjs');
-  writeFileSync(sessionFile, readFileSync(sessionFile, 'utf8').replace("'--runs=local']", "'--runs=local','--reuse']"));
+  // candidate_checks invokes the launcher with a scrubbed operator environment;
+  // the launcher emits its fixed profile env-i payload for both publication callers.
+  // This existing synthetic owner models that transport, not kernel isolation.
+  const payloadEnv = { ...env, PATH: hookEnv.PATH, NODE: hookEnv.NODE };
+  write('.evidence/payload-environment.json', JSON.stringify(payloadEnv));
+  const payloadFile = join(directory, '.evidence/payload-environment.json');
+  write('scripts/verify/shipping-session.mjs', `#!/usr/bin/env node
+import {readFileSync} from 'node:fs';
+import {execFileSync,spawnSync} from 'node:child_process';
+if(process.argv[2]==='--check') process.exit(0);
+if(process.argv[2]!=='--candidate-checks') process.exit(1);
+const environment=JSON.parse(readFileSync(${JSON.stringify(payloadFile)},'utf8'));
+const node=${JSON.stringify(hookEnv.NODE)};
+const git=(ref)=>execFileSync('git',['rev-parse',ref],{env:environment,encoding:'utf8'}).trim();
+const command=process.argv[3]==='cheap'?[node,['scripts/verify/run.mjs','--layer=0-2','--stage=cheap','--scope=changed','--runs=local','--reuse','--base='+git('origin/main'),'--head='+git('HEAD')]]:['/bin/bash',['-p','-c','for c in size-check domain-check; do /bin/bash -p scripts/verify/$c.sh; code=$?; [ "$code" = 0 ] || [ "$code" = 2 ] || exit "$code"; done']];
+process.exit(spawnSync(command[0],command[1],{stdio:'inherit',env:environment}).status??1);
+`);
+  write('package.json', JSON.stringify({ private: true, scripts: {
+    verify: 'node scripts/verify/shipping-session.mjs --candidate-checks cheap',
+  } }));
   write('.githooks/pre-push', installedFixtureHook(root, directory, true));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-  const initial = spawnSync('npm', ['run', 'verify', '--', ...cheapReuse],
+  const initial = spawnSync('npm', ['run', 'verify'],
     { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
   expect({ status: initial.status, output: initial.status === 0 ? '' : initial.stdout + initial.stderr }).toEqual({ status: 0, output: '' });
+  const receiptFile = join(directory, '.evidence/verify/check-cache/focused-tests.json');
+  const firstEnvironment = JSON.parse(readFileSync(receiptFile, 'utf8')).environment;
   const remote = join(directory, '.evidence/remote.git');
   execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
   const push = (ref: string, extra = {}) => spawnSync('git', ['-c', 'core.hooksPath=.githooks', 'push', remote, `HEAD:refs/heads/${ref}`],
     { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 30000 });
-  const reused = push('reused');
+  const reused = push('reused', { FEATURE_FLAG: 'operator-only-not-forwarded' });
   expect({ status: reused.status, output: reused.status === 0 ? '' : reused.stdout + reused.stderr }).toEqual({ status: 0, output: '' });
   expect(reused.stdout + reused.stderr).toContain('"cached":true'); expect(calls()).toBe(1);
+  expect(JSON.parse(readFileSync(receiptFile, 'utf8')).environment).toBe(firstEnvironment);
   expect(calls('admission-calls')).toBe(2); expect(calls('size-calls')).toBe(1); expect(calls('domain-calls')).toBe(1);
-  const changed = push('changed', { FEATURE_FLAG: 'different' });
+  write('.evidence/payload-environment.json', JSON.stringify({ ...payloadEnv, FEATURE_FLAG: 'different-child-input' }));
+  const changed = push('changed');
   expect(changed.status).toBe(0); expect(changed.stdout + changed.stderr).not.toContain('"cached":true'); expect(calls()).toBe(2);
+  expect(JSON.parse(readFileSync(receiptFile, 'utf8')).environment).not.toBe(firstEnvironment);
   expect(calls('admission-calls')).toBe(3); expect(calls('size-calls')).toBe(2); expect(calls('domain-calls')).toBe(2);
 });
 

@@ -1191,22 +1191,35 @@ class ProductionTlsMaterialTests(unittest.TestCase):
 
 
 def custody_fixture_directory():
-    # Protected fixture bytes need secure ancestry even when the command's
-    # short TMPDIR is beneath a sticky system directory for Unix sockets.
-    # This ignored data directory is never a reviewer or subprocess cwd.
-    parent = REPO_ROOT / '.evidence'
-    parent.mkdir(mode=0o700, exist_ok=True)
+    # Reuse the declared private runtime cache when source evidence is read-only.
+    # Ordinary callers without XDG cache retain the existing ignored location.
+    cache = os.environ.get('XDG_CACHE_HOME')
+    parent = Path(cache) / 'fitsy-custody-fixtures' if cache else REPO_ROOT / '.evidence'
+    if not parent.is_absolute():
+        raise RuntimeError('operator fixture storage must be absolute')
     for probe in (parent, *parent.parents):
-        metadata = probe.lstat()
+        try:
+            metadata = probe.lstat()
+        except FileNotFoundError:
+            if probe == parent:
+                continue
+            raise
         if (probe.is_symlink() or metadata.st_uid not in (0, os.getuid())
                 or metadata.st_mode & 0o022):
             raise RuntimeError('secure operator fixture temp ancestry unavailable')
+    parent.mkdir(mode=0o700, exist_ok=True)
     git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
-    ignored = REAL_RUN([git, '-C', str(REPO_ROOT), 'check-ignore', '--quiet',
-                        str(parent / 'custody-probe.json')], capture_output=True,
-                       env={'PATH': '/usr/bin:/bin', 'HOME': '/var/empty'}, timeout=10)
-    if ignored.returncode != 0:
-        raise RuntimeError('operator fixture storage must be ignored')
+    environment = {'PATH': '/usr/bin:/bin', 'HOME': '/var/empty', 'LC_ALL': 'C'}
+    repository = REAL_RUN([git, '-C', str(parent), 'rev-parse', '--show-toplevel'],
+                          capture_output=True, text=True, env=environment, timeout=10)
+    if repository.returncode == 0:
+        ignored = REAL_RUN([git, '-C', str(parent), 'check-ignore', '--quiet',
+                            str(parent / 'custody-probe.json')], capture_output=True,
+                           env=environment, timeout=10)
+        if ignored.returncode != 0:
+            raise RuntimeError('operator fixture storage inside Git must be ignored')
+    elif repository.returncode != 128 or 'not a git repository' not in repository.stderr:
+        raise RuntimeError('operator fixture storage Git ancestry unavailable')
     temporary = tempfile.TemporaryDirectory(prefix='custody-', dir=parent)
     metadata = Path(temporary.name).lstat()
     if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) != 0o700:
