@@ -87,16 +87,28 @@ function installedIdentity(root, paths, check) {
         return info.isFile() && (info.mode & 0o111) !== 0;
       });
       if (!file) { hash.update(JSON.stringify([name, 'absent'])); continue; }
-      visit(file); hash.update(readFileSync(realpathSync(file)));
-      // npm/npx are scripts from an installed package, whose bundled runtime
-      // dependencies matter just as the project-local check engines do.
+      visit(file);
+      const bytes = readFileSync(realpathSync(file));
+      hash.update(bytes);
+      const interpreter = bytes.toString('utf8', 0, Math.min(bytes.length, 256)).split('\n')[0].match(/^#!\s*(\/\S+)(?:\s+(.*))?$/);
+      if (interpreter) {
+        visit(interpreter[1]); hash.update(readFileSync(realpathSync(interpreter[1])));
+        // The named node/python tools are resolved above; unsupported env
+        // selectors cannot establish which interpreter actually executes.
+        if (interpreter[1].endsWith('/env') && !/^(node|python3)$/.test(interpreter[2] ?? '')) return null;
+      }
+      // A real npm installation has a package boundary and bundled runtime
+      // dependencies. Standalone shell dispatchers instead bind their actual
+      // bytes, interpreter and the resolved tools, without inventing a package.
       if (['npm', 'npx'].includes(name)) {
         let directory = dirname(realpathSync(file));
         while (dirname(directory) !== directory && !present(join(directory, 'package.json'))) directory = dirname(directory);
-        if (!present(join(directory, 'package.json'))) return null;
-        visit(directory);
-        const data = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'));
-        packages(join(directory, 'package.json'), Object.keys({ ...data.dependencies, ...data.optionalDependencies }));
+        const packageFile = join(directory, 'package.json');
+        const data = present(packageFile) ? JSON.parse(readFileSync(packageFile, 'utf8')) : null;
+        if (data?.name === 'npm') {
+          visit(directory);
+          packages(packageFile, Object.keys({ ...data.dependencies, ...data.optionalDependencies }));
+        } else if (!interpreter || !/\/(?:ba|da|k|z)?sh$/.test(interpreter[1])) return null;
       }
     }
     const from = join(root, 'package.json');
