@@ -124,7 +124,7 @@ sys.exit(child.returncode)
   mkdirSync(app, { recursive: true });
   symlinkSync(join(operatorHome, 'operator-canary'), join(app, 'main.jsbundle'));
   const hashArtifact = () => spawnSync(process.execPath, ['--max-old-space-size=64', '--input-type=module', '-e',
-    `import {artifactHashes} from ${JSON.stringify(copiedCaller)}; console.log(JSON.stringify(artifactHashes(${JSON.stringify(app)})));`],
+    `import {artifactHashes} from ${JSON.stringify(copiedCaller)}; process.stdout.write(JSON.stringify(artifactHashes(${JSON.stringify(app)})) + '\\n');`],
   { cwd: dir, encoding: 'utf8', env: { ...fixtureEnv(), FITSY_PRODUCT_ROOT: dir }, timeout: 15000 });
   const aliased = hashArtifact();
   expect(aliased.status).toBe(1);
@@ -198,8 +198,8 @@ try {
  assert.deepEqual(negative,[product,productSource,productSource]);
  await assert.rejects(assertShippingSession(control,{...env,FITSY_SHIPPING_TOKEN:'wrong-owner'}),/root or token mismatch/);
  await assert.rejects(assertShippingSession(control,environment),/run final acceptance inside/);
- console.log(JSON.stringify({kind:'NATIVE349_CONTROL_CONTEXT_PASS',control,controlSource,product,productSource,
-  actualCheckClient:true,protectedReviewAdmissionStub:true,wrongProductAndTokenRefused:true,missingLiveSessionRefused:true}));
+ process.stdout.write(JSON.stringify({kind:'NATIVE349_CONTROL_CONTEXT_PASS',control,controlSource,product,productSource,
+  actualCheckClient:true,protectedReviewAdmissionStub:true,wrongProductAndTokenRefused:true,missingLiveSessionRefused:true}) + '\n');
 } finally {await new Promise(resolve=>server.close(resolve));}
 `;
   const result = spawnSync(process.execPath, ['--max-old-space-size=64', '--input-type=module', '-e', script,
@@ -260,7 +260,7 @@ for (const testStore of [true,false]) {
   assert.equal(command,'node');assert.equal(options.cwd,mobile);
   assert.deepEqual(args.slice(0,2),['--input-type=module','-e']);
   assert.equal(options.env.NODE_ENV,testStore?'development':'production');
-  console.log(JSON.stringify({kind:'NATIVE349_PREPARATION_STARTED',configuration:profile.configuration,syntheticTools:true}));
+  process.stdout.write(JSON.stringify({kind:'NATIVE349_PREPARATION_STARTED',configuration:profile.configuration,syntheticTools:true}) + '\n');
   return execFileSync(process.execPath,['--max-old-space-size=64','--import','data:text/javascript;base64,'+Buffer.from(preload).toString('base64'),...args],
    {cwd:options.cwd,encoding:'utf8',env:{...options.env,NODE_OPTIONS:'--max-old-space-size=64',FITSY_PREPARATION_MOBILE:mobile,FITSY_PREPARATION_LOG:log},timeout:15000});
  };
@@ -280,7 +280,7 @@ for (const testStore of [true,false]) {
  assert.deepEqual(JSON.parse(readFileSync(join(mobile,'ios/Fitsy/Supporting/Expo.plist'),'utf8')),{EXUpdatesEnabled:false});
  const tools=readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line));
  assert.deepEqual(tools.map(row=>row.command),['npx','/usr/libexec/PlistBuddy','pod']);
- console.log(JSON.stringify({kind:'NATIVE349_PREPARATION_PASS',configuration:profile.configuration,packageRestored:true,delegate,tools}));
+ process.stdout.write(JSON.stringify({kind:'NATIVE349_PREPARATION_PASS',configuration:profile.configuration,packageRestored:true,delegate,tools}) + '\n');
 }
 `;
   const result = spawnSync(process.execPath, ['--max-old-space-size=64', '--input-type=module', '-e', script,
@@ -308,7 +308,7 @@ test('native identity executes the installed autolinking JavaScript bin', () => 
     `process.stdout.write(JSON.stringify(process.argv[2]==='resolve'?{modules:[]}:{dependencies:{}}));`);
   const identityModule = resolve(__dirname, '../sim/native-identity.mjs');
   const result = spawnSync(process.execPath, ['--max-old-space-size=64', '--input-type=module', '-e',
-    `import {nativeIdentity} from ${JSON.stringify(identityModule)}; console.log(JSON.stringify(nativeIdentity(${JSON.stringify(dir)})));`],
+    `import {nativeIdentity} from ${JSON.stringify(identityModule)}; process.stdout.write(JSON.stringify(nativeIdentity(${JSON.stringify(dir)})) + '\\n');`],
   { encoding: 'utf8', env: fixtureEnv(), timeout: 15000 });
   expect(result.status).toBe(0);
   const identity = JSON.parse(result.stdout);
