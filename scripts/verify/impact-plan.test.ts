@@ -540,6 +540,75 @@ test('cheap reuse retains installed dependency and genuine environment identity'
   expect(readFileSync(join(root, 'node_modules/.package-lock.json'), 'utf8')).toBe(sharedLock);
 });
 
+test('cheap reuse reruns real secrets when an optional executable appears or changes at the same PATH', () => {
+  write('scripts/verify/registry.yml', 'checks:\n  - name: secrets\n    script: secrets.sh\n    layer: 1\n    cache: true\n    blocking: true\n');
+  write('scripts/verify/secrets.sh', readFileSync(join(root, 'scripts/verify/secrets.sh'), 'utf8'));
+  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  const tools = join(directory, '.evidence/tools');
+  mkdirSync(tools, { recursive: true });
+  symlinkSync(process.execPath, join(tools, 'node'));
+  const gitPath = execFileSync('/bin/bash', ['-p', '-c', 'command -v git'], { env, encoding: 'utf8' }).trim();
+  symlinkSync(gitPath, join(tools, 'git'));
+  const extra = { PATH: `${tools}:/usr/bin:/bin` };
+  expect(cli('run.mjs', cheapReuse, extra).status).toBe(0);
+  expect(cli('run.mjs', cheapReuse, extra).stdout).toContain('"cached":true');
+  const tool = '.evidence/tools/gitleaks';
+  write(tool, '#!/bin/sh\necho called >> .evidence/tool-calls\nexit 0\n');
+  chmodSync(join(directory, tool), 0o755);
+  const appeared = cli('run.mjs', cheapReuse, extra);
+  expect(appeared.status).toBe(0); expect(appeared.stdout).not.toContain('"cached":true');
+  expect(calls('tool-calls')).toBe(1);
+  expect(cli('run.mjs', cheapReuse, extra).stdout).toContain('"cached":true');
+  write(tool, '#!/bin/sh\necho called >> .evidence/tool-calls\nexit 1\n');
+  const changed = cli('run.mjs', cheapReuse, extra);
+  expect(changed.status).toBe(1); expect(changed.stdout).not.toContain('"cached":true');
+  expect(calls('tool-calls')).toBe(2);
+});
+
+test('cheap reuse binds actual installed dependency files when the lock text is unchanged', () => {
+  cheapCacheFixture();
+  const link = join(directory, 'node_modules');
+  expect(lstatSync(link).isSymbolicLink()).toBe(true);
+  expect(readlinkSync(link)).toBe(join(root, 'node_modules'));
+  unlinkSync(link); mkdirSync(link);
+  symlinkSync(join(root, 'node_modules/js-yaml'), join(link, 'js-yaml'));
+  write('node_modules/.package-lock.json', '{"fixture":"unchanged"}');
+  write('node_modules/fixture-check/index.cjs', 'process.exit(0);\n');
+  write('scripts/verify/fixture.sh', 'echo run >> .evidence/calls\nnode node_modules/fixture-check/index.cjs\n');
+  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  expect(cli('run.mjs', cheapReuse).status).toBe(0);
+  expect(cli('run.mjs', cheapReuse).stdout).toContain('"cached":true'); expect(calls()).toBe(1);
+  write('node_modules/fixture-check/index.cjs', 'process.exit(1);\n');
+  const changed = cli('run.mjs', cheapReuse);
+  expect(changed.status).toBe(1); expect(changed.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
+  expect(readFileSync(join(link, '.package-lock.json'), 'utf8')).toBe('{"fixture":"unchanged"}');
+});
+
+test.each(['explicit', 'unavailable'])('cheap reuse preserves the %s parent comparison through real nested safety checks', comparison => {
+  for (const file of ['focused-tests.sh', 'focused-tests.mjs', 'node-focused-reporter.mjs', 'secrets.sh', 'migration-safety.sh']) {
+    write(`scripts/verify/${file}`, readFileSync(join(root, 'scripts/verify', file), 'utf8'));
+  }
+  write('scripts/verify/registry.yml', 'checks:\n' + ['focused-tests', 'secrets', 'migration-safety'].map(name =>
+    `  - name: ${name}\n    script: ${name}.sh\n    layer: 1\n    cache: true\n    blocking: true\n`).join(''));
+  const base = commit();
+  write('scripts/comparison.test.mjs', `import test from 'node:test';
+import assert from 'node:assert/strict';
+import {writeFileSync} from 'node:fs';
+test('required comparison assertion',()=>{writeFileSync('.evidence/focused-called','called');assert.fail('selected assertion ran');});
+`);
+  write('apps/api/.env.dev', 'FIXTURE_PLACEHOLDER=value\n');
+  write('prisma/migrations/fixture/migration.sql', 'DROP TABLE fixture;\n');
+  const head = commit(); git('update-ref', 'refs/remotes/origin/main', head);
+  write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: ['scripts/comparison.test.mjs'] }));
+  const result = cli('run.mjs', [...cheapReuse, `--base=${comparison === 'explicit' ? base : 'missing-parent-history'}`, `--head=${head}`]);
+  expect(result.status).toBe(1);
+  const checks = result.stdout.trim().split('\n').map(line => JSON.parse(line));
+  for (const name of ['focused-tests', 'secrets', 'migration-safety']) {
+    expect(checks).toContainEqual(expect.objectContaining({ name, status: 'fail' }));
+  }
+  expect(existsSync(join(directory, '.evidence/focused-called'))).toBe(comparison === 'explicit');
+});
+
 test('npm publication and sanitized push reuse the fixed payload; genuine child environment changes rerun', () => {
   cheapCacheFixture();
   const hookEnv = timingHook(root, directory, env);

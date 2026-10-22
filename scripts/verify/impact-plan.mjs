@@ -17,7 +17,7 @@ export function git(args, cwd = repository, env = process.env) {
 export function comparison({ cwd = repository, env = process.env, base, head } = {}) {
   try {
     let kind = 'branch';
-    if (!base && (env.CI || env.GITHUB_EVENT_NAME) && env.FITSY_DIFF_BASE) { base = env.FITSY_DIFF_BASE; head ??= env.FITSY_DIFF_HEAD; kind = 'explicit'; }
+    if (!base && (env.CI || env.GITHUB_EVENT_NAME || ['local', 'ci'].includes(env.FITSY_RUNS)) && env.FITSY_DIFF_BASE) { base = env.FITSY_DIFF_BASE; head ??= env.FITSY_DIFF_HEAD; kind = 'explicit'; }
     else if (base) kind = 'explicit';
     if (!base && env.GITHUB_EVENT_PATH && ['push', 'pull_request', 'pull_request_target'].includes(env.GITHUB_EVENT_NAME)) {
       const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'));

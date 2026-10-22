@@ -171,8 +171,10 @@ function runCheck(c, { withoutDatabase = false } = {}) {
       ...(c.name === 'focused-tests' ? { FITSY_VERIFY_FOCUSED_RECIPE: c.selection ?? '' } : {}),
       FITSY_VERIFY_NEEDS_NATIVE: plan.native ? '1' : '0',
       FITSY_VERIFY_NEEDS_TEST_DEPS: selected.some(check => check.name === 'test') ? '1' : '0',
-      ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
-      ...(runsCtx === 'ci' && plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) };
+      // Nested local checks must inspect the same resolved range as their parent.
+      // A missing parent range stays unknown instead of falling back to origin/main.
+      FITSY_DIFF_BASE: plan.comparison.base ?? 'unavailable-parent-comparison',
+      FITSY_DIFF_HEAD: plan.comparison.head ?? 'HEAD' };
     if (withoutDatabase) {
       for (const key of ['FITSY_VERIFY_DB_LOCKED', 'FITSY_VERIFY_OWNED_DB', 'FITSY_VERIFY_DB_IMAGE',
         'FITSY_VERIFY_DB_HOST', 'FITSY_VERIFY_CALLER_NON_POOLING_URL', 'FITSY_LOCAL_DB',
@@ -185,8 +187,8 @@ function runCheck(c, { withoutDatabase = false } = {}) {
     const checkArgs = [`--scope=${c.name === 'test' && plan.comparison.unknown ? 'all' : scope}`];
     if (c.name === 'test' && scope === 'changed' && !plan.comparison.unknown) {
       checkArgs.push(`--base=${plan.comparison.base}`);
-      // Local selection must also include current dirty and untracked files.
-      if (runsCtx === 'ci') checkArgs.push(`--head=${plan.comparison.head}`);
+      // changedFiles still includes local dirty and untracked inputs.
+      checkArgs.push(`--head=${plan.comparison.head}`);
     }
     execFile("/bin/bash", ["-p", join(VERIFY_DIR, c.script), ...checkArgs], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
       env: checkEnv }, (err, stdout, stderr) => {

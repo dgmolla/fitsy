@@ -1,7 +1,7 @@
 // Local performance cache, never an independent review or product attestation.
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, writeFileSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { delimiter, isAbsolute, join } from 'node:path';
 import { git } from './impact-plan.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -31,6 +31,47 @@ export function sourceIdentity(root, env = process.env) {
   return hash.digest('hex');
 }
 
+// Bind the installed file versions, not just PATH or package-lock text.
+// inode + nanosecond ctime/mtime identify replacements and in-place writes,
+// including ignored dependencies, without rereading every installed file.
+function installedIdentity(root, paths) {
+  const hash = createHash('sha256');
+  const visited = new Set();
+  function visit(file, recursive) {
+    const path = realpathSync(file);
+    const info = statSync(path, { bigint: true });
+    hash.update(JSON.stringify([file, path, ...['dev', 'ino', 'mode', 'size', 'mtimeNs', 'ctimeNs'].map(key => String(info[key]))]));
+    if (info.isDirectory() && recursive && !visited.has(path)) {
+      visited.add(path);
+      for (const entry of readdirSync(path).sort()) visit(join(path, entry), true);
+    } else if (!info.isDirectory() && !info.isFile()) throw new Error('Uncertain installed input');
+  }
+  function present(path) {
+    try { lstatSync(path); return true; }
+    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+  }
+  try {
+    // Relative PATH entries depend on nested working directories. Rerun rather
+    // than claiming an identity for an executable we cannot resolve reliably.
+    if (paths.some(path => !isAbsolute(path))) return null;
+    visit(process.execPath, false);
+    for (const path of [...new Set(paths)]) {
+      if (!present(path)) { hash.update(JSON.stringify([path, 'absent'])); continue; }
+      visit(path, false);
+      // The complete directory listing binds optional tools appearing at the
+      // same PATH. Resolved file versions also bind symlink target changes.
+      for (const entry of readdirSync(path).sort()) visit(join(path, entry), false);
+    }
+    const modules = join(root, 'node_modules');
+    if (present(modules)) visit(modules, true);
+    else hash.update('no installed dependencies');
+    return hash.digest('hex');
+  } catch {
+    // An unreadable, broken or unsupported installed input cannot prove reuse.
+    return null;
+  }
+}
+
 function environmentIdentity(root, env, salt) {
   // npm and Git add invocation metadata when calling the same checks through
   // npm run vs pre-push. Package contents and actual configuration stay bound.
@@ -44,8 +85,10 @@ function environmentIdentity(root, env, salt) {
     const shim = paths.findIndex(path => path.endsWith('/npm/node_modules/@npmcli/run-script/lib/node-gyp-bin'));
     return [key, shim < 0 ? value : paths.slice(shim + 1).join(delimiter)];
   }).sort(([a], [b]) => a.localeCompare(b));
+  const installed = installedIdentity(root, (values.find(([key]) => key === 'PATH')?.[1] ?? '').split(delimiter));
+  if (installed === null) return null;
   const dependencyFile = join(root, 'node_modules/.package-lock.json');
-  return sha(salt + JSON.stringify({ values, node: process.version, executable: process.execPath,
+  return sha(salt + JSON.stringify({ values, installed, node: process.versions, executable: process.execPath,
     platform: process.platform, arch: process.arch,
     dependencies: existsSync(dependencyFile) ? sha(readFileSync(dependencyFile)) : null }));
 }
@@ -67,7 +110,7 @@ export function verificationCache(root, env, plan, scope) {
     read(check) {
       try {
         const receipt = JSON.parse(readFileSync(join(directory, `${check.name}.json`), 'utf8'));
-        if (receipt.version !== 2 || receipt.source !== source || receipt.environment !== environment || receipt.selection !== selection ||
+        if (environment === null || receipt.version !== 3 || receipt.source !== source || receipt.environment !== environment || receipt.selection !== selection ||
             receipt.definition !== sha(JSON.stringify(check)) || receipt.result?.name !== check.name || receipt.result?.status !== 'pass' ||
             !Number.isFinite(receipt.finishedAt) || receipt.finishedAt > Date.now() || Date.now() - receipt.finishedAt > lifetime) return null;
         return { ...receipt.result, duration_ms: 0, cached: true, verified_at: new Date(receipt.finishedAt).toISOString() };
@@ -82,8 +125,8 @@ export function verificationCache(root, env, plan, scope) {
       catch (error) { if (error.code !== 'ENOENT') throw error; }
     },
     write(check, result) {
-      if (result.status !== 'pass' || plan.comparison.unknown) return;
-      const receipt = { version: 2, source, environment, selection, definition: sha(JSON.stringify(check)), finishedAt: Date.now(), result };
+      if (environment === null || result.status !== 'pass' || plan.comparison.unknown) return;
+      const receipt = { version: 3, source, environment, selection, definition: sha(JSON.stringify(check)), finishedAt: Date.now(), result };
       const file = join(directory, `${check.name}.json`);
       const temporary = `${file}.${process.pid}.tmp`;
       writeFileSync(temporary, JSON.stringify(receipt) + '\n', { mode: 0o600 });
