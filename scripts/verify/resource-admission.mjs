@@ -103,6 +103,24 @@ function requireHost(snapshot, native, reserve) {
   requireHostSafety(snapshot);
   if (snapshot.available_memory_bytes < native + reserve) throw Error('phase native peak plus host reserve unavailable');
 }
+// The fixed locked CLI calls this only at its deferred preparation boundary.
+// Its fresh phase-context has already checked source, authority and the lock FD.
+export function recheckOwnedDatabasePhase(phase, { root = resolve(dirname(file), '../..'),
+  command = (binary, args) => execFileSync(binary, args, { encoding: 'utf8', timeout: 15000 }),
+  disk = statfsSync } = {}) {
+  const receipt = phase?.receipt;
+  if (!receipt?.authority_path || !receipt.authority_sha256) throw Error('canonical phase context is missing');
+  privateFile(receipt.authority_path, process.getuid(), 0o600);
+  if (hash(receipt.authority_path) !== receipt.authority_sha256) throw Error('phase authority changed before database preparation');
+  const authority = JSON.parse(readFileSync(receipt.authority_path, 'utf8'));
+  if (authority.candidate_root !== root || authority.execution_id !== receipt.execution_id ||
+      !Number.isSafeInteger(authority.native_peak_bytes) || authority.native_peak_bytes <= 0) {
+    throw Error('phase capacity authority does not bind this invocation');
+  }
+  const current = hostSnapshot(command, disk, root);
+  requireHost(current, authority.native_peak_bytes, HOST_RESERVE);
+  return current;
+}
 function daemonInfo(raw) {
   const fields = raw.trim().split('|');
   if (fields.length !== 4 || !fields[0] || !fields[1] ||

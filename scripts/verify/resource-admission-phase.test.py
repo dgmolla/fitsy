@@ -133,6 +133,11 @@ function fixtureCommand(binary, args) {
 '''
         helper = helper.replace('if (process.argv[1] && resolve(process.argv[1]) === file)',
                                 injection + '\nif (process.argv[1] && resolve(process.argv[1]) === file)')
+        # Recheck the actual exported predicate with the same synthetic host
+        # observations used by admission; no production environment switch.
+        helper = helper.replace(
+            "command = (binary, args) => execFileSync(binary, args, { encoding: 'utf8', timeout: 15000 }),\n  disk = statfsSync } = {})",
+            "command = fixtureCommand,\n  disk = () => ({bavail: fixtureSample.disk ?? 20*1024**3, bsize:1}) } = {})")
         helper = helper.replace('existsSync, statfsSync', 'existsSync, unlinkSync, statfsSync')
         (self.verify / 'resource-admission.mjs').write_text(helper)
         runtime = (SOURCE / 'docker-runtime.mjs').read_text()
