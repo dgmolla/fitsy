@@ -12,9 +12,16 @@ const runCase = (body: string) => JSON.parse(execFileSync(process.execPath, ['--
    import {embeddedBundleCompatibility} from ${JSON.stringify(profilePath)};
    import {archiveActiveReceipt,preserveRetainedArtifacts} from ${JSON.stringify(productFlowPath)};
    import {writeFileSync,readFileSync,mkdirSync,readdirSync} from 'node:fs';
+   import {execFileSync} from 'node:child_process';
    import {createHash} from 'node:crypto';
    const root=process.env.FITSY_FIXTURE_ROOT;
    const fixture=()=>JSON.parse(readFileSync(root+'/fixture.json'));
+   // Substitute only the external candidate transport. Execute the production
+   // artifact hash script with the fixture's inherited kernel boundary.
+   const artifactExecute=(cmd,args)=>{
+     if(cmd!=='node') throw Error('Unexpected artifact fixture command: '+cmd);
+     return execFileSync(process.execPath,args,{encoding:'utf8',env:process.env});
+   };
    const execute=(cmd,args)=>{
      if(cmd==='git') return 'apps/mobile/app.config.ts\\0apps/mobile/eas.json\\0apps/mobile/lib/screen.tsx\\0apps/mobile/lib/screen.test.tsx\\0apps/mobile/ios/Native.swift\\0apps/mobile/android/Native.kt\\0';
      if(args.includes('introspect')) return JSON.stringify(fixture().expo);
@@ -168,7 +175,7 @@ test('a Release refresh preserves the overwritten app for a later JavaScript rev
     writeFileSync(build+'/receipt.json',JSON.stringify(sealReceipt({nativeIdentity:native,profileIdentity:profile,
       recipeIdentity:recipe,app,appHash:hash('v1'),buildMode:'embedded-release',jsHash:'v1',configHash:'same'})));
     const original=readFileSync(build+'/receipt.json','utf8');
-    archiveActiveReceipt(app,build,resume);
+    archiveActiveReceipt(app,build,resume,artifactExecute);
     writeFileSync(app+'/main.jsbundle','v2');
     const files=readdirSync(resume).map(name=>readFileSync(resume+'/'+name,'utf8'));
     const archived=files.map(value=>JSON.parse(value)).find(value=>value.app!==app);
@@ -192,13 +199,13 @@ test('v1, v2, v1, v3, v2 preserves an inactive Release artifact before output ov
     const write=(version,path=app)=>{writeFileSync(path+'/main.jsbundle',version);
       writeFileSync(build+'/receipt.json',JSON.stringify(sealReceipt({nativeIdentity:native,profileIdentity:profile,
         recipeIdentity:recipe,app:path,appHash:hash(version),buildMode:'embedded-release',jsHash:version,configHash:'same'})));};
-    write('v1');archiveActiveReceipt(app,build,resume);
+    write('v1');archiveActiveReceipt(app,build,resume,artifactExecute);
     write('v2');
     const v1=readdirSync(resume).map(name=>JSON.parse(readFileSync(resume+'/'+name))).find(value=>value.app!==app);
-    archiveActiveReceipt(null,build,resume);
+    archiveActiveReceipt(null,build,resume,artifactExecute);
     writeFileSync(build+'/receipt.json',JSON.stringify(v1));
     writeFileSync(resume+'/native-receipt-superseded-1.json',JSON.stringify({...v1,app:42}));
-    preserveRetainedArtifacts(app,build,resume);archiveActiveReceipt(app,build,resume);
+    preserveRetainedArtifacts(app,build,resume,artifactExecute);archiveActiveReceipt(app,build,resume,artifactExecute);
     write('v3');
     const retained=readdirSync(resume).map(name=>JSON.parse(readFileSync(resume+'/'+name)));
     const selected=reusableNativeReceipt(retained.filter(r=>r.jsHash==='v2'),native,profile,recipe,

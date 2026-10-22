@@ -1,10 +1,11 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, chmodSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, chmodSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
 const modulePath = resolve(__dirname, 'product-flow.mjs');
+const nativeCaller = resolve(__dirname, '../sim/product-flow.mjs');
 // Local media integration runs decoder cases; hosted L2 retains non-video contracts.
 const mediaTest = process.env.FITSY_MEDIA_INTEGRATION === '1' ? test : test.skip;
 const deterministicTest = process.env.FITSY_MEDIA_INTEGRATION === '1' ? test.skip : test;
@@ -18,6 +19,147 @@ const evaluate = (expression: string, env = fixtureEnv()) => spawnSync(process.e
   `import * as gate from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(${expression}));`], { encoding: 'utf8', env });
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'fitsy-product-flow-')); });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+test('native caller keeps candidate config outside operator authority', () => {
+  const operatorHome = join(dir, 'operator-home');
+  const tools = join(dir, 'external-tools');
+  const mobile = join(dir, 'apps/mobile');
+  const expo = join(dir, 'node_modules/expo/bin');
+  const observed = join(dir, 'candidate-config-observed.json');
+  const controls = join(dir, 'trusted-controls');
+  const controlSim = join(controls, 'scripts/sim');
+  const boundary = join(tools, 'external-approval-fixture.py');
+  const candidateHome = join(dir, 'candidate-home');
+  const udid = '11111111-1111-1111-1111-111111111111';
+  for (const path of [operatorHome, candidateHome, tools, mobile, expo, controlSim,
+    join(controls, '.evidence/delivery')]) mkdirSync(path, { recursive: true });
+  // These are synthetic canaries, never the user's HOME or credentials.
+  writeFileSync(join(operatorHome, 'operator-canary'), 'synthetic operator-only fixture');
+  const xcrun = join(tools, 'xcrun');
+  writeFileSync(xcrun, `#!/bin/sh\nif [ "$*" != 'simctl list devices booted --json' ]; then exit 92; fi\nprintf '%s' '${JSON.stringify({ devices: { 'iOS fixture': [{ udid, state: 'Booted' }] } })}'\n`);
+  chmodSync(xcrun, 0o755);
+  writeFileSync(join(expo, 'cli'), `
+const fs = require('node:fs');
+let operatorHomeReadable = false;
+try { operatorHomeReadable = fs.readFileSync(${JSON.stringify(join(operatorHome, 'operator-canary'))}, 'utf8') === 'synthetic operator-only fixture'; }
+catch (error) { if (!['EACCES', 'EPERM', 'ENOENT'].includes(error.code)) throw error; }
+fs.writeFileSync(${JSON.stringify(observed)}, JSON.stringify({
+  configExecuted: true,
+  mobileCwd: process.cwd() === ${JSON.stringify(mobile)},
+  operatorEnvironmentReadable: process.env.FITSY_OPERATOR_FIXTURE_CANARY === 'synthetic-operator-value',
+  operatorHomeReadable,
+}));
+// Stop before autolinking, build admission, simulator claims or SDK execution.
+process.stderr.write('candidate-config-fixture-stop\\n');
+process.exit(73);
+`);
+  // Replace only the external adapter in a disposable copy of the actual caller.
+  // This fixture proves composition and real canary-read refusal, not installation
+  // or resistance to candidate chmod; those need the real kernel-profile probes.
+  const copiedCaller = join(controlSim, 'product-flow.mjs');
+  writeFileSync(copiedCaller, readFileSync(nativeCaller, 'utf8')
+    .replace('/opt/fitsy-approval/external-approval.py', boundary));
+  for (const file of readdirSync(resolve(__dirname, '../sim'))) {
+    if (file !== 'product-flow.mjs') symlinkSync(resolve(__dirname, '../sim', file), join(controlSim, file));
+  }
+  symlinkSync(__dirname, join(controls, 'scripts/verify'), 'dir');
+  symlinkSync(resolve(__dirname, '../../node_modules'), join(controls, 'node_modules'), 'dir');
+  writeFileSync(join(controls, '.evidence/delivery/binding.json'), '{"issue":349}');
+  fixtureGit(['init', '-q', controls]);
+  fixtureGit(['-C', controls, 'config', 'core.hooksPath', '/dev/null']);
+  fixtureGit(['-C', controls, 'add', 'scripts/sim/product-flow.mjs']);
+  fixtureGit(['-C', controls, '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.test',
+    'commit', '-qm', 'trusted caller fixture']);
+  const controlSource = fixtureGit(['-C', controls, 'rev-parse', 'HEAD']).toString().trim();
+  fixtureGit(['-C', controls, 'update-ref', 'refs/remotes/origin/main', controlSource]);
+  writeFileSync(boundary, `
+import argparse, json, os, subprocess, sys
+parser = argparse.ArgumentParser()
+parser.add_argument('action', choices=['candidate-checks'])
+for key in ('issue', 'source', 'base', 'root', 'check', 'product-root', 'cwd'):
+    parser.add_argument('--' + key, required=True)
+parser.add_argument('--env', action='append', default=[])
+parser.add_argument('command', nargs=argparse.REMAINDER)
+args = parser.parse_args()
+assert (args.issue, args.source, args.base, args.root, args.check, args.product_root) == (
+    '349', ${JSON.stringify(controlSource)}, ${JSON.stringify(controlSource)}, ${JSON.stringify(controls)},
+    'native', ${JSON.stringify(dir)})
+assert args.cwd in ('.', 'apps/mobile')
+environment = {'HOME': ${JSON.stringify(candidateHome)}, 'PATH': ${JSON.stringify(process.env.PATH || '')}}
+for entry in args.env:
+    key, value = entry.split('=', 1)
+    assert key.startswith('EXPO_PUBLIC_') or key in ('NODE_ENV', 'EXPO_NO_DOTENV', 'FITSY_ALLOW_MISSING_PUBLIC_ENV', 'CI')
+    environment[key] = value
+canary = ${JSON.stringify(join(operatorHome, 'operator-canary'))}
+os.chmod(canary, 0)
+try:
+    child = subprocess.run(args.command[1:], cwd=os.path.join(args.product_root, args.cwd), env=environment,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    sys.stdout.buffer.write(child.stdout); sys.stderr.buffer.write(child.stderr)
+finally:
+    os.chmod(canary, 0o600)
+sys.exit(child.returncode)
+`);
+  const result = spawnSync(process.execPath, ['--max-old-space-size=64', copiedCaller, 'build', udid], {
+    cwd: dir, encoding: 'utf8', timeout: 15000,
+    env: { ...fixtureEnv(), HOME: operatorHome, PATH: `${tools}:${process.env.PATH}`,
+      NODE_OPTIONS: '', NODE_PATH: '', JEST_WORKER_ID: 'native-boundary-fixture',
+      FITSY_PRODUCT_ROOT: dir, FITSY_OPERATOR_FIXTURE_CANARY: 'synthetic-operator-value',
+      EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://fixture-dev.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: 'synthetic-public-anon' },
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('candidate-config-fixture-stop');
+  // Missing config execution is a setup failure, not successful separation.
+  expect(JSON.parse(readFileSync(observed, 'utf8'))).toEqual({
+    configExecuted: true, mobileCwd: true,
+    operatorEnvironmentReadable: false, operatorHomeReadable: false,
+  });
+  const app = join(dir, '.evidence/product-build/fixture.app');
+  mkdirSync(app, { recursive: true });
+  symlinkSync(join(operatorHome, 'operator-canary'), join(app, 'main.jsbundle'));
+  const hashArtifact = () => spawnSync(process.execPath, ['--max-old-space-size=64', '--input-type=module', '-e',
+    `import {artifactHashes} from ${JSON.stringify(copiedCaller)}; console.log(JSON.stringify(artifactHashes(${JSON.stringify(app)})));`],
+  { cwd: dir, encoding: 'utf8', env: { ...fixtureEnv(), FITSY_PRODUCT_ROOT: dir }, timeout: 15000 });
+  const aliased = hashArtifact();
+  expect(aliased.status).toBe(1);
+  expect(aliased.stderr).toContain('EACCES');
+  expect(readFileSync(join(operatorHome, 'operator-canary'), 'utf8')).toBe('synthetic operator-only fixture');
+  rmSync(join(app, 'main.jsbundle'));
+  writeFileSync(join(app, 'main.jsbundle'), 'identified fixture bundle');
+  const hashed = hashArtifact();
+  expect(hashed.status).toBe(0);
+  expect(JSON.parse(hashed.stdout)).toEqual({
+    appHash: sha('main.jsbundle\0identified fixture bundle'), bundleHash: sha('identified fixture bundle'),
+  });
+});
+
+test('native identity executes the installed autolinking JavaScript bin', () => {
+  for (const path of ['apps/mobile', 'node_modules/expo/bin', 'node_modules/expo-modules-autolinking/bin'])
+    mkdirSync(join(dir, path), { recursive: true });
+  fixtureGit(['init', '-q', dir]);
+  writeFileSync(join(dir, 'package-lock.json'), JSON.stringify({ packages: {
+    'node_modules/expo': { version: '54.0.33' }, 'node_modules/react-native': { version: '0.81.5' },
+    'node_modules/expo-modules-autolinking': { version: '3.0.24' },
+  } }));
+  writeFileSync(join(dir, 'node_modules/expo/bin/cli'),
+    `process.stdout.write(JSON.stringify({name:'Native fixture',slug:'native-fixture',ios:{bundleIdentifier:'com.fitsy.fixture'},plugins:[]}));`);
+  writeFileSync(join(dir, 'node_modules/expo-modules-autolinking/package.json'),
+    '{"version":"3.0.24","bin":{"expo-modules-autolinking":"bin/expo-modules-autolinking.js"}}');
+  writeFileSync(join(dir, 'node_modules/expo-modules-autolinking/bin/expo-modules-autolinking.js'),
+    `process.stdout.write(JSON.stringify(process.argv[2]==='resolve'?{modules:[]}:{dependencies:{}}));`);
+  const identityModule = resolve(__dirname, '../sim/native-identity.mjs');
+  const result = spawnSync(process.execPath, ['--max-old-space-size=64', '--input-type=module', '-e',
+    `import {nativeIdentity} from ${JSON.stringify(identityModule)}; console.log(JSON.stringify(nativeIdentity(${JSON.stringify(dir)})));`],
+  { encoding: 'utf8', env: fixtureEnv(), timeout: 15000 });
+  expect(result.status).toBe(0);
+  const identity = JSON.parse(result.stdout);
+  expect(identity.inputs.nativeConfig.name).toBe('Native fixture');
+  expect(identity.inputs.nativePackages).toEqual({ expo: '54.0.33', 'react-native': '0.81.5' });
+  expect(identity.hash).toMatch(/^[a-f0-9]{64}$/);
+});
 
 function fixture() {
   const flows = ['cold-start-welcome', 'signin-options', 'billing-cancel'].map(name => {
