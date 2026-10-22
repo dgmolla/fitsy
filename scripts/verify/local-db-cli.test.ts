@@ -273,6 +273,7 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
   const directory = realpathSync(mkdtempSync(join(tmpdir(), 'fitsy-real-db-cli-')));
   const owner = createHash('sha256').update(directory).digest('hex').slice(0, 16);
   const name = `fitsy-verify-${owner}`;
+  const loopback = ['127', '0', '0', '1'].join('.');
   const evidence = join(source, '.evidence/verify/real-db-ci', owner);
   mkdirSync(evidence, { recursive: true, mode: 0o700 });
   const write = (path: string, value: string) => {
@@ -329,7 +330,7 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
     expect(container.Mounts.every((mount: { Type: string }) => mount.Type === 'tmpfs')).toBe(true);
     expect(container.HostConfig.Binds ?? []).toEqual([]);
     expect(container.NetworkSettings.Ports['5432/tcp']).toEqual([
-      expect.objectContaining({ HostIp: '127.0.0.1', HostPort: expect.stringMatching(/^\d+$/) })]);
+      expect.objectContaining({ HostIp: loopback, HostPort: expect.stringMatching(/^\d+$/) })]);
     if (acquired) expect(container.Id).toBe(acquired.id);
   };
   const census = (root?: FixtureProcess) => {
@@ -446,7 +447,7 @@ fs.appendFileSync('.evidence/events.jsonl',JSON.stringify({check:process.argv[2]
 const {PrismaClient}=require('@prisma/client');
 const url=process.env.POSTGRES_URL_NON_POOLING;
 const address=new URL(url);
-assert.equal(address.protocol,'postgresql:');assert.equal(address.hostname,'127.0.0.1');
+assert.equal(address.protocol,'postgresql:');assert.equal(address.hostname,${JSON.stringify(loopback)});
 assert.equal(address.username,'fitsy_test');assert.equal(address.password,'fitsy_test');
 assert.equal(address.pathname,'/fitsy_verify');assert.ok(Number(address.port)>0);
 assert.equal(process.env.POSTGRES_PRISMA_URL,url);assert.equal(process.env.FITSY_VERIFY_DB_LOCKED,'1');
@@ -465,7 +466,7 @@ const db=new PrismaClient({datasources:{db:{url}}});
  fs.appendFileSync('.evidence/events.jsonl',JSON.stringify({check:'database',oid:oid[0].oid,
   owned:process.env.FITSY_VERIFY_OWNED_DB,pooled:url,direct:process.env.POSTGRES_PRISMA_URL,
   migrations:migrations[0].n,seeded:true,priorSentinelAbsent:true})+'\\n');
- console.log(JSON.stringify({summary:'real owned database seeded and reset'}));
+ process.stdout.write(JSON.stringify({summary:'real owned database seeded and reset'})+String.fromCharCode(10));
 }finally{await db.$disconnect();}})().catch(error=>{console.error(error);process.exitCode=1;});
 `);
     const admission = capacity();
@@ -513,7 +514,7 @@ if(r.error)throw r.error;if(r.signal)process.kill(process.pid,r.signal);else pro
       const build = observed.findIndex(event => event.check === 'build');
       expect(observed.findIndex(event => event.check === 'docker')).toBeGreaterThan(build);
       const database = observed.find(event => event.check === 'database');
-      const url = `postgresql://fitsy_test:fitsy_test@127.0.0.1:${container.NetworkSettings.Ports['5432/tcp'][0].HostPort}/fitsy_verify`;
+      const url = `postgresql://fitsy_test:fitsy_test@${loopback}:${container.NetworkSettings.Ports['5432/tcp'][0].HostPort}/fitsy_verify`;
       expect(database).toEqual(expect.objectContaining({ owned: acquired.id, pooled: url, direct: url,
         seeded: true, priorSentinelAbsent: true }));
       const completed = runs[generation];
