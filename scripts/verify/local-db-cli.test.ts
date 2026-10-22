@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, realpathSync, rmSync, statfsSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, constants, cpSync, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, realpathSync, rmSync, statfsSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fixtureProcess, signalFixtureProcess, type FixtureProcess } from './lock-fixture-process';
@@ -290,6 +290,9 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
   const python = realpathSync(execFileSync('/usr/bin/which', ['python3'], { encoding: 'utf8' }).trim());
   mkdirSync(join(directory, '.evidence/home'), { recursive: true, mode: 0o700 });
   mkdirSync(join(directory, '.evidence/tmp'), { mode: 0o700 });
+  mkdirSync(join(directory, '.evidence/docker'), { mode: 0o700 });
+  const cidfile = join(directory, '.evidence/docker/container.cid');
+  const observerFault = join(directory, '.evidence/docker/fail-observer-after-create');
   const env = { HOME: join(directory, '.evidence/home'), TMPDIR: join(directory, '.evidence/tmp'),
     PATH: `${join(directory, 'bin')}:${dirname(process.execPath)}:${dirname(docker)}:${dirname(python)}:/usr/bin:/bin`,
     LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8', NODE_OPTIONS: '--max-old-space-size=512',
@@ -306,7 +309,8 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
     timedOut: boolean; seconds: number; stdout: string; stderr: string }[] = [];
   let acquired: { id: string; image: string } | undefined;
   let image = '', context = '', daemon = '';
-  let acquisitionAttempted = false;
+  let acquisitionAttempted = false, observerFailureReached = false;
+  let recoveredAfterObserverFailure: string | undefined;
   let failure: unknown;
   const capacity = () => {
     const available = Number(/^MemAvailable:\s+(\d+) kB$/m.exec(readFileSync('/proc/meminfo', 'utf8'))?.[1]) * 1024;
@@ -322,6 +326,7 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
       remaining, required: 3 * 1024 ** 3, disk: fs.bavail * fs.bsize };
   };
   const validate = (container: ReturnType<typeof inspect>) => {
+    expect(container.Name).toBe(`/${name}`);
     expect(container.Config.Labels['fitsy.verify.owner']).toBe(owner);
     expect(container.Config.Image).toBe('postgis/postgis:16-3.4');
     expect(container.Image).toBe(image);
@@ -332,6 +337,46 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
     expect(container.NetworkSettings.Ports['5432/tcp']).toEqual([
       expect.objectContaining({ HostIp: loopback, HostPort: expect.stringMatching(/^\d+$/) })]);
     if (acquired) expect(container.Id).toBe(acquired.id);
+  };
+  const creationIdentity = () => {
+    // Docker writes the actual acquisition ID before its observer can lose stdout.
+    const fd = openSync(cidfile, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const before = fstatSync(fd);
+      expect(before.isFile() && before.nlink === 1 && before.uid === process.getuid?.() &&
+        !(before.mode & 0o022)).toBe(true);
+      const id = readFileSync(fd, 'utf8').trim();
+      expect(id).toMatch(/^[a-f0-9]{64}$/);
+      const after = lstatSync(cidfile);
+      expect([after.dev, after.ino, after.uid, after.mode, after.nlink])
+        .toEqual([before.dev, before.ino, before.uid, before.mode, before.nlink]);
+      return { id, device: before.dev, inode: before.ino };
+    } finally { closeSync(fd); }
+  };
+  const removeOwnedContainer = () => {
+    expect(realDocker('context', 'show')).toBe(context);
+    expect(realDocker('info', '--format', '{{.ID}}')).toBe(daemon);
+    const creation = existsSync(cidfile) ? creationIdentity() : undefined;
+    if (acquired) expect(creation?.id).toBe(acquired.id);
+    const state = spawnSync(docker, ['inspect', creation?.id ?? name], { env, encoding: 'utf8', timeout: 15000 });
+    if (state.status === 0) {
+      const container = JSON.parse(state.stdout)[0]; validate(container);
+      // Name/labels alone cannot establish an acquisition or authorize removal.
+      if (!creation) throw Error('owned container has no durable Docker creation identity');
+      expect(container.Id).toBe(creation.id);
+      if (acquired) expect(container.Image).toBe(acquired.image);
+      expect(realDocker('context', 'show')).toBe(context);
+      expect(realDocker('info', '--format', '{{.ID}}')).toBe(daemon);
+      realDocker('rm', '-f', creation.id);
+      const gone = spawnSync(docker, ['inspect', creation.id], { env, encoding: 'utf8', timeout: 15000 });
+      expect(gone.status).not.toBe(0); expect(gone.stderr).toMatch(/No such (object|container)/i);
+    } else expect(state.stderr).toMatch(/No such (object|container)/i);
+    if (creation) {
+      const current = lstatSync(cidfile);
+      expect([current.dev, current.ino]).toEqual([creation.device, creation.inode]);
+      unlinkSync(cidfile);
+    }
+    return creation?.id;
   };
   const census = (root?: FixtureProcess) => {
     const rows = exec('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,lstart=']).split('\n').map(line => line.trim().split(/\s+/));
@@ -358,7 +403,7 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
     }
     return rows;
   };
-  const invoke = async () => {
+  const invoke = async (expectObserverFailure = false) => {
     capacity();
     expect(realDocker('context', 'show')).toBe(context);
     expect(JSON.parse(realDocker('info', '--format', '{{json .}}')).ID).toBe(daemon);
@@ -377,10 +422,11 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
       try { census(identity); }
       catch (error) { samplingFailure = error; signalFixtureProcess(identity, 'SIGTERM', true); }
     }, 100);
-    const timeout = setTimeout(() => { timedOut = true; signalFixtureProcess(identity, 'SIGTERM', true); }, 180000);
+    const commandTimeout = expectObserverFailure ? 60000 : 180000;
+    const timeout = setTimeout(() => { timedOut = true; signalFixtureProcess(identity, 'SIGTERM', true); }, commandTimeout);
     const kill = setTimeout(() => {
       for (const acquired of known.values()) signalFixtureProcess(acquired, 'SIGKILL', acquired.pid === acquired.pgid);
-    }, 185000);
+    }, commandTimeout + 5000);
     try {
       const result = await new Promise<{ status: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
         child.once('error', reject);
@@ -391,7 +437,8 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
       writeFileSync(join(evidence, `run-${runs.length}.stderr`), stderr);
       if (samplingFailure) throw samplingFailure;
       expect({ ...result, timedOut, diagnostics: result.status === 0 ? '' : stdout + stderr })
-        .toEqual({ status: 0, signal: null, timedOut: false, diagnostics: '' });
+        .toEqual({ status: expectObserverFailure ? 1 : 0, signal: null, timedOut: false,
+          diagnostics: expectObserverFailure ? stdout + stderr : '' });
     } finally { clearInterval(sample); clearTimeout(timeout); clearTimeout(kill); }
   };
   try {
@@ -481,16 +528,19 @@ const db=new PrismaClient({datasources:{db:{url}}});
     const absent = spawnSync(docker, ['inspect', name], { env, encoding: 'utf8', timeout: 15000 });
     expect(absent.status).not.toBe(0); expect(absent.stderr).toMatch(/No such (object|container)/i);
     const dockerHash = digest(docker);
-    // Observe the actual executable, forwarding literal argv/status and all stdio.
-    // The trace never returns a manufactured Docker response or mutation effect.
+    // Only native Docker's durable cidfile is added to creation argv.
+    // Other arguments/status/stdio and all Docker effects remain real.
     write('bin/docker', `#!${process.execPath}
 const fs=require('node:fs'),crypto=require('node:crypto'),cp=require('node:child_process');
 const binary=${JSON.stringify(docker)},hash=crypto.createHash('sha256'),buffer=Buffer.alloc(1048576),fd=fs.openSync(binary,'r');
 try{for(let n;(n=fs.readSync(fd,buffer))>0;)hash.update(buffer.subarray(0,n));}finally{fs.closeSync(fd);}
 if(hash.digest('hex')!==${JSON.stringify(dockerHash)})throw Error('real Docker binary changed');
-const args=process.argv.slice(2);
+const original=process.argv.slice(2);
+const args=original[0]==='run'?['run','--cidfile',${JSON.stringify(cidfile)},...original.slice(1)]:original;
 fs.appendFileSync('.evidence/events.jsonl',JSON.stringify({check:'docker',args})+'\\n');
 const r=cp.spawnSync(binary,args,{stdio:['inherit','pipe','pipe'],env:process.env,maxBuffer:4194304});
+// Reproduce loss of observer stdout/trace after actual successful creation.
+if(args[0]==='run'&&r.status===0&&fs.existsSync(${JSON.stringify(observerFault)}))process.exit(97);
 if(r.stdout)process.stdout.write(r.stdout);if(r.stderr)process.stderr.write(r.stderr);
 fs.appendFileSync('.evidence/events.jsonl',JSON.stringify({check:'docker-exit',args,status:r.status,signal:r.signal,
   createdId:args[0]==='run'&&r.status===0?r.stdout.toString().trim():null})+String.fromCharCode(10));
@@ -505,6 +555,7 @@ if(r.error)throw r.error;if(r.signal)process.kill(process.pid,r.signal);else pro
       write('.evidence/events.jsonl', '');
       await invoke();
       const container = inspect(name); validate(container);
+      expect(creationIdentity().id).toBe(container.Id);
       if (!acquired) acquired = { id: container.Id, image: container.Image };
       const observed = readFileSync(join(directory, '.evidence/events.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
       writeFileSync(join(evidence, `run-${generation + 1}-events.json`), JSON.stringify(observed, null, 2));
@@ -534,6 +585,23 @@ if(r.error)throw r.error;if(r.signal)process.kill(process.pid,r.signal);else pro
       expect(realDocker('info', '--format', '{{.ID}}')).toBe(daemon);
       expect(digest(docker)).toBe(dockerHash);
     }
+    // Keep both successful reset/seed invocations, then exercise lost observer
+    // evidence on a fresh creation through the same canonical runner and lock.
+    const previousId = acquired?.id;
+    expect(removeOwnedContainer()).toBe(previousId);
+    acquired = undefined;
+    writeFileSync(observerFault, 'fail after native Docker creation\n', { flag: 'wx', mode: 0o600 });
+    write('.evidence/events.jsonl', '');
+    await invoke(true);
+    const faultEvents = readFileSync(join(directory, '.evidence/events.jsonl'), 'utf8')
+      .trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+    writeFileSync(join(evidence, 'observer-failure-events.json'), JSON.stringify(faultEvents, null, 2));
+    expect(faultEvents.filter(event => event.check === 'docker' && event.args[0] === 'run')).toHaveLength(1);
+    expect(faultEvents.filter(event => event.check === 'docker-exit' && event.args[0] === 'run')).toHaveLength(0);
+    const created = creationIdentity();
+    expect(created.id).not.toBe(previousId);
+    validate(inspect(created.id));
+    observerFailureReached = true;
   } catch (error) { failure = error; }
   finally {
     const cleanupErrors: string[] = [];
@@ -553,33 +621,16 @@ if(r.error)throw r.error;if(r.signal)process.kill(process.pid,r.signal);else pro
     try {
       // Do not contact Docker after a failed pre-acquisition resource/readiness check.
       if (acquisitionAttempted) {
-        const eventsPath = join(directory, '.evidence/events.jsonl');
-        const trace = existsSync(eventsPath) ? readFileSync(eventsPath, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
-        const created = trace.filter(event => event.check === 'docker-exit' && event.createdId);
-        if (!acquired && created.length === 1) {
-          expect(created[0].createdId).toMatch(/^[a-f0-9]{64}$/);
-          acquired = { id: created[0].createdId, image };
-        }
-        // The immutable acquisition ID comes from the actual docker-run stdout.
-        const state = spawnSync(docker, ['inspect', acquired?.id ?? name], { env, encoding: 'utf8', timeout: 15000 });
-        if (state.status === 0) {
-          const container = JSON.parse(state.stdout)[0]; validate(container);
-          expect(acquired).toBeDefined();
-          if (acquired) expect(container.Image).toBe(acquired.image);
-          expect(realDocker('context', 'show')).toBe(context);
-          expect(realDocker('info', '--format', '{{.ID}}')).toBe(daemon);
-          realDocker('rm', '-f', container.Id);
-          const gone = spawnSync(docker, ['inspect', container.Id], { env, encoding: 'utf8', timeout: 15000 });
-          expect(gone.status).not.toBe(0); expect(gone.stderr).toMatch(/No such (object|container)/i);
-        } else expect(state.stderr).toMatch(/No such (object|container)/i);
+        recoveredAfterObserverFailure = removeOwnedContainer();
+        if (observerFailureReached) expect(recoveredAfterObserverFailure).toMatch(/^[a-f0-9]{64}$/);
       }
     } catch (error) { cleanupErrors.push(String(error)); }
     writeFileSync(join(evidence, 'closeout.json'), JSON.stringify({ root: directory, owner, name, acquired,
       runs: runs.map(({ stdout, stderr, ...run }) => ({ ...run, stdoutBytes: Buffer.byteLength(stdout), stderrBytes: Buffer.byteLength(stderr) })),
-      knownProcesses: [...known.values()], cleanupErrors, failure: failure ? String(failure) : null,
+      knownProcesses: [...known.values()], observerFailureReached, recoveredAfterObserverFailure, cleanupErrors, failure: failure ? String(failure) : null,
       hardWorkerKillLimitation: 'JS finally cannot guarantee cleanup after worker SIGKILL; hosted CI runner disposal remains required.' }, null, 2));
     if (!cleanupErrors.length) rmSync(directory, { recursive: true, force: true });
     if (cleanupErrors.length) throw Error(`real DB cleanup failed: ${cleanupErrors.join('; ')}; original: ${String(failure ?? '')}; evidence: ${evidence}`);
   }
   if (failure) throw failure;
-}, 420000);
+}, 480000);
