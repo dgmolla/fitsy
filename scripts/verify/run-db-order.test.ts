@@ -54,18 +54,20 @@ printf '%s\\n' '{"summary":"database test checked"}'
 exit "\${FAIL_TEST:-0}"
 `);
   writeFileSync(join(verify, "local-db.mjs"), `import { appendFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 const event = value => appendFileSync('order.log', value + '\\n');
 export function assertOwnedDatabase(env = process.env) {
   event('db-assert');
   if (env.FITSY_VERIFY_OWNED_DB !== 'owned') throw Error('modeled database owner mismatch');
 }
-export function runWithLocalDatabase(args) {
-  event('db-acquire');
-  if (process.env.FAIL_DB === '1') return 1;
-  const result = spawnSync(process.execPath, ['scripts/verify/run.mjs', ...args],
-    { env: { ...process.env, FITSY_VERIFY_OWNED_DB: 'owned' }, stdio: 'inherit' });
-  return result.status ?? 1;
+export async function runWithLocalDatabase(args) {
+  // Model the actual locked CLI's internal deferred preparation callback.
+  // Import the same runner instead of marking the DB owned before its build.
+  const { verify } = await import('./run.mjs');
+  return verify(args, () => {
+    event('db-acquire');
+    if (process.env.FAIL_DB === '1') throw Error('modeled database acquisition failed');
+    return { ...process.env, FITSY_VERIFY_OWNED_DB: 'owned' };
+  });
 }
 `);
   writeFileSync(join(directory, "source.marker"), "original");

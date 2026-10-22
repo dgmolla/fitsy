@@ -114,7 +114,7 @@ export function databaseControl({ root = repository, command = runCommand, spawn
     owned(container, pinnedId, false, pinnedImage);
     docker(['rm', '-f', pinnedId || container.Id]);
   }
-  function run(args) {
+  function prepare() {
     assertLock();
     const phase = assertPhaseLock(root, env);
     if (phase) admittedRuntime = phase.receipt.readiness?.identity;
@@ -182,8 +182,7 @@ export function databaseControl({ root = repository, command = runCommand, spawn
         if (result.status !== 0) throw new Error('owned database migration or seed failed');
       }
       assert(childEnv);
-      return spawn(process.execPath, ['scripts/verify/run.mjs', ...args], { cwd: root, env: childEnv,
-        stdio: 'inherit' }).status ?? 1;
+      return childEnv;
     } catch (error) {
       if (createdId) {
         try {
@@ -195,6 +194,15 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       }
       throw error;
     } finally { /* The supervisor releases its flock after this process group exits. */ }
+  }
+  function run(args, verify) {
+    assertLock();
+    // The CLI keeps one pipeline inside the existing supervised lock. Preparation
+    // stays deferred until that pipeline has passed its safety/build phase.
+    if (verify) return verify(args, prepare);
+    const childEnv = prepare();
+    return spawn(process.execPath, ['scripts/verify/run.mjs', ...args], { cwd: root, env: childEnv,
+      stdio: 'inherit' }).status ?? 1;
   }
   return { assert, run, stop, name, owner };
 }
@@ -214,7 +222,17 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     if (process.argv[2] === '--assert-owned-db') assertOwnedDatabase();
     else if (process.argv[2] === '--stop-owned-db') process.exitCode = withOwnedLock('--locked-stop');
     else if (process.argv[2] === '--locked-stop') { databaseControl().stop(); console.log('Stopped this worktree\'s owned verification database.'); }
-    else if (process.argv[2] === '--locked-run') process.exitCode = databaseControl().run(process.argv.slice(3));
+    else if (process.argv[2] === '--locked-run') {
+      // Do not await this import during module initialization: verify imports
+      // this same module for its fresh owned-container assertions.
+      import('./run.mjs').then(({ verify }) => databaseControl().run(process.argv.slice(3), verify))
+        .then(status => { process.exitCode = status; })
+        .catch(error => {
+          console.log(JSON.stringify({ name: 'local-database', status: 'fail', summary: error.message,
+            fix: 'repair the owned disposable database and rerun verification' }));
+          process.exitCode = 1;
+        });
+    }
   } catch (error) {
     if (process.argv[2] === '--locked-run') console.log(JSON.stringify({ name: 'local-database', status: 'fail',
       summary: error.message, fix: 'repair the owned disposable database and rerun verification' }));
