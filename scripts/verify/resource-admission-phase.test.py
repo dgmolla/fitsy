@@ -85,7 +85,9 @@ const fixtureNow=Date.now;
 Date.now=()=>fixtureNow()+fixtureElapsed+(existsSync(join(process.env.FIXTURE_PACKET,'startup-deadline-expired'))?60001:0);
 function fixtureCommand(binary, args) {
   if (binary === '/usr/bin/vm_stat') {
-    fixtureSample=fixtureSamples[Math.min(fixtureHostReads++,fixtureSamples.length-1)] || {};
+    const deferred=join(process.env.FIXTURE_PACKET,'deferred-host.json');
+    fixtureSample=existsSync(deferred) ? JSON.parse(readFileSync(deferred,'utf8'))
+      : fixtureSamples[Math.min(fixtureHostReads++,fixtureSamples.length-1)] || {};
     if(process.env.FIXTURE_FINISH_DEADLINE && fixtureHostReads===3) writeFileSync(join(process.env.FIXTURE_PACKET,'warm-pair-complete'),'two samples');
     return 'Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free: ' + (fixtureSample.pages ?? process.env.FIXTURE_PAGES ?? 524288) + '.\nPages inactive: 0.\nPages speculative: 0.\n'.replaceAll('\\n','\n');
   }
@@ -138,7 +140,7 @@ function fixtureCommand(binary, args) {
                                   "export function assertAdmittedDockerGuest(expected, command = fixtureCommand)")
         # Retain only the host-query fixture body; no production runtime switch.
         runtime_fixture = injection.replace("let identityReads = 0;", "let identityReads = 0;")
-        runtime = "import { existsSync } from 'node:fs';\nimport { join } from 'node:path';\n" + runtime + runtime_fixture
+        runtime = "import { existsSync, readFileSync } from 'node:fs';\nimport { join } from 'node:path';\n" + runtime + runtime_fixture
         (self.verify / 'docker-runtime.mjs').write_text(runtime)
         shipping = self.verify / 'shipping-session.mjs'
         shipping.write_text("""#!/opt/homebrew/bin/node
@@ -165,6 +167,8 @@ process.exitCode=result.status ?? 1;
         shipping.chmod(0o700)
         (self.verify / 'run.mjs').write_text('''import fs from 'node:fs';
 import {spawnSync} from 'node:child_process';
+export async function verify(_args, prepare) {
+Object.assign(process.env, prepare());
 console.log('remaining canonical selection modeled');
 if(process.env.FIXTURE_ASSERT_READER) {
  if(process.env.FIXTURE_READER_REPLACEMENT) {
@@ -208,6 +212,8 @@ if(process.env.FIXTURE_REPLACE_BETWEEN) {
 if(process.env.FIXTURE_HOLD) {
  fs.writeFileSync(process.env.FIXTURE_HOLD_READY,'owned child reached');
  setInterval(()=>{},1000);
+}
+return 0;
 }
 ''')
         for name in ('prisma/build/index.js', 'tsx/dist/cli.mjs'):
@@ -340,6 +346,128 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
                         FIXTURE_STATE=str(self.directory / 'state.json'), FIXTURE_EVENTS=str(self.directory / 'events'),
                         FIXTURE_RESETS=str(self.directory / 'resets'), FIXTURE_AUTHORITY=str(self.authority))
 
+    def use_real_deferred_pipeline(self):
+        # Only external checks and host/Docker observations are modeled.
+        # The actual runner, lock, CLI and preparation callback remain intact.
+        for name in ('run.mjs', 'receipt-cache.mjs'):
+            shutil.copyfile(SOURCE / name, self.verify / name)
+            self.assertEqual(self.sha(self.verify / name), self.sha(SOURCE / name))
+        (self.root / 'node_modules/js-yaml').symlink_to(SOURCE.parents[1] / 'node_modules/js-yaml')
+        (self.verify / 'registry.yml').write_text('''checks:
+  - name: structural
+    script: cheap.sh
+    layer: 0
+    blocking: true
+  - name: review-admission
+    script: review.sh
+    layer: 0
+    stage: acceptance
+    preflight: true
+    blocking: true
+    runs: [local]
+  - name: build
+    script: build.sh
+    layer: 3
+    blocking: true
+    runs: [local]
+  - name: test
+    script: database.sh
+    layer: 2
+    database: true
+    blocking: true
+    runs: [local]
+''')
+        (self.root / '.evidence/check.mjs').write_text('''import fs from 'node:fs';
+const check=process.argv[2], packet=process.env.FIXTURE_PACKET;
+const record={check,owned:process.env.FITSY_VERIFY_OWNED_DB ?? null,
+  pooled:process.env.POSTGRES_PRISMA_URL ?? null,
+  direct:process.env.POSTGRES_URL_NON_POOLING ?? null};
+fs.appendFileSync(packet+'/pipeline',JSON.stringify(record)+'\\n');
+if(check==='build') {
+  if(record.owned || record.pooled || record.direct) throw Error('build acquired database early');
+  fs.writeFileSync(packet+'/deferred-host.json',process.env.FIXTURE_DEFERRED_HOST || '{}');
+}
+if(check==='database') {
+  const url='postgresql://fitsy_test:fitsy_test@127.0.0.1:55432/fitsy_verify';
+  if(record.owned!=='owned-container' || record.pooled!==url || record.direct!==url ||
+      !fs.existsSync(process.env.FIXTURE_RESETS) ||
+      fs.readFileSync(packet+'/children','utf8')!=='migrate\\nseed\\n') {
+    throw Error('database check did not receive fresh prepared environment');
+  }
+}
+console.log(JSON.stringify({summary:check+' executed'}));
+''')
+        for script, check in (('cheap.sh', 'cheap'), ('review.sh', 'review'),
+                              ('build.sh', 'build'), ('database.sh', 'database')):
+            (self.verify / script).write_text(f'#!/bin/bash\n{NODE} .evidence/check.mjs {check}\n')
+        task = self.packet / 'task.sh'
+        task.write_text(task.read_text().replace(' --locked-run',
+                        ' --locked-run --layer=all --scope=all --runs=local'))
+        self.commit(self.root)
+        self.head = self.git(self.root, 'rev-parse', 'HEAD')
+        self.git(self.root, 'update-ref', 'refs/remotes/origin/main', self.head)
+        manifest = self.admin / 'completed/issue-463.json'
+        manifest.write_text(json.dumps({'source_sha': self.head, 'base_sha': self.head,
+                                        'control_sha': 'a' * 40}))
+        authority = json.loads(self.authority.read_text())
+        authority.update(source_sha=self.head, base_sha=self.head,
+                         completed_manifest_sha256=self.sha(manifest))
+        authority['files_sha256'] = {name: self.sha(Path(name))
+                                     for name in authority['files_sha256']}
+        self.authority.write_text(json.dumps(authority))
+
+    def deferred_pipeline(self, host):
+        self.use_real_deferred_pipeline()
+        result = self.run_packet(FIXTURE_DEFERRED_HOST=json.dumps(host))
+        pipeline = [json.loads(line) for line in (self.packet / 'pipeline').read_text().splitlines()]
+        checks = [event['check'] for event in pipeline]
+        self.assertEqual(checks[:3], ['cheap', 'review', 'build'], result.stdout + result.stderr)
+        for check in ('cheap', 'review', 'build'):
+            self.assertEqual(checks.count(check), 1, result.stdout + result.stderr)
+        self.assertTrue(all(event['owned'] is None for event in pipeline[:3]))
+        self.assertEqual(json.loads((self.packet / 'deferred-host.json').read_text()), host)
+        self.assertEqual(len(list(self.packet.glob('phase-admission-*.json'))), 1)
+        return result, pipeline
+
+    def assert_deferred_host_refusal(self, host):
+        result, pipeline = self.deferred_pipeline(host)
+        local = Path(str(self.env['FIXTURE_EVENTS']) + '.local')
+        self.assertFalse(local.exists(), 'database Docker operations followed post-build host drift: ' +
+                         (local.read_text() if local.exists() else '') + result.stdout + result.stderr)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([event['check'] for event in pipeline], ['cheap', 'review', 'build'])
+        self.assertFalse((self.directory / 'resets').exists())
+        self.assertFalse((self.directory / 'state.json').exists())
+        self.assertFalse((self.packet / 'children').exists())
+        self.assertFalse(list(self.packet.glob('phase-acquisition-*.json')))
+        self.assertEqual(self.git(self.root, 'status', '--porcelain', '--untracked-files=all'), '')
+
+    def test_deferred_build_capacity_drop_refuses_before_database(self):
+        # 5.34 GiB stays above the 4.25 GiB stop but below peak plus 4 GiB reserve.
+        self.assert_deferred_host_refusal({'pages': 350000})
+
+    def test_deferred_build_pressure_change_refuses_before_database(self):
+        self.assert_deferred_host_refusal({'pressure': 2})
+
+    def test_deferred_build_swap_change_refuses_before_database(self):
+        self.assert_deferred_host_refusal({'swap': 1})
+
+    def test_deferred_build_disk_drop_refuses_before_database(self):
+        self.assert_deferred_host_refusal({'disk': 12 * 1024 ** 3 - 1})
+
+    def test_deferred_build_valid_capacity_prepares_and_checks_once(self):
+        result, pipeline = self.deferred_pipeline({})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([event['check'] for event in pipeline], ['cheap', 'review', 'build', 'database'])
+        self.assertEqual(pipeline[-1]['owned'], 'owned-container')
+        self.assertEqual((self.directory / 'resets').read_text().splitlines(), ['reset'])
+        self.assertEqual((self.packet / 'children').read_text().splitlines(), ['migrate', 'seed'])
+        acquired = list(self.packet.glob('phase-acquisition-*.json'))
+        self.assertEqual(len(acquired), 1)
+        phase = next(self.packet.glob('phase-admission-*.json'))
+        self.assertEqual(json.loads(acquired[0].read_text())['admission_sha256'], self.sha(phase))
+        self.assertEqual(self.git(self.root, 'status', '--porcelain', '--untracked-files=all'), '')
+
     @staticmethod
     def sha(path):
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -407,7 +535,9 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
             destination.mkdir(mode=0o700)
             (destination / 'stdout').write_text(result.stdout)
             (destination / 'stderr').write_text(result.stderr)
-            for path in self.packet.iterdir():
+            for path in (*self.packet.iterdir(), self.directory / 'events',
+                         self.directory / 'events.local', self.directory / 'resets',
+                         self.directory / 'state.json'):
                 if path.is_file(): shutil.copyfile(path, destination / path.name)
             (destination / 'command.json').write_text(json.dumps({'argv':[PYTHON,str(self.packet/'run.py')],
                 'cwd':str(self.root),'modeled_external_capacity':extra,'socket_scratch':raw,
