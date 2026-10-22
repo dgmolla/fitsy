@@ -565,6 +565,50 @@ test('cheap reuse reruns real secrets when an optional executable appears or cha
   expect(calls('tool-calls')).toBe(2);
 });
 
+test.each([
+  ['basename', 'changed'], ['basename', 'missing'], ['cat', 'changed'], ['cat', 'missing'],
+])('cheap reuse reruns real structural closure when %s is %s at the same PATH', (name, mutation) => {
+  for (const file of ['scripts/verify/structural.sh', 'scripts/structural-tests.sh', 'scripts/route-reviewers.sh', '.claude/agents/reviewer.md']) {
+    write(file, readFileSync(join(root, file), 'utf8'));
+  }
+  write('scripts/verify/registry.yml', 'checks:\n  - name: structural\n    script: structural.sh\n    layer: 0\n    cache: true\n    blocking: true\n');
+  write('docs/product/guide.md', 'fixture\n');
+  for (const path of ['apps/api', 'apps/mobile', 'packages/shared']) mkdirSync(join(directory, path), { recursive: true });
+  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  const tools = join(directory, '.evidence/tools');
+  mkdirSync(tools, { recursive: true });
+  // An explicit PATH makes removal real absence, without touching host tools.
+  const commands = ['bash', 'sh', 'git', 'dirname', 'basename', 'cat', 'grep', 'sed', 'sort', 'tr', 'head', 'cut', 'xargs', 'find'];
+  let original = '';
+  for (const command of commands) {
+    const executable = execFileSync('/bin/bash', ['-p', '-c', `command -v ${command}`], { env, encoding: 'utf8' }).trim();
+    if (command === name) original = executable;
+    else symlinkSync(executable, join(tools, command));
+  }
+  symlinkSync(process.execPath, join(tools, 'node'));
+  const tool = `.evidence/tools/${name}`;
+  const quoted = "'" + original.replace(/'/g, "'\"'\"'") + "'";
+  const successful = `#!/bin/sh\necho called >> .evidence/structural-tool-calls\nexec ${quoted} "$@"\n`;
+  write(tool, successful); chmodSync(join(directory, tool), 0o755);
+  const extra = { PATH: tools };
+  const first = cli('run.mjs', cheapReuse, extra);
+  expect({ status: first.status, stderr: first.status === 0 ? '' : first.stderr }).toEqual({ status: 0, stderr: '' });
+  const count = calls('structural-tool-calls');
+  const hit = cli('run.mjs', cheapReuse, extra);
+  expect(hit.status).toBe(0); expect(hit.stdout).toContain('"cached":true');
+  expect(calls('structural-tool-calls')).toBe(count);
+  if (mutation === 'missing') unlinkSync(join(directory, tool));
+  else write(tool, '#!/bin/sh\necho changed >> .evidence/structural-tool-calls\necho forbidden-domain\n');
+  const invalidated = cli('run.mjs', cheapReuse, extra);
+  expect(invalidated.status).toBe(1); expect(invalidated.stdout).not.toContain('"cached":true');
+  expect(invalidated.stderr).toContain(name === 'basename' ? 'Docs directory structure' : 'Reviewer routing table');
+  if (mutation === 'changed') expect(calls('structural-tool-calls')).toBeGreaterThan(count);
+  write(tool, successful); chmodSync(join(directory, tool), 0o755);
+  const recovered = cli('run.mjs', cheapReuse, extra);
+  expect(recovered.status).toBe(0); expect(recovered.stdout).not.toContain('"cached":true');
+  expect(cli('run.mjs', cheapReuse, extra).stdout).toContain('"cached":true');
+});
+
 test('cheap reuse binds actual installed dependency files when the lock text is unchanged', () => {
   cheapCacheFixture();
   const link = join(directory, 'node_modules');

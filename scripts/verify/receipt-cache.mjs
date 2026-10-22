@@ -74,12 +74,20 @@ function installedIdentity(root, paths, check) {
   }
   try {
     if (paths.some(path => !isAbsolute(path))) return null;
-    const tools = ['bash', 'git', 'node', 'dirname', 'grep', 'sed', 'sort', 'tr', 'head', 'cut', 'xargs', 'find'];
+    // Shared canonical shell closure: structural.sh -> structural-tests.sh ->
+    // route-reviewers.sh (including basename and cat); safety/context scripts
+    // use the same text tools. npm's script dispatcher also uses a shell.
+    const tools = ['bash', 'sh', 'git', 'node', 'dirname', 'basename', 'cat', 'grep', 'sed', 'sort', 'tr', 'head', 'cut', 'xargs', 'find'];
     if (check.name === 'secrets') tools.push('gitleaks');
     if (check.name === 'actionlint') tools.push('actionlint', 'shellcheck');
     if (['lint', 'typecheck', 'boundaries', 'focused-tests', 'test'].includes(check.name)) tools.push('npm', 'npx');
     if (check.name === 'test' || check.selection?.includes?.('.test.py')) tools.push('python3');
     visit(process.execPath);
+    // run.mjs executes /bin/bash directly; npm's default script shell is
+    // /bin/sh, irrespective of a different executable named sh in PATH.
+    for (const file of ['/bin/bash', '/bin/sh']) {
+      visit(file); hash.update(readFileSync(realpathSync(file)));
+    }
     for (const name of tools) {
       const file = paths.map(path => join(path, name)).find(path => {
         if (!present(path)) return false;
