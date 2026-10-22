@@ -516,7 +516,9 @@ if(r.error)throw r.error;if(r.signal)process.kill(process.pid,r.signal);else pro
       const url = `postgresql://fitsy_test:fitsy_test@127.0.0.1:${container.NetworkSettings.Ports['5432/tcp'][0].HostPort}/fitsy_verify`;
       expect(database).toEqual(expect.objectContaining({ owned: acquired.id, pooled: url, direct: url,
         seeded: true, priorSentinelAbsent: true }));
-      const reported = runs[generation].stdout.trim().split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line));
+      const completed = runs[generation];
+      if (!completed) throw Error('completed real DB invocation evidence is missing');
+      const reported = completed.stdout.trim().split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line));
       for (const check of ['structural', 'build', 'db-fixture']) {
         expect(reported.filter(result => result.name === check && result.status === 'pass')).toHaveLength(1);
       }
