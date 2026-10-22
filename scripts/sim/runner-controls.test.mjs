@@ -16,7 +16,8 @@ const sha = value => createHash('sha256').update(value).digest('hex');
 // The required local media lane registers these cases; ordinary L2 has no
 // decoder dependency. Selection is explicit and independent of tool presence.
 const mediaTest = process.env.FITSY_MEDIA_INTEGRATION === '1' ? test : () => {};
-test('malformed previous report is a reuse miss without changing its raw bytes', async () => {
+const deterministicTest = process.env.FITSY_MEDIA_INTEGRATION === '1' ? () => {} : test;
+deterministicTest('malformed previous report is a reuse miss without changing its raw bytes', async () => {
   const dir = temp(), reportFile = join(dir, 'report.json');
   const malformed = '{"result":"pass",';
   try {
@@ -30,7 +31,7 @@ test('malformed previous report is a reuse miss without changing its raw bytes',
     assert.deepEqual(readPreviousReportForReuse(reportFile), { report: { result: 'pass' }, error: null });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
-test('final timeline failure leaves a failed report and retains the triggering error', () => {
+deterministicTest('final timeline failure leaves a failed report and retains the triggering error', () => {
   const dir = temp(), reportFile = join(dir, 'report.json');
   const report = { result: 'running', flows: [{ name: 'welcome' }] };
   try {
@@ -46,7 +47,7 @@ test('final timeline failure leaves a failed report and retains the triggering e
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('a failed report transition invalidates an already finishable report', () => {
+deterministicTest('a failed report transition invalidates an already finishable report', () => {
   const dir = temp(), reportFile = join(dir, 'report.json'), timeline = join(dir, 'events.jsonl');
   try {
     writeFileSync(reportFile, JSON.stringify({ result: 'awaiting-walkthrough' }));
@@ -67,7 +68,7 @@ async function assertProcessStopped(pid, deadlineMs = 1500) {
   }
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' }, `process ${pid} remains live after group cleanup`);
 }
-test('missing Metro fails readiness before the selector timeout', async () => {
+deterministicTest('missing Metro fails readiness before the selector timeout', async () => {
   const server = createServer();
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
@@ -78,13 +79,13 @@ test('missing Metro fails readiness before the selector timeout', async () => {
   assert.ok(Date.now() - start < 2000);
 });
 
-test('a live but wrong owned Metro JavaScript identity fails before any flow', async () => {
+deterministicTest('a live but wrong owned Metro JavaScript identity fails before any flow', async () => {
   await assert.rejects(requireMetro({ pid: 44, processIdentity: 'owned', jsHash: 'old-js', configHash: 'config', port: 8099 },
     { processIdentity: () => 'owned', sourceHash: 'new-js', configHash: 'config', route: '/bundle' }),
   /Metro JavaScript\/configuration differs/);
 });
 
-test('development flow consumes the owned Maestro command receipt and rejects a no-op', async () => {
+deterministicTest('development flow consumes the owned Maestro command receipt and rejects a no-op', async () => {
   const dir = temp(), timeline = join(dir, 'timeline.jsonl'), video = join(dir, 'video.mp4');
   const commandFile = join(dir, 'commands-test.json');
   const commands = [{ command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'welcome' } } }, metadata: { status: 'COMPLETED' } },
@@ -118,7 +119,7 @@ test('development flow consumes the owned Maestro command receipt and rejects a 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('selected recording mode reaches the runner and omission fails before either child starts', async () => {
+deterministicTest('selected recording mode reaches the runner and omission fails before either child starts', async () => {
   const dir = temp(), timeline = join(dir, 'timeline.jsonl'), video = join(dir, 'video.mp4');
   const recorderLog = join(dir, 'recorder.log');
   const args = { recorderCommand: '/missing-recorder', maestroCommand: process.execPath,
@@ -145,7 +146,7 @@ test('selected recording mode reaches the runner and omission fails before eithe
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('product-flow recording bridge follows CLI options in a child process', () => {
+deterministicTest('product-flow recording bridge follows CLI options in a child process', () => {
   const dir = temp();
   const productFlowUrl = new URL('./product-flow.mjs', import.meta.url).href;
   const evidenceModeUrl = new URL('./evidence-mode.mjs', import.meta.url).href;
@@ -266,7 +267,7 @@ mediaTest('product-flow run CLI reaches a successful fixture flow with the selec
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('product-flow run entrypoint applies requested-video preflight before native work', () => {
+deterministicTest('product-flow run entrypoint applies requested-video preflight before native work', () => {
   const dir = temp();
   const entry = new URL('./product-flow.mjs', import.meta.url).pathname;
   try {
@@ -281,7 +282,7 @@ test('product-flow run entrypoint applies requested-video preflight before nativ
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('bound product-flow CLI records failure but excludes nested test-harness attempts', () => {
+deterministicTest('bound product-flow CLI records failure but excludes nested test-harness attempts', () => {
   const dir = temp();
   const source = new URL('../..', import.meta.url).pathname;
   try {
@@ -311,7 +312,7 @@ test('bound product-flow CLI records failure but excludes nested test-harness at
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('pre-XCTest Maestro exit retains primary failure and records missing capture proof', async () => {
+deterministicTest('pre-XCTest Maestro exit retains primary failure and records missing capture proof', async () => {
   const dir = temp(), timeline = join(dir, 'timeline.jsonl');
   try {
     const recorded = await runRecordedFlow({ recordVideo: false, maestroCommand: process.execPath,
@@ -331,7 +332,7 @@ test('pre-XCTest Maestro exit retains primary failure and records missing captur
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('capture proof failure precedence preserves command and watchdog failures without allowing a pass', () => {
+deterministicTest('capture proof failure precedence preserves command and watchdog failures without allowing a pass', () => {
   const cases = [
     [{ code: 1, reason: null, error: 'driver exited' }, 'maestro-exit', 'driver exited'],
     [{ code: 1, reason: 'inactivity-deadline', error: 'quiet' }, 'inactivity-deadline', 'quiet'],
@@ -349,7 +350,7 @@ test('capture proof failure precedence preserves command and watchdog failures w
   assert.equal(verified.reason, null);
 });
 
-test('healthy long command with driver progress outlives the inactivity interval', async () => {
+deterministicTest('healthy long command with driver progress outlives the inactivity interval', async () => {
   const dir = temp();
   try {
     const script = "const fs=require('fs');const p=process.argv[1];const tick=setInterval(()=>fs.appendFileSync(p,'.'),70);setTimeout(()=>{clearInterval(tick);process.exit(0)},1150)";
@@ -366,7 +367,7 @@ test('healthy long command with driver progress outlives the inactivity interval
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('Maestro start timeline failure reaps only its owned command and keeper', async () => {
+deterministicTest('Maestro start timeline failure reaps only its owned command and keeper', async () => {
   const dir = temp();
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   let keeperPid = null, commandPid = null;
@@ -390,7 +391,7 @@ test('Maestro start timeline failure reaps only its owned command and keeper', a
   }
 });
 
-test('Maestro diagnostic timeline failure reaps its owned group and preserves callback error', async () => {
+deterministicTest('Maestro diagnostic timeline failure reaps its owned group and preserves callback error', async () => {
   const dir = temp(), timeline = join(dir, 'events.jsonl');
   let keeperPid = null, commandPid = null;
   try {
@@ -413,7 +414,7 @@ test('Maestro diagnostic timeline failure reaps its owned group and preserves ca
   }
 });
 
-test('Maestro escalation timeline failure reaps a TERM-resistant command', async () => {
+deterministicTest('Maestro escalation timeline failure reaps a TERM-resistant command', async () => {
   const dir = temp(), timeline = join(dir, 'events.jsonl');
   let keeperPid = null, commandPid = null;
   try {
@@ -436,7 +437,7 @@ test('Maestro escalation timeline failure reaps a TERM-resistant command', async
   }
 });
 
-test('Maestro end timeline failure leaves no owned keeper after command exit', async () => {
+deterministicTest('Maestro end timeline failure leaves no owned keeper after command exit', async () => {
   const dir = temp(), timeline = join(dir, 'events.jsonl');
   let keeperPid = null, commandPid = null;
   try {
@@ -459,7 +460,7 @@ test('Maestro end timeline failure leaves no owned keeper after command exit', a
   }
 });
 
-test('recorded flow removes signal listeners after evidence write failure', async () => {
+deterministicTest('recorded flow removes signal listeners after evidence write failure', async () => {
   const dir = temp();
   const intListeners = process.listenerCount('SIGINT'), termListeners = process.listenerCount('SIGTERM');
   try {
@@ -474,7 +475,7 @@ test('recorded flow removes signal listeners after evidence write failure', asyn
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('watchdog stops its child group and leaves an unrelated process running', async () => {
+deterministicTest('watchdog stops its child group and leaves an unrelated process running', async () => {
   const dir = temp();
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   try {
@@ -489,7 +490,7 @@ test('watchdog stops its child group and leaves an unrelated process running', a
   } finally { unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('completed Maestro flow reaps a lingering owned driver without changing its passing result', async () => {
+deterministicTest('completed Maestro flow reaps a lingering owned driver without changing its passing result', async () => {
   const dir = temp(), pidFile = join(dir, 'descendant.pid'), timeline = join(dir, 'events.jsonl');
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   let descendantPid = null;
@@ -513,7 +514,7 @@ test('completed Maestro flow reaps a lingering owned driver without changing its
   }
 });
 
-test('completed Maestro flow fails if its owned driver resists bounded cleanup', async () => {
+deterministicTest('completed Maestro flow fails if its owned driver resists bounded cleanup', async () => {
   const dir = temp(), pidFile = join(dir, 'descendant.pid'), readyFile = join(dir, 'ready'), timeline = join(dir, 'events.jsonl');
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   let descendantPid = null;
@@ -536,7 +537,7 @@ test('completed Maestro flow fails if its owned driver resists bounded cleanup',
   }
 });
 
-test('watchdog reaps a TERM-resistant descendant after Maestro parent exits', async () => {
+deterministicTest('watchdog reaps a TERM-resistant descendant after Maestro parent exits', async () => {
   const dir = temp(), pidFile = join(dir, 'descendant.pid');
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   let descendantPid = null;
@@ -556,7 +557,7 @@ test('watchdog reaps a TERM-resistant descendant after Maestro parent exits', as
   }
 });
 
-test('unexpected keeper loss fails with diagnostics and never signals an ambiguous group', async () => {
+deterministicTest('unexpected keeper loss fails with diagnostics and never signals an ambiguous group', async () => {
   const dir = temp(), timeline = join(dir, 'events.jsonl');
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   let keeperPid = null, commandPid = null, diagnostics = 0;
@@ -582,7 +583,7 @@ test('unexpected keeper loss fails with diagnostics and never signals an ambiguo
   }
 });
 
-test('keeper stays alive after runner disconnect until a TERM-resistant descendant is killed', async () => {
+deterministicTest('keeper stays alive after runner disconnect until a TERM-resistant descendant is killed', async () => {
   const dir = temp(), pidFile = join(dir, 'disconnect-descendant.pid'), readyFile = join(dir, 'descendant-ready');
   const keeperPath = new URL('./owned-process-keeper.mjs', import.meta.url).pathname;
   const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
@@ -614,7 +615,7 @@ test('keeper stays alive after runner disconnect until a TERM-resistant descenda
   }
 });
 
-test('recorder stops with its flow and leaves unrelated processes alive', async () => {
+deterministicTest('recorder stops with its flow and leaves unrelated processes alive', async () => {
   const dir = temp();
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   try {
@@ -630,7 +631,7 @@ test('recorder stops with its flow and leaves unrelated processes alive', async 
   } finally { unrelated.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('recorder keeps its real keeper open until a delayed exit receipt arrives', async () => {
+deterministicTest('recorder keeps its real keeper open until a delayed exit receipt arrives', async () => {
   const dir = temp(), video = join(dir, 'video.mp4');
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   let releaseReceipt, receiptHeld, closeSent;
@@ -675,7 +676,7 @@ test('recorder keeps its real keeper open until a delayed exit receipt arrives',
   }
 });
 
-test('recorder reports a missing exit receipt and reaps only its keeper', async () => {
+deterministicTest('recorder reports a missing exit receipt and reaps only its keeper', async () => {
   const dir = temp(), unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   let recorder;
   try {
@@ -700,7 +701,7 @@ test('recorder reports a missing exit receipt and reaps only its keeper', async 
   }
 });
 
-test('Maestro watchdog keeps its real keeper open until a delayed exit receipt arrives', async () => {
+deterministicTest('Maestro watchdog keeps its real keeper open until a delayed exit receipt arrives', async () => {
   const dir = temp(), unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   let releaseReceipt, receiptHeld, closeSent;
   const held = new Promise(resolve => { receiptHeld = resolve; });
@@ -740,7 +741,7 @@ test('Maestro watchdog keeps its real keeper open until a delayed exit receipt a
   }
 });
 
-test('successful Maestro keeps its keeper open until a delayed exit receipt arrives', async () => {
+deterministicTest('successful Maestro keeps its keeper open until a delayed exit receipt arrives', async () => {
   const dir = temp();
   let releaseReceipt, receiptHeld, closeSent;
   const held = new Promise(resolve => { receiptHeld = resolve; });
@@ -780,7 +781,7 @@ test('successful Maestro keeps its keeper open until a delayed exit receipt arri
   }
 });
 
-for (const recorderExitCode of [0, 1]) test(`early recorder exit ${recorderExitCode} with partial video fails its still-running flow`, async () => {
+for (const recorderExitCode of [0, 1]) deterministicTest(`early recorder exit ${recorderExitCode} with partial video fails its still-running flow`, async () => {
   const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
   const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   try {
@@ -808,7 +809,7 @@ for (const recorderExitCode of [0, 1]) test(`early recorder exit ${recorderExitC
   } finally { sentinel.kill('SIGTERM'); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('recorder completion during requested stop preserves a passing flow', async () => {
+deterministicTest('recorder completion during requested stop preserves a passing flow', async () => {
   const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
   try {
     const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'complete');process.exit(0)});setInterval(()=>{},1000)";
@@ -834,7 +835,7 @@ test('recorder completion during requested stop preserves a passing flow', async
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('recorder exit observed by keeper before stop fails even when IPC delivery follows stop request', async () => {
+deterministicTest('recorder exit observed by keeper before stop fails even when IPC delivery follows stop request', async () => {
   const dir = temp(), video = join(dir, 'video.mp4'), marker = join(dir, 'recorder-exiting'), timeline = join(dir, 'timeline.jsonl');
   try {
     const delayedExitSpawnImpl = (command, args, options) => {
@@ -873,7 +874,7 @@ test('recorder exit observed by keeper before stop fails even when IPC delivery 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('recorder exit inside startup wait retains partial proof and captures diagnostics', async () => {
+deterministicTest('recorder exit inside startup wait retains partial proof and captures diagnostics', async () => {
   const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
   try {
     const recorderScript = "const fs=require('fs');fs.writeFileSync(process.argv[1],'partial');const wait=()=>fs.existsSync(process.argv[1]+'.startup-ack')?process.exit(0):setTimeout(wait,5);wait()";
@@ -922,7 +923,7 @@ test('recorder exit inside startup wait retains partial proof and captures diagn
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('recorder exit during watchdog diagnostics takes precedence and retains the watchdog reason', async () => {
+deterministicTest('recorder exit during watchdog diagnostics takes precedence and retains the watchdog reason', async () => {
   const dir = temp(), video = join(dir, 'video.mp4'), marker = join(dir, 'stop-recorder'), timeline = join(dir, 'timeline.jsonl');
   try {
     const recorderScript = "const fs=require('fs');fs.writeFileSync(process.argv[1],'partial');const wait=()=>fs.existsSync(process.argv[2])?process.exit(0):setTimeout(wait,10);wait()";
@@ -965,7 +966,7 @@ test('recorder exit during watchdog diagnostics takes precedence and retains the
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('watchdog reason remains primary when recorder exits after the accepted stop', async () => {
+deterministicTest('watchdog reason remains primary when recorder exits after the accepted stop', async () => {
   const dir = temp(), video = join(dir, 'video.mp4'), timeline = join(dir, 'timeline.jsonl');
   try {
     const recorderScript = "process.on('SIGINT',()=>{require('fs').writeFileSync(process.argv[1],'complete');process.exit(0)});setInterval(()=>{},1000)";
@@ -984,7 +985,7 @@ test('watchdog reason remains primary when recorder exits after the accepted sto
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('recorder command startup failure is actionable and closes its keeper', async () => {
+deterministicTest('recorder command startup failure is actionable and closes its keeper', async () => {
   const dir = temp();
   try {
     await assert.rejects(startOwnedRecorder('test-device', join(dir, 'video.mp4'), join(dir, 'recorder.log'),
@@ -993,7 +994,7 @@ test('recorder command startup failure is actionable and closes its keeper', asy
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('recorder startup callback failure stops its owned group', async () => {
+deterministicTest('recorder startup callback failure stops its owned group', async () => {
   const dir = temp();
   let keeperPid = null, commandPid = null;
   try {
@@ -1007,7 +1008,7 @@ test('recorder startup callback failure stops its owned group', async () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-for (const failingWrite of [1, 2]) test(`recorder escalation log write ${failingWrite} failure reaps only its owned group`, async () => {
+for (const failingWrite of [1, 2]) deterministicTest(`recorder escalation log write ${failingWrite} failure reaps only its owned group`, async () => {
   const dir = temp(), log = join(dir, 'recorder.log'), badLog = join(dir, 'unwritable-log');
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
   let recorder;
@@ -1028,7 +1029,7 @@ for (const failingWrite of [1, 2]) test(`recorder escalation log write ${failing
   }
 });
 
-test('recorder stop acknowledgement failure reaps its owned group and retains the IPC error', async () => {
+deterministicTest('recorder stop acknowledgement failure reaps its owned group and retains the IPC error', async () => {
   const dir = temp(), unrelated = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
   let recorder;
   try {
@@ -1049,7 +1050,7 @@ test('recorder stop acknowledgement failure reaps its owned group and retains th
   }
 });
 
-test('recorder reaps its stubborn descendant when leader exits on SIGINT', async () => {
+deterministicTest('recorder reaps its stubborn descendant when leader exits on SIGINT', async () => {
   const dir = temp(), pidFile = join(dir, 'recorder-descendant.pid');
   const unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   let descendantPid = null;
@@ -1070,7 +1071,7 @@ test('recorder reaps its stubborn descendant when leader exits on SIGINT', async
   }
 });
 
-test('recorder stop accepts an already exited owned group', async () => {
+deterministicTest('recorder stop accepts an already exited owned group', async () => {
   const dir = temp();
   try {
     const file = join(dir, 'video.mp4');
@@ -1085,7 +1086,7 @@ test('recorder stop accepts an already exited owned group', async () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('recorder reaps a descendant created after startup when its parent exits before stop', async () => {
+deterministicTest('recorder reaps a descendant created after startup when its parent exits before stop', async () => {
   const dir = temp(), pidFile = join(dir, 'late-descendant.pid');
   let descendantPid = null;
   try {
@@ -1107,7 +1108,7 @@ test('recorder reaps a descendant created after startup when its parent exits be
   }
 });
 
-test('selector failure preserves deadline, expectation and hierarchy availability', () => {
+deterministicTest('selector failure preserves deadline, expectation and hierarchy availability', () => {
   const commands = [{ command: { assertConditionCommand: { condition: { visible: { idRegex: 'welcome-start' } }, timeout: '30000' } },
     metadata: { status: 'FAILED', timestamp: 1000, duration: 30000, error: { message: 'not visible', hierarchyRoot: { children: [] } } } }];
   const summary = summarizeCommands(commands);
@@ -1116,7 +1117,7 @@ test('selector failure preserves deadline, expectation and hierarchy availabilit
   assert.deepEqual(nearestFailure(commands).hierarchy, { children: [] });
 });
 
-test('long gap is unobserved, overlap is non-additive, and missing receipt is unknown', () => {
+deterministicTest('long gap is unobserved, overlap is non-additive, and missing receipt is unknown', () => {
   const command = (timestamp, duration) => ({ command: { tapOnElementCommand: {} }, metadata: { status: 'COMPLETED', timestamp, duration } });
   const summary = summarizeCommands([command(1000, 800), command(46000, 1000), command(46500, 1000)]);
   assert.equal(summary.gaps[0].adjacentStartGapMs, 45000);
@@ -1145,7 +1146,7 @@ test('long gap is unobserved, overlap is non-additive, and missing receipt is un
   assert.equal(missingDuration.gaps[1].investigationCandidate, false);
 });
 
-test('a long parent command covers gaps between nested commands', () => {
+deterministicTest('a long parent command covers gaps between nested commands', () => {
   const command = (timestamp, duration) => ({ command: { tapOnElementCommand: {} }, metadata: { status: 'COMPLETED', timestamp, duration } });
   const summary = summarizeCommands([command(1000, 100000), command(11000, 1000), command(51000, 1000)]);
   assert.equal(summary.gaps[1].adjacentStartGapMs, 40000);
@@ -1154,7 +1155,7 @@ test('a long parent command covers gaps between nested commands', () => {
   assert.equal(summary.gaps[1].investigationCandidate, false);
 });
 
-test('timing summary keeps every incomplete boundary and aggregate gap unknown', () => {
+deterministicTest('timing summary keeps every incomplete boundary and aggregate gap unknown', () => {
   const command = (timestamp, duration) => ({ command: { tapOnElementCommand: {} }, metadata: { status: 'COMPLETED', timestamp, duration } });
   const missing = { command: { retryCommand: { commands: [] } }, metadata: { status: 'COMPLETED' } };
   const complete = [command(1000, 500), command(2000, 500), command(46000, 1000)];
@@ -1180,7 +1181,7 @@ test('timing summary keeps every incomplete boundary and aggregate gap unknown',
   assert.equal(summarizeFlowTiming(complete).recording.recorderStartedAt, null);
 });
 
-for (const signal of ['SIGINT', 'SIGTERM']) test(`${signal} reaps owned flow groups after diagnostics and preserves unrelated process`, async () => {
+for (const signal of ['SIGINT', 'SIGTERM']) deterministicTest(`${signal} reaps owned flow groups after diagnostics and preserves unrelated process`, async () => {
   const dir = temp();
   const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   const fixture = join(dir, 'fixture.mjs');
@@ -1232,7 +1233,7 @@ writeFileSync(join(dir,'result.json'), JSON.stringify({ reason: result.result.re
   }
 });
 
-test('empty commands and abnormal recorder exit fail before walkthrough', () => {
+deterministicTest('empty commands and abnormal recorder exit fail before walkthrough', () => {
   const result = { code: 0, reason: null };
   const command = [{ command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } }, metadata: { status: 'COMPLETED' } }];
   assert.equal(flowFailureReason(result, command, { state: 'stopped', code: 0, bytes: 5, endedBeforeStop: true }), 'recorder-ended-early');
@@ -1306,13 +1307,13 @@ mediaTest('successful Maestro with undecodable recorder output records failure b
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('two matching failures require a diagnosis checkpoint before another run', () => {
+deterministicTest('two matching failures require a diagnosis checkpoint before another run', () => {
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'a' }]), true);
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'b' }]), false);
   assert.equal(needsDiagnosis([{ key: 'a' }, { key: 'a', diagnosis: { file: 'review.json' } }]), false);
 });
 
-test('recording failures match only the same observed cause', () => {
+deterministicTest('recording failures match only the same observed cause', () => {
   const result = { code: 0, reason: null };
   const summary = { observation: 'complete' };
   const recorderExit = recordedFlowFailureKey(null, 'welcome', { failureReason: 'recorder-failure', summary }, result);
@@ -1469,7 +1470,7 @@ mediaTest('production outcomes preserve recorder precedence across command recei
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('failure identity distinguishes flow and tap target while ignoring receipt timestamps', () => {
+deterministicTest('failure identity distinguishes flow and tap target while ignoring receipt timestamps', () => {
   const failure = (idRegex, timestamp, selector = { idRegex, optional: false }) => nearestFailure([{
     command: { tapOnElement: { selector } },
     metadata: { status: 'FAILED', timestamp, duration: 30000, error: { message: 'Element not found' } },
@@ -1490,7 +1491,7 @@ test('failure identity distinguishes flow and tap target while ignoring receipt 
   assert.equal(needsDiagnosis([{ key: first }, { key: otherTarget }]), false);
 });
 
-test('failure identity follows selectors inside retry commands', () => {
+deterministicTest('failure identity follows selectors inside retry commands', () => {
   const failure = (target, timestamp) => nearestFailure([{
     command: { retryCommand: { maxRetries: '2', commands: [
       { waitForAnimationToEndCommand: { timeout: 10000 } },
@@ -1507,7 +1508,7 @@ test('failure identity follows selectors inside retry commands', () => {
   assert.equal(needsDiagnosis([{ key: first }, { key: other }]), false);
 });
 
-test('failure history key excludes target and error text retained in raw receipt', () => {
+deterministicTest('failure history key excludes target and error text retained in raw receipt', () => {
   const dir = temp(), error = 'Element welcome-start not found';
   const raw = [{
     command: { tapOnElement: { selector: { idRegex: 'welcome-start' } } },
@@ -1527,7 +1528,7 @@ test('failure history key excludes target and error text retained in raw receipt
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('archived failure history retains each attempt evidence path', () => {
+deterministicTest('archived failure history retains each attempt evidence path', () => {
   const first = [{ key: 'a', evidence: '.evidence/product-flow/welcome' }];
   const once = archiveFailureEvidence(first, '.evidence/product-flow', '.evidence/resume/product-flow-first');
   const second = [...once, { key: 'a', evidence: '.evidence/product-flow/welcome' }];
@@ -1537,7 +1538,7 @@ test('archived failure history retains each attempt evidence path', () => {
   assert.equal(first[0].evidence, '.evidence/product-flow/welcome');
 });
 
-test('required assertion and app identity preflight fails before walkthrough', () => {
+deterministicTest('required assertion and app identity preflight fails before walkthrough', () => {
   const result = { code: 0, reason: null }, recorder = { state: 'stopped', code: 0, bytes: 5 };
   const config = { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'welcome' } } }, metadata: { status: 'COMPLETED' } };
   const assertion = { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Ready' } } } }, metadata: { status: 'COMPLETED' } };
@@ -1547,7 +1548,7 @@ test('required assertion and app identity preflight fails before walkthrough', (
   assert.equal(flowFailureReason(result, [config, assertion], recorder, 'welcome'), null);
 });
 
-test('final simulator admission requires the live reviewed shipping execution while development preserves UI signoff', async () => {
+deterministicTest('final simulator admission requires the live reviewed shipping execution while development preserves UI signoff', async () => {
   const { admitFinalCandidate } = await import('./product-flow.mjs');
   const calls = [];
   const command = (cmd, args) => calls.push([cmd, args]);
@@ -1558,7 +1559,7 @@ test('final simulator admission requires the live reviewed shipping execution wh
   admitFinalCandidate(runSelection(['fixture', '--mode=development']).mode, command);
   assert.equal(calls.length, 0);
 });
-test('expired or changed shipping execution stops final simulator admission before native acceptance', async () => {
+deterministicTest('expired or changed shipping execution stops final simulator admission before native acceptance', async () => {
   const { admitFinalCandidate } = await import('./product-flow.mjs');
   const calls = [];
   assert.throws(() => admitFinalCandidate({ publishable: true }, (cmd, args) => {

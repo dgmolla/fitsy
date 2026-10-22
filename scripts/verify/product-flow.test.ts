@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 const modulePath = resolve(__dirname, 'product-flow.mjs');
 // Local media integration runs decoder cases; hosted L2 retains non-video contracts.
 const mediaTest = process.env.FITSY_MEDIA_INTEGRATION === '1' ? test : test.skip;
+const deterministicTest = process.env.FITSY_MEDIA_INTEGRATION === '1' ? test.skip : test;
 const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 let dir: string;
 const png = Buffer.from('89504e470d0a1a0a00000000', 'hex');
@@ -59,7 +60,7 @@ function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate') 
 mediaTest('accepts identified baseline and billing outcomes with matching artifacts', () => {
   const result = validate(fixture()); expect(result.status).toBe(0); expect(JSON.parse(result.stdout).status).toBe('pass');
 });
-test('development proof retains assertions but never satisfies final publication', () => {
+deterministicTest('development proof retains assertions but never satisfies final publication', () => {
   const report = fixture();
   report.evidenceMode = 'development';
   report.videoRequested = false;
@@ -72,7 +73,7 @@ test('development proof retains assertions but never satisfies final publication
   expect(publication.status).toBe(1);
   expect(publication.stderr).toContain('Expected final-candidate evidence');
 });
-test('final candidate accepts complete native proof without video when recording was not requested', () => {
+deterministicTest('final candidate accepts complete native proof without video when recording was not requested', () => {
   const report = fixture();
   report.videoRequested = false;
   for (const flow of report.flows) {
@@ -83,7 +84,7 @@ test('final candidate accepts complete native proof without video when recording
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout).status).toBe('pass');
 });
-test('non-video proof does not invoke video tooling', () => {
+deterministicTest('non-video proof does not invoke video tooling', () => {
   const report = fixture();
   report.videoRequested = false;
   for (const flow of report.flows) {
@@ -258,7 +259,7 @@ mediaTest('an artifact symlink cannot read outside the evidence directory', () =
   const result = validate(report); expect(result.status).toBe(1);
   expect(result.stderr).toContain('artifact escapes evidence directory');
 });
-mediaTest.each([
+deterministicTest.each([
   [['docs/product/paywall.md'], []],
   [['apps/mobile/app/welcome/payment.tsx'], ['billing', 'onboarding']],
   ...['apps/mobile/lib/teaserGate.ts', 'apps/mobile/components/LockedUnlockCard.tsx'].map(path => [[path], ['billing']]),
@@ -282,7 +283,7 @@ mediaTest.each([
   expect(JSON.parse(result.stdout).categories).toEqual(categories);
 });
 
-test('submission-only EAS changes preserve JavaScript and acceptance identities', () => {
+deterministicTest('submission-only EAS changes preserve JavaScript and acceptance identities', () => {
   mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
   fixtureGit(['init', '-q', dir]);
   writeFileSync(join(dir, 'apps/mobile/eas.json'), '{"submit":{"production":{"ios":{"ascApiKeyId":"old"}}}}');
