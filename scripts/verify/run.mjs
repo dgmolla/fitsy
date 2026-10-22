@@ -171,8 +171,10 @@ function runCheck(c, { withoutDatabase = false } = {}) {
       ...(c.name === 'focused-tests' ? { FITSY_VERIFY_FOCUSED_RECIPE: c.selection ?? '' } : {}),
       FITSY_VERIFY_NEEDS_NATIVE: plan.native ? '1' : '0',
       FITSY_VERIFY_NEEDS_TEST_DEPS: selected.some(check => check.name === 'test') ? '1' : '0',
-      ...(plan.comparison.base ? { FITSY_DIFF_BASE: plan.comparison.base } : {}),
-      ...(runsCtx === 'ci' && plan.comparison.head ? { FITSY_DIFF_HEAD: plan.comparison.head } : {}) };
+      // Nested local checks must inspect the same resolved range as their parent.
+      // A missing parent range stays unknown instead of falling back to origin/main.
+      FITSY_DIFF_BASE: plan.comparison.base ?? 'unavailable-parent-comparison',
+      FITSY_DIFF_HEAD: plan.comparison.head ?? 'HEAD' };
     if (withoutDatabase) {
       for (const key of ['FITSY_VERIFY_DB_LOCKED', 'FITSY_VERIFY_OWNED_DB', 'FITSY_VERIFY_DB_IMAGE',
         'FITSY_VERIFY_DB_HOST', 'FITSY_VERIFY_CALLER_NON_POOLING_URL', 'FITSY_LOCAL_DB',
@@ -185,8 +187,8 @@ function runCheck(c, { withoutDatabase = false } = {}) {
     const checkArgs = [`--scope=${c.name === 'test' && plan.comparison.unknown ? 'all' : scope}`];
     if (c.name === 'test' && scope === 'changed' && !plan.comparison.unknown) {
       checkArgs.push(`--base=${plan.comparison.base}`);
-      // Local selection must also include current dirty and untracked files.
-      if (runsCtx === 'ci') checkArgs.push(`--head=${plan.comparison.head}`);
+      // changedFiles still includes local dirty and untracked inputs.
+      checkArgs.push(`--head=${plan.comparison.head}`);
     }
     execFile("/bin/bash", ["-p", join(VERIFY_DIR, c.script), ...checkArgs], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
       env: checkEnv }, (err, stdout, stderr) => {
@@ -215,12 +217,14 @@ function runCheck(c, { withoutDatabase = false } = {}) {
 
 async function runChecks(checks, sequential = false) {
   const completedResults = [];
-  const cacheable = checks.filter(c => c.cache && runsCtx === 'local');
+  // DB-backed focused runs retain fresh execution; DB-wrapper reuse is separate.
+  const cacheable = checks.filter(c => c.cache && runsCtx === 'local' &&
+    (c.name !== 'focused-tests' || (!c.database && !focusedDatabaseRequired([]))));
   let cache;
   try {
     if (cacheable.length && !plan.comparison.unknown) {
       const { verificationCache } = await import('./receipt-cache.mjs');
-      cache = verificationCache(REPO_ROOT, process.env, plan);
+      cache = verificationCache(REPO_ROOT, process.env, plan, scope);
     }
   } catch (error) {
     completedResults.push({ name: 'receipt-cache', status: 'fail', blocking: true, summary: error.message,
@@ -230,12 +234,13 @@ async function runChecks(checks, sequential = false) {
     completedResults.push(...checks.map(c => ({ name: c.name, status: 'skipped', summary: 'receipt cache admission failed' })));
   } else {
     const runSelected = c => {
-      const prior = args.reuse && c.cache && cache?.read(c);
+      const reusable = cacheable.includes(c);
+      const prior = args.reuse && reusable && cache?.read(c);
       if (prior) {
         const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
         endTiming(attempt, 'cached');
       }
-      if (!prior && c.cache && cache) cache.invalidate(c);
+      if (!prior && reusable && cache) cache.invalidate(c);
       return prior || runCheck(c);
     };
     const completed = sequential ? [] : await Promise.all(checks.map(runSelected));

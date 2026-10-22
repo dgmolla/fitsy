@@ -1191,22 +1191,35 @@ class ProductionTlsMaterialTests(unittest.TestCase):
 
 
 def custody_fixture_directory():
-    # Protected fixture bytes need secure ancestry even when the command's
-    # short TMPDIR is beneath a sticky system directory for Unix sockets.
-    # This ignored data directory is never a reviewer or subprocess cwd.
-    parent = REPO_ROOT / '.evidence'
-    parent.mkdir(mode=0o700, exist_ok=True)
+    # Reuse the declared private runtime cache when source evidence is read-only.
+    # Ordinary callers without XDG cache retain the existing ignored location.
+    cache = os.environ.get('XDG_CACHE_HOME')
+    parent = Path(cache) / 'fitsy-custody-fixtures' if cache else REPO_ROOT / '.evidence'
+    if not parent.is_absolute():
+        raise RuntimeError('operator fixture storage must be absolute')
     for probe in (parent, *parent.parents):
-        metadata = probe.lstat()
+        try:
+            metadata = probe.lstat()
+        except FileNotFoundError:
+            if probe == parent:
+                continue
+            raise
         if (probe.is_symlink() or metadata.st_uid not in (0, os.getuid())
                 or metadata.st_mode & 0o022):
             raise RuntimeError('secure operator fixture temp ancestry unavailable')
+    parent.mkdir(mode=0o700, exist_ok=True)
     git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
-    ignored = REAL_RUN([git, '-C', str(REPO_ROOT), 'check-ignore', '--quiet',
-                        str(parent / 'custody-probe.json')], capture_output=True,
-                       env={'PATH': '/usr/bin:/bin', 'HOME': '/var/empty'}, timeout=10)
-    if ignored.returncode != 0:
-        raise RuntimeError('operator fixture storage must be ignored')
+    environment = {'PATH': '/usr/bin:/bin', 'HOME': '/var/empty', 'LC_ALL': 'C'}
+    repository = REAL_RUN([git, '-C', str(parent), 'rev-parse', '--show-toplevel'],
+                          capture_output=True, text=True, env=environment, timeout=10)
+    if repository.returncode == 0:
+        ignored = REAL_RUN([git, '-C', str(parent), 'check-ignore', '--quiet',
+                            str(parent / 'custody-probe.json')], capture_output=True,
+                           env=environment, timeout=10)
+        if ignored.returncode != 0:
+            raise RuntimeError('operator fixture storage inside Git must be ignored')
+    elif repository.returncode != 128 or 'not a git repository' not in repository.stderr:
+        raise RuntimeError('operator fixture storage Git ancestry unavailable')
     temporary = tempfile.TemporaryDirectory(prefix='custody-', dir=parent)
     metadata = Path(temporary.name).lstat()
     if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) != 0o700:
@@ -1355,7 +1368,40 @@ class ProfileCustodyTests(unittest.TestCase):
             self.assertEqual(self.candidate_command(), 9)
         observed = json.loads((self.checkout / '.evidence/child.json').read_text())
         self.assertEqual(observed['home'], '/var/empty'); self.assertFalse(observed['token'])
-        self.assertEqual(observed['args'], ['--layer=0-2', '--stage=cheap', '--scope=changed', '--runs=local'])
+        self.assertEqual(observed['args'], ['--layer=0-2', '--stage=cheap', '--scope=changed', '--runs=local',
+            '--reuse', f'--base={self.boundary["comparison_base"]}', f'--head={self.boundary["source_sha"]}'])
+
+    def test_candidate_cheap_reuses_actual_runner_checks_and_keeps_fresh_admission_and_custody(self):
+        import shutil
+        self.prepare_candidate_checks()
+        scripts = self.checkout / 'scripts/verify'
+        for name in ('run.mjs', 'receipt-cache.mjs', 'impact-plan.mjs'):
+            shutil.copyfile(REPO_ROOT / 'scripts/verify' / name, scripts / name)
+        (self.checkout / 'node_modules').symlink_to(REPO_ROOT / 'node_modules', target_is_directory=True)
+        (self.checkout / '.gitignore').write_text('.evidence/\nnode_modules\n')
+        (scripts / 'registry.yml').write_text('checks:\n'
+            '  - name: resource-admission\n    script: admission.sh\n    layer: 0\n    blocking: true\n    preflight: true\n'
+            '  - name: focused-tests\n    script: focused.sh\n    layer: 1\n    blocking: true\n    cache: true\n')
+        for name in ('admission', 'focused'):
+            (scripts / (name + '.sh')).write_text(f'echo run >> .evidence/{name}-calls\n' + "echo '{\"status\":\"pass\"}'\n")
+        recipe = self.checkout / '.evidence/verify/focused-tests.json'
+        recipe.parent.mkdir(parents=True)
+        recipe.write_text('{"version":1,"tests":["scripts/example.test.mjs"]}')
+        git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+        env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
+        for args in (['add','.'], ['commit','-qm','actual cheap runner fixture']):
+            REAL_RUN([git,'-C',str(self.checkout),*args],env=env,check=True)
+        source = subprocess.check_output([git,'-C',str(self.checkout),'rev-parse','HEAD'],env=env).decode().strip()
+        REAL_RUN([git,'-C',str(self.checkout),'update-ref','refs/remotes/origin/main',source],env=env,check=True)
+        self.boundary.update(source_sha=source, comparison_base=source)
+        self.receipt.update(source_sha=source, comparison_base=source)
+        self.save()
+        with patch.object(external, 'candidate_custody', wraps=external.candidate_custody) as custody:
+            self.assertEqual(self.candidate_command(), 0)
+            self.assertEqual(self.candidate_command(), 0)
+            self.assertEqual(custody.call_count, 4)
+        self.assertEqual((self.checkout / '.evidence/focused-calls').read_text().splitlines(), ['run'])
+        self.assertEqual((self.checkout / '.evidence/admission-calls').read_text().splitlines(), ['run', 'run'])
 
     def test_candidate_push_gates_preserve_exit_two_and_real_failure(self):
         source = self.prepare_candidate_checks()
@@ -1418,6 +1464,142 @@ class ProfileCustodyTests(unittest.TestCase):
                     self.assertEqual(external.candidate_checks(self.config,463,self.boundary['source_sha'],self.boundary['comparison_base'],str(self.checkout),'cheap'),expected)
                 terminate.assert_called_once_with(child.pid, external.signal.SIGTERM)
                 self.assertEqual(child.wait.call_count,2)
+
+    def prepare_native_checks(self):
+        self.prepare_candidate_checks()
+        self.product = Path(self.temporary.name) / 'product'
+        (self.product / 'apps/mobile/ios').mkdir(parents=True)
+        (self.product / '.gitignore').write_text('.evidence/\napps/mobile/ios/\n')
+        (self.product / 'apps/mobile/package.json').write_text('{"scripts":{"start":"expo"},"name":"fixture"}')
+        (self.product / 'apps/mobile/app.js').write_text('frozen product')
+        git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+        environment = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
+        self.product_git = lambda *args: subprocess.check_output([git, '-C', str(self.product), *args],
+                                                                env=environment).decode().strip()
+        for args in (('init', '-q'), ('config', 'core.hooksPath', '/dev/null'), ('add', '.'),
+                     ('-c', 'user.name=fixture', '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'product'),
+                     ('checkout', '--detach', '-q')): self.product_git(*args)
+        self.native = dict(root=str(self.product), source_sha=self.product_git('rev-parse', 'HEAD'),
+                           source_tree=self.product_git('rev-parse', 'HEAD^{tree}'),
+                           allowed_cwds=['.', 'apps/mobile', 'apps/mobile/ios'],
+                           environment={'EXPO_PUBLIC_API_URL': 'https://dev.fitsy.org',
+                                        'NODE_ENV': ['development', 'production']}, deadline_seconds=30)
+        import copy
+        self.boundary['native'] = copy.deepcopy(self.native)
+        self.receipt['native'] = copy.deepcopy(self.native)
+        launcher = '#!/bin/bash\nset -eu\n[ "$1" = --candidate-command ]; shift\n'
+        launcher += '[ "$1" = --cwd ]; cd "$2"; shift 2\n'
+        launcher += 'while [ "$1" = --env ]; do export "$2"; shift 2; done\n[ "$1" = -- ]; shift\n'
+        launcher += 'export PATH=' + shlex.quote(os.environ['PATH']) + '\nexec "$@"\n'
+        self.paths['launcher'].write_text(launcher)
+        self.boundary['launcher_sha256'] = self.receipt['launcher_sha256'] = external.digest(launcher.encode())
+        self.save()
+        (self.product / '.evidence').mkdir()
+        self.native_args = dict(product_root=str(self.product), cwd='apps/mobile',
+            env=['EXPO_PUBLIC_API_URL=https://dev.fitsy.org', 'NODE_ENV=production'],
+            command=[sys.executable, '-I', '-c',
+                "import json,os,pathlib; pathlib.Path('../../.evidence/native.json').write_text(json.dumps("
+                "{'cwd':os.getcwd(),'public':os.environ.get('EXPO_PUBLIC_API_URL'),'token':'GH_TOKEN' in os.environ}));"
+                "print('native stdout'); raise SystemExit(7)"])
+
+    def native_command(self, **changes):
+        return self.candidate_command('native', **{**self.native_args, **changes})
+
+    def test_native_candidate_preserves_cwd_public_inputs_exit_and_distinct_product_source(self):
+        self.prepare_native_checks()
+        self.assertNotEqual(self.boundary['source_sha'], self.native['source_sha'])
+        with patch.dict(os.environ, {'GH_TOKEN': 'synthetic-operator-token'}):
+            self.assertEqual(self.native_command(), 7)
+        self.assertEqual(json.loads((self.product / '.evidence/native.json').read_text()),
+                         {'cwd': str(self.product / 'apps/mobile'), 'public': 'https://dev.fitsy.org', 'token': False})
+
+    def test_native_candidate_requires_approved_binding_and_fixed_environment(self):
+        self.prepare_native_checks()
+        for change in ({'product_root': str(self.checkout)}, {'cwd': '../'}, {'cwd': '/tmp'},
+                       {'env': ['GH_TOKEN=synthetic']}, {'env': ['EXPO_PUBLIC_API_URL=https://fitsy.org']},
+                       {'env': ['NODE_ENV=production', 'NODE_ENV=production']}, {'command': []}):
+            with self.subTest(change=change), self.assertRaises(ValueError): self.native_command(**change)
+        self.assertFalse((self.product / '.evidence/native.json').exists())
+        self.boundary['native']['deadline_seconds'] = 31
+        with self.assertRaisesRegex(ValueError, 'native boundary approval changed'): self.native_command()
+
+    def test_native_capture_paths_are_source_bound_without_a_new_binding_per_flow(self):
+        self.prepare_native_checks()
+        for bound in (self.boundary['native'], self.receipt['native']):
+            bound['environment']['FITSY_XCTEST_CAPTURE_RECEIPT'] = {'product_flow_capture': True}
+        self.save()
+        for flow in ('cold-start-welcome', 'onboarding-assisted-targets'):
+            capture = self.product / '.evidence/product-flow' / flow / 'xctest-capture-policy.jsonl'
+            capture.parent.mkdir(parents=True)
+            self.assertEqual(self.native_command(env=[*self.native_args['env'],
+                'FITSY_XCTEST_CAPTURE_RECEIPT=' + str(capture)]), 7)
+        for path in (self.checkout / 'capture.jsonl', self.product / '.evidence/other/capture.jsonl'):
+            with self.assertRaisesRegex(ValueError, 'capture path escapes'):
+                self.native_command(env=['FITSY_XCTEST_CAPTURE_RECEIPT=' + str(path)])
+        target = self.product / '.evidence/product-flow/escaped'
+        target.symlink_to(self.checkout, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'capture path escapes'):
+            self.native_command(env=['FITSY_XCTEST_CAPTURE_RECEIPT=' + str(target / 'xctest-capture-policy.jsonl')])
+
+    def test_native_candidate_refuses_package_alias_before_reading_operator_canary(self):
+        self.prepare_native_checks()
+        package = self.product / 'apps/mobile/package.json'
+        canary = Path(self.temporary.name) / 'synthetic-operator-package.json'
+        canary.write_bytes(package.read_bytes()); canary.chmod(0o600)
+        package.unlink(); package.symlink_to(canary)
+        with self.assertRaisesRegex(ValueError, 'package.*alias'):
+            self.native_command()
+        self.assertFalse((self.product / '.evidence/native.json').exists())
+
+    def test_native_candidate_checks_actual_product_source_tree_detached_and_symlink_cwd(self):
+        self.prepare_native_checks()
+        self.product_git('switch', '-c', 'unexpected')
+        with self.assertRaisesRegex(ValueError, 'detached'): self.native_command()
+        self.product_git('checkout', '--detach', '-q')
+        for key in ('source_sha', 'source_tree'):
+            original = self.boundary['native'][key]
+            self.boundary['native'][key] = self.receipt['native'][key] = 'c' * 40; self.save()
+            with self.assertRaisesRegex(ValueError, 'source/tree/detached'): self.native_command()
+            self.boundary['native'][key] = self.receipt['native'][key] = original; self.save()
+        ios = self.product / 'apps/mobile/ios'
+        ios.rmdir(); ios.symlink_to(self.checkout, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'escapes product'): self.native_command(cwd='apps/mobile/ios')
+
+    def test_native_candidate_rechecks_source_after_child_and_allows_only_native_preparation(self):
+        self.prepare_native_checks()
+        package = self.product / 'apps/mobile/package.json'
+        (self.product / 'apps/mobile/ios/generated').write_text('generated native input')
+        self.assertEqual(self.native_command(), 7)
+        package.write_text('{"scripts":{"start":"expo","ios":"expo run:ios"},"name":"fixture"}')
+        with self.assertRaisesRegex(ValueError, 'package changed'): self.native_command()
+        package.write_text('{"name":"different dependencies/configuration"}')
+        with self.assertRaisesRegex(ValueError, 'package changed'): self.native_command()
+        self.product_git('checkout', '--', 'apps/mobile/package.json')
+        with self.assertRaisesRegex(ValueError, 'product source is dirty'):
+            self.native_command(command=[sys.executable, '-I', '-c',
+                "from pathlib import Path; Path('app.js').write_text('source drift')"])
+
+    def test_native_arguments_never_extend_cheap_or_push_authority(self):
+        self.prepare_native_checks()
+        for check in ('cheap', 'push-gates'):
+            with self.assertRaisesRegex(ValueError, 'native arguments require'):
+                self.candidate_command(check, **self.native_args)
+
+    def test_native_cli_parser_consumes_literal_command_after_separator(self):
+        from types import SimpleNamespace
+        self.prepare_native_checks()
+        def observed(args, **kwargs):
+            if args[0] == '/bin/ps': return SimpleNamespace(returncode=0, stdout='fixture-start\n')
+            return REAL_RUN(args, **kwargs)
+        argv = [str(SCRIPT), 'candidate-checks', '--issue', '463', '--source', self.boundary['source_sha'],
+                '--base', self.boundary['comparison_base'], '--root', str(self.checkout), '--check', 'native',
+                '--product-root', str(self.product), '--cwd', 'apps/mobile']
+        for entry in self.native_args['env']: argv += ['--env', entry]
+        with patch.object(sys, 'argv', [*argv, '--', *self.native_args['command']]), \
+             patch.object(external, 'authority', return_value=self.config), \
+             patch.object(external.subprocess, 'run', side_effect=observed), \
+             patch.object(external.os, 'getpgid', return_value=999998):
+            self.assertEqual(external.main(), 7)
 
 
 class CIAcceptanceTests(unittest.TestCase):
