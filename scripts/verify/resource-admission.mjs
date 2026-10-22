@@ -202,7 +202,7 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
     throw Error('phase receipt destination overlaps candidate or operator custody');
   }
   privateDirectory(directory, uid);
-  const expectedFiles = [join(root, 'scripts/verify/db-lock.py'), file, join(root, 'scripts/verify/local-db.mjs'), join(root, 'scripts/verify/docker-runtime.mjs'),
+  const expectedFiles = [join(root, 'scripts/verify/db-lock.py'), file, join(root, 'scripts/verify/local-db.mjs'), join(root, 'scripts/verify/local-db-control.mjs'), join(root, 'scripts/verify/docker-runtime.mjs'),
     join(directory, 'run.py'), join(directory, 'task.sh'), join(directory, 'db_observation.py')].sort();
   if (Object.keys(authority.files_sha256 ?? {}).sort().join('|') !== expectedFiles.join('|')) throw Error('phase caller/helper binding is incomplete');
   for (const path of expectedFiles) {
@@ -356,7 +356,7 @@ export async function admitOwnedDatabasePhase({ root = resolve(dirname(file), '.
             !existing.State?.Running || !existing.Image) throw Error('existing DB lacks current session acquired identity, ownership or effective limits');
         const port = existing.NetworkSettings?.Ports?.['5432/tcp']?.[0]?.HostPort;
         const url = `postgresql://fitsy_test:fitsy_test@127.0.0.1:${port}/fitsy_verify`;
-        const { databaseControl } = await import('./local-db.mjs');
+        const { databaseControl } = await import('./local-db-control.mjs');
         databaseControl({ root, command: (_binary, args) => checkedDocker(args), env: {
           FITSY_VERIFY_OWNED_DB: existing.Id, FITSY_VERIFY_DB_IMAGE: existing.Image,
           POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url,

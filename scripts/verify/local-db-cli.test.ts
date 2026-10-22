@@ -60,7 +60,7 @@ test.each<DatabaseCase>([
   if (missing) { delete env.POSTGRES_PRISMA_URL; delete env.POSTGRES_URL_NON_POOLING; }
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env, encoding: 'utf8' }).trim();
   try {
-    for (const file of ['run.mjs', 'impact-plan.mjs', 'local-db.mjs', 'db-lock.py', 'docker-runtime.mjs', 'receipt-cache.mjs']) {
+    for (const file of ['run.mjs', 'impact-plan.mjs', 'local-db.mjs', 'local-db-control.mjs', 'db-lock.py', 'docker-runtime.mjs', 'receipt-cache.mjs']) {
       const target = `scripts/verify/${file}`;
       write(target, readFileSync(join(source, target), 'utf8'));
     }

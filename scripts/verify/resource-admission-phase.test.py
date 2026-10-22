@@ -52,7 +52,7 @@ class PhaseBoundaryTests(unittest.TestCase):
         (self.package / 'marker').write_text('selected package fixture')
         self.git(self.package, 'init', '-q')
         self.commit(self.package)
-        for name in ('local-db.mjs', 'impact-plan.mjs'):
+        for name in ('local-db.mjs', 'local-db-control.mjs', 'impact-plan.mjs'):
             shutil.copyfile(SOURCE / name, self.verify / name)
         lock = (SOURCE / 'db-lock.py').read_text().replace(
             'account = Path(pwd.getpwuid(os.getuid()).pw_dir)',
@@ -319,7 +319,7 @@ fi
 sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)!r}],cwd={str(self.root)!r}))
 ''')
         (self.packet / 'db_observation.py').write_text('# modeled external observations\n')
-        files = [self.verify / name for name in ('db-lock.py', 'resource-admission.mjs', 'local-db.mjs', 'docker-runtime.mjs')]
+        files = [self.verify / name for name in ('db-lock.py', 'resource-admission.mjs', 'local-db.mjs', 'local-db-control.mjs', 'docker-runtime.mjs')]
         files += [self.packet / name for name in ('run.py', 'task.sh', 'db_observation.py')]
         self.authority = self.admin / 'operators/issue-463-phase-admission.json'
         data = {'version': 1, 'issue': 463, 'candidate_root': str(self.root), 'source_sha': self.head,

@@ -11,7 +11,7 @@ const cli = (...args: string[]) => spawnSync(process.execPath, ['scripts/verify/
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'fitsy-focused-'));
   mkdirSync(join(root, 'scripts/verify'), { recursive: true });
-  for (const name of ['focused-tests.mjs', 'impact-plan.mjs', 'python-focused.py', 'local-db.mjs', 'node-focused-reporter.mjs']) copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
+  for (const name of ['focused-tests.mjs', 'impact-plan.mjs', 'python-focused.py', 'local-db.mjs', 'local-db-control.mjs', 'docker-runtime.mjs', 'node-focused-reporter.mjs']) copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
   symlinkSync(join(source, 'node_modules'), join(root, 'node_modules'));
   writeFileSync(join(root, '.gitignore'), 'node_modules\n.evidence/\n');
   writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts'] }));

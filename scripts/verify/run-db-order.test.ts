@@ -53,7 +53,7 @@ printf 'test\\n' >> order.log
 printf '%s\\n' '{"summary":"database test checked"}'
 exit "\${FAIL_TEST:-0}"
 `);
-  writeFileSync(join(verify, "local-db.mjs"), `import { appendFileSync } from 'node:fs';
+  writeFileSync(join(verify, "local-db-control.mjs"), `import { appendFileSync } from 'node:fs';
 const event = value => appendFileSync('order.log', value + '\\n');
 export function assertOwnedDatabase(env = process.env) {
   event('db-assert');

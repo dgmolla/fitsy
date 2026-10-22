@@ -86,7 +86,7 @@ def phase_authority(root):
     private(packet, True)
     if any(packet == path or path in packet.parents for path in (root, package, admin)):
         raise RuntimeError('phase receipt destination overlaps protected or source custody')
-    expected = [root / 'scripts/verify' / name for name in ('db-lock.py', 'resource-admission.mjs', 'local-db.mjs', 'docker-runtime.mjs')]
+    expected = [root / 'scripts/verify' / name for name in ('db-lock.py', 'resource-admission.mjs', 'local-db.mjs', 'local-db-control.mjs', 'docker-runtime.mjs')]
     expected += [packet / name for name in ('run.py', 'task.sh', 'db_observation.py')]
     if not isinstance(data['files_sha256'], dict) or set(data['files_sha256']) != {str(path) for path in expected}:
         raise RuntimeError('phase executable identities are incomplete')

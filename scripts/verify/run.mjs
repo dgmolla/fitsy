@@ -155,7 +155,7 @@ export async function verify(argv, prepareDatabase) {
     // Enter the existing OS-lock supervisor before executing this pipeline.
     // The locked CLI calls verify with an internal preparation callback, not a
     // caller-controlled marker authorizing omitted safety checks.
-    const { runWithLocalDatabase } = await import('./local-db.mjs');
+    const { runWithLocalDatabase } = await import('./local-db-control.mjs');
     return runWithLocalDatabase(argv);
   }
   let prepared = false;
@@ -314,7 +314,7 @@ export async function verify(argv, prepareDatabase) {
   if (databaseFocused && !results.some(result => result.status === 'fail' && result.blocking)) {
     try {
       prepareOwnedDatabase();
-      const { assertOwnedDatabase } = await import('./local-db.mjs');
+      const { assertOwnedDatabase } = await import('./local-db-control.mjs');
       assertOwnedDatabase();
       // Cache identities are computed from the actual prepared environment.
       // DB-focused checks remain ineligible for reusable receipts.
@@ -341,7 +341,7 @@ export async function verify(argv, prepareDatabase) {
     if (runsCtx === 'local' && remaining.some(c => c.database)) {
       try {
         prepareOwnedDatabase();
-        const { assertOwnedDatabase } = await import('./local-db.mjs');
+        const { assertOwnedDatabase } = await import('./local-db-control.mjs');
         assertOwnedDatabase();
       } catch (error) {
         results.push({ name: 'local-database', status: 'fail', blocking: true,
