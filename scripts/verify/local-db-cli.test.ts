@@ -6,6 +6,39 @@ import { dirname, join, resolve } from 'node:path';
 import { fixtureProcess, signalFixtureProcess, type FixtureProcess } from './lock-fixture-process';
 
 const source = resolve(__dirname, '../..');
+function linuxDatabaseMemory(read: (path: string) => string = path => readFileSync(path, 'utf8'),
+  runtimeAvailable: () => number = () => process.availableMemory()) {
+  // The supported Node runtime accounts for the process's actual OS/cgroup
+  // topology. Missing root-v2 files alone cannot establish available capacity.
+  const hostAvailable = Number(/^MemAvailable:\s+(\d+) kB$/m.exec(read('/proc/meminfo'))?.[1]) * 1024;
+  const processAvailable = runtimeAvailable();
+  if (![hostAvailable, processAvailable].every(value => Number.isSafeInteger(value) && value > 0)) {
+    throw Error('real database Linux memory headroom is unverified');
+  }
+  const available = Math.min(hostAvailable, processAvailable);
+  // 1536MiB container envelope + 512MiB child heap + 1024MiB reserve.
+  // Existing CI service/Jest usage is charged in these fresh readings.
+  const required = 3 * 1024 ** 3;
+  if (available < required) throw Error('real database needs 3 GiB of available Linux memory');
+  return { available, hostAvailable, processAvailable, required };
+}
+
+test('local database memory admission works without root cgroup-v2 files and refuses uncertain headroom', () => {
+  const gib = 1024 ** 3;
+  // Reproduce the failed runner topology: only the host observation exists;
+  // every direct cgroup-root read would fail just as in the original CI run.
+  const read = (path: string) => {
+    if (path === '/proc/meminfo') return 'MemAvailable: 6291456 kB\n';
+    throw Object.assign(Error('missing root cgroup-v2 file'), { code: 'ENOENT' });
+  };
+  expect(linuxDatabaseMemory(read, () => 4 * gib).available).toBe(4 * gib);
+  expect(linuxDatabaseMemory(read, () => 3 * gib).available).toBe(3 * gib);
+  expect(() => linuxDatabaseMemory(read, () => 2 * gib)).toThrow('3 GiB');
+  expect(() => linuxDatabaseMemory(() => 'MemAvailable: 2097152 kB\n', () => 4 * gib)).toThrow('3 GiB');
+  expect(() => linuxDatabaseMemory(read, () => 0)).toThrow('unverified');
+  expect(() => linuxDatabaseMemory(read, () => Number.NaN)).toThrow('unverified');
+  expect(() => linuxDatabaseMemory(() => 'MemAvailable: malformed\n', () => 4 * gib)).toThrow('unverified');
+});
 type DatabaseCase = { name: string; hijack: boolean; deny: boolean; unlocked: boolean;
   checkFailure: boolean; devDrift: boolean; focused?: boolean; missing?: boolean;
   scriptFocused?: boolean; wholeGroup?: string; delegation?: boolean; canonical?: boolean; standalone?: boolean;
@@ -313,17 +346,10 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
   let recoveredAfterObserverFailure: string | undefined;
   let failure: unknown;
   const capacity = () => {
-    const available = Number(/^MemAvailable:\s+(\d+) kB$/m.exec(readFileSync('/proc/meminfo', 'utf8'))?.[1]) * 1024;
-    const maximum = readFileSync('/sys/fs/cgroup/memory.max', 'utf8').trim();
-    const current = Number(readFileSync('/sys/fs/cgroup/memory.current', 'utf8').trim());
-    const remaining = maximum === 'max' ? available : Number(maximum) - current;
+    const memory = linuxDatabaseMemory();
     const fs = statfsSync(directory);
-    // 1536MiB container envelope + 512MiB child heap + 1024MiB reserve.
-    // The existing CI service/Jest worker are already charged in these fresh readings.
-    expect(Math.min(available, remaining)).toBeGreaterThanOrEqual(3 * 1024 ** 3);
     expect(fs.bavail * fs.bsize).toBeGreaterThanOrEqual(2 * 1024 ** 3);
-    return { available, cgroupMaximum: maximum, cgroupCurrent: current,
-      remaining, required: 3 * 1024 ** 3, disk: fs.bavail * fs.bsize };
+    return { ...memory, disk: fs.bavail * fs.bsize };
   };
   const validate = (container: ReturnType<typeof inspect>) => {
     expect(container.Name).toBe(`/${name}`);
