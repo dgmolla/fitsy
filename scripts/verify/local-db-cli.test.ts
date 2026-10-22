@@ -183,7 +183,10 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
     if (cheapFailure || missingCheap) {
       expect(existsSync(state)).toBe(false);
       expect(existsSync(reset)).toBe(false);
-      expect(result.stdout).toContain('"name":"structural","status":"fail"');
+      const reported = result.stdout.trim().split('\n').map(line => JSON.parse(line));
+      const failed = reported.filter(line => line.status === 'fail');
+      expect(failed).toHaveLength(1);
+      expect(failed[0]).toEqual(expect.objectContaining({ name: 'structural', status: 'fail', blocking: true }));
       if (missingCheap) expect(result.stdout).toContain('registry entry has no script cheap.sh');
       const observed = readFileSync(events, 'utf8').trim().split('\n').map(line => JSON.parse(line));
       expect(observed.map(event => event.check)).toEqual(cheapFailure ? ['admission', 'cheap'] : ['admission']);
