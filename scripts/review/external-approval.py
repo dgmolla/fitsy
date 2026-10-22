@@ -88,6 +88,7 @@ def candidate_custody(config, uid):
             and receipt.get('comparison_base') == boundary['comparison_base']
             and receipt.get('independently_approved') is True,
             'candidate boundary approval/source mismatch')
+    require(receipt.get('native') == boundary.get('native'), 'native boundary approval changed')
     for key in ('source_sha', 'comparison_base'):
         require(isinstance(boundary[key], str) and re.fullmatch(r'[0-9a-f]{40}', boundary[key]),
                 'candidate boundary source identity incomplete')
@@ -138,7 +139,66 @@ def authority():
     return config
 
 
-def candidate_checks(config, issue, source, base, root, check):
+def native_candidate_command(boundary, product_root, cwd, command, env):
+    """Native requests are data; only the private approved binding grants execution."""
+    native = boundary.get('native')
+    require(isinstance(native, dict), 'native candidate boundary is not configured')
+    require(isinstance(product_root, str) and isinstance(cwd, str), 'native product root/cwd are required')
+    require(all(isinstance(native.get(key), str) and re.fullmatch(r'[0-9a-f]{40}', native[key])
+                for key in ('source_sha', 'source_tree')), 'native source/tree binding is incomplete')
+    product = Path(product_root).resolve(strict=True)
+    require(product == Path(native['root']).resolve(strict=True), 'native product root mismatch')
+    require(cwd in ('.', 'apps/mobile', 'apps/mobile/ios') and cwd in native['allowed_cwds'],
+            'native working directory is not approved')
+    working = (product / cwd).resolve(strict=True)
+    require(working == product or product in working.parents, 'native working directory escapes product')
+    require(isinstance(command, list) and command and all(isinstance(arg, str) for arg in command)
+            and command[0] and not command[0].startswith('-'), 'native candidate command is required')
+    require(type(native['deadline_seconds']) is int and native['deadline_seconds'] > 0,
+            'native command deadline is required')
+    environment = {}
+    for entry in env:
+        key, separator, value = entry.partition('=')
+        public_key = bool(re.fullmatch(r'EXPO_PUBLIC_[A-Z0-9_]+', key))
+        native_key = key in ('NODE_ENV', 'EXPO_NO_DOTENV', 'FITSY_ALLOW_MISSING_PUBLIC_ENV', 'CI',
+                            'FORCE_BUNDLING', 'SKIP_BUNDLING', 'EXPO_OFFLINE',
+                            'FITSY_XCTEST_CAPTURE_RECEIPT', 'FITSY_XCTEST_SIM_UDID')
+        require(separator and (public_key or native_key) and key not in environment and key in native['environment'],
+                'native environment key is not approved or repeated')
+        permitted = native['environment'][key]
+        if key == 'FITSY_XCTEST_CAPTURE_RECEIPT' and permitted == {'product_flow_capture': True}:
+            capture = Path(value)
+            require(capture.is_absolute(), 'native capture path must be absolute')
+            capture = capture.resolve()
+            require(capture.is_relative_to(product) and re.fullmatch(
+                r'\.evidence/product-flow/[a-z0-9-]+/xctest-capture-policy\.jsonl',
+                capture.relative_to(product).as_posix()), 'native capture path escapes product flow evidence')
+        else:
+            require(value == permitted if isinstance(permitted, str) else
+                    isinstance(permitted, list) and value in permitted, 'native environment value is not approved')
+        environment[key] = value
+    git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
+    def snapshot():
+        def read(*args):
+            return subprocess.check_output([git, '-C', str(product), *args],
+                env={'PATH': '/usr/bin:/bin', 'HOME': '/var/empty'}, timeout=10).strip()
+        require(read('rev-parse', 'HEAD').decode() == native['source_sha']
+                and read('rev-parse', 'HEAD^{tree}').decode() == native['source_tree']
+                and not read('branch', '--show-current'), 'native product source/tree/detached identity changed')
+        paths = set(filter(None, (read('diff', '--name-only', '--no-renames', 'HEAD', '--').decode() + '\n' +
+            read('ls-files', '--others', '--exclude-standard').decode()).splitlines()))
+        # Preparation restores package bytes inside the candidate transaction.
+        # Never follow candidate aliases to parse package JSON as the operator.
+        require('apps/mobile/package.json' not in paths, 'native package changed or aliases frozen source')
+        # Generated iOS files are measured by nativeIdentity around the build.
+        require(all(path.startswith('apps/mobile/ios/') for path in paths), 'native product source is dirty')
+    snapshot()
+    args = ['--cwd', str(working)]
+    for key, value in sorted(environment.items()): args += ['--env', key + '=' + value]
+    return [*args, '--', *command], snapshot, native['deadline_seconds'] + 5
+
+
+def candidate_checks(config, issue, source, base, root, check, product_root=None, cwd=None, command=None, env=()):
     """Run fixed publication checks through the independently pinned live boundary."""
     boundary = config.get('candidate_boundary')
     require(boundary is not None, 'isolated candidate launcher is required')
@@ -172,7 +232,15 @@ def candidate_checks(config, issue, source, base, root, check):
             'if /bin/bash -p "scripts/verify/$check.sh"; then code=0; else code=$?; fi; '
             '[ "$code" -eq 0 ] || [ "$code" -eq 2 ] || exit "$code"; done'],
     }
-    require(check in commands, 'unsupported candidate check')
+    native_snapshot = None
+    timeout = 245
+    if check == 'native':
+        payload, native_snapshot, timeout = native_candidate_command(boundary, product_root, cwd, command, env)
+    else:
+        require(check in commands, 'unsupported candidate check')
+        require(product_root is None and cwd is None and not command and not env,
+                'native arguments require a native check')
+        payload = commands[check]
     child = None
     interrupted = None
     def stop(signum, _frame):
@@ -182,9 +250,9 @@ def candidate_checks(config, issue, source, base, root, check):
     previous = {sig: signal.signal(sig, stop) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
         child = subprocess.Popen(['/bin/bash', boundary['launcher_path'], '--candidate-command',
-                                  *commands[check]], cwd=root, env=environment, start_new_session=True)
+                                  *payload], cwd=root, env=environment, start_new_session=True)
         try:
-            code = child.wait(timeout=245)
+            code = child.wait(timeout=timeout)
         except KeyboardInterrupt:
             code = 128 + (interrupted or signal.SIGINT)
     finally:
@@ -201,6 +269,7 @@ def candidate_checks(config, issue, source, base, root, check):
         for sig, handler in previous.items(): signal.signal(sig, handler)
     candidate_custody(config, config['operator_uid'])
     require(snapshot() == frozen, 'candidate or focused selection changed during isolated checks')
+    if native_snapshot is not None: native_snapshot()
     return code
 
 
@@ -1072,7 +1141,11 @@ def main():
     checks.add_argument('--source', required=True)
     checks.add_argument('--base', required=True)
     checks.add_argument('--root', required=True)
-    checks.add_argument('--check', choices=['cheap', 'push-gates'], required=True)
+    checks.add_argument('--check', choices=['cheap', 'push-gates', 'native'], required=True)
+    checks.add_argument('--product-root')
+    checks.add_argument('--cwd')
+    checks.add_argument('--env', action='append', default=[])
+    checks.add_argument('command', nargs=argparse.REMAINDER)
     accepted = commands.add_parser('publish-acceptance')
     accepted.add_argument('--issue', type=int, required=True)
     accepted.add_argument('--pr', type=int, required=True)
@@ -1086,7 +1159,9 @@ def main():
     try:
         config = authority()
         if args.action == 'candidate-checks':
-            return candidate_checks(config, args.issue, args.source, args.base, args.root, args.check)
+            command = args.command[1:] if args.command[:1] == ['--'] else args.command
+            return candidate_checks(config, args.issue, args.source, args.base, args.root, args.check,
+                                    args.product_root, args.cwd, command, args.env)
         if args.action == 'validate-review':
             result = validate_local_review(config, args.issue, args.source, args.base, args.domain)
             if result is None:
