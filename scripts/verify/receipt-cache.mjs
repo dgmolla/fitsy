@@ -50,7 +50,7 @@ function environmentIdentity(root, env, salt) {
     dependencies: existsSync(dependencyFile) ? sha(readFileSync(dependencyFile)) : null }));
 }
 
-export function verificationCache(root, env, plan) {
+export function verificationCache(root, env, plan, scope) {
   const directory = join(root, '.evidence/verify/check-cache');
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const saltFile = join(directory, 'salt');
@@ -60,12 +60,14 @@ export function verificationCache(root, env, plan) {
   }
   const source = sourceIdentity(root);
   const environment = environmentIdentity(root, env, readFileSync(saltFile, 'utf8'));
-  const selection = sha(JSON.stringify({ files: plan.files, unknown: plan.comparison.unknown }));
+  // Equal file lists can come from different commit ranges or selection scopes.
+  const { base, head, unknown } = plan.comparison;
+  const selection = sha(JSON.stringify({ files: plan.files, comparison: { base, head, unknown }, scope }));
   return {
     read(check) {
       try {
         const receipt = JSON.parse(readFileSync(join(directory, `${check.name}.json`), 'utf8'));
-        if (receipt.version !== 1 || receipt.source !== source || receipt.environment !== environment || receipt.selection !== selection ||
+        if (receipt.version !== 2 || receipt.source !== source || receipt.environment !== environment || receipt.selection !== selection ||
             receipt.definition !== sha(JSON.stringify(check)) || receipt.result?.name !== check.name || receipt.result?.status !== 'pass' ||
             !Number.isFinite(receipt.finishedAt) || receipt.finishedAt > Date.now() || Date.now() - receipt.finishedAt > lifetime) return null;
         return { ...receipt.result, duration_ms: 0, cached: true, verified_at: new Date(receipt.finishedAt).toISOString() };
@@ -81,7 +83,7 @@ export function verificationCache(root, env, plan) {
     },
     write(check, result) {
       if (result.status !== 'pass' || plan.comparison.unknown) return;
-      const receipt = { version: 1, source, environment, selection, definition: sha(JSON.stringify(check)), finishedAt: Date.now(), result };
+      const receipt = { version: 2, source, environment, selection, definition: sha(JSON.stringify(check)), finishedAt: Date.now(), result };
       const file = join(directory, `${check.name}.json`);
       const temporary = `${file}.${process.pid}.tmp`;
       writeFileSync(temporary, JSON.stringify(receipt) + '\n', { mode: 0o600 });

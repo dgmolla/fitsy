@@ -451,6 +451,116 @@ function cacheFixture() {
 }
 const calls = (file = 'calls') => readFileSync(join(directory, `.evidence/${file}`), 'utf8').trim().split('\n').length;
 
+function cheapCacheFixture() {
+  cacheFixture();
+  write('scripts/verify/registry.yml', `checks:
+  - name: resource-admission
+    script: admission.sh
+    layer: 0
+    preflight: true
+    blocking: true
+  - name: focused-tests
+    script: fixture.sh
+    layer: 1
+    cache: true
+    blocking: true
+`);
+  write('scripts/verify/admission.sh', 'echo admission >> .evidence/admission-calls\necho \'{"status":"pass"}\'\n');
+  write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: ['scripts/example.test.mjs'] }));
+  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+}
+const cheapReuse = ['--stage=cheap', '--layer=0-2', '--runs=local', '--scope=changed', '--reuse'];
+
+test('cheap focused checks reuse a pass while resource admission executes every time', () => {
+  cheapCacheFixture();
+  expect(cli('run.mjs', cheapReuse).status).toBe(0);
+  const second = cli('run.mjs', cheapReuse);
+  expect(second.status).toBe(0); expect(second.stdout).toContain('"cached":true');
+  expect(calls()).toBe(1); expect(calls('admission-calls')).toBe(2);
+});
+
+test.each(['missing', 'malformed', 'failed', 'expired', 'future', 'old-version'])(
+  'cheap caller reruns a %s receipt instead of accepting stale evidence', state => {
+    cheapCacheFixture();
+    expect(cli('run.mjs', cheapReuse).status).toBe(0);
+    const path = join(directory, '.evidence/verify/check-cache/focused-tests.json');
+    const receipt = JSON.parse(readFileSync(path, 'utf8'));
+    if (state === 'missing') rmSync(path);
+    else if (state === 'malformed') writeFileSync(path, '{');
+    else {
+      if (state === 'failed') receipt.result.status = 'fail';
+      if (state === 'expired') receipt.finishedAt = Date.now() - 7 * 3600_000;
+      if (state === 'future') receipt.finishedAt = Date.now() + 3600_000;
+      if (state === 'old-version') receipt.version = 1;
+      writeFileSync(path, JSON.stringify(receipt));
+    }
+    const second = cli('run.mjs', cheapReuse);
+    expect(second.status).toBe(0); expect(second.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
+  });
+
+test('cheap reuse binds commit comparison even when the selected file list is unchanged', () => {
+  cheapCacheFixture();
+  const base = git('rev-parse', 'HEAD');
+  git('commit', '--allow-empty', '-qm', 'same files, different comparison');
+  const head = git('rev-parse', 'HEAD');
+  const first = [...cheapReuse, `--base=${base}`, `--head=${head}`];
+  expect(cli('run.mjs', first).status).toBe(0);
+  expect(cli('run.mjs', first).stdout).toContain('"cached":true'); expect(calls()).toBe(1);
+  const changedBase = cli('run.mjs', [...cheapReuse, `--base=${head}`, `--head=${head}`]);
+  expect(changedBase.status).toBe(0); expect(changedBase.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
+  const changedHead = cli('run.mjs', [...cheapReuse, `--base=${head}`, `--head=${base}`]);
+  expect(changedHead.status).toBe(0); expect(changedHead.stdout).not.toContain('"cached":true'); expect(calls()).toBe(3);
+  expect(cli('run.mjs', [...cheapReuse, '--base=missing-history']).stdout).not.toContain('"cached":true'); expect(calls()).toBe(4);
+});
+
+test('cheap reuse binds scope and the complete focused recipe including the name pattern', () => {
+  cheapCacheFixture();
+  expect(cli('run.mjs', cheapReuse).status).toBe(0);
+  expect(cli('run.mjs', cheapReuse.map(arg => arg === '--scope=changed' ? '--scope=all' : arg)).stdout).not.toContain('"cached":true');
+  expect(calls()).toBe(2);
+  write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: ['scripts/example.test.mjs'], pattern: 'new assertion' }));
+  expect(cli('run.mjs', cheapReuse).stdout).not.toContain('"cached":true'); expect(calls()).toBe(3);
+});
+
+test('cheap reuse retains installed dependency and genuine environment identity', () => {
+  cheapCacheFixture();
+  // Own the fixture dependency lock rather than changing the shared installed tree.
+  rmSync(join(directory, 'node_modules'));
+  mkdirSync(join(directory, 'node_modules'));
+  symlinkSync(join(root, 'node_modules/js-yaml'), join(directory, 'node_modules/js-yaml'));
+  write('node_modules/.package-lock.json', '{"fixture":1}');
+  expect(cli('run.mjs', cheapReuse).status).toBe(0);
+  write('node_modules/.package-lock.json', '{"fixture":2}');
+  expect(cli('run.mjs', cheapReuse).stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
+  expect(cli('run.mjs', cheapReuse, { FEATURE_FLAG: 'changed' }).stdout).not.toContain('"cached":true'); expect(calls()).toBe(3);
+});
+
+test('npm cheap results are reused by the real sanitized push hook and genuine environment changes rerun', () => {
+  cheapCacheFixture();
+  const hookEnv = timingHook(root, directory, env);
+  // The fixture owner supplies the same fixed reuse flag as candidate_checks;
+  // production fixed argv and custody are exercised in external-approval tests.
+  const sessionFile = join(directory, 'scripts/verify/shipping-session.mjs');
+  writeFileSync(sessionFile, readFileSync(sessionFile, 'utf8').replace("'--runs=local']", "'--runs=local','--reuse']"));
+  write('.githooks/pre-push', installedFixtureHook(root, directory, true));
+  chmodSync(join(directory, '.githooks/pre-push'), 0o755);
+  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  const initial = spawnSync('npm', ['run', 'verify', '--', ...cheapReuse],
+    { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
+  expect({ status: initial.status, output: initial.status === 0 ? '' : initial.stdout + initial.stderr }).toEqual({ status: 0, output: '' });
+  const remote = join(directory, '.evidence/remote.git');
+  execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
+  const push = (ref: string, extra = {}) => spawnSync('git', ['-c', 'core.hooksPath=.githooks', 'push', remote, `HEAD:refs/heads/${ref}`],
+    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 30000 });
+  const reused = push('reused');
+  expect({ status: reused.status, output: reused.status === 0 ? '' : reused.stdout + reused.stderr }).toEqual({ status: 0, output: '' });
+  expect(reused.stdout + reused.stderr).toContain('"cached":true'); expect(calls()).toBe(1);
+  expect(calls('admission-calls')).toBe(2); expect(calls('size-calls')).toBe(1); expect(calls('domain-calls')).toBe(1);
+  const changed = push('changed', { FEATURE_FLAG: 'different' });
+  expect(changed.status).toBe(0); expect(changed.stdout + changed.stderr).not.toContain('"cached":true'); expect(calls()).toBe(2);
+  expect(calls('admission-calls')).toBe(3); expect(calls('size-calls')).toBe(2); expect(calls('domain-calls')).toBe(2);
+});
+
 test('unchanged successful L2 is reused; source, environment, and definition changes rerun it', () => {
   cacheFixture();
   expect(cli('run.mjs', ['--layer=2']).status).toBe(0); expect(calls()).toBe(1);

@@ -165,7 +165,8 @@ def candidate_checks(config, issue, source, base, root, check):
             'candidate check delivery issue differs from active authority')
     commands = {
         'cheap': ['/usr/bin/env', 'node', 'scripts/verify/run.mjs', '--layer=0-2',
-                  '--stage=cheap', '--scope=changed', '--runs=local'],
+                  '--stage=cheap', '--scope=changed', '--runs=local', '--reuse',
+                  f'--base={base}', f'--head={source}'],
         'push-gates': ['/bin/bash', '-p', '-c',
             'set -eu; for check in size-check domain-check; do '
             'if /bin/bash -p "scripts/verify/$check.sh"; then code=0; else code=$?; fi; '
