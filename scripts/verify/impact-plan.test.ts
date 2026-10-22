@@ -573,6 +573,8 @@ test('cheap reuse binds actual installed dependency files when the lock text is 
   unlinkSync(link); mkdirSync(link);
   symlinkSync(join(root, 'node_modules/js-yaml'), join(link, 'js-yaml'));
   write('node_modules/.package-lock.json', '{"fixture":"unchanged"}');
+  write('package.json', JSON.stringify({ private: true, dependencies: { 'fixture-check': '1.0.0' } }));
+  write('node_modules/fixture-check/package.json', JSON.stringify({ name: 'fixture-check', version: '1.0.0', main: 'index.cjs' }));
   write('node_modules/fixture-check/index.cjs', 'process.exit(0);\n');
   write('scripts/verify/fixture.sh', 'echo run >> .evidence/calls\nnode node_modules/fixture-check/index.cjs\n');
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
@@ -600,10 +602,12 @@ test('required comparison assertion',()=>{writeFileSync('.evidence/focused-calle
   write('prisma/migrations/fixture/migration.sql', 'DROP TABLE fixture;\n');
   const head = commit(); git('update-ref', 'refs/remotes/origin/main', head);
   write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: ['scripts/comparison.test.mjs'] }));
-  const result = cli('run.mjs', [...cheapReuse, `--base=${comparison === 'explicit' ? base : 'missing-parent-history'}`, `--head=${head}`]);
-  expect(result.status).toBe(1);
-  const checks = result.stdout.trim().split('\n').map(line => JSON.parse(line));
   for (const name of ['focused-tests', 'secrets', 'migration-safety']) {
+    // Each real consumer gets its own parent run: blocking safety failures
+    // intentionally prevent a later focused phase in an aggregate run.
+    const result = cli('run.mjs', [...cheapReuse, `--only=${name}`, `--base=${comparison === 'explicit' ? base : 'missing-parent-history'}`, `--head=${head}`]);
+    expect(result.status).toBe(1);
+    const checks = result.stdout.trim().split('\n').map(line => JSON.parse(line));
     expect(checks).toContainEqual(expect.objectContaining({ name, status: 'fail' }));
   }
   expect(existsSync(join(directory, '.evidence/focused-called'))).toBe(comparison === 'explicit');
