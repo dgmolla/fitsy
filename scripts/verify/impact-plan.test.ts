@@ -578,10 +578,12 @@ test.each([
   const tools = join(directory, '.evidence/tools');
   mkdirSync(tools, { recursive: true });
   // An explicit PATH makes removal real absence, without touching host tools.
-  const commands = ['bash', 'sh', 'git', 'dirname', 'basename', 'cat', 'grep', 'sed', 'sort', 'tr', 'head', 'cut', 'xargs', 'find'];
+  // GNU xargs defaults to external echo; resolve actual executables rather
+  // than shell builtins (command -v echo would yield only the word echo).
+  const commands = ['bash', 'sh', 'git', 'dirname', 'basename', 'cat', 'grep', 'sed', 'sort', 'tr', 'head', 'cut', 'xargs', 'echo', 'find'];
   let original = '';
   for (const command of commands) {
-    const executable = execFileSync('/bin/bash', ['-p', '-c', `command -v ${command}`], { env, encoding: 'utf8' }).trim();
+    const executable = execFileSync('/bin/bash', ['-p', '-c', `type -P ${command}`], { env, encoding: 'utf8' }).trim();
     if (command === name) original = executable;
     else symlinkSync(executable, join(tools, command));
   }

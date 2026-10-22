@@ -76,8 +76,9 @@ function installedIdentity(root, paths, check) {
     if (paths.some(path => !isAbsolute(path))) return null;
     // Shared canonical shell closure: structural.sh -> structural-tests.sh ->
     // route-reviewers.sh (including basename and cat); safety/context scripts
-    // use the same text tools. npm's script dispatcher also uses a shell.
-    const tools = ['bash', 'sh', 'git', 'node', 'dirname', 'basename', 'cat', 'grep', 'sed', 'sort', 'tr', 'head', 'cut', 'xargs', 'find'];
+    // use the same text tools. Bare xargs invokes external echo on GNU/Linux;
+    // npm's script dispatcher also uses a shell.
+    const tools = ['bash', 'sh', 'git', 'node', 'dirname', 'basename', 'cat', 'grep', 'sed', 'sort', 'tr', 'head', 'cut', 'xargs', 'echo', 'find'];
     if (check.name === 'secrets') tools.push('gitleaks');
     if (check.name === 'actionlint') tools.push('actionlint', 'shellcheck');
     if (['lint', 'typecheck', 'boundaries', 'focused-tests', 'test'].includes(check.name)) tools.push('npm', 'npx');
@@ -85,7 +86,9 @@ function installedIdentity(root, paths, check) {
     visit(process.execPath);
     // run.mjs executes /bin/bash directly; npm's default script shell is
     // /bin/sh, irrespective of a different executable named sh in PATH.
-    for (const file of ['/bin/bash', '/bin/sh']) {
+    // Bind system echo too: xargs' default command can use this fixed path
+    // rather than the GNU implementation's PATH lookup bound below.
+    for (const file of ['/bin/bash', '/bin/sh', '/bin/echo']) {
       visit(file); hash.update(readFileSync(realpathSync(file)));
     }
     for (const name of tools) {
