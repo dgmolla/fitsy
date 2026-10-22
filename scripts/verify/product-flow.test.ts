@@ -210,6 +210,88 @@ try {
   expect(result.stdout).toContain('NATIVE349_CONTROL_CONTEXT_PASS');
 });
 
+test('isolated native preparation preserves Debug Metro and Release bundle delegates', () => {
+  const script = String.raw`import assert from 'node:assert/strict';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {execFileSync} from 'node:child_process';
+const control=process.argv[1], directory=process.argv[2];
+const {buildProfile,metroRoute}=await import(pathToFileURL(join(control,'scripts/sim/build-profile.mjs')));
+const source=readFileSync(join(control,'scripts/sim/product-flow.mjs'),'utf8');
+const preparation=source.slice(source.indexOf('function prepareNative('),source.indexOf('\nfunction compileNative('));
+assert.ok(preparation.startsWith('function prepareNative('));
+const embedded='Bundle.main.url(forResource: "main", withExtension: "jsbundle")';
+for (const testStore of [true,false]) {
+ const product=join(directory,testStore?'debug':'release'),mobile=join(product,'apps/mobile');
+ mkdirSync(mobile,{recursive:true});
+ const packageBefore='{\n  "name":"synthetic-preparation","scripts":{"start":"expo"}\n}\n';
+ writeFileSync(join(mobile,'package.json'),packageBefore);
+ const profile=buildProfile(testStore,testStore?{EXPO_PUBLIC_REVENUECAT_TEST_KEY:'test_synthetic',EXPO_PUBLIC_DEV_LOGIN_EMAIL:'fixture@example.test'}:{});
+ const log=join(product,'tools.jsonl');
+ const preload=[
+  "import assert from 'node:assert/strict';",
+  "import childProcess from 'node:child_process';",
+  "import {syncBuiltinESMExports} from 'node:module';",
+  "import {mkdirSync,readFileSync,writeFileSync,appendFileSync} from 'node:fs';",
+  "import {join} from 'node:path';",
+  "const mobile=process.env.FITSY_PREPARATION_MOBILE,log=process.env.FITSY_PREPARATION_LOG;",
+  "const embedded='Bundle.main.url(forResource: \"main\", withExtension: \"jsbundle\")';",
+  "childProcess.execFileSync=(command,args,options)=>{",
+  " appendFileSync(log,JSON.stringify({command,args,cwd:options.cwd})+'\\n');",
+  " if(command==='npx') {",
+  "  assert.deepEqual(args,['expo','prebuild','--platform','ios','--no-install']);assert.equal(options.cwd,mobile);",
+  "  for(const path of ['ios/Fitsy/Supporting','ios/Fitsy.xcodeproj'])mkdirSync(join(mobile,path),{recursive:true});",
+  "  const pkg=JSON.parse(readFileSync(join(mobile,'package.json'),'utf8'));pkg.scripts.prebuild='generated';writeFileSync(join(mobile,'package.json'),JSON.stringify(pkg));",
+  "  writeFileSync(join(mobile,'ios/Fitsy/AppDelegate.swift'),'func bundleURL() -> URL? {\\n  return '+embedded+'\\n}\\n');",
+  "  writeFileSync(join(mobile,'ios/Fitsy/Supporting/Expo.plist'),'{}');",
+  "  writeFileSync(join(mobile,'ios/Podfile'),\"target 'Fitsy' do\\n  use_expo_modules!\\nend\\n\");",
+  "  writeFileSync(join(mobile,'ios/Fitsy.xcodeproj/project.pbxproj'),'export SKIP_BUNDLING=1');",
+  " } else if(command==='/usr/libexec/PlistBuddy') {",
+  "  assert.deepEqual(args,['-c','Set :EXUpdatesEnabled false',join(mobile,'ios/Fitsy/Supporting/Expo.plist')]);",
+  "  writeFileSync(args[2],JSON.stringify({EXUpdatesEnabled:false}));",
+  " } else if(command==='pod') {",
+  "  assert.deepEqual(args,['install']);assert.equal(options.cwd,join(mobile,'ios'));",
+  " } else throw new Error('Unexpected real tool request: '+command);",
+  " return Buffer.alloc(0);",
+  "};syncBuiltinESMExports();"
+].join('\n');
+ const execute=(command,args,options)=>{
+  assert.equal(command,'node');assert.equal(options.cwd,mobile);
+  assert.deepEqual(args.slice(0,2),['--input-type=module','-e']);
+  assert.equal(options.env.NODE_ENV,testStore?'development':'production');
+  console.log(JSON.stringify({kind:'NATIVE349_PREPARATION_STARTED',configuration:profile.configuration,syntheticTools:true}));
+  return execFileSync(process.execPath,['--max-old-space-size=64','--import','data:text/javascript;base64,'+Buffer.from(preload).toString('base64'),...args],
+   {cwd:options.cwd,encoding:'utf8',env:{...options.env,NODE_OPTIONS:'--max-old-space-size=64',FITSY_PREPARATION_MOBILE:mobile,FITSY_PREPARATION_LOG:log},timeout:15000});
+ };
+ // Execute the real preparation function's generated transaction. Only its
+ // candidate execution seam and external tool subprocesses are synthetic.
+ // The extracted real function receives the same file URL as its actual module.
+ const prepare=new Function('mobile','repoEnv','runCandidate','moduleUrl',preparation.replaceAll('import.meta.url','moduleUrl')+'; return prepareNative;')
+  (mobile,()=>Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('GIT_'))),execute,pathToFileURL(join(control,'scripts/sim/product-flow.mjs')).href);
+ prepare(profile,testStore);
+ assert.equal(readFileSync(join(mobile,'package.json'),'utf8'),packageBefore);
+ const delegate=readFileSync(join(mobile,'ios/Fitsy/AppDelegate.swift'),'utf8');
+ if(testStore)assert.ok(delegate.includes('http://localhost:'+profile.metroPort+metroRoute));
+ else {assert.ok(delegate.includes(embedded));assert.ok(!delegate.includes('http://localhost:'));}
+ const podfile=readFileSync(join(mobile,'ios/Podfile'),'utf8');
+ assert.equal(podfile.includes("exclude: ['expo-dev-client', 'expo-dev-launcher', 'expo-dev-menu']"),testStore);
+ assert.equal(readFileSync(join(mobile,'ios/Fitsy.xcodeproj/project.pbxproj'),'utf8'),'export FORCE_BUNDLING=1');
+ assert.deepEqual(JSON.parse(readFileSync(join(mobile,'ios/Fitsy/Supporting/Expo.plist'),'utf8')),{EXUpdatesEnabled:false});
+ const tools=readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line));
+ assert.deepEqual(tools.map(row=>row.command),['npx','/usr/libexec/PlistBuddy','pod']);
+ console.log(JSON.stringify({kind:'NATIVE349_PREPARATION_PASS',configuration:profile.configuration,packageRestored:true,delegate,tools}));
+}
+`;
+  const result = spawnSync(process.execPath, ['--max-old-space-size=64', '--input-type=module', '-e', script,
+    resolve(__dirname, '../..'), dir], { encoding: 'utf8', timeout: 20000,
+    env: { ...fixtureEnv(), NODE_OPTIONS: '--max-old-space-size=64' } });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain('NATIVE349_PREPARATION_PASS');
+  expect(result.stdout).toContain('Release');
+});
+
 test('native identity executes the installed autolinking JavaScript bin', () => {
   for (const path of ['apps/mobile', 'node_modules/expo/bin', 'node_modules/expo-modules-autolinking/bin'])
     mkdirSync(join(dir, path), { recursive: true });

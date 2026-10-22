@@ -328,7 +328,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const mobile = ${JSON.stringify(mobile)}, profile = ${JSON.stringify(profile)}, testStore = ${JSON.stringify(testStore)};
-const bundleDelegate = ${bundleDelegate.toString()};
+import { bundleDelegate } from ${JSON.stringify(new URL('./build-profile.mjs', import.meta.url).href)};
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 const read = file => JSON.parse(readFileSync(file, 'utf8'));
 const run = (command, args, options = {}) => execFileSync(command, args,
