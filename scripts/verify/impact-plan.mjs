@@ -45,7 +45,7 @@ export function changedFiles(options = {}) {
   if (range.unknown) return { comparison: range, files: null };
   try {
     const files = git(['diff', '--name-only', '--no-renames', '-z', range.base, range.head], cwd, env).split('\0');
-    if (!env.CI && !env.GITHUB_EVENT_NAME && !options.head) {
+    if (!env.CI && !env.GITHUB_EVENT_NAME) {
       files.push(...git(['diff', '--name-only', '--no-renames', '-z', 'HEAD'], cwd, env).split('\0'));
       files.push(...git(['ls-files', '--others', '--exclude-standard', '-z'], cwd, env).split('\0'));
     }
@@ -60,16 +60,39 @@ export function focusedDatabaseRequired(paths, env = process.env) {
       /^scripts\/(?:hex-resume|hex-persist|pipeline-completed-hex|mini-hex-e2e)\.test\.ts$/.test(path)));
 }
 
+export const allTestGroups = ['api', 'scripts', 'mobile'];
+const documentationPath = path => /^[^/]+\.md$/.test(path) ||
+  /^(docs|proj-mgmt)\/.*\.(md|mdx|rst|txt|png|jpe?g|svg|webp)$/.test(path);
+
+// Whole workspaces only. Shared inputs, harness changes and unknown paths
+// cannot establish that any consumer is unaffected.
+export function wholeTestGroups(files) {
+  if (files === null) return [...allTestGroups];
+  const groups = new Set();
+  for (const path of files) {
+    if (documentationPath(path)) continue;
+    if (/^scripts\/(?:verify|sim)\/|(?:^|\/)(?:package(?:-lock)?\.json|(?:jest|babel|metro|eslint|next)\.config\.[^/]+|tsconfig[^/]*\.json)$/.test(path)) {
+      return [...allTestGroups];
+    }
+    const group = path.startsWith('apps/api/') ? 'api'
+      : path.startsWith('apps/mobile/') ? 'mobile'
+        : path.startsWith('scripts/') ? 'scripts' : null;
+    if (!group) return [...allTestGroups];
+    groups.add(group);
+  }
+  return allTestGroups.filter(group => groups.has(group));
+}
+
 export function impactPlan(options = {}) {
   const selection = changedFiles(options);
-  const documentationOnly = selection.files !== null && selection.files.every(path =>
-    /^[^/]+\.md$/.test(path) || /^(docs|proj-mgmt)\/.*\.(md|mdx|rst|txt|png|jpe?g|svg|webp)$/.test(path));
+  const documentationOnly = selection.files !== null && selection.files.every(documentationPath);
   const code = !documentationOnly;
   // Product-flow remains the authority for exact categories and native proof.
   const native = code && (selection.files === null || selection.files.some(path =>
     /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(path) &&
     !/\.md$/.test(path) && !serviceHealthPath(path)));
-  return { version: 1, ...selection, documentationOnly, code, tests: code, build: code, native };
+  return { version: 1, ...selection, documentationOnly, code, tests: code, build: code, native,
+    testGroups: wholeTestGroups(selection.files) };
 }
 
 export function checkApplies(check, plan) {
@@ -89,7 +112,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
     }
   }
-  if (args.files) {
+  if (args['test-groups']) console.log(plan.testGroups.join(' '));
+  else if (args.files) {
     if (!plan.files) { console.error('Comparison history unavailable'); process.exitCode = 1; }
     else process.stdout.write(plan.files.join('\n') + (plan.files.length ? '\n' : ''));
   } else console.log(JSON.stringify(plan));

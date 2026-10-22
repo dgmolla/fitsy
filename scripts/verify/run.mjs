@@ -21,7 +21,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
-import { impactPlan, git, focusedDatabaseRequired } from "./impact-plan.mjs";
+import { impactPlan, git, focusedDatabaseRequired, allTestGroups } from "./impact-plan.mjs";
 
 // Clear shell startup selectors before checks launch nested npm or Bash shells.
 for (const key of Object.keys(process.env)) {
@@ -118,6 +118,8 @@ for (let c of registry.checks) {
     continue;
   }
   if (c.name === 'focused-tests') c = { ...c, selection: frozenSelection, database: focusedDatabase() };
+  if (c.name === 'test') c = { ...c, selection: {
+    groups: scope === 'changed' ? plan.testGroups : allTestGroups, comparison: plan.comparison } };
   selected.push(c);
 }
 const acceptance = selected.filter(c => isAcceptance(c) && !c.preflight);
@@ -179,7 +181,13 @@ function runCheck(c, { withoutDatabase = false } = {}) {
     if (c.name === 'dev-drift' && process.env.FITSY_VERIFY_OWNED_DB) {
       checkEnv.POSTGRES_URL_NON_POOLING = process.env.FITSY_VERIFY_CALLER_NON_POOLING_URL ?? '';
     }
-    execFile("/bin/bash", ["-p", join(VERIFY_DIR, c.script), `--scope=${scope}`], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
+    const checkArgs = [`--scope=${scope}`];
+    if (c.name === 'test' && scope === 'changed' && !plan.comparison.unknown) {
+      checkArgs.push(`--base=${plan.comparison.base}`);
+      // Local selection must also include current dirty and untracked files.
+      if (runsCtx === 'ci') checkArgs.push(`--head=${plan.comparison.head}`);
+    }
+    execFile("/bin/bash", ["-p", join(VERIFY_DIR, c.script), ...checkArgs], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
       env: checkEnv }, (err, stdout, stderr) => {
       const code = err ? (err.code ?? 1) : 0;
       let parsed;

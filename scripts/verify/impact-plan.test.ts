@@ -22,6 +22,39 @@ const cli = (file: string, args: string[] = [], extra: Record<string, string> = 
 const plan = (extra: Record<string, string> = {}) => JSON.parse(cli('impact-plan.mjs', [], extra).stdout);
 const event = (name: string, data: object) => { const path = join(directory, `.evidence/${name}.json`); write(`.evidence/${name}.json`, JSON.stringify(data)); return path; };
 
+function wholeGroupFixture() {
+  write('scripts/verify/test.sh', readFileSync(join(root, 'scripts/verify/test.sh'), 'utf8'));
+  write('scripts/verify/registry.yml', 'checks:\n  - name: test\n    script: test.sh\n    layer: 2\n    blocking: true\n    cache: true\n    runs: [local, ci]\n');
+  const quote = (value: string) => "'" + value.replace(/'/g, "'\"'\"'") + "'";
+  // Only external test engines are fixtures; selection and test.sh are real.
+  write('bin/node', `#!/bin/sh
+if [ "$1" != --test ]; then exec ${quote(process.execPath)} "$@"; fi
+echo scripts-node >> .evidence/group-calls
+[ "\${FAIL_GROUP:-}" != scripts ]
+`);
+  write('bin/python3', '#!/bin/sh\necho scripts-python >> .evidence/group-calls\n[ "${FAIL_GROUP:-}" != scripts ]\n');
+  write('bin/npm', `#!/bin/sh
+case "$*" in
+  *--workspace=apps/api*) group=api ;;
+  *--workspace=@fitsy/scripts*) group=scripts ;;
+  *--workspace=@fitsy/mobile*) group=mobile ;;
+  *) echo 'unexpected test engine command' >&2; exit 1 ;;
+esac
+echo "$group" >> .evidence/group-calls
+printf '%s\\n' "$*" >> .evidence/group-argv
+[ "\${FAIL_GROUP:-}" != "$group" ]
+`);
+  for (const name of ['node', 'python3', 'npm']) chmodSync(join(directory, 'bin', name), 0o755);
+  const base = commit(); git('update-ref', 'refs/remotes/origin/main', base);
+  const calls = () => existsSync(join(directory, '.evidence/group-calls'))
+    ? readFileSync(join(directory, '.evidence/group-calls'), 'utf8').trim().split('\n').filter(Boolean) : [];
+  const run = (extra: Record<string, string> = {}, args = ['--layer=2', '--runs=ci', '--scope=changed']) => {
+    write('.evidence/group-calls', ''); write('.evidence/group-argv', '');
+    return cli('run.mjs', args, { PATH: `${join(directory, 'bin')}:${env.PATH}`, ...extra });
+  };
+  return { base, calls, run };
+}
+
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'fitsy-impact-'));
   installVerificationFixture(root, directory);
@@ -35,6 +68,145 @@ beforeEach(() => {
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
+
+test('scripts-only actual runner executes its whole group without API or mobile', () => {
+  const fixture = wholeGroupFixture();
+  write('scripts/review/example.py', 'changed = True\n'); const head = commit();
+  const result = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head });
+  expect({ status: result.status, stderr: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(fixture.calls()).toContain('scripts-node');
+  expect(fixture.calls()).toContain('scripts-python');
+  expect(fixture.calls()).toContain('scripts');
+  expect(fixture.calls()).not.toContain('api');
+  expect(fixture.calls()).not.toContain('mobile');
+});
+
+test.each([
+  ['apps/api/lib/example.ts', ['api']],
+  ['apps/mobile/lib/example.ts', ['mobile']],
+  ['scripts/deploy/example.mjs', ['scripts']],
+  ['packages/shared/src/example.ts', ['api', 'scripts', 'mobile']],
+  ['prisma/schema.prisma', ['api', 'scripts', 'mobile']],
+  ['package-lock.json', ['api', 'scripts', 'mobile']],
+  ['scripts/package.json', ['api', 'scripts', 'mobile']],
+  ['apps/mobile/jest.config.js', ['api', 'scripts', 'mobile']],
+  ['apps/mobile/babel.config.js', ['api', 'scripts', 'mobile']],
+  ['tsconfig.json', ['api', 'scripts', 'mobile']],
+  ['scripts/verify/test.sh', ['api', 'scripts', 'mobile']],
+  ['.github/workflows/verify.yml', ['api', 'scripts', 'mobile']],
+  ['unknown/component.ts', ['api', 'scripts', 'mobile']],
+  ['docs/guide.md', []],
+] as [string, string[]][])('whole groups for %s reach the actual runner', (path, groups) => {
+  const fixture = wholeGroupFixture();
+  // Keep the actual test harness intact while still changing its source identity.
+  write(path, path.endsWith('.json') ? '{"fixture":"changed"}\n'
+    : (path === 'scripts/verify/test.sh' ? readFileSync(join(directory, path), 'utf8') : '') + '\n# changed fixture input\n');
+  const head = commit();
+  const extra = { CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head };
+  expect(plan(extra).testGroups).toEqual(groups);
+  const result = fixture.run(extra);
+  expect({ status: result.status, stderr: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, stderr: '' });
+  const actual = fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call));
+  expect(actual).toEqual(groups);
+  expect(fixture.calls().includes('scripts-node')).toBe(groups.includes('scripts'));
+  expect(fixture.calls().includes('scripts-python')).toBe(groups.includes('scripts'));
+  if (groups.includes('api')) expect(readFileSync(join(directory, '.evidence/group-argv'), 'utf8')).toContain('test:coverage');
+});
+
+test.each(['api', 'scripts', 'mobile'])('a failed selected whole %s group blocks acceptance', group => {
+  const fixture = wholeGroupFixture();
+  write('packages/shared/src/changed.ts', 'export const value = true;\n'); const head = commit();
+  const result = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head, FAIL_GROUP: group });
+  expect(result.status).toBe(1);
+  expect(result.stdout).toContain('"name":"test","status":"fail"');
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+});
+
+test('whole groups use the integrated main range and the actual pinned PR range', () => {
+  const fixture = wholeGroupFixture();
+  write('apps/api/lib/first.ts', 'export const first = true;\n'); commit();
+  write('apps/mobile/lib/second.ts', 'export const second = true;\n'); const head = commit();
+  git('update-ref', 'refs/remotes/origin/main', head);
+  const main = { CI: 'true', GITHUB_EVENT_NAME: 'push', GITHUB_EVENT_PATH: event('groups-main', { before: fixture.base, after: head }) };
+  expect(fixture.run(main).status).toBe(0);
+  expect(fixture.calls()).toEqual(['api', 'mobile']);
+  git('checkout', '--detach', fixture.base);
+  const pr = { CI: 'true', GITHUB_EVENT_NAME: 'pull_request',
+    GITHUB_EVENT_PATH: event('groups-pr', { pull_request: { base: { sha: fixture.base }, head: { sha: head } } }) };
+  expect(fixture.run(pr).status).toBe(0);
+  expect(fixture.calls()).toEqual(['api', 'mobile']);
+});
+
+test('whole groups retain dirty and untracked changes even with an explicit local head', () => {
+  const fixture = wholeGroupFixture();
+  write('scripts/review/example.py', 'value = True\n'); const head = commit();
+  write('apps/mobile/lib/untracked.ts', 'export const dirty = true;\n');
+  expect(JSON.parse(cli('impact-plan.mjs', [`--base=${fixture.base}`, `--head=${head}`]).stdout).testGroups).toEqual(['scripts', 'mobile']);
+  const result = fixture.run({}, ['--layer=2', '--runs=local', '--scope=changed', `--base=${fixture.base}`]);
+  expect(result.status).toBe(0);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'mobile']);
+});
+
+test('whole groups cover deleted and cross-group renamed paths', () => {
+  const fixture = wholeGroupFixture();
+  write('apps/api/lib/removed.ts', 'export const value = true;\n'); const base = commit();
+  git('update-ref', 'refs/remotes/origin/main', base);
+  git('rm', 'apps/api/lib/removed.ts'); const head = commit();
+  expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: base, FITSY_DIFF_HEAD: head }).status).toBe(0);
+  expect(fixture.calls()).toEqual(['api']);
+  write('apps/api/lib/moved.ts', 'export const value = true;\n'); const renameBase = commit();
+  mkdirSync(join(directory, 'scripts/review'), { recursive: true });
+  git('mv', 'apps/api/lib/moved.ts', 'scripts/review/moved.ts'); const renamed = commit();
+  expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: renameBase, FITSY_DIFF_HEAD: renamed }).status).toBe(0);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts']);
+});
+
+test('whole groups expand unknown history and explicit all scope, and direct invocation defaults to full', () => {
+  const fixture = wholeGroupFixture();
+  write('scripts/review/example.py', 'value = True\n'); const head = commit();
+  expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: '0'.repeat(40), FITSY_DIFF_HEAD: head }).status).toBe(0);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head },
+    ['--layer=2', '--runs=ci', '--scope=all']).status).toBe(0);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  write('.evidence/group-calls', '');
+  const direct = cli('test.sh', [], { PATH: `${join(directory, 'bin')}:${env.PATH}` });
+  expect(direct.status).toBe(0);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+});
+
+test('forged subset selectors cannot hide whole groups and a failed planner cannot pass', () => {
+  const fixture = wholeGroupFixture();
+  write('packages/shared/src/example.ts', 'export const value = true;\n'); const head = commit();
+  expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head,
+    FITSY_VERIFY_TEST_GROUPS: 'scripts', FITSY_TEST_GROUPS: 'scripts' }).status).toBe(0);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  const forged = cli('test.sh', ['--scope=changed', '--groups=scripts'], { PATH: `${join(directory, 'bin')}:${env.PATH}` });
+  expect(forged.status).toBe(1);
+  write('bin/node', '#!/bin/sh\nexit 1\n');
+  const broken = cli('test.sh', ['--scope=changed'], { PATH: `${join(directory, 'bin')}:${env.PATH}` });
+  expect(broken.status).toBe(1);
+  expect(broken.stdout).toContain('test group planning failed');
+});
+
+test('whole-group local receipts bind comparison and group definition; CI never reuses them', () => {
+  const fixture = wholeGroupFixture();
+  write('apps/api/lib/base.ts', 'export const value = 0;\n'); const apiBase = commit();
+  write('apps/api/lib/base.ts', 'export const value = 1;\n'); commit();
+  write('scripts/review/example.py', 'value = True\n'); commit();
+  const local = ['--layer=2', '--runs=local', '--scope=changed', '--reuse'];
+  expect(fixture.run({}, [...local, `--base=${apiBase}`]).stdout).not.toContain('"cached":true');
+  expect(fixture.run({}, [...local, `--base=${apiBase}`]).stdout).toContain('"cached":true');
+  expect(fixture.calls()).toEqual([]);
+  // Same candidate/files/groups, a different base still retires the earlier proof.
+  expect(fixture.run({}, [...local, `--base=${fixture.base}`]).stdout).not.toContain('"cached":true');
+  const full = fixture.run({}, ['--layer=2', '--runs=local', '--scope=all', '--reuse']);
+  expect(full.stdout).not.toContain('"cached":true');
+  const ci = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: git('rev-parse', 'HEAD') },
+    ['--layer=2', '--runs=ci', '--scope=changed', '--reuse']);
+  expect(ci.status).toBe(0); expect(ci.stdout).not.toContain('"cached":true');
+  expect(fixture.calls()).toContain('api');
+});
 
 test('actual main push selects a matching advisory check after origin/main advances', () => {
   write('scripts/verify/registry.yml', 'checks:\n  - name: test\n    script: fixture.sh\n    layer: 2\n    blocking: shadow\n    runs: [ci]\n    paths: ["apps/api/**"]\n');
