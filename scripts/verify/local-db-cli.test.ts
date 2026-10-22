@@ -7,8 +7,10 @@ import { dirname, join, resolve } from 'node:path';
 const source = resolve(__dirname, '../..');
 type DatabaseCase = { name: string; hijack: boolean; deny: boolean; unlocked: boolean;
   checkFailure: boolean; devDrift: boolean; focused?: boolean; missing?: boolean;
-  scriptFocused?: boolean; wholeGroup?: string };
+  scriptFocused?: boolean; wholeGroup?: string; delegation?: boolean };
 test.each<DatabaseCase>([
+  { name: 'full delegation preserves cheap checks and fresh database focus', delegation: true, focused: true,
+    hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   ...['api', 'scripts', 'mobile'].map(wholeGroup => ({ name: `whole ${wholeGroup} group`, wholeGroup,
     hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false })),
   { name: 'whole scripts with changed owner', wholeGroup: 'scripts', hijack: true, deny: false, unlocked: false, checkFailure: false, devDrift: false },
@@ -23,7 +25,7 @@ test.each<DatabaseCase>([
   { name: 'without OS lock', hijack: false, deny: false, unlocked: true, checkFailure: false, devDrift: false },
   { name: 'failing database check', hijack: false, deny: false, unlocked: false, checkFailure: true, devDrift: false },
   { name: 'dev drift retains caller URL', hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: true },
-])('local database runner $name owns admission, URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift, focused = false, missing = false, scriptFocused = false, wholeGroup = '' }) => {
+])('local database runner $name owns admission, URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift, focused = false, missing = false, scriptFocused = false, wholeGroup = '', delegation = false }) => {
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-db-cli-'));
   const write = (path: string, value: string) => {
     const target = join(directory, path); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, value);
@@ -32,22 +34,25 @@ test.each<DatabaseCase>([
     !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$)/.test(key) &&
     !key.startsWith('FITSY_VERIFY_') && key !== 'FITSY_LOCAL_DB'));
   // Runtime data must not become unknown changed source in group selection.
-  const data = wholeGroup ? join(directory, '.evidence') : directory;
+  const data = wholeGroup || delegation ? join(directory, '.evidence') : directory;
   mkdirSync(data, { recursive: true });
   const state = join(data, 'docker-state.json');
   const reset = join(data, 'reset');
   const devUrl = join(data, 'dev-url');
+  const seed = join(data, 'seed');
+  const events = join(data, 'events.jsonl');
   const loopback = ['127', '0', '0', '1'].join('.');
   const owner = createHash('sha256').update(realpathSync(directory)).digest('hex').slice(0, 16);
   Object.assign(env, { PATH: `${join(directory, 'bin')}:${env.PATH}`, FITSY_TEST_STATE: state,
     FITSY_TEST_RESET: reset, FITSY_TEST_OWNER: owner, FITSY_TEST_HIJACK: hijack ? '1' : '0',
     FITSY_TEST_DENY: deny ? '1' : '0', FITSY_TEST_CHECK_FAIL: checkFailure ? '1' : '0', FITSY_TEST_DEV_URL: devUrl,
+    ...(delegation ? { FITSY_TEST_SEED: seed, FITSY_TEST_EVENTS: events } : {}),
     POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
     POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' });
   if (missing) { delete env.POSTGRES_PRISMA_URL; delete env.POSTGRES_URL_NON_POOLING; }
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env, encoding: 'utf8' }).trim();
   try {
-    for (const file of ['run.mjs', 'impact-plan.mjs', 'local-db.mjs', 'db-lock.py', 'docker-runtime.mjs']) {
+    for (const file of ['run.mjs', 'impact-plan.mjs', 'local-db.mjs', 'db-lock.py', 'docker-runtime.mjs', 'receipt-cache.mjs']) {
       const target = `scripts/verify/${file}`;
       write(target, readFileSync(join(source, target), 'utf8'));
     }
@@ -80,6 +85,22 @@ echo "$group" >> .evidence/groups
       write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8').replace('name: db-fixture', 'name: focused-tests').replace('layer: 2', 'layer: 1'));
       write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: [scriptFocused ? 'scripts/hex-resume.test.ts' : 'apps/api/fixture.test.ts'] }));
     }
+    if (delegation) {
+      write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
+        '  - name: structural\n    script: cheap.sh\n    layer: 0\n    blocking: true\n    cache: true\n' +
+        '  - name: db-fixture\n    script: database.sh\n    layer: 2\n    blocking: true\n    database: true\n');
+      // Observe actual subprocess effects, retaining the caller and owned DB URLs.
+      write('.evidence/event.mjs', `import fs from 'node:fs';
+const read = path => fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : null;
+fs.appendFileSync(process.env.FITSY_TEST_EVENTS, JSON.stringify({
+  check: process.argv[2], generation: read(process.env.FITSY_TEST_RESET), seed: read(process.env.FITSY_TEST_SEED),
+  locked: process.env.FITSY_VERIFY_DB_LOCKED, owned: process.env.FITSY_VERIFY_OWNED_DB ?? null,
+  pooled: process.env.POSTGRES_PRISMA_URL ?? null, direct: process.env.POSTGRES_URL_NON_POOLING ?? null,
+}) + '\\n');
+`);
+      write('scripts/verify/cheap.sh', '#!/bin/sh\nnode .evidence/event.mjs cheap\n');
+      write('scripts/verify/database.sh', '#!/bin/sh\nnode .evidence/event.mjs database\n');
+    }
     if (devDrift) {
       write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
         '  - name: dev-drift\n    script: dev-drift.sh\n    layer: 3\n    blocking: shadow\n');
@@ -90,6 +111,7 @@ echo "$group" >> .evidence/groups
   [ "$POSTGRES_PRISMA_URL" = 'postgresql://fitsy_test:fitsy_test@${loopback}:55432/fitsy_verify' ] &&
   [ "$POSTGRES_URL_NON_POOLING" = "$POSTGRES_PRISMA_URL" ] || exit 1
 printf '%s\\n' '{"summary":"owned database check executed"}'\n`);
+    if (delegation) write('scripts/verify/fixture.sh', readFileSync(join(directory, 'scripts/verify/fixture.sh'), 'utf8') + 'node .evidence/event.mjs focused\n');
     if (checkFailure) write('scripts/verify/fixture.sh', readFileSync(join(directory, 'scripts/verify/fixture.sh'), 'utf8') + 'exit 1\n');
     write('bin/docker', `#!/usr/bin/env node
 const fs=require('node:fs'); const args=process.argv.slice(2); const state=process.env.FITSY_TEST_STATE;
@@ -99,7 +121,8 @@ else if(args[0]==='run') { fs.writeFileSync(state,JSON.stringify({Id:'owned-id',
   Config:{Image:'postgis/postgis:16-3.4',Labels:{'fitsy.verify.owner':process.env.FITSY_TEST_OWNER}},
   State:{Running:true},NetworkSettings:{Ports:{'5432/tcp':[{HostIp:'${loopback}',HostPort:'55432'}]}}}));
   process.stdout.write('owned-id\\n'); }
-else if(args[0]==='exec') { if(args.includes('psql')) fs.writeFileSync(process.env.FITSY_TEST_RESET,'reset'); }
+else if(args[0]==='exec') { if(args.includes('psql')) { const file=process.env.FITSY_TEST_RESET;
+  fs.writeFileSync(file,process.env.FITSY_TEST_EVENTS ? String(Number(fs.existsSync(file) ? fs.readFileSync(file,'utf8') : 0)+1) : 'reset'); } }
 else process.exit(1);
 `);
     chmodSync(join(directory, 'bin/docker'), 0o755);
@@ -107,6 +130,9 @@ else process.exit(1);
     symlinkSync(join(source, 'node_modules/js-yaml'), join(directory, 'node_modules/js-yaml'));
     write('node_modules/prisma/build/index.js', "process.exit(0);\n");
     write('node_modules/tsx/dist/cli.mjs', `import fs from 'node:fs';
+if (process.env.FITSY_TEST_EVENTS) {
+  fs.writeFileSync(process.env.FITSY_TEST_SEED, fs.readFileSync(process.env.FITSY_TEST_RESET));
+}
 if (process.env.FITSY_TEST_HIJACK === '1') {
   const state = JSON.parse(fs.readFileSync(process.env.FITSY_TEST_STATE, 'utf8'));
   state.Config.Labels['fitsy.verify.owner'] = 'another-owner';
@@ -122,7 +148,7 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
     }
     const result = spawnSync(process.execPath, unlocked
       ? ['scripts/verify/local-db.mjs', '--locked-run', '--only=admission,db-fixture', '--runs=local']
-      : ['scripts/verify/run.mjs', `--only=admission,${wholeGroup ? 'test' : focused ? 'focused-tests' : 'db-fixture'}${devDrift ? ',dev-drift' : ''}`, '--runs=local'],
+      : ['scripts/verify/run.mjs', `--only=admission,${delegation ? 'structural,focused-tests,db-fixture' : wholeGroup ? 'test' : focused ? 'focused-tests' : 'db-fixture'}${devDrift ? ',dev-drift' : ''}`, '--runs=local', ...(delegation ? ['--stage=full', '--reuse'] : [])],
       { cwd: directory, env, encoding: 'utf8', timeout: 15000 });
     expect(result.status).toBe(hijack || deny || unlocked || checkFailure ? 1 : 0);
     if (unlocked) {
@@ -140,7 +166,28 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
       if (wholeGroup) expect(existsSync(join(directory, '.evidence/groups'))).toBe(false);
     } else {
       expect(existsSync(reset)).toBe(true);
-      if (wholeGroup) {
+      if (delegation) {
+        const observed = readFileSync(events, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+        const cheap = observed.filter(event => event.check === 'cheap');
+        const focusedChecks = observed.filter(event => event.check === 'focused');
+        const database = observed.filter(event => event.check === 'database');
+        expect(database).toHaveLength(1);
+        for (const event of [...database, ...focusedChecks]) {
+          expect(event.locked).toBe('1');
+          expect(event.owned).toBe('owned-id');
+          expect(Number(event.generation)).toBeGreaterThan(0);
+          expect(event.seed).toBe(event.generation);
+          expect(event.pooled).toBe(`postgresql://fitsy_test:fitsy_test@${loopback}:55432/fitsy_verify`);
+          expect(event.direct).toBe(event.pooled);
+        }
+        expect(focusedChecks.length).toBeGreaterThan(0);
+        // A reset invalidates DB observations even when the owned URL is unchanged.
+        expect(new Set(focusedChecks.map(event => event.generation)).size).toBe(focusedChecks.length);
+        expect(focusedChecks.at(-1).generation).toBe(database[0].generation);
+        expect(cheap).toHaveLength(1);
+        expect(cheap[0].owned).toBeNull();
+        expect(cheap[0].pooled).toBe('postgresql://external.example/prod');
+      } else if (wholeGroup) {
         const groups = readFileSync(join(directory, '.evidence/groups'), 'utf8').trim().split('\n');
         expect(groups.filter(group => ['api', 'scripts', 'mobile'].includes(group))).toEqual([wholeGroup]);
         expect(groups.includes('scripts-node')).toBe(wholeGroup === 'scripts');
