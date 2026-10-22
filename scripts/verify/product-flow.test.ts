@@ -139,6 +139,77 @@ sys.exit(child.returncode)
   });
 });
 
+test('native final admission uses the reviewed control context and preserves live ownership', () => {
+  const script = String.raw`import assert from 'node:assert/strict';
+import {createServer} from 'node:net';
+import {mkdirSync,writeFileSync,readFileSync,symlinkSync} from 'node:fs';
+import {join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {execFileSync} from 'node:child_process';
+const control = process.argv[1], product = process.argv[2];
+const environment = Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('GIT_')));
+const git = (root,args)=>execFileSync('git',['-C',root,...args],{env:environment,encoding:'utf8'}).trim();
+git(product,['init','-q']); git(product,['config','core.hooksPath','/dev/null']);
+writeFileSync(join(product,'product.txt'),'separate frozen product fixture');
+git(product,['add','product.txt']);
+git(product,['-c','user.name=fixture','-c','user.email=fixture@example.test','commit','-qm','product']);
+const productSource=git(product,['rev-parse','HEAD']), controlSource=git(control,['rev-parse','HEAD']);
+git(product,['update-ref','refs/remotes/origin/main',productSource]);
+assert.notEqual(productSource,controlSource);
+const copied=join(product,'check-client/scripts/verify'); mkdirSync(copied,{recursive:true});
+writeFileSync(join(copied,'shipping-session.mjs'),readFileSync(join(control,'scripts/verify/shipping-session.mjs')));
+for (const name of ['receipt-cache.mjs','impact-plan.mjs']) symlinkSync(join(control,'scripts/verify',name),join(copied,name));
+// Only protected review admission is stubbed. The actual check client executes
+// this shell in its emitted cwd and performs the real live socket exchange.
+writeFileSync(join(copied,'review-admission.sh'), '#!/bin/bash\nprintf \'%s\\n\' "$PWD" "$FITSY_DIFF_HEAD" "$FITSY_DIFF_BASE" >> "$FITSY_CONTEXT_OBSERVATIONS"\n');
+const {assertShippingSession}=await import(pathToFileURL(join(copied,'shipping-session.mjs')));
+process.env.FITSY_PRODUCT_ROOT=product;
+const {admitFinalCandidate}=await import(pathToFileURL(join(control,'scripts/sim/product-flow.mjs')));
+const socketPath=join(product,'context.sock'), token='synthetic-live-owner';
+const requests=[];
+const server=createServer({allowHalfOpen:true},socket=>{
+ let raw='';socket.on('error',()=>{});socket.on('data',data=>raw+=data);
+ socket.on('end',()=>{
+  const request=JSON.parse(raw);requests.push(request);
+  socket.end(request.root===control && request.token===token?'pass':'fixture live-session root or token mismatch');
+ });
+});
+await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(socketPath,resolve);});
+const observations=join(product,'check-context.txt');
+const env={...environment,FITSY_SHIPPING_SOCKET:socketPath,FITSY_SHIPPING_TOKEN:token,FITSY_CONTEXT_OBSERVATIONS:observations};
+try {
+ let admission;
+ admitFinalCandidate({publishable:true},(command,args,options={})=>{
+  assert.equal(command,join(control,'scripts/verify/shipping-session.mjs'));assert.deepEqual(args,['--check']);
+  // Match the real run executor's product-root default exactly.
+  admission=assertShippingSession(options.cwd||product,env);
+ });
+ try {await admission;}
+ catch(error) {
+  console.error(JSON.stringify({kind:'NATIVE349_CONTEXT_REFUSAL',message:error.message,requests,
+    emitted:readFileSync(observations,'utf8').trim().split('\n'),productSource,controlSource}));throw error;
+ }
+ const emitted=readFileSync(observations,'utf8').trim().split('\n');
+ assert.deepEqual(emitted.slice(0,3),[control,controlSource,git(control,['rev-parse','origin/main'])]);
+ assert.equal(requests[0].root,control);
+ await assert.rejects(assertShippingSession(product,env),/root or token mismatch/);
+ assert.equal(requests.at(-1).root,product);
+ const negative=readFileSync(observations,'utf8').trim().split('\n').slice(-3);
+ assert.deepEqual(negative,[product,productSource,productSource]);
+ await assert.rejects(assertShippingSession(control,{...env,FITSY_SHIPPING_TOKEN:'wrong-owner'}),/root or token mismatch/);
+ await assert.rejects(assertShippingSession(control,environment),/run final acceptance inside/);
+ console.log(JSON.stringify({kind:'NATIVE349_CONTROL_CONTEXT_PASS',control,controlSource,product,productSource,
+  actualCheckClient:true,protectedReviewAdmissionStub:true,wrongProductAndTokenRefused:true,missingLiveSessionRefused:true}));
+} finally {await new Promise(resolve=>server.close(resolve));}
+`;
+  const result = spawnSync(process.execPath, ['--max-old-space-size=64', '--input-type=module', '-e', script,
+    resolve(__dirname, '../..'), dir], { encoding: 'utf8', timeout: 15000,
+    env: { ...fixtureEnv(), NODE_OPTIONS: '--max-old-space-size=64' } });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain('NATIVE349_CONTROL_CONTEXT_PASS');
+});
+
 test('native identity executes the installed autolinking JavaScript bin', () => {
   for (const path of ['apps/mobile', 'node_modules/expo/bin', 'node_modules/expo-modules-autolinking/bin'])
     mkdirSync(join(dir, path), { recursive: true });

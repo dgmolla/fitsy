@@ -67,7 +67,7 @@ export function admitFinalCandidate(mode, command = run) {
   if (!mode.publishable) return;
   // Final journeys belong to the live shipping execution, after fresh review.
   // Standalone journeys fail rather than consume another bounded review round.
-  command(fileURLToPath(new URL('../verify/shipping-session.mjs', import.meta.url)), ['--check']);
+  command(fileURLToPath(new URL('../verify/shipping-session.mjs', import.meta.url)), ['--check'], { cwd: controlRoot });
 }
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]).sort();
