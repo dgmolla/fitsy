@@ -75,17 +75,19 @@ process.exit(73);
   writeFileSync(boundary, `
 import argparse, json, os, subprocess, sys
 parser = argparse.ArgumentParser()
-parser.add_argument('action', choices=['candidate-checks'])
+commands = parser.add_subparsers(dest='action', required=True)
+checks = commands.add_parser('candidate-checks')
 for key in ('issue', 'source', 'base', 'root', 'check', 'product-root', 'cwd'):
-    parser.add_argument('--' + key, required=True)
-parser.add_argument('--env', action='append', default=[])
-parser.add_argument('command', nargs=argparse.REMAINDER)
+    checks.add_argument('--' + key, required=True)
+checks.add_argument('--env', action='append', default=[])
+checks.add_argument('command', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 assert (args.issue, args.source, args.base, args.root, args.check, args.product_root) == (
     '349', ${JSON.stringify(controlSource)}, ${JSON.stringify(controlSource)}, ${JSON.stringify(controls)},
     'native', ${JSON.stringify(dir)})
 assert args.cwd in ('.', 'apps/mobile')
-environment = {'HOME': ${JSON.stringify(candidateHome)}, 'PATH': ${JSON.stringify(process.env.PATH || '')}}
+environment = {'HOME': ${JSON.stringify(candidateHome)}, 'PATH': ${JSON.stringify(process.env.PATH || '')},
+               'NODE_OPTIONS': '--max-old-space-size=64'}
 for entry in args.env:
     key, value = entry.split('=', 1)
     assert key.startswith('EXPO_PUBLIC_') or key in ('NODE_ENV', 'EXPO_NO_DOTENV', 'FITSY_ALLOW_MISSING_PUBLIC_ENV', 'CI')
@@ -103,12 +105,13 @@ sys.exit(child.returncode)
   const result = spawnSync(process.execPath, ['--max-old-space-size=64', copiedCaller, 'build', udid], {
     cwd: dir, encoding: 'utf8', timeout: 15000,
     env: { ...fixtureEnv(), HOME: operatorHome, PATH: `${tools}:${process.env.PATH}`,
-      NODE_OPTIONS: '', NODE_PATH: '', JEST_WORKER_ID: 'native-boundary-fixture',
+      NODE_OPTIONS: '--max-old-space-size=64', NODE_PATH: '', JEST_WORKER_ID: 'native-boundary-fixture',
       FITSY_PRODUCT_ROOT: dir, FITSY_OPERATOR_FIXTURE_CANARY: 'synthetic-operator-value',
       EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org',
       EXPO_PUBLIC_SUPABASE_URL: 'https://fixture-dev.supabase.co',
       EXPO_PUBLIC_SUPABASE_ANON_KEY: 'synthetic-public-anon' },
   });
+  if (!existsSync(observed)) throw new Error(`Native config fixture did not execute: ${result.stderr}`);
   expect(result.error).toBeUndefined();
   expect(result.status).toBe(1);
   expect(result.stderr).toContain('candidate-config-fixture-stop');
