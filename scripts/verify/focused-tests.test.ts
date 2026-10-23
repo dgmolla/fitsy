@@ -255,8 +255,8 @@ test('canonical full caller reuses a complete focused file while nested admissio
   expect(events.find(event => event.name === 'A' && !event.env.FITSY_VERIFY_OWNED_DB)?.env.FITSY_VERIFY_NEEDS_TEST_DEPS).toBe('0');
   const fullContextLaunches = launches.filter(launch => launch.env.FITSY_VERIFY_OWNED_DB === 'fixture-owned');
   expect(fullContextLaunches).toHaveLength(2);
-  expect(fullContextLaunches[0].argv).toContain('--runTestsByPath');
-  expect(fullContextLaunches[1].argv.some(arg => arg.startsWith('--testPathIgnorePatterns='))).toBe(true);
+  expect(fullContextLaunches[0]?.argv).toContain('--runTestsByPath');
+  expect(fullContextLaunches[1]?.argv.some(arg => arg.startsWith('--testPathIgnorePatterns='))).toBe(true);
   for (const launch of fullContextLaunches) {
     expect(launch.argv.slice(0, 5)).toEqual(['test', '--workspace=@fitsy/scripts', '--', '--maxWorkers=1', '--workerIdleMemoryLimit=256MB']);
     expect(launch.env).toMatchObject({ FITSY_MEDIA_INTEGRATION: '0', NODE_OPTIONS: '--max-old-space-size=512' });
