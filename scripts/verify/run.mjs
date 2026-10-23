@@ -165,6 +165,14 @@ export async function verify(argv, prepareDatabase) {
       prepared = true;
     }
   }
+  let scriptsEnvironment;
+  try {
+    const recipe = JSON.parse(frozenSelection ?? '{}');
+    if (selected.some(c => c.name === 'focused-tests' && c.script === 'focused-tests.sh') &&
+        recipe.tests?.length && recipe.tests.every(path => /^scripts\/.*\.test\.tsx?$/.test(path))) {
+      ({ scriptsJestEnvironment: scriptsEnvironment } = await import('./receipt-cache.mjs'));
+    }
+  } catch { /* The focused launcher reports invalid selections. */ }
   let wholeAttempt = process.env.FITSY_LOCAL_DB === '1' ? null : beginTiming('verification', 'whole');
   function interruptTiming() {
     for (const attempt of [...activeAttempts]) endTiming(attempt, 'interrupted');
@@ -176,14 +184,7 @@ export async function verify(argv, prepareDatabase) {
     if (wholeAttempt) { endTiming(wholeAttempt, status); wholeAttempt = null; }
   }
 
-  function runCheck(c, { withoutDatabase = false } = {}) {
-    const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
-    if (c.missing) {
-      endTiming(attempt, 'fail');
-      return Promise.resolve({ name: c.name, status: "fail", summary: `registry entry has no script ${c.script}`, fix: "add the script or remove the entry", blocking: c.blocking !== "shadow" });
-    }
-    return new Promise((resolve) => {
-      const t0 = Date.now();
+  function checkInputs(c, { withoutDatabase = false } = {}) {
       const checkEnv = { ...process.env, FITSY_RUNS: runsCtx,
         ...(c.name === 'focused-tests' ? { FITSY_VERIFY_FOCUSED_RECIPE: c.selection ?? '' } : {}),
         FITSY_VERIFY_NEEDS_NATIVE: plan.native ? '1' : '0',
@@ -200,6 +201,9 @@ export async function verify(argv, prepareDatabase) {
       if (c.name === 'dev-drift' && process.env.FITSY_VERIFY_OWNED_DB) {
         checkEnv.POSTGRES_URL_NON_POOLING = process.env.FITSY_VERIFY_CALLER_NON_POOLING_URL ?? '';
       }
+      if (c.name === 'focused-tests' && scriptsEnvironment) {
+        Object.assign(checkEnv, scriptsEnvironment(checkEnv), { FITSY_VERIFY_FOCUSED_RECIPE: c.selection ?? '' });
+      }
       // Unknown parent history must not become a narrower child comparison.
       const checkArgs = [`--scope=${c.name === 'test' && plan.comparison.unknown ? 'all' : scope}`];
       if (c.name === 'test' && scope === 'changed' && !plan.comparison.unknown) {
@@ -207,8 +211,20 @@ export async function verify(argv, prepareDatabase) {
         // changedFiles still includes local dirty and untracked inputs.
         checkArgs.push(`--head=${plan.comparison.head}`);
       }
-      execFile("/bin/bash", ["-p", join(VERIFY_DIR, c.script), ...checkArgs], { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
-        env: checkEnv }, (err, stdout, stderr) => {
+      return { env: checkEnv, args: ['-p', join(VERIFY_DIR, c.script), ...checkArgs] };
+  }
+
+  function runCheck(c, options) {
+    const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
+    if (c.missing) {
+      endTiming(attempt, 'fail');
+      return Promise.resolve({ name: c.name, status: "fail", summary: `registry entry has no script ${c.script}`, fix: "add the script or remove the entry", blocking: c.blocking !== "shadow" });
+    }
+    return new Promise((resolve) => {
+      const t0 = Date.now();
+      const input = checkInputs(c, options);
+      execFile("/bin/bash", input.args, { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
+        env: input.env }, (err, stdout, stderr) => {
         const code = err ? (err.code ?? 1) : 0;
         let parsed;
         try {
@@ -234,14 +250,15 @@ export async function verify(argv, prepareDatabase) {
 
   async function runChecks(checks, sequential = false) {
     const completedResults = [];
-    // DB-backed focused runs retain fresh execution; DB-wrapper reuse is separate.
+    // DB-backed focused runs retain fresh execution. Their new complete-file
+    // reports may only cover residual work in this same live invocation.
     const cacheable = checks.filter(c => c.cache && runsCtx === 'local' &&
-      (c.name !== 'focused-tests' || (!c.database && !focusedDatabaseRequired([]))));
+      (c.name !== 'focused-tests' || !c.database));
     let cache;
     try {
       if (cacheable.length && !plan.comparison.unknown) {
         const { verificationCache } = await import('./receipt-cache.mjs');
-        cache = verificationCache(REPO_ROOT, process.env, plan, scope);
+        cache = verificationCache(REPO_ROOT, process.env, plan, scope, checkInputs);
       }
     } catch (error) {
       completedResults.push({ name: 'receipt-cache', status: 'fail', blocking: true, summary: error.message,
@@ -252,7 +269,8 @@ export async function verify(argv, prepareDatabase) {
     } else {
       const runSelected = c => {
         const reusable = cacheable.includes(c);
-        const prior = args.reuse && reusable && cache?.read(c);
+        const prior = args.reuse && reusable &&
+          !(['focused-tests', 'test'].includes(c.name) && focusedDatabaseRequired([])) && cache?.read(c);
         if (prior) {
           const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
           endTiming(attempt, 'cached');
@@ -268,7 +286,7 @@ export async function verify(argv, prepareDatabase) {
         if (cache.unchanged() && sourceStable()) {
           for (const check of cacheable) {
             const result = completed.find(r => r.name === check.name);
-            if (!result.cached) cache.write(check, result);
+            if (!result.cached) cache.write(check, { ...result, invocation_pid: process.pid });
           }
         } else {
           for (const check of cacheable) cache.invalidate(check);
@@ -285,11 +303,14 @@ export async function verify(argv, prepareDatabase) {
   const results = [...preflight];
   const focused = cheap.filter(c => c.name === 'focused-tests');
   const databaseFocused = runsCtx === 'local' && focused.some(c => c.database || focusedDatabaseRequired([]));
+  // Keep the full caller's focus in its actual prepared test context. Nested
+  // protected admission still performs its own distinct cheap-context focus.
+  const fullContextFocused = runsCtx === 'local' && focused.length > 0 && needsDatabase && remaining.some(c => c.name === 'test');
   // Cheap failures stop expensive work in local and combined CI invocations.
   if (!results.some(r => r.status === 'fail' && r.blocking)) {
     results.push(...await runChecks(cheap.filter(c => c.name !== 'focused-tests'), true));
     if (!results.some(r => r.status === 'fail' && r.blocking)) {
-      if (!databaseFocused) results.push(...await runChecks(focused));
+      if (!databaseFocused && !fullContextFocused) results.push(...await runChecks(focused));
     } else skipped.push(...focused.map(c => ({ name: c.name, status: 'skipped', summary: 'cheap checks failed' })));
   } else {
     skipped.push(...cheap.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
@@ -311,7 +332,12 @@ export async function verify(argv, prepareDatabase) {
         summary: 'candidate changed during production build', fix: 'revalidate the changed candidate' });
     }
   }
-  if (databaseFocused && !results.some(result => result.status === 'fail' && result.blocking)) {
+  if (!preDatabaseBuild.length && fullContextFocused && !results.some(r => r.status === 'fail' && r.blocking)) {
+    results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
+    if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
+      summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
+  }
+  if ((databaseFocused || fullContextFocused) && !results.some(result => result.status === 'fail' && result.blocking)) {
     try {
       prepareOwnedDatabase();
       const { assertOwnedDatabase } = await import('./local-db-control.mjs');
@@ -325,7 +351,7 @@ export async function verify(argv, prepareDatabase) {
     if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
       summary: 'candidate changed during focused database checks', fix: 'revalidate the changed candidate' });
   }
-  if (!preDatabaseBuild.length && !results.some(r => r.status === 'fail' && r.blocking)) {
+  if (!preDatabaseBuild.length && !fullContextFocused && !results.some(r => r.status === 'fail' && r.blocking)) {
     results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
     if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
       summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
@@ -333,7 +359,7 @@ export async function verify(argv, prepareDatabase) {
   if (results.some(result => result.status === 'fail' && result.blocking)) {
     skipped.push(...remaining.filter(c => !results.some(result => result.name === c.name))
       .map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
-    if (databaseFocused && !focused.some(c => results.some(result => result.name === c.name))) {
+    if ((databaseFocused || fullContextFocused) && !focused.some(c => results.some(result => result.name === c.name))) {
       skipped.push(...focused.filter(c => !skipped.some(result => result.name === c.name))
         .map(c => ({ name: c.name, status: 'skipped', summary: 'database prerequisites failed' })));
     }

@@ -27,8 +27,21 @@ case "$TEST_GROUPS" in
   *) printf '{"name":"test","status":"fail","summary":"invalid test group plan"}\n'; exit 1 ;;
 esac
 FAIL=""
+# Consume complete same-invocation focused proof before any other test engine
+# can mutate the freshly prepared database. Missing proof keeps every file fresh.
 if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
-  node --test scripts/delivery/*.test.mjs >&2 || FAIL="delivery"
+  JEST_COMMAND=(test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB)
+  JEST_ENV=(FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512)
+  FOCUSED_IGNORE="$(/usr/bin/env "${JEST_ENV[@]}" node scripts/verify/receipt-cache.mjs --scripts-focused-exclusion "$PPID" "$@" -- "${JEST_COMMAND[@]}")" || FOCUSED_IGNORE=""
+  JEST_SELECTION=()
+  if [ -n "$FOCUSED_IGNORE" ]; then
+    JEST_SELECTION+=("--testPathIgnorePatterns=$FOCUSED_IGNORE" --passWithNoTests)
+  fi
+  # Real decoder and attachment cases retain the required local media lane.
+  /usr/bin/env "${JEST_ENV[@]}" npm "${JEST_COMMAND[@]}" "${JEST_SELECTION[@]}" >&2 || FAIL="scripts"
+fi
+if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
+  node --test scripts/delivery/*.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }delivery"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-report.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-report"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-dispatcher.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-dispatcher"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/pressure-retention.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }pressure-retention"
@@ -43,11 +56,6 @@ if [[ " $TEST_GROUPS " == *" api "* ]]; then
   else
     npm run test:coverage --workspace=apps/api >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
   fi
-fi
-# Real decoder and attachment cases run in the required local media lane;
-# their deterministic contract cases remain registered here.
-if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
-  FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512 npm test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB >&2 || FAIL="${FAIL:+$FAIL, }scripts"
 fi
 # One Jest worker keeps mobile suites serial while recycling its process after
 # large files; in-band mode retains every suite in one process.
