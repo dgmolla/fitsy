@@ -19,7 +19,7 @@ import { Masthead, MacroStrip, SearchBar } from './DiscoveryChrome';
 import { HeroCard, RestaurantSection } from './DiscoveryCards';
 const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { onboardingPreview?: boolean; onPreviewBack?: () => void }) {
-  const { navigation, isOnboardingPreview, tried, inputs, query, setQuery, canSearch, hasQuery, location,
+  const { navigation, isOnboardingPreview, tried, inputs, filterMode, query, setQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible, startTour,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown, cancelTourTyping, handleClearQuery, handleApplyFilters,
@@ -209,6 +209,8 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       <FilterPopup
         visible={filterVisible}
         values={inputs}
+        mode={filterMode}
+        allowPartial
         onApply={handleApplyFilters}
         onClose={() => setFilterVisible(false)}
       />
