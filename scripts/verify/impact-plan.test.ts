@@ -107,7 +107,7 @@ test.each([
   const result = fixture.run(extra);
   expect({ status: result.status, stderr: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, stderr: '' });
   const actual = fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call));
-  expect(actual).toEqual(groups);
+  expect(actual).toEqual(['scripts', 'api', 'mobile'].filter(group => groups.includes(group)));
   expect(fixture.calls().includes('scripts-node')).toBe(groups.includes('scripts'));
   expect(fixture.calls().includes('scripts-python')).toBe(groups.includes('scripts'));
   if (groups.includes('api')) expect(readFileSync(join(directory, '.evidence/group-argv'), 'utf8')).toContain('test:coverage');
@@ -119,7 +119,7 @@ test.each(['api', 'scripts', 'mobile'])('a failed selected whole %s group blocks
   const result = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head, FAIL_GROUP: group });
   expect(result.status).toBe(1);
   expect(result.stdout).toContain('"name":"test","status":"fail"');
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
 });
 
 test('whole groups use the integrated main range and the actual pinned PR range', () => {
@@ -158,21 +158,21 @@ test('whole groups cover deleted and cross-group renamed paths', () => {
   mkdirSync(join(directory, 'scripts/review'), { recursive: true });
   git('mv', 'apps/api/lib/moved.ts', 'scripts/review/moved.ts'); const renamed = commit();
   expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: renameBase, FITSY_DIFF_HEAD: renamed }).status).toBe(0);
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api']);
 });
 
 test('whole groups expand unknown history and explicit all scope, and direct invocation defaults to full', () => {
   const fixture = wholeGroupFixture();
   write('scripts/review/example.py', 'value = True\n'); const head = commit();
   expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: '0'.repeat(40), FITSY_DIFF_HEAD: head }).status).toBe(0);
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
   expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head },
     ['--layer=2', '--runs=ci', '--scope=all']).status).toBe(0);
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
   write('.evidence/group-calls', '');
   const direct = cli('test.sh', [], { PATH: `${join(directory, 'bin')}:${env.PATH}` });
   expect(direct.status).toBe(0);
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
 });
 
 test.each([
@@ -190,7 +190,7 @@ test.each([
   const result = fixture.run(extra, ['--layer=2', '--runs=ci', '--scope=changed', invalidArg]);
   expect(result.status).toBe(failure ? 1 : 0);
   expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call)))
-    .toEqual(['api', 'scripts', 'mobile']);
+    .toEqual(['scripts', 'api', 'mobile']);
   expect(fixture.calls()).toContain('scripts-node');
   expect(fixture.calls()).toContain('scripts-python');
   if (failure) {
@@ -204,7 +204,7 @@ test('forged subset selectors cannot hide whole groups and a failed planner cann
   write('packages/shared/src/example.ts', 'export const value = true;\n'); const head = commit();
   expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head,
     FITSY_VERIFY_TEST_GROUPS: 'scripts', FITSY_TEST_GROUPS: 'scripts' }).status).toBe(0);
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
   const forged = cli('test.sh', ['--scope=changed', '--groups=scripts'], { PATH: `${join(directory, 'bin')}:${env.PATH}` });
   expect(forged.status).toBe(1);
   write('bin/node', '#!/bin/sh\nexit 1\n');
@@ -477,6 +477,21 @@ test('cheap focused checks reuse a pass while resource admission executes every 
   const second = cli('run.mjs', cheapReuse);
   expect(second.status).toBe(0); expect(second.stdout).toContain('"cached":true');
   expect(calls()).toBe(1); expect(calls('admission-calls')).toBe(2);
+});
+
+test('focused receipts bind actual child flags when full and cheap select different dependencies', () => {
+  cheapCacheFixture();
+  write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
+    '  - name: test\n    script: acceptance.sh\n    layer: 2\n    blocking: true\n');
+  write('scripts/verify/fixture.sh', 'echo "$FITSY_VERIFY_NEEDS_TEST_DEPS" >> .evidence/child-flags\necho \'{"status":"pass"}\'\n');
+  write('scripts/verify/acceptance.sh', 'echo \'{"status":"pass"}\'\n');
+  commit();
+  expect(cli('run.mjs', cheapReuse).status).toBe(0);
+  expect(cli('run.mjs', cheapReuse).stdout).toContain('"cached":true');
+  const full = cli('run.mjs', cheapReuse.filter(arg => arg !== '--stage=cheap'));
+  expect(full.status).toBe(0);
+  expect(full.stdout).not.toContain('"cached":true');
+  expect(readFileSync(join(directory, '.evidence/child-flags'), 'utf8').trim().split('\n')).toEqual(['0', '1']);
 });
 
 test.each(['missing', 'malformed', 'failed', 'expired', 'future', 'old-version'])(
