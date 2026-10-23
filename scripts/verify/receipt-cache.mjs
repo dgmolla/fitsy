@@ -176,9 +176,10 @@ export function completeJestFiles(root, tests, report) {
       report.numPassedTests + (report.numPendingTests ?? 0) + (report.numTodoTests ?? 0) !== report.numTotalTests || report.testResults?.length !== tests.length) return false;
   return tests.every(test => {
     const result = report.testResults.find(result => result.name === resolve(root, test));
-    // Optional conditional cases remain skipped under the identical context;
-    // every selected file must still contain a real passing assertion.
-    return result?.status === 'passed' && result.assertionResults?.some(assertion => assertion.status === 'passed') &&
+    // Jest labels passing files with pending cases 'focused'. Callers require
+    // an unpatterned whole-file recipe and identical full-suite context; source
+    // .only and optional skips then behave the same in both invocations.
+    return ['passed', 'focused'].includes(result?.status) && result.assertionResults?.some(assertion => assertion.status === 'passed') &&
       result.assertionResults.every(assertion => ['passed', 'pending', 'todo'].includes(assertion.status));
   });
 }
