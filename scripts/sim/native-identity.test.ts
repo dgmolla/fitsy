@@ -10,7 +10,7 @@ const cleanEnv = () => Object.fromEntries(Object.entries(process.env).filter(([k
 const runCase = (body: string) => JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e',
   `import {nativeIdentity,nativeBuildDecision,reusableNativeReceipt,profileIdentity,sealReceipt,identityHash,buildInputDrift} from ${JSON.stringify(modulePath)};
    import {embeddedBundleCompatibility} from ${JSON.stringify(profilePath)};
-   import {archiveActiveReceipt,preserveRetainedArtifacts} from ${JSON.stringify(productFlowPath)};
+   import {archiveActiveReceipt,preserveRetainedArtifacts,recipeIdentity} from ${JSON.stringify(productFlowPath)};
    import {writeFileSync,readFileSync,mkdirSync,readdirSync} from 'node:fs';
    import {execFileSync} from 'node:child_process';
    import {createHash} from 'node:crypto';
@@ -129,6 +129,58 @@ test('Release public store-key presence changes JS configuration without changin
     const configured=profileIdentity({configuration:'Release',storeMode:'apple-simulator',buildMode:'embedded-release'}, {os:'iOS 26.0'}, {}, execute);
     process.stdout.write(JSON.stringify({same:keyless.hash===configured.hash,capability:configured.inputs.storeCapability}));`);
   expect(result).toEqual({ same: true, capability: 'apple-native' });
+});
+
+test('the actual isolated producer reuses the original compiler recipe while native, profile and artifact guards remain active', () => {
+  const result = runCase(`
+    const native=nativeIdentity(root,{},execute);
+    const profile=profileIdentity({configuration:'Debug',storeMode:'test-store',buildMode:'owned-metro-test-store',metroPort:8099}, {os:'iOS 26.0'}, {}, execute);
+    const inputs={prepareNative:'d9a8609e6481096427966d03990f536dc1031340c1d3707efcb2ce1c5e4b212d',
+      compileNative:'7257dcd03745a7bd1c90d3266213e115e08abc156444f72315f929e368b632ef',
+      bundleDelegate:'7faa156e6e3c54554cbb882026e5985d7e67720cd28c5e963b290f5d1881c60d',
+      metroRoute:'/.expo/.virtual-metro-entry.bundle?platform=ios&dev=true&minify=false'};
+    const receipt=sealReceipt({nativeIdentity:native,profileIdentity:profile,recipeIdentity:{inputs,hash:identityHash(inputs)},app:'original Debug.app'});
+    const current=recipeIdentity();
+    const decide=(overrides={})=>nativeBuildDecision({receipt,native,profile,recipe:current,appIntact:true,...overrides});
+    const selected=reusableNativeReceipt([receipt],native,profile,current,()=>true);
+    writeFileSync(root+'/apps/mobile/ios/Native.swift','changed native source');
+    const nativeDrift=decide({native:nativeIdentity(root,{},execute)});
+    const wrongProfile=profileIdentity({configuration:'Debug',storeMode:'test-store',buildMode:'owned-metro-test-store',metroPort:8100}, {os:'iOS 26.0'}, {}, execute);
+    process.stdout.write(JSON.stringify({reuse:decide(),selected:selected?.app,originalRecipe:receipt.recipeIdentity,
+      nativeDrift,profileDrift:decide({profile:wrongProfile}),artifactDrift:decide({appIntact:false}),
+      sealDrift:decide({receipt:{...receipt,app:'forged'}})}));`);
+  expect(result.reuse).toEqual({ rebuild: false, reasons: [] });
+  expect(result.selected).toBe('original Debug.app');
+  expect(result.originalRecipe.hash).toBe('8676c37dafa145c7706837b03b6cbf64cf5f1ef006458b47ee8e788511f1e0e4');
+  for (const [key, reason] of Object.entries({ nativeDrift: /Native.swift/, profileDrift: /metroPort/,
+    artifactDrift: /artifact missing or changed/, sealDrift: /receipt changed/ })) {
+    expect(result[key].rebuild).toBe(true);
+    expect(result[key].reasons.join(' ')).toMatch(reason);
+  }
+});
+
+test('transport compatibility refuses unknown recipe maps and mismatched digests on either side', () => {
+  const result = runCase(`
+    const native=nativeIdentity(root,{},execute);
+    const profile=profileIdentity({configuration:'Debug',storeMode:'test-store',buildMode:'owned-metro-test-store',metroPort:8099}, {os:'iOS 26.0'}, {}, execute);
+    const oldInputs={prepareNative:'d9a8609e6481096427966d03990f536dc1031340c1d3707efcb2ce1c5e4b212d',
+      compileNative:'7257dcd03745a7bd1c90d3266213e115e08abc156444f72315f929e368b632ef',
+      bundleDelegate:'7faa156e6e3c54554cbb882026e5985d7e67720cd28c5e963b290f5d1881c60d',
+      metroRoute:'/.expo/.virtual-metro-entry.bundle?platform=ios&dev=true&minify=false'};
+    const make=inputs=>({inputs,hash:identityHash(inputs)});
+    const old=make(oldInputs),current=recipeIdentity();
+    const decide=(prior,next)=>nativeBuildDecision({receipt:sealReceipt({nativeIdentity:native,profileIdentity:profile,recipeIdentity:prior}),native,profile,recipe:next,appIntact:true});
+    process.stdout.write(JSON.stringify({
+      unknownOld:decide(make({...oldInputs,compileNative:'different compiler'}),current),
+      unknownCurrent:decide(old,make({...current.inputs,prepareNative:'different preparation'})),
+      extraOld:decide(make({...oldInputs,extra:'unreviewed'}),current),
+      extraCurrent:decide(old,make({...current.inputs,extra:'unreviewed'})),
+      wrongOldDigest:decide({...old,hash:'0'.repeat(64)},current),
+      wrongCurrentDigest:decide(old,{...current,hash:'0'.repeat(64)})}));`);
+  for (const decision of Object.values(result) as { rebuild: boolean; reasons: string[] }[]) {
+    expect(decision.rebuild).toBe(true);
+    expect(decision.reasons.join(' ')).toMatch(/native build recipe/);
+  }
 });
 
 test('Debug, Release, Debug selects the retained intact binary without another compile', () => {

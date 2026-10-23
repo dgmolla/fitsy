@@ -8,6 +8,26 @@ const stable = value => JSON.stringify(value, (_, item) => item && !Array.isArra
   ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
 export const identityHash = value => sha(stable(value));
 export const sealReceipt = receipt => ({ ...receipt, receiptHash: identityHash(receipt) });
+// The original compiler recipe and its credential-isolated transport execute
+// the same preparation/compiler inputs. Keep this one reviewed transition
+// exact: a later producer change must establish its own compatibility.
+const originalRecipeInputs = {
+  prepareNative: 'd9a8609e6481096427966d03990f536dc1031340c1d3707efcb2ce1c5e4b212d',
+  compileNative: '7257dcd03745a7bd1c90d3266213e115e08abc156444f72315f929e368b632ef',
+  bundleDelegate: '7faa156e6e3c54554cbb882026e5985d7e67720cd28c5e963b290f5d1881c60d',
+  metroRoute: '/.expo/.virtual-metro-entry.bundle?platform=ios&dev=true&minify=false',
+};
+const isolatedRecipeInputs = { ...originalRecipeInputs,
+  prepareNative: '677d5e2fbf809dccda58245bd45e1b5a97b53f6b3c0fb7b1b3e40ac082e1f732',
+  compileNative: '33e523e1fe2ecb5b16086ae1fd9c639ac92508135059c5142fa3e8ea7d019b82',
+};
+function compatibleRecipe(previous, current) {
+  if (previous?.hash === current.hash) return true;
+  return previous?.hash === identityHash(originalRecipeInputs) &&
+    current.hash === identityHash(isolatedRecipeInputs) &&
+    stable(previous.inputs) === stable(originalRecipeInputs) &&
+    stable(current.inputs) === stable(isolatedRecipeInputs);
+}
 const nativeFile = path => /^(apps\/mobile\/ios\/|patches\/)/.test(path) ||
   /^apps\/mobile\/(expo|react-native)\.config\.[cm]?[jt]s$/.test(path);
 const command = (cmd, args, cwd, env) => execFileSync(cmd, args, { cwd, env, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }).trim();
@@ -134,6 +154,7 @@ export function nativeBuildDecision({ receipt, native, profile, recipe = null, a
   if (receipt.profileIdentity.hash !== identityHash(receipt.profileIdentity.inputs)) reasons.push('profile identity inputs do not match their recorded digest');
   if (recipe && (!receipt.recipeIdentity || receipt.recipeIdentity.hash !== identityHash(receipt.recipeIdentity.inputs)))
     reasons.push('native build recipe receipt is missing or changed');
+  if (recipe && recipe.hash !== identityHash(recipe.inputs)) reasons.push('current native build recipe inputs do not match their digest');
   if (!appIntact) reasons.push('artifact missing or changed: recorded app tree hash does not match');
   if (receipt.nativeIdentity.hash !== native.hash) {
     const paths = compareNativeInputs(receipt.nativeIdentity.inputs, native.inputs);
@@ -143,7 +164,7 @@ export function nativeBuildDecision({ receipt, native, profile, recipe = null, a
     const paths = compareNativeInputs(receipt.profileIdentity.inputs, profile.inputs);
     reasons.push(...(paths.length ? paths : ['identity digest differs from recorded inputs']).map(path => `binary profile changed: ${path}`));
   }
-  if (recipe && receipt.recipeIdentity?.hash !== recipe.hash)
+  if (recipe && !compatibleRecipe(receipt.recipeIdentity, recipe))
     reasons.push(...compareNativeInputs(receipt.recipeIdentity?.inputs, recipe.inputs).map(path => `native build recipe changed: ${path}`));
   return { rebuild: reasons.length > 0, reasons: [...new Set(reasons)] };
 }

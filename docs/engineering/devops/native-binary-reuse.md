@@ -34,6 +34,8 @@ Prefer an available task-owned device and artifact; preserve parked work and use
 Verify the original receipt seal and app tree, resolved native packages/autolinking and plugin configuration, generated native inputs, architecture, OS, build profile, Xcode/SDK and recorded compiler recipe.
 Separate an actual native input change from a recipe fingerprint changed only by command isolation or transport, and retain the original compiler provenance while the owner resolves that compatibility decision.
 Do not rewrite or reseal a historical receipt to make either comparison pass.
+The consumer recognizes one exact reviewed transition from the original compiler recipe to its credential-isolated transport, comparing both complete input maps and their digests.
+That transition preserves the recorded original recipe and every native, profile and artifact check; unknown or subsequently changed producer recipes still require a new compatibility decision.
 
 The current CLI searches active and retained receipts under its selected product root and requires their apps to remain inside that root's build directory.
 It does not automatically discover or import receipts from other registered worktrees.

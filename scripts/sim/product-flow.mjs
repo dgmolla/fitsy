@@ -28,7 +28,7 @@ const nativeEnvironmentKey = key => key.startsWith('EXPO_PUBLIC_') || [
 ].includes(key);
 const resumeDir = resolve(root, '.evidence/resume');
 const failuresFile = join(resumeDir, 'native-failures.json');
-const recipeIdentity = () => {
+export const recipeIdentity = () => {
   const inputs = { prepareNative: digest(prepareNative.toString()), compileNative: digest(compileNative.toString()),
     bundleDelegate: digest(bundleDelegate.toString()), metroRoute };
   return { hash: identityHash(inputs), inputs };
