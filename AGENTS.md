@@ -145,6 +145,8 @@ Follow `docs/engineering/devops/shipping.md` for supported commands, acceptance,
 Publish after meaningful cheap checks, focused regressions and a matching independent review of the frozen candidate.
 The trusted existing public Verify workflow supplies heavy validation before protected merge.
 Keep applicable real-media/native journeys and release approvals explicit; a hook pass or a same-named CI status is not acceptance.
+Before requesting a simulator rebuild, follow the [native binary reuse cookbook](docs/engineering/devops/native-binary-reuse.md) to inspect installed Debug/Metro apps and original registered-task receipts.
+An absent current-root receipt or stale embedded Release bundle does not establish that no compatible native shell exists.
 
 ```bash
 npm run verify -- --stage=cheap   # structural, safety, lint, types and selected focused tests before review
