@@ -35,12 +35,11 @@ if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   JEST_COMMAND=(test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB)
   JEST_ENV=(FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512)
   FOCUSED_IGNORE="$(/usr/bin/env "${JEST_ENV[@]}" node scripts/verify/receipt-cache.mjs --scripts-focused-exclusion "$PPID" "$@" -- "${JEST_COMMAND[@]}")" || FOCUSED_IGNORE=""
-  JEST_SELECTION=()
   if [ -n "$FOCUSED_IGNORE" ]; then
-    JEST_SELECTION+=("--testPathIgnorePatterns=$FOCUSED_IGNORE" --passWithNoTests)
+    JEST_COMMAND+=("--testPathIgnorePatterns=$FOCUSED_IGNORE" --passWithNoTests)
   fi
   # Real decoder and attachment cases retain the required local media lane.
-  /usr/bin/env "${JEST_ENV[@]}" npm "${JEST_COMMAND[@]}" "${JEST_SELECTION[@]}" >&2 || FAIL="scripts"
+  /usr/bin/env "${JEST_ENV[@]}" npm "${JEST_COMMAND[@]}" >&2 || FAIL="scripts"
 fi
 if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   node --test scripts/delivery/*.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }delivery"
