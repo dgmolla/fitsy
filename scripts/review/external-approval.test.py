@@ -1262,6 +1262,7 @@ class ProfileCustodyTests(unittest.TestCase):
         self.save()
 
     def save(self):
+        self.config['candidate_boundary'] = self.boundary
         raw = json.dumps(self.receipt).encode()
         self.paths['receipt'].write_bytes(raw); self.paths['receipt'].chmod(0o600)
         self.boundary['receipt_sha256'] = external.digest(raw)
@@ -1273,6 +1274,108 @@ class ProfileCustodyTests(unittest.TestCase):
         with patch.object(external.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='fixture-start\n')):
             with patch.object(external.os, 'getpgid', return_value=999998):
                 external.candidate_custody(self.config, self.os.getuid())
+
+    def prepare_native_local_network(self):
+        import copy
+        native = self.boundary.get('native') or dict(root=self.temporary.name,
+            source_sha='c' * 40, source_tree='d' * 40, allowed_cwds=['.'],
+            environment={}, deadline_seconds=30)
+        policy = dict(mode='native-local-proxy', network_proxy=True,
+            allow_local_binding=True, domains={'localhost': 'allow', '127.0.0.1': 'allow'})
+        self.boundary['native'] = copy.deepcopy(native)
+        self.receipt['native'] = copy.deepcopy(native)
+        observed = self.claim['worker_boundary']
+        observed.update(network=True, native=copy.deepcopy(native),
+            source_sha=self.boundary['source_sha'], comparison_base=self.boundary['comparison_base'])
+        for target in (self.boundary, self.receipt, observed):
+            target['network_policy'] = copy.deepcopy(policy)
+        self.receipt['live_denials'].update(external_http_proxy=True, external_raw_tcp=True)
+        self.receipt['live_checks'] = dict(loopback_nonce_http=True,
+            loopback_listener_closed=True, external_host_controls=True)
+        self.save()
+
+    def test_native_local_network_requires_truthful_approved_mode(self):
+        self.prepare_native_local_network()
+        self.check()
+
+    def test_native_local_network_rejects_missing_changed_or_unbounded_policy(self):
+        import copy
+        self.prepare_native_local_network()
+        originals = copy.deepcopy((self.boundary, self.receipt, self.claim))
+        for location in ('boundary', 'receipt', 'claim'):
+            for change in (None, {}, {'mode': 'arbitrary-network'},
+                           {'network_proxy': False}, {'network_proxy': 1},
+                           {'allow_local_binding': False}, {'allow_local_binding': 1},
+                           {'domains': {'localhost': 'allow', 'example.com': 'allow'}},
+                           {'extra': 'unapproved'}):
+                self.boundary, self.receipt, self.claim = copy.deepcopy(originals)
+                target = {'boundary': self.boundary, 'receipt': self.receipt,
+                          'claim': self.claim['worker_boundary']}[location]
+                if change is None:
+                    target.pop('network_policy')
+                elif not change:
+                    target['network_policy'] = {}
+                else:
+                    target['network_policy'].update(change)
+                self.save()
+                with self.subTest(location=location, change=change), self.assertRaises(ValueError):
+                    self.check()
+
+    def test_native_local_network_requires_fresh_bound_proof_and_native_identity(self):
+        import copy
+        self.prepare_native_local_network()
+        originals = copy.deepcopy((self.boundary, self.receipt, self.claim))
+        changes = [('observed', 'network', False), ('observed', 'network', 1),
+                   ('observed', 'native', None), ('observed', 'native', {'root': 'other'}),
+                   ('observed', 'source_sha', 'e' * 40),
+                   ('observed', 'comparison_base', 'e' * 40),
+                   ('observed', 'config_sha256', 'e' * 64),
+                   ('boundary', 'native', None), ('receipt', 'native', None),
+                   ('receipt', 'source_sha', 'e' * 40),
+                   ('receipt', 'independently_approved', False),
+                   ('claim', 'stage', 'finished'), ('claim', 'finished_at', 'ended'),
+                   ('claim', 'pid_started', 'reused'),
+                   ('claim', 'worker_pgid', self.os.getpgrp())]
+        for key in ('external_http_proxy', 'external_raw_tcp', 'command_network'):
+            changes.append(('denials', key, False))
+        for key in ('loopback_nonce_http', 'loopback_listener_closed', 'external_host_controls'):
+            changes.extend([('checks', key, False), ('checks', key, 1)])
+        for location, key, value in changes:
+            self.boundary, self.receipt, self.claim = copy.deepcopy(originals)
+            target = {'boundary': self.boundary, 'receipt': self.receipt,
+                      'claim': self.claim, 'observed': self.claim['worker_boundary'],
+                      'denials': self.receipt['live_denials'],
+                      'checks': self.receipt['live_checks']}[location]
+            target[key] = value
+            self.save()
+            with self.subTest(location=location, key=key), self.assertRaises(ValueError):
+                self.check()
+        self.boundary, self.receipt, self.claim = copy.deepcopy(originals)
+        self.save()
+        self.paths['profile'].write_bytes(self.profile + b'changed')
+        with self.assertRaisesRegex(ValueError, 'profile changed'):
+            self.check()
+        self.paths['profile'].write_bytes(self.profile)
+        self.paths['receipt'].write_bytes(self.paths['receipt'].read_bytes() + b' ')
+        with self.assertRaisesRegex(ValueError, 'receipt changed'):
+            self.check()
+
+    def test_network_true_without_explicit_native_mode_is_refused(self):
+        self.claim['worker_boundary']['network'] = True
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'original claim'):
+            self.check()
+
+    def test_native_local_network_never_extends_cheap_or_push_authority(self):
+        self.prepare_native_checks()
+        self.prepare_native_local_network()
+        for check in ('cheap', 'push-gates'):
+            with self.subTest(check=check), self.assertRaisesRegex(ValueError, 'requires a native check'):
+                self.candidate_command(check)
+        self.assertFalse((self.checkout / '.evidence/child.json').exists())
+        with patch.dict(os.environ, {'GH_TOKEN': 'synthetic-operator-token'}):
+            self.assertEqual(self.native_command(), 7)
+        self.assertFalse(json.loads((self.product / '.evidence/native.json').read_text())['token'])
 
     def test_pinned_profile_is_a_distinct_prepared_contract(self):
         self.check()
