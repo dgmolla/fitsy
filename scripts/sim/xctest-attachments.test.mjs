@@ -22,6 +22,7 @@ const unknown = Buffer.concat([Buffer.from([0, 0, 0, 12]), Buffer.from('ftyp'), 
 const wideQuicktime = Buffer.concat([Buffer.from([0, 0, 0, 8]), Buffer.from('wide'), Buffer.from([0, 0, 0, 16]), Buffer.from('mdat'), Buffer.alloc(8)]);
 // Real decoder cases register only in the required local media lane.
 const mediaTest = process.env.FITSY_MEDIA_INTEGRATION === '1' ? test : () => {};
+const deterministicTest = process.env.FITSY_MEDIA_INTEGRATION === '1' ? () => {} : test;
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'fitsy-xctest-'));
   const attachments = join(root, udid, 'data/Containers/Data/InternalDaemon/owned/Attachments');
@@ -122,7 +123,7 @@ mediaTest('actual closeout classifies movie structure and preserves image, audio
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('actual closeout preserves movie-shaped attachment after probe failure', () => {
+deterministicTest('actual closeout preserves movie-shaped attachment after probe failure', () => {
   const { root, attachments } = fixture();
   const priorPath = process.env.PATH;
   try {
@@ -144,7 +145,7 @@ test('actual closeout preserves movie-shaped attachment after probe failure', ()
   }
 });
 
-test('unprobeable wide-first QuickTime candidate is preserved', () => {
+deterministicTest('unprobeable wide-first QuickTime candidate is preserved', () => {
   const { root, attachments } = fixture();
   try {
     const before = snapshotXCTestAttachments(udid, { deviceRoot: root });
