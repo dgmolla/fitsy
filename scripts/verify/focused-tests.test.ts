@@ -219,7 +219,7 @@ else {
  }
  writeFileSync(file,JSON.stringify(receipt));
 }
-process.stdout.write(JSON.stringify({status:'pass'})+'\n');
+process.stdout.write(JSON.stringify({status:'pass'})+'\\n');
 `);
   writeFileSync(join(root, '.evidence/full.mjs'), `import {appendFileSync} from 'node:fs';
 import {verify} from '../scripts/verify/run.mjs';
