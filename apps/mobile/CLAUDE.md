@@ -18,6 +18,9 @@ scripts/gen/screen.sh <route>  # scaffold a screen the correct shape
 - JS-only changes ship as OTA; anything native (app.config.ts, package.json,
   eas.json, ios/, android/) needs a binary - deploy.yml guards this by tag.
 
+For local simulator verification, inspect existing installed Debug/Metro apps and original task receipts before planning a native rebuild, following the [native binary reuse cookbook](../../docs/engineering/devops/native-binary-reuse.md).
+Verify native compatibility and current JavaScript/owned Metro evidence separately; Test Store proof does not establish Apple billing acceptance.
+
 ## Preserve discovery behavior
 
 Treat ranking, qualification, query relevance and serving interpretation as product behavior, even when the task starts in onboarding or a paywall.

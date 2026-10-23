@@ -107,8 +107,36 @@ def candidate_custody(config, uid):
     require(claim.get('id') == boundary['claim_id'] and claim.get('issue') == boundary['issue']
             and observed.get('kind') == boundary['kind']
             and observed.get('config_sha256') == boundary['profile_sha256']
-            and observed.get('operator_home_read') is False and observed.get('network') is False,
+            and observed.get('operator_home_read') is False,
             'candidate boundary does not match original claim')
+    network_policy = boundary.get('network_policy')
+    if network_policy is None:
+        require(receipt.get('network_policy') is None and observed.get('network_policy') is None
+                and observed.get('network') is False,
+                'candidate boundary does not match original claim')
+    else:
+        # The full independently reviewed profile hash above grants local binding.
+        # Domain rules constrain proxy destinations, not bind addresses or ports.
+        policies = (network_policy, receipt.get('network_policy'), observed.get('network_policy'))
+        require(all(type(policy) is dict and set(policy) == {
+                    'mode', 'network_proxy', 'allow_local_binding', 'domains'}
+                    and policy.get('mode') == 'native-local-proxy'
+                    and policy.get('network_proxy') is True
+                    and policy.get('allow_local_binding') is True
+                    and type(policy.get('domains')) is dict
+                    and policy['domains'] == {'localhost': 'allow', '127.0.0.1': 'allow'}
+                    for policy in policies), 'native local network policy is not approved')
+        native = boundary.get('native')
+        require(type(native) is dict and bool(native) and observed.get('native') == native
+                and observed.get('network') is True
+                and observed.get('source_sha') == boundary['source_sha']
+                and observed.get('comparison_base') == boundary['comparison_base'],
+                'native local network does not match original claim')
+        checks = receipt.get('live_checks') or {}
+        require(all(denials.get(key) is True for key in ('external_http_proxy', 'external_raw_tcp'))
+                and all(checks.get(key) is True for key in (
+                    'loopback_nonce_http', 'loopback_listener_closed', 'external_host_controls')),
+                'native local network live proof incomplete')
     require(claim.get('stage') == 'running' and not claim.get('finished_at')
             and type(claim.get('pid')) is int and claim['pid'] > 0
             and receipt.get('worker_pid') == claim['pid']
@@ -203,6 +231,8 @@ def candidate_checks(config, issue, source, base, root, check, product_root=None
     boundary = config.get('candidate_boundary')
     require(boundary is not None, 'isolated candidate launcher is required')
     claim = candidate_custody(config, config['operator_uid'])
+    require(boundary.get('network_policy') is None or check == 'native',
+            'local network authority requires a native check')
     require(isinstance(claim.get('worktree'), str) and Path(claim['worktree']).is_absolute(),
             'active candidate claim requires its owned worktree')
     root = Path(root).resolve(strict=True)

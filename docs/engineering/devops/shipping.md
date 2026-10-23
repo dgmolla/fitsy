@@ -112,13 +112,15 @@ Applicable product acceptance and its exact-head publisher require fresh `.evide
 Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
 
 Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID.
+Follow the [native binary reuse cookbook](native-binary-reuse.md) before requesting a rebuild, including installed Debug/Metro apps and original receipts from registered task worktrees.
+Missing current-root proof or stale Release JavaScript alone does not establish native incompatibility; resolve any supported adoption gap and retain original provenance.
 Keep public configuration in the ignored mobile environment file.
-The builder generates an embedded Release app, disables downloaded OTA updates, and records source/native/JS/configuration identities.
+When a new artifact is required, the default builder generates an embedded Release app, disables downloaded OTA updates, and records source/native/JS/configuration identities.
 A keyless build proves navigation only and cannot cover billing.
 Never publish credentials or personal data in evidence.
 
 For RevenueCat Test Store, add `--test-store` to `build` and configure the public `EXPO_PUBLIC_REVENUECAT_TEST_KEY`.
-This builds Debug without the dev launcher and uses an owned Metro server on port 8099.
+This selects compatible Debug without the dev launcher and an owned Metro server on port 8099, reusing an intact matching artifact when the supported consumer can select it.
 Expo development bundles require a server connection; an embedded Debug bundle cannot initialize.
 Each run starts its own server, refuses a busy port, and records its process, source, configuration and served-bundle hashes.
 Keep that server running through walkthrough, publication and merge; the gate rechecks its identity and bundle.

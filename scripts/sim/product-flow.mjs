@@ -4,7 +4,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync, realpathSync, copyFileSync, cpSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { createHash, randomUUID } from 'node:crypto';
-import { resolve, relative, join, dirname, delimiter } from 'node:path';
+import { resolve, relative, join, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance } from '../verify/product-flow.mjs';
@@ -18,9 +18,17 @@ const yaml = createRequire(import.meta.url)('js-yaml');
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
 const mobile = resolve(root, 'apps/mobile');
+const controlRoot = realpathSync(fileURLToPath(new URL('../..', import.meta.url)));
+const operatorPython = process.platform === 'darwin'
+  ? '/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/bin/python3.9'
+  : '/usr/bin/python3';
+const nativeEnvironmentKey = key => key.startsWith('EXPO_PUBLIC_') || [
+  'NODE_ENV', 'EXPO_NO_DOTENV', 'FITSY_ALLOW_MISSING_PUBLIC_ENV', 'CI', 'FORCE_BUNDLING',
+  'SKIP_BUNDLING', 'EXPO_OFFLINE', 'FITSY_XCTEST_CAPTURE_RECEIPT', 'FITSY_XCTEST_SIM_UDID',
+].includes(key);
 const resumeDir = resolve(root, '.evidence/resume');
 const failuresFile = join(resumeDir, 'native-failures.json');
-const recipeIdentity = () => {
+export const recipeIdentity = () => {
   const inputs = { prepareNative: digest(prepareNative.toString()), compileNative: digest(compileNative.toString()),
     bundleDelegate: digest(bundleDelegate.toString()), metroRoute };
   return { hash: identityHash(inputs), inputs };
@@ -36,11 +44,30 @@ export function readPreviousReportForReuse(file) {
 const save = (file, value) => writeFileSync(file, JSON.stringify(value, null, 2) + '\n');
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 32 * 1024 * 1024, ...opts })?.trim() || '';
+// Only the installed operator adapter selects the approved launcher and profile.
+// The candidate command and public inputs are data inside that boundary.
+function candidateCommand(command, args, cwd = root, env = repoEnv()) {
+  const issue = read(join(controlRoot, '.evidence/delivery/binding.json')).issue;
+  const source = run('git', ['rev-parse', 'HEAD'], { cwd: controlRoot });
+  const base = run('git', ['rev-parse', 'origin/main'], { cwd: controlRoot });
+  return { command: operatorPython, args: ['-I', '-B', '/opt/fitsy-approval/external-approval.py',
+    'candidate-checks', '--issue', String(issue), '--source', source, '--base', base,
+    '--root', controlRoot, '--check', 'native', '--product-root', root, '--cwd', relative(root, cwd) || '.',
+    ...Object.entries(env).filter(([key]) => nativeEnvironmentKey(key))
+      .flatMap(([key, value]) => ['--env', `${key}=${value}`]), '--', command, ...args],
+  env: { HOME: '/var/empty', PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' } };
+}
+function runCandidate(command, args, options = {}) {
+  const candidate = candidateCommand(command, args, options.cwd || root, options.env || repoEnv());
+  return run(candidate.command, candidate.args, { ...options, cwd: controlRoot, env: candidate.env });
+}
+const candidateNativeIdentity = env => nativeIdentity(root, env,
+  (command, args, cwd, commandEnv) => runCandidate(command, args, { cwd, env: commandEnv }));
 export function admitFinalCandidate(mode, command = run) {
   if (!mode.publishable) return;
   // Final journeys belong to the live shipping execution, after fresh review.
   // Standalone journeys fail rather than consume another bounded review round.
-  command(fileURLToPath(new URL('../verify/shipping-session.mjs', import.meta.url)), ['--check']);
+  command(fileURLToPath(new URL('../verify/shipping-session.mjs', import.meta.url)), ['--check'], { cwd: controlRoot });
 }
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]).sort();
@@ -49,6 +76,19 @@ function treeHash(dir) {
   const hash = createHash('sha256');
   for (const f of files(dir)) hash.update(relative(dir, f) + '\0').update(readFileSync(f));
   return hash.digest('hex');
+}
+export function artifactHashes(app, execute = runCandidate) {
+  // Candidate build scripts can leave aliases in the output tree. Read all
+  // artifact bytes under the same filesystem denials as the build itself.
+  const script = `import {readdirSync,readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {relative,join} from 'node:path';
+const files=${files.toString()};
+const treeHash=${treeHash.toString()};
+const digest=${digest.toString()};
+const app=${JSON.stringify(app)};
+process.stdout.write(JSON.stringify({appHash:treeHash(app),bundleHash:digest(readFileSync(join(app,'main.jsbundle')))}));`;
+  return JSON.parse(execute('node', ['--input-type=module', '-e', script]));
 }
 export function environment() {
   assert(process.env.EXPO_PUBLIC_API_URL === 'https://dev.fitsy.org', 'Load the mobile dev environment; this runner refuses production');
@@ -78,11 +118,11 @@ export function claimDevice(udid) {
   assert(Number.isFinite(workerSeconds) && workerSeconds > 0, 'Native phase requires a positive worker time budget');
   // One bounded lease covers the permitted worker run plus completion and release.
   const minutes = String(Math.ceil(workerSeconds / 60) + 5);
-  run('bash', ['scripts/sim/sim', 'claim', '--minutes', minutes], { stdio: 'inherit' });
-  run('bash', ['scripts/sim/sim', 'use-intent', udid], { stdio: 'inherit' });
+  run('/bin/bash', ['-p', join(controlRoot, 'scripts/sim/sim'), 'claim', '--minutes', minutes], { cwd: controlRoot, stdio: 'inherit' });
+  run('/bin/bash', ['-p', join(controlRoot, 'scripts/sim/sim'), 'use-intent', udid], { cwd: controlRoot, stdio: 'inherit' });
 }
-export const releaseDevice = () => run('bash', ['scripts/sim/sim', 'release'], { stdio: 'inherit' });
-export const recordDeviceUse = udid => run('bash', ['scripts/sim/sim', 'use-complete', udid], { stdio: 'inherit' });
+export const releaseDevice = () => run('/bin/bash', ['-p', join(controlRoot, 'scripts/sim/sim'), 'release'], { cwd: controlRoot, stdio: 'inherit' });
+export const recordDeviceUse = udid => run('/bin/bash', ['-p', join(controlRoot, 'scripts/sim/sim'), 'use-complete', udid], { cwd: controlRoot, stdio: 'inherit' });
 const metroFile = join(buildDir, 'metro.json');
 const processIdentity = pid => run('ps', ['-p', String(pid), '-o', 'lstart=,command=']);
 export function runSelectedRecordedFlow(mode, options) {
@@ -141,10 +181,10 @@ async function startMetro(r) {
     server.listen(r.metroPort, '127.0.0.1', () => server.close(resolvePort));
   });
   const fd = openSync(join(buildDir, 'metro.log'), 'w');
-  const child = spawn(process.execPath, [join(root, 'node_modules/expo/bin/cli'), 'start', '--dev-client', '--localhost', '--port', String(r.metroPort)], {
-    cwd: mobile, detached: true, stdio: ['ignore', fd, fd],
-    env: { ...repoEnv(), CI: '1', EXPO_NO_DOTENV: '1', NODE_ENV: 'development', EXPO_OFFLINE: '1' },
-  });
+  const candidate = candidateCommand('node', [join(root, 'node_modules/expo/bin/cli'), 'start', '--dev-client', '--localhost', '--port', String(r.metroPort)],
+    mobile, { ...repoEnv(), CI: '1', EXPO_NO_DOTENV: '1', NODE_ENV: 'development', EXPO_OFFLINE: '1' });
+  const child = spawn(candidate.command, candidate.args, { cwd: controlRoot, detached: true,
+    stdio: ['ignore', fd, fd], env: candidate.env });
   closeSync(fd);
   await new Promise((ready, reject) => { child.once('spawn', ready); child.once('error', reject); });
   child.unref();
@@ -184,7 +224,7 @@ async function checkBundle(report) {
 }
 function installedApp(udid, appHash) {
   const installed = run('xcrun', ['simctl', 'get_app_container', udid, 'com.fitsy.mobile', 'app']);
-  assert(installed && existsSync(installed) && treeHash(installed) === appHash,
+  assert(installed && existsSync(installed) && artifactHashes(installed).appHash === appHash,
     'Installed simulator app differs from the verified native artifact; reinstall the intact artifact');
 }
 function existingReceipt() {
@@ -203,7 +243,7 @@ function retainedReceipts() {
       catch { return []; } // Preserve unreadable raw receipts without trusting them.
     });
 }
-export function archiveActiveReceipt(overwritingApp = null, buildDirectory = buildDir, archiveDirectory = resumeDir) {
+export function archiveActiveReceipt(overwritingApp = null, buildDirectory = buildDir, archiveDirectory = resumeDir, execute = runCandidate) {
   const file = join(buildDirectory, 'receipt.json');
   if (!existsSync(file)) return;
   const archive = join(archiveDirectory, `native-receipt-superseded-${Date.now()}-${randomUUID()}.json`);
@@ -216,19 +256,19 @@ export function archiveActiveReceipt(overwritingApp = null, buildDirectory = bui
   }
   const verified = active?.nativeIdentity && active?.profileIdentity && !nativeBuildDecision({ receipt: active,
     native: active.nativeIdentity, profile: active.profileIdentity, recipe: active.recipeIdentity,
-    appIntact: intact(active, buildDirectory) }).rebuild;
+    appIntact: intact(active, buildDirectory, execute) }).rebuild;
   copyFileSync(file, archive);
   if (overwritingApp && verified && resolve(active.app) === resolve(overwritingApp)) {
     const preserved = join(buildDirectory, 'native-artifacts', randomUUID(), 'Fitsy.app');
     mkdirSync(dirname(preserved), { recursive: true });
     cpSync(active.app, preserved, { recursive: true });
-    assert(treeHash(preserved) === active.appHash, 'Preserved native artifact differs from verified source');
+    assert(artifactHashes(preserved, execute).appHash === active.appHash, 'Preserved native artifact differs from verified source');
     const { receiptHash, ...artifact } = active;
     save(join(archiveDirectory, `native-receipt-superseded-${Date.now()}-${randomUUID()}.json`),
       sealReceipt({ ...artifact, app: preserved }));
   }
 }
-export function preserveRetainedArtifacts(overwritingApp, buildDirectory = buildDir, archiveDirectory = resumeDir) {
+export function preserveRetainedArtifacts(overwritingApp, buildDirectory = buildDir, archiveDirectory = resumeDir, execute = runCandidate) {
   if (!existsSync(archiveDirectory)) return;
   for (const name of readdirSync(archiveDirectory).filter(name => /^native-receipt-superseded-[0-9]+(?:-[0-9a-f-]{36})?\.json$/.test(name))) {
     const source = join(archiveDirectory, name);
@@ -236,7 +276,7 @@ export function preserveRetainedArtifacts(overwritingApp, buildDirectory = build
     try { retained = read(source); }
     catch { continue; } // Keep unreadable raw evidence untouched.
     if (typeof retained?.app !== 'string' || resolve(retained.app) !== resolve(overwritingApp) ||
-      !intact(retained, buildDirectory)) continue;
+      !intact(retained, buildDirectory, execute)) continue;
     const verified = retained.nativeIdentity && retained.profileIdentity && !nativeBuildDecision({
       receipt: retained, native: retained.nativeIdentity, profile: retained.profileIdentity,
       recipe: retained.recipeIdentity, appIntact: true,
@@ -245,21 +285,21 @@ export function preserveRetainedArtifacts(overwritingApp, buildDirectory = build
     const preserved = join(buildDirectory, 'native-artifacts', randomUUID(), 'Fitsy.app');
     mkdirSync(dirname(preserved), { recursive: true });
     cpSync(retained.app, preserved, { recursive: true });
-    assert(treeHash(preserved) === retained.appHash, 'Preserved retained artifact differs from verified source');
+    assert(artifactHashes(preserved, execute).appHash === retained.appHash, 'Preserved retained artifact differs from verified source');
     const { receiptHash, ...artifact } = retained;
     save(join(archiveDirectory, `native-receipt-superseded-${Date.now()}-${randomUUID()}.json`),
       sealReceipt({ ...artifact, app: preserved }));
   }
 }
-function intact(r, buildDirectory = buildDir) {
+function intact(r, buildDirectory = buildDir, execute = runCandidate) {
   try { return r?.app && realpathSync(r.app).startsWith(realpathSync(buildDirectory) + '/') &&
-    r.appHash === treeHash(r.app); }
+    r.appHash === artifactHashes(r.app, execute).appHash; }
   catch { return false; }
 }
 function buildDecision(udid, profile) {
   const active = existingReceipt();
   const identity = device(udid);
-  const native = nativeIdentity(root, { ...process.env, NODE_ENV: profile.configuration === 'Debug' ? 'development' : 'production' });
+  const native = candidateNativeIdentity({ ...process.env, NODE_ENV: profile.configuration === 'Debug' ? 'development' : 'production' });
   const compatibility = profileIdentity(profile, identity);
   const recipe = recipeIdentity();
   const selected = reusableNativeReceipt([active, ...retainedReceipts()], native, compatibility, recipe, intact);
@@ -281,9 +321,21 @@ function prepareNative(profile, testStore) {
   // Keyless Release is useful for baseline navigation, but cannot verify billing.
   const env = { ...repoEnv(), EXPO_NO_DOTENV: '1', NODE_ENV: testStore ? 'development' : 'production',
     FITSY_ALLOW_MISSING_PUBLIC_ENV: '1', CI: '1', FORCE_BUNDLING: '1', SKIP_BUNDLING: '' };
+  // Prebuild plugins produce these files. Keep their reads, restoration and
+  // mutation inside the same credential-denying candidate transaction.
+  const script = String.raw`
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const mobile = ${JSON.stringify(mobile)}, profile = ${JSON.stringify(profile)}, testStore = ${JSON.stringify(testStore)};
+import { bundleDelegate } from ${JSON.stringify(new URL('./build-profile.mjs', import.meta.url).href)};
+const assert = (ok, why) => { if (!ok) throw new Error(why); };
+const read = file => JSON.parse(readFileSync(file, 'utf8'));
+const run = (command, args, options = {}) => execFileSync(command, args,
+  { cwd: mobile, env: process.env, stdio: 'inherit', ...options });
   const packageFile = join(mobile, 'package.json'), packageBefore = readFileSync(packageFile);
   try {
-    run('npx', ['expo', 'prebuild', '--platform', 'ios', '--no-install'], { cwd: mobile, env, stdio: 'inherit' });
+    run('npx', ['expo', 'prebuild', '--platform', 'ios', '--no-install'], { cwd: mobile });
   } finally {
     const before = JSON.parse(packageBefore), after = read(packageFile);
     after.scripts = before.scripts;
@@ -300,14 +352,16 @@ function prepareNative(profile, testStore) {
     : '  use_expo_modules!'));
   const project = join(mobile, 'ios/Fitsy.xcodeproj/project.pbxproj');
   writeFileSync(project, readFileSync(project, 'utf8').replaceAll('export SKIP_BUNDLING=1', 'export FORCE_BUNDLING=1'));
-  run('pod', ['install'], { cwd: join(mobile, 'ios'), env, stdio: 'inherit' });
+  run('pod', ['install'], { cwd: join(mobile, 'ios') });
+`;
+  runCandidate('node', ['--input-type=module', '-e', script], { cwd: mobile, env, stdio: 'inherit' });
   return env;
 }
 function compileNative(profile, udid, env) {
   const log = join(buildDir, 'build.log');
   const fd = openSync(log, 'w');
   try {
-    run('xcodebuild', ['-workspace', 'ios/Fitsy.xcworkspace', '-scheme', 'Fitsy', '-configuration', profile.configuration,
+    runCandidate('xcodebuild', ['-workspace', 'ios/Fitsy.xcworkspace', '-scheme', 'Fitsy', '-configuration', profile.configuration,
       '-sdk', 'iphonesimulator', '-destination', `id=${udid}`, '-derivedDataPath', buildDir, '-jobs', '4',
       'ONLY_ACTIVE_ARCH=YES', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'build'],
     { cwd: mobile, env, stdio: ['ignore', fd, fd] });
@@ -315,7 +369,7 @@ function compileNative(profile, udid, env) {
   const app = join(buildDir, `Build/Products/${profile.configuration}-iphonesimulator/Fitsy.app`);
   const entitlementsFile = join(buildDir,
     `Build/Intermediates.noindex/Fitsy.build/${profile.configuration}-iphonesimulator/Fitsy.build/Fitsy.app-Simulated.xcent`);
-  const entitlements = JSON.parse(run('plutil', ['-convert', 'json', '-o', '-', entitlementsFile]));
+  const entitlements = JSON.parse(runCandidate('plutil', ['-convert', 'json', '-o', '-', entitlementsFile]));
   assert(entitlements['application-identifier']?.endsWith('.com.fitsy.mobile'), 'Simulator keychain application entitlement is missing');
   return { app, entitlements };
 }
@@ -361,7 +415,7 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
     preserveRetainedArtifacts(outputApp);
     archiveActiveReceipt(outputApp);
     const env = prepareNative(profile, testStore);
-    const preparedNative = nativeIdentity(root, env);
+    const preparedNative = candidateNativeIdentity(env);
     const preparedJsHash = inputHash(root, 'js');
     const preparedConfigHash = environment().configHash;
     const preparedInputs = { native: preparedNative, jsHash: preparedJsHash,
@@ -370,15 +424,15 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
     assert(preparationDrift.length === 0,
       `Inputs changed during native preparation: ${preparationDrift.join(', ')}; discard this artifact`);
     const { app, entitlements } = compileNative(profile, udid, env);
-    const builtNative = nativeIdentity(root, env);
+    const builtNative = candidateNativeIdentity(env);
     const completedInputs = { native: builtNative, jsHash: inputHash(root, 'js'),
       configHash: environment().configHash, recipe: recipeIdentity() };
     const compilationDrift = buildInputDrift(preparedInputs, completedInputs, true);
     assert(compilationDrift.length === 0,
       `Inputs changed during compilation: ${compilationDrift.join(', ')}; discard this artifact`);
-    const bundleHash = digest(readFileSync(join(app, 'main.jsbundle')));
+    const { appHash, bundleHash } = artifactHashes(app);
     save(join(buildDir, 'receipt.json'), sealReceipt({ ...config, ...identity, nativeIdentity: builtNative,
-      profileIdentity: compatibility, jsHash: inputHash(root, 'js'), app, appHash: treeHash(app), bundleHash,
+      profileIdentity: compatibility, jsHash: inputHash(root, 'js'), app, appHash, bundleHash,
       publicConfigAcceptance: buildPublicConfigAcceptance(previous, config, active),
       ...profile, metroRoute: profile.metroPort ? metroRoute : null,
       recipeIdentity: buildRecipe, buildRecipeHash: buildRecipe.hash,
@@ -501,7 +555,7 @@ async function execute(udid, names, mode) {
       publicConfigAcceptance: { keys: publicConfigKeys },
       result: 'running', startedAt: new Date().toISOString(),
       fixture, keychainReset: false, evidenceMode: mode.name, videoRequested: mode.recordVideo,
-      maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
+      maestroVersion: runCandidate(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
     save(join(out, 'report.json'), report);
     if (process.env.FITSY_SIM_RESET_KEYCHAIN) {
       assert(process.env.FITSY_SIM_RESET_KEYCHAIN === udid, 'Keychain reset must explicitly name the selected disposable simulator');
@@ -518,7 +572,7 @@ async function execute(udid, names, mode) {
     recordDeviceUse(udid);
     installedApp(udid, r.appHash);
     for (const flow of flowSources) {
-      assert(hash === inputHash() && r.appHash === treeHash(app) && report.configHash === environment().configHash,
+      assert(hash === inputHash() && r.appHash === artifactHashes(app).appHash && report.configHash === environment().configHash,
         'Acceptance inputs, artifact or public configuration changed before Maestro; start a fresh run');
       installedApp(udid, r.appHash);
       if (r.buildMode === 'owned-metro-test-store') await requireMetro(report.metro, { processIdentity,
@@ -538,13 +592,14 @@ async function execute(udid, names, mode) {
       const captureReceipt = join(dir, 'xctest-capture-policy.jsonl');
       writeFileSync(captureReceipt, '');
       const attachmentBefore = snapshotXCTestAttachments(udid);
+      const candidate = candidateCommand(process.env.MAESTRO_BIN || 'maestro',
+        ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
+        root, { ...repoEnv(), FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid });
       let recorded, attachment;
       try { recorded = await runFlow({
-        maestroCommand: process.env.MAESTRO_BIN || 'maestro',
-        maestroArgs: ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
+        maestroCommand: candidate.command, maestroArgs: candidate.args,
         udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,
-        env: { ...repoEnv(), PATH: `${join(root, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
-          FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },
+        env: candidate.env,
         dir, timeline, flow: flowBytes, diagnostic });
       } finally {
         attachment = writeAttachmentCloseout({ before: attachmentBefore, after: () => snapshotXCTestAttachments(udid),
@@ -605,7 +660,7 @@ async function execute(udid, names, mode) {
       save(join(out, 'report.json'), report);
       event(timeline, { type: 'flow-end', flow: flow.name, outcome: 'pass', elapsedMs: result.elapsedMs, commandReceipt: relative(out, commands[0]) });
     }
-    assert(hash === inputHash() && r.appHash === treeHash(app), 'Candidate changed during tests');
+    assert(hash === inputHash() && r.appHash === artifactHashes(app).appHash, 'Candidate changed during tests');
     assert(server.backendDeployment === backend().backendDeployment, 'Dev deployment changed during tests');
     await checkBundle(report);
     completeMaestroRun(join(out, 'report.json'), timeline, report);
