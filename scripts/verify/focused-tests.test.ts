@@ -112,7 +112,7 @@ test.each(['ts', 'mjs', 'py'])('direct script focused %s rejects an external dat
 // boundaries here; this fixture does not establish protected admission or DB proof.
 type CallerEvent = { name: string; argv: string[]; env: Record<string, string> };
 type ReceiptFault = 'missing' | 'failed' | 'expired' | 'environment' | 'report' | 'coverage' | 'old-invocation';
-function focusedFullCallerFixture({ partial = false, build = false, fault }: { partial?: boolean; build?: boolean; fault?: ReceiptFault } = {}) {
+function focusedFullCallerFixture({ partial = false, build = false, fault, inheritedRecipe = false }: { partial?: boolean; build?: boolean; fault?: ReceiptFault; inheritedRecipe?: boolean } = {}) {
   for (const name of ['run.mjs', 'receipt-cache.mjs', 'focused-tests.sh', 'test.sh']) {
     copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
   }
@@ -159,7 +159,8 @@ function focusedFullCallerFixture({ partial = false, build = false, fault }: { p
   const recordLaunch = `require('node:fs').appendFileSync('.evidence/launches.jsonl',JSON.stringify({argv:process.argv.slice(1),env:Object.fromEntries(Object.entries(process.env).filter(([key])=>/^(FITSY_|POSTGRES_|NODE_OPTIONS)/.test(key)))})+'\\n');`;
   writeFileSync(join(root, 'bin/npm'), `#!/bin/sh\n${quote(process.execPath)} -e ${quote(recordLaunch)} "$@"\nexec ${quote(npm)} "$@"\n`);
   for (const name of ['node', 'python3', 'npm']) chmodSync(join(root, 'bin', name), 0o755);
-  const childEnv = { ...env, PATH: `${join(root, 'bin')}:${env.PATH}` };
+  const childEnv = { ...env, PATH: `${join(root, 'bin')}:${env.PATH}`,
+    ...(inheritedRecipe ? { FITSY_VERIFY_FOCUSED_RECIPE: 'inherited-caller-recipe' } : {}) };
   const assertion = (name: string) => `require('node:fs').appendFileSync(${JSON.stringify(join(root, '.evidence/assertions.jsonl'))}, JSON.stringify({name:${JSON.stringify(name)},argv:process.argv,env:Object.fromEntries(Object.entries(process.env).filter(([key])=>/^(FITSY_|POSTGRES_|NODE_OPTIONS)/.test(key)))})+'\\n');`;
   writeFileSync(join(root, 'scripts/fixture.test.ts'), `test('complete file A', () => { ${assertion('A')} expect(2 + 2).toBe(4); });\ntest.skip('optional file A', () => {});\n` +
     (partial ? `test('unselected failure', () => { ${assertion('unselected')} expect(1).toBe(2); });\n` : ''));
@@ -265,6 +266,25 @@ test('canonical full caller reuses a complete focused file while nested admissio
     .toEqual(events.find(event => event.name === 'B')?.env);
   expect(events.filter(event => event.name === 'B')).toHaveLength(1);
   expect(result.stdout).toContain('"name":"test","status":"pass"');
+}, 45000);
+
+test('canonical full caller strips inherited recipe transport from both Jest children before reuse', () => {
+  const fixture = focusedFullCallerFixture({ inheritedRecipe: true });
+  const result = fixture.run();
+  const events = fixture.events();
+  const launches = fixture.launches();
+  console.info('FOCUSED_FULL_INHERITED_RECIPE_TRACE', JSON.stringify({ status: result.status, stdout: result.stdout,
+    stderr: result.stderr, events, launches }));
+  expect({ status: result.status, stderr: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, stderr: '' });
+  const fullContextLaunches = launches.filter(launch => launch.env.FITSY_VERIFY_OWNED_DB === 'fixture-owned');
+  expect(fullContextLaunches).toHaveLength(2);
+  for (const launch of fullContextLaunches) expect(launch.env).not.toHaveProperty('FITSY_VERIFY_FOCUSED_RECIPE');
+  expect(fullContextLaunches[1]?.argv.some(arg => arg.startsWith('--testPathIgnorePatterns='))).toBe(true);
+  expect(events.filter(event => event.name === 'A' && event.env.FITSY_VERIFY_OWNED_DB === 'fixture-owned')).toHaveLength(1);
+  expect(events.filter(event => event.name === 'A' && !event.env.FITSY_VERIFY_OWNED_DB)).toHaveLength(1);
+  expect(events.filter(event => event.name === 'B')).toHaveLength(1);
+  expect(events.find(event => event.name === 'A' && event.env.FITSY_VERIFY_OWNED_DB === 'fixture-owned')?.env)
+    .toEqual(events.find(event => event.name === 'B')?.env);
 }, 45000);
 
 test('canonical full caller retains unselected failing assertions from a partial focused pattern', () => {

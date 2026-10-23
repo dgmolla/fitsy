@@ -30,6 +30,8 @@ FAIL=""
 # Consume complete same-invocation focused proof before any other test engine
 # can mutate the freshly prepared database. Missing proof keeps every file fresh.
 if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
+  # Match focused Jest: recipe transport must not reach script assertions.
+  unset FITSY_VERIFY_FOCUSED_RECIPE
   JEST_COMMAND=(test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB)
   JEST_ENV=(FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512)
   FOCUSED_IGNORE="$(/usr/bin/env "${JEST_ENV[@]}" node scripts/verify/receipt-cache.mjs --scripts-focused-exclusion "$PPID" "$@" -- "${JEST_COMMAND[@]}")" || FOCUSED_IGNORE=""
