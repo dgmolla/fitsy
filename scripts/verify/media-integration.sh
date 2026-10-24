@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 1
 node scripts/verify/media-integration.mjs --required >/dev/null
 applicability=$?
 if [ "$applicability" -eq 2 ]; then

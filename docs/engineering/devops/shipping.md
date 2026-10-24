@@ -38,16 +38,15 @@ Finish implementation and commit the frozen candidate before review.
 Select meaningful focused reproduction and regression tests for the changed behavior.
 Run applicable structural, lint, type and safety checks plus that focused selection before independent review.
 The hook runs cheap checks and focused tests directly; GitHub owns merge requirements and heavy validation.
-Reviewer execution is a separate operation with attempts controlled by the local AI review poller.
+Independent review uses the [simple-review runner](../../../scripts/review/simple-review.md) and retained routing and severity rules.
+The installed review caller publishes the existing `AI review` status for the exact candidate.
+Reviewer execution remains separate, with attempts controlled by the installed local AI reviewer.
 
 ```sh
 node scripts/verify/focused-tests.mjs --set scripts/verify/impact-plan.test.ts
 npm run verify -- --stage=cheap
-export FITSY_REVIEW_PROVIDER=codex
-export FITSY_REVIEW_MODEL=gpt-6-sol
-export FITSY_REVIEW_REASONING_EFFORT=high
-# Execute the independently authorized review of the committed candidate.
-bash scripts/review/run-review.sh --local
+node --test scripts/review/simple-review.test.mjs
+# Obtain an independent review through simple review before publishing.
 # Publish through the ordinary hook after applicable validation.
 git push -u origin HEAD
 ```
@@ -56,6 +55,7 @@ Replace the focused test with the accepted issue's meaningful regressions and ru
 Focused selection supports Jest, Node `.test.mjs` and Python `.test.py` through the canonical runner.
 Stop on failed cheap checks or matching review before push; applicable final acceptance remains mandatory before protected merge.
 A focused selection is not full acceptance; correctness review still judges scenario relevance.
+The review behavior suite proves runner behavior; it does not supply a candidate's independent verdict.
 
 Local verification and publication do not require an issue binding, a shipping session, a review daemon or `~/.fitsy-review`.
 The pre-push hook runs size/domain checks followed by cheap static checks and focused tests.
@@ -176,86 +176,34 @@ The shadow L7 smoke cannot satisfy this gate; cloud execution is not a launch re
 For a backend change before its first push, deploy a clean committed checkout with `vercel deploy --target=preview`, then assign the ready preview to dev during a coordinated test window.
 The gate accepts Vercel's CLI `meta.gitCommitSha` identity as well as a Git deployment's `gitSource.sha`, rejects dirty CLI uploads, and still compares candidate backend contents and pins the deployment across the test and publication.
 
-Commit the tested change locally before independent review; `--local` reviews committed `origin/main...HEAD`, not uncommitted edits.
-Fetch the base first and ensure the branch contains the current review definitions.
-If it predates the harness, rebase/update it deliberately in its own worktree before review; do not silently skip missing lenses.
+## Independent review
 
-Explicit independent review covers the required domains with the same required domains as the trusted-main poller:
+Use one independent read-only review of the exact candidate through `scripts/review/simple-review.mjs`.
+The required review gate remains `AI review`, alongside the final `Verify` job.
+Do not change branch protection as part of local review tooling cleanup.
+The implementer cannot supply its own independent verdict.
 
-| Changed surface | Required review domains |
-|---|---|
-| Every PR, including docs and tests | `correctness`, including maintainability and required acceptance |
-| Production auth, billing or data-loss code | Also `danger-zone` |
-| Production deployment/security or review/release controls | Also `workflow-security` |
+The retained `scripts/route-reviewers.sh` maps changed paths to roles.
+The runner always includes correctness and maps API/mobile to danger-zone, CTO to workflow-security, product-manager to spec-conformance, and design/GTM to docs-sanity.
+`REVIEW.md` retains the severity definitions, evidence requirements and complete-domain JSON contract.
+Missing domains, contradictory verdicts, malformed output, timeouts and provider failures never establish approval.
+Only CONFIRMED P0/P1 findings block the review result.
+P2/P3 and plausible findings remain visible with the raw verdict; custom disposition files and test-receipt fingerprints are retired.
+Required product tests and essential acceptance criteria still block independently of finding priority.
 
-Exact shared path routing is in `scripts/review/review-domains.py`; ordinary test, fixture and documentation paths do not trigger specialists by name alone, while review and release policy files do.
-If the changed behavior exposes a sensitive control outside those paths, add the relevant specialist before merge.
-An `incident` label, `Spec:` line or test file does not by itself add a separate lens; correctness still checks the named acceptance and relevant tests.
+The runner supports Codex only, defaults to `gpt-6-sol` with high reasoning effort, and accepts an explicit `FITSY_REVIEW_MODEL`.
+The provider executes in a temporary home with a read-only sandbox, without GitHub credentials or inherited agent-session configuration.
+The installed subscription caller uses the same routing and output validation with its local transport.
+See [simple review](../../../scripts/review/simple-review.md) for inputs, exit codes and the behavior suite.
 
-```sh
-bash scripts/review/run-review.sh --local
-# Required domain coverage remains canonical; the active poller owns review attempt limits.
-```
-
-Group material defects and mandatory acceptance failures into one repair pass, while preserving bounded P2 debt as owned, source-bound follow-ups.
-After repair, review the affected behavior and its consequences against the current source; do not reopen unrelated adjudicated questions without new evidence.
-After cheap/focused checks and a passing independent review, publish the frozen candidate through the ordinary hook.
-Before protected merge, require trusted existing Verify and every applicable real-media/native flow, reusing only receipts whose source, environment and test identity still match.
-Rerun invalidated checks and lenses after a source change; never reuse an old-head verdict as a fresh pass.
-Review requirements are independent of the implementing agent, model vendor and subscription.
-The runner supports `claude` and `codex` adapters; choose an authenticated provider explicitly with `FITSY_REVIEW_PROVIDER`.
-Set `FITSY_REVIEW_MODEL` to the intended model; Codex defaults to `gpt-6-sol`, while explicitly selected Claude installations retain their tier-based defaults.
-Use a model appropriate to the change's risk and keep the required lenses unchanged.
-Export `FITSY_REVIEW_PROVIDER`, `FITSY_REVIEW_MODEL`, and `FITSY_REVIEW_REASONING_EFFORT` in the shipping shell before review.
-The review runner records that reviewer profile with its result.
-A supported Claude profile uses the same persistent-export contract.
-Provider-specific credentials remain in the provider's normal local credential store and must never enter the repository or evidence.
-The adapters run an independent review process with read-only tools, disabled integrations and bounded execution time.
-`FITSY_REVIEW_TIMEOUT_SECONDS` configures the execution timeout.
-For Codex, `FITSY_REVIEW_REASONING_EFFORT` defaults to `high` and supports `low`, `medium`, `high` and `xhigh`; unsupported model/effort combinations fail rather than silently changing settings.
-The installed CLI and administrator-managed policy remain trusted infrastructure; the adapter constrains model tools and preserves the normal credential store.
-Authentication, process, timeout and invalid-output failures cannot produce passing or reusable verdicts.
-A supported alternative may resolve a provider outage, but never switch providers to evade a confirmed code finding.
-The runner records provider, model and execution identity with the verdict, and includes that identity and adapter/parser contents in its cache key.
-An existing status from another provider still satisfies the same lens; a cache entry is reused only for its matching execution identity.
-The implementing agent must not author its own independent review verdict.
-Existing post-PR compatibility callers may reuse a matching canonical round.
-Independent review evidence must match the current candidate and the required domains.
-The cache binds every required domain and instruction, provider identity, acceptance brief and patch; only optional hunk-heading labels are normalized.
-The trusted main poller invokes the reviewer once and publishes `review/round` with its complete input identity after all required compatibility statuses.
-Before reusing a completed same-head status, a nonexecuting identity probe checks current acceptance, routing, instructions, provider and patch inputs.
-A changed identity requires one new complete round; identity failure withdraws reuse, and a retained needs-coordinator failure still requires diagnosis.
-Existing `lens/<domain>` statuses are derived only from one complete independent result.
-Missing domain results make the entire round incomplete.
-PR patches are generated from the exact checked-out head and immutable target base commit, with a head recheck before execution.
-Changed-input success statuses are withdrawn before replacement execution.
-Legacy `run-lens.sh` delegates the whole round and cannot run separate routine reviewers.
-The default independent provider is Codex, model `gpt-6-sol`, high reasoning effort.
-The active local AI review poller controls attempts per head SHA; legacy cached projections do not execute a reviewer.
-A changed diff or changed review inputs invalidates that reuse.
-The selected skills and current human issue limits control execution and retry decisions.
-Incomplete review is never a pass or an automatic retry entitlement.
-An implementer cannot replace the independent required domains with its own assessment.
-Every finding has a separate impact priority, and raw reviewer verdicts remain unchanged.
-The canonical runner accepts an owned, source-bound P2 follow-up only through the disposition and required-test contract in [review-dispositions.md](review-dispositions.md).
-P0/P1 impacts, malformed dispositions, stale receipts and missing required tests remain blocking.
-The active local AI review poller allows two attempts per head SHA and publishes `AI review`.
-A new head SHA receives its own attempt allowance; workflow and provider timeouts bound individual execution.
-The repository no longer allocates cumulative issue budgets or reconciles execution counts, grants or completed-review accounting.
-Keep existing historical review records needed by unfinished tasks unchanged.
-See [review attempts and historical evidence](review-dispositions.md#review-attempts-and-historical-evidence).
-Incomplete execution and exhausted attempts cannot satisfy the independent review gate or bypass required checks.
-P3 findings remain advisory; confirmed P0/P1, required tests and essential acceptance continue to block independently.
-The Jev review-triage evaluation is a later shadow experiment under issue #372, with no gate or merge authority.
-A rebase may alter the actual diff and requires checking again.
-
-Local mode carries the bound issue brief, not the full PR body.
-Keep release acceptance in that issue; if a requirement exists only in PR text, require a PR-context correctness review before relying on a cached local verdict.
-Do not use the content-only cache as proof that changed requirements were reviewed.
-The same applies when a reviewer relied on context outside the cached diff and that context changed.
-
-Do not run another generic review after these project lenses solely because a global skill says to.
-Use additional review only for a concrete uncovered risk or an explicit user request.
+Use immutable trusted-base review controls against the exact checked-out PR head and merge-base diff.
+The runner checks live commits, labels and PR state before publication and creates or updates one marked bot comment.
+A stale or incomplete review cannot publish a passing result.
+Review caches, approval fingerprints, compatibility lens statuses and repository poller scripts no longer supply review results.
+Keep all findings visible and repair material defects and mandatory acceptance failures together.
+After repair, review changed behavior and affected consequences against current source.
+Before protected merge, require current trusted Verify and every applicable real-media/native flow.
+Apple, legal, submission and release approvals remain applicable.
 
 ## PR, integration, and deployment
 
@@ -263,7 +211,7 @@ Open the PR with scope, intent, actual verification results, relevant evidence p
 State the coherent outcome, acceptance evidence, non-goals, owner, and blocking dependencies.
 Use `--body-file` for multiline CLI PR bodies.
 Include `Spec:` or the incident reference where applicable.
-Check the current PR head, its CI, and required lens statuses before merging; an earlier commit's green result is insufficient.
+Check the current PR head, its CI, and the `AI review` status before merging; an earlier commit's green result is insufficient.
 Follow existing task authorization for push, merge, migration, and deployment.
 If the user has already authorized the complete shipping sequence, continue through it without repeatedly requesting the same authorization.
 Do not treat a request to discuss or prepare a proposal as authority to publish it.
