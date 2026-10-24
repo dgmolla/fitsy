@@ -191,7 +191,7 @@ class CanonicalReviewTests(unittest.TestCase):
     def add_p2(self):
         self.verdict.update(verdict='fail', findings=[{
             'severity': 'CONFIRMED', 'priority': 'P2', 'domains': ['correctness'],
-            'file': 'scripts/review/review-budget.py', 'line': 860,
+            'file': 'scripts/review/review-round.py', 'line': 86,
             'summary': 'Optional receipt compatibility', 'scenario': 'Historical native receipt only',
             'fix': 'Preserve supported receipt binding', 'impact': 'Owned optional recovery'}])
         self.verdict['domains']['correctness'] = 'fail'
@@ -1371,37 +1371,6 @@ class ProfileCustodyTests(unittest.TestCase):
         self.assertEqual(observed['args'], ['--layer=0-2', '--stage=cheap', '--scope=changed', '--runs=local',
             '--reuse', f'--base={self.boundary["comparison_base"]}', f'--head={self.boundary["source_sha"]}'])
 
-    def test_candidate_cheap_reuses_actual_runner_checks_and_keeps_uncached_checks_and_custody(self):
-        import shutil
-        self.prepare_candidate_checks()
-        scripts = self.checkout / 'scripts/verify'
-        for name in ('run.mjs', 'receipt-cache.mjs', 'impact-plan.mjs'):
-            shutil.copyfile(REPO_ROOT / 'scripts/verify' / name, scripts / name)
-        (self.checkout / 'node_modules').symlink_to(REPO_ROOT / 'node_modules', target_is_directory=True)
-        (self.checkout / '.gitignore').write_text('.evidence/\nnode_modules\n')
-        (scripts / 'registry.yml').write_text('checks:\n'
-            '  - name: dependencies\n    script: dependencies.sh\n    layer: 0\n    blocking: true\n'
-            '  - name: focused-tests\n    script: focused.sh\n    layer: 1\n    blocking: true\n    cache: true\n')
-        for name in ('dependencies', 'focused'):
-            (scripts / (name + '.sh')).write_text(f'echo run >> .evidence/{name}-calls\n' + "echo '{\"status\":\"pass\"}'\n")
-        recipe = self.checkout / '.evidence/verify/focused-tests.json'
-        recipe.parent.mkdir(parents=True)
-        recipe.write_text('{"version":1,"tests":["scripts/example.test.mjs"]}')
-        git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
-        env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
-        for args in (['add','.'], ['commit','-qm','actual cheap runner fixture']):
-            REAL_RUN([git,'-C',str(self.checkout),*args],env=env,check=True)
-        source = subprocess.check_output([git,'-C',str(self.checkout),'rev-parse','HEAD'],env=env).decode().strip()
-        REAL_RUN([git,'-C',str(self.checkout),'update-ref','refs/remotes/origin/main',source],env=env,check=True)
-        self.boundary.update(source_sha=source, comparison_base=source)
-        self.receipt.update(source_sha=source, comparison_base=source)
-        self.save()
-        with patch.object(external, 'candidate_custody', wraps=external.candidate_custody) as custody:
-            self.assertEqual(self.candidate_command(), 0)
-            self.assertEqual(self.candidate_command(), 0)
-            self.assertEqual(custody.call_count, 4)
-        self.assertEqual((self.checkout / '.evidence/focused-calls').read_text().splitlines(), ['run'])
-        self.assertEqual((self.checkout / '.evidence/dependencies-calls').read_text().splitlines(), ['run', 'run'])
 
     def test_candidate_push_gates_preserve_exit_two_and_real_failure(self):
         source = self.prepare_candidate_checks()

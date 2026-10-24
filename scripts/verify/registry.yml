@@ -125,7 +125,7 @@ checks:
     layer: 2
     blocking: true
     runs: [local]
-    why: Real decoder, attachment and opt-in recording integration tests for changed simulator or product-flow controls; missing local tools fail.
+    why: Real decoder and attachment integration tests for changed simulator or product-flow controls; missing local tools fail.
 
   - name: build
     script: build.sh
