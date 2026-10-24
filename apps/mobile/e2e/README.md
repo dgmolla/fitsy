@@ -8,6 +8,15 @@ Use `isNativeFocused(dump, testID)` on a fresh observation before typing and `as
 These helpers inspect the exact element row and fail closed for missing or duplicate selectors.
 They do not prove search results; assert the returned dish or empty-state recovery separately and retain the complete raw tool trace.
 
+## Preview Search highlight
+
+`onboarding-search-highlight` follows real onboarding with meal prep selected so Search is the first preview tip.
+It captures entry, settled pizza results and Back to Search, then verifies all five tips, completion, replay and Skip.
+Run it on both a small and normal supported iPhone through the canonical simulator runner.
+The entry screenshot records the first observed state; a fast response can finish before that capture, so it alone does not prove the loading transition.
+Retain source-bound loading, transition and results captures with viewport and safe-area provenance when reproducing layout timing, and inspect equal clearance around the Search field and the tooltip position in each image.
+Preserve original screenshots, approvals and raw failed evidence; obtain explicit UI approval for changed candidate states before final acceptance.
+
 ## Subscription Restore acceptance
 
 `subscription-restore-expired` starts with an authenticated recreated Fitsy account on the ordinary paywall and an expired real Apple purchase belonging to the device's store account.
