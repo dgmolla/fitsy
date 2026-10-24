@@ -4,7 +4,7 @@ The `Simple review` workflow runs alongside the existing review system and does 
 It uses `pull_request` events for same-repository branches, skips forks and the `skip-review` label, and cancels superseded runs per PR.
 There is no attempt counter or retained review ledger.
 
-Set the repository secret `OPENAI_API_KEY`; optionally set `FITSY_REVIEW_MODEL` (default `gpt-6-sol`, high reasoning effort).
+Reviews run on the owner's Mac: a launchd poller calls `codex exec --sandbox read-only` with the local Codex subscription (model `gpt-6.1-sol`), reusing `selectLenses`/`validateReview` from this file, posts the review comment and sets the `AI review` commit status (success unless a CONFIRMED P0/P1). No GitHub secret is needed; the CI `review` job is removed.
 The current provider adapter supports the Codex CLI only and rejects unsupported providers without fallback.
 It runs once in a temporary home with a read-only sandbox and receives no GitHub token or inherited agent session.
 The CLI uses the documented [non-interactive mode](https://developers.openai.com/codex/noninteractive/).
