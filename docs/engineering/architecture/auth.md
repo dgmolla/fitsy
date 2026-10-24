@@ -54,7 +54,34 @@ The welcome screen (`app/welcome/signin.tsx` and `app/welcome/login.tsx`) shows 
 
 ### Token Storage (SEC-01 — resolved)
 
-After a successful auth flow, the Supabase session (access + refresh tokens) is persisted in the device keychain via `expo-secure-store` (`apps/mobile/lib/authClient.ts`, key `fitsy_authToken`), managed by the Supabase SDK's SecureStore adapter.
+After a successful auth flow, the Supabase SDK persists the full session through its `expo-secure-store` adapter.
+The shared `adoptSession` helper rejects SDK errors and missing sessions before any caller continues navigation.
+Only then does it copy the confirmed session's access token into the legacy `fitsy_authToken` key, including any token refreshed during adoption.
+Failed sign-in cannot leave a new legacy token that a cold launch mistakes for authenticated checkout.
+
+### No-trial checkout
+
+Anonymous checkout after a prior paywall decline enters sign-in before showing plans, including payment deep links and interrupted checkout resumes.
+Provider cancellation, rejected credentials and failed session adoption leave the selected meal on sign-in with purchase controls unavailable.
+Successful sign-in preserves the meal and uses the account's entitlement verdict to choose payment, resubscribe or the purchased destination.
+Purchase and restore recheck the session and native account before invoking the store, including when the session expires while plans are open.
+Automatic session expiry preserves the pending selection with its original account ownership, so another account cannot read or claim it.
+An authenticated API rejection resumes a pending no-trial checkout at sign-in after clearing expired tokens.
+Explicit logout and account deletion abandon the checkout through `clearToken()`; expiry uses `clearToken({ reason: 'session-expired' })`.
+Trial invitations, reminders and out-of-area routes retain their existing behavior.
+Development login is guarded by `__DEV__` in both the interface and the shared authentication helper.
+
+```mermaid
+flowchart LR
+    A[Anonymous no-trial checkout] --> S[Sign in with selected meal]
+    S --> C{Session established}
+    C -->|Failed or cancelled| S
+    C -->|Confirmed| V{Account verdict}
+    V -->|Never subscribed| P[Payment]
+    V -->|Expired| R[Resubscribe]
+    V -->|Active| M[Selected meal]
+    V -->|Unknown| U[Subscription check]
+```
 
 > **SEC-01 (resolved by S-200, 2026-04-26):** the original design stored the JWT in unencrypted `AsyncStorage`. It was migrated to `expo-secure-store` (iOS Keychain / Android Keystore); no auth token is held in AsyncStorage. This is no longer an open risk — relevant because Fitsy ships direct to the public App Store (no trusted-tester beta).
 
@@ -270,7 +297,11 @@ Apple's own signing keys are not stored — Supabase fetches them from Apple's J
 
 ## Session Refresh
 
-The mobile client listens to `supabase.auth.onAuthStateChange`. When the auth state rotates the access token (`session_refreshed` analytics event), the new token is stored to `AsyncStorage`. If the refresh token is rejected (forced sign-out), the `session_refresh_failed` event fires and the user is redirected to the welcome screen.
+The mobile client listens to `supabase.auth.onAuthStateChange` and records `session_refreshed` when the SDK rotates the access token.
+Supabase persists the refreshed session through its SecureStore adapter.
+A rejected refresh closes entitlement access and records `session_refresh_failed` for a previously signed-in account.
+Pending checkout stays account-bound until reauthentication or explicit abandonment.
+An authenticated API rejection clears expired tokens and sends a pending no-trial checkout to sign-in; other expired requests return to welcome.
 
 ---
 

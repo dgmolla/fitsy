@@ -8,6 +8,9 @@ import type {
   GoogleAuthResponse,
 } from '@fitsy/shared';
 import { supabase } from './supabase';
+import { clearPaywallIntent } from './paywallIntent';
+import { clearPaymentSignInContinuation } from './paymentSignInContinuation';
+import { clearPendingMealClaim } from './pendingMealClaim';
 import { archiveActiveMacroTargets, clearActiveMacroTargets } from './macroStorage';
 import { clearAccountOnboardingData } from './onboardingStorage';
 import { forgetPendingProfileSync } from './profileSyncStorage';
@@ -44,12 +47,20 @@ export async function storeToken(token: string): Promise<void> {
 /**
  * Clear all auth state — Supabase session AND legacy token. Used by logout,
  * account deletion, and the 401 unauthorized handler in api.ts.
+ * Expiry retains account-bound checkout for reauthentication; explicit logout
+ * abandons it before the SDK emits SIGNED_OUT.
  */
-export async function clearToken(options: { forgetTargets?: boolean } = {}): Promise<void> {
+export async function clearToken({ reason = 'logout', forgetTargets = false }: {
+  reason?: 'logout' | 'session-expired';
+  forgetTargets?: boolean;
+} = {}): Promise<void> {
   const { data } = await supabase.auth.getSession();
-  if (options.forgetTargets && data.session?.user?.id) await forgetPendingProfileSync(data.session.user.id);
-  await archiveActiveMacroTargets(data.session?.user?.id ?? null, options.forgetTargets);
-  await clearAccountOnboardingData(data.session?.user?.id ?? null, options.forgetTargets);
+  if (forgetTargets && data.session?.user?.id) await forgetPendingProfileSync(data.session.user.id);
+  await archiveActiveMacroTargets(data.session?.user?.id ?? null, forgetTargets);
+  await clearAccountOnboardingData(data.session?.user?.id ?? null, forgetTargets);
+  if (reason === 'logout') await Promise.allSettled([
+    clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(),
+  ]);
   // Supabase's signOut clears its own SecureStore key (the session blob).
   await supabase.auth.signOut().catch(() => {
     // signOut may fail offline — don't let that block local cleanup.
@@ -67,10 +78,17 @@ export async function adoptSession(token: string, refreshToken: string | undefin
   if (!refreshToken) {
     throw new Error('auth response missing refreshToken');
   }
-  await supabase.auth.setSession({
+  const { data, error } = await supabase.auth.setSession({
     access_token: token,
     refresh_token: refreshToken,
   });
+  if (error) throw error;
+  if (!data.session?.access_token || !data.session.user?.id) {
+    throw new Error('Sign in did not establish a session. Please try again.');
+  }
+  // Never let the legacy fallback turn failed adoption into an authenticated
+  // cold resume. Adoption can refresh the token, so retain its confirmed value.
+  await storeToken(data.session.access_token);
 }
 
 // ─── Auth API calls ───────────────────────────────────────────────────────────
@@ -112,7 +130,6 @@ export async function loginAndStore(
   if ('error' in result) {
     throw new Error(result.error);
   }
-  await storeToken(result.token);
   await adoptSession(result.token, result.refreshToken);
   return result;
 }
@@ -126,7 +143,6 @@ export async function registerAndStore(
   if ('error' in result) {
     throw new Error(result.error);
   }
-  await storeToken(result.token);
   await adoptSession(result.token, result.refreshToken);
   return result;
 }
@@ -134,12 +150,13 @@ export async function registerAndStore(
 // ─── Dev login ──────────────────────────────────────────────────────────────
 // Dev-only throwaway account so onboarding/auth can be exercised without
 // Apple/Google OAuth (which need real config + a signed build). Logs in, or
-// registers on first run, then stores the token + adopts the session. Shared by
+// registers on first run, then adopts the session and stores its token. Shared by
 // app/auth/login.tsx and app/welcome/signin.tsx — callers handle nav/analytics.
 export async function devLogin(): Promise<AuthResponse> {
+  if (!__DEV__) throw new Error('Dev login is only available in development.');
   // An isolated Test Store run can use a disposable development account
   // without changing the shared Dev login account or its billing eligibility.
-  const creds = { email: (__DEV__ && process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL) || 'dev@fitsy.local', password: 'dev12345' };
+  const creds = { email: process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL || 'dev@fitsy.local', password: 'dev12345' };
   const attempt = async (path: string) => {
     const res = await fetch(`${BASE_URL}${path}`, {
       method: 'POST',
@@ -153,7 +170,6 @@ export async function devLogin(): Promise<AuthResponse> {
   if (!data.token || !data.refreshToken || !data.user) {
     throw new Error(data.error ?? 'Dev login failed');
   }
-  await storeToken(data.token);
   await adoptSession(data.token, data.refreshToken);
   return data as AuthResponse;
 }
@@ -199,7 +215,6 @@ export async function appleSignIn(): Promise<AppleAuthResponse> {
     email: email ?? undefined,
   });
 
-  await storeToken(result.token);
   await adoptSession(result.token, result.refreshToken);
   return result;
 }
@@ -215,8 +230,8 @@ export type { GoogleAuthResponse };
  * Call this after the OAuth browser flow completes successfully.
  */
 export async function completeGoogleSignIn(idToken: string): Promise<GoogleAuthResponse> {
+  if (!idToken) throw new Error('Google Sign In failed: missing credentials');
   const result = await postJson<GoogleAuthResponse>('/api/auth/google', { idToken });
-  await storeToken(result.token);
   await adoptSession(result.token, result.refreshToken);
   return result;
 }

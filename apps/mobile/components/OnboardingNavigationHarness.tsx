@@ -31,7 +31,8 @@ import { hasPendingMealClaim, rememberPendingMealClaim } from '../lib/pendingMea
 import type { ProfileResponse, UserGoalV2 } from '@fitsy/shared';
 
 type Session = { access_token: string; user: { id: string } } | null;
-export const mockState: { session: Session; sessionRead?: () => Promise<{ data: { session: Session } }> } = { session: null };
+type AuthListener = (event: string, session: Session) => void;
+export const mockState: { session: Session; sessionRead?: () => Promise<{ data: { session: Session } }>; googleResponse?: 'cancel' | 'missing-token'; authListeners: Set<AuthListener> } = { session: null, authListeners: new Set() };
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('posthog-react-native', () => {
@@ -45,7 +46,10 @@ jest.mock('@supabase/supabase-js', () => {
     getSession: async () => mockState.sessionRead ? mockState.sessionRead() : ({ data: { session: mockState.session } }),
     signOut: async () => { mockState.session = null; return { error: null }; },
     setSession: async () => { mockState.session = { access_token: 'test-token', user: { id: 'buyer' } }; return { data: { session: mockState.session } }; },
-    onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    onAuthStateChange: (listener: AuthListener) => {
+      mockState.authListeners.add(listener);
+      return { data: { subscription: { unsubscribe() { mockState.authListeners.delete(listener); } } } };
+    },
     startAutoRefresh() {}, stopAutoRefresh() {},
   } }) };
 });
@@ -63,7 +67,12 @@ jest.mock('expo-auth-session/providers/google', () => {
   const React = require('react');
   return { useIdTokenAuthRequest: () => {
     const [result, setResult] = React.useState(null);
-    return [null, result, async () => { const next = { type: 'success', params: { id_token: 'google-token' } }; setResult(next); return next; }];
+    return [null, result, async () => {
+      const next = mockState.googleResponse === 'cancel' ? { type: 'cancel' }
+        : { type: 'success', params: mockState.googleResponse === 'missing-token' ? {} : { id_token: 'google-token' } };
+      setResult(next);
+      return next;
+    }];
   } };
 });
 jest.mock('expo-web-browser', () => ({ maybeCompleteAuthSession() {} }));
@@ -158,6 +167,8 @@ beforeEach(async () => {
   await SecureStore.deleteItemAsync('fitsy_authToken');
   mockState.session = null;
   mockState.sessionRead = undefined;
+  mockState.googleResponse = undefined;
+  mockState.authListeners.clear();
   accountProfiles = Object.create(null);
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();

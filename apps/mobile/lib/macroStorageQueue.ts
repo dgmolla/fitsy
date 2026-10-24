@@ -5,4 +5,3 @@ export function mutateTargets<T>(work: () => Promise<T>): Promise<T> {
   targetMutationQueue = next.then(() => {}, () => {});
   return next;
 }
-
