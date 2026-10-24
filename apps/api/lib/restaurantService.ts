@@ -207,7 +207,7 @@ export async function findNearbyRestaurants(
   const queryContext = textQuery.active ? Prisma.sql`SELECT EXISTS (
     SELECT 1 FROM "MenuItem" mi JOIN "Restaurant" qr ON qr.id = mi."restaurantId"
     WHERE ${nearbyBoundarySql(lat, lng, radiusMiles, 'qr')}
-      AND mi.calories IS NOT NULL AND mi."proteinG" IS NOT NULL
+      AND mi."retiredAt" IS NULL AND mi.calories IS NOT NULL AND mi."proteinG" IS NOT NULL
       AND mi."carbsG" IS NOT NULL AND mi."fatG" IS NOT NULL
       AND ${textQuery.dish('mi')}
   ) AS "hasDishMatches"` : Prisma.sql`SELECT false AS "hasDishMatches"`;
@@ -286,7 +286,7 @@ export async function findNearbyRestaurants(
         m."fatG"        AS "fatG",
         ${macroScoreSumSql(targets)}               AS "scoreSum"
       FROM "MenuItem" m
-      WHERE m."restaurantId" = r.id
+      WHERE m."restaurantId" = r.id AND m."retiredAt" IS NULL
         AND m.calories IS NOT NULL AND m."proteinG" IS NOT NULL
         AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
         ${menuQueryFilter}

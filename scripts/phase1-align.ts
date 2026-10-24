@@ -71,7 +71,7 @@ async function main() {
     const official = officialByBrand.get(b.slug); if (!official) continue;
     if (aliasesOut[b.slug]) continue; // already aligned
     const keys = new Set(official.map((o) => o.canonicalKey));
-    const items = await p.menuItem.findMany({ where: { restaurant: { brandId: b.id } }, select: { name: true }, take: 5000 });
+    const items = await p.menuItem.findMany({ where: { retiredAt: null, restaurant: { brandId: b.id } }, select: { name: true }, take: 5000 });
     const ueNames = [...new Set(items.map((i) => i.name))].filter(Boolean);
     if (!ueNames.length) continue;
     const naive = ueNames.filter((n) => keys.has(slug(n))).length;

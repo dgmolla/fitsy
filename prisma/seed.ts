@@ -160,14 +160,17 @@ export async function seedData(prisma: PrismaClient): Promise<void> {
     for (const t of ITEM_TEMPLATES) {
       const jitter = isChain ? 0 : Math.round((rand() - 0.5) * 60);
       const cal = t.cal + jitter;
-      const item = await prisma.menuItem.upsert({
-        where: { restaurantId_name: { restaurantId: restaurant.id, name: t.name } },
-        create: { restaurantId: restaurant.id, name: t.name, category: "Mains", price: Number((9 + rand() * 12).toFixed(2)), calories: cal, proteinG: t.p, carbsG: t.c, fatG: t.f },
-        update: { calories: cal, proteinG: t.p, carbsG: t.c, fatG: t.f },
-      });
+      // Seed templates have no external product ID. Use the active name-fallback partial index.
+      const [item] = await prisma.$queryRaw<{ id: string }[]>`
+        INSERT INTO "MenuItem" (id, "restaurantId", name, category, price, calories, "proteinG", "carbsG", "fatG", "createdAt", "updatedAt")
+        VALUES (gen_random_uuid(), ${restaurant.id}, ${t.name}, 'Mains', ${Number((9 + rand() * 12).toFixed(2))}, ${cal}, ${t.p}, ${t.c}, ${t.f}, now(), now())
+        ON CONFLICT ("restaurantId", name) WHERE "sourceItemId" IS NULL AND "retiredAt" IS NULL
+        DO UPDATE SET calories = EXCLUDED.calories, "proteinG" = EXCLUDED."proteinG", "carbsG" = EXCLUDED."carbsG", "fatG" = EXCLUDED."fatG"
+        RETURNING id
+      `;
       await prisma.macroEstimate.upsert({
-        where: { menuItemId_source: { menuItemId: item.id, source: "seed" } },
-        create: { menuItemId: item.id, calories: cal, proteinG: t.p, carbsG: t.c, fatG: t.f, confidence: t.conf, source: "seed", reasoning: "deterministic seed fixture" },
+        where: { menuItemId_source: { menuItemId: item!.id, source: "seed" } },
+        create: { menuItemId: item!.id, calories: cal, proteinG: t.p, carbsG: t.c, fatG: t.f, confidence: t.conf, source: "seed", reasoning: "deterministic seed fixture" },
         update: { calories: cal, confidence: t.conf },
       });
     }

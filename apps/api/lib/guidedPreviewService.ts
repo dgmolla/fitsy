@@ -36,7 +36,7 @@ export function guidedPreviewSql({ lat, lng, targets, query }: GuidedPreviewPara
         r."distanceMiles", r."restaurantMatches", r."exactRestaurant",
         ${macroScoreSumSql(targets)} AS "scoreSum", ${text.dish()} AS "dishMatches"
       FROM "MenuItem" m JOIN nearby_restaurants r ON r.id = m."restaurantId"
-      WHERE m.calories IS NOT NULL AND m."proteinG" IS NOT NULL
+      WHERE m."retiredAt" IS NULL AND m.calories IS NOT NULL AND m."proteinG" IS NOT NULL
         AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
     ), query_context AS MATERIALIZED (
       SELECT coalesce(bool_or("dishMatches"), false) AS "hasDishMatches" FROM area_menu
