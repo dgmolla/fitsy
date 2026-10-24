@@ -374,7 +374,7 @@ def prospective_policy(path, ledger, candidate, issue, events):
 
 
 def canonical_authority(path, expected):
-    # Administrator/coordinator custody is trusted, as in execute-review.py.
+    # Administrator/coordinator custody is trusted.
     # Candidate environment and copies of controls cannot select this authority.
     if path is None:
         raise ValueError("canonical coordinator authority is required")
@@ -629,56 +629,6 @@ def reconcile_allocation(handle, args, events, total):
     return {"allowed": True, "idempotent": False, **proposed}
 
 
-def admit_cache(args, events):
-    """A cache entry is data; only retained execution can authenticate it."""
-    canonical_ledger(args.ledger, args.issue)
-    if not re.fullmatch(r"[0-9a-f]{64}", args.cache_key or ""):
-        raise ValueError("invalid canonical cache identity")
-    if args.result_file.absolute() != ADMIN_CACHE / (args.cache_key + ".json") or args.result_file.is_symlink():
-        raise ValueError("cache must use canonical administrator-managed location")
-    approval = canonical_authority(ADMIN_REVIEW / "operators" / f"issue-{args.issue}-cache-{args.cache_key}.json",
-                                   ADMIN_REVIEW / "operators" / f"issue-{args.issue}-cache-{args.cache_key}.json")
-    raw = args.result_file.read_bytes()
-    expected = dict(issue=args.issue, source_sha=args.source_sha, base_sha=args.base_sha,
-                    domains=sorted(set(args.required_domain)), cache_key=args.cache_key,
-                    result_sha256=hashlib.sha256(raw).hexdigest(),
-                    ledger_sha256=hashlib.sha256(args.ledger.read_bytes()).hexdigest())
-    if any(approval.get(key) != value for key, value in expected.items()):
-        raise ValueError("cache lacks exact coordinator-verified independent execution approval")
-    value = json.loads(raw)
-    proof = value.get("execution", {})
-    starts, finishes, total = usage(events)
-    if total["unfinished_attempts"] or total["completed_seconds"] > total["cap_seconds"]:
-        raise ValueError("cached execution exceeds effective original ledger authority")
-    attempt = proof.get("attempt_id")
-    start, finish = starts.get(attempt, {}), finishes.get(attempt, {})
-    if (proof.get("cache_key") != args.cache_key or proof.get("base_sha") != args.base_sha
-            or start.get("source_sha") != args.source_sha or finish.get("source_sha") != args.source_sha
-            or finish.get("outcome") != "pass" or finish.get("failure_kind") != "completed"
-            or finish.get("verdict") != value.get("verdict")
-            or finish.get("result_sha256") != hashlib.sha256(raw).hexdigest()):
-        raise ValueError("cache lacks matching retained source-bound reviewer execution")
-    artifacts = proof.get("artifacts", {})
-    if set(artifacts) != {"raw", "receipt"}:
-        raise ValueError("cache lacks original reviewer artifacts")
-    for artifact in artifacts.values():
-        if hashlib.sha256(Path(artifact["path"]).read_bytes()).hexdigest() != artifact["sha256"]:
-            raise ValueError("cached reviewer artifact changed")
-    execution = json.loads(Path(artifacts["receipt"]["path"]).read_text())
-    if execution.get("kind") != "completed" or execution.get("returncode") != 0:
-        raise ValueError("cache execution is incomplete")
-    import importlib.util
-    import sys
-    sys.dont_write_bytecode = True
-    spec = importlib.util.spec_from_file_location("review_round", Path(__file__).with_name("review-round.py"))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    original = module.extract(Path(artifacts["raw"]["path"]).read_text(), args.required_domain)
-    if original is None or any(value.get(key) != original.get(key) for key in ("verdict", "domains", "findings")):
-        raise ValueError("cache differs from complete original independent verdict")
-    return value
-
-
 def git_changed_paths(root, *comparison, env):
     """Enumerate both sides of moves without rename heuristics or path quoting."""
     raw = subprocess.check_output(
@@ -707,7 +657,7 @@ def admit_completed(handle, ledger, args, events):
     # A control-only trusted-main advance cannot expand the product comparison.
     allowed = controls + ["scripts/verify/shipping-session.mjs", "scripts/verify/review-admission.sh",
                           "scripts/verify/product-flow.mjs", "scripts/sim/publish-product-flow.mjs",
-                          "scripts/sim/product-flow.mjs", "scripts/sim/runner-controls.test.mjs",
+                          "scripts/sim/product-flow.mjs",
                           "scripts/verify/run.mjs", "scripts/verify/run-output.test.ts",
                           "scripts/verify/test.sh", "scripts/delivery/phase-events.test.mjs",
                           "scripts/verify/receipt-cache.mjs", "scripts/verify/README.md",
@@ -722,7 +672,6 @@ def admit_completed(handle, ledger, args, events):
                           "AGENTS.md", "docs/engineering/devops/shipping.md",
                           "docs/engineering/devops/resource-control-continuation.md",
                           "docs/engineering/devops/task-management.md",
-                          "docs/engineering/devops/review-dispositions.md",
                           "docs/engineering/devops/agent-model-routing.md",
                           "docs/engineering/devops/shipping-control-cutover.md",
                           "docs/engineering/devops/shipping-control-setup",
@@ -889,7 +838,7 @@ def reconcile_runtime(handle, args, events, total):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit", "reconcile-count", "reconcile-allocation", "reconcile-runtime", "account-completed", "admit-completed", "validate-completed", "completed-context", "admit-cache"))
+    parser.add_argument("action", choices=("begin", "finish", "status", "extend", "grant-authorized", "bind-limit", "reconcile-count", "reconcile-allocation", "reconcile-runtime", "account-completed", "admit-completed", "validate-completed", "completed-context"))
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--import-ledger", action="append", default=[])
     parser.add_argument("--optional-import-ledger", action="append", default=[])
@@ -910,9 +859,7 @@ def main():
     parser.add_argument("--required-domain", action="append", default=[])
     parser.add_argument("--execution-policy", type=Path)
     parser.add_argument("--authorization-file", type=Path)
-    parser.add_argument("--result-file", type=Path)
     parser.add_argument("--result-sha256")
-    parser.add_argument("--cache-key")
     parser.add_argument("--failure-kind", choices=FAILURE_KINDS)
     parser.add_argument("--outcome", choices=("pass", "fail", "interrupted"), default="interrupted")
     parser.add_argument("--verdict", choices=("pass", "fail", "incomplete"))
@@ -951,9 +898,6 @@ def main():
             limit = total["execution_limit"]
             if limit and args.issue != limit["issue"]:
                 raise ValueError("execution limit requires the original bound issue")
-            if args.action == "admit-cache":
-                print(json.dumps(admit_cache(args, events)))
-                return 0
             if args.action == "reconcile-allocation":
                 print(json.dumps(reconcile_allocation(handle, args, events, total)))
                 return 0

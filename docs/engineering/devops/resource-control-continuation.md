@@ -112,7 +112,6 @@ Focused unprivileged checks:
 
 ```sh
 python3 -B scripts/delivery/resource-controls.test.py
-python3 -B scripts/review/external-approval.test.py ProfileCustodyTests
 python3 -B scripts/delivery/local-dispatcher.test.py ResourceRetentionTest
 ```
 

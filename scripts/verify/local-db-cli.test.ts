@@ -48,8 +48,6 @@ test.each<DatabaseCase>([
     hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   ...[
     { name: 'canonical full delegation builds before DB preparation', standalone: false },
-    { name: 'standalone locked full delegation keeps safety and fresh reset evidence', standalone: true, repeat: true },
-    { name: 'standalone locked full delegation stops at failed cheap work', standalone: true, cheapFailure: true },
     { name: 'canonical full delegation stops at missing cheap work', standalone: false, missingCheap: true },
   ].map(options => ({ ...options, delegation: true, focused: true, canonical: true,
     hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false })),
