@@ -56,6 +56,7 @@ async function getRestaurantById(slugParam: string) {
     where: { id: parsed.id },
     include: {
       menuItems: {
+        where: { retiredAt: null },
         orderBy: [{ category: "asc" }, { name: "asc" }],
         include: {
           macroEstimates: { orderBy: { id: "desc" }, take: 1 },

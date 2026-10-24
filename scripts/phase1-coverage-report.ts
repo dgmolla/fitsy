@@ -19,13 +19,13 @@ async function main() {
   // --- totals ---
   const totalRest = await p.restaurant.count();
   const chainRest = await p.restaurant.count({ where: { brandId: { not: null } } });
-  const totalItems = await p.menuItem.count();
+  const totalItems = await p.menuItem.count({ where: { retiredAt: null } });
 
   // --- restaurants + items covered by official extraction, by route ---
   const offRows = await p.$queryRaw<{ route: string; restaurants: bigint; items: bigint }[]>`
     SELECT b.slug, count(DISTINCT r.id) AS restaurants, count(mi.id) AS items
     FROM "Brand" b JOIN "Restaurant" r ON r."brandId" = b.id
-    LEFT JOIN "MenuItem" mi ON mi."restaurantId" = r.id
+    LEFT JOIN "MenuItem" mi ON mi."restaurantId" = r.id AND mi."retiredAt" IS NULL
     WHERE b.slug = ANY(${officialSlugs})
     GROUP BY b.slug` as any;
   const byRoute: Record<string, { rest: number; items: number; brands: number }> = {};
@@ -41,14 +41,14 @@ async function main() {
   const spaRest = await p.restaurant.count({ where: { brandRef: { slug: { in: spaSlugs } } } });
 
   // --- fallback-tier source split: MacroEstimates NOT under an official brand ---
-  const srcAll = await p.macroEstimate.groupBy({ by: ["source"], _count: { _all: true } });
+  const srcAll = await p.macroEstimate.groupBy({ where: { menuItem: { retiredAt: null } }, by: ["source"], _count: { _all: true } });
   const srcFallback = await p.$queryRaw<{ source: string; n: bigint }[]>`
     SELECT me.source, count(*) AS n
     FROM "MacroEstimate" me
     JOIN "MenuItem" mi ON me."menuItemId" = mi.id
     JOIN "Restaurant" r ON mi."restaurantId" = r.id
     LEFT JOIN "Brand" b ON r."brandId" = b.id
-    WHERE (b.slug IS NULL OR b.slug <> ALL(${officialSlugs}))
+    WHERE mi."retiredAt" IS NULL AND (b.slug IS NULL OR b.slug <> ALL(${officialSlugs}))
     GROUP BY me.source` as any;
 
   // --- report ---

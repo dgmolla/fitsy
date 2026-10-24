@@ -1,0 +1,81 @@
+{
+  "captureSha256": "5e40d822b78b3453cae1d349c1e26a2d5e1ea38eaebe6812ffec8561342db96b",
+  "capturedAt": "2026-09-13T07:48:10.169Z",
+  "storeUuid": "69e8574e-3ca8-57b9-bf43-77387fcecb51",
+  "data": {
+    "title": "Panini Kabob Grill",
+    "catalogSectionsMap": {
+      "menu": [
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Featured items"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "e3bbefa9-7de0-5356-8e23-de99eac2d2d6",
+                  "title": "Alfredo Linguine",
+                  "itemDescription": "Linguine with Garlic, Butter, and Imported Shaved Parmesan Cheese. Protein is not included. Available with chicken, shrimp, or salmon.",
+                  "price": 1839,
+                  "priceTagline": {
+                    "text": "$18.39",
+                    "textFormat": "<span>$18.39</span>",
+                    "accessibilityText": "$18.39"
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "PASTA ENTREES"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "e3bbefa9-7de0-5356-8e23-de99eac2d2d6",
+                  "title": "Alfredo Linguine",
+                  "itemDescription": "Linguine with Garlic, Butter, and Imported Shaved Parmesan Cheese. Protein is not included. Available with chicken, shrimp, or salmon.",
+                  "price": 1839,
+                  "priceTagline": {
+                    "text": "$18.39",
+                    "textFormat": "<span>$18.39</span>",
+                    "accessibilityText": "$18.39"
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "FAMILY PASTA COMBOS"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "e909c3de-e83b-5b57-828c-988ef5a2817b",
+                  "title": "Alfredo Linguine",
+                  "itemDescription": "Linguine with Garlic, Butter, and Imported Shaved Parmesan Cheese. Protein is not included. Available with chicken, shrimp, or salmon.",
+                  "price": 6329,
+                  "priceTagline": {
+                    "text": "$63.29",
+                    "textFormat": "<span>$63.29</span>",
+                    "accessibilityText": "$63.29"
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

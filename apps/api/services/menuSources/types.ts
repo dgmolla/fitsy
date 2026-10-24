@@ -8,6 +8,8 @@
 
 export interface StructuredMenuItem {
   name: string;
+  /** Stable, provider-qualified product ID, e.g. `ubereats:<uuid>`. Never a placement or macro source. */
+  sourceItemId?: string | undefined;
   description?: string;
   price?: number;
   calories?: number; // calories extracted from source (e.g. UberEats markdown) — use directly when set

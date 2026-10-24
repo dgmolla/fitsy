@@ -136,7 +136,7 @@ async function verifyOfficial(url: string, items: string[]): Promise<{ verified:
 async function sampleItemsFor(brandId: string): Promise<string[]> {
   // most-common item names across this brand's locations = its menu core
   const rows = await p.menuItem.findMany({
-    where: { restaurant: { brandId } },
+    where: { retiredAt: null, restaurant: { brandId } },
     select: { name: true },
     take: 2000,
   });
