@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -32,8 +32,8 @@ process.stdout.write(JSON.stringify({id:url,createdAt:Date.now(),runtimeVersion:
 `, { mode: 0o755 });
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
-function rollback(extra: Record<string, string> = {}) {
-  return spawnSync('bash', ['scripts/deploy/rollback.sh', 'mobile'], {
+function rollback(extra: Record<string, string> = {}, args = ['mobile']) {
+  return spawnSync('bash', ['scripts/deploy/rollback.sh', ...args], {
     cwd: root, encoding: 'utf8', env: { ...process.env, ...extra, PATH: `${join(root, 'bin')}:${process.env.PATH}` },
   });
 }
@@ -51,4 +51,40 @@ test.each([{ ALL_DUPLICATES: 'true' }, { INVALID: 'true' }])('unverifiable recov
   expect(result.status).not.toBe(0);
   expect(readFileSync(join(root, 'calls'), 'utf8')).not.toContain('update:republish');
   expect(readFileSync(join(root, 'hold'), 'utf8')).toContain('rollback hold');
+});
+
+test.each([['--dry-run', 'mobile'], ['mobile', '--dry-run'], ['mobile', 'g0', '--dry-run']])('mobile preview resolves target without holds, locks, evidence or republish: %j', (...args) => {
+  writeFileSync(join(root, 'bin/gh'), '#!/bin/bash\nexit 99\n', { mode: 0o755 });
+  writeFileSync(join(root, 'lease'), 'active-release');
+  const result = rollback({}, args);
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain('would republish iOS group g0 on production');
+  expect(result.stdout).not.toContain('NOW:');
+  expect(readFileSync(join(root, 'calls'), 'utf8')).not.toContain('update:republish');
+  expect(readFileSync(join(root, 'hold'), 'utf8')).toBe('[[]]');
+  expect(readFileSync(join(root, 'lease'), 'utf8')).toBe('active-release');
+  expect(existsSync(join(root, '.evidence'))).toBe(false);
+  expect(existsSync(join(root, 'recovered'))).toBe(false);
+});
+
+test.each([{ ALL_DUPLICATES: 'true' }, { INVALID: 'true' }])('mobile preview preserves bundle verification: %j', extra => {
+  const result = rollback(extra, ['mobile', '--dry-run']);
+  expect(result.status).not.toBe(0);
+  expect(readFileSync(join(root, 'hold'), 'utf8')).toBe('[[]]');
+  expect(readFileSync(join(root, 'calls'), 'utf8')).not.toContain('update:republish');
+});
+
+test.each([true, false])('API preview resolves %s explicit target without promote or health mutations', explicit => {
+  mkdirSync(join(root, '.vercel'));
+  writeFileSync(join(root, '.vercel/project.json'), '{}');
+  writeFileSync(join(root, 'bin/vercel'), '#!/bin/bash\nexit 99\n', { mode: 0o755 });
+  const python = spawnSync('python3', ['-c', 'import sys;print(sys.executable)'], { encoding: 'utf8' }).stdout.trim();
+  writeFileSync(join(root, 'bin/python3'), '#!/bin/bash\nif [[ "$*" == *com.vercel.cli/auth.json* ]]; then echo fixture-token; else exec "$FIXTURE_PYTHON" "$@"; fi\n', { mode: 0o755 });
+  writeFileSync(join(root, 'bin/curl'), '#!/bin/bash\n[[ "$*" == *api.vercel.com/v6/deployments* ]] || exit 99\nprintf \'%s\' \'{"deployments":[{"url":"current.vercel.app"},{"url":"previous.vercel.app"}]}\'\n', { mode: 0o755 });
+  const args = ['api', '--dry-run', ...(explicit ? ['https://known-good.vercel.app'] : [])];
+  const result = rollback({ FIXTURE_PYTHON: python }, args);
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain(`would promote production deployment: https://${explicit ? 'known-good' : 'previous'}.vercel.app`);
+  expect(result.stdout).not.toContain('NOW:');
+  expect(existsSync(join(root, '.evidence'))).toBe(false);
 });
