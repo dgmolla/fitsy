@@ -170,3 +170,24 @@ jobs:
       - run: git fetch origin main
       - name: Run L3 checks
         run: node scripts/verify/run.mjs --layer=3 --runs=ci --scope=changed
+
+  verify:
+    name: Verify
+    needs: [classify, static, domain-check, test, build]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every applicable job
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          jq -e --arg event "$GITHUB_EVENT_NAME" '
+            def expected($flag):
+              if $flag == "true" then "success"
+              elif $flag == "false" then "skipped" else "invalid" end;
+            .classify.result == "success" and
+            .static.result == expected(.classify.outputs.code) and
+            .test.result == expected(.classify.outputs.tests) and
+            .build.result == expected(.classify.outputs.build) and
+            ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end)
+          ' <<<"$NEEDS_JSON"
