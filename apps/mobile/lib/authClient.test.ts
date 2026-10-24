@@ -1,8 +1,12 @@
 /**
  * @jest-environment node
  */
-import { loginAndStore, registerAndStore } from './authClient';
+import { adoptSession, appleSignIn, clearToken, completeGoogleSignIn, devLogin, loginAndStore, registerAndStore } from './authClient';
 import type { AuthApiResponse } from '@fitsy/shared';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 
 // Mock expo-secure-store
 jest.mock('expo-secure-store', () => ({
@@ -18,7 +22,7 @@ jest.mock('expo-secure-store', () => ({
 jest.mock('./supabase', () => ({
   supabase: {
     auth: {
-      setSession: jest.fn().mockResolvedValue({ data: {}, error: null }),
+      setSession: jest.fn().mockResolvedValue({ data: { session: { access_token: 'jwt-token-abc', user: { id: 'u1' } } }, error: null }),
       getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
       signOut: jest.fn().mockResolvedValue({ error: null }),
     },
@@ -27,6 +31,7 @@ jest.mock('./supabase', () => ({
 
 const SecureStore = jest.requireMock('expo-secure-store') as {
   setItemAsync: jest.Mock;
+  deleteItemAsync: jest.Mock;
 };
 const SupabaseMock = jest.requireMock('./supabase') as {
   supabase: { auth: { setSession: jest.Mock } };
@@ -49,6 +54,76 @@ const sampleAuthResponse: AuthApiResponse = {
 const errorResponse: AuthApiResponse = {
   error: 'Invalid credentials',
 };
+
+describe('confirmed session adoption', () => {
+  const originalFetch = global.fetch;
+  const originalDev = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
+    global.fetch = makeMockFetch({ ok: true, body: sampleAuthResponse });
+    jest.mocked(AppleAuthentication.signInAsync).mockResolvedValue({
+      identityToken: 'apple-token', authorizationCode: 'apple-code',
+    } as AppleAuthentication.AppleAuthenticationCredential);
+  });
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.clearAllMocks();
+    if (originalDev) Object.defineProperty(globalThis, '__DEV__', originalDev);
+    else Reflect.deleteProperty(globalThis, '__DEV__');
+  });
+
+  it.each([
+    ['Apple', () => appleSignIn()],
+    ['Google', () => completeGoogleSignIn('google-token')],
+    ['development', () => devLogin()],
+    ['email login', () => loginAndStore('jane@example.com', 'secret')],
+    ['registration', () => registerAndStore('Jane', 'jane@example.com', 'secret')],
+  ] as const)('%s rejects an SDK session error without retaining a legacy token', async (_provider, authenticate) => {
+    SupabaseMock.supabase.auth.setSession.mockResolvedValueOnce({ data: { session: null }, error: new Error('Session rejected') });
+    await expect(authenticate()).rejects.toThrow('Session rejected');
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty SDK session without retaining a legacy token', async () => {
+    SupabaseMock.supabase.auth.setSession.mockResolvedValueOnce({ data: { session: null }, error: null });
+    await expect(adoptSession('jwt-token-abc', 'refresh-token-xyz')).rejects.toThrow('session');
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing Google ID token without exchanging or storing credentials', async () => {
+    await expect(completeGoogleSignIn('')).rejects.toThrow('missing credentials');
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(SupabaseMock.supabase.auth.setSession).not.toHaveBeenCalled();
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('retains the confirmed access token when the SDK refreshes during adoption', async () => {
+    SupabaseMock.supabase.auth.setSession.mockResolvedValueOnce({
+      data: { session: { access_token: 'refreshed-token', user: { id: 'u1' } } }, error: null,
+    });
+    await loginAndStore('jane@example.com', 'secret');
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('fitsy_authToken', 'refreshed-token');
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalledWith('fitsy_authToken', 'jwt-token-abc');
+  });
+
+  it('refuses development authentication in production before sending credentials', async () => {
+    Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
+    await expect(devLogin()).rejects.toThrow('development');
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(SupabaseMock.supabase.auth.setSession).not.toHaveBeenCalled();
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it.each(['logout', 'session-expired'] as const)('%s clears tokens and only explicit logout abandons checkout', async reason => {
+    const keys = ['@fitsy/paywallIntent', '@fitsy/purchasedContinuation', '@fitsy/paymentSignInContinuation', '@fitsy/pendingMealClaim'];
+    for (const key of keys) await AsyncStorage.setItem(key, 'retained-checkout');
+    await clearToken(reason);
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('fitsy_authToken');
+    for (const key of keys) expect(await AsyncStorage.getItem(key)).toBe(reason === 'logout' ? null : 'retained-checkout');
+  });
+});
 
 describe('loginAndStore', () => {
   const originalFetch = global.fetch;

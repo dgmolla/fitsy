@@ -48,22 +48,20 @@ export default function LoginScreen() {
   useEffect(() => {
     if (response?.type === 'success') {
       const idToken = response.params['id_token'];
-      if (idToken) {
-        setGoogleLoading(true);
-        completeGoogleSignIn(idToken)
-          .then(async (result) => {
-            trackAuthSuccess({ provider: 'google', is_new_user: result.isNewUser });
-            await captureIdentity(result.user.id, result.user.email);
-            await pullProfileFromServer();
-            setGoogleLoading(false);
-            router.replace('/(tabs)/search');
-          })
-          .catch((err: Error) => {
-            trackAuthFailure({ provider: 'google', error_message: err.message });
-            setGoogleLoading(false);
-            Alert.alert('Sign In Failed', err.message);
-          });
-      }
+      setGoogleLoading(true);
+      completeGoogleSignIn(idToken)
+        .then(async (result) => {
+          trackAuthSuccess({ provider: 'google', is_new_user: result.isNewUser });
+          await captureIdentity(result.user.id, result.user.email);
+          await pullProfileFromServer();
+          setGoogleLoading(false);
+          router.replace('/(tabs)/search');
+        })
+        .catch((err: Error) => {
+          trackAuthFailure({ provider: 'google', error_message: err.message });
+          setGoogleLoading(false);
+          Alert.alert('Sign In Failed', err.message);
+        });
     } else if (response?.type === 'error') {
       trackAuthFailure({ provider: 'google', error_message: response.error?.message });
       Alert.alert('Google Sign In Error', response.error?.message ?? 'Unknown error');
