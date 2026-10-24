@@ -74,7 +74,7 @@ export async function sendWaitlistConfirmation(row: { id: string; email: string 
       // One key per claim. Claims for a row are at least CONFIRM_RESEND_GAP_MS
       // apart, so a later attempt is never inside the provider's 24h
       // idempotency window with the same key, and never needs to be.
-      idempotencyKey: `lifecycle:confirm:${row.email}:${now.toISOString()}`,
+      idempotencyKey: `lifecycle:confirm:${row.id}:${now.toISOString()}`,
     });
     if (ok) {
       delivered = true;

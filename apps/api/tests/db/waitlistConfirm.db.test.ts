@@ -7,6 +7,9 @@
  * external boundary (the provider HTTP call and Slack) stubbed. Runs when
  * POSTGRES_PRISMA_URL is set.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 jest.setTimeout(30_000);
 
 const hasDb = !!process.env["POSTGRES_PRISMA_URL"];
@@ -26,7 +29,7 @@ describeIfDb("waitlist confirmation claim (DB)", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const confirm = require("@/lib/waitlistConfirm") as typeof import("../../lib/waitlistConfirm");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { GET } = require("@/app/waitlist/confirm/route") as typeof import("../../app/waitlist/confirm/route");
+  const { GET, POST } = require("@/app/waitlist/confirm/route") as typeof import("../../app/waitlist/confirm/route");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { NextRequest } = require("next/server") as typeof import("next/server");
 
@@ -51,6 +54,25 @@ describeIfDb("waitlist confirmation claim (DB)", () => {
     await svc.prisma.marketingSend.deleteMany({ where: { email } });
     await svc.prisma.launchWaitlist.deleteMany({ where: { email } });
     await svc.prisma.$disconnect();
+  });
+
+  it("the cutover migration never treats historical account linkage as proof of mailbox ownership", async () => {
+    const migration = readFileSync(resolve(__dirname,
+      "../../../../prisma/migrations/20260908110000_waitlist_confirmed_at/migration.sql"), "utf8");
+    await svc.prisma.$transaction(async (tx) => {
+      // Shadow the public table only inside this transaction, then execute
+      // the actual migration against the three historical signup shapes.
+      await tx.$executeRawUnsafe(`CREATE TEMP TABLE "LaunchWaitlist" (
+        id text PRIMARY KEY, source text, "userId" text, "createdAt" timestamp NOT NULL DEFAULT now()
+      ) ON COMMIT DROP`);
+      await tx.$executeRawUnsafe(`INSERT INTO "LaunchWaitlist" (id, source, "userId") VALUES
+        ('web', 'web', NULL), ('linked', 'web', 'password-user'), ('onboarding', 'onboarding', 'password-user-2')`);
+      await tx.$executeRawUnsafe(`DO $migration$ BEGIN\n${migration}\nEND; $migration$`);
+      const rows = await tx.$queryRaw<{ confirmedAt: Date | null; legacyConsent: boolean }[]>`
+        SELECT "confirmedAt", "legacyConsent" FROM pg_temp."LaunchWaitlist"`;
+      expect(rows).toHaveLength(3);
+      expect(rows).toEqual(Array(3).fill({ confirmedAt: null, legacyConsent: true }));
+    });
   });
 
   it("two concurrent sends for one row: exactly one provider call, one claim, one ledger row, no alert", async () => {
@@ -95,16 +117,22 @@ describeIfDb("waitlist confirmation claim (DB)", () => {
     await svc.prisma.launchWaitlist.delete({ where: { id: failing.id } });
   });
 
-  it("a repeat click on the confirmation link keeps the first confirmedAt and still lands on the confirmed page", async () => {
+  it("scanner GETs leave consent pending; explicit POST confirms once and repeat submissions keep the first timestamp", async () => {
     const row = await svc.prisma.launchWaitlist.findUniqueOrThrow({ where: { email }, select: { id: true } });
     const url = confirm.confirmUrl(row.id) as string;
-    const first = await GET(new NextRequest(url));
+    for (let i = 0; i < 2; i++) {
+      const landing = await GET(new NextRequest(url));
+      expect(landing.status).toBe(200);
+      expect(await landing.text()).toContain('<form method="POST"');
+      expect((await svc.prisma.launchWaitlist.findUniqueOrThrow({ where: { id: row.id } })).confirmedAt).toBeNull();
+    }
+    const first = await POST(new NextRequest(url, { method: "POST" }));
     expect(first.status).toBe(200);
     const { confirmedAt } = await svc.prisma.launchWaitlist.findUniqueOrThrow({ where: { id: row.id } });
     expect(confirmedAt).not.toBeNull();
 
     await new Promise((r) => setTimeout(r, 20));
-    const second = await GET(new NextRequest(url));
+    const second = await POST(new NextRequest(url, { method: "POST" }));
     expect(second.status).toBe(200);
     expect(await second.text()).toContain("confirmed");
     const again = await svc.prisma.launchWaitlist.findUniqueOrThrow({ where: { id: row.id } });

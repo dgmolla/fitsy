@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { coarseCoord, normalizeEmail } from "@/lib/waitlist";
+import { sendWaitlistConfirmation } from "@/lib/waitlistConfirmSend";
 
 export const runtime = "nodejs";
 
@@ -60,10 +62,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const email = normalizeEmail(user.email);
+  const confirmedAt = (await providerVerifiedEmail(auth.sub, email)) ? new Date() : null;
   const label = typeof city === "string" ? city.slice(0, 80) : null;
   const location = { lat: coarseCoord(lat), lng: coarseCoord(lng), city: label };
 
-  await prisma.$transaction(async (tx) => {
+  const row = await prisma.$transaction(async (tx) => {
     const existing = await tx.launchWaitlist.findUnique({
       where: { email },
       select: { lat: true, lng: true, emailOptOutAt: true, confirmedAt: true },
@@ -79,25 +82,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Upsert by email so re-hitting the screen refreshes the location without
     // spamming rows, and a prior website signup becomes this account's row.
     // emailOptOutAt is never reset here.
-    // The account email was verified by Apple/Google, so the row is
-    // confirmed by construction; linking also confirms a pending web row.
-    const now = new Date();
-    await tx.launchWaitlist.upsert({
+    // A valid session alone does not prove mailbox ownership: password
+    // registration sets email_confirmed_at without verification.
+    const waitlist = await tx.launchWaitlist.upsert({
       where: { email },
       create: {
         email,
         userId: auth.sub,
         source: "onboarding",
-        confirmedAt: now,
+        confirmedAt,
         legacyConsent: false,
         ...location,
       },
       update: {
         userId: auth.sub,
         ...location,
-        ...(existing?.confirmedAt ? {} : { confirmedAt: now }),
+        ...(confirmedAt && !existing?.confirmedAt ? { confirmedAt } : {}),
         ...(newCity ? { notifiedAt: null } : {}),
       },
+      select: { id: true, confirmedAt: true },
     });
 
     // Linking an account onto a row that already opted out carries the
@@ -108,7 +111,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         data: { emailOptOutAt: existing.emailOptOutAt },
       });
     }
+    return waitlist;
   });
 
+  if (row.confirmedAt === null) {
+    after(() => sendWaitlistConfirmation({ id: row.id, email }));
+  }
+
   return NextResponse.json({ ok: true }, { status: 200 });
+}
+
+async function providerVerifiedEmail(userId: string, email: string): Promise<boolean> {
+  try {
+    // Read provider identities from Supabase, never user-editable metadata
+    // or a JWT's email-confirmed flag. The verified address must match the
+    // stored address that will actually receive the launch notification.
+    const { data, error } = await getSupabaseAdmin().auth.admin.getUserById(userId);
+    return !error && data.user?.id === userId && data.user.identities?.some((identity) => {
+      const info = identity.identity_data;
+      return (identity.provider === "apple" || identity.provider === "google") &&
+        info?.["email_verified"] === true && typeof info["email"] === "string" &&
+        normalizeEmail(info["email"]) === email;
+    }) === true;
+  } catch {
+    // An unavailable provider must not grant consent or prevent signup.
+    return false;
+  }
 }

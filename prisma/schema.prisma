@@ -62,10 +62,10 @@ model LaunchWaitlist {
   // attempt inside a single run's drain loop.
   lastNotifyAttemptAt DateTime?
   emailOptOutAt DateTime?      // set via /unsubscribe?w=<id>; suppresses email to this row
-  // Double opt-in. Onboarding rows are confirmed at creation (the provider
-  // verified the account email); website rows are confirmed by the link in
-  // the confirmation email. Unconfirmed rows receive nothing but that email
-  // and, if legacyConsent is set, the launch blast.
+  // Double opt-in. Onboarding confirms only a matching Apple/Google identity
+  // with provider-verified email ownership. Other rows require an explicit
+  // POST from the emailed confirmation form. Unconfirmed waitlist rows get
+  // only that email and, if legacyConsent is set, the launch blast.
   confirmedAt   DateTime?
   // Single opt-in cohort: rows collected before double opt-in existed (and
   // rows the previous bundle inserts during the migrate/promote window, via

@@ -29,6 +29,12 @@ jest.mock("@/lib/supabase", () => ({
   getSupabaseAdmin: jest.fn(),
 }));
 
+const mockAfter = jest.fn();
+jest.mock("next/server", () => ({
+  ...jest.requireActual("next/server"),
+  after: (callback: () => unknown) => mockAfter(callback),
+}));
+
 // Prisma mock — all DB access goes through this
 jest.mock("@/lib/restaurantService", () => {
   const user = {
@@ -40,6 +46,7 @@ jest.mock("@/lib/restaurantService", () => {
   const macroTarget = { upsert: jest.fn() };
   const savedItem = { findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn() };
   const menuItem = { findUnique: jest.fn() };
+  const launchWaitlist = { findUnique: jest.fn(), upsert: jest.fn() };
 
   return {
     prisma: {
@@ -47,6 +54,7 @@ jest.mock("@/lib/restaurantService", () => {
       macroTarget,
       savedItem,
       menuItem,
+      launchWaitlist,
       $transaction: jest.fn().mockImplementation(async (fn) =>
         fn({ user, macroTarget, savedItem, menuItem }),
       ),
@@ -71,6 +79,7 @@ import { POST as applePost } from "./apple/route";
 import { POST as googlePost } from "./google/route";
 import { POST as registerPost } from "./register/route";
 import { POST as loginPost } from "./login/route";
+import { POST as waitlistPost } from "../waitlist/route";
 import { GET as profileGet, PATCH as profilePatch } from "../user/profile/route";
 import { GET as savedItemsGet } from "../saved-items/route";
 import { NextRequest } from "next/server";
@@ -174,6 +183,7 @@ const mockSignInWithIdToken = jest.fn();
 const mockSignInWithPassword = jest.fn();
 const mockAdminCreateUser = jest.fn();
 const mockAdminDeleteUser = jest.fn();
+const mockAdminGetUserById = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -192,6 +202,7 @@ beforeEach(() => {
       admin: {
         createUser: mockAdminCreateUser,
         deleteUser: mockAdminDeleteUser,
+        getUserById: mockAdminGetUserById,
       },
     },
   });
@@ -411,6 +422,41 @@ describe("Integration: Google Sign-In → Protected Route", () => {
 // ─── Group 3: Email/Password → Protected Route ────────────────────────────────
 
 describe("Integration: Email/Password Register + Login → Protected Route", () => {
+  it("password registration's returned token cannot confirm a pending website signup", async () => {
+    mockAdminCreateUser.mockResolvedValue({ data: { user: SUPABASE_USER }, error: null });
+    mockSignInWithPassword.mockResolvedValue({ data: { session: SUPABASE_SESSION }, error: null });
+    const registered = await registerPost(registerRequest({ email: USER_EMAIL, password: "attacker-password" }));
+    expect(registered.status).toBe(201);
+    expect(mockAdminCreateUser).toHaveBeenCalledWith(expect.objectContaining({ email_confirm: true }));
+    const { token } = await registered.json();
+
+    // Preserve the public registration behavior, including its synthetic
+    // confirmation flag. It grants a session, not proof of mailbox control.
+    mockAdminGetUserById.mockResolvedValue({ data: { user: {
+      id: USER_ID,
+      email_confirmed_at: new Date().toISOString(),
+      identities: [{ provider: "email", identity_data: { email: USER_EMAIL, email_verified: true } }],
+    } }, error: null });
+    allowJwt();
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue(DB_USER);
+    const pending = { id: "web-signup", lat: null, lng: null, emailOptOutAt: null, confirmedAt: null };
+    (prisma.launchWaitlist.findUnique as jest.Mock).mockResolvedValue(pending);
+    (prisma.launchWaitlist.upsert as jest.Mock).mockImplementation(({ update }) => Object.assign(pending, update));
+    (prisma.$transaction as jest.Mock).mockImplementation(async (fn) => fn({
+      user: prisma.user, launchWaitlist: prisma.launchWaitlist,
+    }));
+
+    const joined = await waitlistPost(new NextRequest("http://localhost/api/waitlist", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ lat: 34.05, lng: -118.25 }),
+    }));
+    expect(joined.status).toBe(200);
+    expect(mockJwtVerify).toHaveBeenCalledWith(token, expect.anything(), expect.anything());
+    expect(pending.confirmedAt).toBeNull();
+    expect(mockAfter).toHaveBeenCalledTimes(1);
+  });
+
   it("3.1 — register new user: token from register accepted on GET /api/user/profile", async () => {
     const REGISTER_JWT = "register.supa.token";
     const REGISTER_SESSION = {

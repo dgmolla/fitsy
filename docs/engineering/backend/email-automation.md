@@ -11,7 +11,11 @@ Every send path needs the same guarantees: one send per step per address, never 
 Two schedules feed one send ledger.
 
 1. **Static (calendar) schedule.** The Tuesday weekly editorial (accounts and confirmed waitlist-only addresses), plus the launch-day blast, which fires from a daily cron from the date in `apps/api/lib/launch.ts` onward.
-2. **Dynamic (lifecycle) schedule.** Step zero of the waitlist track is the double opt-in confirmation, sent from the signup request itself (deferred with `after()`); nothing else reaches an unconfirmed address. The remaining steps (waitlist join +3d, +7d; account created +1d, +3d, +7d) are walked by a daily cron that ships in a follow-up PR.
+2. **Dynamic (lifecycle) schedule.**
+   Step zero of the waitlist track is the double opt-in confirmation, sent from the signup request itself (deferred with `after()`); nothing else in the waitlist track reaches an unconfirmed address.
+   Onboarding skips the confirmation request only when a matching Apple/Google provider identity proves email ownership; password accounts use the signed confirmation flow.
+   Fetching the emailed link renders a form; only the recipient's token-verified POST records consent.
+   The remaining steps (waitlist join +3d, +7d; account created +1d, +3d, +7d) are walked by a daily cron that ships in a follow-up PR.
 
 The `MarketingSend` ledger records every marketing send by normalized address, campaign, and step.
 It gives every campaign idempotency and the cross-campaign frequency cap.
@@ -45,7 +49,8 @@ flowchart TD
     end
     subgraph Dynamic schedule
         S[POST /api/waitlist/web] -->|"after()"| C0[step 0: confirmation email]
-        C0 --> CONF[GET /waitlist/confirm sets confirmedAt]
+        C0 --> FORM[GET /waitlist/confirm renders form only]
+        FORM --> CONF[Explicit POST verifies token and sets confirmedAt]
         D[Vercel cron daily 16:00 UTC - follow-up PR] --> LC[/api/internal/marketing/lifecycle]
         LC --> STEPS[steps: anchor + offset]
     end

@@ -1,10 +1,9 @@
 /**
  * GET /waitlist/confirm?w=<waitlistId>&t=<token>
- *   Double opt-in landing. Sets LaunchWaitlist.confirmedAt (idempotent) and
- *   renders a confirmation page. GET is deliberate: this is the link in the
- *   confirmation email, and confirming consent is the one email-link action
- *   that is safe for a mail scanner to trigger (it only ever enables what the
- *   address owner requested and can undo with the unsubscribe link).
+ *   Renders an explicit confirmation form without mutation, so email
+ *   scanners cannot confirm an address by prefetching the link.
+ * POST /waitlist/confirm?w=<waitlistId>&t=<token>
+ *   Re-verifies the token and sets LaunchWaitlist.confirmedAt idempotently.
  *
  * No auth: the HMAC token in the URL is the auth.
  */
@@ -17,13 +16,41 @@ import { LAUNCH_CITY, LAUNCH_DATE_LABEL } from "@/lib/launch";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest): Promise<Response> {
+function verifiedLink(request: NextRequest): { waitlistId: string; actionUrl: string } | null {
   const { searchParams } = request.nextUrl;
   const waitlistId = searchParams.get("w") ?? "";
   const token = searchParams.get("t") ?? "";
   if (!waitlistId || !verifyConfirmToken(waitlistId, token)) {
-    return badLinkPage("confirmation link");
+    return null;
   }
+  return {
+    waitlistId,
+    actionUrl: `/waitlist/confirm?w=${encodeURIComponent(waitlistId)}&amp;t=${encodeURIComponent(token)}`,
+  };
+}
+
+export async function GET(request: NextRequest): Promise<Response> {
+  const verified = verifiedLink(request);
+  if (!verified) return badLinkPage("confirmation link");
+  const { waitlistId, actionUrl } = verified;
+  const exists = await prisma.launchWaitlist.findUnique({ where: { id: waitlistId }, select: { id: true } });
+  if (!exists) return badLinkPage("confirmation link");
+
+  return htmlPage(
+    "Confirm your Fitsy waitlist spot",
+    `<h1>Confirm your spot.</h1>
+<p>Confirm you'd like Fitsy launch updates and meal ideas by email. ${LAUNCH_CITY} launches ${LAUNCH_DATE_LABEL}.</p>
+<form method="POST" action="${actionUrl}">
+  <button type="submit">Confirm my email</button>
+</form>
+<p class="note">Didn't sign up? Ignore this page. You haven't confirmed anything.</p>`,
+  );
+}
+
+export async function POST(request: NextRequest): Promise<Response> {
+  const verified = verifiedLink(request);
+  if (!verified) return badLinkPage("confirmation link");
+  const { waitlistId } = verified;
 
   // The `confirmedAt: null` filter makes a repeat click a zero-row update, so
   // the first confirmation time is kept; the existence probe below keeps a

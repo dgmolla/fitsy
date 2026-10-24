@@ -21,6 +21,7 @@ import { isEmailOptedOut, sendMarketingEmail } from "@/lib/marketingEmail";
 import { recordSend } from "@/lib/marketingLedger";
 import { confirmUrl } from "@/lib/waitlistConfirm";
 import { resetAlertDedup } from "@/lib/errorAlert";
+import { isValidWaitlistEmail } from "@/lib/waitlist";
 
 const ROW = { id: "wl1", email: "web@example.org" };
 const NOW = new Date("2026-09-09T12:00:00Z");
@@ -58,9 +59,20 @@ describe("sendWaitlistConfirmation", () => {
     expect(arg.to).toBe("web@example.org");
     expect(arg.subject).toContain("Confirm");
     expect(arg.html).toContain(confirmUrl("wl1"));
-    expect(arg.idempotencyKey).toBe(`lifecycle:confirm:web@example.org:${NOW.toISOString()}`);
+    expect(arg.idempotencyKey).toBe(`lifecycle:confirm:wl1:${NOW.toISOString()}`);
     expect(recordSend).toHaveBeenCalledWith("web@example.org", "lifecycle", "confirm");
     expect(mockNotifySlack).not.toHaveBeenCalled();
+  });
+
+  it.each([214, 254])("keeps the provider idempotency key bounded for an accepted %i-character address", async (length) => {
+    const email = `${"a".repeat(64)}@${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(length - 197)}.org`;
+    expect(email).toHaveLength(length);
+    expect(isValidWaitlistEmail(email)).toBe(true);
+    expect(await sendWaitlistConfirmation({ id: "cm123456789012345678901234", email })).toBe(true);
+    const arg = (sendMarketingEmail as jest.Mock).mock.calls[0]![0];
+    expect(arg.to).toBe(email);
+    expect(arg.idempotencyKey.length).toBeLessThanOrEqual(256);
+    expect(arg.idempotencyKey).not.toContain(email);
   });
 
   it("an opted-out address is a permanent refusal: no claim, no send, no alert", async () => {
