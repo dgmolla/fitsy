@@ -20,7 +20,7 @@ Read `REVIEW.md` first; its severity, evidence, and output rules apply.
 - Check whether a realistic failure can be reproduced, tested, and diagnosed with the available evidence.
 - Cite the changed code, concrete scenario, and consequence; avoid speculative architecture rewrites and style preferences.
 - Apply `REVIEW.md` urgency and dispositions: only actual severe impact warrants P0/P1, bounded P2 debt needs an owned follow-up, and P3 is advisory.
-- Keep these checks inside the existing correctness lens and review budget; do not add a lens.
+- Keep these checks inside the existing correctness lens and AI review attempt limit; do not add a lens.
 
 ## This repo's known traps (grown from real incidents — add here via harness-audit)
 

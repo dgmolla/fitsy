@@ -282,7 +282,7 @@ Human dispute path: reply on the finding; the author agent may close a finding w
 **Cost:** Sonnet lenses roughly 30-60k tokens each; typical medium PR runs 2-3 lenses, roughly $1-3.
 Tier high adds a Fable pass, roughly $5-10.
 At current volume (5-20 PRs/month) this is under $100/month.
-Cap: a monthly spend limit on the CI API key and a per-PR token budget in the workflow; over budget fails closed with a `review-budget` label for a human.
+Review attempts are limited to two per head SHA by the local AI review poller; workflow and provider timeouts bound individual execution.
 
 **Changes:** the spawned-subagent review in `sprint.md` §3b is removed.
 Review happens in CI for every PR, whoever opened it.
@@ -539,7 +539,7 @@ Anything without a mechanism is deleted rather than documented.
 | `auto-merge` | `on-green` | GitHub auto-merge enabled by the classify job after checks pass (GitHub rejects enabling it earlier since 2026-03) |
 | `spec-requirement` | `feature` | `spec-conformance` lens fails a `medium+` feature PR with no `Spec:` line; bug fixes need an `incident` link instead |
 | `shadow-checks` | list | registry `blocking: shadow`; promoted by editing the registry in a PR that shows two weeks of zero false positives |
-| `review-budget` | `$X/month`, `N tokens/PR` | API key spend cap, workflow budget guard |
+| AI review attempts | Two per head SHA | Local AI review poller; workflow and provider timeouts |
 | `harden-on-incident` | `required` | `harness-audit` lens + `replay.sh` |
 | `human-override` | label `override-check` + justification | logged to L10, sampled weekly |
 

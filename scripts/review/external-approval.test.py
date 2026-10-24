@@ -191,7 +191,7 @@ class CanonicalReviewTests(unittest.TestCase):
     def add_p2(self):
         self.verdict.update(verdict='fail', findings=[{
             'severity': 'CONFIRMED', 'priority': 'P2', 'domains': ['correctness'],
-            'file': 'scripts/review/review-budget.py', 'line': 860,
+            'file': 'scripts/review/review-round.py', 'line': 86,
             'summary': 'Optional receipt compatibility', 'scenario': 'Historical native receipt only',
             'fix': 'Preserve supported receipt binding', 'impact': 'Owned optional recovery'}])
         self.verdict['domains']['correctness'] = 'fail'
