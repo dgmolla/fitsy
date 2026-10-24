@@ -28,7 +28,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `structural.sh` | 0 | the growing invariant checklist (`scripts/structural-tests.sh`) |
 | `secrets.sh` | 0 | no hardcoded keys, committed .env, or build output in the diff |
 | `lint.sh` | 1 | eslint clean across workspaces |
-| `typecheck.sh` | 1 | tsc clean per workspace |
+| `typecheck.sh` | 1 | workspace type-check scripts pass; API generates the current Prisma client before tsc |
 | `product-flow.sh` | 1 (local, blocking) | fresh candidate-bound simulator and affected-journey evidence; see `docs/engineering/devops/shipping.md` |
 | `boundaries.sh` | 1 | imports respect the layer graph in `.dependency-cruiser.cjs` (T3) |
 | `size-check.sh` | 1 | reports counted review size above or below the 600-line signal without imposing a hard cap |
@@ -71,6 +71,8 @@ See [shipping.md](../../docs/engineering/devops/shipping.md) for CI configuratio
 The local pre-push hook runs size/domain checks, then cheap static checks and focused tests.
 UI smoke selection and execution belong to CI, with no simulator step added to this hook.
 A fresh checkout needs installed dependencies but no issue binding, review daemon or home-directory review state.
+Type checking calls each workspace's `npm run type-check`, including Prisma generation from the repository schema before compiling the API.
+This refreshes stale generated types after schema updates without requiring a database connection or migration.
 GitHub owns merge requirements and heavy validation.
 For the L2 test check, `--reuse` accepts a successful local receipt no older than six hours only when source files, the selected diff, local configuration, environment, dependency lock, runtime and check definition still match.
 A fresh failure invalidates an older pass, and a source change during verification fails the run and archives the retired receipt.
