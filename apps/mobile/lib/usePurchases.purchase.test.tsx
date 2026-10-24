@@ -35,7 +35,7 @@ async function restoreWithStalledSync(result: ProviderResult) {
   mockRc.restorePurchases.mockResolvedValue(proInfo);
   const pending = deferred<SyncResult>();
   mockApi.syncSubscription.mockReturnValue(pending.promise);
-  let got: boolean | null | undefined;
+  let got: 'active' | 'expired' | 'none' | null | undefined;
   await act(async () => {
     const p = result.current.restore();
     await new Promise((r) => setImmediate(r));
@@ -46,26 +46,13 @@ async function restoreWithStalledSync(result: ProviderResult) {
 }
 
 describe('purchase / restore', () => {
-  it('distinguishes a failed native Restore from a completed Restore with no subscription', async () => {
-    const { result } = renderProvider();
-    await waitFor(() => expect(result.current.ready).toBe(true));
-    mockRc.restorePurchases.mockResolvedValueOnce(null).mockResolvedValueOnce({ entitlements: { active: {}, all: {} } });
-    let failed: boolean | null | undefined;
-    let empty: boolean | null | undefined;
-    await act(async () => { failed = await result.current.restore(); });
-    await act(async () => { empty = await result.current.restore(); });
-    expect(failed).toBeNull();
-    expect(empty).toBe(false);
-    expect(Alert.alert).toHaveBeenCalledWith('Restore not completed', 'Please try again.');
-    expect(mockRc.restorePurchases).toHaveBeenCalledTimes(2);
-  });
   it('holds Restore while the signed-in native identity is unresolved', async () => {
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));
     useFakeTimersKeepingFlush();
     mockRc.ensurePurchasesUser.mockImplementationOnce(() => new Promise(() => {}));
     mockRc.restorePurchases.mockResolvedValue(proInfo);
-    let restored: boolean | null | undefined;
+    let restored: 'active' | 'expired' | 'none' | null | undefined;
     await act(async () => {
       const pending = result.current.restore();
       await new Promise((r) => setImmediate(r));
@@ -130,7 +117,7 @@ describe('purchase / restore', () => {
     await waitFor(() => expect(result.current.ready).toBe(true));
     useFakeTimersKeepingFlush();
     const { got, pending } = await restoreWithStalledSync(result);
-    expect(got).toBe(true);
+    expect(got).toBe('active');
     expect(result.current.entitled).toBe(true);
     expect(mockAnalytics.trackPurchasesRestored).toHaveBeenCalledWith({ is_pro: true });
     await act(async () => { pending.resolve({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() }); });

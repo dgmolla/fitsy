@@ -1,4 +1,4 @@
-import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, realpathSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -6,7 +6,7 @@ const yaml = require('js-yaml') as { load(value: string): unknown };
 const root = resolve(__dirname, '../..');
 let directory: string;
 beforeEach(() => {
-  directory = mkdtempSync(join(tmpdir(), 'fitsy-drift-'));
+  directory = realpathSync(mkdtempSync(join(tmpdir(), 'fitsy-drift-')));
   mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
   mkdirSync(join(directory, 'prisma/migrations'), { recursive: true });
   mkdirSync(join(directory, 'bin'));

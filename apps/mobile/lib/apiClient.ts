@@ -233,8 +233,8 @@ export interface SubscriptionSyncResult extends SubscriptionStatusResult {
 
 export type SubscriptionVerdict = 'active' | 'expired' | 'never_subscribed' | 'unknown';
 
-/** Why the client asks for a re-read; the server refuses to persist a downgrade on 'purchase'/'restore'. */
-export type SubscriptionSyncReason = 'purchase' | 'restore' | 'sign_in' | 'mismatch';
+/** A lapsed restored receipt uses a distinct reason so the server can persist its history. */
+export type SubscriptionSyncReason = 'purchase' | 'restore' | 'restore_history' | 'sign_in' | 'mismatch';
 
 /**
  * Ask the API to re-read this user's entitlement straight from RevenueCat

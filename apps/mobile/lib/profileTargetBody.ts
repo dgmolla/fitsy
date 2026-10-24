@@ -48,4 +48,3 @@ export function dailyMacroTarget(macros: StoredMacroTargets, source: 'automatic'
   return { ...daily, source, calories: macroCalories({ protein: daily.proteinG,
     carbs: daily.carbsG, fat: daily.fatG }) };
 }
-

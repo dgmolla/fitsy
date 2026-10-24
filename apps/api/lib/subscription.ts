@@ -140,6 +140,8 @@ export interface SyncOptions {
    * retried a few times and, if still inactive, nothing is written.
    */
   neverDowngrade?: boolean;
+  /** Wait for an inactive restored receipt to appear on this account before classifying it. */
+  awaitHistory?: boolean;
 }
 
 /**
@@ -161,8 +163,8 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  *
  * Returns the resulting entitlement, or `null` when nothing was written:
  * RevenueCat couldn't be consulted (not configured / unreachable), or
- * `neverDowngrade` blocked an inactive result. Either way a transient
- * condition can never downgrade a paying user.
+ * `neverDowngrade` blocked an inactive result, or `awaitHistory` could not
+ * confirm a restored Pro history. Transient failures never erase known state.
  *
  * A user RevenueCat confirms has never subscribed gets a `never_subscribed`
  * row; an existing row is updated to whatever RevenueCat says, including
@@ -170,7 +172,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  */
 export async function syncSubscriptionFromRevenueCat(
   userId: string,
-  { neverDowngrade = false }: SyncOptions = {},
+  { neverDowngrade = false, awaitHistory = false }: SyncOptions = {},
 ): Promise<boolean | null> {
   // Fallback stamp when RevenueCat doesn't date its response: captured
   // BEFORE the call so the row never claims knowledge of events that
@@ -179,9 +181,10 @@ export async function syncSubscriptionFromRevenueCat(
   let state = await fetchProEntitlement(userId);
   if (!state) return null;
 
-  if (neverDowngrade) {
+  if (neverDowngrade || awaitHistory) {
     let reads = 1;
-    while (!state.active && Date.now() - readStartedAt.getTime() < DOWNGRADE_RETRY_BUDGET_MS) {
+    while (!state.active && (neverDowngrade || !state.hadProEntitlement) &&
+      Date.now() - readStartedAt.getTime() < DOWNGRADE_RETRY_BUDGET_MS) {
       await sleep(DOWNGRADE_RETRY_DELAY_MS);
       const again = await fetchProEntitlement(userId);
       reads++;
@@ -190,11 +193,13 @@ export async function syncSubscriptionFromRevenueCat(
     }
     if (!state.active) {
       const elapsed = Date.now() - readStartedAt.getTime();
-      console.warn(
-        `[subscription] ${userId} RevenueCat still inactive after ${reads} reads over ${elapsed} ms; ` +
-          "not persisting a downgrade on a purchase/restore sync",
-      );
-      return null;
+      if (neverDowngrade || !state.hadProEntitlement) {
+        console.warn(
+          `[subscription] ${userId} RevenueCat still ${neverDowngrade ? 'inactive' : 'missing restored history'} ` +
+          `after ${reads} reads over ${elapsed} ms; not persisting an unconfirmed restore`,
+        );
+        return null;
+      }
     }
   }
 

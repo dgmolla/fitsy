@@ -50,6 +50,6 @@ export interface PurchasesContextValue {
   showManageSubscriptions: () => Promise<void>;
   /** The store confirmed a purchase/restore within the last STORE_GRACE_MS. */
   storeConfirmed: boolean;
-  /** True for Pro, false for a completed restore with no Pro, null if restore could not complete. */
-  restore: () => Promise<boolean | null>;
+  /** Active access, verified expired history, no receipt, or an unresolved restore. */
+  restore: () => Promise<'active' | 'expired' | 'none' | null>;
 }

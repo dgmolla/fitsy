@@ -35,7 +35,8 @@ const config = {
             tsconfig: {
               module: 'CommonJS',
               moduleResolution: 'node',
-              paths: {},
+              // Keep the app's workspace aliases when dependencies are linked
+              // from another checkout, matching moduleNameMapper above.
               strict: true,
             },
           },
@@ -58,6 +59,7 @@ const config = {
         '<rootDir>/lib/usePurchases.signin.test.tsx',
         '<rootDir>/lib/usePurchases.signout.test.tsx',
         '<rootDir>/lib/usePurchases.purchase.test.tsx',
+        '<rootDir>/lib/usePurchases.restoreHistory.test.tsx',
       ],
       moduleNameMapper: {
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',

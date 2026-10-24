@@ -1,11 +1,11 @@
-import { mkdtempSync, writeFileSync, symlinkSync, rmSync, readFileSync, mkdirSync, copyFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, writeFileSync, symlinkSync, rmSync, readFileSync, mkdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 const root = resolve(__dirname, "../..");
 let directory: string;
 beforeEach(() => {
-  directory = mkdtempSync(join(tmpdir(), "fitsy-actionlint-"));
+  directory = realpathSync(mkdtempSync(join(tmpdir(), "fitsy-actionlint-")));
   symlinkSync(execFileSync("which", ["dirname"], { encoding: "utf8" }).trim(), join(directory, "dirname"));
 });
 afterEach(() => { rmSync(directory, { recursive: true, force: true }); });

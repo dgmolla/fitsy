@@ -10,7 +10,7 @@ export function OnboardingAccountSummary({ intent, targets }: { intent: PaywallI
   return <View style={s.wrap}>
     <View style={s.card} testID="signup-selected-restaurant">
       <Text style={s.eyebrow}>{name ? 'YOUR SELECTED RESTAURANT' : 'YOUR MEAL SEARCH'}</Text>
-      <Text style={s.name}>{name ?? 'Meals for your goals'}</Text>
+      <Text style={s.name} testID="signup-selected-restaurant-name">{name ?? 'Meals for your goals'}</Text>
       <Text style={s.badge}>Full menus with Pro</Text>
       {(intent.query || intent.areaName) && <Text style={s.search}>{[intent.query, intent.areaName].filter(Boolean).join(' · ')}</Text>}
       {targets && <View style={s.targets}><Text style={s.note}>Your meal targets</Text><Text style={s.note}>{targets.calories} kcal · {targets.protein}g protein · {targets.carbs}g carbs · {targets.fat}g fat</Text></View>}

@@ -76,6 +76,10 @@ export function impact(paths, configKeys = []) {
   const affected = source.filter(p => /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(p) && !serviceHealthPath(p));
   const categories = new Set();
   for (const path of affected) {
+    // Shared trial timing changes affect offer presentation and native jobs,
+    // even when no mobile caller changes in the same diff.
+    if (path === 'packages/shared/src/contracts/trialPolicy.ts')
+      for (const category of ['billing', 'notifications', 'onboarding']) categories.add(category);
     const matched = rules.filter(([, pattern]) => pattern.test(path));
     for (const [category] of matched) categories.add(category);
     // Unknown client/config/schema changes need a changed-journey charter too.

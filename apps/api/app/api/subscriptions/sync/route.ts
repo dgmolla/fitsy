@@ -21,8 +21,10 @@ import {
  *
  * Body (optional): `{ reason }` - why the client is syncing. For `purchase`
  * and `restore` the server never persists a downgrade (RevenueCat's REST
- * view can lag StoreKit by seconds): an inactive read is retried briefly
- * and, if still inactive, nothing is written. Unknown reasons are ignored.
+ * view can lag StoreKit by seconds). `restore_history` is sent only after the
+ * SDK returns an inactive prior entitlement; it waits briefly for RevenueCat
+ * to attach that history to the current account, then persists its expired
+ * verdict. Unknown reasons are ignored.
  *
  * Response: the same account-bound verdict/freshness fields as GET status,
  * plus `synced`. A failed or withheld sync retains the existing proof.
@@ -55,6 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const reason = await readReason(request);
   const active = await syncSubscriptionFromRevenueCat(auth.sub, {
     neverDowngrade: reason !== null && NEVER_DOWNGRADE_REASONS.has(reason),
+    ...(reason === "restore_history" ? { awaitHistory: true } : {}),
   });
   const status = await getEntitlementStatus(auth.sub, auth.email);
   return NextResponse.json({

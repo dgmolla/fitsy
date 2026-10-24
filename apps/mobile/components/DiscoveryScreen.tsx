@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useReducer, useRef } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WelcomeNav } from './WelcomeNav';
@@ -28,6 +28,8 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   const listRef = useRef<FlatList<(typeof results)[number]>>(null);
   const scrollOffset = useRef(0);
   const viewportRef = useRef<View>(null);
+  const [tourLayoutVersion, refreshTourLayout] = useReducer((version: number) => version + 1, 0);
+  const onTourLayoutChange = () => { if (tourVisible) refreshTourLayout(); };
   const prepareTourStep = useCallback((step: CoachMarkStep) => new Promise<void>(resolve => {
     // The location chip is fixed above the list; all other anchors scroll with it.
     if (step.key === 'location') { resolve(); return; }
@@ -168,9 +170,10 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
           <Pressable onPress={() => { void handleRefresh(); }} accessibilityRole="button" testID="preview-retry"><Text style={s.previewLink}>Try again</Text></Pressable>
         </View>
       )}
-      <View ref={viewportRef} collapsable={false} style={{ flex: 1 }}><FlatList
+      <View ref={viewportRef} collapsable={false} onLayout={onTourLayoutChange} style={{ flex: 1 }}><FlatList
           ref={listRef}
-          onScroll={event => { scrollOffset.current = event.nativeEvent.contentOffset.y; }}
+          onScroll={event => { scrollOffset.current = event.nativeEvent.contentOffset.y; onTourLayoutChange(); }}
+          onContentSizeChange={onTourLayoutChange}
           scrollEventThrottle={16}
           style={{ flex: 1 }}
           // The tab navigator occupies its own layout space below this list.
@@ -200,6 +203,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       <CoachMarks
         visible={tourVisible && locked === true}
         steps={tourSteps}
+        layoutVersion={tourLayoutVersion}
         onDone={closeTour}
         onBeforeStep={prepareTourStep}
         onStepLeaving={cancelTourTyping}
