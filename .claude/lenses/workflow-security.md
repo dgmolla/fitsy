@@ -22,7 +22,7 @@ and injection-proof** (tenet T12). Read `REVIEW.md` first.
 ## Examples from real incidents
 
 - Reviewer harness executed from the reviewed branch: the poller ran
-  `run-lens.sh` from the PR's own checkout, letting any PR edit its reviewer
+  its review runner from the PR's own checkout, letting any PR edit its reviewer
   (and old branches simply lacked the scripts). Tell: automation that
   executes scripts from a ref the automation is judging. (#240)
 

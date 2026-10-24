@@ -65,6 +65,7 @@ The owned PostGIS target checks and migration steps still run before local datab
 Set the selection with `node scripts/verify/focused-tests.mjs --set <test paths>`.
 Use optional `--jest-pattern=<test name regex>` to select focused Jest scenarios; a selection with no passing tests fails.
 Focused selections run fresh before review and full acceptance.
+Independent review uses [simple review](../review/simple-review.md) and the existing `AI review` gate.
 The hook and verifier execute selected checks directly without a shipping session or local review gate.
 Run independent review through the supported review runner before publishing.
 Changes after review require review and acceptance evidence for the current source.

@@ -3,7 +3,8 @@
 # whole API run: shared-schema suites can exhaust each other's SERIALIZABLE retry
 # budget. Explicit concurrency inside a test remains unchanged.
 set -uo pipefail
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 1
 SCOPE=all
 PLAN_ARGS=(--test-groups)
 for ARG in "$@"; do
@@ -46,11 +47,9 @@ if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   run_jest scripts /usr/bin/env FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512 npm test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB
   run_node simple-review scripts/review/simple-review.test.mjs
   run_node github scripts/github/*.test.mjs
-  for TEST in scripts/sim/retire_task_device.test.py scripts/review/advisory-finding.test.py; do
-    report="$REPORTS/${TEST##*/}.json"
-    PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/python-focused.py "$TEST" "$report" >&2 &&
-      node scripts/verify/test-results.mjs "$report" python >&2 || FAIL="${FAIL:+$FAIL, }$TEST"
-  done
+  report="$REPORTS/retire-task-device.json"
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/python-focused.py scripts/sim/retire_task_device.test.py "$report" >&2 &&
+    node scripts/verify/test-results.mjs "$report" python >&2 || FAIL="${FAIL:+$FAIL, }retire-task-device"
 fi
 if [[ " $TEST_GROUPS " == *" api "* ]]; then
   if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then

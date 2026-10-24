@@ -134,7 +134,8 @@ Replay and reconcile the pending updates after recovery, retaining their origina
 ### Review follow-up
 
 Every PR body includes exactly one `Delivery-Issue: #N` line within its first 4,000 characters, naming the authoritative outcome issue.
+The installed review caller publishes the existing `AI review` status for the exact candidate after its required lenses finish.
 
-At each review round closeout, record confirmed findings, impact priority, and either the detector plus prevention change or an owned follow-up under the review disposition contract.
+At each review round closeout, record confirmed findings, impact priority, and either the detector plus prevention change or an owned follow-up in the authoritative outcome issue.
 If no new hardening is warranted, state that explicitly instead of manufacturing a change.
 Link merged fixes and successful checks or deployment results on the issue; queued fixes do not count as shipped improvements.

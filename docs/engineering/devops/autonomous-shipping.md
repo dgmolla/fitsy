@@ -1,7 +1,9 @@
 # Autonomous Shipping
 
 > **Status:** Design v2, 2026-08-28 · **Owner:** CTO · Supersedes v1 (2026-08-28, same file)
-> **Rollout status (2026-09-07):** steps 2-5 LIVE (verify registry #233, static completeness #236, lenses + local poller #238-240, deploy/rollback #241; dev environment 2026-08-29). Step 1 (ruleset) deliberately deferred by owner decision - checks are advisory until it flips. Steps 6-8 buildable core LIVE 2026-09-07 (#244-#251): migration safety, own-code-mock + mutation shadows (59% baseline), real-DB tests + response contract (which caught the matchScore null wire bug, #245/#246), sim CLI + FEATURE_MAP + first Maestro flows + EAS e2e workflow, all seven lenses + multi-lens poller + incident eval corpus/replay + escaped-defects metric. Remaining, gated by design: step 8 lens tuning (first real incidents), step 9 routines (two stable weeks), step 10 ratchet (ongoing), step 1 ruleset (owner's call).
+> **Historical rollout guide:** Current review behavior is documented in [simple review](../../../scripts/review/simple-review.md).
+> The legacy review runners, pollers, cache projections and disposition tooling are retired.
+> Product verification, migration safety and release contracts below remain applicable through the maintained registry and shipping guidance.
 > Goal: any code change, from any origin, reaches production with no human in the merge path, and every escape makes the pipeline stronger.
 
 This document is the plan.
@@ -56,11 +58,11 @@ Each row names the mechanism; a tenet with "convention" as its mechanism is a TO
 | T3 | **Boundaries are code.** `apps/mobile` imports only `packages/shared` and its own tree. `apps/api/app/api/**` imports `lib/`, `lib/` imports `services/`, never upward. `scripts/` imports `packages/shared` and `apps/api/services/` (the pipeline shares the external-world wrappers), never `lib/` or `app/`. `services/` is the only place that talks to the outside world. | `dependency-cruiser` config in `.dependency-cruiser.cjs`, run in Layer 1 |
 | T4 | **Every route is guarded and typed by default.** Each `route.ts` declares its auth level and a zod request/response schema from `packages/shared/src/contracts/`. The mobile client consumes the same schema. | Structural check (route → guard + schema), contract tests (Layer 3), `tsc` |
 | T5 | **Tests are the spec, and they must be able to fail.** No `--passWithNoTests`. New behavior lands with a test that fails without the change. Agent-written tests are checked by mutation score on the touched files. | Jest config, Stryker incremental with `thresholds.break`, "test-fails-without-change" check on incident PRs |
-| T6 | **Deterministic before probabilistic.** Cheap binary checks run first and short-circuit. Agents run only where judgment is needed, only on the paths that need it, at the smallest model that works. A finding an agent has made twice becomes a deterministic check. | Layer ordering in `scripts/verify`, `risk-tiers.yml` path routing, lens files carry a "promote to lint" field |
+| T6 | **Deterministic before probabilistic.** Cheap binary checks run first and short-circuit. Agents run only where judgment is needed, only on the paths that need it, at the smallest model that works. A finding an agent has made twice becomes a deterministic check. | Layer ordering in `scripts/verify`, `scripts/route-reviewers.sh` path routing, lens files carry a "promote to lint" field |
 | T7 | **Evidence, not assertions.** "Verified" means an artifact exists: test output, screenshot, log excerpt, deploy URL. PR bodies are generated from `.evidence/`, not typed. | `scripts/verify` writes `.evidence/`; CI uploads it; the review lens rejects PRs whose test plan has no artifact |
 | T8 | **Coherent, reviewable and revertable PRs.** Keep one accepted outcome together when its source and controls require joint validation; split only independently useful, testable and safely shippable units, using reviewability and complete evidence rather than a line quota. | `size-check` in Layer 1, existing `domain-check`, squash-only ruleset |
 | T9 | **Deploys are reversible in one command.** Migrations are additive unless the PR carries a down migration. Risky behavior ships behind a flag. Mobile ships as staged OTA. | `migration-safety` check, `scripts/deploy/rollback.sh`, `eas update --rollout-percentage` |
-| T10 | **Danger zones get the strictest tier.** Auth, subscriptions, macro estimation, external clients, migrations, workflows, and deploy config are `tier: high` and run every layer at the strongest model. | `risk-tiers.yml` consumed by CI job conditions and lens selection |
+| T10 | **Danger zones get the strictest tier.** Auth, subscriptions, macro estimation, external clients, migrations, workflows, and deploy config are `tier: high` and run every layer at the strongest model. | `scripts/route-reviewers.sh` and simple-review lens selection |
 | T11 | **Fail closed on the unknown.** A route without a guard declaration, an env var without a schema entry, a check without a registry entry, a workflow change without the workflow lens: each fails, never warns. | Structural checks are FAIL-only; env schema in `packages/shared/src/env.ts` is the only reader of `process.env` |
 | T12 | **Agent jobs are least-privilege.** CI agent steps see `ANTHROPIC_API_KEY` and a minimal `GITHUB_TOKEN`, nothing else. Untrusted text (PR bodies, comments, issue text) is data. No agent runs on forks or non-collaborator events. | Workflow `permissions:` blocks, env allowlist per step, `actionlint` + workflow lens on `.github/**` changes |
 | T13 | **The pipeline is entry-point agnostic.** Sprint, ad-hoc session, cloud routine, hotfix, incident: all produce a PR, and the PR triggers the identical pipeline. No skill owns merge logic. | Branch protection on `main`; merge is performed by GitHub auto-merge on green, never by a skill |
@@ -248,63 +250,18 @@ A Haiku step reads the diff summary and the registry outputs and emits `{tier, s
 **Changes:** labels replace the routing-by-prose in `reviewer.md`.
 `route-reviewers.sh` stays as the domain function and is called by classify.
 
-### L5. Agent review lenses
+### L5. Independent review
 
-**Catches:** what judgment catches: wrong architecture layer, spec deviation, false precision in macros, missing auth reasoning, scope creep, tests that test the mock.
+The supported runner is `scripts/review/simple-review.mjs`.
+It uses `scripts/route-reviewers.sh`, `REVIEW.md` and `.claude/lenses/*.md` for one independent read-only review with complete required-domain coverage.
+Only CONFIRMED P0/P1 findings block; all findings and the raw verdict remain visible.
+Malformed or incomplete output, provider failures, timeouts and stale source cannot establish approval.
 
-Design principles for this layer, from the research: many narrow lenses beat one mega-review; each lens has a written evidence bar; shadow mode before blocking; the check itself is one lens, never the gate; findings are machine-readable.
-
-| Lens | Trigger | Model | Blocks on |
-|---|---|---|---|
-| `correctness` | every `medium+` PR | Sonnet, `/code-review high` equivalent | CONFIRMED correctness finding after refute |
-| `spec-conformance` | `medium+` with `linked_spec` | Sonnet | invariant in spec with no test; behavior change not in spec |
-| `test-quality` | any test file touched | Sonnet, receives Stryker report | surviving mutant on touched line; assertion-free test; own-code mock |
-| `mobile-ui` | `surface:mobile` | Sonnet, receives L7 screenshots | flow failure; unexplained visual diff |
-| `danger-zone` | `tier:high` | Fable, refute-first | any confirmed finding |
-| `workflow-security` | `.github/**`, `vercel.json`, `eas.json` | Fable | `pull_request_target`, widened `permissions`, new secret exposure, untrusted checkout |
-| `harness-audit` | label `incident` | Sonnet | fix without detector; detector without constraint or written "not feasible" |
-| `docs-sanity` | `tier:low` | Haiku | broken links, docs outside domain dirs; comment-only, never blocks |
-
-**Refute pass:** each CONFIRMED-candidate finding is handed to a fresh verifier subagent with the instruction to disprove it using the code and by running the relevant test.
-Only findings that survive are CONFIRMED.
-The verifier runs on a different model tier from the finder (Sonnet finds, Haiku-with-tools or Fable refutes depending on tier) and a different prompt.
-We cannot get a different model family inside one vendor; the compensating controls are the different lens, the refute pass, and Layer 1-3 catching the mechanical classes regardless.
-Escape rate in Layer 10 tells us whether this is enough.
-
-**Lens files** live in `.claude/lenses/<lens>.md`, organized around what to look for, the evidence bar, examples from real incidents, and a `promote-to-lint:` section listing findings this lens has made more than once (T6 requires those to become deterministic checks; the harness-audit lens checks this list is shrinking).
-A `REVIEW.md` at repo root carries the shared rules: severity definitions, skip paths (lockfiles, generated, snapshots, `.evidence/`), `file:line` evidence bar, nit cap of 5, "do not comment on what CI enforces".
-
-**Mechanism:** `claude-code-action@v1` in `.github/workflows/review.yml`, mode "once after PR creation, then on `@claude review`" (not every push; the author agent asks for re-review after fixing).
-Each lens is a matrix job with its own prompt, `--allowedTools` restricted to read, git diff, running `scripts/verify/*`, and `gh pr comment`.
-The job writes `review-<lens>.json` to `.evidence/` and sets a check status; the check is what branch protection requires.
-Human dispute path: reply on the finding; the author agent may close a finding with a reasoned reply, which is logged to Layer 10 as `disputed` and sampled.
-
-**Cost:** Sonnet lenses roughly 30-60k tokens each; typical medium PR runs 2-3 lenses, roughly $1-3.
-Tier high adds a Fable pass, roughly $5-10.
-At current volume (5-20 PRs/month) this is under $100/month.
-Review attempts are limited to two per head SHA by the local AI review poller; workflow and provider timeouts bound individual execution.
-
-**Changes:** the spawned-subagent review in `sprint.md` §3b is removed.
-Review happens in CI for every PR, whoever opened it.
-`.claude/agents/reviewer.md` shrinks to the routing table and a pointer to `REVIEW.md` and lenses.
-Role files keep their "review lens" sections only as input to the lens files, then drop them.
-
-**Runners.** The pipeline requires a check-run on the PR named `lens/<name>`; it does not care which process posts it.
-`scripts/review/run-review.sh <pr>` is the canonical implementation: selects all required domains, invokes one independent read-only reviewer, validates complete domain results and projects existing `lens/<name>` statuses.
-See [shipping.md](shipping.md) for current provider, cache and budget policy; the legacy `run-lens.sh` entrypoint delegates the full round.
-Callers, in the order we adopt them:
-
-| Runner | Mechanism | Cost | When |
-|---|---|---|---|
-| `local` | `bash scripts/review/poller.sh` runs on demand; the repository no longer installs a review daemon | covered by the Max subscription | legacy local runner |
-| `cloud-routine` | Claude Code routine on PR-open events runs the same script | subscription usage, no Mac | once lenses are trusted, so PRs merge while the Mac is asleep |
-| `actions-oauth` | `claude-code-action@v1` with `CLAUDE_CODE_OAUTH_TOKEN` | subscription usage | alternative to routines; note Anthropic announced and then paused (2026-06) moving `claude -p` and Actions off subscription pools, so this may become per-token with notice |
-| `actions-api` | same action with `ANTHROPIC_API_KEY` | per token (§9) | fallback if subscription paths are cut off |
-| `open-model` | same script with `ANTHROPIC_BASE_URL` pointing at a proxy (Qwen3-Coder via OpenRouter or self-hosted) | ~10-30x cheaper than Sonnet per token | shadow only: L4 classify and `docs-sanity` first; `correctness` only if its recall on the incident corpus matches Sonnet's; never `tier:high` |
-
-A `runner` field per lens in the registry selects the caller; changing runner is a config edit, not a redesign.
-A `stale-review` timeout (30 min without a lens check-run) posts a PR comment and, if configured, falls through to the next runner in the list.
-Local-runner security: a dedicated macOS user with only `gh` auth and the Claude login, no Vercel/EAS/Supabase credentials, and the same `--allowedTools` restriction as CI.
+The required status remains `AI review`; the final `Verify` job remains the product verification gate.
+The review workflow runs `node --test scripts/review/simple-review.test.mjs`.
+The owner's installed local reviewer supplies the live review status.
+Repository pollers, per-lens status projection, review caches and custom P2 disposition files are retired.
+See [simple review](../../../scripts/review/simple-review.md) for the maintained interface and [shipping](shipping.md) for product and release acceptance.
 
 ### L6. API E2E on the Vercel preview
 
@@ -401,7 +358,8 @@ It turns every escape into a permanent check and every repeated agent finding in
 **Required fields** on the closing PR, enforced by the `harness-audit` lens:
 
 1. **Fix**: the change.
-2. **Detect**: a check that fails on the original diff. The PR names it, and CI proves it: `scripts/verify/replay.sh <incident>` checks out the original bad commit in a worktree and asserts the named check fails there and passes on the fix. This is the "test fails without the change" rule made mechanical.
+2. **Detect**: add a regression that fails on the original behavior and passes on the fix.
+The PR records that reproduction and the passing result.
 3. **Constrain**: a lint rule, type, generator change, or structural invariant that makes the class unwritable, or an explicit "not feasible because ...".
 4. **Layer attribution**: which layer should have caught it. This is the metric.
 
@@ -441,8 +399,8 @@ Each has one job, a CLI surface, JSON output, and no knowledge of who calls it.
 | `deploy/*` | `scripts/deploy/` | migrate, ota, record, rollback | L8, L9 |
 | `gen/*` | `scripts/gen/` | scaffold route + schema + contract test, screen + testID + feature-map entry + Maestro stub, migration + down | authors (agents), T1 |
 | `evidence` | `.evidence/` convention + `scripts/verify/evidence.sh` | collect, upload as Actions artifact, render the PR "Verification" section | every layer |
-| lenses | `.claude/lenses/*.md` + `REVIEW.md` | one review concern each | `review.yml` matrix |
-| eval corpus + `replay.sh` | `scripts/verify/evals/` | prove a check catches its incident; measure lens recall | L10, lens PRs, monthly routine |
+| lenses | `.claude/lenses/*.md` + `REVIEW.md` | evidence rules for required domains | simple-review runner |
+| incident examples | `scripts/verify/evals/` | captured breaking diffs and expected findings for lens changes | independent reviewer |
 | FEATURE_MAP | `apps/mobile/FEATURE_MAP.md` | how to drive the app | L7 agent mode, incident repro routine |
 | contracts | `packages/shared/src/contracts/` | zod schema per route, shared by API and mobile | T4, L3, mobile client |
 
@@ -539,8 +497,8 @@ Anything without a mechanism is deleted rather than documented.
 | `auto-merge` | `on-green` | GitHub auto-merge enabled by the classify job after checks pass (GitHub rejects enabling it earlier since 2026-03) |
 | `spec-requirement` | `feature` | `spec-conformance` lens fails a `medium+` feature PR with no `Spec:` line; bug fixes need an `incident` link instead |
 | `shadow-checks` | list | registry `blocking: shadow`; promoted by editing the registry in a PR that shows two weeks of zero false positives |
-| AI review attempts | Two per head SHA | Local AI review poller; workflow and provider timeouts |
-| `harden-on-incident` | `required` | `harness-audit` lens + `replay.sh` |
+| AI review attempts | Two per head SHA | Installed local reviewer; workflow and provider timeouts |
+| `harden-on-incident` | `required` | regression test plus constraint against the demonstrated failure |
 | `human-override` | label `override-check` + justification | logged to L10, sampled weekly |
 
 `active-roles` and `wave-progression` are sprint-planning preferences, not pipeline knobs; they move to `proj-mgmt/` conventions.
@@ -587,12 +545,12 @@ Steps 1-4 are the foundation and should land before any routine dispatches work.
 1. **Gate** (an hour) - DEFERRED by owner decision 2026-09-07 (docs velocity); flip when ready: ruleset on `main`: PR required, required checks = current CI jobs, squash only, no direct push, admins included. Auto-merge on. `sprint.md` §3b-d and `ship-branch` 3.5-6 deleted the same day, since they would now conflict with the ruleset.
 2. **One implementation** - DONE 2026-09-07 (#233): `scripts/verify/` with `run.sh`, `registry.yml`, and the existing checks moved in unchanged. `verify.yml` replaces `ci.yml` + `reviewer.yml`. Pre-push calls `run.sh --layer=0`. Husky removed. `--passWithNoTests` removed. Structural 3 and 5 fixed to `--scope=changed`. Nested `CLAUDE.md` per app with commands only; root `CLAUDE.md` trimmed; `context-freshness` check.
 3. **Static completeness** - DONE 2026-09-07 (#236): mobile lint, mobile tests in CI, dependency-cruiser with the T3 graph, size check, gitleaks, actionlint, structural 4-8 to FAIL with a shrink-only allowlist, `docs/` and `proj-mgmt/` exempt from domain count.
-4. **Review lenses, local runner** - DONE 2026-09-07 (#238, #239, #240; poller live): `scripts/review/run-lens.sh`, `REVIEW.md`, `correctness` and `docs-sanity` lenses, launchd poller on Dawit's Mac, classify job in CI with tier labels, `stale-review` timeout. Blocking from day one for `correctness` CONFIRMED; everything else shadow.
+4. **Review lenses, local runner** - DONE 2026-09-07 (#238, #239, #240; poller live): the retired per-lens runner, `REVIEW.md`, `correctness` and `docs-sanity` lenses, launchd poller on Dawit's Mac, classify job in CI with tier labels, `stale-review` timeout. Blocking from day one for `correctness` CONFIRMED; everything else shadow.
 4b. **Dev environment** (half a day plus a data snapshot): `fitsy-dev` Supabase project, Vercel Preview env vars repointed, `seed.ts`, `snapshot.ts`, `reset.ts`, `dev-drift` check, local dev defaults to dev. `staging-environment.md` rewritten to the Environments table above. **Scripts landed 2026-08-29 (`scripts/dev/`, first `scripts/verify/` check); provisioning waits on a one-time `npx supabase login`.**
 5. **Deploy and rollback** - DONE 2026-09-07 (#241; first live run green): `deploy.yml` with migrate-then-Vercel, `eas update` at 10%, deploy record, `rollback.sh`, `api-e2e.sh` on prod. Fix `eas.json` submit path.
 6. **Contracts and DB tests** - CORE DONE 2026-09-07 (#244, #245, #246; route generators still open): `packages/shared/src/contracts/`, generator for routes, contract tests, seed, first DB tests for search and subscription, migration safety. Own-code-mock lint in shadow.
 7. **Mobile E2E** - CORE DONE 2026-09-07 (#248, #249; flows unexecuted until EXPO_TOKEN or a free local sim; testIDs adopted incrementally via lint): `sim` CLI, FEATURE_MAP, testID lint, six Maestro flows, EAS workflow, `mobile-ui` lens. Dev-client decision documented.
-8. **Remaining lenses and the loop** - INFRA DONE 2026-09-07 (#250, #251); example sections and tuning wait for real incidents as designed: `spec-conformance`, `test-quality` with Stryker in shadow, `danger-zone`, `workflow-security`, `harness-audit`, `replay.sh`, eval corpus, layer-attribution metric on the scoreboard.
+8. **Remaining lenses and the loop** - INFRA DONE 2026-09-07 (#250, #251); example sections and tuning wait for real incidents as designed: `spec-conformance`, `test-quality` with Stryker in shadow, `danger-zone`, `workflow-security`, `harness-audit`, incident examples, layer-attribution metric on the scoreboard.
 9. **Routines** (after 8 is stable for two weeks): issue-to-PR routine on `agent-ready`; alert-to-incident routine with `logs` and `sim` repro; monthly lens-recall replay.
 10. **Ratchet** (ongoing): Stryker floor +5/month while green; shadow checks promoted after two clean weeks; every incident adds to the corpus.
 
