@@ -17,7 +17,7 @@ Enabling auto-merge does not enable it on individual PRs or waive any gates.
 CODEOWNERS marks `@dgmolla` as owner for visibility; it is not enforced as a required approval.
 
 `Verify` is bound to the GitHub Actions App, which rejects a same-name status from another issuer but cannot distinguish another Actions workflow with the same job name.
-Keep existing independent approval/release gates and reconcile their pinned Verify workflow digest through the existing reviewed installation before cutover.
+GitHub requires `Verify` and `AI review` on the current PR head; keep the existing release gates.
 Before declaring remote adoption, inspect the printed settings and demonstrate rejection of failed/stale checks, a forged same-name check and an unapproved control change in a disposable repository with equivalent rules.
 This PR prepares configuration only; remote installation and those acceptance checks are separate administrator actions.
 See GitHub's [branch protection API](https://docs.github.com/en/rest/branches/branch-protection#update-branch-protection) and [protected branch behavior](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).

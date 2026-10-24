@@ -14,6 +14,18 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
+test("an aliased CLI entrypoint executes selected checks instead of silently passing", () => {
+  const verify = join(directory, "scripts/verify");
+  writeFileSync(join(verify, "registry.yml"), "checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 1\n    blocking: true\n    runs: [ci]\n");
+  writeFileSync(join(verify, "fixture.sh"), "printf '%s\\n' '{\"summary\":\"executed through alias\"}'\nexit 1\n");
+  const alias = join(directory, "verify-alias.mjs");
+  symlinkSync(join(verify, "run.mjs"), alias);
+  const result = spawnSync(process.execPath, [alias, "--only=fixture", "--scope=all", "--runs=ci"],
+    { cwd: directory, encoding: "utf8", timeout: 10000 });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout.trim())).toMatchObject({ name: "fixture", status: "fail", summary: "executed through alias" });
+});
+
 test.each(['--layer=99', '--only='])('empty check selection fails for %s', arg => {
   writeFileSync(join(directory, 'scripts/verify/registry.yml'), 'checks: []\n');
   const result = spawnSync(process.execPath, ['scripts/verify/run.mjs', '--runs=ci', arg],

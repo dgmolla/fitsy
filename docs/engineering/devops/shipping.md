@@ -4,6 +4,8 @@ The human-selected standalone Pstack `orchestrate-delivery`, `ship-branch` and `
 Load the exact committed package paths supplied in the coordinator assignment.
 Latest direct human instructions and issue-bound authorizations take precedence.
 This document supplies supported command contracts, product acceptance, security/data protections and release requirements.
+GitHub requires `Verify` and `AI review` on the current PR head before merge.
+Local shipping helpers run candidate checks directly through the canonical verifier.
 It does not impose another workflow, lifetime review count, automatic retry or budget increase.
 The executable checks remain in `scripts/verify/registry.yml`, `scripts/verify/risk-tiers.yml`, and `scripts/review/`.
 Historical recipes in `autonomous-shipping.md` and generic global skills do not select a competing pipeline.
@@ -70,9 +72,10 @@ UI signoff and development walkthroughs precede final UI acceptance.
 The final-candidate simulator runner and publisher retain source, app, backend and evidence validation without a local session wrapper.
 Apple account, legal and submission approvals, product-flow status, PR checks, main Verify, Deploy and actual release acceptance remain required.
 
-The independently installed external approval operator validates the existing Verify workflow bytes, approved candidate tree, PR base/head/merge tree, exact run/attempt/checksuite and successful standard-runner jobs from the GitHub Actions issuer before publishing required acceptance.
-The existing per-issue `local_acceptance` policy pins `source_tree_sha` from the independently reviewed candidate and retains only the applicable local receipt/recipe/required checks, including real media when affected.
-An empty local required-check set means no applicable local receipt, not permission to skip trusted CI or product-flow/release protections.
+The pre-push hook runs size/domain checks followed by cheap static checks and focused tests.
+GitHub's current-head `Verify` and `AI review` results provide merge authority.
+The final Verify job still requires every applicable classified job to succeed and only permits legitimate skips.
+Deployment validates successful main Verify and the exact protected release source through the existing [routine production entrypoints](routine-production.md).
 A hook pass does not replace the applicable product-flow verification or independent review.
 The registry determines which checks apply and whether a check is blocking or shadow.
 Removing obsolete structural exceptions belongs to the changed product domain only when every removed entry names a file in the same diff.
@@ -213,7 +216,7 @@ Open the PR with scope, intent, actual verification results, relevant evidence p
 State the coherent outcome, acceptance evidence, non-goals, owner, and blocking dependencies.
 Use `--body-file` for multiline CLI PR bodies.
 Include `Spec:` or the incident reference where applicable.
-Check the current PR head, its CI, and the `AI review` status before merging; an earlier commit's green result is insufficient.
+Check the current PR head and its required `Verify` and `AI review` results before merging; an earlier commit's green result is insufficient.
 Follow existing task authorization for push, merge, migration, and deployment.
 If the user has already authorized the complete shipping sequence, continue through it without repeatedly requesting the same authorization.
 Do not treat a request to discuss or prepare a proposal as authority to publish it.

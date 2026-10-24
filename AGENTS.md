@@ -164,6 +164,8 @@ The check list lives in `scripts/verify/registry.yml`; CI (`verify.yml`), the
 pre-push hook, and agents all run the same scripts.
 
 Protected merge requires current trusted CI plus applicable local media/native evidence; old-head CI and candidate-controlled workflow changes cannot substitute.
+GitHub requires `Verify` and `AI review` on the current PR head.
+Local shipping helpers run checks directly and do not require an approval App installation.
 
 ## Post-PR Gate
 

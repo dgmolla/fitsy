@@ -31,9 +31,9 @@ Preview/development builds refuse either production binding and preview migratio
 Environment checks select the guarded caller; they do not authorize candidate access to production credentials.
 Migrations must remain additive under existing structural SQL checks and independent migration review so the prior API remains compatible during a build.
 
-`Deploy` follows successful pinned main-push `Verify` through `workflow_run`.
-Its existing admission binds actual workflow/run/current-main identities, immutable merged PR parents/tree, current issue acceptance and genuine independent App review/acceptance plus candidate/main CI.
-The App remains the independent PR check issuer; its key never enters CI.
+`Deploy` follows successful main-push `Verify` through `workflow_run`.
+Its admission validates the workflow identity, successful main-push event, exact release commit, current main and protected merged PR source through GitHub.
+GitHub requires `Verify` and `AI review` on the current PR head before merge.
 Main Verify is required for completed delivery.
 It is not a gate on the timing of the existing Git producer's build.
 
@@ -42,7 +42,6 @@ It checks the trusted bot identity and immutable deployment URL, then requires t
 It waits boundedly for Git deployment/domain readiness, fails on a failed newest deployment, runs the existing production-safe API smoke, then rechecks public serving identity.
 The health endpoint already consumes Vercel's system `VERCEL_GIT_COMMIT_SHA`.
 No custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval is required.
-Retire the former routine App dispatch continuation after the actual pilot succeeds; it is no longer a supported workflow entrypoint.
 Keep the existing repository Expo/smoke credential route.
 Sensitive maintenance retains `production-release`; native/Apple release decisions retain `production-native`.
 This revision does not migrate unrelated secret custody.
