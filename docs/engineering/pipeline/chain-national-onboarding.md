@@ -60,8 +60,11 @@ flowchart LR
 4. **Keep similarity out of the write decision.** Use it to rank candidate facts; require recipe, portion and source evidence before approval.
    Keep conflicts and unknowns visible instead of forcing every item into a winner.
 5. **Use the same matcher for both writers.** Every approved batch needs an existing-menu update replay and a captured-UE import replay, including negative cases.
-   Report captured source listings separately from unique persisted menu items, since repeated listings can share an item name.
-   In this batch the parser produces 79 unique WaBa names and 72 unique Yoshinoya names, and the database test requires all 151 items to persist; the reported 62 official matches are not inflated by same-name duplicates.
+   Report captured source listings separately from unique persisted source products, since repeated placements can share a source ID and distinct products can share a name.
+   The current source-ID parser retains 82 WaBa products and 80 Yoshinoya products, compared with the old 79 and 72 unique names.
+   The database replays require all 162 source products to persist and pair each product's macros by source ID.
+   The original catalog still matches 20 WaBa and 32 Yoshinoya products; the reviewed defaults raise those counts to 29 and 33.
+   The 11 recovered same-name products remain unreviewed and use estimation.
    Activating a reviewed brand also switches its new-import resolver away from the legacy FatSecret menu fallback to UE, so test the complete menu, empty responses and estimation volume before activation.
    The April nutrition-only update preserves the existing menu membership and does not perform that menu-source replacement.
 6. **Make routine onboarding a data operation.** After the shared matcher/schema release, compatible facts and aliases can ship through guarded catalog and menu batches without a separate API deployment per chain.
