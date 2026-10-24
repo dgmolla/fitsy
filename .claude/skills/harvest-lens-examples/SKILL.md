@@ -43,7 +43,11 @@ lens edits).
      When changing verification caller routing, set each subprocess fixture's `FITSY_RUNS` explicitly and replay it under the L2 parent's `FITSY_RUNS=ci CI=true` environment.
      Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
      CI only posts `Sim scope` and uploads `selection.json`; never restore hosted simulator execution, preflight or simulator secrets.
+     Keep status credentials in the protected completion publisher, never the candidate classifier or baseline scripts.
+     Bound descriptions to scope/count, validate the source run and current head, and make exact-flow consumers read `selection.json`.
      Diagnose local setup through `node scripts/sim/ci.mjs --scope=changed --plan` and the shipping contract, preserving required flows and genuine billing starting states.
+     Declare account/store requirements in maintained YAML tags and require untracked local fixture preparation before each affected journey.
+     Test state isolation across sign-out and billing flows; a simulated adapter test does not establish a successful real-store full run.
      Use saved Maestro YAML and Maestro MCP for new walkthroughs; validate actual interactions plus hierarchy observations through the product-flow evidence consumer when changing tool routing.
      If the canonical local media preflight cannot inspect process ownership, retain the failed result and route that check to the existing authorized host owner; do not weaken the preflight or move native execution into CI.
 4. **Eval cases**: for the sharpest escapes, capture

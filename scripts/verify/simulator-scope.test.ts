@@ -128,7 +128,7 @@ const write = (path: string, value: string) => {
 const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env, encoding: 'utf8' }).trim();
 const commit = () => { git('add', '.'); git('commit', '-qm', 'fixture'); return git('rev-parse', 'HEAD'); };
 function fixture() {
-  for (const path of ['scripts/verify/impact-plan.mjs', 'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh', 'scripts/sim/ci.mjs',
+  for (const path of ['scripts/verify/impact-plan.mjs', 'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh', 'scripts/sim/ci.mjs', 'scripts/sim/journey-fixtures.mjs',
     ...allFlows.map(name => `apps/mobile/e2e/flows/${name}.yaml`)]) {
     mkdirSync(dirname(join(directory, path)), { recursive: true }); copyFileSync(join(root, path), join(directory, path));
   }
@@ -377,9 +377,13 @@ test('pre-push remains main\'s cheap gate and never runs simulator smoke', () =>
 });
 
 
-test('CI only classifies simulator scope and grants status writes to classify alone', () => {
+test('candidate CI only classifies simulator scope with read-only credentials', () => {
   expect(workflow.permissions.statuses).toBeUndefined();
-  expect(Object.entries(workflow.jobs).filter(([, job]) => job.permissions?.statuses === 'write').map(([name]) => name)).toEqual(['classify']);
+  expect(Object.values(workflow.jobs).some(job => job.permissions?.statuses === 'write')).toBe(false);
+  expect(workflow.jobs.classify!.permissions).toEqual({ contents: 'read', 'pull-requests': 'read' });
+  expect(workflow.jobs.classify!.steps.find(step => step.uses === 'actions/checkout@v4')!.with).toMatchObject({ 'persist-credentials': false });
+  expect(workflow.jobs.classify!.steps.some(step => step.uses === 'actions/github-script@v7')).toBe(false);
+  expect(workflow.jobs.classify!.steps.some(step => step.env?.GH_TOKEN || step.env?.GITHUB_TOKEN)).toBe(false);
   const upload = workflow.jobs.classify!.steps.find(step => step.name === 'Upload simulator selection')!;
   expect(upload.uses).toBe('actions/upload-artifact@v4');
   expect(upload.with?.path).toBe('.evidence/sim-scope/selection.json');
@@ -392,25 +396,17 @@ test('CI only classifies simulator scope and grants status writes to classify al
   expect(registry.checks.some(check => check.name === 'mobile-e2e')).toBe(false);
 });
 
-test.each([
-  { scope: 'none', flows: [] },
-  { scope: 'smoke', flows: ['reminders'] },
-  { scope: 'flow', flows: ['chain-menu-serving', 'menu-load-recovery'] },
-  { scope: 'full', flows: allFlows },
-])('actual status step posts exact $scope selection on the PR head', async simulator => {
-  write('.evidence/sim-scope/selection.json', JSON.stringify({ simulator }));
-  const script = workflow.jobs.classify!.steps.find(step => step.name === 'Record Sim scope on PR head')!;
-  expect(script.if).toBe("github.event_name == 'pull_request'");
-  const context = { repo: { owner: 'dgmolla', repo: 'fitsy' }, payload: { pull_request: { head: { sha: 'pr-head' } } },
-    sha: 'synthetic-merge', serverUrl: 'https://github.com', runId: 123 };
-  const status = jest.fn().mockResolvedValue({});
-  const localRequire = (name: string) => name === 'node:fs' ? {
-    readFileSync: (path: string, encoding: 'utf8') => readFileSync(join(directory, path), encoding),
-  } : require(name);
-  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
-  await new AsyncFunction('require', 'github', 'context', script.with!.script)(localRequire,
-    { rest: { repos: { createCommitStatus: status } } }, context);
-  expect(status).toHaveBeenCalledWith({ owner: 'dgmolla', repo: 'fitsy', sha: 'pr-head', context: 'Sim scope', state: 'success',
-    description: `scope=${simulator.scope} flows=${simulator.flows.join(',') || '-'}`,
-    target_url: 'https://github.com/dgmolla/fitsy/actions/runs/123' });
+test.each(['none', 'smoke', 'flow', 'full'])('actual %s selection produces a status within GitHub\'s 140-character limit', scope => {
+  const simulator = select(scope === 'none' ? ['docs/guide.md'] : scope === 'full' ? ['apps/mobile/lib/authClient.ts'] : ['apps/mobile/lib/notificationSchedule.ts']);
+  if (scope === 'smoke') Object.assign(simulator, { scope, mode: 'render', smoke: [
+    { flow: 'reminders', screen: 'apps/mobile/app/notification-settings.tsx', selector: { id: 'reminder-permission' } },
+  ] });
+  const head = 'a'.repeat(40);
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {scopeDescription} from ${JSON.stringify(join(root, 'scripts/verify/sim-scope-status.mjs'))};
+     process.stdout.write(scopeDescription(${JSON.stringify({ version: 1, comparison: { head, unknown: false }, simulator })}, '${head}'));`],
+  { env, encoding: 'utf8' });
+  expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(result.stdout.trim()).toBe(`scope=${scope} flows=${simulator.flows.length}`);
+  expect(result.stdout.trim().length).toBeLessThanOrEqual(140);
 });

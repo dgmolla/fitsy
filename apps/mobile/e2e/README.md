@@ -7,6 +7,7 @@ Unmapped mobile paths expand to the full flow set, and `needs-sim` forces flows 
 Every UI edit triggers local coverage: proven screen-local style/copy reuses a maintained flow through its mapped render assertion and saves a screenshot, behavior changes run affected E2E flows, and shared UI/app shells run the full suite.
 Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the maintained YAML flows.
 CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
+The read-only classifier supplies data to the protected `sim-scope.yml` publisher; the bounded status description contains scope and flow count, and the poller reads exact names from the artifact.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
 The pre-push hook stays free of simulator execution.
 Use `node scripts/sim/ci.mjs --scope=<none|smoke|flow|full> --flows=<comma-list> --udid=<UDID>` with environment configuration loaded from the Mac.
@@ -19,6 +20,61 @@ Use the Debug build with owned Metro so native Dev Login consumes those same env
 It resets only the synthetic Grilled Chicken Bowl bookmark, saves the meal through the UI and verifies it in Saved after relaunch.
 Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
 A local scope pass does not replace the source-bound final-candidate product-flow gate.
+
+## Local journey fixtures
+
+Full scope mixes entitled, never-subscribed, expired and recreated accounts, plus Test Store and Apple purchase histories.
+Those states cannot share the authentication left by the preceding flow.
+The saved YAML declares required starting fixtures with `fixture:` tags and compatible build stores with `store:` tags.
+Set `FITSY_E2E_FIXTURES` to an absolute path to an untracked local JSON file before running an account-dependent selection.
+The runner validates all required entries before acquiring a device or clearing app state.
+
+```json
+{
+  "version": 1,
+  "fixtures": {
+    "entitled-dev": {
+      "envFile": "/absolute/local/entitled.env",
+      "prepare": ["/absolute/local/prepare-fitsy", "entitled-dev"]
+    },
+    "unsubscribed-dev": {
+      "envFile": "/absolute/local/unsubscribed.env",
+      "prepare": ["/absolute/local/prepare-fitsy", "unsubscribed-dev"]
+    },
+    "expired-subscription": {
+      "envFile": "/absolute/local/expired.env",
+      "prepare": ["/absolute/local/prepare-fitsy", "expired-subscription"]
+    },
+    "empty-store": {
+      "envFile": "/absolute/local/empty-store.env",
+      "prepare": ["/absolute/local/prepare-fitsy", "empty-store"]
+    },
+    "apple-history": {
+      "envFile": "/absolute/local/apple-store.env",
+      "prepare": ["/absolute/local/prepare-fitsy", "apple-history"]
+    }
+  }
+}
+```
+
+Environment files may override only `EXPO_PUBLIC_` values and stay on the local machine.
+The two dev-login fixtures require their own `${EXPO_PUBLIC_DEV_LOGIN_EMAIL}` and `${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}` values.
+The adapter receives its configured arguments followed by the flow name and owned simulator UDID, with the fixture's environment loaded.
+It selects and installs a compatible candidate artifact through the canonical native commands and signs into the documented real account/store state.
+Pre-provision actual purchases, expiry and account recreation through the product; the bounded selection/sign-in step has 60 seconds and must not fabricate receipts or database entitlement.
+Preparation owns and releases its simulator lease before returning; it must leave no driver or Metro process running.
+The runner then reacquires the device, validates the candidate/native/backend identity and allowed store, and starts owned Metro with that fixture's environment.
+It retains an identity receipt per journey, stops owned Metro and restores the previous environment afterward.
+An optional `default` entry can restore a baseline build/state before journeys without a `fixture:` tag.
+All selected journeys still run; missing preparation or a store mismatch fails the selection.
+Apple history transfer retains the real-store requirements below and cannot pass on a Test Store build.
+
+```sh
+export FITSY_E2E_FIXTURES=/absolute/local/fitsy-fixtures.json
+node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=full --udid=<UDID>
+```
+
+## Native helper checks
 
 Check saved flow syntax with `maestro check-syntax apps/mobile/e2e/flows/<flow>.yaml` before acquiring a simulator.
 If Maestro cannot initialize its normal cache in a restricted workspace, set `JAVA_OPTS=-Duser.home=<owned-writable-temporary-directory>` for syntax checks.

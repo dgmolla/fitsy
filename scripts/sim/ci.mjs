@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { delimiter, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { impactPlan, repository, simulatorFlows, gitEnv, isMain } from '../verify/impact-plan.mjs';
+import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
 
 export function renderSmoke(documents, selector) {
   const [header, commands] = documents;
@@ -58,15 +59,20 @@ export async function runLocal(args = process.argv.slice(2)) {
   const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro } = await import('./product-flow.mjs');
   const { admitDisk, runOwnedMaestro } = await import('./runner-controls.mjs');
   const { inputHash } = await import('../verify/product-flow.mjs');
-  environment(); // Preserve dev-only API and Supabase target protection.
   const maestro = process.env.MAESTRO_BIN || 'maestro';
   const command = (binary, argv) => execFileSync(binary, argv, { cwd: repository, env: gitEnv(), stdio: 'inherit', timeout: 30000 });
   const yaml = createRequire(import.meta.url)('js-yaml');
   // Parse checkpoints and check syntax before acquiring the shared native driver.
   const journeys = selection.mode === 'render' ? selection.smoke.map((smoke, index) => ({
     name: `render-${index}-${smoke.flow}`,
+    flow: smoke.flow,
     documents: renderSmoke(yaml.loadAll(readFileSync(resolve(repository, `apps/mobile/e2e/flows/${smoke.flow}.yaml`), 'utf8')), smoke.selector),
-  })) : selection.flows.map(name => ({ name, path: resolve(repository, `apps/mobile/e2e/flows/${name}.yaml`) }));
+  })) : selection.flows.map(name => ({ name, flow: name, path: resolve(repository, `apps/mobile/e2e/flows/${name}.yaml`) }));
+  // Resolve every required fixture before acquiring a device or clearing state.
+  // The YAML remains the single catalog of journeys and their starting states.
+  for (const journey of journeys) {
+    journey.fixture = journeyFixture((journey.documents || yaml.loadAll(readFileSync(journey.path, 'utf8')))[0]);
+  }
   const out = resolve(repository, `.evidence/mobile-e2e/${Date.now()}-${process.pid}`);
   mkdirSync(out, { recursive: true });
   writeFileSync(resolve(out, 'selection.json'), JSON.stringify({ ...selection, comparison: plan.comparison }, null, 2) + '\n');
@@ -77,39 +83,51 @@ export async function runLocal(args = process.argv.slice(2)) {
     }
     command(maestro, ['check-syntax', journey.path]);
   }
-  const loginArgs = selection.flows.includes('log-meal') ? ['EXPO_PUBLIC_DEV_LOGIN_EMAIL', 'EXPO_PUBLIC_DEV_LOGIN_PASSWORD'].flatMap(key => {
-    if (!process.env[key]?.trim()) throw new Error(`Local ${key} is required for log-meal`);
-    return ['-e', `${key}=${process.env[key]}`];
-  }) : [];
   const controller = new AbortController();
   const interrupt = () => controller.abort();
-  let metroStarted = false;
+  const sourceHash = inputHash();
   admitDisk(repository, 'Local simulator scope');
-  claimDevice();
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   try {
-    const session = simulatorSession(udid);
-    writeFileSync(resolve(out, 'identity.json'), JSON.stringify(session, null, 2) + '\n');
-    if (session.built.metroPort) { metroStarted = true; await startMetro(session.built); }
-    for (const { name, path } of journeys) {
+    for (const { name, flow, path, fixture } of journeys) {
       if (controller.signal.aborted) throw new Error('Simulator run interrupted');
       const dir = resolve(out, name); mkdirSync(dir, { recursive: true });
-      const result = await runOwnedMaestro(maestro, ['--device', udid, 'test', ...loginArgs, '--format', 'junit',
-        '--output', resolve(dir, 'report.xml'), '--test-output-dir', dir, path], {
-        cwd: repository, dir, timeline: resolve(out, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'),
-        signal: controller.signal, env: { ...gitEnv(),
-          PATH: `${resolve(repository, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
-          FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: resolve(dir, 'capture.jsonl') },
-        diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', resolve(dir, 'failure.png')]),
+      await withFixtureEnvironment(fixture, async () => {
+        environment(); // Preserve dev-only API and Supabase target protection before setup too.
+        prepareJourney(fixture, flow, udid);
+        if (controller.signal.aborted) throw new Error('Simulator run interrupted during fixture preparation');
+        if (inputHash() !== sourceHash) throw new Error('Candidate source changed during fixture preparation');
+        claimDevice();
+        let metroStarted = false;
+        try {
+          const session = simulatorSession(udid);
+          assertJourneyStore(fixture, session.built);
+          writeFileSync(resolve(dir, 'identity.json'), JSON.stringify({ ...session, fixture: fixture.name }, null, 2) + '\n');
+          if (session.built.metroPort) { metroStarted = true; await startMetro(session.built); }
+          const loginArgs = ['EXPO_PUBLIC_DEV_LOGIN_EMAIL', 'EXPO_PUBLIC_DEV_LOGIN_PASSWORD'].flatMap(key => {
+            if (fixture.name === 'entitled-dev' && !process.env[key]?.trim()) throw new Error(`Local ${key} is required for log-meal`);
+            return process.env[key] ? ['-e', `${key}=${process.env[key]}`] : [];
+          });
+          const result = await runOwnedMaestro(maestro, ['--device', udid, 'test', ...loginArgs, '--format', 'junit',
+            '--output', resolve(dir, 'report.xml'), '--test-output-dir', dir, path], {
+            cwd: repository, dir, timeline: resolve(out, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'),
+            signal: controller.signal, env: { ...gitEnv(),
+              PATH: `${resolve(repository, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
+              FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: resolve(dir, 'capture.jsonl') },
+            diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', resolve(dir, 'failure.png')]),
+          });
+          if (result.code !== 0 || result.reason) throw new Error(`Maestro flow ${name} failed; inspect ${dir}`);
+          if (inputHash() !== sourceHash || environment().configHash !== session.configHash)
+            throw new Error('Candidate source or public configuration changed during simulator execution');
+        } finally {
+          try { if (metroStarted) await stopMetro(); }
+          finally { releaseDevice(); }
+        }
       });
-      if (result.code !== 0 || result.reason) throw new Error(`Maestro flow ${name} failed; inspect ${dir}`);
     }
-    if (inputHash() !== session.inputHash || environment().configHash !== session.configHash)
-      throw new Error('Candidate source or public configuration changed during simulator execution');
     return { name: 'mobile-e2e', status: 'pass', ...selection, simulator: udid, evidence: out };
   } finally {
-    try { if (metroStarted) await stopMetro(); }
-    finally { releaseDevice(); process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt); }
+    process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
   }
 }
 

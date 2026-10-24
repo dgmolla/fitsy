@@ -2,7 +2,7 @@
 # Requires a disposable entitled dev account with a completed profile.
 # The native Dev Login reads the same EXPO_PUBLIC_* values from owned Metro.
 appId: com.fitsy.mobile
-tags: [auth, discovery, changed-journey]
+tags: [auth, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
 env:
   LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
   LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}

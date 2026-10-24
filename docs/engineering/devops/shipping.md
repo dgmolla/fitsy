@@ -98,7 +98,10 @@ Verification-only package script edits do not require a simulator; native depend
 Every mobile or web UI edit triggers local coverage: proven screen-local copy/style edits use launch-and-render smoke, navigation/state/forms use affected E2E flows, and shared UI or app shells use the full suite.
 Render smoke reuses maintained flow setup through a mapped render assertion, then saves a screenshot; uncertain changes retain E2E coverage.
 The `needs-sim` label forces flows and its addition or removal reruns classification.
-CI prints the scope and reason, uploads the full plan as `selection.json` in the `sim-scope` artifact, and posts a successful `Sim scope` commit status on the PR head with `scope=<scope> flows=<comma-list or ->`.
+CI prints the scope and reason and uploads the full plan as `selection.json` in the `sim-scope` artifact.
+The classifier and baseline scripts run with read-only credentials and no persisted checkout token.
+The separate `sim-scope.yml` workflow publishes a successful `Sim scope` status on the current PR head from protected code, after validating the source run and artifact.
+Its description is `scope=<scope> flows=<count>` to stay within GitHub's 140-character limit; the local poller reads exact flow names and checkpoints from the linked Verify run's artifact.
 That status records selection, not a native test result.
 The final Verify job retains its existing applicability and failure semantics.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
@@ -119,6 +122,11 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 ```
 
 All selected flows require their documented starting states, including billing fixtures.
+Configure `FITSY_E2E_FIXTURES` with the untracked local adapters and public environment files described in [the native README](../../../apps/mobile/e2e/README.md#local-journey-fixtures).
+Each account-dependent flow declares its fixture and allowed stores in its YAML tags.
+The runner prepares that fixture before the journey, reacquires the device lease, validates the installed native/build/store identity, and starts owned Metro with that fixture's configuration.
+It stops owned Metro and restores the caller environment after each journey, so earlier sign-out flows cannot supply a later billing flow's starting state.
+Missing preparation, incompatible stores and failed fixture assertions fail the selection without omitting flows.
 Apple history-transfer acceptance still requires a compatible Apple store build; Test Store evidence cannot establish it.
 Applicable product acceptance and its exact-head publisher require fresh `.evidence/product-flow/report.json` when impact selection applies; ordinary publication does not claim that proof.
 Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.

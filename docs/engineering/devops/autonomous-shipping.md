@@ -287,7 +287,9 @@ It combines the retained reviewer ownership router and simulator path tiers with
 Navigation, auth, billing, native configuration, release candidates and unknown mobile impact select full coverage.
 All mobile/web UI changes trigger coverage: proven screen-local style/copy edits use render assertions and screenshots, behavior changes use affected E2E flows, and shared components or app shells use the full suite.
 Render smoke reuses maintained journey setup through its mapped screen checkpoint, and mixed or uncertain edits keep broader E2E coverage.
-CI records selection in the `Sim scope` status and uploads `selection.json`; it never runs simulators or needs simulator secrets.
+CI uploads `selection.json` from a read-only classifier; the protected completion publisher records `scope=<scope> flows=<count>` in `Sim scope`.
+Exact-flow consumers use that artifact from the linked Verify run.
+CI never runs simulators or needs simulator secrets.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
 The `needs-sim` label forces flows, and CI logs print the chosen scope and reason.
 The existing Build job runs L3 on Ubuntu, and the final Verify aggregator is unchanged.

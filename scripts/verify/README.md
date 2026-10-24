@@ -63,15 +63,23 @@ Adding or removing that label reruns Verify.
 
 The existing Build job runs only L3 checks on Ubuntu.
 CI computes `none|smoke|flow|full`, exports flow names and render checkpoints, and uploads the full plan as `selection.json` in the `sim-scope` artifact.
-It posts the `Sim scope` status on the PR head with `scope=<scope> flows=<comma-list or ->`; only classify has `statuses: write`.
+The classifier and its baseline scripts have read-only credentials, with checkout credential persistence disabled.
+The separate `sim-scope.yml` completion workflow loads its publisher from the protected workflow revision, validates the source run, artifact and current PR head, and posts `Sim scope` with `scope=<scope> flows=<count>`.
+Only that trusted publisher has `statuses: write`; it never executes candidate code.
+The local poller reads exact flow names and render checkpoints from the linked Verify run's `selection.json`, rather than parsing names from the bounded status description.
 A docs-only `needs-sim` label requests local flows while static, tests and Build remain skipped.
 The final Verify aggregator is unchanged.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
 Run the local scripted gate with `node scripts/sim/ci.mjs --scope=<scope> --flows=<comma-list> --udid=<UDID>` after loading the Mac's dev environment and preparing its candidate build.
 Use `--plan` to inspect explicit scope and flows without launching native tools; `--scope=changed` consumes the shared impact plan.
 Keep render checkpoints and the comparison range aligned with the selected PR head.
+Account-dependent journeys declare `fixture:` and `store:` tags in their maintained YAML.
+Load `FITSY_E2E_FIXTURES` with local, untracked preparation commands and per-fixture public environments as described in [the native README](../../apps/mobile/e2e/README.md#local-journey-fixtures).
+The runner resolves every required fixture before native execution, prepares it before each journey, validates the installed build/store and restarts owned Metro for that fixture's configuration.
+It preserves the full flow set and fails when genuine purchase history or the required store build is unavailable.
 CI execution is refused by the local runner, and the registry contains no native execution check.
 Replay scope regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/simulator-scope.test.ts sim/ci.test.ts`.
+Replay trusted publication and fixture isolation with `node --test scripts/verify/sim-scope-status.test.mjs scripts/sim/journey-fixtures.test.mjs`.
 See [shipping.md](../../docs/engineering/devops/shipping.md) for native setup, billing starting states and separate source-bound product acceptance.
 
 The local pre-push hook runs size/domain checks, then cheap static checks and focused tests.

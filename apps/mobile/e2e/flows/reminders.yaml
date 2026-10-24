@@ -2,7 +2,7 @@
 # The MCP walkthrough purchases only on an owned Test Store account and verifies
 # actual native scheduling, delivery and account cleanup separately.
 appId: com.fitsy.mobile
-tags: [billing, onboarding, discovery, notifications, changed-journey]
+tags: [billing, onboarding, discovery, notifications, changed-journey, 'fixture:unsubscribed-dev', 'store:test-store']
 ---
 - launchApp:
     clearState: true
