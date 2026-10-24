@@ -1,7 +1,8 @@
-import { calculateDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
+import { calculateSettledDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
 export { calculateDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
 import { calculateSuggestedCalories, type OnboardingData } from './onboardingStorage';
 import type { StoredMacroTargets } from './macroStorage';
+import { macroCalories } from './macroEnergy';
 
 interface Macros {
   protein: number;
@@ -28,16 +29,16 @@ interface Macros {
 export const MEALS_PER_DAY = 3.5;
 
 export function dailyToPerMealMacros(daily: Macros): Macros {
-  return {
+  const grams = {
     protein: Math.round(daily.protein / MEALS_PER_DAY),
     carbs: Math.round(daily.carbs / MEALS_PER_DAY),
     fat: Math.round(daily.fat / MEALS_PER_DAY),
-    calories: Math.round(daily.calories / MEALS_PER_DAY),
   };
+  return { ...grams, calories: macroCalories(grams) };
 }
 
 export function calculateMacros(data: OnboardingData): Macros {
-  return dailyToPerMealMacros(calculateDailyMacros(calculateSuggestedCalories(data), data.goal));
+  return dailyToPerMealMacros(calculateSettledDailyMacros(calculateSuggestedCalories(data), data.goal));
 }
 
 export function macrosToStored(m: Macros): StoredMacroTargets {

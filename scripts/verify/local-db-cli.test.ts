@@ -44,14 +44,16 @@ test('local database memory admission works without root cgroup-v2 files and ref
 });
 type DatabaseCase = { name: string; hijack: boolean; deny: boolean; unlocked: boolean;
   checkFailure: boolean; devDrift: boolean; focused?: boolean; missing?: boolean;
-  scriptFocused?: boolean; wholeGroup?: string; delegation?: boolean; canonical?: boolean;
-  missingCheap?: boolean };
+  scriptFocused?: boolean; wholeGroup?: string; delegation?: boolean; canonical?: boolean; standalone?: boolean;
+  cheapFailure?: boolean; missingCheap?: boolean; repeat?: boolean };
 test.each<DatabaseCase>([
   { name: 'full delegation preserves cheap checks and fresh database focus', delegation: true, focused: true,
     hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   ...[
-    { name: 'canonical full delegation builds before DB preparation' },
-    { name: 'canonical full delegation stops at missing cheap work', missingCheap: true },
+    { name: 'canonical full delegation builds before DB preparation', standalone: false },
+    { name: 'standalone locked full delegation keeps safety and fresh reset evidence', standalone: true, repeat: true },
+    { name: 'standalone locked full delegation stops at failed cheap work', standalone: true, cheapFailure: true },
+    { name: 'canonical full delegation stops at missing cheap work', standalone: false, missingCheap: true },
   ].map(options => ({ ...options, delegation: true, focused: true, canonical: true,
     hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false })),
   ...['api', 'scripts', 'mobile'].map(wholeGroup => ({ name: `whole ${wholeGroup} group`, wholeGroup,
@@ -68,7 +70,7 @@ test.each<DatabaseCase>([
   { name: 'without OS lock', hijack: false, deny: false, unlocked: true, checkFailure: false, devDrift: false },
   { name: 'failing database check', hijack: false, deny: false, unlocked: false, checkFailure: true, devDrift: false },
   { name: 'dev drift retains caller URL', hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: true },
-])('local database runner $name owns URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift, focused = false, missing = false, scriptFocused = false, wholeGroup = '', delegation = false, canonical = false, missingCheap = false }) => {
+])('local database runner $name owns URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift, focused = false, missing = false, scriptFocused = false, wholeGroup = '', delegation = false, canonical = false, standalone = false, cheapFailure = false, missingCheap = false, repeat = false }) => {
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-db-cli-'));
   const write = (path: string, value: string) => {
     const target = join(directory, path); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, value);
@@ -141,7 +143,7 @@ fs.appendFileSync(process.env.FITSY_TEST_EVENTS, JSON.stringify({
   pooled: process.env.POSTGRES_PRISMA_URL ?? null, direct: process.env.POSTGRES_URL_NON_POOLING ?? null,
 }) + '\\n');
 `);
-      if (!missingCheap) write('scripts/verify/cheap.sh', '#!/bin/sh\nnode .evidence/event.mjs cheap\n');
+      if (!missingCheap) write('scripts/verify/cheap.sh', '#!/bin/sh\nnode .evidence/event.mjs cheap\n' + (cheapFailure ? 'exit 1\n' : ''));
       if (canonical) {
         write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
           '  - name: build\n    script: build.sh\n    layer: 3\n    blocking: true\n');
@@ -200,23 +202,27 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
     const verifyArgs = [canonical ? `--only=baseline,focused-tests,${databaseChecks}`
       : `--only=baseline,${delegation ? 'structural,focused-tests,db-fixture' : wholeGroup ? 'test' : focused ? 'focused-tests' : 'db-fixture'}${devDrift ? ',dev-drift' : ''}`,
       '--runs=local', ...(delegation ? ['--stage=full', '--reuse'] : [])];
-    const argv = unlocked ? ['scripts/verify/local-db.mjs', '--locked-run', '--only=baseline,db-fixture', '--runs=local']
-      : ['scripts/verify/run.mjs', ...verifyArgs];
-    const result = spawnSync(process.execPath, argv, { cwd: directory, env, encoding: 'utf8', timeout: 15000 });
-    const expectedStatus = hijack || deny || unlocked || checkFailure || missingCheap ? 1 : 0;
+    const command = standalone ? 'python3' : process.execPath;
+    const argv = standalone
+      ? ['scripts/verify/db-lock.py', directory, process.execPath, join(directory, 'scripts/verify/local-db.mjs'), '--locked-run', ...verifyArgs]
+      : unlocked ? ['scripts/verify/local-db.mjs', '--locked-run', '--only=baseline,db-fixture', '--runs=local']
+        : ['scripts/verify/run.mjs', ...verifyArgs];
+    const run = () => spawnSync(command, argv, { cwd: directory, env, encoding: 'utf8', timeout: 15000 });
+    const result = run();
+    const expectedStatus = hijack || deny || unlocked || checkFailure || cheapFailure || missingCheap ? 1 : 0;
     expect({ status: result.status, error: result.error?.message,
       diagnostics: result.status === expectedStatus ? '' : `${result.stdout}\n${result.stderr}` })
       .toEqual({ status: expectedStatus, error: undefined, diagnostics: '' });
-    if (missingCheap) {
+    if (cheapFailure || missingCheap) {
       expect(existsSync(state)).toBe(false);
       expect(existsSync(reset)).toBe(false);
       const reported = result.stdout.trim().split('\n').map(line => JSON.parse(line));
       const failed = reported.filter(line => line.status === 'fail');
       expect(failed).toHaveLength(1);
       expect(failed[0]).toEqual(expect.objectContaining({ name: 'structural', status: 'fail', blocking: true }));
-      expect(result.stdout).toContain('registry entry has no script cheap.sh');
+      if (missingCheap) expect(result.stdout).toContain('registry entry has no script cheap.sh');
       const observed = readFileSync(events, 'utf8').trim().split('\n').map(line => JSON.parse(line));
-      expect(observed.map(event => event.check)).toEqual(['baseline']);
+      expect(observed.map(event => event.check)).toEqual(cheapFailure ? ['baseline', 'cheap'] : ['baseline']);
     } else if (unlocked) {
       expect(existsSync(state)).toBe(false);
       expect(existsSync(reset)).toBe(false);
@@ -262,6 +268,19 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
           expect(observed.map(event => event.check)).toEqual(['baseline', 'cheap', 'build', 'focused', 'database']);
           expect(observed.find(event => event.check === 'build').generation).toBeNull();
           expect(reported.filter(line => line.name === 'build' && line.status === 'pass')).toHaveLength(1);
+        }
+        if (repeat) {
+          writeFileSync(events, '');
+          const next = run();
+          expect({ status: next.status, stderr: next.status === 0 ? '' : next.stderr }).toEqual({ status: 0, stderr: '' });
+          const nextEvents = readFileSync(events, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+          const fresh = nextEvents.filter(event => event.check === 'focused');
+          expect(fresh).toHaveLength(1);
+          expect(Number(fresh[0].generation)).toBeGreaterThan(Number(database[0].generation));
+          expect(fresh[0].seed).toBe(fresh[0].generation);
+          expect(fresh[0].owned).toBe('owned-id');
+          expect(nextEvents.filter(event => event.check === 'database').map(event => event.generation)).toEqual([fresh[0].generation]);
+          expect(nextEvents.filter(event => event.check === 'cheap').length).toBeLessThanOrEqual(1);
         }
       } else if (wholeGroup) {
         const groups = readFileSync(join(directory, '.evidence/groups'), 'utf8').trim().split('\n');

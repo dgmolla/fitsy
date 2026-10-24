@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
+  Alert,
   Easing,
   Modal,
   KeyboardAvoidingView,
@@ -13,18 +14,21 @@ import {
   type ViewStyle,
 } from "react-native";
 import { BlurView } from "expo-blur";
-import { EDITORIAL, FONTS } from "@/lib/brand";
+import { EDITORIAL } from "@/lib/brand";
+import { filterPopupStyles as s } from "./FilterPopup.styles";
 import { StepperControl } from "@/components/StepperControl";
 import { MACRO_COLORS } from "@/lib/macroColors";
 import type { MacroValues } from "@/lib/macroPresets";
-
+import { isCompleteTarget, macroCalories, normalizeCompleteTarget, parseTarget, settleTargetEdit } from "@/lib/macroEnergy";
 interface FilterPopupProps {
   visible: boolean;
   values: MacroValues;
-  onApply: (values: MacroValues) => void;
-  onClose: () => void;
+  onApply: (values: MacroValues, mode?: "search" | "complete") => void | Promise<void>;
+  onClose: () => void | Promise<void>;
+  mode?: "search" | "complete";
+  allowPartial?: boolean;
+  goal?: "build_muscle" | "lose_fat" | "maintain" | "performance";
 }
-
 const MACROS: {
   key: keyof MacroValues;
   label: string;
@@ -36,26 +40,45 @@ const MACROS: {
   { key: "carbs", label: "Carbs", color: MACRO_COLORS.carbs, step: 5 },
   { key: "fat", label: "Fat", color: MACRO_COLORS.fat, step: 5 },
 ];
-
 export function FilterPopup({
   visible,
   values,
   onApply,
   onClose,
+  mode = "search",
+  allowPartial = false,
+  goal = "maintain",
 }: FilterPopupProps) {
+  const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<MacroValues>(values);
-
+  const [linked, setLinked] = useState(mode === "complete");
+  const linkedRef = useRef(mode === "complete");
+  const hadAllocation = useRef(isCompleteTarget(values));
+  const caloriesEdited = useRef(values.calories !== '');
+  const draftRef = useRef(values);
+  const lastEdited = useRef<keyof MacroValues>("calories");
+  const latestValues = useRef(values);
+  latestValues.current = values;
+  const wasVisible = useRef(false);
+  function replaceDraft(next: MacroValues) {
+    hadAllocation.current ||= isCompleteTarget(next);
+    draftRef.current = next;
+    setDraft(next);
+  }
   const scaleAnim = useRef(new Animated.Value(0.72)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const blurOpacity = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
-    if (visible) {
-      setDraft(values);
+    if (visible && !wasVisible.current) {
+      draftRef.current = latestValues.current;
+      setDraft(latestValues.current);
+      linkedRef.current = mode === "complete";
+      hadAllocation.current = isCompleteTarget(latestValues.current);
+      caloriesEdited.current = latestValues.current.calories !== '';
+      setLinked(linkedRef.current);
       scaleAnim.setValue(0.72);
       opacityAnim.setValue(0);
       blurOpacity.setValue(0);
-
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
@@ -78,8 +101,8 @@ export function FilterPopup({
         }),
       ]).start();
     }
-  }, [visible, values, scaleAnim, opacityAnim, blurOpacity]);
-
+    wasVisible.current = visible;
+  }, [visible, mode, scaleAnim, opacityAnim, blurOpacity]);
   function dismiss(cb: () => void) {
     Animated.parallel([
       Animated.timing(scaleAnim, {
@@ -100,36 +123,38 @@ export function FilterPopup({
       }),
     ]).start(() => cb());
   }
-
   function update(key: keyof MacroValues, val: string) {
-    setDraft((prev) => {
-      const next = { ...prev, [key]: val };
-      return next;
-    });
+    if (key === "calories") caloriesEdited.current = true;
+    lastEdited.current = key;
+    replaceDraft({ ...draftRef.current, [key]: val });
   }
-
+  const partialDraft = (values: MacroValues) => allowPartial && (!isCompleteTarget(values)
+    || parseTarget(values.calories) === null
+    || (!linkedRef.current && [values.protein, values.carbs, values.fat].some(value => parseTarget(value) === 0)));
+  const clearedProfileMacro = (values: MacroValues) => !allowPartial && linkedRef.current
+    && ((caloriesEdited.current && !parseTarget(values.calories))
+      || (hadAllocation.current && !isCompleteTarget(values)));
+  function settle(key: keyof MacroValues) {
+    if (linkedRef.current && !partialDraft(draftRef.current) && !clearedProfileMacro(draftRef.current))
+      replaceDraft(settleTargetEdit(draftRef.current, key, goal, true, !caloriesEdited.current));
+  }
   function step(
     key: keyof MacroValues,
     delta: number,
   ) {
-    setDraft((prev) => {
-      const current = parseInt(prev[key], 10) || 0;
-      const macro = MACROS.find((m) => m.key === key)!;
-      const next = {
-        ...prev,
-        [key]: String(Math.max(0, current + delta * macro.step)),
-      };
-      return next;
-    });
+    const current = parseInt(draftRef.current[key], 10) || 0;
+    const macro = MACROS.find((m) => m.key === key)!;
+    lastEdited.current = key;
+    if (key === "calories") caloriesEdited.current = true;
+    const next = { ...draftRef.current, [key]: String(Math.max(0, current + delta * macro.step)) };
+    replaceDraft(linkedRef.current && !partialDraft(next) && !clearedProfileMacro(next)
+      ? settleTargetEdit(next, key, goal, true, !caloriesEdited.current) : next);
   }
-
   const translateY = scaleAnim.interpolate({
     inputRange: [0.72, 1],
     outputRange: [-40, 0],
     extrapolate: "clamp",
   });
-
-
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={() => dismiss(onClose)}>
       <Animated.View
@@ -147,7 +172,6 @@ export function FilterPopup({
           ]}
         />
       </Animated.View>
-
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={() => dismiss(onClose)}
@@ -184,105 +208,66 @@ export function FilterPopup({
                   value={draft[key]}
                   unit={key === "calories" ? undefined : "g"}
                   onChangeText={(t) => update(key, t)}
+                  onBlur={() => settle(key)}
                   onStep={(dir) => step(key, dir)}
                 />
               </View>
             </View>
           ))}
-
           </ScrollView>
-
+          {mode === "search" && !linked && isCompleteTarget(draft)
+            && parseTarget(draft.calories) !== null && Number(draft.calories) > 0
+            && macroCalories({ protein: Number(draft.protein), carbs: Number(draft.carbs), fat: Number(draft.fat) }) > 0 && (
+              <Pressable accessibilityRole="button" accessibilityLabel="Link calories and macros"
+                testID="meal-filter-link" onPress={() => {
+                  replaceDraft(settleTargetEdit(draftRef.current, 'calories', goal, true));
+                  linkedRef.current = true;
+                  setLinked(true);
+                }}>
+                <Text style={s.linkText}>Link calories and macros</Text>
+              </Pressable>
+            )}
+          {allowPartial && linked && (
+            <Pressable accessibilityRole="button" accessibilityLabel="Use independent filters"
+              testID="meal-filter-unlink" onPress={() => {
+                linkedRef.current = false;
+                setLinked(false);
+              }}>
+              <Text style={s.linkText}>Use independent filters</Text>
+            </Pressable>
+          )}
           {/* Apply */}
           <Pressable
             style={s.applyBtn}
             accessibilityRole="button"
             accessibilityLabel="Apply meal targets"
             testID="meal-filter-apply"
-            onPress={() => dismiss(() => onApply(draft))}
+            disabled={saving}
+            onPress={async () => {
+              if (saving) return;
+              if (clearedProfileMacro(draftRef.current)) {
+                Alert.alert("Complete your target", "Enter valid calories and all three macros before applying.");
+                return;
+              }
+              const independent = !linkedRef.current || partialDraft(draftRef.current);
+              const settled = independent ? draftRef.current : settleTargetEdit(draftRef.current, lastEdited.current, goal, true, !caloriesEdited.current);
+              if (!independent && (!isCompleteTarget(settled) || !parseTarget(settled.calories))) {
+                Alert.alert("Complete your target", "Enter valid calories and all three macros before applying.");
+                return;
+              }
+              setSaving(true);
+              try {
+                await onApply(independent ? settled : normalizeCompleteTarget(settled), independent ? "search" : "complete");
+                dismiss(() => {});
+              } catch {
+                Alert.alert("Couldn't save targets", "Your edits are still here. Please try again.");
+              } finally { setSaving(false); }
+            }}
           >
-            <Text style={s.applyText}>Apply</Text>
+            <Text style={s.applyText}>{saving ? "Saving..." : "Apply"}</Text>
           </Pressable>
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
-
-const s = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  // Keep each target independent so editing a macro preserves an entered calorie target.
-  card: {
-    width: "100%",
-    maxWidth: 356,
-    maxHeight: "90%",
-    borderRadius: 24,
-    backgroundColor: EDITORIAL.cream,
-    borderWidth: 1,
-    borderColor: EDITORIAL.border,
-    paddingHorizontal: 22,
-    paddingTop: 24,
-    paddingBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.1,
-    shadowRadius: 32,
-    elevation: 10,
-  },
-
-  title: {
-    fontFamily: FONTS.frauncesMedium,
-    fontSize: 20,
-    color: EDITORIAL.green,
-    letterSpacing: -0.3,
-    marginBottom: 10,
-  },
-
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-  },
-  labelCol: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flexShrink: 1,
-  },
-  dot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-  },
-  label: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 15,
-    fontWeight: "600",
-    color: EDITORIAL.textMid,
-    letterSpacing: -0.2,
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: EDITORIAL.border,
-  },
-
-  applyBtn: {
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: "center",
-    backgroundColor: EDITORIAL.green,
-  },
-  applyText: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 15,
-    fontWeight: "700",
-    color: EDITORIAL.cream,
-    letterSpacing: -0.2,
-  },
-});

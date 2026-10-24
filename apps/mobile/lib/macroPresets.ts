@@ -13,14 +13,14 @@ export interface Preset {
 export const PRESETS: Preset[] = [
   {
     label: 'Cut (2000 kcal/day)',
-    values: { calories: '2000', protein: '150', carbs: '200', fat: '67' },
+    values: { calories: '2000', protein: '110', carbs: '246', fat: '64' },
   },
   {
     label: 'Bulk (3000 kcal/day)',
-    values: { calories: '3000', protein: '180', carbs: '350', fat: '100' },
+    values: { calories: '3000', protein: '130', carbs: '395', fat: '100' },
   },
   {
     label: 'Maintain (2500 kcal/day)',
-    values: { calories: '2500', protein: '160', carbs: '280', fat: '83' },
+    values: { calories: '2500', protein: '115', carbs: '330', fat: '80' },
   },
 ];

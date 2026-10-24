@@ -1,7 +1,7 @@
-import { fixtureProcess, signalFixtureProcess } from './lock-fixture-process';
+import { fixtureProcess, signalFixtureProcess, startLockFixture, type FixtureProcess } from './lock-fixture-process';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { isLocalDatabaseHost } from '../../apps/api/tests/fixtures/localDatabaseHost';
@@ -230,6 +230,44 @@ test('lock fixture refuses unacquired and zero process cleanup without signaling
     }
     expect(kill).not.toHaveBeenCalled();
   } finally { kill.mockRestore(); }
+});
+
+test('concurrent CLI attempts cannot reset DB, even when a coordinator dies with a live child', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'fitsy-db-flock-'));
+  const lockScript = resolve(__dirname, 'db-lock.py');
+  const marker = resolve(root, 'pids');
+  const { holder, contender } = startLockFixture(root, lockScript, marker);
+  let worker: FixtureProcess | undefined, child: FixtureProcess | undefined;
+  try {
+    for (let i = 0; i < 40 && !existsSync(marker); i++) await new Promise(resolve => setTimeout(resolve, 25));
+    expect(existsSync(marker)).toBe(true);
+    const pids = readFileSync(marker, 'utf8').split(' ');
+    const workerPid = Number(pids[0]), childPid = Number(pids[1]);
+    if (!holder.pid) throw new Error('lock fixture holder did not start');
+    worker = fixtureProcess(workerPid, holder.pid);
+    expect(worker).toBeDefined();
+    expect(worker?.pgid).toBe(workerPid);
+    child = fixtureProcess(childPid, workerPid);
+    expect(child).toBeDefined();
+    expect(contender().status).toBe(75);
+    holder.kill('SIGKILL');
+    expect(contender().status).toBe(75);
+    expect(signalFixtureProcess(worker, 'SIGKILL')).toBe(true);
+    expect(() => process.kill(childPid, 0)).not.toThrow();
+    expect(contender().status).toBe(75);
+    expect(signalFixtureProcess(child, 'SIGTERM')).toBe(true);
+    let result = contender();
+    for (let i = 0; i < 40 && result.status === 75; i++) {
+      spawnSync('sleep', ['0.05']);
+      result = contender();
+    }
+    expect(result.status).toBe(0);
+  } finally {
+    holder.kill('SIGTERM');
+    signalFixtureProcess(worker, 'SIGKILL', true);
+    signalFixtureProcess(child, 'SIGTERM');
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('bound database stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {

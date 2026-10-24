@@ -75,6 +75,7 @@ const config = {
       // no node override, so StyleSheet/Modal/etc. are the real RN mocks.
       displayName: 'components',
       preset: 'jest-expo',
+      setupFiles: ['<rootDir>/__mocks__/test-env.cjs'],
       testMatch: ['<rootDir>/components/**/*.test.tsx'],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',

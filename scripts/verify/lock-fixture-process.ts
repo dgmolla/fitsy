@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 export type FixtureProcess = { pid: number; pgid: number; started: string };
 export function fixtureProcess(pid: number, parent?: number): FixtureProcess | undefined {
@@ -16,4 +16,17 @@ export function signalFixtureProcess(acquired: FixtureProcess | undefined, signa
       (group && current.pgid !== acquired.pid)) return false;
   try { process.kill(group ? -acquired.pid : acquired.pid, signal); return true; }
   catch { return false; }
+}
+
+export function startLockFixture(root: string, lockScript: string, marker: string) {
+  // This generic flock fixture is not the caller's admitted shipping DB phase.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+    !key.startsWith('FITSY_VERIFY_') && !key.startsWith('FITSY_SHIPPING_') && key !== 'FITSY_LOCAL_DB'));
+  const contender = () => spawnSync('python3', [lockScript, root, 'python3', '-c', 'print("acquired")'], { encoding: 'utf8', env });
+  const holderCode = `import os,subprocess,sys,time
+child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(20)'],
+  stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+open(${JSON.stringify(marker)},'w').write(f'{os.getpid()} {child.pid}')
+time.sleep(20)`;
+  return { holder: spawn('python3', [lockScript, root, 'python3', '-c', holderCode], { stdio: 'ignore', env }), contender };
 }

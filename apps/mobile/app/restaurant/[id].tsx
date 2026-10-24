@@ -16,7 +16,7 @@ import { Redirect, Stack, router, useLocalSearchParams, useNavigation } from 'ex
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { BookmarkButton, FitsyLoader, LockedUnlockCard, MenuItemCard } from '@/components';
 import { fetchMenuOutcome, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
-import { getMacroTargets } from '@/lib/macroStorage';
+import { getDiscoveryMacroTargets } from '@/lib/macroStorage';
 import { reconcileMenuBookmarks } from '@/lib/menuBookmarks';
 import { reconcileMenuLoad } from '@/lib/menuLoadState';
 import { recordSaveAndMaybePrompt } from '@/lib/ratingPrompt';
@@ -122,7 +122,7 @@ export default function RestaurantDetailScreen() {
       // runs inside the same Promise.all as the menu fetch (rather than
       // ahead of it) so it doesn't add latency to every detail-screen open.
       const [outcome, session, macroTargets] = await Promise.all([
-        fetchMenuOutcome(id, { selectedItemId: params.selectedItemId }), supabase.auth.getSession().then((r) => r.data.session), getMacroTargets(),
+        fetchMenuOutcome(id, { selectedItemId: params.selectedItemId }), supabase.auth.getSession().then((r) => r.data.session), getDiscoveryMacroTargets(),
       ]);
       const savedResult = session ? await getSavedItems() : null;
       if (cancelled) return;
