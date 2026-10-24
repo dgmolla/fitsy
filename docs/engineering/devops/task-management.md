@@ -14,7 +14,7 @@ Existing authorized work continues under its existing owner during migration.
 | --- | --- |
 | GitHub Issues and Fitsy Delivery Project | Deliverable, priority, dependencies, acceptance, execution owner, current stage, and blockers. |
 | FM or an explicitly delegated coordinator | Claim work, supervise workers, reconcile evidence, and update the same issue. |
-| Repository and GitHub | Canonical checks, source-bound review, PR/merge identity, deployment and verification receipts. |
+| Repository and GitHub | Canonical checks, source-bound review, PR/merge identity, deployment evidence and fresh verification results. |
 | Slack | Notifications linked to the issue and evidence; never a separate task queue. |
 
 ```mermaid

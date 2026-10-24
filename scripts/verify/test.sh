@@ -23,42 +23,46 @@ if [ "$SCOPE" = changed ]; then
   fi
 fi
 case "$TEST_GROUPS" in
-  "") printf '{"name":"test","status":"skipped","summary":"documentation-only comparison"}\n'; exit 2 ;;
+  "") printf '{"name":"test","status":"fail","summary":"no affected test groups selected","fix":"choose a nonempty comparison or use --scope=all"}\n'; exit 1 ;;
   api|scripts|mobile|"api scripts"|"api mobile"|"scripts mobile"|"api scripts mobile") ;;
   *) printf '{"name":"test","status":"fail","summary":"invalid test group plan"}\n'; exit 1 ;;
 esac
 FAIL=""
-# Consume complete same-invocation focused proof before any other test engine
-# can mutate the freshly prepared database. Missing proof keeps every file fresh.
+REPORTS="$(mktemp -d "${TMPDIR:-/tmp}/fitsy-tests.XXXXXX")" || exit 1
+trap 'rm -rf "$REPORTS"' EXIT
+# Each engine must report passing cases from this invocation, even if it exits 0.
+run_jest() {
+  local group="$1"; shift
+  "$@" --json --outputFile="$REPORTS/$group.json" >&2 &&
+    node scripts/verify/test-results.mjs "$REPORTS/$group.json" jest >&2 || FAIL="${FAIL:+$FAIL, }$group"
+}
+run_node() {
+  local group="$1"; shift
+  node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=./scripts/verify/node-focused-reporter.mjs --test-reporter-destination="$REPORTS/$group.json" "$@" >&2 &&
+    node scripts/verify/test-results.mjs "$REPORTS/$group.json" node >&2 || FAIL="${FAIL:+$FAIL, }$group"
+}
 if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
-  # Match focused Jest: recipe transport must not reach script assertions.
   unset FITSY_VERIFY_FOCUSED_RECIPE
-  JEST_COMMAND=(test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB)
-  JEST_ENV=(FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512)
-  FOCUSED_IGNORE="$(/usr/bin/env "${JEST_ENV[@]}" node scripts/verify/receipt-cache.mjs --scripts-focused-exclusion "$PPID" "$@" -- "${JEST_COMMAND[@]}")" || FOCUSED_IGNORE=""
-  if [ -n "$FOCUSED_IGNORE" ]; then
-    JEST_COMMAND+=("--testPathIgnorePatterns=$FOCUSED_IGNORE" --passWithNoTests)
-  fi
   # Real decoder and attachment cases retain the required local media lane.
-  /usr/bin/env "${JEST_ENV[@]}" npm "${JEST_COMMAND[@]}" >&2 || FAIL="scripts"
-fi
-if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
-  node --test scripts/review/simple-review.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }simple-review"
-  node --test scripts/github/*.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }github"
-  PYTHONDONTWRITEBYTECODE=1 python3 scripts/sim/retire_task_device.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }retire-task-device"
+  run_jest scripts /usr/bin/env FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512 npm test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB
+  run_node simple-review scripts/review/simple-review.test.mjs
+  run_node github scripts/github/*.test.mjs
+  report="$REPORTS/retire-task-device.json"
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/python-focused.py scripts/sim/retire_task_device.test.py "$report" >&2 &&
+    node scripts/verify/test-results.mjs "$report" python >&2 || FAIL="${FAIL:+$FAIL, }retire-task-device"
 fi
 if [[ " $TEST_GROUPS " == *" api "* ]]; then
   if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then
     # Keep shared-schema suites serial while recycling retained suite modules.
-    NODE_OPTIONS=--max-old-space-size=512 npm run test:coverage:gc --workspace=apps/api -- --maxWorkers=1 --workerIdleMemoryLimit=256MB --logHeapUsage >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
+    run_jest api /usr/bin/env NODE_OPTIONS=--max-old-space-size=512 npm run test:coverage:gc --workspace=apps/api -- --maxWorkers=1 --workerIdleMemoryLimit=256MB --logHeapUsage
   else
-    npm run test:coverage --workspace=apps/api >&2 || FAIL="${FAIL:+$FAIL, }apps/api"
+    run_jest api npm run test:coverage --workspace=apps/api --
   fi
 fi
 # One Jest worker keeps mobile suites serial while recycling its process after
 # large files; in-band mode retains every suite in one process.
 if [[ " $TEST_GROUPS " == *" mobile "* ]]; then
-  NODE_OPTIONS=--max-old-space-size=768 npm test --workspace=@fitsy/mobile -- --maxWorkers=1 --workerIdleMemoryLimit=256MB >&2 || FAIL="${FAIL:+$FAIL, }mobile"
+  run_jest mobile /usr/bin/env NODE_OPTIONS=--max-old-space-size=768 npm test --workspace=@fitsy/mobile -- --maxWorkers=1 --workerIdleMemoryLimit=256MB
 fi
 if [ -n "$FAIL" ]; then
   printf '{"name":"test","status":"fail","summary":"tests failed in: %s","fix":"run the failing workspace suite locally (npm run test:coverage -w apps/api or npm test -w @fitsy/scripts) and fix"}\n' "$FAIL"

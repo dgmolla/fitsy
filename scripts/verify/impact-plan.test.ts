@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -24,15 +24,19 @@ const event = (name: string, data: object) => { const path = join(directory, `.e
 
 function wholeGroupFixture() {
   write('scripts/verify/test.sh', readFileSync(join(root, 'scripts/verify/test.sh'), 'utf8'));
-  write('scripts/verify/registry.yml', 'checks:\n  - name: test\n    script: test.sh\n    layer: 2\n    blocking: true\n    cache: true\n    runs: [local, ci]\n');
+  write('scripts/verify/registry.yml', 'checks:\n  - name: test\n    script: test.sh\n    layer: 2\n    blocking: true\n    runs: [local, ci]\n');
   const quote = (value: string) => "'" + value.replace(/'/g, "'\"'\"'") + "'";
   // Only external test engines are fixtures; selection and test.sh are real.
   write('bin/node', `#!/bin/sh
 if [ "$1" != --test ]; then exec ${quote(process.execPath)} "$@"; fi
 echo scripts-node >> .evidence/group-calls
+count=1; [ "\${ZERO_ENGINE:-}" != node ] || count=0
+for arg in "$@"; do
+  case "$arg" in --test-reporter-destination=stderr) ;; --test-reporter-destination=*) printf '{"passing_tests":%s}\\n' "$count" > "\${arg#*=}" ;; esac
+done
 [ "\${FAIL_GROUP:-}" != scripts ]
 `);
-  write('bin/python3', '#!/bin/sh\necho scripts-python >> .evidence/group-calls\n[ "${FAIL_GROUP:-}" != scripts ]\n');
+  write('bin/python3', '#!/bin/sh\necho scripts-python >> .evidence/group-calls\ncount=1; [ "${ZERO_ENGINE:-}" != python ] || count=0\n[ "${ZERO_ENGINE:-}" = missing-python ] || printf \'{"success":true,"passing_tests":%s}\\n\' "$count" > "$3"\n[ "${FAIL_GROUP:-}" != scripts ]\n');
   write('bin/npm', `#!/bin/sh
 case "$*" in
   *--workspace=apps/api*) group=api ;;
@@ -42,6 +46,9 @@ case "$*" in
 esac
 echo "$group" >> .evidence/group-calls
 printf '%s\\n' "$*" >> .evidence/group-argv
+for arg in "$@"; do
+  case "$arg" in --outputFile=*) printf '{"success":true,"numPassedTests":%s}\\n' "\${PASS_COUNT:-1}" > "\${arg#*=}" ;; esac
+done
 [ "\${FAIL_GROUP:-}" != "$group" ]
 `);
   for (const name of ['node', 'python3', 'npm']) chmodSync(join(directory, 'bin', name), 0o755);
@@ -105,7 +112,7 @@ test.each([
   const extra = { CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head };
   expect(plan(extra).testGroups).toEqual(groups);
   const result = fixture.run(extra);
-  expect({ status: result.status, stderr: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(result.status).toBe(groups.length ? 0 : 1);
   const actual = fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call));
   expect(actual).toEqual(['scripts', 'api', 'mobile'].filter(group => groups.includes(group)));
   expect(fixture.calls().includes('scripts-node')).toBe(groups.includes('scripts'));
@@ -120,6 +127,22 @@ test.each(['api', 'scripts', 'mobile'])('a failed selected whole %s group blocks
   expect(result.status).toBe(1);
   expect(result.stdout).toContain('"name":"test","status":"fail"');
   expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
+});
+
+test('a successful engine exit with zero executed tests fails the whole group', () => {
+  const fixture = wholeGroupFixture();
+  write('apps/mobile/lib/example.ts', 'export const value = true;\n'); const head = commit();
+  const result = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head, PASS_COUNT: '0' });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('executed no passing tests');
+});
+
+test.each(['node', 'python', 'missing-python'])('a successful %s exit without passing cases fails the scripts group', engine => {
+  const fixture = wholeGroupFixture();
+  write('scripts/example.ts', 'export const value = true;\n'); const head = commit();
+  const result = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head, ZERO_ENGINE: engine });
+  expect(result.status).toBe(1);
+  expect(result.stdout).toContain('tests failed in:');
 });
 
 test('whole groups use the integrated main range and the actual pinned PR range', () => {
@@ -211,25 +234,6 @@ test('forged subset selectors cannot hide whole groups and a failed planner cann
   const broken = cli('test.sh', ['--scope=changed'], { PATH: `${join(directory, 'bin')}:${env.PATH}` });
   expect(broken.status).toBe(1);
   expect(broken.stdout).toContain('test group planning failed');
-});
-
-test('whole-group local receipts bind comparison and group definition; CI never reuses them', () => {
-  const fixture = wholeGroupFixture();
-  write('apps/api/lib/base.ts', 'export const value = 0;\n'); const apiBase = commit();
-  write('apps/api/lib/base.ts', 'export const value = 1;\n'); commit();
-  write('scripts/review/example.py', 'value = True\n'); commit();
-  const local = ['--layer=2', '--runs=local', '--scope=changed', '--reuse'];
-  expect(fixture.run({}, [...local, `--base=${apiBase}`]).stdout).not.toContain('"cached":true');
-  expect(fixture.run({}, [...local, `--base=${apiBase}`]).stdout).toContain('"cached":true');
-  expect(fixture.calls()).toEqual([]);
-  // Same candidate/files/groups, a different base still retires the earlier proof.
-  expect(fixture.run({}, [...local, `--base=${fixture.base}`]).stdout).not.toContain('"cached":true');
-  const full = fixture.run({}, ['--layer=2', '--runs=local', '--scope=all', '--reuse']);
-  expect(full.stdout).not.toContain('"cached":true');
-  const ci = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: git('rev-parse', 'HEAD') },
-    ['--layer=2', '--runs=ci', '--scope=changed', '--reuse']);
-  expect(ci.status).toBe(0); expect(ci.stdout).not.toContain('"cached":true');
-  expect(fixture.calls()).toContain('api');
 });
 
 test('actual main push selects a matching advisory check after origin/main advances', () => {
@@ -441,8 +445,8 @@ test('the local runner cannot hide an untracked private env file from secrets', 
   expect(cli('run.mjs', ['--only=secrets', '--runs=local']).status).toBe(1);
 });
 
-function cacheFixture() {
-  write('scripts/verify/registry.yml', 'checks:\n  - name: test\n    script: fixture.sh\n    layer: 2\n    blocking: true\n    cache: true\n');
+function hookFixture() {
+  write('scripts/verify/registry.yml', 'checks:\n  - name: focused-tests\n    script: fixture.sh\n    layer: 1\n    blocking: true\n');
   write('scripts/verify/fixture.sh', `mkdir -p .evidence\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\nexit "\${FIXTURE_EXIT:-0}"\n`);
   write('scripts/verify/size-check.sh', 'echo size >> .evidence/size-calls\necho \'{"status":"pass"}\'\n');
   write('scripts/verify/domain-check.sh', 'echo domain >> .evidence/domain-calls\necho \'{"status":"pass"}\'\n');
@@ -451,296 +455,8 @@ function cacheFixture() {
 }
 const calls = (file = 'calls') => readFileSync(join(directory, `.evidence/${file}`), 'utf8').trim().split('\n').length;
 
-function cheapCacheFixture() {
-  cacheFixture();
-  write('scripts/verify/registry.yml', `checks:
-  - name: focused-tests
-    script: fixture.sh
-    layer: 1
-    cache: true
-    blocking: true
-`);
-  write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: ['scripts/example.test.mjs'] }));
-  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-}
-const cheapReuse = ['--stage=cheap', '--layer=0-2', '--runs=local', '--scope=changed', '--reuse'];
-
-test('cheap focused checks reuse a matching pass', () => {
-  cheapCacheFixture();
-  expect(cli('run.mjs', cheapReuse).status).toBe(0);
-  const second = cli('run.mjs', cheapReuse);
-  expect(second.status).toBe(0); expect(second.stdout).toContain('"cached":true');
-  expect(calls()).toBe(1);
-});
-
-test('focused receipts bind actual child flags when full and cheap select different dependencies', () => {
-  cheapCacheFixture();
-  write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
-    '  - name: test\n    script: acceptance.sh\n    layer: 2\n    blocking: true\n');
-  write('scripts/verify/fixture.sh', 'echo "$FITSY_VERIFY_NEEDS_TEST_DEPS" >> .evidence/child-flags\necho \'{"status":"pass"}\'\n');
-  write('scripts/verify/acceptance.sh', 'echo \'{"status":"pass"}\'\n');
-  commit();
-  expect(cli('run.mjs', cheapReuse).status).toBe(0);
-  expect(cli('run.mjs', cheapReuse).stdout).toContain('"cached":true');
-  const full = cli('run.mjs', cheapReuse.filter(arg => arg !== '--stage=cheap'));
-  expect(full.status).toBe(0);
-  expect(full.stdout).not.toContain('"cached":true');
-  expect(readFileSync(join(directory, '.evidence/child-flags'), 'utf8').trim().split('\n')).toEqual(['0', '1']);
-});
-
-test.each(['missing', 'malformed', 'failed', 'expired', 'future', 'old-version'])(
-  'cheap caller reruns a %s receipt instead of accepting stale evidence', state => {
-    cheapCacheFixture();
-    expect(cli('run.mjs', cheapReuse).status).toBe(0);
-    const path = join(directory, '.evidence/verify/check-cache/focused-tests.json');
-    const receipt = JSON.parse(readFileSync(path, 'utf8'));
-    if (state === 'missing') rmSync(path);
-    else if (state === 'malformed') writeFileSync(path, '{');
-    else {
-      if (state === 'failed') receipt.result.status = 'fail';
-      if (state === 'expired') receipt.finishedAt = Date.now() - 7 * 3600_000;
-      if (state === 'future') receipt.finishedAt = Date.now() + 3600_000;
-      if (state === 'old-version') receipt.version = 1;
-      writeFileSync(path, JSON.stringify(receipt));
-    }
-    const second = cli('run.mjs', cheapReuse);
-    expect(second.status).toBe(0); expect(second.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
-  });
-
-test('cheap reuse binds commit comparison even when the selected file list is unchanged', () => {
-  cheapCacheFixture();
-  const base = git('rev-parse', 'HEAD');
-  git('commit', '--allow-empty', '-qm', 'same files, different comparison');
-  const head = git('rev-parse', 'HEAD');
-  const first = [...cheapReuse, `--base=${base}`, `--head=${head}`];
-  expect(cli('run.mjs', first).status).toBe(0);
-  expect(cli('run.mjs', first).stdout).toContain('"cached":true'); expect(calls()).toBe(1);
-  const changedBase = cli('run.mjs', [...cheapReuse, `--base=${head}`, `--head=${head}`]);
-  expect(changedBase.status).toBe(0); expect(changedBase.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
-  const changedHead = cli('run.mjs', [...cheapReuse, `--base=${head}`, `--head=${base}`]);
-  expect(changedHead.status).toBe(0); expect(changedHead.stdout).not.toContain('"cached":true'); expect(calls()).toBe(3);
-  expect(cli('run.mjs', [...cheapReuse, '--base=missing-history']).stdout).not.toContain('"cached":true'); expect(calls()).toBe(4);
-});
-
-test('cheap reuse binds scope and the complete focused recipe including the name pattern', () => {
-  cheapCacheFixture();
-  expect(cli('run.mjs', cheapReuse).status).toBe(0);
-  expect(cli('run.mjs', cheapReuse.map(arg => arg === '--scope=changed' ? '--scope=all' : arg)).stdout).not.toContain('"cached":true');
-  expect(calls()).toBe(2);
-  write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: ['scripts/example.test.mjs'], pattern: 'new assertion' }));
-  expect(cli('run.mjs', cheapReuse).stdout).not.toContain('"cached":true'); expect(calls()).toBe(3);
-});
-
-test('cheap reuse retains installed dependency and genuine environment identity', () => {
-  cheapCacheFixture();
-  // Own the fixture dependency lock rather than changing the shared installed tree.
-  const link = join(directory, 'node_modules');
-  expect(lstatSync(link).isSymbolicLink()).toBe(true);
-  expect(readlinkSync(link)).toBe(join(root, 'node_modules'));
-  const sharedLock = readFileSync(join(root, 'node_modules/.package-lock.json'), 'utf8');
-  unlinkSync(link);
-  mkdirSync(link);
-  symlinkSync(join(root, 'node_modules/js-yaml'), join(directory, 'node_modules/js-yaml'));
-  write('node_modules/.package-lock.json', '{"fixture":1}');
-  expect(cli('run.mjs', cheapReuse).status).toBe(0);
-  write('node_modules/.package-lock.json', '{"fixture":2}');
-  expect(cli('run.mjs', cheapReuse).stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
-  expect(cli('run.mjs', cheapReuse, { FEATURE_FLAG: 'changed' }).stdout).not.toContain('"cached":true'); expect(calls()).toBe(3);
-  expect(readFileSync(join(root, 'node_modules/.package-lock.json'), 'utf8')).toBe(sharedLock);
-});
-
-test('cheap reuse reruns real secrets when an optional executable appears or changes at the same PATH', () => {
-  write('scripts/verify/registry.yml', 'checks:\n  - name: secrets\n    script: secrets.sh\n    layer: 1\n    cache: true\n    blocking: true\n');
-  write('scripts/verify/secrets.sh', readFileSync(join(root, 'scripts/verify/secrets.sh'), 'utf8'));
-  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-  const tools = join(directory, '.evidence/tools');
-  mkdirSync(tools, { recursive: true });
-  symlinkSync(process.execPath, join(tools, 'node'));
-  const gitPath = execFileSync('/bin/bash', ['-p', '-c', 'command -v git'], { env, encoding: 'utf8' }).trim();
-  symlinkSync(gitPath, join(tools, 'git'));
-  const extra = { PATH: `${tools}:/usr/bin:/bin` };
-  expect(cli('run.mjs', cheapReuse, extra).status).toBe(0);
-  expect(cli('run.mjs', cheapReuse, extra).stdout).toContain('"cached":true');
-  const tool = '.evidence/tools/gitleaks';
-  write(tool, '#!/bin/sh\necho called >> .evidence/tool-calls\nexit 0\n');
-  chmodSync(join(directory, tool), 0o755);
-  const appeared = cli('run.mjs', cheapReuse, extra);
-  expect(appeared.status).toBe(0); expect(appeared.stdout).not.toContain('"cached":true');
-  expect(calls('tool-calls')).toBe(1);
-  expect(cli('run.mjs', cheapReuse, extra).stdout).toContain('"cached":true');
-  write(tool, '#!/bin/sh\necho called >> .evidence/tool-calls\nexit 1\n');
-  const changed = cli('run.mjs', cheapReuse, extra);
-  expect(changed.status).toBe(1); expect(changed.stdout).not.toContain('"cached":true');
-  expect(calls('tool-calls')).toBe(2);
-});
-
-test.each([
-  ['basename', 'changed'], ['basename', 'missing'], ['cat', 'changed'], ['cat', 'missing'],
-])('cheap reuse reruns real structural closure when %s is %s at the same PATH', (name, mutation) => {
-  for (const file of ['scripts/verify/structural.sh', 'scripts/structural-tests.sh', 'scripts/route-reviewers.sh', '.claude/agents/reviewer.md']) {
-    write(file, readFileSync(join(root, file), 'utf8'));
-  }
-  write('scripts/verify/registry.yml', 'checks:\n  - name: structural\n    script: structural.sh\n    layer: 0\n    cache: true\n    blocking: true\n');
-  write('docs/product/guide.md', 'fixture\n');
-  for (const path of ['apps/api', 'apps/mobile', 'packages/shared']) mkdirSync(join(directory, path), { recursive: true });
-  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-  const tools = join(directory, '.evidence/tools');
-  mkdirSync(tools, { recursive: true });
-  // An explicit PATH makes removal real absence, without touching host tools.
-  // GNU xargs defaults to external echo; resolve actual executables rather
-  // than shell builtins (command -v echo would yield only the word echo).
-  const commands = ['bash', 'sh', 'git', 'dirname', 'basename', 'cat', 'grep', 'sed', 'sort', 'tr', 'head', 'cut', 'xargs', 'echo', 'find'];
-  let original = '';
-  for (const command of commands) {
-    const executable = execFileSync('/bin/bash', ['-p', '-c', `type -P ${command}`], { env, encoding: 'utf8' }).trim();
-    if (command === name) original = executable;
-    else symlinkSync(executable, join(tools, command));
-  }
-  symlinkSync(process.execPath, join(tools, 'node'));
-  const tool = `.evidence/tools/${name}`;
-  const quoted = "'" + original.replace(/'/g, "'\"'\"'") + "'";
-  const successful = `#!/bin/sh\necho called >> .evidence/structural-tool-calls\nexec ${quoted} "$@"\n`;
-  write(tool, successful); chmodSync(join(directory, tool), 0o755);
-  const extra = { PATH: tools };
-  const first = cli('run.mjs', cheapReuse, extra);
-  expect({ status: first.status, stderr: first.status === 0 ? '' : first.stderr }).toEqual({ status: 0, stderr: '' });
-  const count = calls('structural-tool-calls');
-  const hit = cli('run.mjs', cheapReuse, extra);
-  expect(hit.status).toBe(0); expect(hit.stdout).toContain('"cached":true');
-  expect(calls('structural-tool-calls')).toBe(count);
-  if (mutation === 'missing') unlinkSync(join(directory, tool));
-  else write(tool, '#!/bin/sh\necho changed >> .evidence/structural-tool-calls\necho forbidden-domain\n');
-  const invalidated = cli('run.mjs', cheapReuse, extra);
-  expect(invalidated.status).toBe(1); expect(invalidated.stdout).not.toContain('"cached":true');
-  expect(invalidated.stderr).toContain(name === 'basename' ? 'Docs directory structure' : 'Reviewer routing table');
-  if (mutation === 'changed') expect(calls('structural-tool-calls')).toBeGreaterThan(count);
-  write(tool, successful); chmodSync(join(directory, tool), 0o755);
-  const recovered = cli('run.mjs', cheapReuse, extra);
-  expect(recovered.status).toBe(0); expect(recovered.stdout).not.toContain('"cached":true');
-  expect(cli('run.mjs', cheapReuse, extra).stdout).toContain('"cached":true');
-});
-
-test('cheap reuse binds actual installed dependency files when the lock text is unchanged', () => {
-  cheapCacheFixture();
-  const link = join(directory, 'node_modules');
-  expect(lstatSync(link).isSymbolicLink()).toBe(true);
-  expect(readlinkSync(link)).toBe(join(root, 'node_modules'));
-  unlinkSync(link); mkdirSync(link);
-  symlinkSync(join(root, 'node_modules/js-yaml'), join(link, 'js-yaml'));
-  write('node_modules/.package-lock.json', '{"fixture":"unchanged"}');
-  write('package.json', JSON.stringify({ private: true, dependencies: { 'fixture-check': '1.0.0' } }));
-  write('node_modules/fixture-check/package.json', JSON.stringify({ name: 'fixture-check', version: '1.0.0', main: 'index.cjs' }));
-  write('node_modules/fixture-check/index.cjs', 'process.exit(0);\n');
-  write('scripts/verify/fixture.sh', 'echo run >> .evidence/calls\nnode node_modules/fixture-check/index.cjs\n');
-  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-  expect(cli('run.mjs', cheapReuse).status).toBe(0);
-  expect(cli('run.mjs', cheapReuse).stdout).toContain('"cached":true'); expect(calls()).toBe(1);
-  write('node_modules/fixture-check/index.cjs', 'process.exit(1);\n');
-  const changed = cli('run.mjs', cheapReuse);
-  expect(changed.status).toBe(1); expect(changed.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
-  expect(readFileSync(join(link, '.package-lock.json'), 'utf8')).toBe('{"fixture":"unchanged"}');
-});
-
-test.each(['explicit', 'unavailable'])('cheap reuse preserves the %s parent comparison through real nested safety checks', comparison => {
-  for (const file of ['focused-tests.sh', 'focused-tests.mjs', 'node-focused-reporter.mjs', 'secrets.sh', 'migration-safety.sh']) {
-    write(`scripts/verify/${file}`, readFileSync(join(root, 'scripts/verify', file), 'utf8'));
-  }
-  write('scripts/verify/registry.yml', 'checks:\n' + ['focused-tests', 'secrets', 'migration-safety'].map(name =>
-    `  - name: ${name}\n    script: ${name}.sh\n    layer: 1\n    cache: true\n    blocking: true\n`).join(''));
-  const base = commit();
-  write('scripts/comparison.test.mjs', `import test from 'node:test';
-import assert from 'node:assert/strict';
-import {writeFileSync} from 'node:fs';
-test('required comparison assertion',()=>{writeFileSync('.evidence/focused-called','called');assert.fail('selected assertion ran');});
-`);
-  write('apps/api/.env.dev', 'FIXTURE_PLACEHOLDER=value\n');
-  write('prisma/migrations/fixture/migration.sql', 'DROP TABLE fixture;\n');
-  const head = commit(); git('update-ref', 'refs/remotes/origin/main', head);
-  write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: ['scripts/comparison.test.mjs'] }));
-  for (const name of ['focused-tests', 'secrets', 'migration-safety']) {
-    // Each real consumer gets its own parent run: blocking safety failures
-    // intentionally prevent a later focused phase in an aggregate run.
-    const result = cli('run.mjs', [...cheapReuse, `--only=${name}`, `--base=${comparison === 'explicit' ? base : 'missing-parent-history'}`, `--head=${head}`]);
-    expect(result.status).toBe(1);
-    const checks = result.stdout.trim().split('\n').map(line => JSON.parse(line));
-    expect(checks).toContainEqual(expect.objectContaining({ name, status: 'fail' }));
-  }
-  expect(existsSync(join(directory, '.evidence/focused-called'))).toBe(comparison === 'explicit');
-});
-
-test('unchanged successful L2 is reused; source, environment, and definition changes rerun it', () => {
-  cacheFixture();
-  expect(cli('run.mjs', ['--layer=2']).status).toBe(0); expect(calls()).toBe(1);
-  expect(cli('run.mjs', ['--layer=2', '--reuse']).stdout).toContain('"cached":true'); expect(calls()).toBe(1);
-  write('scripts/example.mjs', 'export const x = 2;\n');
-  expect(cli('run.mjs', ['--layer=2', '--reuse']).status).toBe(0); expect(calls()).toBe(2);
-  expect(cli('run.mjs', ['--layer=2', '--reuse'], { FEATURE_FLAG: 'changed' }).status).toBe(0); expect(calls()).toBe(3);
-  write('scripts/verify/fixture.sh', readFileSync(join(directory, 'scripts/verify/fixture.sh'), 'utf8') + '# new assertion\n');
-  expect(cli('run.mjs', ['--layer=2', '--reuse']).status).toBe(0); expect(calls()).toBe(4);
-});
-
-test('failed and expired receipts never become a reusable pass', () => {
-  cacheFixture();
-  expect(cli('run.mjs', ['--layer=2'], { FIXTURE_EXIT: '1' }).status).toBe(1);
-  expect(cli('run.mjs', ['--layer=2', '--reuse'], { FIXTURE_EXIT: '1' }).status).toBe(1); expect(calls()).toBe(2);
-  expect(cli('run.mjs', ['--layer=2']).status).toBe(0);
-  const receiptFile = join(directory, '.evidence/verify/check-cache/test.json');
-  const receipt = JSON.parse(readFileSync(receiptFile, 'utf8')); receipt.finishedAt = 0;
-  writeFileSync(receiptFile, JSON.stringify(receipt));
-  expect(cli('run.mjs', ['--layer=2', '--reuse']).stdout).not.toContain('"cached":true'); expect(calls()).toBe(4);
-  write('apps/api/.env.local', 'FEATURE_FLAG=changed\n');
-  expect(cli('run.mjs', ['--layer=2', '--reuse']).stdout).not.toContain('"cached":true'); expect(calls()).toBe(5);
-});
-
-test('a fresh failed run invalidates an older successful receipt with the same inputs', () => {
-  cacheFixture();
-  write('scripts/verify/fixture.sh', `mkdir -p .evidence\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\ntest ! -e .evidence/force-fail\n`);
-  expect(cli('run.mjs', ['--layer=2']).status).toBe(0);
-  write('.evidence/force-fail', '1');
-  expect(cli('run.mjs', ['--layer=2']).status).toBe(1);
-  rmSync(join(directory, '.evidence/force-fail'));
-  const retry = cli('run.mjs', ['--layer=2', '--reuse']);
-  expect(retry.status).toBe(0); expect(retry.stdout).not.toContain('"cached":true'); expect(calls()).toBe(3);
-});
-
-test('source mutation during a cached run retires the prior receipt', () => {
-  cacheFixture();
-  write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
-    '  - name: mutator\n    script: mutator.sh\n    layer: 2\n    blocking: true\n');
-  write('scripts/verify/mutator.sh', `if [ -e .evidence/mutate ]; then echo 'export const x = 2;' > scripts/example.mjs; fi\necho '{"summary":"mutation check"}'\n`);
-  const original = readFileSync(join(directory, 'scripts/example.mjs'), 'utf8');
-  expect(cli('run.mjs', ['--layer=2']).status).toBe(0);
-  write('.evidence/mutate', '1');
-  const changed = cli('run.mjs', ['--layer=2', '--reuse']);
-  expect(changed.status).toBe(1); expect(changed.stdout).toContain('"name":"source-stability"');
-  write('scripts/example.mjs', original); rmSync(join(directory, '.evidence/mutate'));
-  const retry = cli('run.mjs', ['--layer=2', '--reuse']);
-  expect(retry.status).toBe(0); expect(retry.stdout).not.toContain('"cached":true'); expect(calls()).toBe(2);
-});
-
-test('CI-first real push preserves prior unit receipt without rerunning heavy checks', () => {
-  cacheFixture();
-  const hookEnv = hookEnvironment(root, directory, env);
-  write('.githooks/pre-push', installedFixtureHook(root, directory, true));
-  chmodSync(join(directory, '.githooks/pre-push'), 0o755);
-  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-  const local = spawnSync('npm', ['run', 'verify', '--', '--runs=local'],
-    { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
-  expect({ status: local.status, output: local.status === 0 ? '' : `${local.error?.message}\n${local.stdout}\n${local.stderr}` }).toEqual({ status: 0, output: '' }); expect(calls()).toBe(1);
-  const receiptFile = join(directory, '.evidence/verify/check-cache/test.json');
-  const receipt = readFileSync(receiptFile, 'utf8');
-  const remote = join(directory, '.evidence/remote.git');
-  execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
-  const pushed = spawnSync('git', ['-c', 'core.hooksPath=.githooks', 'push', remote, 'HEAD:refs/heads/candidate'],
-    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, FEATURE_FLAG: 'different' }, timeout: 30000 });
-  expect(pushed.status).toBe(0); expect(calls()).toBe(1);
-  expect(readFileSync(receiptFile, 'utf8')).toBe(receipt);
-  expect(pushed.stdout + pushed.stderr).not.toMatch(/"name":"test"/);
-  expect(existsSync(join(hookEnv.HOME, '.fitsy-review'))).toBe(false);
-});
-
 test('pre-push works from a fresh home without an issue binding or review installation', () => {
-  cheapCacheFixture();
+  hookFixture();
   const hookEnv = hookEnvironment(root, directory, env);
   write('.githooks/pre-push', installedFixtureHook(root, directory));
   const hook = spawnSync('/bin/bash', ['-p', '.githooks/pre-push'], {
@@ -755,7 +471,7 @@ test('pre-push works from a fresh home without an issue binding or review instal
 });
 
 test.each(['size-check', 'domain-check', 'static', 'focused-tests'])('pre-push blocks a failed %s without review state', failing => {
-  cheapCacheFixture();
+  hookFixture();
   const hookEnv = hookEnvironment(root, directory, env);
   write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
     '  - name: static\n    script: static.sh\n    layer: 1\n    blocking: true\n');
@@ -780,7 +496,7 @@ test('the runner reports missing dependencies without a local admission helper',
 });
 
 test('pre-push accepts an inapplicable domain gate but refuses its real failure', () => {
-  cacheFixture();
+  hookFixture();
   const hookEnv = hookEnvironment(root, directory, env);
   write('.githooks/pre-push', installedFixtureHook(root, directory));
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"skipped"}\'\nexit 2\n');
@@ -794,7 +510,7 @@ test('pre-push accepts an inapplicable domain gate but refuses its real failure'
 });
 
 test('real Git push hook preserves outer refs, isolates Git and reruns cheap size/domain gates', () => {
-  cacheFixture();
+  hookFixture();
   const hookEnv = hookEnvironment(root, directory, env);
   write('scripts/verify/fixture.sh', `mkdir -p .evidence/inner\ngit -C .evidence/inner init -q\ngit -C .evidence/inner config user.name fixture\ngit -C .evidence/inner config user.email fixture@example.test\necho nested > .evidence/inner/file\ngit -C .evidence/inner add file\ngit -C .evidence/inner commit -qm nested\ngit -C .evidence/inner checkout -qb nested\ntest "$(git -C .evidence/inner branch --show-current)" = nested\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\n`);
   write('.githooks/pre-push', installedFixtureHook(root, directory));
@@ -806,9 +522,9 @@ test('real Git push hook preserves outer refs, isolates Git and reruns cheap siz
   execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
   const push = (ref: string) => spawnSync('git', ['push', remote, `HEAD:refs/heads/${ref}`],
     { cwd: directory, env: hookEnv, encoding: 'utf8', timeout: 30000 });
-  const first = push('first'); expect(first.status).toBe(0); expect(existsSync(join(directory, '.evidence/calls'))).toBe(false);
+  const first = push('first'); expect(first.status).toBe(0); expect(calls()).toBe(1);
   const second = push('second'); expect(second.status).toBe(0);
-  expect(second.stdout + second.stderr).not.toMatch(/"name":"test"/); expect(existsSync(join(directory, '.evidence/calls'))).toBe(false);
+  expect(second.stdout + second.stderr).not.toMatch(/"name":"test"/); expect(calls()).toBe(2);
   expect(calls('size-calls')).toBe(2); expect(calls('domain-calls')).toBe(2);
   expect(git('rev-parse', 'HEAD')).toBe(before);
   expect(git('branch', '--show-current')).toBe(branch);

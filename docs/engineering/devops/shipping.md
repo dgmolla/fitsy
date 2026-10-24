@@ -64,6 +64,8 @@ A hook pass does not replace independent review, applicable product acceptance o
 
 Keep review and acceptance evidence tied to the tested source.
 After source changes, rerun affected checks and obtain matching review before merge.
+Every selected verification check executes afresh, and full affected test groups include focused test files.
+Empty selections, missing scripts and zero passing test cases fail verification.
 UI signoff and development walkthroughs precede final UI acceptance.
 The final-candidate simulator runner and publisher retain source, app, backend and evidence validation without a local session wrapper.
 Apple account, legal and submission approvals, product-flow status, PR checks, main Verify, Deploy and actual release acceptance remain required.
