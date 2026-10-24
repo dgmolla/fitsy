@@ -209,6 +209,9 @@ owner decision - flip it per the tuning guide when ready.
 
 - Follow [task management](docs/engineering/devops/task-management.md) for the GitHub Project queue, exclusive execution ownership, worker lifecycle, progress updates, and delivery timestamps.
 - `proj-mgmt/` retains planning/reference material; do not maintain a competing active task queue.
+- Run `scripts/delivery/cleanup.py <private-records.json>` on demand; dry-run is the default and deletion requires `--apply`.
+  Follow the [cleanup record contract](docs/engineering/devops/local-dispatcher.md#admission-and-manual-cleanup); preserve active, dirty, unmerged, shared and uncertain resources, with actual inactivity strictly over four hours.
+  Do not install a cleanup scheduler or launchd job.
 
 ## Maintaining this file
 

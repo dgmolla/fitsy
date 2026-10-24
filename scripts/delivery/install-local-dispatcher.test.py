@@ -15,10 +15,6 @@ import unittest
 
 INSTALLER = Path(__file__).with_name('install-local-dispatcher.sh')
 RUNTIME = Path(__file__).with_name('local-dispatcher.py')
-RESOURCE = Path(__file__).with_name('resource_lifecycle.py')
-COLD = Path(__file__).with_name('cold_retention.py')
-RETIREMENT = Path(__file__).parents[1] / 'sim/retire_task_device.py'
-USES = Path(__file__).parents[1] / 'sim/sim_resource_uses.py'
 
 
 class InstallTest(unittest.TestCase):
@@ -31,10 +27,6 @@ class InstallTest(unittest.TestCase):
                 path.mkdir(parents=True, exist_ok=True)
             shutil.copy2(INSTALLER, repo / 'scripts/delivery/install-local-dispatcher.sh')
             shutil.copy2(RUNTIME, repo / 'scripts/delivery/local-dispatcher.py')
-            shutil.copy2(RESOURCE, repo / 'scripts/delivery/resource_lifecycle.py')
-            shutil.copy2(COLD, repo / 'scripts/delivery/cold_retention.py')
-            shutil.copy2(RETIREMENT, repo / 'scripts/sim/retire_task_device.py')
-            shutil.copy2(USES, repo / 'scripts/sim/sim_resource_uses.py')
             (home / 'firstmate/config/slack-notifications.json').write_text(json.dumps({
                 'channel': 'CCHANNEL', 'user': 'UHUMAN', 'bridge_path': str(base / 'bridge')}))
             (home / '.fitsy-delivery/config.json').write_text(json.dumps({
@@ -77,34 +69,13 @@ class InstallTest(unittest.TestCase):
                                 '--worktree-root', str(roots))
             self.assertIn('installed_paused', installed)
             installed_runtime = home / '.fitsy-dispatcher/runtime/local-dispatcher.py'
-            installed_helper = home / '.fitsy-dispatcher/sim/retire_task_device.py'
-            self.assertEqual(installed_helper.read_bytes(), RETIREMENT.read_bytes())
             self.assertIn('"active": null', command(sys.executable, str(installed_runtime), 'status',
                                                      '--config', str(home / '.fitsy-dispatcher/config.json')))
             config_path = home / '.fitsy-dispatcher/config.json'
             config = json.loads(config_path.read_text())
             self.assertFalse(config['enabled'])
             self.assertEqual(config['scratch_reserve_bytes'], 4 * 1024**3)
-            self.assertEqual((home / '.fitsy-dispatcher/runtime/resource_lifecycle.py').read_bytes(), RESOURCE.read_bytes())
-            # Installed recovery must resolve ownership tools under the timer's narrow PATH.
-            self.assertTrue(Path(config['lsof_bin']).is_absolute())
-            empty = base / 'released-scratch'; empty.mkdir()
-            claim = {'id': 'released-fixture', 'terminal': 'waiting', 'finished_at': '2026-10-05T00:00:00Z'}
-            receipt = home / '.fitsy-dispatcher/claims/released-fixture/receipt.json'
-            receipt.parent.mkdir(parents=True); receipt.write_text(json.dumps(claim))
-            command(sys.executable, '-c',
-                    "import os,sys,json; os.environ['PATH']='/usr/bin:/bin'; sys.path.insert(0,sys.argv[1]); import resource_lifecycle as r; "
-                    'r.released(json.load(open(sys.argv[2])),json.loads(sys.argv[3]),[sys.argv[4]])',
-                    str(installed_runtime.parent), str(config_path), json.dumps(claim), str(empty))
-            # Container-level lsof warnings are uncertainty, not permission to release.
-            uncertain_env = {**env, 'FAKE_LSOF_UNCERTAIN': '1'}
-            rejected_release = subprocess.run([sys.executable, '-c',
-                    "import os,sys,json; os.environ['PATH']='/usr/bin:/bin'; sys.path.insert(0,sys.argv[1]); import resource_lifecycle as r; "
-                    'r.released(json.load(open(sys.argv[2])),json.loads(sys.argv[3]),[sys.argv[4]])',
-                    str(installed_runtime.parent), str(config_path), json.dumps(claim), str(empty)],
-                    cwd=repo, env=uncertain_env, text=True, capture_output=True, timeout=15)
-            self.assertNotEqual(rejected_release.returncode, 0)
-            self.assertIn('uncertain file ownership', rejected_release.stderr)
+            self.assertEqual(config['runtime_sha256'].keys(), {'runtime/local-dispatcher.py'})
             # A mixed runtime must never be enabled using the published source identity.
             original_runtime = installed_runtime.read_bytes()
             installed_runtime.write_bytes(original_runtime + b'\n# interrupted update fixture\n')

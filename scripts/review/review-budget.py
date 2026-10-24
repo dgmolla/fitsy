@@ -713,8 +713,6 @@ def admit_completed(handle, ledger, args, events):
                           "scripts/verify/receipt-cache.mjs", "scripts/verify/README.md",
                           ".githooks/pre-push",
                           "scripts/delivery/local-dispatcher.py", "scripts/delivery/local-dispatcher.test.py",
-                          "scripts/delivery/cold_retention.py", "scripts/delivery/pressure-retention.test.py",
-                          "scripts/delivery/resource-controls.test.py", "scripts/delivery/resource_lifecycle.py",
                           "scripts/verify/hook-fixture.ts", "scripts/verify/impact-plan.mjs",
                           "scripts/verify/impact-plan.test.ts", "scripts/verify/product-flow-impact.test.ts",
                           "scripts/verify/product-flow-public-env.test.ts",

@@ -1251,12 +1251,13 @@ class CompletedAdmission(CompletedAccounting):
         original_control = self.args.control_sha
         for name in ('app.ts', 'apps/mobile/app/nutrition.tsx',
                      'scripts/delivery/unrelated.py', 'scripts/verify/unrelated.mjs',
+                     'scripts/delivery/cleanup.py',
                      'scripts/verify/run-output.test.ts.backup',
                      'scripts/deploy/native-compatibility.test.ts.backup',
                      'scripts/deploy/ota.sh',
                      'docs/engineering/devops/unrelated.md',
                      '.github/workflows/unrelated.yml',
-                     'scripts/delivery/resource_lifecycle.py.backup',
+                     'scripts/delivery/local-dispatcher.py.backup',
                      'scripts/verify/impact-plan.mjs.backup'):
             with self.subTest(path=name):
                 self.git('checkout', '-qf', '-B', 'controls', original_control)
@@ -1299,10 +1300,6 @@ class CompletedAdmission(CompletedAccounting):
                      '.github/workflows/deploy.yml', '.github/workflows/eas-build.yml', 'vercel.json',
                      'scripts/delivery/local-dispatcher.py', 'scripts/delivery/local-dispatcher.test.py',
                      'docs/engineering/devops/resource-control-continuation.md',
-                     'scripts/delivery/cold_retention.py',
-                     'scripts/delivery/pressure-retention.test.py',
-                     'scripts/delivery/resource-controls.test.py',
-                     'scripts/delivery/resource_lifecycle.py',
                      'scripts/verify/hook-fixture.ts', 'scripts/verify/impact-plan.mjs',
                      'scripts/verify/impact-plan.test.ts',
                      'scripts/verify/run-output.test.ts',

@@ -7,31 +7,23 @@ installation and actual #443 shipment must be reported separately.
 
 ```mermaid
 flowchart LR
-    I[Existing claim: acquisition intent] --> A[Exact acquired identity]
+    I[Existing exclusive task claim] --> A[Exact checkout and process identity]
     M[Fresh coordinator measurements] --> B[Budget admission]
     A --> E[Existing owned execution]
     B --> E
     E --> T[All-exit owned group teardown]
-    T --> R[Retain source and canonical evidence]
-    R --> C[Strict greater than four-hour assessment]
+    T --> R[Retain source and required evidence]
+    R --> C[Explicit dry-run cleanup after four hours]
     C --> V[Fresh dependency and identity check]
-    V --> D[Separately validated exact deletion]
+    V --> D[Exact removal only with apply]
 ```
 
 ## Acquisition and admission
 
-`resource_intent` and `resource_acquired` in `scripts/delivery/resource_lifecycle.py`
-append identity observations inside the original claim. The adapter records new or
-resumed checkout path/head/branch and worker PID/start/group. Interrupted intent
-remains `acquiring`; another acquisition cannot overwrite it. Original histories
-and durable terminal receipts remain the recovery authority.
-
-The same helpers accept simulator UDID and Docker context/daemon, container/image
-IDs, network IDs, and volume/builder name plus creation identity. Callers must
-record consumers, unfinished outcome dependencies, actual last use and recreation
-argv before a resource can become disposable. Labels and creation age alone do
-not establish ownership or last use. Docker/native caller integration and runtime
-reconciliation are not established by these helper tests.
+The dispatcher keeps checkout creation intent and exact worker PID/start/group in the original claim.
+Interrupted launch and checkout creation remain owned until reconciled under the existing dispatcher lock.
+Original histories and durable terminal receipts remain the recovery authority.
+The capacity check lives with its only caller in `scripts/delivery/local-dispatcher.py`.
 
 The installed coordinator configuration may supply `execution_budget` and a
 private `resource_observation_path` outside the writable checkout tree. Neither is
@@ -67,20 +59,10 @@ enforcement installed. The coordinator must observe actual surviving identities
 and stopped children before releasing ownership, and preserve interrupted intent
 and original review accounting.
 
-Source retirement and scratch deletion require execution release strictly more
-than 14,400 seconds ago, even with disk pressure, configured zero grace or an
-over-budget cache. Shutting down compute is distinct from deleting data. Booted
-simulator shutdown retains its supported separate policy; simulator erasure and
-evidence deletion still need their own dependency/evidence safeguards.
-
-`docker_retention` assesses containers, images, volumes, networks and dedicated
-builders. It requires complete fresh inventory, exact identity, explicit disposable
-provenance/recreation, no active/shared use and no unfinished dependency. Stopped
-containers also pin images, volumes and networks. Reused volume names fail exact
-creation identity matching. No destructive Docker operation is implemented or
-promoted here. Builder cache deletion and all new exact-target operations need
-disposable-runtime validation by the cleanup-skill owner before promotion.
-No whole-host prune, force removal, VM storage deletion or new registry is added.
+Resource deletion is an explicit on-demand operation through `scripts/delivery/cleanup.py`.
+Its [record format and safeguards](local-dispatcher.md#admission-and-manual-cleanup) require known exclusive ownership, ended dependencies and actual use/release strictly more than four hours ago.
+Dry-run is the default, and uncertain, dirty, unmerged, shared or active resources are retained.
+The dispatcher no longer archives or deletes resources on an idle tick.
 
 ## Prepared profile custody
 
@@ -111,9 +93,9 @@ authority. No account switch or new #443 product review is part of this contract
 Focused unprivileged checks:
 
 ```sh
-python3 -B scripts/delivery/resource-controls.test.py
+python3 -B scripts/delivery/cleanup.test.py
 python3 -B scripts/review/external-approval.test.py ProfileCustodyTests
-python3 -B scripts/delivery/local-dispatcher.test.py ResourceRetentionTest
+python3 -B scripts/delivery/local-dispatcher.test.py SimulatorClaimProcessTest
 ```
 
 The trusted coordinator needs a supported environment with real process inventory
@@ -123,9 +105,8 @@ and disposable resource teardown for these affected process cases:
 python3 -B scripts/delivery/local-dispatcher.test.py \
   DispatcherProcessTest.test_success_and_failure_stop_unneeded_children_before_release \
   DispatcherProcessTest.test_cancelled_launcher_settles_group_and_cannot_accept_late_success \
-  DispatcherProcessTest.test_cancel_during_acquisition_preserves_original_intent_without_new_worker \
+  DispatcherProcessTest.test_cancel_before_worker_spawn_preserves_claim_without_starting_worker \
   DispatcherProcessTest.test_timeout_stops_surviving_worker_group_child
-python3 -B scripts/delivery/pressure-retention.test.py
 ```
 
 Run applicable canonical cheap checks against the frozen commit before any
