@@ -497,7 +497,7 @@ Anything without a mechanism is deleted rather than documented.
 | `auto-merge` | `on-green` | GitHub auto-merge enabled by the classify job after checks pass (GitHub rejects enabling it earlier since 2026-03) |
 | `spec-requirement` | `feature` | `spec-conformance` lens fails a `medium+` feature PR with no `Spec:` line; bug fixes need an `incident` link instead |
 | `shadow-checks` | list | registry `blocking: shadow`; promoted by editing the registry in a PR that shows two weeks of zero false positives |
-| `review-budget` | `$X/month`, `N tokens/PR` | API key spend cap, workflow budget guard |
+| AI review attempts | Two per head SHA | Installed local reviewer; workflow and provider timeouts |
 | `harden-on-incident` | `required` | regression test plus constraint against the demonstrated failure |
 | `human-override` | label `override-check` + justification | logged to L10, sampled weekly |
 

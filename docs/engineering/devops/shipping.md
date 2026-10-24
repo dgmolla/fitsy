@@ -39,6 +39,8 @@ Select meaningful focused reproduction and regression tests for the changed beha
 Run applicable structural, lint, type and safety checks plus that focused selection before independent review.
 Independent review uses the [simple-review runner](../../../scripts/review/simple-review.md) and retained routing and severity rules.
 The installed review caller publishes the existing `AI review` status for the exact candidate.
+Local admission completes cheap checks and revalidates matching independent evidence through immutable trusted-main reviewer controls.
+Reviewer execution remains separate, with attempts controlled by the installed local AI reviewer.
 
 ```sh
 node scripts/verify/focused-tests.mjs --set scripts/verify/impact-plan.test.ts
@@ -66,7 +68,7 @@ Apple/legal approvals, product-flow status, hooks, PR checks, main Verify, Deplo
 
 Keep source frozen throughout checks, review and acceptance.
 Source drift fails the run, and later source changes require current cheap checks, review and affected full acceptance.
-Reuse unchanged verification receipts only through the canonical runners; retain actual failure history.
+Reuse unchanged verification receipts only through the canonical runners and preserve raw failure history for unfinished tasks.
 Verification retains each stage attempt under `.evidence/verify/attempts/` and archives retired test receipts under `check-cache/history/`.
 UI signoff and development walkthroughs precede final UI acceptance.
 The publishable `final-candidate` simulator entry point requires the live shipping session's matching canonical review before native journeys.

@@ -61,7 +61,7 @@ If ownership cannot be established, reconcile it before launching another worker
 For Codex-led work, one coordinator claims the issue and assigns one Sol implementation owner by default.
 Add agents only for bounded independent tasks with explicit file ownership; another lane's blocker does not hold unrelated work.
 Freeze and commit the candidate, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, then complete one independent canonical review before full suites and affected E2E acceptance.
-Repair findings and revalidate cheap checks and review before full acceptance; revalidate matching canonical review evidence through live shipping admission and retain the original issue review budget.
+Repair findings and revalidate cheap checks and review before full acceptance; revalidate matching canonical review evidence through live shipping admission and preserve historical review records needed by unfinished tasks.
 Use the review domains, UI signoff, release approvals and shipping gates in [shipping.md](shipping.md).
 Send a separate Slack alert headed `🚨 *BLOCKED*` only when live evidence establishes a concrete action that requires the human.
 Keep agent-owned review, required-gate, execution and dependency recovery on the issue and handoff without human mentions.
@@ -127,7 +127,7 @@ Reconcile workers on completion and on the supervisor's normal heartbeat.
 After recording completion, use FM's canonical teardown for the completed worker when no child work, owned running operation, pending delivery, or unrecorded evidence remains.
 Keep a completed worker only for a documented recovery need with an owner and expiry/recheck condition.
 Do not keep it idle indefinitely as a substitute for durable task state.
-Do not kill workers solely because of elapsed age outside an explicitly configured, issue-bound execution budget, and do not restart them to evade review budgets or erase failed attempts.
+Do not kill workers solely because of elapsed age outside an explicitly configured, issue-bound execution budget, and do not restart them to evade the AI review attempt limit or erase failed attempts.
 The local dispatcher enforces a 90-minute active claim budget, records a timeout, reconciles its owned process group, and parks the issue without resetting source-bound evidence or review history.
 Worker retirement and worktree deletion are separate operations: preserve unmerged changes, source-bound evidence, review history, and release/rollback receipts.
 Release simulator, Metro, database and other resource claims only through their ownership-aware procedures.
@@ -146,12 +146,12 @@ Replay and reconcile the pending updates after recovery, retaining their origina
 ### Persistent reviewers and timing coverage
 
 Every PR body includes exactly one `Delivery-Issue: #N` line within its first 4,000 characters, naming the authoritative outcome issue.
-PR-mode review runners isolate their timing binding by PR under `.evidence/review-delivery/` and publish on closeout.
+Review callers record timing through the delivery owner's configured reporting path and publish on closeout.
 Missing, ambiguous or conflicting issue metadata creates an explicit timing gap and never borrows another task's binding.
-The poller publishes again after its selected lenses finish to reconcile their combined evidence.
+The installed review caller publishes the existing `AI review` status for the exact candidate after its required lenses finish.
 GitHub reporting outages retain local events and do not convert a failed review into a passing gate or block a passing review.
 Historical accepted observations count as tracked coverage; stale checkpoints remain a separate liveness signal even when their phases are outside the 24-hour duration window.
 
-At each review round closeout, record confirmed findings, impact priority, and either the detector plus prevention change or an owned follow-up under the review disposition contract.
+At each review round closeout, record confirmed findings, impact priority, and either the detector plus prevention change or an owned follow-up in the authoritative outcome issue.
 If no new hardening is warranted, state that explicitly instead of manufacturing a change.
 Publish shipped improvements using the [hourly report evidence contract](hourly-delivery-report.md#local-phases-and-review-hardening); queued fixes do not count as shipped improvements.

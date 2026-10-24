@@ -124,7 +124,7 @@ Completed mobile checkouts retain their hot proof paths until the existing issue
 The incoming-reference scan traverses nested dependency links without following symlinks and stops after incoming_reference_scan_seconds (30 seconds maximum/default).
 A scan deadline or filesystem error preserves the checkout and records the unresolved assessment and next action; it never authorizes removal.
 Before normal Git removal, private Gitbundle recovery and every source/environment/app/raw-evidence archive member must pass exact content verification.
-Dirty or untracked source is retained in that verified archive; no original branch, terminal receipt, failure, review budget or UI approval is deleted or reset.
+Dirty or untracked source is retained in that verified archive; no original branch, terminal receipt, failure, historical review record or UI approval is deleted or reset.
 One immutable content-addressed source bundle serves covered recoveries instead of copying repository history into every archive.
 Identical app files of at least 8 MiB use one private compressed recovery object with compressed and decoded hashes recorded in each manifest.
 Restore those objects to their exact manifest paths and recorded file modes, then verify decoded hashes; a damaged object retains the next hot source and cannot satisfy completed-source recovery.

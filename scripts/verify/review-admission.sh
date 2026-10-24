@@ -52,7 +52,7 @@ HEAD_SHA="$(git rev-parse HEAD)"
 # Local acceptance derives its range from authenticated source, never the caller.
 unset FITSY_DIFF_BASE FITSY_DIFF_HEAD
 ADMIN_HOME="$(python3 -I -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
-for NAME in FITSY_REVIEW_HOME FITSY_REVIEW_CACHE FITSY_REVIEW_BUDGET_HOME FITSY_REVIEW_COMPLETED_HOME; do
+for NAME in FITSY_REVIEW_HOME FITSY_REVIEW_CACHE; do
   [ -z "${!NAME:-}" ] || { echo "caller-selected $NAME cannot authorize shipping" >&2; fail; }
 done
 TRUSTED_REPO="$ADMIN_HOME/.fitsy-review/repo"

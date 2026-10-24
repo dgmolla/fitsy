@@ -131,6 +131,8 @@ vercel env add KEY prod    # Add/update a secret
 The human-selected standalone Pstack orchestrate-delivery, ship-branch and verify-fitsy skills supplied by the coordinator control orchestration and shipping.
 Repository documents retain product, supported command, security/data and release contracts.
 Follow [model routing and delegation](docs/engineering/devops/agent-model-routing.md) for configured model and independent review protections.
+The installed local AI reviewer owns the two-attempt limit per head SHA; individual executions are bounded by workflow and provider timeouts.
+Preserve historical review records needed by unfinished tasks.
 
 ## Session Discipline
 
