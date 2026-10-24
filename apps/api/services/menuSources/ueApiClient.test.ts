@@ -121,7 +121,7 @@ function buildResponse(sections: Array<{ name?: string; items: Array<{ title: st
             standardItemsPayload: {
               ...(section.name ? { title: { text: section.name } } : {}),
               catalogItems: section.items.map((item) => ({
-                uuid: item.uuid ?? "item-uuid",
+                ...(item.uuid ? { uuid: item.uuid } : {}),
                 title: item.title,
                 ...(item.description !== undefined ? { itemDescription: item.description } : {}),
                 ...(item.price !== undefined ? { price: item.price } : {}),

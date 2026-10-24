@@ -80,7 +80,7 @@ The orchestrator **reuses** every building block from `scripts/preload.ts`:
 - `PipelineEmitter` + existing event schemas (`scripts/pipeline-events.ts`) — Axiom `fitsy-pipeline` dataset continues unchanged; add a `phase: 'ue-first' | 'legacy'` field to `RestaurantEvent`, `CostCheckpoint`, `SubstepEvent` so dashboards can filter by pipeline. Cost dashboards gain a `googlePlacesPhoto` key alongside the existing `braveSearch/firecrawl/haiku`.
 - `API_SEMAPHORES` (`scripts/semaphore.ts`) — UE=5, Haiku=20 ceilings
 - `validateApiCredentials` pattern (`scripts/preload.ts:218`) — preflight UE reachability (incl. `UE_LOC_COOKIE` decode + probe) + Anthropic
-- `shouldSkipIncremental` + `computeMenuHash` (`scripts/preload.ts:306–331`) — see Freshness & skip logic below
+- `shouldSkipIncremental` + `computeMenuHash` (`apps/api/services/menuSources/menuItemIdentity.ts`) — see Freshness & skip logic below
 - `MenuSourceResolver` (`apps/api/services/menuSources/resolver.ts`) — chain → UE fallback, swap `UberEatsSource` for a new `UeApiDirectSource`
 - `FatSecretSource` — unchanged
 - `validateItems` / `persistHexBulkInTx` (`scripts/pipeline-utils.ts`) — rejection + bulk persist
@@ -269,7 +269,7 @@ Reuse `PipelineEmitter` for reporting. Each invariant failure emits a `PipelineE
 | Every attempted Restaurant has outcome | `lastScrapedAt IS NOT NULL` for every row processed this run |
 | MenuItem FK integrity | No MenuItem with missing `restaurantId` |
 | No orphan MacroEstimates | Every MacroEstimate links to an existing MenuItem |
-| Unique (restaurantId, name) | Matches existing `@@unique([restaurantId, name])` constraint |
+| Unique source products | `(restaurantId, sourceItemId)` plus the active name fallback; see [identity contract](../backend/idempotent-preload-spec.md) |
 | Macro values in sane ranges | calories 0–5000, protein 0–200g, carbs 0–500g, fat 0–300g |
 
 Reuse `scripts/verify/api-e2e.sh` as the entry point for the nightly variant; no new cron infra in scope.

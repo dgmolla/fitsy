@@ -27,7 +27,7 @@ export async function getMenuPage(prisma: Pick<PrismaClient, "restaurant" | "$qu
   const limit = Math.min(250, Math.max(1, options.limit ?? 200));
   const key = targetKey(restaurantId, options), cursor = options.cursor ? decode(options.cursor, key) : null;
   const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId },
-    select: { id: true, name: true, rating: true, userRatingCount: true, _count: { select: { menuItems: true } } } });
+    select: { id: true, name: true, rating: true, userRatingCount: true, _count: { select: { menuItems: { where: { retiredAt: null } } } } } });
   if (!restaurant) return null;
   const score = Prisma.sql`CASE WHEN m.id = ${options.selectedItemId ?? null} THEN -1::double precision
     WHEN m.calories IS NULL OR m."proteinG" IS NULL OR m."carbsG" IS NULL OR m."fatG" IS NULL THEN 1e100::double precision
@@ -36,7 +36,7 @@ export async function getMenuPage(prisma: Pick<PrismaClient, "restaurant" | "$qu
   const rows = await prisma.$queryRaw<MenuRow[]>`
     WITH scored AS MATERIALIZED (
       SELECT m.*, ${score} AS score
-      FROM "MenuItem" m WHERE m."restaurantId" = ${restaurantId}
+      FROM "MenuItem" m WHERE m."restaurantId" = ${restaurantId} AND m."retiredAt" IS NULL
     ), page AS MATERIALIZED (
       SELECT * FROM scored ${after} ORDER BY score, id LIMIT ${limit + 1}
     )

@@ -15,7 +15,7 @@ interface StatsResponse {
 export async function GET(): Promise<NextResponse<StatsResponse>> {
   const [totalDishes, totalRestaurants, chainCount] = await Promise.all([
     prisma.menuItem.count({
-      where: { macroEstimates: { some: {} } },
+      where: { retiredAt: null, macroEstimates: { some: {} } },
     }),
     prisma.restaurant.count(),
     prisma.restaurant.count({ where: { chainFlag: true } }),
