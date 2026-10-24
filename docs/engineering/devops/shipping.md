@@ -37,50 +37,37 @@ A substantive new human requirement changes scope explicitly; acknowledge it and
 Finish implementation and commit the frozen candidate before review.
 Select meaningful focused reproduction and regression tests for the changed behavior.
 Run applicable structural, lint, type and safety checks plus that focused selection before independent review.
+The hook runs cheap checks and focused tests directly; GitHub owns merge requirements and heavy validation.
 Independent review uses the [simple-review runner](../../../scripts/review/simple-review.md) and retained routing and severity rules.
 The installed review caller publishes the existing `AI review` status for the exact candidate.
-Local admission completes cheap checks and revalidates matching independent evidence through immutable trusted-main reviewer controls.
 Reviewer execution remains separate, with attempts controlled by the installed local AI reviewer.
 
 ```sh
 node scripts/verify/focused-tests.mjs --set scripts/verify/impact-plan.test.ts
 npm run verify -- --stage=cheap
 node --test scripts/review/simple-review.test.mjs
-# After independent review, the retained local session revalidates protected evidence.
-scripts/verify/shipping-session.mjs -- bash <task-owned-shipping-script>
+# Obtain an independent review through simple review before publishing.
+# Publish through the ordinary hook after applicable validation.
+git push -u origin HEAD
 ```
 
-Replace the focused test and task script with the accepted issue's meaningful regressions and applicable final acceptance commands.
+Replace the focused test with the accepted issue's meaningful regressions and run applicable final acceptance commands before merge.
 Focused selection supports Jest, Node `.test.mjs` and Python `.test.py` through the canonical runner.
+Stop on failed cheap checks or matching review before push; applicable final acceptance remains mandatory before protected merge.
 A focused selection is not full acceptance; correctness review still judges scenario relevance.
-The retained local admission path validates the installed canonical review authority without executing the retired reviewer or reading review caches.
-Missing canonical authority fails admission.
 The review behavior suite proves runner behavior; it does not supply a candidate's independent verdict.
 
-The live shipping session binds committed head, base, source/configuration, delivery issue, authorization and focused selection through acceptance and push.
-Closing it removes execution ownership; a later session revalidates matching evidence without demanding another reviewer.
-Final-candidate simulator acceptance requires that live ownership.
-Source drift invalidates the session and requires affected evidence to be revalidated before shipping.
-Raw admission attempts remain under `.evidence/review-admission/`.
-`--stage=cheap` cannot satisfy final acceptance.
-Hosted checks retain their independent required suites.
-Apple/legal approvals, product-flow status, hooks, PR checks, main Verify, Deploy and actual affected release proof remain required.
+Local verification and publication do not require an issue binding, a shipping session, a review daemon or `~/.fitsy-review`.
+The pre-push hook runs size/domain checks followed by cheap static checks and focused tests.
+It does not execute full suites, builds or reviewers.
+A hook pass does not replace independent review, applicable product acceptance or required GitHub checks.
 
-Keep source frozen throughout checks, review and acceptance.
-Source drift fails the run, and later source changes require current cheap checks, review and affected full acceptance.
-Reuse unchanged verification receipts only through the canonical runners and preserve raw failure history for unfinished tasks.
-Verification retains each stage attempt under `.evidence/verify/attempts/` and archives retired test receipts under `check-cache/history/`.
+Keep review and acceptance evidence tied to the tested source.
+After source changes, rerun affected checks and obtain matching review before merge.
 UI signoff and development walkthroughs precede final UI acceptance.
-The publishable `final-candidate` simulator entry point requires the live shipping session's matching canonical review before native journeys.
-Keep each publishable native journey and its finish inside live matching-review ownership, using `set -e` or `&&` to stop on failure.
-For ordinary publication, run `scripts/verify/shipping-session.mjs -- git push -u origin HEAD` after freezing and reviewing the candidate.
-The existing trusted public Verify supplies heavy validation before protected merge; applicable local media/native evidence may be completed separately against that same frozen head.
-Development walkthroughs and UI signoff happen before that session.
-Source or focused-selection drift invalidates the live admission and requires revalidation of cheap checks and affected review evidence; it never silently starts another reviewer.
-Apple account, legal and submission approvals, required product-flow status, pre-push, PR, main Verify, Deploy and actual release acceptance remain required.
+The final-candidate simulator runner and publisher retain source, app, backend and evidence validation without a local session wrapper.
+Apple account, legal and submission approvals, product-flow status, PR checks, main Verify, Deploy and actual release acceptance remain required.
 
-The pre-push hook revalidates the live source-bound independent review, runs cheap/focused checks plus size/domain checks, then rechecks live ownership.
-It does not run local tests/builds as a publication prerequisite.
 The independently installed external approval operator validates the existing Verify workflow bytes, approved candidate tree, PR base/head/merge tree, exact run/attempt/checksuite and successful standard-runner jobs from the GitHub Actions issuer before publishing required acceptance.
 The existing per-issue `local_acceptance` policy pins `source_tree_sha` from the independently reviewed candidate and retains only the applicable local receipt/recipe/required checks, including real media when affected.
 An empty local required-check set means no applicable local receipt, not permission to skip trusted CI or product-flow/release protections.
@@ -126,7 +113,7 @@ Never set it for a simulator containing accounts you need to keep.
 node scripts/verify/product-flow.mjs --plan
 export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
-# Inside the task-owned shipping script, invoked through shipping-session.mjs:
+# Run final acceptance against the current candidate:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name> --mode=final-candidate
 # Capture affected primary and recovery paths through Mobile MCP, then:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
@@ -267,7 +254,6 @@ A background process existing is not proof that it will wake its owner.
 When waiting, retain durable task state and use the harness's supported completion notification mechanism.
 If the runner cannot continue automatically, report that limitation rather than promise an unverified future follow-up.
 
-Protected release entrypoints execute `scripts/verify/shipping-session.mjs` and `scripts/verify/run.mjs` directly, using their trusted system Env startup wrapper.
-Do not launch them through a caller-configured `node` process: Node startup imports run before module code can validate admission.
-The executable wrapper clears `NODE_OPTIONS` and `NODE_PATH` and fixes administrator interpreter search locations before Node starts.
-For npm verification aliases, clear those startup options before invoking npm; the pre-push hook and protected live child environment enforce this for shipping.
+The pre-push hook clears `NODE_OPTIONS`, `NODE_PATH` and shell startup selectors before verification.
+The verifier executable also clears Node startup selectors and uses fixed interpreter search locations.
+For npm verification aliases, clear Node startup options before invoking npm.

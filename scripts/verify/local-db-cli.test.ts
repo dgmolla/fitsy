@@ -6,6 +6,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fixtureProcess, signalFixtureProcess, type FixtureProcess } from './lock-fixture-process';
 
 const source = resolve(__dirname, '../..');
+// Exercise the Linux CI check selection in the portable CLI fixtures too.
+// Admission no longer adds cheap checks to an explicit --only selection.
+const databaseChecks = 'structural,build,db-fixture';
 function linuxDatabaseMemory(read: (path: string) => string = path => readFileSync(path, 'utf8'),
   runtimeAvailable: () => number = () => process.availableMemory()) {
   // The supported Node runtime accounts for the process's actual OS/cgroup
@@ -61,11 +64,11 @@ test.each<DatabaseCase>([
   { name: 'focused API without caller URL', focused: true, missing: true, hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   { name: 'healthy', hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: false },
   { name: 'owner changed', hijack: true, deny: false, unlocked: false, checkFailure: false, devDrift: false },
-  { name: 'preflight failed', hijack: false, deny: true, unlocked: false, checkFailure: false, devDrift: false },
+  { name: 'cheap check failed', hijack: false, deny: true, unlocked: false, checkFailure: false, devDrift: false },
   { name: 'without OS lock', hijack: false, deny: false, unlocked: true, checkFailure: false, devDrift: false },
   { name: 'failing database check', hijack: false, deny: false, unlocked: false, checkFailure: true, devDrift: false },
   { name: 'dev drift retains caller URL', hijack: false, deny: false, unlocked: false, checkFailure: false, devDrift: true },
-])('local database runner $name owns admission, URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift, focused = false, missing = false, scriptFocused = false, wholeGroup = '', delegation = false, canonical = false, standalone = false, cheapFailure = false, missingCheap = false, repeat = false }) => {
+])('local database runner $name owns URL and post-seed identity', ({ hijack, deny, unlocked, checkFailure, devDrift, focused = false, missing = false, scriptFocused = false, wholeGroup = '', delegation = false, canonical = false, standalone = false, cheapFailure = false, missingCheap = false, repeat = false }) => {
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-db-cli-'));
   const write = (path: string, value: string) => {
     const target = join(directory, path); mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, value);
@@ -96,7 +99,7 @@ test.each<DatabaseCase>([
       const target = `scripts/verify/${file}`;
       write(target, readFileSync(join(source, target), 'utf8'));
     }
-    write('scripts/verify/registry.yml', 'checks:\n  - name: admission\n    script: admission.sh\n    layer: 0\n    blocking: true\n    preflight: true\n  - name: db-fixture\n    script: fixture.sh\n    layer: 2\n    blocking: true\n    database: true\n');
+    write('scripts/verify/registry.yml', 'checks:\n  - name: baseline\n    script: baseline.sh\n    layer: 0\n    blocking: true\n  - name: db-fixture\n    script: fixture.sh\n    layer: 2\n    blocking: true\n    database: true\n');
     if (wholeGroup) {
       write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8')
         .replace('name: db-fixture', 'name: test').replace('script: fixture.sh', 'script: test.sh'));
@@ -141,11 +144,7 @@ fs.appendFileSync(process.env.FITSY_TEST_EVENTS, JSON.stringify({
       if (!missingCheap) write('scripts/verify/cheap.sh', '#!/bin/sh\nnode .evidence/event.mjs cheap\n' + (cheapFailure ? 'exit 1\n' : ''));
       if (canonical) {
         write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
-          '  - name: review-admission\n    script: review.sh\n    layer: 0\n    stage: acceptance\n    blocking: true\n    preflight: true\n' +
           '  - name: build\n    script: build.sh\n    layer: 3\n    blocking: true\n');
-        // Protected review is the external boundary; selection and source guards
-        // stay in the real copied runner and receipt-cache implementation.
-        write('scripts/verify/review.sh', '#!/bin/sh\nnode .evidence/event.mjs review\n');
         write('scripts/verify/build.sh', '#!/bin/sh\n' +
           '[ -z "$FITSY_VERIFY_DB_LOCKED$FITSY_VERIFY_OWNED_DB$POSTGRES_PRISMA_URL$POSTGRES_URL_NON_POOLING" ] || exit 1\n' +
           'node .evidence/event.mjs build\n');
@@ -157,8 +156,8 @@ fs.appendFileSync(process.env.FITSY_TEST_EVENTS, JSON.stringify({
         '  - name: dev-drift\n    script: dev-drift.sh\n    layer: 3\n    blocking: shadow\n');
       write('scripts/verify/dev-drift.sh', '#!/bin/sh\nprintf "%s" "$POSTGRES_URL_NON_POOLING" > "$FITSY_TEST_DEV_URL"\necho \'{"summary":"dev drift checked"}\'\n');
     }
-    write('scripts/verify/admission.sh', '#!/bin/sh\n[ "$FITSY_TEST_DENY" != 1 ] || exit 1\n' +
-      (delegation ? 'node .evidence/event.mjs admission\n' : ''));
+    write('scripts/verify/baseline.sh', '#!/bin/sh\n[ "$FITSY_TEST_DENY" != 1 ] || exit 1\n' +
+      (delegation ? 'node .evidence/event.mjs baseline\n' : ''));
     write('scripts/verify/fixture.sh', `#!/bin/sh\n[ "$FITSY_VERIFY_DB_LOCKED" = 1 ] && [ -f "$FITSY_TEST_RESET" ] &&
   [ "$POSTGRES_PRISMA_URL" = 'postgresql://fitsy_test:fitsy_test@${loopback}:55432/fitsy_verify' ] &&
   [ "$POSTGRES_URL_NON_POOLING" = "$POSTGRES_PRISMA_URL" ] || exit 1
@@ -198,13 +197,13 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
       write(wholeGroup === 'scripts' ? 'scripts/review/example.py' : `apps/${wholeGroup}/lib/example.ts`, 'changed = true\n');
       git('add', '-A'); git('commit', '-qm', 'group candidate');
     }
-    const verifyArgs = [canonical ? '--only=build,db-fixture'
-      : `--only=admission,${delegation ? 'structural,focused-tests,db-fixture' : wholeGroup ? 'test' : focused ? 'focused-tests' : 'db-fixture'}${devDrift ? ',dev-drift' : ''}`,
+    const verifyArgs = [canonical ? `--only=baseline,focused-tests,${databaseChecks}`
+      : `--only=baseline,${delegation ? 'structural,focused-tests,db-fixture' : wholeGroup ? 'test' : focused ? 'focused-tests' : 'db-fixture'}${devDrift ? ',dev-drift' : ''}`,
       '--runs=local', ...(delegation ? ['--stage=full', '--reuse'] : [])];
     const command = standalone ? 'python3' : process.execPath;
     const argv = standalone
       ? ['scripts/verify/db-lock.py', directory, process.execPath, join(directory, 'scripts/verify/local-db.mjs'), '--locked-run', ...verifyArgs]
-      : unlocked ? ['scripts/verify/local-db.mjs', '--locked-run', '--only=admission,db-fixture', '--runs=local']
+      : unlocked ? ['scripts/verify/local-db.mjs', '--locked-run', '--only=baseline,db-fixture', '--runs=local']
         : ['scripts/verify/run.mjs', ...verifyArgs];
     const run = () => spawnSync(command, argv, { cwd: directory, env, encoding: 'utf8', timeout: 15000 });
     const result = run();
@@ -221,7 +220,7 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
       expect(failed[0]).toEqual(expect.objectContaining({ name: 'structural', status: 'fail', blocking: true }));
       if (missingCheap) expect(result.stdout).toContain('registry entry has no script cheap.sh');
       const observed = readFileSync(events, 'utf8').trim().split('\n').map(line => JSON.parse(line));
-      expect(observed.map(event => event.check)).toEqual(cheapFailure ? ['admission', 'cheap'] : ['admission']);
+      expect(observed.map(event => event.check)).toEqual(cheapFailure ? ['baseline', 'cheap'] : ['baseline']);
     } else if (unlocked) {
       expect(existsSync(state)).toBe(false);
       expect(existsSync(reset)).toBe(false);
@@ -229,7 +228,7 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
     } else if (deny) {
       expect(existsSync(state)).toBe(false);
       expect(existsSync(reset)).toBe(false);
-      expect(result.stdout).toContain('preflight failed');
+      expect(result.stdout).toContain('cheap checks failed');
     } else if (hijack) {
       expect(existsSync(reset)).toBe(true);
       expect(result.stdout).toContain('refusing a database container with different ownership or image');
@@ -262,11 +261,10 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
         expect(reported.filter(line => line.name === 'structural' && line.status === 'pass')).toHaveLength(1);
         expect(reported.filter(line => line.name === 'focused-tests' && line.status === 'pass')).toHaveLength(1);
         expect(reported.filter(line => line.name === 'db-fixture' && line.status === 'pass')).toHaveLength(1);
-        expect(observed.filter(event => event.check === 'admission')).toHaveLength(1);
+        expect(observed.filter(event => event.check === 'baseline')).toHaveLength(1);
         if (canonical) {
-          expect(observed.map(event => event.check)).toEqual(['admission', 'cheap', 'review', 'build', 'focused', 'database']);
+          expect(observed.map(event => event.check)).toEqual(['baseline', 'cheap', 'build', 'focused', 'database']);
           expect(observed.find(event => event.check === 'build').generation).toBeNull();
-          expect(reported.filter(line => line.name === 'review-admission' && line.status === 'pass')).toHaveLength(1);
           expect(reported.filter(line => line.name === 'build' && line.status === 'pass')).toHaveLength(1);
         }
         if (repeat) {
@@ -434,7 +432,7 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
     const at = Date.now();
     acquisitionAttempted = true;
     const child = spawn(process.execPath, ['scripts/verify/run.mjs', '--stage=full', '--runs=local',
-      '--only=build,db-fixture', '--reuse'], { cwd: directory, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      `--only=${databaseChecks}`, '--reuse'], { cwd: directory, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     if (!child.pid || !child.stdout || !child.stderr) throw Error('real CLI did not acquire its pipes/PID');
     const identity = fixtureProcess(child.pid); expect(identity?.pgid).toBe(child.pid);
     if (!identity) throw Error('real CLI start identity unavailable');
@@ -467,7 +465,7 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
   };
   try {
     for (const file of ['run.mjs', 'impact-plan.mjs', 'local-db.mjs', 'local-db-control.mjs', 'db-lock.py',
-      'docker-runtime.mjs', 'receipt-cache.mjs', 'resource-admission.mjs']) {
+      'docker-runtime.mjs', 'receipt-cache.mjs']) {
       write(`scripts/verify/${file}`, readFileSync(join(source, 'scripts/verify', file), 'utf8'));
     }
     for (const path of ['prisma/schema.prisma', 'prisma/seed.ts', 'prisma/migrations']) {
@@ -478,21 +476,10 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
     symlinkSync(join(source, 'node_modules'), join(directory, 'node_modules'));
     write('.gitignore', 'node_modules\n.evidence\n');
     write('scripts/verify/registry.yml', `checks:
-  - name: resource-admission
-    script: admission.sh
-    layer: 0
-    blocking: true
-    preflight: true
   - name: structural
     script: cheap.sh
     layer: 0
     blocking: true
-  - name: review-admission
-    script: review.sh
-    layer: 0
-    stage: acceptance
-    blocking: true
-    preflight: true
   - name: build
     script: build.sh
     layer: 3
@@ -503,14 +490,12 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
     database: true
     blocking: true
 `);
-    write('scripts/verify/admission.sh', '#!/bin/sh\nnode scripts/verify/resource-admission.mjs\n');
     write('.evidence/event.cjs', `const fs=require('node:fs');
 fs.appendFileSync('.evidence/events.jsonl',JSON.stringify({check:process.argv[2],
   locked:process.env.FITSY_VERIFY_DB_LOCKED,owned:process.env.FITSY_VERIFY_OWNED_DB,
   pooled:process.env.POSTGRES_PRISMA_URL,direct:process.env.POSTGRES_URL_NON_POOLING})+'\\n');
 `);
     write('scripts/verify/cheap.sh', '#!/bin/sh\nnode .evidence/event.cjs cheap\n');
-    write('scripts/verify/review.sh', '#!/bin/sh\nnode .evidence/event.cjs review\n');
     write('scripts/verify/build.sh', '#!/bin/sh\nset -eu\n' +
       '[ -z "${FITSY_VERIFY_DB_LOCKED-}${FITSY_VERIFY_OWNED_DB-}${POSTGRES_PRISMA_URL-}${POSTGRES_URL_NON_POOLING-}" ]\nnode .evidence/event.cjs build\n');
     write('scripts/verify/query.sh', '#!/bin/sh\nnode .evidence/query.cjs\n');
@@ -584,8 +569,8 @@ if(r.error)throw r.error;if(r.signal)process.kill(process.pid,r.signal);else pro
       const observed = readFileSync(join(directory, '.evidence/events.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
       writeFileSync(join(evidence, `run-${generation + 1}-events.json`), JSON.stringify(observed, null, 2));
       expect(observed.filter(event => event.check === 'cheap')).toHaveLength(1);
-      expect(observed.filter(event => ['cheap', 'review', 'build', 'database'].includes(event.check)).map(event => event.check))
-        .toEqual(['cheap', 'review', 'build', 'database']);
+      expect(observed.filter(event => ['cheap', 'build', 'database'].includes(event.check)).map(event => event.check))
+        .toEqual(['cheap', 'build', 'database']);
       const build = observed.findIndex(event => event.check === 'build');
       expect(observed.findIndex(event => event.check === 'docker')).toBeGreaterThan(build);
       const database = observed.find(event => event.check === 'database');

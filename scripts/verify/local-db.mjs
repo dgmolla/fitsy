@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { fileURLToPath } from 'node:url';
-import { assertPhaseLock, assertOwnedDatabase, databaseControl, withOwnedLock } from './local-db-control.mjs';
-export { assertPhaseLock, assertOwnedDatabase, databaseControl, runWithLocalDatabase } from './local-db-control.mjs';
+import { realpathSync } from 'node:fs';
+import { assertOwnedDatabase, databaseControl, withOwnedLock } from './local-db-control.mjs';
+export { assertOwnedDatabase, databaseControl, runWithLocalDatabase } from './local-db-control.mjs';
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   try {
     if (process.argv[2] === '--assert-owned-db') assertOwnedDatabase();
     else if (process.argv[2] === '--stop-owned-db') process.exitCode = withOwnedLock('--locked-stop');
@@ -12,15 +13,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       // The fixed CLI owns the pipeline; reusable DB helpers never import it.
       import('./run.mjs').then(async ({ verify }) => {
         if (typeof verify !== 'function') throw Error('canonical verifier does not export verify');
-        const phase = Boolean(process.env.FITSY_VERIFY_DB_PHASE);
-        const recheck = phase
-          ? (await import('./resource-admission.mjs')).recheckOwnedDatabasePhase : null;
-        return databaseControl().run(process.argv.slice(3), (args, prepare) => verify(args, () => {
-          // Cheap checks and the DB-free build may have consumed admission headroom.
-          // Revalidate its protected authority under this same lock before Docker.
-          if (phase) recheck(assertPhaseLock());
-          return prepare();
-        }));
+        return databaseControl().run(process.argv.slice(3), verify);
       })
         .then(status => { process.exitCode = status; })
         .catch(error => {

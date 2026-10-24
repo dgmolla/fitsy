@@ -48,12 +48,7 @@ function scenario(name: string) {
       spawned.push({ args, env: opts.env, resetBeforeSpawn: calls.some(call => call[0] === 'exec' && call.includes('psql')) });
       return { status: mode === 'migration_failure' && args[1] === 'migrate' ? 1 : 0 };
     }, disk: () => ({ bavail: mode === 'low_disk' ? 1 : 3 * 1024 ** 3, bsize: 1 }),
-    // This owned-container unit seam models runtime; combined Python cases exercise real canonical context.
-    runtimeContext: () => ({ identity: { fixture: true }, container: { id: 'owned-container-id', image_id: 'sha256:image' } }),
-    runtimeCheck: () => {}, assertLock: () => {}, env: { ...(mode === 'forged_phase' ? { FITSY_VERIFY_DB_PHASE: '1',
-      FITSY_VERIFY_DB_LOCKED: '1', FITSY_VERIFY_OWNED_DB: 'owned-container-id',
-      FITSY_VERIFY_DB_IMAGE: 'sha256:image', FITSY_VERIFY_DB_HOST: loopback,
-      FITSY_SHIPPING_SOCKET: '/unowned/session.sock', FITSY_SHIPPING_TOKEN: 'plausible-complete-token' } : {}),
+    assertLock: () => {}, env: {
       ...(mode.startsWith('stop_bound_') ? { FITSY_VERIFY_OWNED_DB: 'owned-container-id',
         FITSY_VERIFY_DB_IMAGE: mode === 'stop_bound_partial' ? '' : 'sha256:image' } : {}),
       POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
@@ -135,13 +130,6 @@ test('numeric DB suite host gate invokes the real owned assertion against inspec
     expect([current.dev, current.ino, current.uid]).toEqual([identity.dev, identity.ino, identity.uid]);
     rmSync(scratch, { recursive: true });
   }
-});
-
-test('complete forged phase metadata cannot reach a helper or Docker without the real inherited lock', () => {
-  const result = scenario('forged_phase');
-  expect(result.error).toMatch(/actual inherited lock descriptor/);
-  expect(result.calls).toHaveLength(0);
-  expect(result.spawned).toHaveLength(0);
 });
 
 test('forged numeric loopback metadata cannot pass the owned container assertion', () => {
@@ -244,7 +232,7 @@ test('lock fixture refuses unacquired and zero process cleanup without signaling
   } finally { kill.mockRestore(); }
 });
 
-test('bound post-session stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {
+test('bound database stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {
   for (const mode of ['stop_bound_replaced', 'stop_bound_wrong_image', 'stop_bound_partial', 'stop_bound_unowned']) {
     const result = scenario(mode);
     expect(result.error).not.toBe('');
@@ -253,7 +241,7 @@ test('bound post-session stop rejects replacement, image drift, incomplete pins 
   }
 });
 
-test('bound post-session stop removes the genuine acquired immutable ID', () => {
+test('bound database stop removes the genuine acquired immutable ID', () => {
   const result = scenario('stop_bound_valid');
   expect(result.error).toBe('');
   expect(result.calls).toContainEqual(['rm', '-f', 'owned-container-id']);

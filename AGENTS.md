@@ -86,9 +86,9 @@ Environments: ephemeral (CI + `prisma/seed.ts`), **dev** (`fitsy-dev` Supabase: 
 ```bash
 git config core.hooksPath .githooks
 ```
-`npm install` wires this automatically (the `prepare` script). The hook runs
-layers 0-3 of `scripts/verify/` on your changes before every push — a quick
-filter, not a substitute for `npm run verify`.
+`npm install` wires this automatically through the `prepare` script.
+The hook runs size/domain checks, cheap static checks and focused tests before every push.
+It works with an ordinary checkout and installed dependencies; GitHub owns merge requirements and heavy validation.
 
 ### Environment Variables
 Managed via Vercel CLI. All secrets live in Vercel → auto-synced to deploys. `Production` holds prod creds; `Preview` and `Development` hold the dev environment's.
@@ -150,7 +150,7 @@ Keep applicable real-media/native journeys and release approvals explicit; a hoo
 
 ```bash
 npm run verify -- --stage=cheap   # structural, safety, lint, types and selected focused tests before review
-# Freeze/commit, obtain canonical independent review, then publish inside the live shipping session.
+# Obtain independent review, then publish through the ordinary pre-push hook.
 # Optional local full diagnostics retain their normal contracts:
 npm run verify         # layers 0-2 on your changes (structural, secrets, lint, types, tests)
 npm run verify:all     # everything, including the production build
