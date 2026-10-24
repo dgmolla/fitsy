@@ -67,6 +67,9 @@ For a docs-only `needs-sim` override, classification requests the build job whil
 Build runs `--only=mobile-e2e --runs=ci --scope=changed` after any applicable API build.
 A simulator failure fails Build, so the unchanged final Verify aggregator rejects it.
 The native recipe uses dev services, a disposable Test Store account and an explicitly created device; ordinary logs and screenshots are uploaded for diagnosis.
+Hosted billing journeys establish isolated signed-in empty or expired Test Store fixtures using `scripts/sim/hosted-journeys.mjs` and the maintained billing sign-in YAML.
+The same policy reports Apple history-transfer Restore as a separate required acceptance journey, recorded as not run by hosted CI.
+It never reports Test Store evidence as Apple acceptance; the existing local product-flow gate remains authoritative for that proof.
 The classifier exports scope, mode, flow names and render checkpoints; execution rejects drift in any of these inputs.
 Caller fixtures must choose their own `FITSY_RUNS` context: L2 exports `ci`, which selects hosted execution even when the fixture intends to verify the local skip.
 Replay routing regressions with `FITSY_RUNS=ci CI=true npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/mobile-e2e.test.ts verify/simulator-scope.test.ts`.

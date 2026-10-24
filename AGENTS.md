@@ -164,6 +164,7 @@ The check list lives in `scripts/verify/registry.yml`; CI (`verify.yml`), the
 pre-push hook, and agents all run the same scripts.
 Inspect CI's dynamic simulator scope with `npm run verify:sim-plan`; selection and flow mappings live in `scripts/verify/impact-plan.mjs`.
 The existing Build job runs selected native flows, while local source-bound product acceptance remains separate.
+Hosted billing fixture setup and separate required Apple acceptance are defined in `scripts/sim/hosted-journeys.mjs`; configuration and starting states live in the shipping contract and E2E README.
 Every mobile/web UI edit triggers CI smoke: screen-local style/copy uses render smoke, behavior uses affected E2E, and shared UI/app shells use the full suite.
 Keep simulator smoke out of the pre-push hook.
 

@@ -8,6 +8,15 @@ Every UI edit triggers CI coverage: proven screen-local style/copy reuses a main
 Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the maintained YAML flows; missing checkpoints fail before a simulator is created.
 CI compares scope, mode, flows and checkpoints with classification; the pre-push hook stays free of simulator execution.
 CI execution does not replace the local source-bound product-flow gate.
+Hosted billing setup and the explicit Apple-only coverage policy live in `scripts/sim/hosted-journeys.mjs`, consumed by `scripts/sim/ci.mjs`.
+Before each hosted Restore journey, CI clears app storage and keychain, signs in through `setup/billing-signin.yaml`, and asserts the required paywall or Welcome back starting screen.
+The empty and expired fixtures use distinct disposable Test Store accounts; the runner restarts its owned Metro when switching the bundled Dev login credentials.
+CI verifies each account through the real dev login and subscription-sync APIs before building and rechecks the billing fixture immediately before its journey.
+Prepare the expired account's same-account purchase and expiry through the real Test Store product, then configure `FITSY_SIM_EXPIRED_LOGIN_EMAIL` and secret `FITSY_SIM_EXPIRED_LOGIN_PASSWORD` alongside the ordinary never-subscribed account.
+Missing credentials, incorrect subscription history, stale verdicts and failed native assertions fail execution.
+`subscription-restore-expired` requires Apple history transfer and runs separately through the local product-flow acceptance procedure below.
+CI prints this required, unexecuted Apple obligation and retains it in `selection.json` and its result; a hosted pass supplies no Apple acceptance evidence.
+The assisted-targets journey also opens `/macro-setup`, asserts its daily editor and exercises Save and Skip; macro-setup render smoke stops at `macro-setup-save` on that screen.
 Run the native accessibility helper regression tests from the repository root with `node --test apps/mobile/e2e/helpers/native-ax.test.mjs` when changing these helpers.
 
 Mobile MCP text dumps include state names in their legend.

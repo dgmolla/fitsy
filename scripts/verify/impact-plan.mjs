@@ -75,7 +75,8 @@ const screenFlows = [
     /^(chain-menu-serving|menu-load-recovery|menu-macro-serving)$/],
   [/^apps\/mobile\/(app\/notification-settings\.|lib\/(notification|pushToken|useNotifications|useReminders))/,
     /^reminders$/],
-  [/^apps\/mobile\/(app\/macro-setup\.|components\/ScrollPicker\.|lib\/(macroCalculator|macroPresets|macroSuggestions)\.)/,
+  [/^apps\/mobile\/app\/macro-setup\./, /^onboarding-assisted-targets$/],
+  [/^apps\/mobile\/(components\/ScrollPicker\.|lib\/(macroCalculator|macroPresets|macroSuggestions)\.)/,
     /^onboarding-(assisted-targets|target-ranked-search)$/],
   [/^apps\/mobile\/(app\/\(tabs\)\/search\.|components\/(Discovery|Restaurant|Location|FilterPopup|SearchHeader)|lib\/(discovery|searchLoading|locations|locationCache|useLocation|useDiscovery))/,
     /^(onboarding-(assisted-targets|guided-preview|target-ranked-search)|menu-load-recovery)$/],
@@ -210,6 +211,7 @@ function renderOnly(path, range, cwd, env) {
 // Smoke reuses each maintained journey's setup, stopping at the screen's first
 // render assertion. No second YAML scenario catalog or duplicated login recipe.
 export const renderCheckpoints = [
+  [/^apps\/mobile\/app\/macro-setup\./, 'onboarding-assisted-targets', { id: 'macro-setup-save' }],
   [/^apps\/mobile\/app\/notification-settings\./, 'reminders', { id: 'reminder-permission' }],
   [/^apps\/mobile\/app\/restaurant\//, 'chain-menu-serving', 'Seed Bowl Co #01'],
   [/^apps\/mobile\/app\/welcome\/problem\./, 'cold-start-welcome', { id: 'welcome-start' }],

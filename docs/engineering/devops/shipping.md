@@ -105,6 +105,13 @@ Missing tools, skipped/failed assertions, missing coverage and stale evidence fa
 
 Hosted execution uses `scripts/sim/ci.mjs`, the maintained native build recipe, a fresh simulator and RevenueCat Test Store against `https://dev.fitsy.org`.
 Configure repository variables `FITSY_SIM_SUPABASE_URL`, `FITSY_SIM_SUPABASE_ANON_KEY`, `FITSY_SIM_REVENUECAT_TEST_KEY` and `FITSY_SIM_LOGIN_EMAIL`, plus secret `FITSY_SIM_LOGIN_PASSWORD` for a disposable dev account distinct from the shared Dev login.
+Create that account before CI and keep it never subscribed; Dev login forwards its configured password, with the existing shared defaults retained for local development.
+Full hosted coverage also requires variable `FITSY_SIM_EXPIRED_LOGIN_EMAIL` and secret `FITSY_SIM_EXPIRED_LOGIN_PASSWORD` for a distinct account with a real expired same-account Test Store purchase.
+Prepare that purchase and expiry through the product; the runner verifies fresh subscription-sync verdicts and never manufactures billing state.
+Each hosted Restore journey clears app storage and keychain, signs in through the maintained billing setup, and asserts its starting screen independently of earlier flows.
+Switching accounts restarts owned Metro so the bundle contains the selected account's credentials.
+The explicit policy in `scripts/sim/hosted-journeys.mjs` assigns `subscription-restore-expired` to separate required Apple acceptance because Test Store cannot transfer purchase history between recreated accounts.
+CI logs and artifacts identify that journey as required and not run; complete it through the existing local product-flow procedure with an Apple-compatible build before acceptance.
 No production database or release credentials are supplied to this job.
 Missing configuration or tools and failed Maestro assertions fail the selected Build job.
 Selection, command reports, screenshots, build logs and Metro logs are retained as ordinary CI artifacts.

@@ -58,6 +58,8 @@ const errorResponse: AuthApiResponse = {
 describe('confirmed session adoption', () => {
   const originalFetch = global.fetch;
   const originalDev = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+  const originalEmail = process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL;
+  const originalPassword = process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -69,6 +71,10 @@ describe('confirmed session adoption', () => {
   });
   afterEach(() => {
     global.fetch = originalFetch;
+    if (originalEmail === undefined) delete process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL;
+    else process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL = originalEmail;
+    if (originalPassword === undefined) delete process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD;
+    else process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD = originalPassword;
     jest.clearAllMocks();
     if (originalDev) Object.defineProperty(globalThis, '__DEV__', originalDev);
     else Reflect.deleteProperty(globalThis, '__DEV__');
@@ -114,6 +120,30 @@ describe('confirmed session adoption', () => {
     expect(global.fetch).not.toHaveBeenCalled();
     expect(SupabaseMock.supabase.auth.setSession).not.toHaveBeenCalled();
     expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('forwards disposable credentials on login and registration (register=%s)', async register => {
+    process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL = 'hosted-fixture@example.test';
+    process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD = 'non-default-fixture-password';
+    if (register) jest.mocked(global.fetch).mockResolvedValueOnce({
+      json: async () => ({ error: 'Invalid credentials' }),
+    } as Response);
+    await devLogin();
+    expect(global.fetch).toHaveBeenCalledTimes(register ? 2 : 1);
+    for (const [url, init] of jest.mocked(global.fetch).mock.calls) {
+      expect(url).toMatch(/\/api\/auth\/(login|register)$/);
+      expect(JSON.parse(init!.body as string)).toEqual({
+        email: 'hosted-fixture@example.test', password: 'non-default-fixture-password',
+      });
+    }
+  });
+
+  it('retains the shared local defaults without configured credentials', async () => {
+    delete process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL;
+    delete process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD;
+    await devLogin();
+    expect(JSON.parse(jest.mocked(global.fetch).mock.calls[0][1]!.body as string))
+      .toEqual({ email: 'dev@fitsy.local', password: 'dev12345' });
   });
 
   it.each(['logout', 'session-expired'] as const)('%s clears tokens and only explicit logout abandons checkout', async reason => {

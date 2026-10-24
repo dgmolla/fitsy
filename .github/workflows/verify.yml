@@ -207,6 +207,8 @@ jobs:
           EXPO_PUBLIC_REVENUECAT_TEST_KEY: ${{ vars.FITSY_SIM_REVENUECAT_TEST_KEY }}
           EXPO_PUBLIC_DEV_LOGIN_EMAIL: ${{ vars.FITSY_SIM_LOGIN_EMAIL }}
           EXPO_PUBLIC_DEV_LOGIN_PASSWORD: ${{ secrets.FITSY_SIM_LOGIN_PASSWORD }}
+          FITSY_SIM_EXPIRED_LOGIN_EMAIL: ${{ vars.FITSY_SIM_EXPIRED_LOGIN_EMAIL }}
+          FITSY_SIM_EXPIRED_LOGIN_PASSWORD: ${{ secrets.FITSY_SIM_EXPIRED_LOGIN_PASSWORD }}
         run: node scripts/verify/run.mjs --only=mobile-e2e --runs=ci --scope=changed
       - name: Preserve simulator logs and screenshots
         if: always() && needs.classify.outputs.simulator == 'true'

@@ -155,6 +155,8 @@ checks:
       CI selects none, affected flows or full flows through impact-plan.mjs.
       Screen-local style/copy edits stop at render assertions; UI behavior uses
       affected E2E flows and shared UI or app shell changes use the full suite.
+      Hosted billing fixtures sign in independently; Apple history-transfer
+      acceptance is explicitly reported and retained for local product-flow.
       Failures fail the selected mobile job. Local product-flow acceptance and
       the final Verify aggregator retain their existing independent semantics.
 

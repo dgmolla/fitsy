@@ -35,7 +35,7 @@ test.each([
   ['apps/mobile/lib/menuFilters.ts', ['chain-menu-serving', 'menu-load-recovery', 'menu-macro-serving']],
   ['apps/mobile/app/notification-settings.tsx', ['reminders']],
   ['apps/mobile/lib/notificationSchedule.ts', ['reminders']],
-  ['apps/mobile/app/macro-setup.tsx', ['onboarding-assisted-targets', 'onboarding-target-ranked-search']],
+  ['apps/mobile/app/macro-setup.tsx', ['onboarding-assisted-targets']],
   ['apps/mobile/lib/macroCalculator.ts', ['onboarding-assisted-targets', 'onboarding-target-ranked-search']],
   ['apps/mobile/e2e/flows/menu-load-recovery.yaml', ['menu-load-recovery']],
 ] as [string, string[]][])('medium change %s selects only mapped flows', (path, flows) => {
@@ -127,6 +127,7 @@ const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, e
 const commit = () => { git('add', '.'); git('commit', '-qm', 'fixture'); return git('rev-parse', 'HEAD'); };
 function fixture() {
   for (const path of ['scripts/verify/impact-plan.mjs', 'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh', 'scripts/sim/ci.mjs',
+    'scripts/sim/hosted-journeys.mjs',
     ...allFlows.map(name => `apps/mobile/e2e/flows/${name}.yaml`)]) {
     mkdirSync(dirname(join(directory, path)), { recursive: true }); copyFileSync(join(root, path), join(directory, path));
   }
@@ -298,6 +299,7 @@ test.each([
 });
 
 test.each([
+  { path: 'apps/mobile/app/macro-setup.tsx', after: screen('Daily energy'), mode: 'render', scope: 'affected', flow: 'onboarding-assisted-targets' },
   { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 12), mode: 'render', scope: 'affected', flow: 'onboarding-assisted-targets' },
   { path: 'apps/mobile/app/notification-settings.tsx', after: screen('Notifications'), mode: 'render', scope: 'affected', flow: 'reminders' },
   { path: 'apps/mobile/app/notification-settings.styles.ts', after: screen('Your goal', 12), mode: 'render', scope: 'affected', flow: 'reminders' },

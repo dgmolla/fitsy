@@ -33,7 +33,7 @@ signed in without targets -> `/macro-setup`.
 | `/auth/login` | "Have an account? Log in" link on the problem screen (router.push, no intermediate screen) | "Welcome back", "Continue with Apple" | Apple/Google/email in one screen |
 | `/welcome/signin` | locked preview action | `signup-selected-restaurant`, `signup-apple`, `signup-google` | Selected restaurant/search/targets remain visible; authenticated onboarding continues to trial introduction |
 | `/auth/reviewer` | App Store review deep link | - | demo access |
-| `/macro-setup` | signed in, no targets | - | standalone target editor |
+| `/macro-setup` | signed in, no targets | `macro-setup-save`, `macro-setup-skip` | daily target editor; assisted-targets flow covers render, Save and Skip |
 | `/(tabs)/search` | cold start when entitled; tab bar | "Search restaurants or dishes" | same discovery component as preview; tabs require entitlement; hard paywall after decline by default |
 | `/(tabs)/saved` | tab bar | - | saved restaurants/items |
 | `/(tabs)/profile` | tab bar | "YOUR GOAL" | targets, plan, sign out |

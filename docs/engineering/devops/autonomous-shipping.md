@@ -296,7 +296,8 @@ Two complementary execution modes:
 
 1. **Deterministic flows (Maestro)**: the selected existing `apps/mobile/e2e/flows/*.yaml` run against dev services with a disposable Test Store account.
    Hosted execution retains ordinary logs and screenshots, and missing tools or failed assertions fail Build.
-   The manually dispatched `.eas/workflows/mobile-e2e.yml` remains an explicit full-suite alternative.
+   Hosted billing fixtures use isolated empty and expired accounts; the explicit policy in `scripts/sim/hosted-journeys.mjs` retains Apple history-transfer Restore as separate required local acceptance.
+   The manually dispatched `.eas/workflows/mobile-e2e.yml` requires all documented starting states, including a compatible Apple store fixture, and cannot replace that separate Apple acceptance with Test Store evidence.
 2. **Agent-driven verification**: only for `affected_screens` without a Maestro flow, or when the PR body asks for it. A Sonnet agent uses the simulator CLI (below) and the feature map to drive the changed flow, saves screenshots and the Metro log excerpt to `.evidence/`, and writes a pass/fail JSON. This is the "verification skill" pattern from the talk.
 
 | Tool | Status | Notes |
