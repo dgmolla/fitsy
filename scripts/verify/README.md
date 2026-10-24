@@ -64,7 +64,10 @@ Adding or removing that label reruns Verify.
 
 The existing build job uses macOS when simulator work applies and Ubuntu otherwise.
 For a docs-only `needs-sim` override, classification requests the build job while static and unit-test jobs remain correctly skipped.
-Build runs `--only=mobile-e2e --runs=ci --scope=changed` after any applicable API build.
+Build first runs `node scripts/sim/ci.mjs --scope=changed --preflight` for required simulator selections, using the same configuration as execution.
+It reports every missing repository variable or secret together before the API build and native tool installation; the Supabase URL can reuse the existing `DEV_SUPABASE_URL` secret.
+A configuration pass supplies no native acceptance evidence and does not authenticate billing fixtures.
+Build then runs `--only=mobile-e2e --runs=ci --scope=changed` after any applicable API build.
 A simulator failure fails Build, so the unchanged final Verify aggregator rejects it.
 The native recipe uses dev services, a disposable Test Store account and an explicitly created device; ordinary logs and screenshots are uploaded for diagnosis.
 Hosted billing journeys establish isolated signed-in empty or expired Test Store fixtures using `scripts/sim/hosted-journeys.mjs` and the maintained billing sign-in YAML.

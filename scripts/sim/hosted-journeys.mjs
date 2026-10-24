@@ -1,5 +1,7 @@
 // Hosted Test Store coverage and real-store acceptance have different fixtures.
 // Keep Apple history transfer explicit: it remains a required local journey.
+import { buildProfile } from './build-profile.mjs';
+
 export function hostedCoverage(flows) {
   return {
     hosted: flows.filter(flow => flow !== 'subscription-restore-expired'),
@@ -13,6 +15,25 @@ export function hostedCoverage(flows) {
 
 export const billingFixture = flow => flow === 'subscription-expired-routing' ? 'expired'
   : flow === 'subscription-restore-empty' ? 'never_subscribed' : null;
+
+export function hostedConfiguration(flows, env) {
+  // Unset Actions variables become empty strings. Report the entire setup gap
+  // before installing native tools, rather than failing one credential at a time.
+  const required = [
+    ['EXPO_PUBLIC_SUPABASE_URL', 'variable FITSY_SIM_SUPABASE_URL or secret DEV_SUPABASE_URL'],
+    ['EXPO_PUBLIC_SUPABASE_ANON_KEY', 'variable FITSY_SIM_SUPABASE_ANON_KEY'],
+    ['EXPO_PUBLIC_REVENUECAT_TEST_KEY', 'variable FITSY_SIM_REVENUECAT_TEST_KEY'],
+    ['EXPO_PUBLIC_DEV_LOGIN_EMAIL', 'variable FITSY_SIM_LOGIN_EMAIL'],
+    ['EXPO_PUBLIC_DEV_LOGIN_PASSWORD', 'secret FITSY_SIM_LOGIN_PASSWORD'],
+    ...(flows.some(flow => billingFixture(flow) === 'expired') ? [
+      ['FITSY_SIM_EXPIRED_LOGIN_EMAIL', 'variable FITSY_SIM_EXPIRED_LOGIN_EMAIL'],
+      ['FITSY_SIM_EXPIRED_LOGIN_PASSWORD', 'secret FITSY_SIM_EXPIRED_LOGIN_PASSWORD'],
+    ] : []),
+  ];
+  const missing = required.filter(([key]) => !env[key]?.trim()).map(([, setting]) => setting);
+  if (missing.length) throw new Error(`Missing hosted simulator configuration: ${missing.join('; ')}`);
+  return { profile: buildProfile(true, env), accounts: hostedAccounts(flows, env) };
+}
 
 export function hostedAccounts(flows, env) {
   const account = (kind, email, password) => {

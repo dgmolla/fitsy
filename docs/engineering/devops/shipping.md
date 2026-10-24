@@ -104,7 +104,11 @@ Applicable product acceptance and its exact-head publisher require fresh `.evide
 Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
 
 Hosted execution uses `scripts/sim/ci.mjs`, the maintained native build recipe, a fresh simulator and RevenueCat Test Store against `https://dev.fitsy.org`.
-Configure repository variables `FITSY_SIM_SUPABASE_URL`, `FITSY_SIM_SUPABASE_ANON_KEY`, `FITSY_SIM_REVENUECAT_TEST_KEY` and `FITSY_SIM_LOGIN_EMAIL`, plus secret `FITSY_SIM_LOGIN_PASSWORD` for a disposable dev account distinct from the shared Dev login.
+Configure repository variables `FITSY_SIM_SUPABASE_ANON_KEY`, `FITSY_SIM_REVENUECAT_TEST_KEY` and `FITSY_SIM_LOGIN_EMAIL`, plus secret `FITSY_SIM_LOGIN_PASSWORD` for a disposable dev account distinct from the shared Dev login.
+The Supabase URL uses variable `FITSY_SIM_SUPABASE_URL` when configured, otherwise the existing `DEV_SUPABASE_URL` secret.
+After installing dependencies, run `node scripts/sim/ci.mjs --scope=changed --preflight` with the same mobile environment to validate configuration without native tools or network calls.
+CI runs this preflight before L3 builds and Maestro installation and reports all missing repository settings together, without logging their values.
+This configuration check does not authenticate fixtures, run native journeys or supply acceptance evidence; the subsequent execution still verifies real account state and every selected hosted flow.
 Create that account before CI and keep it never subscribed; Dev login forwards its configured password, with the existing shared defaults retained for local development.
 Full hosted coverage also requires variable `FITSY_SIM_EXPIRED_LOGIN_EMAIL` and secret `FITSY_SIM_EXPIRED_LOGIN_PASSWORD` for a distinct account with a real expired same-account Test Store purchase.
 Prepare that purchase and expiry through the product; the runner verifies fresh subscription-sync verdicts and never manufactures billing state.

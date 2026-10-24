@@ -183,6 +183,22 @@ jobs:
           cache: npm
       - run: npm ci
       - run: git fetch origin main
+      - name: Preflight simulator configuration
+        if: needs.classify.outputs.simulator == 'true'
+        env:
+          FITSY_CI_SIM_SCOPE: ${{ needs.classify.outputs.sim_scope }}
+          FITSY_CI_SIM_MODE: ${{ needs.classify.outputs.sim_mode }}
+          FITSY_CI_SIM_SMOKE: ${{ needs.classify.outputs.sim_smoke }}
+          FITSY_CI_SIM_FLOWS: ${{ needs.classify.outputs.sim_flows }}
+          EXPO_PUBLIC_API_URL: https://dev.fitsy.org
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.FITSY_SIM_SUPABASE_URL || secrets.DEV_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.FITSY_SIM_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_REVENUECAT_TEST_KEY: ${{ vars.FITSY_SIM_REVENUECAT_TEST_KEY }}
+          EXPO_PUBLIC_DEV_LOGIN_EMAIL: ${{ vars.FITSY_SIM_LOGIN_EMAIL }}
+          EXPO_PUBLIC_DEV_LOGIN_PASSWORD: ${{ secrets.FITSY_SIM_LOGIN_PASSWORD }}
+          FITSY_SIM_EXPIRED_LOGIN_EMAIL: ${{ vars.FITSY_SIM_EXPIRED_LOGIN_EMAIL }}
+          FITSY_SIM_EXPIRED_LOGIN_PASSWORD: ${{ secrets.FITSY_SIM_EXPIRED_LOGIN_PASSWORD }}
+        run: node scripts/sim/ci.mjs --scope=changed --preflight
       - name: Run L3 checks
         if: needs.classify.outputs.code == 'true'
         run: node scripts/verify/run.mjs --layer=3 --runs=ci --scope=changed
@@ -202,7 +218,7 @@ jobs:
           FITSY_CI_SIM_SMOKE: ${{ needs.classify.outputs.sim_smoke }}
           FITSY_CI_SIM_FLOWS: ${{ needs.classify.outputs.sim_flows }}
           EXPO_PUBLIC_API_URL: https://dev.fitsy.org
-          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.FITSY_SIM_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.FITSY_SIM_SUPABASE_URL || secrets.DEV_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.FITSY_SIM_SUPABASE_ANON_KEY }}
           EXPO_PUBLIC_REVENUECAT_TEST_KEY: ${{ vars.FITSY_SIM_REVENUECAT_TEST_KEY }}
           EXPO_PUBLIC_DEV_LOGIN_EMAIL: ${{ vars.FITSY_SIM_LOGIN_EMAIL }}

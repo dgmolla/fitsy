@@ -2,6 +2,70 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 const modulePath = resolve(__dirname, 'ci.mjs');
+const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+  !/^(GIT_|GITHUB_|FITSY_|EXPO_PUBLIC_|CI$|RUNNER_ENVIRONMENT$)/.test(key)));
+const configuration = {
+  EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org',
+  EXPO_PUBLIC_SUPABASE_URL: 'https://dev-fixture.supabase.co',
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: 'fixture-anon-key',
+  EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_fixture',
+  EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'empty@example.test',
+  EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'private-empty-password',
+  FITSY_SIM_EXPIRED_LOGIN_EMAIL: 'expired@example.test',
+  FITSY_SIM_EXPIRED_LOGIN_PASSWORD: 'private-expired-password',
+};
+const settings = [
+  ['EXPO_PUBLIC_SUPABASE_URL', 'FITSY_SIM_SUPABASE_URL'],
+  ['EXPO_PUBLIC_SUPABASE_ANON_KEY', 'FITSY_SIM_SUPABASE_ANON_KEY'],
+  ['EXPO_PUBLIC_REVENUECAT_TEST_KEY', 'FITSY_SIM_REVENUECAT_TEST_KEY'],
+  ['EXPO_PUBLIC_DEV_LOGIN_EMAIL', 'FITSY_SIM_LOGIN_EMAIL'],
+  ['EXPO_PUBLIC_DEV_LOGIN_PASSWORD', 'FITSY_SIM_LOGIN_PASSWORD'],
+  ['FITSY_SIM_EXPIRED_LOGIN_EMAIL', 'FITSY_SIM_EXPIRED_LOGIN_EMAIL'],
+  ['FITSY_SIM_EXPIRED_LOGIN_PASSWORD', 'FITSY_SIM_EXPIRED_LOGIN_PASSWORD'],
+] as const;
+function preflight(extra: NodeJS.ProcessEnv) {
+  return spawnSync(process.execPath, [modulePath, '--scope=all', '--preflight'], {
+    env: { ...cleanEnv, ...extra }, encoding: 'utf8', timeout: 10000,
+  });
+}
+
+test('configuration preflight lists every missing repository setting together', () => {
+  const result = preflight({ EXPO_PUBLIC_API_URL: configuration.EXPO_PUBLIC_API_URL });
+  expect(result.status).toBe(1);
+  const receipt = JSON.parse(result.stdout);
+  expect(receipt.status).toBe('fail');
+  for (const [, setting] of settings) expect(receipt.summary).toContain(setting);
+  expect(receipt.fix).toContain('docs/engineering/devops/shipping.md');
+});
+
+test.each(settings)('configuration preflight rejects absent %s and names its repository setting', (key, setting) => {
+  const result = preflight({ ...configuration, [key]: '   ' });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ status: 'fail', summary: expect.stringContaining(setting) });
+  expect(result.stdout + result.stderr).not.toMatch(/private-empty-password|private-expired-password|fixture-anon-key/);
+});
+
+test('valid configuration preflight supplies no native or billing acceptance result', () => {
+  const result = preflight(configuration);
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({
+    name: 'mobile-e2e-config', status: 'pass', summary: expect.stringContaining('no native flows executed'),
+  });
+  expect(result.stdout + result.stderr).not.toMatch(/private-empty-password|private-expired-password|fixture-anon-key/);
+});
+
+test.each([
+  { extra: { EXPO_PUBLIC_API_URL: 'https://api.fitsy.org' }, error: 'refuses production' },
+  { extra: { EXPO_PUBLIC_SUPABASE_URL: 'https://zaxkmjqozvmbifiwbxps.supabase.co' }, error: 'Production Supabase is forbidden' },
+  { extra: { EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'appl_fixture' }, error: 'requires EXPO_PUBLIC_REVENUECAT_TEST_KEY' },
+  { extra: { EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'dev@fitsy.local' }, error: 'disposable account' },
+  { extra: { FITSY_SIM_EXPIRED_LOGIN_EMAIL: 'EMPTY@example.test' }, error: 'distinct disposable accounts' },
+])('configuration preflight retains native environment protections: $extra', ({ extra, error }) => {
+  const result = preflight({ ...configuration, ...extra });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ status: 'fail', summary: expect.stringContaining(error) });
+});
+
 const runtime = (version: string, isAvailable = true) => ({ version, isAvailable, identifier: `com.apple.CoreSimulator.SimRuntime.iOS-${version}` });
 const phone = (name: string, minRuntimeVersionString = '18.0', maxRuntimeVersionString = '99.0') =>
   ({ name, minRuntimeVersionString, maxRuntimeVersionString, productFamily: 'iPhone', identifier: name });

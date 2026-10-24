@@ -127,7 +127,7 @@ const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, e
 const commit = () => { git('add', '.'); git('commit', '-qm', 'fixture'); return git('rev-parse', 'HEAD'); };
 function fixture() {
   for (const path of ['scripts/verify/impact-plan.mjs', 'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh', 'scripts/sim/ci.mjs',
-    'scripts/sim/hosted-journeys.mjs',
+    'scripts/sim/hosted-journeys.mjs', 'scripts/sim/build-profile.mjs',
     ...allFlows.map(name => `apps/mobile/e2e/flows/${name}.yaml`)]) {
     mkdirSync(dirname(join(directory, path)), { recursive: true }); copyFileSync(join(root, path), join(directory, path));
   }
@@ -192,7 +192,7 @@ test('verification modules import safely from stdin without executing their CLIs
 });
 
 const yaml = require('js-yaml') as { load(text: string): unknown };
-type Step = { name?: string; run?: string; if?: string };
+type Step = { name?: string; run?: string; if?: string; env?: Record<string, string> };
 const workflowText = readFileSync(join(root, '.github/workflows/verify.yml'), 'utf8');
 const workflow = yaml.load(workflowText) as { on: { pull_request: { types: string[] } };
   jobs: Record<string, { if?: string; 'runs-on'?: string; steps: Step[] }> };
@@ -239,6 +239,23 @@ test('label additions and removals rerun classification, and the final Verify jo
   expect(workflowText.split('\n  verify:\n')[1]).toBe(original.split('\n  verify:\n')[1]);
   const main = execFileSync('git', ['show', 'origin/main:.github/workflows/verify.yml'], { cwd: root, env, encoding: 'utf8' });
   expect(workflowText.split('\n  verify:\n')[1]).toBe(main.split('\n  verify:\n')[1]);
+});
+
+test('CI preflights the same simulator configuration before builds and native tool installation', () => {
+  const steps = workflow.jobs.build!.steps;
+  const preflight = steps.findIndex(step => step.name === 'Preflight simulator configuration');
+  expect(preflight).toBeGreaterThan(steps.findIndex(step => step.run === 'npm ci'));
+  expect(preflight).toBeLessThan(steps.findIndex(step => step.name === 'Run L3 checks'));
+  expect(preflight).toBeLessThan(steps.findIndex(step => step.name === 'Install Maestro'));
+  const execute = steps.find(step => step.name === 'Run selected simulator flows')!;
+  expect(steps[preflight]!.if).toBe(execute.if);
+  expect(steps[preflight]!.env).toEqual(execute.env);
+  expect(steps[preflight]!.run).toBe('node scripts/sim/ci.mjs --scope=changed --preflight');
+  const url = execute.env!.EXPO_PUBLIC_SUPABASE_URL!;
+  const resolveURL = (vars: object, secrets: object) =>
+    Function('vars', 'secrets', `return (${url.replace(/^\$\{\{\s*|\s*\}\}$/g, '')});`)(vars, secrets);
+  expect(resolveURL({}, { DEV_SUPABASE_URL: 'existing-dev-url' })).toBe('existing-dev-url');
+  expect(resolveURL({ FITSY_SIM_SUPABASE_URL: 'explicit-dev-url' }, { DEV_SUPABASE_URL: 'existing-dev-url' })).toBe('explicit-dev-url');
 });
 
 const screen = (copy = 'Your goal', margin = 8, action = 'setGoal("performance")') =>
@@ -334,7 +351,7 @@ test.each([
       FITSY_CI_SIM_SCOPE: plan.simulator.scope, FITSY_CI_SIM_MODE: plan.simulator.mode,
       FITSY_CI_SIM_FLOWS: JSON.stringify(plan.simulator.flows), FITSY_CI_SIM_SMOKE: JSON.stringify(plan.simulator.smoke) }, encoding: 'utf8',
   });
-  expect(execute.status).toBe(0);
+  expect({ status: execute.status, error: execute.status === 0 ? '' : execute.stderr }).toEqual({ status: 0, error: '' });
   expect(JSON.parse(execute.stdout)).toEqual(plan.simulator);
 });
 

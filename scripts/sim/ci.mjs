@@ -5,7 +5,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { impactPlan, repository, simulatorFlows, gitEnv, isMain } from '../verify/impact-plan.mjs';
-import { billingFixture, hostedAccounts, hostedCoverage, hostedJourney, verifyBillingFixture } from './hosted-journeys.mjs';
+import { billingFixture, hostedConfiguration, hostedCoverage, hostedJourney, verifyBillingFixture } from './hosted-journeys.mjs';
 
 export function simulatorTarget(inventory) {
   const runtime = inventory.runtimes.filter(item => item.isAvailable && item.identifier.includes('.iOS-'))
@@ -33,8 +33,8 @@ export function renderSmoke(documents, selector) {
 }
 
 export async function runCI(args = process.argv.slice(2)) {
-  if (args.some(arg => !['--scope=changed', '--scope=all', '--plan'].includes(arg)))
-    throw new Error('Usage: ci.mjs [--scope=changed|all] [--plan]');
+  if (args.some(arg => !['--scope=changed', '--scope=all', '--plan', '--preflight'].includes(arg)))
+    throw new Error('Usage: ci.mjs [--scope=changed|all] [--plan|--preflight]');
   const plan = impactPlan();
   const selection = args.includes('--scope=all') ? { risk: 'high', scope: 'full', required: true, mode: 'e2e', smoke: [],
     flows: simulatorFlows(), reason: 'Explicit all scope requires the full flow set' } : plan.simulator;
@@ -52,17 +52,18 @@ export async function runCI(args = process.argv.slice(2)) {
   if (!selection.required) return { name: 'mobile-e2e', status: 'skipped', ...selection };
   if (!selection.flows.length) throw new Error('Required simulator flow catalog is missing or empty');
   if (!coverage.hosted.length) throw new Error('No hosted journeys selected; complete the reported Apple acceptance through product-flow.mjs');
-  if (process.env.GITHUB_ACTIONS !== 'true' || process.env.RUNNER_ENVIRONMENT !== 'github-hosted')
+  const preflight = args.includes('--preflight');
+  if (!preflight && (process.env.GITHUB_ACTIONS !== 'true' || process.env.RUNNER_ENVIRONMENT !== 'github-hosted'))
     throw new Error('Native CI execution requires an isolated GitHub-hosted checkout; use product-flow.mjs locally');
-  if (process.platform !== 'darwin') throw new Error('Simulator execution requires macOS with Xcode');
+  if (!preflight && process.platform !== 'darwin') throw new Error('Simulator execution requires macOS with Xcode');
+  const { profile, accounts } = hostedConfiguration(coverage.hosted, process.env);
   // Use the maintained native recipe, dev-target protection, Test Store profile,
   // keychain entitlement checks and owned Metro lifecycle. No production tokens.
   const { environment, prepareNative, compileNative, startMetro, stopMetro } = await import('./product-flow.mjs');
-  const { buildProfile } = await import('./build-profile.mjs');
   const { admitDisk } = await import('./runner-controls.mjs');
   environment();
-  const profile = buildProfile(true, process.env);
-  const accounts = hostedAccounts(coverage.hosted, process.env);
+  if (preflight) return { name: 'mobile-e2e-config', status: 'pass',
+    summary: 'Simulator configuration is present and valid; no native flows executed' };
   const fixtures = [];
   for (const account of Object.values(accounts)) fixtures.push(await verifyBillingFixture(account));
   admitDisk(repository, 'Hosted native build');
@@ -152,7 +153,7 @@ if (isMain(import.meta.url)) {
     if (result.status === 'skipped') process.exitCode = 2;
   } catch (error) {
     console.log(JSON.stringify({ name: 'mobile-e2e', status: 'fail', summary: error.message,
-      fix: 'Inspect the selected flows and CI artifacts; configure the dev backend and disposable Test Store account' }));
+      fix: 'Configure the missing repository variables and secrets using docs/engineering/devops/shipping.md, then rerun Verify; inspect CI artifacts for journey failures' }));
     process.exitCode = 1;
   }
 }

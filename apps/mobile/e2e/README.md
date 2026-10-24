@@ -8,6 +8,9 @@ Every UI edit triggers CI coverage: proven screen-local style/copy reuses a main
 Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the maintained YAML flows; missing checkpoints fail before a simulator is created.
 CI compares scope, mode, flows and checkpoints with classification; the pre-push hook stays free of simulator execution.
 CI execution does not replace the local source-bound product-flow gate.
+CI preflights its configuration before builds or native tool installation and reports all missing settings together; the Supabase URL falls back to the existing `DEV_SUPABASE_URL` secret.
+With dependencies and the mobile dev environment loaded, use `node scripts/sim/ci.mjs --scope=changed --preflight` to check configuration locally without running native tools or contacting services.
+Configure the named repository variables and secrets using the shipping contract; a preflight pass does not prove fixture history or native acceptance.
 Hosted billing setup and the explicit Apple-only coverage policy live in `scripts/sim/hosted-journeys.mjs`, consumed by `scripts/sim/ci.mjs`.
 Before each hosted Restore journey, CI clears app storage and keychain, signs in through `setup/billing-signin.yaml`, and asserts the required paywall or Welcome back starting screen.
 The empty and expired fixtures use distinct disposable Test Store accounts; the runner restarts its owned Metro when switching the bundled Dev login credentials.

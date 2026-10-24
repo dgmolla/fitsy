@@ -82,6 +82,29 @@ test('unrelated affected flows do not require an expired billing account', () =>
   expect(result).toEqual(['never_subscribed']);
 });
 
+test.each([
+  { flows: ['reminders'], expired: false },
+  { flows: ['subscription-restore-empty'], expired: false },
+  { flows: ['subscription-expired-routing'], expired: true },
+])('configuration preflight requires only the selected account kinds: $flows', ({ flows, expired }) => {
+  const result = evaluate(`
+    import {hostedConfiguration} from ${JSON.stringify(policy)};
+    try {
+      const {profile, accounts} = hostedConfiguration(${JSON.stringify(flows)}, ${JSON.stringify({
+        EXPO_PUBLIC_SUPABASE_URL: 'https://dev-fixture.supabase.co',
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: 'fixture-anon-key',
+        EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_fixture',
+        EXPO_PUBLIC_DEV_LOGIN_EMAIL: credentials.EXPO_PUBLIC_DEV_LOGIN_EMAIL,
+        EXPO_PUBLIC_DEV_LOGIN_PASSWORD: credentials.EXPO_PUBLIC_DEV_LOGIN_PASSWORD,
+      })});
+      process.stdout.write(JSON.stringify({storeMode:profile.storeMode, accounts:Object.keys(accounts)}));
+    } catch (error) { process.stdout.write(JSON.stringify({error:error.message})); }`);
+  if (expired) {
+    expect(result.error).toContain('FITSY_SIM_EXPIRED_LOGIN_EMAIL');
+    expect(result.error).toContain('FITSY_SIM_EXPIRED_LOGIN_PASSWORD');
+  } else expect(result).toEqual({ storeMode: 'test-store', accounts: ['never_subscribed'] });
+});
+
 const freshStatus = { synced: true, active: false, stale: false, lastRcVerifiedAt: new Date().toISOString() };
 test.each([
   { kind: 'expired', status: { ...freshStatus, verdict: 'expired' }, ok: true },

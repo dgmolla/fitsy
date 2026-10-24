@@ -290,6 +290,7 @@ Render smoke reuses maintained journey setup through its mapped screen checkpoin
 This is a CI policy; the cheap pre-push hook does not run simulators.
 The `needs-sim` label forces flows, and CI logs print the chosen scope and reason.
 The existing Build job runs on macOS when needed and propagates simulator failures through the unchanged final Verify aggregator.
+It checks configuration with `node scripts/sim/ci.mjs --scope=changed --preflight` before builds or native tool installation, using the same environment as execution and reporting every missing repository setting together.
 The local source-bound acceptance gate remains required; see [shipping.md](shipping.md) for execution and configuration.
 
 Two complementary execution modes:
