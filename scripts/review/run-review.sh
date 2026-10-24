@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One independent review round, all required domains, one budget attempt.
+# Legacy independent review runner; the active AI review poller owns attempt limits.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
@@ -86,7 +86,7 @@ require_stable_candidate() {
     return 1
   fi
 }
-# Fresh local rounds finish cheap checks before reserving review capacity.
+# Fresh local rounds finish cheap checks before reviewer execution.
 # Existing admission/projection calls never execute a provider.
 if [ "$TARGET" = --local ] && [ "$PROBE" = 0 ] && [ "$CACHED_ONLY" = 0 ] && [ "$FRESH_EXECUTION" != 1 ]; then
   node scripts/verify/run.mjs --layer=0-2 --stage=cheap --scope=changed --runs=local >&2
@@ -122,14 +122,7 @@ if [ "$TARGET" = "--local" ]; then
 else
   ISSUE="$(printf '%s\n' "$BODY" | sed -nE 's/^Delivery-Issue: #([1-9][0-9]*)[[:space:]]*$/\1/p')"
 fi
-[[ "$ISSUE" =~ ^[1-9][0-9]*$ ]] || { echo '[run-review] timing gap: review budget requires one bound Delivery-Issue candidate' >&2; exit 1; }
-CONTROL_SHA="$(git rev-parse origin/main)"
-COMPLETED_AUTH="${FITSY_REVIEW_COMPLETED_HOME:-${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/completed}/issue-$ISSUE.json"
-if [ -f "$COMPLETED_AUTH" ]; then
-  BASE_SHA="$(python3 -I scripts/review/review-budget.py completed-context --ledger "$CACHE_DIR/unused" \
-    --authorization-file "$COMPLETED_AUTH" --issue "$ISSUE" --source-sha "$HEAD_SHA")" || exit 1
-  DIFF="$(git diff --abbrev=8 "$BASE_SHA...$HEAD_SHA" | python3 -I -c 'import re,sys; print(re.sub(r"(?m)^(@@ -[0-9]+(?:,[0-9]+)? \+[0-9]+(?:,[0-9]+)? @@).*$",r"\1",sys.stdin.read()),end="")')"
-fi
+[[ "$ISSUE" =~ ^[1-9][0-9]*$ ]] || { echo '[run-review] review requires one bound Delivery-Issue candidate' >&2; exit 1; }
 # The bound issue supplies release intent, never reviewer instructions or proof.
 # Ignore changing task status so local and PR reviews reuse the same acceptance.
 if ! ISSUE_BRIEF="$(github issue view "$ISSUE" --json body --jq .body 2>/dev/null)"; then
@@ -148,25 +141,9 @@ for line in lines:
 print("\n".join(kept))
 ')"
 [ -n "$ISSUE_BRIEF" ] || { echo '[run-review] bound issue brief is empty; review cannot verify release acceptance' >&2; exit 1; }
-BUDGET_HOME="${FITSY_REVIEW_BUDGET_HOME:-$HOME/.cache/fitsy-review/budgets}"
-BUDGET_LEDGER="$BUDGET_HOME/issue-$ISSUE.jsonl"
-# Root commit identity is stable across local clones and remote URL spellings.
-# A candidate branch has one issue even when its first PR changes the body/head.
+# Domain coverage remains bound to the candidate; no execution ledger is used.
 [ -n "$HEAD_BRANCH" ] || { echo '[run-review] review requires a named candidate branch' >&2; exit 1; }
 CANDIDATE="$(git rev-list --max-parents=0 HEAD | sort):$HEAD_BRANCH"
-BUDGET_ARGS=(--ledger "$BUDGET_LEDGER" --candidate "$CANDIDATE" --issue "$ISSUE")
-if [ ! -f "$COMPLETED_AUTH" ]; then BUDGET_ARGS+=(--optional-import-ledger "$REPO_ROOT/.evidence/review-budget.jsonl"); fi
-if [ -n "${FITSY_REVIEW_EXECUTION_POLICY:-}" ]; then BUDGET_ARGS+=(--execution-policy "$FITSY_REVIEW_EXECUTION_POLICY"); fi
-for LEGACY_LEDGER in "${FITSY_REVIEW_BUDGET_LEDGER:-}" "${FITSY_REVIEW_BUDGET_IMPORT_LEDGER:-}"; do
-  [ -z "$LEGACY_LEDGER" ] || [ -f "$COMPLETED_AUTH" ] || BUDGET_ARGS+=(--import-ledger "$LEGACY_LEDGER")
-done
-if [ "$TARGET" != "--local" ] && [ ! -f "$COMPLETED_AUTH" ]; then
-  BUDGET_ARGS+=(--optional-import-ledger "${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/budgets/$TARGET.jsonl")
-fi
-if ! python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" >&2; then
-  echo '[run-review] timing gap: candidate budget binding or history refused' >&2
-  exit 1
-fi
 
 # The issue binding lives in ignored local evidence. A missing binding is
 # visible, but timing collection never changes the independent review gate.
@@ -188,19 +165,12 @@ TELEMETRY_CACHE_HIT=0
 PROMPT_FILE=""
 RAW_FILE=""
 REVIEW_PID=""
-BUDGET_OPEN=0
-BUDGET_OUTCOME=interrupted
-BUDGET_VERDICT=incomplete
 review_exit() {
   local code=$?
   if [ -n "$REVIEW_PID" ]; then
     kill -TERM "$REVIEW_PID" 2>/dev/null || true
     wait "$REVIEW_PID" 2>/dev/null || true
     REVIEW_PID=""
-  fi
-  if [ "$BUDGET_OPEN" = 1 ]; then
-    python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
-      --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" >&2 || code=1
   fi
   if [ -n "$PROMPT_FILE" ]; then rm -f "$PROMPT_FILE" "$RAW_FILE"; fi
   if [ -n "$TELEMETRY_ATTEMPT" ]; then
@@ -226,15 +196,13 @@ fi
 
 # Classify both sides, including deleted and renamed sensitive files.
 CHANGED="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")"
-DOMAINS="$(printf '%s\n' "$CHANGED" | python3 -I scripts/review/review-domains.py --state-file "$BUDGET_HOME/domains/issue-$ISSUE.json" --candidate "$CANDIDATE" --issue "$ISSUE" ${DOMAIN_ARGS[@]+"${DOMAIN_ARGS[@]}"})"
+DOMAINS="$(printf '%s\n' "$CHANGED" | python3 -I scripts/review/review-domains.py --state-file "$CACHE_DIR/domains/issue-$ISSUE.json" --candidate "$CANDIDATE" --issue "$ISSUE" ${DOMAIN_ARGS[@]+"${DOMAIN_ARGS[@]}"})"
 DOMAIN_FILES=()
 for DOMAIN in $DOMAINS; do
   [ -f ".claude/lenses/$DOMAIN.md" ] || { echo "missing domain instructions: $DOMAIN" >&2; exit 1; }
   DOMAIN_FILES+=(".claude/lenses/$DOMAIN.md")
 done
 TIER="$(echo "$CHANGED" | node scripts/review/tier.mjs)"
-BUDGET_ARGS+=(--risk "$TIER")
-BUDGET_ARGS+=(--required)
 PROVIDER="${FITSY_REVIEW_PROVIDER:-codex}"
 incomplete_status() {
   [ "$TARGET" != --local ] || return 0
@@ -252,51 +220,34 @@ if [ "$TARGET" != "--local" ] && [ -f "$TELEMETRY_FILE" ] && [ -z "$TELEMETRY_RO
   exit 1
 fi
 if ! IDENTITY="$(python3 -I scripts/review/execute-review.py --identity "$PROVIDER" "$MODEL")"; then preflight_error; fi
-# A completed verdict remains reusable as remaining budget shrinks. Runtime
-# deadlines stay in its provenance, not the semantic reviewer/cache identity.
+# Runtime deadlines stay in provenance, not the semantic reviewer/cache identity.
 CACHE_IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d.pop("timeout_seconds"); print(json.dumps(d,sort_keys=True))')"
 
-COMPLETED_IDENTITY=""
-if [ -f "$COMPLETED_AUTH" ]; then
-  COMPLETED_IDENTITY="$(python3 -I -c 'import hashlib,json,pathlib,sys; p=pathlib.Path(sys.argv[1]); raw=p.read_bytes(); d=json.loads(raw); h=hashlib.sha256(raw); [(h.update(k.encode()),h.update(pathlib.Path(v["path"]).read_bytes())) for k,v in sorted(d["artifacts"].items())]; print(h.hexdigest())' "$COMPLETED_AUTH")" || { incomplete_status completed_evidence; exit 1; }
-fi
 # Key on reviewed content and the bound release brief. PR title/body can change
 # without altering acceptance, while an issue acceptance edit must rerun review.
-KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" "$REPO_ROOT/scripts/review/review-budget.py" <(printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF:$COMPLETED_IDENTITY") | shasum -a 256 | cut -d' ' -f1)"
+KEY="$(printf '%s' "$DIFF" | cat - "${DOMAIN_FILES[@]}" REVIEW.md "$REPO_ROOT/scripts/review/run-review.sh" "$REPO_ROOT/scripts/review/review-domains.py" "$REPO_ROOT/scripts/review/review-round.py" "$REPO_ROOT/scripts/review/execute-review.py" "$REPO_ROOT/scripts/review/extract-verdict.py" "$REPO_ROOT/scripts/review/review-gate.py" <(printf '%s' "$HEAD_SHA:$BASE_SHA:$DOMAINS:$CACHE_IDENTITY") <(printf '%s' "$ISSUE:$ISSUE_BRIEF") | shasum -a 256 | cut -d' ' -f1)"
 DIFF_SHA256="$(printf '%s' "$DIFF" | shasum -a 256 | cut -d' ' -f1)"
 CACHE_FILE="$CACHE_DIR/$KEY.json"
-if [ "$PROBE" = 1 ] && [ ! -f "$COMPLETED_AUTH" ]; then
+if [ "$PROBE" = 1 ]; then
   python3 -I -c 'import json,sys; print(json.dumps({"cache_key":sys.argv[1],"domains":sys.argv[2].split(),"head_sha":sys.argv[3]}))' "$KEY" "$DOMAINS" "$HEAD_SHA"
   exit 0
 fi
-if [ -f "$COMPLETED_AUTH" ]; then
-  [ "$PROVIDER" = codex ] && [ "$MODEL" = gpt-6-sol ] && [ "${FITSY_REVIEW_REASONING_EFFORT:-high}" = high ] || {
-    echo '[run-review] completed reviewer profile does not match selected provider/model/effort' >&2; exit 1;
-  }
-  COMPLETED_ARGS=(--authorization-file "$COMPLETED_AUTH" --candidate-root "$REPO_ROOT"
-    --control-sha "$CONTROL_SHA" --source-sha "$HEAD_SHA" --base-sha "$BASE_SHA"
-    --acceptance-sha256 "$(printf '%s' "$ISSUE_BRIEF" | shasum -a 256 | cut -d' ' -f1)")
-  for DOMAIN in $DOMAINS; do COMPLETED_ARGS+=(--required-domain "$DOMAIN"); done
-  COMPLETED_ACTION=admit-completed
-  if [ "$PROBE" = 1 ]; then COMPLETED_ACTION=validate-completed; fi
-  ADMIN_HOME="$(python3 -I -c 'import os,pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
-  INSTALLED_OPERATOR="$ADMIN_HOME/.fitsy-review/operators/review-budget.py"
-  if [ ! -f "$INSTALLED_OPERATOR" ]; then INSTALLED_OPERATOR="$ADMIN_HOME/.fitsy-review/repo/scripts/review/review-budget.py"; fi
-  RESULT_JSON="$(python3 -I "$INSTALLED_OPERATOR" "$COMPLETED_ACTION" "${BUDGET_ARGS[@]}" "${COMPLETED_ARGS[@]}")" || { incomplete_status completed_evidence; exit 1; }
-  if [ "$PROBE" = 1 ]; then
-    python3 -I -c 'import json,sys; print(json.dumps({"cache_key":sys.argv[1],"domains":sys.argv[2].split(),"head_sha":sys.argv[3]}))' "$KEY" "$DOMAINS" "$HEAD_SHA"
-    exit 0
-  fi
-  # Project only the validated original result through the existing domain gates.
-  # No provider, new cache or persisted admission is created on this path.
-elif { [ "$FRESH_EXECUTION" != 1 ] || [ "$CACHED_ONLY" = 1 ]; } && [ -f "$CACHE_FILE" ]; then
+if { [ "$FRESH_EXECUTION" != 1 ] || [ "$CACHED_ONLY" = 1 ]; } && [ -f "$CACHE_FILE" ]; then
   TELEMETRY_CACHE_HIT=1
   echo "[run-review] cache hit ($KEY)" >&2
-  CACHE_ARGS=(--result-file "$CACHE_FILE" --cache-key "$KEY" --base-sha "$BASE_SHA" --source-sha "$HEAD_SHA")
-  for DOMAIN in $DOMAINS; do CACHE_ARGS+=(--required-domain "$DOMAIN"); done
-  RESULT_JSON="$(python3 -I scripts/review/review-budget.py admit-cache "${BUDGET_ARGS[@]}" "${CACHE_ARGS[@]}")" || {
-    incomplete_status cache_provenance; exit 1;
-  }
+  RESULT_JSON="$(python3 -I - "$CACHE_FILE" "$KEY" "$BASE_SHA" "$IDENTITY" <<'PYCACHE'
+import hashlib,json,pathlib,sys
+result=json.loads(pathlib.Path(sys.argv[1]).read_text())
+execution=result['execution']
+assert execution['cache_key'] == sys.argv[2] and execution['base_sha'] == sys.argv[3]
+expected=json.loads(sys.argv[4]); observed=dict(result['reviewer'])
+expected.pop('timeout_seconds'); observed.pop('timeout_seconds')
+assert observed == expected
+for artifact in execution['artifacts'].values():
+    assert hashlib.sha256(pathlib.Path(artifact['path']).read_bytes()).hexdigest() == artifact['sha256']
+print(json.dumps(result))
+PYCACHE
+  )" || { incomplete_status cache_provenance; exit 1; }
 else
   if [ "$CACHED_ONLY" = 1 ]; then
     echo "[run-review] required complete review cache unavailable; no execution authorized" >&2
@@ -323,51 +274,29 @@ else
     echo "Review all required domains together. Return explicit results for every required domain, and consolidate duplicate findings with all applicable domain names. You may read repo files for context."
     echo "End with the fenced JSON block required by REVIEW.md's output contract."
   } > "$PROMPT_FILE"
-  REQUESTED_TIMEOUT="${FITSY_REVIEW_TIMEOUT_SECONDS:-}"
-  if [ -z "$REQUESTED_TIMEOUT" ] || [ "${FITSY_REVIEW_TIMEOUT_FLOOR:-0}" = 1 ]; then
-    WINDOW_STATUS="$(python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" --lens "$LENS")" || { echo '[run-review] capacity preflight failed' >&2; incomplete_status budget; exit 1; }
-    REQUIRED_TIMEOUT="$(printf '%s' "$WINDOW_STATUS" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); print(max(1,int(min(d["remaining_seconds"],d["prospective_remaining_seconds"])-5)) if "prospective_remaining_seconds" in d else d["required_window_seconds"])')"
-    if [ -n "$REQUESTED_TIMEOUT" ] && ! [[ "$REQUESTED_TIMEOUT" =~ ^[0-9]+$ ]]; then echo '[run-review] invalid timeout' >&2; incomplete_status configuration; exit 1; fi
-    if [ -z "$REQUESTED_TIMEOUT" ] || [ "$REQUESTED_TIMEOUT" -lt "$REQUIRED_TIMEOUT" ]; then REQUESTED_TIMEOUT="$REQUIRED_TIMEOUT"; fi
-  fi
-  if ! BUDGET_GRANT="$(python3 -I scripts/review/review-budget.py begin "${BUDGET_ARGS[@]}" --round-id "$HEAD_SHA" \
-      --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" \
-      --timeout-seconds "$REQUESTED_TIMEOUT")"; then
-    echo "$BUDGET_GRANT" >&2
-    echo "[run-review] review time unavailable; no independent reviewer started" >&2
-    incomplete_status budget
-    exit 1
-  fi
-  BUDGET_OPEN=1
-  echo "$BUDGET_GRANT" >&2
-  GRANTED_TIMEOUT="$(printf '%s' "$BUDGET_GRANT" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["timeout_seconds"])')"
-  IDENTITY="$(printf '%s' "$IDENTITY" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["timeout_seconds"]=int(sys.argv[1]); print(json.dumps(d,sort_keys=True))' "$GRANTED_TIMEOUT")"
   echo "[run-review] $LENS on ${TARGET} (tier=$TIER provider=$PROVIDER model=$MODEL)" >&2
   # Never salvage a pass from partial output produced by a failed execution.
   EXECUTION_FILE="$CACHE_DIR/$KEY.$ATTEMPT_ID.execution.receipt"
-  FITSY_REVIEW_DIAGNOSTIC_FILE="$EXECUTION_FILE" FITSY_REVIEW_TIMEOUT_SECONDS="$GRANTED_TIMEOUT" python3 -I scripts/review/execute-review.py "$PROVIDER" "$MODEL" \
+  FITSY_REVIEW_DIAGNOSTIC_FILE="$EXECUTION_FILE" python3 -I scripts/review/execute-review.py "$PROVIDER" "$MODEL" \
     < "$PROMPT_FILE" > "$RAW_FILE" 2>>"$CACHE_DIR/errors.log" &
   REVIEW_PID=$!
   if wait "$REVIEW_PID"; then
     REVIEW_PID=""
-    BUDGET_OUTCOME=pass
+    EXECUTION_OUTCOME=pass
     RESULT_JSON="$(python3 -I scripts/review/review-round.py "$DOMAINS" < "$RAW_FILE")"
   else
     REVIEW_PID=""
-    BUDGET_OUTCOME=fail
+    EXECUTION_OUTCOME=fail
     RESULT_JSON="$(printf '' | python3 -I scripts/review/review-round.py "$DOMAINS" --execution-error)"
   fi
   FAILURE_KIND="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("kind", "process_error"))' "$EXECUTION_FILE" 2>/dev/null || echo process_error)"
-  if [ "$BUDGET_OUTCOME" = fail ] && [ "$FAILURE_KIND" = completed ]; then FAILURE_KIND=invalid_output; fi
-  if [ "$BUDGET_OUTCOME" = pass ] && [ "$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" = incomplete ]; then
+  if [ "$EXECUTION_OUTCOME" = fail ] && [ "$FAILURE_KIND" = completed ]; then FAILURE_KIND=invalid_output; fi
+  if [ "$EXECUTION_OUTCOME" = pass ] && [ "$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["verdict"])')" = incomplete ]; then
     if [ "$FAILURE_KIND" = completed ]; then FAILURE_KIND=invalid_output; fi
-    BUDGET_OUTCOME=fail
+    EXECUTION_OUTCOME=fail
   fi
-  if [ "$BUDGET_OUTCOME" = fail ]; then
+  if [ "$EXECUTION_OUTCOME" = fail ]; then
     RESULT_JSON="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["error"]["kind"]=sys.argv[1]; d["error"]["execution_evidence"]=sys.argv[2]; print(json.dumps(d))' "$FAILURE_KIND" "$EXECUTION_FILE")"
-  fi
-  if [ "$BUDGET_OUTCOME" = pass ]; then
-    BUDGET_VERDICT="$(printf '%s' "$RESULT_JSON" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["verdict"])')"
   fi
   cp "$RAW_FILE" "$CACHE_DIR/$KEY.raw"
   rm -f "$PROMPT_FILE" "$RAW_FILE"
@@ -381,11 +310,6 @@ result["execution"]={"attempt_id":sys.argv[2],"cache_key":sys.argv[3],"base_sha"
  "artifacts":{key:{"path":path,"sha256":hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()}
  for key,path in (("raw",sys.argv[5]),("receipt",sys.argv[6]))}}
 print(json.dumps(result))' "$IDENTITY" "$ATTEMPT_ID" "$KEY" "$BASE_SHA" "$CACHE_DIR/$KEY.raw" "$EXECUTION_FILE")"
-  RESULT_DIGEST="$(printf '%s' "$RESULT_JSON" | shasum -a 256 | cut -d' ' -f1)"
-  python3 -I scripts/review/review-budget.py finish "${BUDGET_ARGS[@]}" --failure-kind "$FAILURE_KIND" --round-id "$HEAD_SHA" \
-    --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" \
-    --result-sha256 "$RESULT_DIGEST" >&2
-  BUDGET_OPEN=0
   require_stable_candidate || { echo "$RESULT_JSON"; exit 1; }
   # Never cache incomplete reviews or historical runner findings. Both are
   # transient infrastructure failures, not reusable independent verdicts.

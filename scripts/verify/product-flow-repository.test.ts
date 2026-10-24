@@ -72,7 +72,6 @@ test('the canonical product-flow check blocks missing evidence but permits expli
   expect(result.stdout).not.toContain('"status":"skipped"');
   const registry = readFileSync(join(verify, 'registry.yml'), 'utf8');
   expect(registry).toMatch(/name: product-flow\n\s+stage: acceptance/);
-  expect(registry).toMatch(/name: review-admission[\s\S]*?blocking: true/);
   expect(registry).toMatch(/name: build\n[\s\S]*?runs: \[local, ci\]/);
 });
 

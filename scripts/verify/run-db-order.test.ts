@@ -17,13 +17,6 @@ afterEach(() => rmSync(directory, { recursive: true, force: true }));
 test("builds before acquiring the modeled owned database and reports the full selection", () => {
   const verify = join(directory, "scripts/verify");
   writeFileSync(join(verify, "registry.yml"), `checks:
-  - name: review-admission
-    script: review-admission.sh
-    stage: acceptance
-    layer: 0
-    blocking: true
-    preflight: true
-    runs: [local]
   - name: build
     script: build.sh
     layer: 3
@@ -35,10 +28,6 @@ test("builds before acquiring the modeled owned database and reports the full se
     blocking: true
     database: true
     runs: [local]
-`);
-  writeFileSync(join(verify, "review-admission.sh"), `#!/bin/bash
-[ "\${FAIL_REVIEW:-0}" = 0 ] || exit 1
-printf '%s\\n' '{"summary":"review admitted"}'
 `);
   writeFileSync(join(verify, "build.sh"), `#!/bin/bash
 test -z "$FITSY_VERIFY_DB_LOCKED$FITSY_VERIFY_OWNED_DB$POSTGRES_PRISMA_URL$POSTGRES_URL_NON_POOLING" || exit 1
@@ -93,7 +82,6 @@ export async function runWithLocalDatabase(args) {
     .toEqual(["build", "db-acquire", "db-assert", "test"]);
   expect(names(valid.stdout).filter(name => name === "build")).toHaveLength(1);
   expect(names(valid.stdout).filter(name => name === "test")).toHaveLength(1);
-  expect(names(valid.stdout).filter(name => name === "review-admission")).toHaveLength(1);
   expect(valid.stderr).toContain("verify:");
 
   writeFileSync(join(directory, "order.log"), "");
@@ -121,12 +109,6 @@ export async function runWithLocalDatabase(args) {
   expect(forged.status).toBe(1);
   expect(readFileSync(join(directory, "order.log"), "utf8")).not.toContain("test");
   expect(forged.stdout).toContain("modeled database owner mismatch");
-
-  writeFileSync(join(directory, "order.log"), "");
-  const reviewFailed = run({ FAIL_REVIEW: "1" });
-  expect(reviewFailed.status).toBe(1);
-  expect(readFileSync(join(directory, "order.log"), "utf8")).toBe("");
-  expect(reviewFailed.stdout).toContain('"name":"build","status":"skipped"');
 
   expect(run({}, ["--only=unknown"]).status).toBe(1);
 });

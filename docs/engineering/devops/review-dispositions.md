@@ -7,7 +7,7 @@ A failed raw verdict remains visible when an owned P2 follow-up satisfies the ga
 Reviewer execution failure, timeout, authentication failure or invalid output produces `verdict: "incomplete"`, `findings: []` and an `error.kind` of `execution_error` or `invalid_output`.
 An incomplete review has no product priority, cannot be disposed, is never cached and fails the gate even for an advisory lens.
 Its PR commit status is `error`, while a completed review with a blocking code finding reports `failure`.
-The poller treats the latest `error` as incomplete and may retry it only within the remaining issue time and round allowance.
+The active local AI review poller allows two attempts per head SHA; incomplete execution never passes.
 Historical `(runner)` findings remain blocking if encountered in earlier review records.
 This review gate does not replace `npm run verify`, product-flow evidence, source identity or release approval.
 
@@ -35,7 +35,7 @@ It stays separate from the raw review and is bound to the reviewed source SHA, d
 The runner prints the first three values in its `gate` line after an initial review.
 Each `finding_sha256` is the SHA-256 of that finding serialized as compact JSON with sorted keys.
 Changing source, diff, reviewer output or a test receipt requires a new disposition.
-Old cached verdicts cannot silently pass: `REVIEW.md`, parser, gate and budget scripts are part of the raw cache key, and the effective gate is recomputed on every cache hit.
+Old cached verdicts cannot silently pass: `REVIEW.md`, parser, gate and runner scripts are part of the raw cache key, and the effective gate is recomputed on every cache hit.
 
 A version 1 file has this shape:
 
@@ -77,60 +77,17 @@ Existing source-bound P3 entries may remain as history, but new P3 findings need
 Plausible and nit findings remain comments and need no disposition.
 For a P0 or P1 entry, set `disposition: "block"` and provide the five impact fields; the gate still fails.
 
-## Review budget
+## Review attempts and historical evidence
 
-The runner allows at most 1,800 seconds of cumulative independent reviewer execution for one delivery issue across every source head, lens, provider, local invocation and PR invocation.
-The default permits at most two combined rounds of at most 900 seconds each: one initial review and one affected rereview after a consolidated repair.
-Execution failures consume the same time and round allowance.
-At the boundary, stop with retained evidence and a concrete disposition; never turn exhaustion into acceptance.
-No automatic extension is permitted under this default.
-Explicit human-approved issue-specific exceptions retain their boundary, while a newer narrower human instruction supersedes older capacity grants.
-Successful, failed, invalid-output, interrupted and timed-out executions all consume time; a retry, rebase, changed head, worker restart or provider change does not reset history.
-A valid cached verdict spends no new reviewer time and retains its original execution provenance.
-New ledger finishes record reviewer execution `outcome` separately from the parsed `verdict`.
-An execution can complete with `outcome: "pass"` and `verdict: "fail"` when the reviewer confirms a code finding.
-An incomplete execution records `outcome: "fail"` and `verdict: "incomplete"`.
-Historical finishes without `verdict` retain their original meaning and are never rewritten.
+The local AI review poller owns the two-attempt limit per head SHA and publishes the `AI review` commit status.
+A new head SHA has its own attempt allowance.
+Workflow and provider timeouts bound individual execution.
+The repository no longer maintains a cumulative review ledger, execution reservations, allocation grants or completed-review accounting commands.
+Do not start the retired poller alongside the active AI review poller.
 
-Local mode uses the existing delivery issue binding; PR mode requires exactly one `Delivery-Issue: #N` field.
-Both use `~/.cache/fitsy-review/budgets/issue-N.jsonl` by default, including the poller.
-A locked binding under that budget directory ties the repository root ancestry and candidate branch name to its original issue across clones and later heads.
-Keep one delivery issue per candidate branch; changing the PR issue field cannot allocate a fresh pool.
-Read the full PR body for the unique issue field before limiting metadata in the review prompt.
-`FITSY_REVIEW_BUDGET_HOME` may select a shared durable location, but every caller for that issue must use the same location.
-The append-only ledger imports the checkout's historical `.evidence/review-budget.jsonl`, any explicit `FITSY_REVIEW_BUDGET_LEDGER` or `FITSY_REVIEW_BUDGET_IMPORT_LEDGER`, and in PR mode the historical `${FITSY_REVIEW_HOME:-$HOME/.fitsy-review}/budgets/PR_NUMBER.jsonl`.
-Those originals remain unchanged; imported events retain their original exception, adoption and closeout flags and elapsed time.
-Copies of the same events count once, while conflicting copies fail closed.
-The old exception/adoption/closeout permits do not extend the cumulative cap.
-Do not point a resumed candidate at an empty budget location or omit known prior ledgers.
-
-Before reviewer launch, a file lock atomically reserves its granted reviewer timeout plus five seconds for process closeout.
-The default reserves up to 900 reviewer seconds plus five closeout seconds per combined round; only actual reviewer execution is charged against the 1,800-second issue allowance.
-Historical observed runtimes cannot inflate the bounded deadline above 900 seconds.
-If remaining unreserved capacity cannot cover the bounded round and closeout, admission stops without launching or charging another execution.
-The default bound starts with the issue's first reviewer execution and spans every source head, provider and worker.
-For a historical issue receiving a newer prospective bound, retain the prior ledger and explicitly bind the observed baseline, remaining additional time and round allowance; never infer a fresh pool from a restart.
-An explicitly authorized issue-specific exception supplies its own deadline within its remaining allowance.
-The adapter receives that exact deadline and records it in the verdict's execution identity.
-A completed verdict's cache key binds content, provider, model, CLI, security policy and executor definition; changing remaining time alone does not invalidate it.
-Concurrent lenses cannot each spend the same remaining capacity.
-The caller waits for reviewer termination before recording elapsed execution and releasing unused reserved time.
-An unfinished new attempt retains its full reservation; a legacy unfinished attempt with no bounded reservation refuses new execution until its actual completion is reconciled.
-Never manufacture a finish time or a pass to release capacity.
-
-Inspect and migrate history before resuming an older candidate:
-
-```sh
-python3 scripts/review/review-budget.py status \
-  --ledger "$HOME/.cache/fitsy-review/budgets/issue-N.jsonl" \
-  --import-ledger /absolute/path/to/prior/.evidence/review-budget.jsonl
-```
-
-Repeat `--import-ledger` for every known candidate ledger, including prior explicit exceptions or poller histories.
-The response reports completed, reserved and remaining seconds plus unfinished attempts.
-At exhaustion, retain the findings and evidence and stop new reviewer execution.
-Consolidate confirmed blockers and owned deferrals under the existing gate; time exhaustion is not approval, a passing review, or permission to waive required tests.
-Any later authorized policy exception must retain the complete history and name its actual remaining boundary; the runner provides no unlimited reset switch.
+Preserve existing historical ledgers, completed manifests and raw provider artifacts needed by unfinished tasks.
+Remaining historical evidence consumers may verify those records without allocating new review time or rewriting history.
+An exhausted or incomplete attempt never supplies a passing review, replaces Verify or waives product and release requirements.
 
 ## Jev advisory experiment
 
@@ -149,106 +106,9 @@ External data sharing and any later gate integration require separate explicit a
 
 ## Adoption
 
-Run `npm run verify` and applicable local lenses on the committed branch with `FITSY_REVIEW_PROVIDER` and `FITSY_REVIEW_MODEL` set to authenticated independent review settings.
-Keep the raw JSON emitted by `run-review.sh` and the initial `gate` identity line.
-For a P2 finding, record the owner, acceptance criteria and actual required-test receipts in the sidecar, then rerun the same lens.
-A valid raw cache hit reuses the independent reviewer while the gate evaluates the new disposition.
-For a ready PR, run the same canonical runner in PR mode with `FITSY_GH_BIN=gh-axi` and the same candidate budget directory and disposition paths, then read back the exact-head statuses.
-The PR comment and status description expose raw findings and the effective gate separately.
-Publish `product-flow/local` for a mobile-facing PR; a non-product PR uses the canonical not-applicable selection.
-Merge and deployment remain with the configured authority.
+Follow [the current review runner guide](../../../scripts/review/simple-review.md) for reviewer isolation, severity handling and the single PR comment.
+Run `node --test scripts/review/simple-review.test.mjs` for the retained review behavior tests.
+The local AI review poller publishes the current head's `AI review` status; Verify and applicable product, deployment and migration checks remain independent requirements.
 
 Historical review findings and source-bound deferrals remain in [issue #330](https://github.com/dgmolla/fitsy/issues/330) and their original evidence.
-Changing the time policy does not turn an old failed verdict into a pass or prove a delivery-speed target.
-
-
-### Execution recovery and explicit authorization
-
-Per-attempt wall time, cumulative reviewer execution and delivery-worker lifetime are separate constraints.
-The default independent attempt is capped at 900 seconds; any classified same-head retry must fit the remaining issue time and round allowance.
-A later poller tick supplies backoff; authentication, configuration, invalid output and unknown failures receive no blind automatic retry.
-Private per-attempt execution receipts retain stdout/stderr, failure kind, elapsed seconds and observed stream activity.
-Stream activity is transport evidence, not semantic progress or a verdict; repeated output never grants more time inside an attempt.
-A hard deadline still kills the process group and rejects any partial pass.
-
-Historical automatic extensions and authorized grants remain in the append-only ledger; they do not authorize automatic expansion under the current default.
-A newer narrower issue-bound instruction takes precedence without deleting previous receipts or granting a fresh pool.
-
-To avoid editing review-control code for each approval, a trusted coordinator may use `python3 -I /absolute/trusted/review-budget.py grant-authorized --authorization-file /absolute/private/approval.json` with the original issue ledger, candidate and issue arguments.
-Use the independently reviewed, committed operator installation from the trusted main branch, never the candidate checkout or its Python import files.
-Confirm that installation supports the authorization command before invoking it; an older installation requires deliberate trusted installation, not execution from an unreviewed branch.
-The owner-controlled, non-group-writable manifest must live outside the reviewed checkout and contain exactly `issue`, `seconds` and the GitHub issue-comment `provenance` of explicit human approval.
-The coordinator must verify that approval before creating the manifest; a URL alone is not evidence of approval.
-The runner records its hash, retains prior grants, rejects duplicate provenance and active unreconciled attempts, and limits cumulative explicitly granted additions to 14400 seconds.
-This operator ceiling is finite and separate from ordinary automatic capacity; it is not an unlimited reset switch.
-Historical finite authorized-grant events remain readable without issue-specific code.
-
-Recommended worker policy: allow a three-hour default delivery window for native build/review/E2E work, with a bounded extension to four hours when the recorded owner has concrete recent phase progress.
-Idle heartbeats, log noise and a still-existing process do not establish that progress.
-This recommendation does not change dispatcher worker scheduling in this patch.
-
-### Coordinator custody for selected-skill admission
-
-Admission uses the administrator home from the OS account record, not caller-selected review directories.
-The canonical original ledger is `~/.cache/fitsy-review/budgets/issue-N.jsonl`.
-The existing private completed-evidence manifest is `~/.fitsy-review/completed/issue-N.json`.
-Only the selected coordinator may issue that real approval after independently checking provider execution, raw artifacts, source/base, acceptance, domains, authorization and cumulative accounting.
-The implementation owner must request verification through the issue/handoff and must not create its own passing approval.
-Unsigned administrator-managed policy remains trusted infrastructure under the existing adapter contract; same-user compromise of that infrastructure is outside this boundary.
-Candidate environment paths, copied operators and internally consistent artifact hashes do not establish that custody.
-
-The completed manifest additionally binds `control_sha` and `operator_sha256` to the independently reviewed committed controls and their installed bytes.
-Issue463 bootstrap uses only `~/.fitsy-review/operators/review-budget.py`, installed by the coordinator after genuine independent approval of that exact source.
-It is not installed from an unreviewed candidate and does not authorize another nutrition review.
-Before completed accounting, use the installed operator's existing `reconcile-allocation` entrypoint to append the approved source-bound stop to the original ledger.
-The manifest stop must equal the effective ledger cap; accounting rejects a disagreement and retains every original event.
-The coordinator then binds the post-reconciliation original ledger digest in the completed manifest.
-Repeated completed accounting remains idempotent.
-
-For existing cache reuse, the coordinator independently reconciles execution before placing a private approval in `~/.fitsy-review/operators/issue-N-cache-KEY.json`.
-That approval binds `issue`, `source_sha`, `base_sha`, sorted `domains`, `cache_key`, `result_sha256` and `ledger_sha256`.
-It contains no verdict projection and does not replace the retained provider receipt, raw verdict or original ledger.
-Admission checks that approval plus the original execution evidence and refuses changed authority or evidence.
-The existing cache, ledger and adapter remain the execution/accounting entrypoints.
-
-Direct `account-completed` uses the same canonical completed manifest and approved operator digest as shipping admission.
-`reconcile-allocation` uses `~/.fitsy-review/operators/issue-N-allocation.json`; `reconcile-count` uses `~/.fitsy-review/operators/issue-N-count.json`.
-Both reconciliation manifests additionally bind `control_sha` and `operator_sha256` to the separately approved installation.
-Caller-selected copies cannot mutate the canonical original ledger through these entrypoints.
-Allocation reconciliation validates the proposed retained usage before appending an event, so an effective-cap conflict leaves the original ledger readable and unchanged.
-
-Issue463 bootstrap requires the candidate comparison ref to match managed trusted main before admission and rechecks that ref before returning.
-Live shipping identity also binds the managed-main ref; an advance during acceptance closes that source-bound admission.
-Frozen issue443 retains its explicitly approved product comparison while separately binding the unchanged current control installation.
-
-Live session checks revalidate canonical administrator/coordinator evidence through the control installation before accepting any socket response.
-A responding caller-selected socket cannot replace that review authority, including direct native publication checks.
-The permanent exception supersedes the generic cumulative ceiling only through the exact retained, independently approved bounded allocation stop.
-Each allocation remains at most 300 seconds, additive, source-bound and checked before append; a malformed or disagreeing stop refuses without mutating history.
-Normal session admission still completes cheap checks before it creates live ownership.
-Its internal cached-only `--revalidate-session` path rechecks canonical evidence and current source/control refs, preserving the existing source-bound cheap proof without repeating the entire cheap pipeline on every native or hook call.
-That path requires session selectors and refuses reviewer execution; selectors never replace genuine coordinator-approved evidence.
-
-Shipping admission pins issue retrieval to the existing administrator GitHub CLI in known installation locations, rejecting `FITSY_GH_BIN` before any live-session branch.
-Protected retrieval clears caller credential, host, configuration, proxy and executable-search selectors and reads the canonical administrator account configuration against `github.com` and `dgmolla/fitsy`.
-The protected runner receives that pinned executable explicitly; standalone provider fixtures remain external-boundary tests and cannot authorize shipping.
-An acceptance change invalidates reuse even if a caller executable returns the previously approved body.
-
-Admission and live ownership use administrator executable locations for their Git, Node, Python and shell commands, including source identity reads.
-The canonical runner invokes the system Bash with privileged startup semantics; live ownership clears caller shell loaders and exported functions before child execution.
-Caller PATH or `BASH_ENV` artifacts cannot replace proof validation before the gate's code runs.
-These are existing entrypoint corrections, not additional approval issuers or a new execution service.
-
-Protected Node entrypoints use their executable system Env wrapper, which clears Node startup selectors before the interpreter loads the module.
-Live child environments and pre-push also clear these selectors, so a startup import cannot replace admission or acceptance with an early exit.
-Direct caller-configured `node` or npm startup is not release evidence; use the protected executable entrypoints or clear startup selectors before npm starts.
-
-The canonical `.githooks/pre-push` fixes administrator executable search before any Git command.
-It derives the checkout from its installed hook location, clears Git repository selectors, and verifies that checkout before acceptance.
-Caller PATH and GIT_WORK_TREE cannot redirect verification to another source.
-The hook removes exported BASH_FUNC_* entries before child shells and directly executes the protected verifier.
-The verifier clears shell startup selectors before nested checks; nested hook Bash checks use protected startup.
-Privileged accounting and reconciliation require the canonical private operator or managed-main operator pathname as well as its approved digest.
-Disposable authenticated overlays delegate those actions to that installed operator; byte-identical caller copies cannot act before installation.
-Direct admission and publishable simulator guards use protected Node child startup.
-Frozen pre-cutover verifier files retain their original mode and use the same system Env startup protection without source edits.
+Retiring the ledger does not turn an old failed verdict into a pass.

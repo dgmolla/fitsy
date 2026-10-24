@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -47,12 +47,7 @@ function scenario(name: string) {
       spawned.push({ args, env: opts.env, resetBeforeSpawn: calls.some(call => call[0] === 'exec' && call.includes('psql')) });
       return { status: mode === 'migration_failure' && args[1] === 'migrate' ? 1 : 0 };
     }, disk: () => ({ bavail: mode === 'low_disk' ? 1 : 3 * 1024 ** 3, bsize: 1 }),
-    // This owned-container unit seam models runtime; combined Python cases exercise real canonical context.
-    runtimeContext: () => ({ identity: { fixture: true }, container: { id: 'owned-container-id', image_id: 'sha256:image' } }),
-    runtimeCheck: () => {}, assertLock: () => {}, env: { ...(mode === 'forged_phase' ? { FITSY_VERIFY_DB_PHASE: '1',
-      FITSY_VERIFY_DB_LOCKED: '1', FITSY_VERIFY_OWNED_DB: 'owned-container-id',
-      FITSY_VERIFY_DB_IMAGE: 'sha256:image', FITSY_VERIFY_DB_HOST: loopback,
-      FITSY_SHIPPING_SOCKET: '/unowned/session.sock', FITSY_SHIPPING_TOKEN: 'plausible-complete-token' } : {}),
+    assertLock: () => {}, env: {
       ...(mode.startsWith('stop_bound_') ? { FITSY_VERIFY_OWNED_DB: 'owned-container-id',
         FITSY_VERIFY_DB_IMAGE: mode === 'stop_bound_partial' ? '' : 'sha256:image' } : {}),
       POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
@@ -134,13 +129,6 @@ test('numeric DB suite host gate invokes the real owned assertion against inspec
     expect([current.dev, current.ino, current.uid]).toEqual([identity.dev, identity.ino, identity.uid]);
     rmSync(scratch, { recursive: true });
   }
-});
-
-test('complete forged phase metadata cannot reach a helper or Docker without the real inherited lock', () => {
-  const result = scenario('forged_phase');
-  expect(result.error).toMatch(/actual inherited lock descriptor/);
-  expect(result.calls).toHaveLength(0);
-  expect(result.spawned).toHaveLength(0);
 });
 
 test('forged numeric loopback metadata cannot pass the owned container assertion', () => {
@@ -231,7 +219,77 @@ test('explicit stop can retire an owned stopped container without an active port
   expect(result.containerExists).toBe(false);
 });
 
-test('bound post-session stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {
+test('concurrent CLI attempts cannot reset DB after its coordinator and worker die', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'fitsy-db-flock-'));
+  const lockScript = resolve(__dirname, 'db-lock.py');
+  const marker = resolve(root, 'ready');
+  const childReady = resolve(root, 'child-ready');
+  const orphaned = resolve(root, 'orphaned');
+  const stopWorker = resolve(root, 'stop-worker');
+  const stopChild = resolve(root, 'stop-child');
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+    !key.startsWith('FITSY_VERIFY_') && key !== 'FITSY_LOCAL_DB'));
+  // Each fixture process terminates itself through task-owned files. This
+  // exercises the real lock supervisor without requiring process inspection
+  // or signaling a PID that might have been reused after an assertion fails.
+  const childCode = `import os,pathlib,time
+parent=os.getppid()
+pathlib.Path(${JSON.stringify(childReady)}).touch()
+deadline=time.monotonic()+20
+while not pathlib.Path(${JSON.stringify(stopChild)}).exists() and time.monotonic()<deadline:
+ if os.getppid()!=parent: pathlib.Path(${JSON.stringify(orphaned)}).touch()
+ time.sleep(0.02)
+`;
+  const workerCode = `import json,os,pathlib,signal,subprocess,sys,time
+child=subprocess.Popen([sys.executable,'-c',${JSON.stringify(childCode)}],
+ stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+# Wait until the descendant has started before exposing the worker's identity.
+while not pathlib.Path(${JSON.stringify(childReady)}).exists():
+ if child.poll() is not None: sys.exit(1)
+ time.sleep(0.02)
+pathlib.Path(${JSON.stringify(marker)}).write_text(json.dumps({'pid':os.getpid(),'pgid':os.getpgrp(),'parent':os.getppid()}))
+deadline=time.monotonic()+20
+while not pathlib.Path(${JSON.stringify(stopWorker)}).exists() and time.monotonic()<deadline: time.sleep(0.02)
+os.kill(os.getpid(),signal.SIGKILL)
+`;
+  const holder = spawn('python3', [lockScript, root, 'python3', '-c', workerCode], { stdio: 'ignore', env });
+  const contender = () => spawnSync('python3', [lockScript, root, 'python3', '-c', 'print("acquired")'], { encoding: 'utf8', env });
+  const waitFor = async (path: string) => {
+    for (let i = 0; i < 80 && !existsSync(path); i++) await new Promise(resolve => setTimeout(resolve, 25));
+    expect(existsSync(path)).toBe(true);
+  };
+  try {
+    await waitFor(marker);
+    const worker = JSON.parse(readFileSync(marker, 'utf8'));
+    expect(worker.pid).toBeGreaterThan(1);
+    expect(worker.pgid).toBe(worker.pid);
+    expect(worker.parent).toBe(holder.pid);
+    expect(contender().status).toBe(75);
+    const exited = new Promise(resolve => holder.once('exit', resolve));
+    expect(holder.kill('SIGKILL')).toBe(true);
+    await exited;
+    expect(contender().status).toBe(75);
+    writeFileSync(stopWorker, 'stop');
+    await waitFor(orphaned);
+    expect(contender().status).toBe(75);
+    writeFileSync(stopChild, 'stop');
+    let result = contender();
+    for (let i = 0; i < 80 && result.status === 75; i++) {
+      await new Promise(resolve => setTimeout(resolve, 25));
+      result = contender();
+    }
+    expect(result.status).toBe(0);
+  } finally {
+    writeFileSync(stopWorker, 'stop');
+    writeFileSync(stopChild, 'stop');
+    holder.kill('SIGTERM');
+    // Preserve the stop files until the descendants have released the lock.
+    for (let i = 0; i < 80 && contender().status === 75; i++) await new Promise(resolve => setTimeout(resolve, 25));
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('bound database stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {
   for (const mode of ['stop_bound_replaced', 'stop_bound_wrong_image', 'stop_bound_partial', 'stop_bound_unowned']) {
     const result = scenario(mode);
     expect(result.error).not.toBe('');
@@ -240,7 +298,7 @@ test('bound post-session stop rejects replacement, image drift, incomplete pins 
   }
 });
 
-test('bound post-session stop removes the genuine acquired immutable ID', () => {
+test('bound database stop removes the genuine acquired immutable ID', () => {
   const result = scenario('stop_bound_valid');
   expect(result.error).toBe('');
   expect(result.calls).toContainEqual(['rm', '-f', 'owned-container-id']);

@@ -61,7 +61,8 @@ If ownership cannot be established, reconcile it before launching another worker
 For Codex-led work, one coordinator claims the issue and assigns one Sol implementation owner by default.
 Add agents only for bounded independent tasks with explicit file ownership; another lane's blocker does not hold unrelated work.
 Freeze and commit the candidate, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, then complete one independent canonical review before full suites and affected E2E acceptance.
-Repair findings and revalidate cheap checks and review before full acceptance; revalidate matching canonical review evidence through live shipping admission and retain the original issue review budget.
+Repair findings and revalidate cheap checks and review before full acceptance.
+Keep independent review evidence matched to the current source and preserve historical review records needed by unfinished tasks.
 Use the review domains, UI signoff, release approvals and shipping gates in [shipping.md](shipping.md).
 Send a separate Slack alert headed `🚨 *BLOCKED*` only when live evidence establishes a concrete action that requires the human.
 Keep agent-owned review, required-gate, execution and dependency recovery on the issue and handoff without human mentions.
@@ -127,7 +128,7 @@ Reconcile workers on completion and on the supervisor's normal heartbeat.
 After recording completion, use FM's canonical teardown for the completed worker when no child work, owned running operation, pending delivery, or unrecorded evidence remains.
 Keep a completed worker only for a documented recovery need with an owner and expiry/recheck condition.
 Do not keep it idle indefinitely as a substitute for durable task state.
-Do not kill workers solely because of elapsed age outside an explicitly configured, issue-bound execution budget, and do not restart them to evade review budgets or erase failed attempts.
+Do not kill workers solely because of elapsed age outside an explicitly configured, issue-bound execution budget, and do not restart them to evade the AI review attempt limit or erase failed attempts.
 The local dispatcher enforces a 90-minute active claim budget, records a timeout, reconciles its owned process group, and parks the issue without resetting source-bound evidence or review history.
 Worker retirement and worktree deletion are separate operations: preserve unmerged changes, source-bound evidence, review history, and release/rollback receipts.
 Release simulator, Metro, database and other resource claims only through their ownership-aware procedures.

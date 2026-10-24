@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -12,7 +12,8 @@ let directory: string;
 const git = (...args: string[]) => execFileSync(gitBinary, args, { cwd: directory, env: environment, encoding: "utf8" });
 
 beforeEach(() => {
-  directory = mkdtempSync(join(tmpdir(), "fitsy-structural-"));
+  // Node canonicalizes the entrypoint path, including macOS temporary aliases.
+  directory = realpathSync(mkdtempSync(join(tmpdir(), "fitsy-structural-")));
   for (const path of ["apps/api/lib", "apps/mobile", "packages/shared", "scripts/verify"]) mkdirSync(join(directory, path), { recursive: true });
   for (const path of ["scripts/structural-tests.sh", "scripts/verify/structural.sh", "scripts/verify/run.mjs", "scripts/verify/impact-plan.mjs"]) copyFileSync(join(root, path), join(directory, path));
   symlinkSync(join(root, "node_modules"), join(directory, "node_modules"));

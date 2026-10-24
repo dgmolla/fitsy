@@ -37,8 +37,8 @@ A substantive new human requirement changes scope explicitly; acknowledge it and
 Finish implementation and commit the frozen candidate before review.
 Select meaningful focused reproduction and regression tests for the changed behavior.
 Run applicable structural, lint, type and safety checks plus that focused selection before independent review.
-Local admission completes cheap checks and revalidates matching independent evidence through immutable trusted-main reviewer controls.
-Reviewer execution is a separate explicit operation under the original issue accounting.
+The hook runs cheap checks and focused tests directly; GitHub owns merge requirements and heavy validation.
+Reviewer execution is a separate operation with attempts controlled by the local AI review poller.
 
 ```sh
 node scripts/verify/focused-tests.mjs --set scripts/verify/impact-plan.test.ts
@@ -46,52 +46,30 @@ npm run verify -- --stage=cheap
 export FITSY_REVIEW_PROVIDER=codex
 export FITSY_REVIEW_MODEL=gpt-6-sol
 export FITSY_REVIEW_REASONING_EFFORT=high
-# Execute only the independently authorized review of the frozen candidate.
-/bin/bash -p scripts/verify/review-admission.sh --execute-review
-# Revalidate that evidence and own ordinary pre-push publication live.
-scripts/verify/shipping-session.mjs -- bash <task-owned-shipping-script>
+# Execute the independently authorized review of the committed candidate.
+bash scripts/review/run-review.sh --local
+# Publish through the ordinary hook after applicable validation.
+git push -u origin HEAD
 ```
 
-Replace the focused test and task script with the accepted issue's meaningful regressions and applicable final acceptance commands.
+Replace the focused test with the accepted issue's meaningful regressions and run applicable final acceptance commands before merge.
 Focused selection supports Jest, Node `.test.mjs` and Python `.test.py` through the canonical runner.
-The task script must stop on failed cheap checks or matching review before push; applicable final acceptance remains mandatory before protected merge.
+Stop on failed cheap checks or matching review before push; applicable final acceptance remains mandatory before protected merge.
 A focused selection is not full acceptance; correctness review still judges scenario relevance.
 
-Admission checks out the frozen candidate in a disposable directory and restores immutable reviewer controls from the managed external review repository main.
-Default admission uses `run-review.sh --local --cached-only` and cannot execute a provider when matching evidence is missing.
-Explicit `--execute-review` uses the same authenticated overlay, ignores cached results and charges the original issue ledger.
-The existing canonical review cache must remain outside every Git checkout; candidate-local caches cannot admit shipping.
-Cached verdicts require a retained matching provider execution, source/base/key binding, the result digest recorded by trusted closeout, and unchanged original raw artifacts.
-Bare or legacy unproven cache JSON cannot admit shipping.
-Externally authorized original completed evidence remains subject to the source, base, issue, acceptance, provider, domain and raw-artifact checks.
-No candidate controls are installed as trusted, and no new persisted admission or saved-pass projection is created.
-Changing material review inputs invalidates reuse.
+Local verification and publication do not require an issue binding, a shipping session, a review daemon or `~/.fitsy-review`.
+The pre-push hook runs size/domain checks followed by cheap static checks and focused tests.
+It does not execute full suites, builds or reviewers.
+A hook pass does not replace independent review, applicable product acceptance or required GitHub checks.
 
-The live shipping session binds committed head, base, clean checkout, delivery issue, authorization and focused selection through acceptance and push.
-Closing it removes execution ownership; a later session revalidates matching evidence without demanding another reviewer.
-Final-candidate simulator acceptance requires that live ownership.
-Source drift invalidates the session and requires affected evidence to be revalidated before shipping.
-Raw admission attempts remain under `.evidence/review-admission/`.
-`--stage=cheap` cannot satisfy final acceptance.
-Hosted checks retain their independent required suites.
-Apple/legal approvals, product-flow status, hooks, PR checks, main Verify, Deploy and actual affected release proof remain required.
-
-Keep source frozen throughout checks, review and acceptance.
-Later source changes require current cheap checks, review and affected full acceptance.
-Every selected verification check executes afresh, and full affected test groups include the focused test files.
+Keep review and acceptance evidence tied to the tested source.
+After source changes, rerun affected checks and obtain matching review before merge.
+Every selected verification check executes afresh, and full affected test groups include focused test files.
 Empty selections, missing scripts and zero passing test cases fail verification.
-Review-budget attempts and raw failure history never reset.
 UI signoff and development walkthroughs precede final UI acceptance.
-The publishable `final-candidate` simulator entry point requires the live shipping session's matching canonical review before native journeys.
-Keep each publishable native journey and its finish inside live matching-review ownership, using `set -e` or `&&` to stop on failure.
-For ordinary publication, run `scripts/verify/shipping-session.mjs -- git push -u origin HEAD` after freezing and reviewing the candidate.
-The existing trusted public Verify supplies heavy validation before protected merge; applicable local media/native evidence may be completed separately against that same frozen head.
-Development walkthroughs and UI signoff happen before that session.
-Source or focused-selection drift invalidates the live admission and requires revalidation of cheap checks and affected review evidence; it never silently starts another reviewer.
-Apple account, legal and submission approvals, required product-flow status, pre-push, PR, main Verify, Deploy and actual release acceptance remain required.
+The final-candidate simulator runner and publisher retain source, app, backend and evidence validation without a local session wrapper.
+Apple account, legal and submission approvals, product-flow status, PR checks, main Verify, Deploy and actual release acceptance remain required.
 
-The pre-push hook revalidates the live source-bound independent review, runs cheap/focused checks plus size/domain checks, then rechecks live ownership.
-It does not run local tests/builds as a publication prerequisite.
 The independently installed external approval operator validates the existing Verify workflow bytes, approved candidate tree, PR base/head/merge tree, exact run/attempt/checksuite and successful standard-runner jobs from the GitHub Actions issuer before publishing required acceptance.
 The existing per-issue `local_acceptance` policy pins `source_tree_sha` from the independently reviewed candidate and retains only the applicable local receipt/recipe/required checks, including real media when affected.
 An empty local required-check set means no applicable local receipt, not permission to skip trusted CI or product-flow/release protections.
@@ -102,7 +80,7 @@ Allowlist additions, unrelated removals, deletion of the allowlist and unreadabl
 
 Changes under `scripts/sim/` or the product-flow verification controls run the blocking local `media-integration` lane in `npm run verify`.
 Install `ffprobe` and `ffmpeg` locally before that run.
-The lane runs real decoder, XCTest attachment and opt-in recorder cases, then records `.evidence/verify/media-integration.json` with the candidate SHA and source/test hash.
+The lane runs real decoder and XCTest attachment cases, then records `.evidence/verify/media-integration.json` with the candidate SHA and source/test hash.
 Hosted L2 runs deterministic tests without media tools.
 After committing, rerun `node scripts/verify/run.mjs --only=media-integration --runs=local` so the receipt names the PR head.
 The `product-flow/local` publisher checks that receipt before setting its exact-head status, including when mobile product evidence is not applicable.
@@ -137,7 +115,7 @@ Never set it for a simulator containing accounts you need to keep.
 node scripts/verify/product-flow.mjs --plan
 export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
-# Inside the task-owned shipping script, invoked through shipping-session.mjs:
+# Run final acceptance against the current candidate:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name> --mode=final-candidate
 # Capture affected primary and recovery paths through Mobile MCP, then:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
@@ -200,7 +178,7 @@ The shadow L7 smoke cannot satisfy this gate; cloud execution is not a launch re
 For a backend change before its first push, deploy a clean committed checkout with `vercel deploy --target=preview`, then assign the ready preview to dev during a coordinated test window.
 The gate accepts Vercel's CLI `meta.gitCommitSha` identity as well as a Git deployment's `gitSource.sha`, rejects dirty CLI uploads, and still compares candidate backend contents and pins the deployment across the test and publication.
 
-Commit the tested change locally before shipping admission; `--local` reviews committed `origin/main...HEAD`, not uncommitted edits.
+Commit the tested change locally before independent review; `--local` reviews committed `origin/main...HEAD`, not uncommitted edits.
 Fetch the base first and ensure the branch contains the current review definitions.
 If it predates the harness, rebase/update it deliberately in its own worktree before review; do not silently skip missing lenses.
 
@@ -217,9 +195,8 @@ If the changed behavior exposes a sensitive control outside those paths, add the
 An `incident` label, `Spec:` line or test file does not by itself add a separate lens; correctness still checks the named acceptance and relevant tests.
 
 ```sh
-bash scripts/verify/review-admission.sh
-# Admission revalidates the canonical matching result without provider execution.
-# Required domain coverage and issue-wide budget history remain canonical.
+bash scripts/review/run-review.sh --local
+# Required domain coverage remains canonical; the active poller owns review attempt limits.
 ```
 
 Group material defects and mandatory acceptance failures into one repair pass, while preserving bounded P2 debt as owned, source-bound follow-ups.
@@ -232,7 +209,7 @@ The runner supports `claude` and `codex` adapters; choose an authenticated provi
 Set `FITSY_REVIEW_MODEL` to the intended model; Codex defaults to `gpt-6-sol`, while explicitly selected Claude installations retain their tier-based defaults.
 Use a model appropriate to the change's risk and keep the required lenses unchanged.
 Export `FITSY_REVIEW_PROVIDER`, `FITSY_REVIEW_MODEL`, and `FITSY_REVIEW_REASONING_EFFORT` in the shipping shell before review.
-Keep those exports for full verification and pre-push so every admission validates the snapshotted reviewer profile.
+The review runner records that reviewer profile with its result.
 A supported Claude profile uses the same persistent-export contract.
 Provider-specific credentials remain in the provider's normal local credential store and must never enter the repository or evidence.
 The adapters run an independent review process with read-only tools, disabled integrations and bounded execution time.
@@ -245,7 +222,7 @@ The runner records provider, model and execution identity with the verdict, and 
 An existing status from another provider still satisfies the same lens; a cache entry is reused only for its matching execution identity.
 The implementing agent must not author its own independent review verdict.
 Existing post-PR compatibility callers may reuse a matching canonical round.
-Local shipping admission revalidates matching complete evidence through authenticated immutable main controls.
+Independent review evidence must match the current candidate and the required domains.
 The cache binds every required domain and instruction, provider identity, acceptance brief and patch; only optional hunk-heading labels are normalized.
 The trusted main poller invokes the reviewer once and publishes `review/round` with its complete input identity after all required compatibility statuses.
 Before reusing a completed same-head status, a nonexecuting identity probe checks current acceptance, routing, instructions, provider and patch inputs.
@@ -253,10 +230,10 @@ A changed identity requires one new complete round; identity failure withdraws r
 Existing `lens/<domain>` statuses are derived only from one complete independent result.
 Missing domain results make the entire round incomplete.
 PR patches are generated from the exact checked-out head and immutable target base commit, with a head recheck before execution.
-Changed-input success statuses are withdrawn before replacement execution, including when the finite budget denies that execution.
+Changed-input success statuses are withdrawn before replacement execution.
 Legacy `run-lens.sh` delegates the whole round and cannot run separate routine reviewers.
 The default independent provider is Codex, model `gpt-6-sol`, high reasoning effort.
-Each actual round execution or retry charges the retained issue ledger once; cached projections charge no new execution.
+The active local AI review poller controls attempts per head SHA; legacy cached projections do not execute a reviewer.
 A changed diff or changed review inputs invalidates that reuse.
 The selected skills and current human issue limits control execution and retry decisions.
 Incomplete review is never a pass or an automatic retry entitlement.
@@ -264,23 +241,12 @@ An implementer cannot replace the independent required domains with its own asse
 Every finding has a separate impact priority, and raw reviewer verdicts remain unchanged.
 The canonical runner accepts an owned, source-bound P2 follow-up only through the disposition and required-test contract in [review-dispositions.md](review-dispositions.md).
 P0/P1 impacts, malformed dispositions, stale receipts and missing required tests remain blocking.
-Retain all actual execution, reservations, failures and original issue-bound limits across source repairs, providers and workers.
-Do not infer a lifetime attempt count from one combined domain review.
-True explicit human attempt limits and cumulative ceilings remain binding.
-A coordinator-imposed count error may be reconciled only by the supported trusted operator, never by editing ledger bytes or installing candidate controls to approve themselves.
-`review-budget.py reconcile-count` requires a private external operator manifest binding the original limit and complete ledger digests, candidate, issue and issue-bound coordinator/human provenance.
-It appends one idempotent reconciliation event and preserves the original baseline, elapsed costs, timeout ceiling and cumulative stop.
-It refuses unfinished or incomplete history, explicit human-count declarations, mismatched authority and capacity changes.
-The existing prospective execution policy can narrow the remaining window; it cannot reset cumulative accounting or authorize an incomplete retry.
-See [review-dispositions.md](review-dispositions.md#review-budget) for the retained ledger and disposition contracts.
-Do not invoke an unreviewed candidate operator against a live ledger.
-The permanent human exception permits issue463 bootstrap using a private external installation of the independently reviewed exact-source operator and authorized original raw evidence.
-Set `FITSY_REVIEW_BOOTSTRAP_OPERATOR` only after that independent review and installation; this issue-specific path retains actual main identity and cannot admit nutrition.
-`review-budget.py reconcile-allocation` appends a source-bound bounded allocation authorized by the private permanent human receipt, preserving the original limit and every elapsed attempt.
-Completed failed bootstrap reviews are accounted as failed verdicts and cannot admit shipping.
-All bootstrap allocations and execution must be reconciled before final acceptance.
-After verified main release, install through the ordinary trusted-main path and stop using the bootstrap operator.
-Exhaustion and admission refusal are neither review approval nor permission to bypass hooks.
+The active local AI review poller allows two attempts per head SHA and publishes `AI review`.
+A new head SHA receives its own attempt allowance; workflow and provider timeouts bound individual execution.
+The repository no longer allocates cumulative issue budgets or reconciles execution counts, grants or completed-review accounting.
+Keep existing historical review records needed by unfinished tasks unchanged.
+See [review attempts and historical evidence](review-dispositions.md#review-attempts-and-historical-evidence).
+Incomplete execution and exhausted attempts cannot satisfy the independent review gate or bypass required checks.
 P3 findings remain advisory; confirmed P0/P1, required tests and essential acceptance continue to block independently.
 The Jev review-triage evaluation is a later shadow experiment under issue #372, with no gate or merge authority.
 A rebase may alter the actual diff and requires checking again.
@@ -342,7 +308,6 @@ A background process existing is not proof that it will wake its owner.
 When waiting, retain durable task state and use the harness's supported completion notification mechanism.
 If the runner cannot continue automatically, report that limitation rather than promise an unverified future follow-up.
 
-Protected release entrypoints execute `scripts/verify/shipping-session.mjs` and `scripts/verify/run.mjs` directly, using their trusted system Env startup wrapper.
-Do not launch them through a caller-configured `node` process: Node startup imports run before module code can validate admission.
-The executable wrapper clears `NODE_OPTIONS` and `NODE_PATH` and fixes administrator interpreter search locations before Node starts.
-For npm verification aliases, clear those startup options before invoking npm; the pre-push hook and protected live child environment enforce this for shipping.
+The pre-push hook clears `NODE_OPTIONS`, `NODE_PATH` and shell startup selectors before verification.
+The verifier executable also clears Node startup selectors and uses fixed interpreter search locations.
+For npm verification aliases, clear Node startup options before invoking npm.
