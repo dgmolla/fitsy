@@ -51,7 +51,7 @@ node "$ROOT/scripts/delivery/phase-events.mjs" summary >/dev/null || {
 "$ROOT/scripts/verify/shipping-session.mjs" --check
 "$ROOT/scripts/verify/shipping-session.mjs" --candidate-checks cheap
 "$ROOT/scripts/verify/shipping-session.mjs" --check
-# The same isolated boundary owns routing-table execution and size/domain N/A.
+# Run the same local size/domain checks, including their N/A results.
 "$ROOT/scripts/verify/shipping-session.mjs" --candidate-checks push-gates
 # Publishing is recoverable; a GitHub outage must not erase a verified push.
 if ! node "$ROOT/scripts/delivery/phase-events.mjs" publish; then

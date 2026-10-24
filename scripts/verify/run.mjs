@@ -16,7 +16,7 @@
  * last stdout line is JSON {name, status, summary, fix}.
  */
 import { execFile } from "node:child_process";
-import { readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -304,7 +304,7 @@ export async function verify(argv, prepareDatabase) {
   const focused = cheap.filter(c => c.name === 'focused-tests');
   const databaseFocused = runsCtx === 'local' && focused.some(c => c.database || focusedDatabaseRequired([]));
   // Keep the full caller's focus in its actual prepared test context. Nested
-  // protected admission still performs its own distinct cheap-context focus.
+  // local admission still performs its own distinct cheap-context focus.
   const fullContextFocused = runsCtx === 'local' && focused.length > 0 && needsDatabase && remaining.some(c => c.name === 'test');
   // Cheap failures stop expensive work in local and combined CI invocations.
   if (!results.some(r => r.status === 'fail' && r.blocking)) {
@@ -421,7 +421,7 @@ export async function verify(argv, prepareDatabase) {
   return status;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   verify(process.argv.slice(2)).then(status => { process.exitCode = status; })
     .catch(error => { console.error(error); process.exitCode = 1; });
 }

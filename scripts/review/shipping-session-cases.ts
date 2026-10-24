@@ -40,48 +40,6 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command.ends
     expect(callCount()).toBe(1);
     expect(readFileSync(ledger, 'utf8')).toBe(retained);
   });
-  test('protected publication launcher authority covers fixed commands and live custody', () => {
-    const result = spawnSync('python3', ['-B', join(f.source, 'scripts/review/external-approval.test.py'), 'ProfileCustodyTests', 'AcceptanceTests', 'CIAcceptanceTests', '-v'],
-      { cwd: f.source, encoding: 'utf8', env: f.env(), timeout: 20000 });
-    if (result.status !== 0) throw Error(String(result.stdout) + String(result.stderr));
-    expect(result.stderr).toContain('OK');
-  });
-  test('normal publication keeps product checks away from operator HOME', () => {
-    setup();
-    const admin = f.env().REVIEW_TEST_ADMIN!;
-    writeFileSync(join(admin, 'publication-custody-probe'), 'synthetic operator-only marker');
-    f.setEnv({ ...f.env(), HOME: admin });
-    const cheap = join(f.root(), 'scripts/verify/cheap.sh');
-    writeFileSync(cheap, readFileSync(cheap, 'utf8') +
-      '[ ! -e "$HOME/publication-custody-probe" ] || { echo "operator HOME exposed to product check" >&2; exit 1; }\n');
-    f.git('add', 'scripts/verify/cheap.sh'); f.git('commit', '-qm', 'publication isolation probe');
-    // Model the retained canonical adapter route used by normal publication,
-    // without executing a reviewer or claiming installed authority in this fixture.
-    writeFileSync(join(f.root(), '.evidence/canonical-fixture-review'), 'fixture administrator review');
-    const remote = join(f.root(), '.evidence/isolated-publication.git');
-    f.git('init', '-q', '--bare', remote); f.git('config', 'core.hooksPath', '.evidence');
-    chmodSync(join(f.root(), '.evidence/pre-push'), 0o700);
-    const result = session(`git push ${JSON.stringify(remote)} HEAD:refs/heads/candidate`, false);
-    if (result.status !== 0) throw Error(String(result.stdout) + String(result.stderr));
-    expect(f.git('--git-dir=' + remote, 'rev-parse', 'refs/heads/candidate').trim()).toBe(f.git('rev-parse', 'HEAD').trim());
-    expect(order()).toContain('cheap'); expect(order()).toContain('focused');
-    expect(callCount()).toBe(0);
-  });
-  test.each(['cheap', 'size-check', 'domain-check'])('canonical publication preserves %s failure before transport', check => {
-    setup();
-    const root = f.root();
-    const script = check === 'cheap' ? 'scripts/verify/cheap.sh' : `scripts/verify/${check}.sh`;
-    writeFileSync(join(root, script), 'echo failing-check >&2\nexit 1\n');
-    f.git('add', script); f.git('commit', '-qm', 'failed isolated check');
-    writeFileSync(join(root, '.evidence/canonical-fixture-review'), 'fixture administrator review');
-    const remote = join(root, '.evidence/refused-publication.git');
-    f.git('init', '-q', '--bare', remote); f.git('config', 'core.hooksPath', '.evidence');
-    chmodSync(join(root, '.evidence/pre-push'), 0o700);
-    const result = session(`git push ${JSON.stringify(remote)} HEAD:refs/heads/candidate`, false);
-    expect(result.status).toBe(1); expect(result.stderr).toContain('failing-check');
-    expect(f.git('--git-dir=' + remote, 'for-each-ref')).toBe('');
-    expect(callCount()).toBe(0);
-  });
   test('CI-first ordinary push publishes after cheap and review without local full', () => {
     setup();
     const root = f.root(), remote = join(root, '.evidence/publication.git');
@@ -95,6 +53,19 @@ admitFinalCandidate({publishable:true},(command,args)=>execFileSync(command.ends
     expect(order()).toContain('cheap'); expect(order()).toContain('focused');
     expect(order().split('\n')).not.toContain('full');
     expect(f.git('--git-dir=' + remote, 'rev-parse', 'refs/heads/candidate').trim()).toBe(f.git('rev-parse', 'HEAD').trim());
+  });
+  test.each(['size-check', 'domain-check'])('direct publication preserves %s failure before transport', check => {
+    setup();
+    const root = f.root();
+    writeFileSync(join(root, `scripts/verify/${check}.sh`), 'echo failing-check >&2\nexit 1\n');
+    f.git('add', '-A'); f.git('commit', '-qm', 'failed publication check');
+    const remote = join(root, '.evidence/refused-publication.git');
+    f.git('init', '-q', '--bare', remote); f.git('config', 'core.hooksPath', '.evidence');
+    chmodSync(join(root, '.evidence/pre-push'), 0o700);
+    const result = session(`git push ${JSON.stringify(remote)} HEAD:refs/heads/candidate`);
+    expect(result.status).toBe(1); expect(result.stderr).toContain('failing-check');
+    expect(f.git('--git-dir=' + remote, 'for-each-ref')).toBe('');
+    expect(callCount()).toBe(1);
   });
   test('missing retained result never launches a reviewer while establishing ownership', () => {
     setup();

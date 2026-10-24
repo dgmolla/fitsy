@@ -108,12 +108,12 @@ test.each(['ts', 'mjs', 'py'])('direct script focused %s rejects an external dat
 });
 
 // Keep run.mjs, focused-tests.mjs, test.sh and Jest real. Only database
-// acquisition, independent review custody and unrelated test engines are external
+// acquisition, independent review evidence and unrelated test engines are external
 // boundaries here; this fixture does not establish protected admission or DB proof.
 type CallerEvent = { name: string; argv: string[]; env: Record<string, string> };
 type ReceiptFault = 'missing' | 'failed' | 'expired' | 'environment' | 'report' | 'coverage' | 'old-invocation';
 function focusedFullCallerFixture({ partial = false, build = false, fault, inheritedRecipe = false }: { partial?: boolean; build?: boolean; fault?: ReceiptFault; inheritedRecipe?: boolean } = {}) {
-  for (const name of ['run.mjs', 'receipt-cache.mjs', 'focused-tests.sh', 'test.sh']) {
+  for (const name of ['run.mjs', 'receipt-cache.mjs', 'focused-tests.sh', 'test.sh', 'shipping-session.mjs']) {
     copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
   }
   writeFileSync(join(root, 'scripts/package.json'), JSON.stringify({ name: '@fitsy/scripts', scripts: { test: 'jest --config=jest.config.cjs' } }));
@@ -177,28 +177,28 @@ export const databaseControl=()=>{};
 export const withOwnedLock=()=>{throw Error('unexpected DB lock acquisition')};
 export const runWithLocalDatabase=()=>{throw Error('unexpected DB acquisition')};
 `);
-  writeFileSync(join(root, 'scripts/verify/review-admission.sh'), `#!/bin/bash\nset -eu\nexec ${quote(python)} .evidence/admission.py\n`);
+  const fixedPath = `${join(root, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
+  const runner = join(root, 'scripts/verify/run.mjs');
+  writeFileSync(runner, readFileSync(runner, 'utf8').replace(
+    'PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin node', `PATH=${fixedPath} node`));
+  chmodSync(runner, 0o755);
+  const session = join(root, 'scripts/verify/shipping-session.mjs');
+  writeFileSync(session, readFileSync(session, 'utf8')
+    .replaceAll('userInfo().homedir', JSON.stringify(join(root, '.evidence/home')))
+    .replace(/const administratorPath = '[^']+';/, `const administratorPath = ${JSON.stringify(fixedPath)};`));
+  writeFileSync(join(root, 'scripts/verify/review-admission.sh'), `#!/bin/bash\nset -eu\nexec node .evidence/admission.mjs\n`);
   if (build) writeFileSync(join(root, 'scripts/verify/build.sh'), `#!/bin/bash\nset -eu\n[ -z "\${POSTGRES_PRISMA_URL:-}\${POSTGRES_URL_NON_POOLING:-}\${FITSY_VERIFY_OWNED_DB:-}" ]\nprintf '%s\\n' '{"event":"build"}' >> .evidence/boundaries.jsonl\nprintf '%s\\n' '{"status":"pass"}'\n`);
   git('add', '.'); git('commit', '-qm', 'real caller fixture baseline');
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   const base = execFileSync('git', ['rev-parse', 'origin/main'], { cwd: root, env, encoding: 'utf8' }).trim();
   writeFileSync(join(root, 'scripts/candidate.ts'), 'export const changed = "focused/full";\n');
-  // Exercise the exact adapter function called by protected review-admission,
-  // including its fixed cheap argv and real frozen-source rechecks. Synthetic
-  // custody is a test boundary, never authority to use an installed operator.
-  writeFileSync(join(root, '.evidence/admission.py'), `import importlib.util,json,os,pathlib,sys
-from unittest.mock import patch
-spec=importlib.util.spec_from_file_location('approval',${JSON.stringify(join(source, 'scripts/review/external-approval.py'))})
-approval=importlib.util.module_from_spec(spec);spec.loader.exec_module(approval)
-root=pathlib.Path(${JSON.stringify(root)})
-source=approval.subprocess.check_output(['git','rev-parse','HEAD'],cwd=root).decode().strip()
-config={'operator_uid':os.getuid(),'candidate_boundary':{'issue':458,'source_sha':source,'comparison_base':${JSON.stringify(base)},'launcher_path':str(root/'.evidence/launcher.sh')}}
-with patch.object(approval,'candidate_custody',return_value={'worktree':str(root)}):
- code=approval.candidate_checks(config,458,source,${JSON.stringify(base)},str(root),'cheap')
-print(json.dumps({'name':'review-admission','status':'pass' if code==0 else 'fail'}))
-sys.exit(code)
+  // Exercise the same local cheap-check helper used by admission and the hook.
+  // Keep the full caller's database environment separate from nested cheap checks.
+  writeFileSync(join(root, '.evidence/admission.mjs'), `import {candidateChecks} from ${JSON.stringify(join(root, 'scripts/verify/shipping-session.mjs'))};
+const code=await candidateChecks('cheap',${JSON.stringify(root)},${JSON.stringify(childEnv)});
+process.stdout.write(JSON.stringify({name:'review-admission',status:code===0?'pass':'fail'})+'\\n');
+process.exitCode=code;
 `);
-  writeFileSync(join(root, '.evidence/launcher.sh'), `#!/bin/bash\nset -eu\n[ "$1" = --candidate-command ]\nshift\nexec /usr/bin/env -i ${Object.entries(childEnv).filter((entry): entry is [string, string] => entry[1] !== undefined).map(([key, value]) => quote(key + '=' + value)).join(' ')} "$@"\n`);
   if (fault) writeFileSync(join(root, '.evidence/before-test.mjs'), `import {readFileSync,writeFileSync,unlinkSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const file='.evidence/verify/check-cache/focused-tests.json';

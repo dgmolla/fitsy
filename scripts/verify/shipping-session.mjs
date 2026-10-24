@@ -36,11 +36,16 @@ function identity(root, env = process.env) {
 export async function candidateChecks(check, root = process.cwd(), env = process.env) {
   if (!['cheap', 'push-gates'].includes(check)) throw Error('unsupported candidate check');
   root = realpathSync(resolve(root));
-  const trustedEnv = executionEnvironment(env);
-  const issue = JSON.parse(readFileSync(join(root, '.evidence/delivery/binding.json'), 'utf8')).issue;
-  return execute('/usr/bin/python3', ['-I', '-B', '/opt/fitsy-approval/external-approval.py',
-    'candidate-checks', '--issue', String(issue), '--source', git(['rev-parse', 'HEAD'], root, trustedEnv).trim(),
-    '--base', git(['rev-parse', 'origin/main'], root, trustedEnv).trim(), '--root', root, '--check', check], root, env);
+  const frozen = identity(root, env);
+  const command = check === 'cheap'
+    ? [join(root, 'scripts/verify/run.mjs'), ['--layer=0-2', '--stage=cheap', '--scope=changed', '--runs=local', '--reuse']]
+    : ['/bin/bash', ['-p', '-c',
+      'set -eu; for check in size-check domain-check; do '
+      + 'if /bin/bash -p "scripts/verify/$check.sh"; then code=0; else code=$?; fi; '
+      + '[ "$code" -eq 0 ] || [ "$code" -eq 2 ] || exit "$code"; done']];
+  const code = await execute(command[0], command[1], root, env);
+  if (identity(root, env) !== frozen) throw Error('candidate or focused selection changed during checks');
+  return code;
 }
 
 export function inShippingSession(env = process.env) {

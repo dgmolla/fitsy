@@ -29,39 +29,6 @@ export function validationOrderCases(f: Fixture) {
     for (const name of ['receipt-cache.mjs', 'review-admission.sh', 'shipping-session.mjs']) copyFileSync(join(f.source, 'scripts/verify', name), join(root, 'scripts/verify', name));
     installFixtureTools(root);
     installAdmissionFixture(root, admin, cache, f.git);
-    // Synthetic administrator adapter models the fixed child interface only.
-    // Real kernel/profile denials require the separately owned installed probes.
-    const adapter = join(root, '.evidence/candidate-adapter.py');
-    const python = execFileSync('/usr/bin/which', ['python3'], { encoding: 'utf8' }).trim();
-    const candidateHome = join(root, '.evidence/candidate-home'); mkdirSync(candidateHome, { recursive: true });
-    writeFileSync(adapter, `import json,os,pathlib,subprocess,sys
-args = dict(zip(sys.argv[2::2],sys.argv[3::2]))
-root = pathlib.Path(${JSON.stringify(root)})
-if sys.argv[1] == 'validate-review':
- if (root/'.evidence/canonical-fixture-review').exists():
-  print(json.dumps({'canonical_review':'pass','source_sha':args['--source'],'base_sha':args['--base']})); sys.exit(0)
- print(json.dumps({'canonical_review':'not_configured'})); sys.exit(2)
-assert sys.argv[1] == 'candidate-checks'
-assert pathlib.Path(args['--root']).resolve() == root.resolve()
-assert args['--source'] == subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
-assert args['--base'] == subprocess.check_output(['git','rev-parse','origin/main'],cwd=root,text=True).strip()
-assert int(args['--issue']) == json.loads((root/'.evidence/delivery/binding.json').read_text())['issue']
-env = {k:v for k,v in os.environ.items() if not k.startswith(('GH_','GITHUB_','REVIEW_','FITSY_SHIPPING_','GIT_','FITSY_DIFF_'))}
-env['HOME'] = ${JSON.stringify(candidateHome)}
-check = args['--check']
-if check == 'cheap': command = ['node','scripts/verify/run.mjs','--stage=cheap','--layer=0-2','--runs=local']
-else:
- assert check == 'push-gates'
- command = ['/bin/bash','-p','-c','for c in size-check domain-check; do /bin/bash -p scripts/verify/$c.sh; code=$?; [ "$code" = 0 ] || [ "$code" = 2 ] || exit "$code"; done']
-sys.exit(subprocess.run(command,cwd=root,env=env).returncode)
-`);
-    for (const file of ['scripts/verify/review-admission.sh', 'scripts/verify/shipping-session.mjs']) {
-      const path = join(root, file);
-      writeFileSync(path, readFileSync(path, 'utf8')
-        .replaceAll('/opt/fitsy-approval/external-approval.py', adapter)
-        .replaceAll('/usr/bin/python3', python));
-    }
-
     writeFileSync(join(root, '.claude/lenses/workflow-security.md'), 'Review shipping controls.\n');
     writeFileSync(join(root, 'scripts/verify/registry.yml'), `checks:
   - name: structural

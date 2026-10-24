@@ -22,7 +22,7 @@ checks:
     blocking: true
     preflight: true
     runs: [local]
-    why: Require a clean source-bound passing canonical review before full acceptance.
+    why: Revalidate retained local review evidence before full local acceptance; GitHub Verify and AI review own merge authority.
 
   - name: focused-tests
     cache: true

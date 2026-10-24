@@ -725,12 +725,11 @@ def admit_completed(handle, ledger, args, events):
                           "docs/engineering/devops/review-dispositions.md",
                           "docs/engineering/devops/agent-model-routing.md",
                           "docs/engineering/devops/shipping-control-cutover.md",
-                          "docs/engineering/devops/shipping-control-setup",
                           "docs/engineering/devops/ios-release-runbook.md",
                           ".github/workflows/deploy.yml", ".github/workflows/eas-build.yml",
                           ".github/workflows/dev-maintenance.yml",
                           "vercel.json"]
-    allowed_directories = control_directories + ("docs/engineering/devops/shipping-control-setup",)
+    allowed_directories = control_directories
     if any(name not in allowed and not any(name.startswith(path + "/") for path in allowed_directories)
            for name in changed):
         raise ValueError("trusted main changed product or unrelated inputs; frozen comparison invalid")

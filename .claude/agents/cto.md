@@ -85,6 +85,8 @@ Review cross-cutting changes and architecture decisions. Check:
 Follow [canonical shipping](../../docs/engineering/devops/shipping.md): freeze and commit source, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, and complete one passing independent review before full suites and affected E2E acceptance.
 Repair findings and revalidate affected cheap checks and review before full acceptance.
 Preserve UI signoff, release approvals, source identity and the retained issue review budget.
+GitHub requires `Verify` and `AI review` on the current PR head before merge.
+Local candidate checks run directly without an approval App installation.
 Run every required full gate before push; fix all failures in your session.
 
 1. `bash scripts/structural-tests.sh`

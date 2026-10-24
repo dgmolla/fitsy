@@ -3,6 +3,8 @@
 Apply this policy to every Fitsy coordinator, implementation worker and review adapter.
 The human-selected standalone Pstack skills control orchestration and evidence planning.
 The [shipping contracts](shipping.md) retain supported commands, product acceptance, dispositions and release protections.
+GitHub's current-head `Verify` and `AI review` results control merge eligibility.
+The retained local review adapters support local validation without an approval App installation.
 Current human issue-bound review limits govern execution; historical dispatcher defaults do not override them.
 Model selection never waives those gates or grants permission to start extra work.
 The local dispatcher snapshots a configured implementation provider, model and effort and an independent reviewer provider, model and effort for each claim.
