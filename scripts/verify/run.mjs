@@ -52,23 +52,6 @@ export async function verify(argv, prepareDatabase) {
   const isAcceptance = c => c.stage === 'acceptance' || c.layer >= 2;
   const only = args.only === undefined ? null : new Set(args.only.split(","));
   if (only?.has("")) throw new Error("--only requires at least one check name");
-  let delivery;
-  const activeAttempts = new Set();
-  if (runsCtx === 'local' && existsSync(join(REPO_ROOT, 'scripts/delivery/phase-events.mjs'))) {
-    try { delivery = await import('../delivery/phase-events.mjs'); }
-    catch (error) { console.error(`delivery telemetry: unavailable (${error.message})`); }
-  }
-  function beginTiming(phase, check) {
-    try { const attempt = delivery?.start(REPO_ROOT, phase, 'verify-run', { check }) ?? null;
-      if (attempt) activeAttempts.add(attempt); return attempt; }
-    catch (error) { console.error(`delivery telemetry: ${error.message}`); return null; }
-  }
-  function endTiming(attempt, status) {
-    if (!attempt || !activeAttempts.has(attempt)) return;
-    try { delivery.finish(REPO_ROOT, attempt, status); activeAttempts.delete(attempt); }
-    catch (error) { console.error(`delivery telemetry: ${error.message}`); }
-  }
-
   const [layerMin, layerMax] =
     layerArg === "all" ? [0, 99] : layerArg.includes("-") ? layerArg.split("-").map(Number) : [Number(layerArg), Number(layerArg)];
 
@@ -142,17 +125,6 @@ export async function verify(argv, prepareDatabase) {
       prepared = true;
     }
   }
-  let wholeAttempt = process.env.FITSY_LOCAL_DB === '1' ? null : beginTiming('verification', 'whole');
-  function interruptTiming() {
-    for (const attempt of [...activeAttempts]) endTiming(attempt, 'interrupted');
-    wholeAttempt = null;
-  }
-  process.on('exit', interruptTiming);
-  delivery?.closeOnSignals(interruptTiming);
-  function closeWhole(status) {
-    if (wholeAttempt) { endTiming(wholeAttempt, status); wholeAttempt = null; }
-  }
-
   function checkInputs(c, { withoutDatabase = false } = {}) {
       const checkEnv = { ...process.env, FITSY_RUNS: runsCtx,
         ...(c.name === 'focused-tests' ? { FITSY_VERIFY_FOCUSED_RECIPE: c.selection ?? '' } : {}),
@@ -181,9 +153,7 @@ export async function verify(argv, prepareDatabase) {
   }
 
   function runCheck(c, options) {
-    const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
     if (c.missing) {
-      endTiming(attempt, 'fail');
       return Promise.resolve({ name: c.name, status: "fail", summary: `registry entry has no script ${c.script}`, fix: "add the script or remove the entry", blocking: true });
     }
     return new Promise((resolve) => {
@@ -199,7 +169,6 @@ export async function verify(argv, prepareDatabase) {
           parsed = { name: c.name, summary: (stderr || stdout).trim().split("\n").at(-1)?.slice(0, 200) ?? "" };
         }
         const status = code === 0 && parsed.status !== "fail" ? "pass" : code === 2 ? "skipped" : "fail";
-        endTiming(attempt, status);
         resolve({
           ...parsed,
           name: c.name,
@@ -298,11 +267,11 @@ export async function verify(argv, prepareDatabase) {
   for (const r of blockingFailed) console.error(`FAIL ${r.name}: ${r.summary ?? ""}${r.fix ? `\n  fix: ${r.fix}` : ""}`);
   // Allow piped diagnostics to drain before Node exits, including failing CI logs.
   const status = blockingFailed.length ? 1 : 0;
-  closeWhole(status ? 'fail' : 'pass');
   return status;
 }
 
-if (process.argv[1] && existsSync(process.argv[1]) && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
+if (process.argv[1] && existsSync(process.argv[1]) &&
+    realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
   verify(process.argv.slice(2)).then(status => { process.exitCode = status; })
     .catch(error => { console.error(error); process.exitCode = 1; });
 }

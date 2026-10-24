@@ -1,7 +1,7 @@
 # Autonomous Shipping
 
 > **Status:** Design v2, 2026-08-28 · **Owner:** CTO · Supersedes v1 (2026-08-28, same file)
-> **Rollout status (2026-09-07):** steps 2-5 LIVE (verify registry #233, static completeness #236, lenses + local poller #238-240, deploy/rollback #241; dev environment 2026-08-29). Step 1 (ruleset) deliberately deferred by owner decision - checks are advisory until it flips. Poller LaunchAgent `com.fitsy.review-poller` reviews every open PR on the Max subscription. Steps 6-8 buildable core LIVE 2026-09-07 (#244-#251): migration safety, own-code-mock + mutation shadows (59% baseline), real-DB tests + response contract (which caught the matchScore null wire bug, #245/#246), sim CLI + FEATURE_MAP + first Maestro flows + EAS e2e workflow, all seven lenses + multi-lens poller + incident eval corpus/replay + escaped-defects metric. Remaining, gated by design: step 8 lens tuning (first real incidents), step 9 routines (two stable weeks), step 10 ratchet (ongoing), step 1 ruleset (owner's call).
+> **Rollout status (2026-09-07):** steps 2-5 LIVE (verify registry #233, static completeness #236, lenses + local poller #238-240, deploy/rollback #241; dev environment 2026-08-29). Step 1 (ruleset) deliberately deferred by owner decision - checks are advisory until it flips. Steps 6-8 buildable core LIVE 2026-09-07 (#244-#251): migration safety, own-code-mock + mutation shadows (59% baseline), real-DB tests + response contract (which caught the matchScore null wire bug, #245/#246), sim CLI + FEATURE_MAP + first Maestro flows + EAS e2e workflow, all seven lenses + multi-lens poller + incident eval corpus/replay + escaped-defects metric. Remaining, gated by design: step 8 lens tuning (first real incidents), step 9 routines (two stable weeks), step 10 ratchet (ongoing), step 1 ruleset (owner's call).
 > Goal: any code change, from any origin, reaches production with no human in the merge path, and every escape makes the pipeline stronger.
 
 This document is the plan.
@@ -296,7 +296,7 @@ Callers, in the order we adopt them:
 
 | Runner | Mechanism | Cost | When |
 |---|---|---|---|
-| `local` (**default now**) | launchd job on Dawit's Mac (same pattern as the daily-memo job) polls `gh pr list` every 2 minutes for open PRs missing a lens check-run and runs them; also reachable by hand as `npm run review -- <pr>` | covered by the Max subscription | from rollout step 4 |
+| `local` | `bash scripts/review/poller.sh` runs on demand; the repository no longer installs a review daemon | covered by the Max subscription | legacy local runner |
 | `cloud-routine` | Claude Code routine on PR-open events runs the same script | subscription usage, no Mac | once lenses are trusted, so PRs merge while the Mac is asleep |
 | `actions-oauth` | `claude-code-action@v1` with `CLAUDE_CODE_OAUTH_TOKEN` | subscription usage | alternative to routines; note Anthropic announced and then paused (2026-06) moving `claude -p` and Actions off subscription pools, so this may become per-token with notice |
 | `actions-api` | same action with `ANTHROPIC_API_KEY` | per token (§9) | fallback if subscription paths are cut off |

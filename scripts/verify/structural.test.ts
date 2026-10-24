@@ -50,3 +50,32 @@ test("the same canonical caller still refuses unguarded subscriber data", () => 
   expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: "fail", blocking: true });
   expect(result.stderr).toContain("Subscription gating invariant violated");
 });
+
+test("a release review packet passes the canonical documentation layout check", () => {
+  mkdirSync(join(directory, "docs/release"), { recursive: true });
+  writeFileSync(join(directory, "docs/release/next-submission.md"), "# Submission review packet\n");
+  const result = verify();
+  expect(result.error).toBeUndefined();
+  if (result.status !== 0) throw new Error(result.stdout + "\n" + result.stderr);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: "pass", blocking: true });
+});
+
+test.each(["misc", "releases"])("an unrelated docs/%s domain is still rejected", domain => {
+  mkdirSync(join(directory, "docs", domain), { recursive: true });
+  writeFileSync(join(directory, "docs", domain, "notes.md"), "# Notes\n");
+  const result = verify();
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: "fail", blocking: true });
+  expect(result.stderr).toContain(`docs/${domain}/ is not an allowed domain`);
+});
+
+test("release preparation does not permit loose tracked documents at the docs root", () => {
+  mkdirSync(join(directory, "docs"));
+  writeFileSync(join(directory, "docs/submission.md"), "# Submission\n");
+  const result = verify();
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: "fail", blocking: true });
+  expect(result.stderr).toContain("submission.md is a file directly in docs/");
+});

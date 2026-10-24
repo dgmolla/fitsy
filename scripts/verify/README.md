@@ -48,6 +48,8 @@ Callers: `.githooks/pre-push` (size/domain checks plus cheap layers 0-1, changed
 
 The local pre-push hook runs size/domain checks, then cheap static checks and focused tests.
 A fresh checkout needs installed dependencies but no issue binding, review daemon or home-directory review state.
+Keep dependencies local to this checkout so workspace links resolve its own packages.
+After merging schema changes, regenerate its Prisma client with `npx prisma generate --schema=prisma/schema.prisma` before verification.
 GitHub owns merge requirements and heavy validation.
 Every selected check executes on each invocation and reports its actual exit status.
 An empty check selection or a missing registry script fails verification.

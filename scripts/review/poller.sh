@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Local review runner: find open PRs whose head commit lacks a completed lens status and
-# run the appropriate lens. Installed as a LaunchAgent by install-poller.sh;
-# also runnable by hand. Reviews on the Max subscription (no API billing).
+# run the appropriate lens on demand. Reviews use the Max subscription (no API billing).
 #
 # Runs in its own clone (~/.fitsy-review/repo) so it never touches a working
 # tree an agent or human is editing.
@@ -59,7 +58,7 @@ while read -r NUM SHA; do
   fi
   # Overlay the review harness from origin/main: the PR must not be able to
   # edit its own reviewer (T12), and old branches may predate the harness.
-  if ! (git restore --source=origin/main --staged --worktree --no-overlay -- scripts/review scripts/delivery/phase-events.mjs scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses &&
+  if ! (git restore --source=origin/main --staged --worktree --no-overlay -- scripts/review scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses &&
         git clean -qfdx -- scripts/review .claude/lenses); then
     echo "[poller] PR #$NUM: trusted harness restoration failed; skipping this tick"
     continue
@@ -92,11 +91,6 @@ while read -r NUM SHA; do
   else
     FITSY_REVIEW_TIMEOUT_SECONDS="$ATTEMPT_TIMEOUT" \
       bash scripts/review/run-review.sh "$NUM" || echo "[poller] PR #$NUM review round -> fail"
-  fi
-  # Reconcile once after the round, including concurrent or failed closeouts.
-  TIMING_ROOT="$REPO_DIR/.evidence/review-delivery/$NUM"
-  if [ -f "$TIMING_ROOT/.evidence/delivery/binding.json" ]; then
-    (cd "$TIMING_ROOT" && node "$REPO_DIR/scripts/delivery/phase-events.mjs" publish) || echo "[poller] PR #$NUM timing publication pending"
   fi
   git checkout -qf origin/main 2>/dev/null || true
   git clean -qfd 2>/dev/null || true

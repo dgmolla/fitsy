@@ -113,11 +113,9 @@ Focused unprivileged checks:
 ```sh
 python3 -B scripts/delivery/resource-controls.test.py
 python3 -B scripts/review/external-approval.test.py ProfileCustodyTests
-python3 -B scripts/delivery/local-dispatcher.test.py WorkerIsolationTest QueueReadTest
 ```
 
-Legacy dispatcher, receipt and retention process fixtures were retired during verification cleanup.
-The remaining dispatcher suite covers the actual worker launcher and queue response parsing.
+The retired dispatcher process and cold-retention fixture suites are no longer part of repository verification.
 
 Run applicable canonical cheap checks against the frozen commit before any
 independent review. No additional reviewer allocation is authorized by the worker
