@@ -48,12 +48,16 @@ Callers: `.githooks/pre-push` (size/domain checks plus cheap layers 0-1, changed
 
 The local pre-push hook runs size/domain checks, then cheap static checks and focused tests.
 A fresh checkout needs installed dependencies but no issue binding, review daemon or home-directory review state.
+Keep dependencies local to this checkout so workspace links resolve its own packages.
+After merging schema changes, regenerate its Prisma client with `npx prisma generate --schema=prisma/schema.prisma` before verification.
 GitHub owns merge requirements and heavy validation.
-For the L2 test check, `--reuse` accepts a successful local receipt no older than six hours only when source files, the selected diff, local configuration, environment, dependency lock, runtime and check definition still match.
-A fresh failure invalidates an older pass, and a source change during verification fails the run and archives the retired receipt.
-The receipt saves repeated local test work; it is not an independent review or product-flow attestation.
-Hosted CI runs applicable checks independently.
-The owned PostGIS target checks and migration steps still run before local database tests, including a cached L2 result.
+Every selected check executes on each invocation and reports its actual exit status.
+An empty check selection or a missing registry script fails verification.
+The L2 test check runs complete affected API, scripts and mobile groups, including files already run in the focused selection.
+Unknown comparison history expands full-suite selection to every group.
+An empty group selection or an engine reporting zero passing tests fails the test check.
+Temporary engine reports count the current execution and are removed afterward.
+The owned PostGIS target checks and migration steps still run before local database tests.
 
 ## Candidate validation order
 
@@ -73,6 +77,7 @@ API and pipeline database selections, plus selections with caller database URLs,
 Full local builds remain database-free and run before database acquisition.
 CI runs its own required checks independently of local review state.
 
-Retired cache receipts move to `check-cache/history/` rather than being deleted.
-A cheap stage, a review pass and a cached test receipt each prove their own stage.
+The saved focused recipe contains test paths and an optional Jest pattern, never a passing result.
+Selected tests execute even for a documentation-only comparison; missing or empty recipes fail.
+A cheap stage and a review pass each prove their own stage; full acceptance executes its affected groups afresh.
 Required GitHub checks, applicable product acceptance and release approvals still apply.
