@@ -211,44 +211,14 @@ It contains no verdict projection and does not replace the retained provider rec
 Admission checks that approval plus the original execution evidence and refuses changed authority or evidence.
 The existing cache, ledger and adapter remain the execution/accounting entrypoints.
 
-Direct `account-completed` uses the same canonical completed manifest and approved operator digest as shipping admission.
+Direct `account-completed` uses the canonical completed manifest and approved operator digest.
 `reconcile-allocation` uses `~/.fitsy-review/operators/issue-N-allocation.json`; `reconcile-count` uses `~/.fitsy-review/operators/issue-N-count.json`.
 Both reconciliation manifests additionally bind `control_sha` and `operator_sha256` to the separately approved installation.
 Caller-selected copies cannot mutate the canonical original ledger through these entrypoints.
 Allocation reconciliation validates the proposed retained usage before appending an event, so an effective-cap conflict leaves the original ledger readable and unchanged.
 
-Issue463 bootstrap requires the candidate comparison ref to match managed trusted main before admission and rechecks that ref before returning.
-Live shipping identity also binds the managed-main ref; an advance during acceptance closes that source-bound admission.
-Frozen issue443 retains its explicitly approved product comparison while separately binding the unchanged current control installation.
-
-Live session checks revalidate canonical administrator/coordinator evidence through the control installation before accepting any socket response.
-A responding caller-selected socket cannot replace that review authority, including direct native publication checks.
 The permanent exception supersedes the generic cumulative ceiling only through the exact retained, independently approved bounded allocation stop.
-Each allocation remains at most 300 seconds, additive, source-bound and checked before append; a malformed or disagreeing stop refuses without mutating history.
-Normal session admission still completes cheap checks before it creates live ownership.
-Its internal cached-only `--revalidate-session` path rechecks canonical evidence and current source/control refs, preserving the existing source-bound cheap proof without repeating the entire cheap pipeline on every native or hook call.
-That path requires session selectors and refuses reviewer execution; selectors never replace genuine coordinator-approved evidence.
-
-Shipping admission pins issue retrieval to the existing administrator GitHub CLI in known installation locations, rejecting `FITSY_GH_BIN` before any live-session branch.
-Protected retrieval clears caller credential, host, configuration, proxy and executable-search selectors and reads the canonical administrator account configuration against `github.com` and `dgmolla/fitsy`.
-The protected runner receives that pinned executable explicitly; standalone provider fixtures remain external-boundary tests and cannot authorize shipping.
-An acceptance change invalidates reuse even if a caller executable returns the previously approved body.
-
-Admission and live ownership use administrator executable locations for their Git, Node, Python and shell commands, including source identity reads.
-The canonical runner invokes the system Bash with privileged startup semantics; live ownership clears caller shell loaders and exported functions before child execution.
-Caller PATH or `BASH_ENV` artifacts cannot replace proof validation before the gate's code runs.
-These are existing entrypoint corrections, not additional approval issuers or a new execution service.
-
-Protected Node entrypoints use their executable system Env wrapper, which clears Node startup selectors before the interpreter loads the module.
-Live child environments and pre-push also clear these selectors, so a startup import cannot replace admission or acceptance with an early exit.
-Direct caller-configured `node` or npm startup is not release evidence; use the protected executable entrypoints or clear startup selectors before npm starts.
-
-The canonical `.githooks/pre-push` fixes administrator executable search before any Git command.
-It derives the checkout from its installed hook location, clears Git repository selectors, and verifies that checkout before acceptance.
-Caller PATH and GIT_WORK_TREE cannot redirect verification to another source.
-The hook removes exported BASH_FUNC_* entries before child shells and directly executes the protected verifier.
-The verifier clears shell startup selectors before nested checks; nested hook Bash checks use protected startup.
-Privileged accounting and reconciliation require the canonical private operator or managed-main operator pathname as well as its approved digest.
-Disposable authenticated overlays delegate those actions to that installed operator; byte-identical caller copies cannot act before installation.
-Direct admission and publishable simulator guards use protected Node child startup.
-Frozen pre-cutover verifier files retain their original mode and use the same system Env startup protection without source edits.
+Each allocation remains at most 300 seconds, additive, source-bound and checked before append.
+A malformed or disagreeing stop refuses without mutating history.
+Local verification and pre-push execute checks directly; GitHub owns merge requirements.
+Review accounting retains its original ledgers and operator authority independently of the hook.

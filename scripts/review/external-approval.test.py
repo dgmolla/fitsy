@@ -1371,7 +1371,7 @@ class ProfileCustodyTests(unittest.TestCase):
         self.assertEqual(observed['args'], ['--layer=0-2', '--stage=cheap', '--scope=changed', '--runs=local',
             '--reuse', f'--base={self.boundary["comparison_base"]}', f'--head={self.boundary["source_sha"]}'])
 
-    def test_candidate_cheap_reuses_actual_runner_checks_and_keeps_fresh_admission_and_custody(self):
+    def test_candidate_cheap_reuses_actual_runner_checks_and_keeps_uncached_checks_and_custody(self):
         import shutil
         self.prepare_candidate_checks()
         scripts = self.checkout / 'scripts/verify'
@@ -1380,9 +1380,9 @@ class ProfileCustodyTests(unittest.TestCase):
         (self.checkout / 'node_modules').symlink_to(REPO_ROOT / 'node_modules', target_is_directory=True)
         (self.checkout / '.gitignore').write_text('.evidence/\nnode_modules\n')
         (scripts / 'registry.yml').write_text('checks:\n'
-            '  - name: resource-admission\n    script: admission.sh\n    layer: 0\n    blocking: true\n    preflight: true\n'
+            '  - name: dependencies\n    script: dependencies.sh\n    layer: 0\n    blocking: true\n'
             '  - name: focused-tests\n    script: focused.sh\n    layer: 1\n    blocking: true\n    cache: true\n')
-        for name in ('admission', 'focused'):
+        for name in ('dependencies', 'focused'):
             (scripts / (name + '.sh')).write_text(f'echo run >> .evidence/{name}-calls\n' + "echo '{\"status\":\"pass\"}'\n")
         recipe = self.checkout / '.evidence/verify/focused-tests.json'
         recipe.parent.mkdir(parents=True)
@@ -1401,7 +1401,7 @@ class ProfileCustodyTests(unittest.TestCase):
             self.assertEqual(self.candidate_command(), 0)
             self.assertEqual(custody.call_count, 4)
         self.assertEqual((self.checkout / '.evidence/focused-calls').read_text().splitlines(), ['run'])
-        self.assertEqual((self.checkout / '.evidence/admission-calls').read_text().splitlines(), ['run', 'run'])
+        self.assertEqual((self.checkout / '.evidence/dependencies-calls').read_text().splitlines(), ['run', 'run'])
 
     def test_candidate_push_gates_preserve_exit_two_and_real_failure(self):
         source = self.prepare_candidate_checks()

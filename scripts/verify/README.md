@@ -18,7 +18,9 @@ stderr: human-readable detail
 ## Registry
 
 `registry.yml` lists every check with its layer, tier, path filters, blocking mode, and the reason it exists.
-Blocking checks are selected by layer and run context, never by changed-path filters. Path filters apply only to advisory checks; explicit standalone checks still require `--only`. Individual checks may limit their own work using `--scope` or report no applicable work.
+Blocking checks are selected by layer and run context, never by changed-path filters.
+Path filters apply only to advisory checks; explicit standalone checks still require `--only`.
+Individual checks may limit their own work using `--scope` or report no applicable work.
 A check without a registry entry, or an entry without a script, is itself a failure (tenet T11).
 
 | Check | Layer | What it proves |
@@ -42,14 +44,16 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `mobile-e2e.sh` | 7 (shadow) | Retired unscoped native smoke; use required source-bound product-flow with an exact owned UDID |
 | `api-e2e.sh` | 6 | a deployed API serves health + teaser-lock invariants (read-only by default; `--write` adds the register probe) |
 
-Callers: `.githooks/pre-push` (layers 0-3, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
+Callers: `.githooks/pre-push` (size/domain checks plus cheap layers 0-1, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
 
-The local pre-push hook requires layers 0-3, including production build acceptance, and still runs size and domain checks on every push.
+The local pre-push hook runs size/domain checks, then cheap static checks and focused tests.
+A fresh checkout needs installed dependencies but no issue binding, review daemon or home-directory review state.
+GitHub owns merge requirements and heavy validation.
 For the L2 test check, `--reuse` accepts a successful local receipt no older than six hours only when source files, the selected diff, local configuration, environment, dependency lock, runtime and check definition still match.
 A fresh failure invalidates an older pass, and a source change during verification fails the run and archives the retired receipt.
 The receipt saves repeated local test work; it is not an independent review or product-flow attestation.
 Hosted CI runs applicable checks independently.
-The owned PostGIS admission and migration steps still run before local database tests, including a cached L2 result.
+The owned PostGIS target checks and migration steps still run before local database tests, including a cached L2 result.
 
 ## Candidate validation order
 
@@ -57,22 +61,17 @@ The owned PostGIS admission and migration steps still run before local database 
 Set the selection with `node scripts/verify/focused-tests.mjs --set <test paths>`.
 Use optional `--jest-pattern=<test name regex>` to select focused Jest scenarios; a selection with no passing tests fails.
 Focused selections run fresh before review and full acceptance.
-Shipping admission completes the cheap stage, restores main reviewer controls from the existing external managed review repository in a disposable committed-candidate checkout, and executes a fresh canonical round with all required domains and the retained issue budget.
-Repair findings and repeat cheap checks and review on the committed repair.
-Use `scripts/verify/shipping-session.mjs -- <shipping command>` to own one fresh admission across final product-flow acceptance, verification and pre-push.
-The child command runs affected journeys, full verification and push in sequence, stopping on failure.
-The live parent checks source identity and focused selection for every admission request and closes admission on exit.
-It neither reads nor writes saved review verdicts.
-Standalone final-candidate journeys fail closed outside the live session; direct verification still requests fresh review.
-Source drift invalidates the session rather than automatically consuming another bounded review round.
+The hook and verifier execute selected checks directly without a shipping session or local review gate.
+Run independent review through the supported review runner before publishing.
+Changes after review require review and acceptance evidence for the current source.
 
 The registry marks product-flow as `stage: acceptance`; layers 2 and above also belong to acceptance.
-`review-admission` is mandatory for any selected local acceptance check, including `--only` and layer-only calls.
-The runner completes cheap static checks before focused tests, admits API and pipeline database selections, plus any selection with caller database URLs, through the owned disposable database, then completes all cheap checks before review admission or full-suite database setup.
-Admission executes the canonical main `run-review.sh --local` in a new execution directory on the frozen committed head.
-Candidate caches never satisfy shipping admission, and raw attempts remain under `.evidence/review-admission/`.
-CI remains an independent full gate without local review execution.
+The cheap stage excludes these checks.
+The runner completes cheap static checks before focused tests.
+API and pipeline database selections, plus selections with caller database URLs, use the owned disposable database with its target and ownership assertions.
+Full local builds remain database-free and run before database acquisition.
+CI runs its own required checks independently of local review state.
 
-Every production local invocation retains stage, source identity, timestamps and raw check results under `.evidence/verify/attempts/`.
 Retired cache receipts move to `check-cache/history/` rather than being deleted.
-A cheap stage, a review pass and a cached test receipt each prove their own stage; none replaces required final full acceptance or shipping gates.
+A cheap stage, a review pass and a cached test receipt each prove their own stage.
+Required GitHub checks, applicable product acceptance and release approvals still apply.

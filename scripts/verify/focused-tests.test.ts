@@ -108,8 +108,7 @@ test.each(['ts', 'mjs', 'py'])('direct script focused %s rejects an external dat
 });
 
 // Keep run.mjs, focused-tests.mjs, test.sh and Jest real. Only database
-// acquisition, independent review custody and unrelated test engines are external
-// boundaries here; this fixture does not establish protected admission or DB proof.
+// acquisition and unrelated test engines are external boundaries here.
 type CallerEvent = { name: string; argv: string[]; env: Record<string, string> };
 type ReceiptFault = 'missing' | 'failed' | 'expired' | 'environment' | 'report' | 'coverage' | 'old-invocation';
 function focusedFullCallerFixture({ partial = false, build = false, fault, inheritedRecipe = false }: { partial?: boolean; build?: boolean; fault?: ReceiptFault; inheritedRecipe?: boolean } = {}) {
@@ -122,12 +121,6 @@ function focusedFullCallerFixture({ partial = false, build = false, fault, inher
     script: focused-tests.sh
     layer: 1
     cache: true
-    blocking: true
-    runs: [local]
-  - name: review-admission
-    script: review-admission.sh
-    layer: 1
-    preflight: true
     blocking: true
     runs: [local]
   - name: test
@@ -172,33 +165,15 @@ export function assertOwnedDatabase(env=process.env) {
   if(env.FITSY_VERIFY_OWNED_DB!=='fixture-owned') throw Error('fixture database not prepared');
   appendFileSync('.evidence/boundaries.jsonl',JSON.stringify({event:'assert-db'})+'\\n');
 }
-export const assertPhaseLock=()=>{};
 export const databaseControl=()=>{};
 export const withOwnedLock=()=>{throw Error('unexpected DB lock acquisition')};
 export const runWithLocalDatabase=()=>{throw Error('unexpected DB acquisition')};
 `);
-  writeFileSync(join(root, 'scripts/verify/review-admission.sh'), `#!/bin/bash\nset -eu\nexec ${quote(python)} .evidence/admission.py\n`);
   if (build) writeFileSync(join(root, 'scripts/verify/build.sh'), `#!/bin/bash\nset -eu\n[ -z "\${POSTGRES_PRISMA_URL:-}\${POSTGRES_URL_NON_POOLING:-}\${FITSY_VERIFY_OWNED_DB:-}" ]\nprintf '%s\\n' '{"event":"build"}' >> .evidence/boundaries.jsonl\nprintf '%s\\n' '{"status":"pass"}'\n`);
   git('add', '.'); git('commit', '-qm', 'real caller fixture baseline');
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   const base = execFileSync('git', ['rev-parse', 'origin/main'], { cwd: root, env, encoding: 'utf8' }).trim();
   writeFileSync(join(root, 'scripts/candidate.ts'), 'export const changed = "focused/full";\n');
-  // Exercise the exact adapter function called by protected review-admission,
-  // including its fixed cheap argv and real frozen-source rechecks. Synthetic
-  // custody is a test boundary, never authority to use an installed operator.
-  writeFileSync(join(root, '.evidence/admission.py'), `import importlib.util,json,os,pathlib,sys
-from unittest.mock import patch
-spec=importlib.util.spec_from_file_location('approval',${JSON.stringify(join(source, 'scripts/review/external-approval.py'))})
-approval=importlib.util.module_from_spec(spec);spec.loader.exec_module(approval)
-root=pathlib.Path(${JSON.stringify(root)})
-source=approval.subprocess.check_output(['git','rev-parse','HEAD'],cwd=root).decode().strip()
-config={'operator_uid':os.getuid(),'candidate_boundary':{'issue':458,'source_sha':source,'comparison_base':${JSON.stringify(base)},'launcher_path':str(root/'.evidence/launcher.sh')}}
-with patch.object(approval,'candidate_custody',return_value={'worktree':str(root)}):
- code=approval.candidate_checks(config,458,source,${JSON.stringify(base)},str(root),'cheap')
-print(json.dumps({'name':'review-admission','status':'pass' if code==0 else 'fail'}))
-sys.exit(code)
-`);
-  writeFileSync(join(root, '.evidence/launcher.sh'), `#!/bin/bash\nset -eu\n[ "$1" = --candidate-command ]\nshift\nexec /usr/bin/env -i ${Object.entries(childEnv).filter((entry): entry is [string, string] => entry[1] !== undefined).map(([key, value]) => quote(key + '=' + value)).join(' ')} "$@"\n`);
   if (fault) writeFileSync(join(root, '.evidence/before-test.mjs'), `import {readFileSync,writeFileSync,unlinkSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const file='.evidence/verify/check-cache/focused-tests.json';
@@ -241,7 +216,7 @@ process.exitCode=await verify(['--layer=${build ? 'all' : '0-2'}','--stage=full'
   };
 }
 
-test('canonical full caller reuses a complete focused file while nested admission and residual Jest remain real', () => {
+test('canonical full caller reuses a complete focused file while residual Jest remains real', () => {
   const fixture = focusedFullCallerFixture();
   const result = fixture.run();
   const events = fixture.events();
@@ -249,11 +224,8 @@ test('canonical full caller reuses a complete focused file while nested admissio
   console.info('FOCUSED_FULL_CALLER_TRACE', JSON.stringify({ status: result.status, stdout: result.stdout, stderr: result.stderr, events,
     launches, boundaries: readFileSync(join(root, '.evidence/boundaries.jsonl'), 'utf8') }));
   expect({ status: result.status, stderr: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, stderr: '' });
-  // Protected admission has a genuinely different cheap context. It must keep
-  // its own A assertion, while the full-context producer covers exactly A once.
   expect(events.filter(event => event.name === 'A' && event.env.FITSY_VERIFY_OWNED_DB === 'fixture-owned')).toHaveLength(1);
-  expect(events.filter(event => event.name === 'A' && !event.env.FITSY_VERIFY_OWNED_DB)).toHaveLength(1);
-  expect(events.find(event => event.name === 'A' && !event.env.FITSY_VERIFY_OWNED_DB)?.env.FITSY_VERIFY_NEEDS_TEST_DEPS).toBe('0');
+  expect(events.filter(event => event.name === 'A' && !event.env.FITSY_VERIFY_OWNED_DB)).toHaveLength(0);
   const fullContextLaunches = launches.filter(launch => launch.env.FITSY_VERIFY_OWNED_DB === 'fixture-owned');
   expect(fullContextLaunches).toHaveLength(2);
   expect(fullContextLaunches[0]?.argv).toContain('--runTestsByPath');
@@ -281,7 +253,7 @@ test('canonical full caller strips inherited recipe transport from both Jest chi
   for (const launch of fullContextLaunches) expect(launch.env).not.toHaveProperty('FITSY_VERIFY_FOCUSED_RECIPE');
   expect(fullContextLaunches[1]?.argv.some(arg => arg.startsWith('--testPathIgnorePatterns='))).toBe(true);
   expect(events.filter(event => event.name === 'A' && event.env.FITSY_VERIFY_OWNED_DB === 'fixture-owned')).toHaveLength(1);
-  expect(events.filter(event => event.name === 'A' && !event.env.FITSY_VERIFY_OWNED_DB)).toHaveLength(1);
+  expect(events.filter(event => event.name === 'A' && !event.env.FITSY_VERIFY_OWNED_DB)).toHaveLength(0);
   expect(events.filter(event => event.name === 'B')).toHaveLength(1);
   expect(events.find(event => event.name === 'A' && event.env.FITSY_VERIFY_OWNED_DB === 'fixture-owned')?.env)
     .toEqual(events.find(event => event.name === 'B')?.env);

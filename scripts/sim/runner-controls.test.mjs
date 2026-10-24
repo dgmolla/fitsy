@@ -299,12 +299,11 @@ deterministicTest('bound product-flow CLI records failure but excludes nested te
       { cwd: dir, env: { ...fixtureEnv, NODE_TEST_CONTEXT: context, JEST_WORKER_ID: '' }, encoding: 'utf8', timeout: 10000 });
     const standalone = invoke('');
     assert.equal(standalone.status, 1);
-    assert.match(standalone.stderr, /run final acceptance inside .*shipping-session/);
+    assert.match(standalone.stderr, /Native artifact missing: run build with the required profile/);
     const events = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
       { cwd: dir, encoding: 'utf8' })).events;
     assert.deepEqual(events.filter(event => event.phase === 'e2e').map(event => [event.phase, event.check, event.status]), [['e2e', 'run', 'fail']]);
     assert.equal(events.filter(event => event.phase === 'verification').length, 0);
-    assert.equal(existsSync(join(dir, '.evidence/review-admission')), false);
     assert.equal(invoke('child-v8').status, 1);
     const after = JSON.parse(execFileSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'summary'],
       { cwd: dir, encoding: 'utf8' })).events;
@@ -1546,25 +1545,4 @@ deterministicTest('required assertion and app identity preflight fails before wa
   assert.equal(flowFailureReason(result, [config, { ...assertion, metadata: { status: 'SKIPPED' } }], recorder, 'welcome'), 'missing-or-failed-required-assertions');
   assert.equal(flowFailureReason(result, [config, assertion], recorder, 'another-flow'), 'wrong-app-or-flow-receipt');
   assert.equal(flowFailureReason(result, [config, assertion], recorder, 'welcome'), null);
-});
-
-deterministicTest('final simulator admission requires the live reviewed shipping execution while development preserves UI signoff', async () => {
-  const { admitFinalCandidate } = await import('./product-flow.mjs');
-  const calls = [];
-  const command = (cmd, args) => calls.push([cmd, args]);
-  admitFinalCandidate(runSelection(['fixture', '--mode=final-candidate']).mode, command);
-  assert.equal(calls[0][0], fileURLToPath(new URL('../verify/shipping-session.mjs', import.meta.url)));
-  assert.deepEqual(calls[0][1], ['--check']);
-  calls.length = 0;
-  admitFinalCandidate(runSelection(['fixture', '--mode=development']).mode, command);
-  assert.equal(calls.length, 0);
-});
-deterministicTest('expired or changed shipping execution stops final simulator admission before native acceptance', async () => {
-  const { admitFinalCandidate } = await import('./product-flow.mjs');
-  const calls = [];
-  assert.throws(() => admitFinalCandidate({ publishable: true }, (cmd, args) => {
-    calls.push([cmd, args]); throw new Error('shipping session is no longer active');
-  }), /shipping session is no longer active/);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0][1], ['--check']);
 });

@@ -61,7 +61,8 @@ If ownership cannot be established, reconcile it before launching another worker
 For Codex-led work, one coordinator claims the issue and assigns one Sol implementation owner by default.
 Add agents only for bounded independent tasks with explicit file ownership; another lane's blocker does not hold unrelated work.
 Freeze and commit the candidate, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, then complete one independent canonical review before full suites and affected E2E acceptance.
-Repair findings and revalidate cheap checks and review before full acceptance; revalidate matching canonical review evidence through live shipping admission and retain the original issue review budget.
+Repair findings and revalidate cheap checks and review before full acceptance.
+Keep independent review evidence matched to the current source and retain the original issue review budget.
 Use the review domains, UI signoff, release approvals and shipping gates in [shipping.md](shipping.md).
 Send a separate Slack alert headed `🚨 *BLOCKED*` only when live evidence establishes a concrete action that requires the human.
 Keep agent-owned review, required-gate, execution and dependency recovery on the issue and handoff without human mentions.

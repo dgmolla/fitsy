@@ -705,7 +705,7 @@ def admit_completed(handle, ledger, args, events):
     git("merge-base", "--is-ancestor", args.base_sha, args.control_sha)
     changed = git_changed_paths(root, args.base_sha, args.control_sha, env=env)
     # A control-only trusted-main advance cannot expand the product comparison.
-    allowed = controls + ["scripts/verify/shipping-session.mjs", "scripts/verify/review-admission.sh",
+    allowed = controls + [
                           "scripts/verify/product-flow.mjs", "scripts/sim/publish-product-flow.mjs",
                           "scripts/sim/product-flow.mjs", "scripts/sim/runner-controls.test.mjs",
                           "scripts/verify/run.mjs", "scripts/verify/run-output.test.ts",

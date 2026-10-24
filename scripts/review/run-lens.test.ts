@@ -1,4 +1,3 @@
-import { validationOrderCases } from "./validation-order-cases";
 import { fixtureNodeUnderProtectedPath } from "../verify/hook-fixture";
 import { roundRunnerCases, normalizeFixtureResponse, runPrFixture, seedManagedFixture, approveFixtureCaches } from "./round-runner-cases";
 import { executionFailureCases } from "./execution-failure-cases";
@@ -16,7 +15,7 @@ let guard: string;
 let guardHead: string;
 let inheritedGit: NodeJS.ProcessEnv;
 function isolatedEnv() {
-  // Synthetic checkouts must establish their own shipping session ownership.
+  // Synthetic checkouts must not inherit the outer caller's execution context.
   return Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_DIFF_|GITHUB_EVENT_|CI$|FITSY_RUNS$|FITSY_LOCAL_DB$|FITSY_VERIFY_|FITSY_REVIEW_BOOTSTRAP_OPERATOR$|FITSY_SHIPPING_(SOCKET|TOKEN)$|POSTGRES_)/.test(key)));
 }
 let calls: string;
@@ -293,5 +292,3 @@ policyRunnerCases({ root: () => root, setRoot: value => { root = value; }, env: 
 executionFailureCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, run, runPr, git });
 
 roundRunnerCases({ root: () => root, calls: () => calls, env: () => env, run, runPr, git });
-
-validationOrderCases({ root: () => root, env: () => env, setEnv: value => { env = value; }, source, run, git, calls: () => calls });
