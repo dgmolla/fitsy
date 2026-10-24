@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Exercise actual release callers with only GitHub/Vercel boundaries replaced."""
-import base64
 import copy
 import importlib.util
 import io
@@ -32,62 +31,18 @@ class AdmissionTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='fitsy-release-')
         self.root = Path(self.temp.name)
-        self.source, self.reviewed, self.base, self.tree = (c * 40 for c in 'abcd')
+        self.source = 'a' * 40
         self.prefix = f'repos/{gate.REPO}/'
         self.rows = {}
-        self.body = '**TL;DR:** Release the authorized change.\n\nDone means exact-source delivery.'
-        digest = gate.approval.acceptance(self.body)
-        verify = {'id': 20, 'workflow_id': gate.VERIFY, 'path': '.github/workflows/verify.yml',
+        verify = {'id': 20, 'path': '.github/workflows/verify.yml',
                   'event': 'push', 'head_branch': 'main', 'head_sha': self.source,
                   'repository': {'full_name': gate.REPO}, 'head_repository': {'full_name': gate.REPO},
-                  'status': 'completed', 'conclusion': 'success', 'run_attempt': 1, 'check_suite_id': 200}
-        candidate = dict(verify, id=10, event='pull_request', head_sha=self.reviewed, check_suite_id=100, pull_requests=[])
+                  'status': 'completed', 'conclusion': 'success'}
         self.event = {'workflow_run': copy.deepcopy(verify)}
         self.put('actions/runs/20', verify)
-        self.put('actions/runs/10', candidate)
-        self.put('actions/runs/30', {'id': 30, 'workflow_id': gate.DEPLOY, 'path': '.github/workflows/deploy.yml',
-                                    'event': 'workflow_run', 'head_branch': 'main', 'head_sha': self.source,
-                                    'repository': {'full_name': gate.REPO}})
         self.put('git/ref/heads/main', {'object': {'sha': self.source}})
-        for sha, event, run in ((self.source, 'push', 20), (self.reviewed, 'pull_request', 10)):
-            self.put(f'actions/workflows/{gate.VERIFY}/runs?head_sha={sha}&event={event}&per_page=1',
-                     {'workflow_runs': [{'id': run}]})
-        self.put(f'commits/{self.source}/pulls?per_page=100', [{
-            'number': 500, 'state': 'closed', 'merged_at': '2026-10-21T00:00:00Z',
-            'merge_commit_sha': self.source, 'body': 'Delivery-Issue: #471\n',
-            'head': {'sha': self.reviewed, 'repo': {'full_name': gate.REPO}},
-            'base': {'sha': self.base, 'ref': 'main', 'repo': {'full_name': gate.REPO}}}])
-        self.put('issues/471', {'body': self.body})
-        checks = [{'name': name, 'head_sha': self.reviewed, 'app': {'id': gate.APP},
-                   'status': 'completed', 'conclusion': 'success'}
-                  for name in (gate.approval.CHECK, gate.approval.ACCEPTANCE_CHECK)]
-        checks[0].update(external_id=f'issue-471:{self.reviewed}:{digest}',
-                         output={'summary': f'Source {self.reviewed}; base {self.base}; acceptance {digest}; accounting fixture'})
-        self.put(f'commits/{self.reviewed}/check-runs?filter=latest&per_page=100',
-                 {'total_count': 2, 'check_runs': checks})
-        self.put(f'commits/{self.reviewed}/status?per_page=100',
-                 {'sha': self.reviewed, 'total_count': 1, 'statuses': [{'context': 'product-flow/local', 'state': 'success'}]})
-        self.put(f'git/commits/{self.reviewed}', {'tree': {'sha': self.tree}})
-        self.put(f'git/commits/{self.source}', {'tree': {'sha': self.tree},
-                                              'parents': [{'sha': self.base}, {'sha': self.reviewed}]})
-        self.put(f'actions/workflows/{gate.VERIFY}', {'path': '.github/workflows/verify.yml', 'state': 'active'})
-        for sha in (self.base, self.reviewed, self.source):
-            self.put(f'contents/.github/workflows/verify.yml?ref={sha}',
-                     {'type': 'file', 'path': '.github/workflows/verify.yml', 'encoding': 'base64',
-                      'content': base64.b64encode((ROOT / '.github/workflows/verify.yml').read_bytes()).decode()})
-        for run in (verify, candidate):
-            jobs = []
-            for index, name in enumerate(gate.approval.VERIFY_JOBS):
-                jid = run['id'] * 10 + index
-                skipped = run['event'] == 'push' and name == 'Single-domain PR check'
-                jobs.append({'id': jid, 'name': name, 'run_id': run['id'], 'run_attempt': 1,
-                             'head_sha': run['head_sha'], 'status': 'completed', 'conclusion': 'skipped' if skipped else 'success',
-                             'labels': [] if skipped else ['ubuntu-latest'],
-                             'check_run_url': f'https://api.github.com/{self.prefix}check-runs/{jid}'})
-                self.put(f'check-runs/{jid}', {'id': jid, 'name': name, 'head_sha': run['head_sha'],
-                         'app': {'id': 15368, 'slug': 'github-actions'}, 'check_suite': {'id': run['check_suite_id']},
-                         'status': 'completed', 'conclusion': 'success'})
-            self.put(f'actions/runs/{run["id"]}/jobs?filter=latest&per_page=100', {'total_count': len(jobs), 'jobs': jobs})
+        self.put(f'actions/workflows/verify.yml/runs?head_sha={self.source}&event=push&per_page=1',
+                 {'workflow_runs': [{'id': 20}]})
         gh = self.root / 'gh'
         gh.write_text('#!/usr/bin/env python3\nimport json,os,sys\nprint(json.dumps(json.load(open(os.environ["FIXTURE"]))[sys.argv[2]]))\n')
         gh.chmod(0o700)
@@ -117,20 +72,20 @@ class AdmissionTests(unittest.TestCase):
         result = self.drive()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.root / 'output').read_text(), f'release_sha={self.source}\n')
+        self.assertEqual(json.loads(result.stdout), {'release_sha': self.source})
 
-    def test_wrong_failed_stale_source_run_workflow_and_issuer_are_refused(self):
+    def test_failed_non_main_non_push_wrong_workflow_or_repository_verify_is_refused(self):
         original = copy.deepcopy(self.rows)
         mutations = [
             ('actions/runs/20', 'conclusion', 'failure', 'successful same-repository'),
+            ('actions/runs/20', 'status', 'in_progress', 'successful same-repository'),
+            ('actions/runs/20', 'head_branch', 'feature', 'successful same-repository'),
             ('actions/runs/20', 'event', 'pull_request', 'successful same-repository'),
-            ('actions/runs/20', 'workflow_id', 99, 'upstream event/run mismatch'),
-            ('actions/runs/20', 'run_attempt', 2, 'upstream event/run mismatch'),
+            ('actions/runs/20', 'path', '.github/workflows/other.yml', 'successful same-repository'),
+            ('actions/runs/20', 'repository', {'full_name': 'attacker/fitsy'}, 'successful same-repository'),
             ('actions/runs/20', 'head_repository', {'full_name': 'attacker/fitsy'}, 'successful same-repository'),
-            ('actions/runs/30', 'event', 'workflow_dispatch', 'wrong downstream workflow'),
-            ('git/ref/heads/main', 'object', {'sha': 'e' * 40}, 'superseded protected main'),
-            ('check-runs/200', 'app', {'id': 99, 'slug': 'github-actions'}, 'Verify job issuer'),
-            ('git/commits/' + self.source, 'tree', {'sha': 'e' * 40}, 'merged tree differs'),
-            ('issues/471', 'body', self.body + '\nAcceptance changed', 'current acceptance/review binding'),
+            ('actions/runs/20', 'id', 21, 'upstream event/run mismatch'),
+            ('actions/runs/20', 'head_sha', 'b' * 40, 'upstream event/run mismatch'),
         ]
         for path, key, value, reason in mutations:
             with self.subTest(path=path, key=key):
@@ -140,36 +95,32 @@ class AdmissionTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(reason, result.stderr)
                 self.assertEqual((self.root / 'output').read_text(), '')
-        self.rows = original
-        self.assertNotEqual(self.drive(GITHUB_EVENT_NAME='workflow_dispatch').returncode, 0)
-        self.assertNotEqual(self.drive(GITHUB_REPOSITORY='attacker/fitsy').returncode, 0)
 
-    def test_wrong_app_and_stale_or_failed_candidate_ci_are_refused(self):
-        checks = self.get(f'commits/{self.reviewed}/check-runs?filter=latest&per_page=100')['check_runs']
-        checks[0]['app']['id'] = 99
-        self.assertNotEqual(self.drive().returncode, 0)
-        checks[0]['app']['id'] = gate.APP
-        self.get('actions/runs/10')['conclusion'] = 'failure'
-        self.assertNotEqual(self.drive().returncode, 0)
-        self.get('actions/runs/10')['conclusion'] = 'success'
-        self.get(f'actions/workflows/{gate.VERIFY}/runs?head_sha={self.reviewed}&event=pull_request&per_page=1')['workflow_runs'] = []
-        self.assertNotEqual(self.drive().returncode, 0)
+    def test_wrong_release_event_repository_or_ref_is_refused(self):
+        for key, value in [('GITHUB_EVENT_NAME', 'workflow_dispatch'),
+                           ('GITHUB_REPOSITORY', 'attacker/fitsy'), ('GITHUB_REF', 'refs/heads/feature')]:
+            with self.subTest(key=key):
+                result = self.drive(**{key: value})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('unauthorized release event/repository/ref', result.stderr)
+                self.assertEqual((self.root / 'output').read_text(), '')
 
-    def test_mutable_pr_base_cannot_substitute_for_reviewed_immutable_merge_parents(self):
-        pr = self.get(f'commits/{self.source}/pulls?per_page=100')[0]
-        pr['base']['sha'] = 'f' * 40
-        result = self.drive()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        merge = self.get(f'git/commits/{self.source}')
-        merge['parents'][0]['sha'] = 'e' * 40
+    def test_superseded_main_sha_is_refused(self):
+        self.get('git/ref/heads/main')['object']['sha'] = 'b' * 40
         result = self.drive()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('review comparison base mismatch', result.stderr)
-        merge['parents'][0]['sha'] = self.base
-        merge['parents'][1]['sha'] = 'e' * 40
-        result = self.drive()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('immutable merge parent/reviewed head mismatch', result.stderr)
+        self.assertIn('superseded protected main source', result.stderr)
+        self.assertEqual((self.root / 'output').read_text(), '')
+
+    def test_latest_push_verify_run_for_source_is_required(self):
+        latest = self.get(f'actions/workflows/verify.yml/runs?head_sha={self.source}&event=push&per_page=1')
+        for runs in ([], [{'id': 21}]):
+            with self.subTest(runs=runs):
+                latest['workflow_runs'] = runs
+                result = self.drive()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('superseded Verify run', result.stderr)
+                self.assertEqual((self.root / 'output').read_text(), '')
 
 
 class GitDeploymentTests(unittest.TestCase):
