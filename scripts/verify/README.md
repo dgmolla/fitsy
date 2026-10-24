@@ -75,7 +75,7 @@ Keep dependencies local to this checkout so workspace links resolve its own pack
 Type checking calls each workspace's `npm run type-check`, including Prisma generation from the repository schema before compiling the API.
 This refreshes stale generated types after schema updates without requiring a database connection or migration.
 To refresh the client separately after merging schema changes, run `npx prisma generate --schema=prisma/schema.prisma`.
-GitHub owns merge requirements and heavy validation.
+GitHub requires `Verify` and `AI review` on the current PR head and owns heavy validation.
 Every selected check executes on each invocation and reports its actual exit status.
 An empty check selection or a missing registry script fails verification.
 The L2 test check runs complete affected API, scripts and mobile groups, including files already run in the focused selection.

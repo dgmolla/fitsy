@@ -168,6 +168,8 @@ Every mobile/web UI edit triggers CI smoke: screen-local style/copy uses render 
 Keep simulator smoke out of the pre-push hook.
 
 Protected merge requires current trusted CI plus applicable local media/native evidence; old-head CI and candidate-controlled workflow changes cannot substitute.
+GitHub requires `Verify` and `AI review` on the current PR head.
+Local shipping helpers run checks directly and do not require an approval App installation.
 
 ## Post-PR Gate
 
