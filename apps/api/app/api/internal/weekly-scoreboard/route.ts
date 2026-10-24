@@ -53,6 +53,7 @@ async function loadDbMetrics(now: Date): Promise<DbMetrics> {
     feedback,
     waitlist,
     waitlistTotal,
+    waitlistConfirmed,
   ] = await Promise.all([
     prisma.user.count(),
     weekOverWeek((f, t) => prisma.user.count({ where: { createdAt: range(f, t) } }), now),
@@ -85,6 +86,9 @@ async function loadDbMetrics(now: Date): Promise<DbMetrics> {
       now,
     ),
     prisma.launchWaitlist.count(),
+    // Double opt-in confirmed: what recurring email reaches. The launch
+    // blast additionally reaches the legacyConsent cohort (lib/launchNotify.ts).
+    prisma.launchWaitlist.count({ where: { confirmedAt: { not: null } } }),
   ]);
   return {
     totalUsers,
@@ -98,6 +102,7 @@ async function loadDbMetrics(now: Date): Promise<DbMetrics> {
     feedback,
     waitlist,
     waitlistTotal,
+    waitlistConfirmed,
   };
 }
 

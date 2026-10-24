@@ -3,10 +3,9 @@
  *
  * Weekly marketing email cron - triggered every Tuesday at 16:00 UTC.
  * Picks the deterministic edition for the current week, loads the marketing
- * audience that has NOT yet received it (lib/marketingAudience.ts: accounts,
- * and waitlist-only addresses once the double opt-in confirmation ships,
- * minus every opt-out, minus the ledger rows for this step), and sends
- * sequentially (no fan-out).
+ * audience that has NOT yet received it (lib/marketingAudience.ts: accounts
+ * and confirmed waitlist-only addresses, minus every opt-out, minus the
+ * ledger rows for this step), and sends sequentially (no fan-out).
  *
  * Idempotency and pacing come from the MarketingSend ledger
  * (lib/marketingLedger.ts). The ledger step is `<edition>:w<week>`, so an
@@ -57,11 +56,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const { slug, subject, html } = editionForDate(now);
   const step = `${slug}:w${weekIndexForDate(now)}`;
 
-  // Recurring email to waitlist-only addresses waits for double opt-in.
+  // Waitlist-only rows are included only once confirmed (double opt-in).
   // Addresses already recorded for this step are excluded at query time, so
   // a re-run walks only what is left.
   const audience = await marketingAudience({
-    includeWaitlistOnly: false,
+    includeWaitlistOnly: true,
     excludeSent: { campaign: "weekly", step },
   });
   const eligible = audience.length;
