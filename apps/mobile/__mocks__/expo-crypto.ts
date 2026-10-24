@@ -1,6 +1,4 @@
-export function randomUUID(): string {
-  return '00000000-0000-0000-0000-000000000000';
-}
+export { randomUUID } from 'node:crypto';
 
 export enum CryptoDigestAlgorithm {
   SHA256 = 'SHA-256',
