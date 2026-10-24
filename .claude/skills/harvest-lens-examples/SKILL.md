@@ -35,15 +35,20 @@ lens edits).
      Consolidate repeated examples when a shared rule preserves their failure scenarios.
    - Behavioral/user-facing -> also consider a Maestro flow or DB test.
      Inspect `npm run verify:sim-plan` and update `scripts/verify/impact-plan.mjs` plus its table-driven tests when adding affected-screen coverage.
+     Keep the retained ownership router and simulator risk policy as inputs; do not restore deleted review executables.
+     UI changes require CI render smoke for proven screen-local style/copy, affected E2E for behavior, or full coverage for shared UI/app shells.
+     Extend render checkpoints together with their maintained YAML assertions, and keep simulator execution out of pre-push.
 4. **Eval cases**: for the sharpest escapes, capture
    `scripts/verify/evals/incidents/<pr-number>/` (diff.patch via
    `gh pr diff <n> --patch` of the ORIGINAL breaking change when identifiable,
    expected.json naming the lens + finding). Skip when the breaking diff
    cannot be isolated - a bad eval case is worse than none.
-5. **Prove recall** for any lens you edited:
-   `bash scripts/verify/evals/replay.sh <case>` for its cases, and
-   `bash scripts/review/run-lens.sh --local <lens>` still passes on a clean
-   branch.
+5. **Prove recall** for any lens you edited: supply its captured incident diffs
+   and expected findings to the independent reviewer using `REVIEW.md` and that lens.
+   Record actual findings and misses with the lens change.
+   Run `node --test scripts/review/simple-review.test.mjs` for routing, severity,
+   complete domain coverage and independent-provider behavior.
+   See `scripts/review/simple-review.md` for the supported review interface.
 6. **Ship**: one cto-domain PR with the lens edits + eval cases + updated
    `last-harvest`. PR body lists each harvested PR -> where its learning went.
 

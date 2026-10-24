@@ -7,23 +7,6 @@
 # paths: advisory (shadow) checks only; select when --scope=changed matches a glob.
 # Blocking checks always run within their layer/context; path filters cannot hide them.
 checks:
-  - name: resource-admission
-    script: resource-admission.sh
-    layer: 0
-    blocking: true
-    preflight: true
-    runs: [local]
-    why: Check dependencies and disk before local verification.
-
-  - name: review-admission
-    script: review-admission.sh
-    layer: 0
-    stage: acceptance
-    blocking: true
-    preflight: true
-    runs: [local]
-    why: Require a clean source-bound passing canonical review before full acceptance.
-
   - name: focused-tests
     cache: true
     script: focused-tests.sh
@@ -142,7 +125,7 @@ checks:
     layer: 2
     blocking: true
     runs: [local]
-    why: Real decoder, attachment and opt-in recording integration tests for changed simulator or product-flow controls; missing local tools fail.
+    why: Real decoder and attachment integration tests for changed simulator or product-flow controls; missing local tools fail.
 
   - name: build
     script: build.sh
@@ -180,6 +163,8 @@ checks:
     runs: [ci, scheduled, local]
     why: >
       CI selects none, affected flows or full flows through impact-plan.mjs.
+      Screen-local style/copy edits stop at render assertions; UI behavior uses
+      affected E2E flows and shared UI or app shell changes use the full suite.
       Failures fail the selected mobile job. Local product-flow acceptance and
       the final Verify aggregator retain their existing independent semantics.
 

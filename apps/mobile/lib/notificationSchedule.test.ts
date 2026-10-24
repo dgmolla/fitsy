@@ -57,22 +57,53 @@ test('permission denial cancels prior reminders and never prompts or schedules',
   await replaceReminders('one', plan());
   expect(pending.size).toBe(0); expect(sdk.scheduleNotificationAsync).not.toHaveBeenCalled();
 });
-test('a seven-day trial creates exactly one native day-six request on a fixed clock', async () => {
-  jest.useFakeTimers().setSystemTime(new Date(2026, 8, 7, 9));
+test.each([7, 14])('a %i-day trial creates one native request exactly two days before verified expiry', async days => {
+  jest.useFakeTimers().setSystemTime(new Date(2026, 8, 7, 12));
   try {
-    const expiration = new Date(2026, 8, 14, 12);
+    const expiration = new Date(2026, 8, 7 + days, 12);
+    const expected = new Date(2026, 8, 7 + days - 2, 12);
     const trial = planReminders({ now: new Date(), userId: 'one', entitled: true,
       preferences: { meals: false, trial: true },
       subscription: { isActive: true, periodType: 'TRIAL', willRenew: true,
-        latestPurchaseDate: new Date(2026, 8, 7, 9).toISOString(), expirationDate: expiration.toISOString() } });
+        latestPurchaseDate: new Date().toISOString(), expirationDate: expiration.toISOString() } });
     await replaceReminders('one', trial);
     await replaceReminders('one', trial);
     expect(pending.size).toBe(1);
-    expect(await readScheduledReminders('one')).toEqual([{ kind: 'trial', date: trial[0].date.toISOString() }]);
-    expect(trial[0].date.getTime()).toBeLessThan(expiration.getTime() - 24 * 3_600_000);
-    expect(sdk.scheduleNotificationAsync.mock.calls.at(-1)?.[0].trigger).toMatchObject({ type: 'date', date: trial[0].date });
+    expect(await readScheduledReminders('one')).toEqual([{ kind: 'trial', date: expected.toISOString() }]);
+    expect(expiration.getTime() - trial[0].date.getTime()).toBe(48 * 3_600_000);
+    expect(sdk.scheduleNotificationAsync.mock.calls.at(-1)?.[0].trigger).toMatchObject({ type: 'date', date: expected });
     await replaceReminders('one', []);
     expect(pending.size).toBe(0);
+  } finally { jest.useRealTimers(); }
+});
+test('verified plan changes, permission recovery and cancellation reconcile one expiry-bound trial request', async () => {
+  jest.useFakeTimers().setSystemTime(new Date(2026, 8, 7, 12));
+  try {
+    const preferences = { meals: false, trial: true };
+    const subscription = { isActive: true, periodType: 'TRIAL' as const, willRenew: true,
+      latestPurchaseDate: new Date().toISOString(), expirationDate: new Date(2026, 8, 21, 12).toISOString() };
+    const reconcile = async () => replaceReminders('one', planReminders({
+      now: new Date(), userId: 'one', entitled: true, preferences, subscription,
+    }));
+    await reconcile();
+    const originalIdentifier = [...pending.keys()][0];
+    subscription.expirationDate = new Date(2026, 8, 14, 12).toISOString();
+    await reconcile();
+    await reconcile();
+    expect(pending.has(originalIdentifier)).toBe(false);
+    expect([...pending.keys()]).toEqual([`${REMINDER_PREFIX}trial.${Date.parse(subscription.expirationDate)}`]);
+    expect(await readScheduledReminders('one')).toEqual([{ kind: 'trial', date: new Date(2026, 8, 12, 12).toISOString() }]);
+    sdk.getPermissionsAsync.mockResolvedValue({ status: 'denied' } as Notifications.NotificationPermissionsStatus);
+    await reconcile();
+    expect(pending.size).toBe(0);
+    sdk.getPermissionsAsync.mockResolvedValue({ status: 'granted' } as Notifications.NotificationPermissionsStatus);
+    await reconcile();
+    expect(pending.size).toBe(1);
+    expect(await readScheduledReminders('one')).toEqual([{ kind: 'trial', date: new Date(2026, 8, 12, 12).toISOString() }]);
+    subscription.willRenew = false;
+    await reconcile();
+    expect(pending.size).toBe(0);
+    expect(subscription.expirationDate).toBe(new Date(2026, 8, 14, 12).toISOString());
   } finally { jest.useRealTimers(); }
 });
 test('an update after the new lead time keeps a valid future reminder for the same trial', async () => {

@@ -23,6 +23,8 @@ test.each([
   ['scripts/verify/run.mjs'], ['apps/api/app/api/search/route.ts'],
   ['apps/api/app/api/health/route.ts'], ['apps/mobile/lib/menuFilters.test.ts'],
   ['.github/workflows/verify.yml'],
+  ['apps/web/lib/cache.ts'], ['apps/web/app/api/health/route.ts'],
+  ['apps/mobile/components/test-fixtures/accountProfile.ts'],
 ])('low simulator risk for %s retains no native work', path => {
   expect(select([path])).toMatchObject({ risk: 'low', scope: 'none', required: false, flows: [] });
 });
@@ -56,6 +58,9 @@ test.each([
   'prisma/schema.prisma', 'package-lock.json',
   'scripts/deploy/mobile.sh', '.github/workflows/deploy.yml',
   'apps/mobile/components/NewUnmappedScreen.tsx',
+  'apps/mobile/assets/icon.png', 'apps/mobile/lib/colors.ts',
+  'apps/web/public/logo.png', 'apps/web/src/components/Logo.styles.ts',
+  'apps/web/app/page.mdx', 'apps/web/app/page.jsx',
 ])('high change %s selects every flow', path => {
   expect(select([path])).toMatchObject({ risk: 'high', scope: 'full', required: true, flows: allFlows });
 });
@@ -120,7 +125,7 @@ const write = (path: string, value: string) => {
 const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env, encoding: 'utf8' }).trim();
 const commit = () => { git('add', '.'); git('commit', '-qm', 'fixture'); return git('rev-parse', 'HEAD'); };
 function fixture() {
-  for (const path of ['scripts/verify/impact-plan.mjs', 'scripts/verify/risk-tiers.yml', 'scripts/review/tier.mjs',
+  for (const path of ['scripts/verify/impact-plan.mjs', 'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh', 'scripts/sim/ci.mjs',
     ...allFlows.map(name => `apps/mobile/e2e/flows/${name}.yaml`)]) {
     mkdirSync(dirname(join(directory, path)), { recursive: true }); copyFileSync(join(root, path), join(directory, path));
   }
@@ -150,8 +155,18 @@ test('actual classify CLI prints its reason, exports selection, and consumes the
   expect(readFileSync(output, 'utf8')).toContain(`sim_flows=${JSON.stringify(allFlows)}\n`);
 });
 
-test('a missing review classifier or flow mapping fails conservatively to the full set', () => {
-  fixture(); rmSync(join(directory, 'scripts/review/tier.mjs'));
+test.each(['scripts/route-reviewers.sh', 'scripts/verify/risk-tiers.yml'])(
+  'a missing supported routing input %s fails conservatively to the full set', path => {
+  fixture(); rmSync(join(directory, path));
+  expect(select(['apps/mobile/lib/menuFilters.ts'], { cwd: directory })).toMatchObject({ scope: 'full', risk: 'high' });
+});
+
+test.each([
+  { path: 'scripts/route-reviewers.sh', contents: 'echo invalid\n' },
+  { path: 'scripts/route-reviewers.sh', contents: 'echo \'["unknown-role"]\'\n' },
+  { path: 'scripts/verify/risk-tiers.yml', contents: 'tiers:\n  high: []\n' },
+])('malformed policy input $path cannot narrow simulator coverage', ({ path, contents }) => {
+  fixture(); write(path, contents);
   expect(select(['apps/mobile/lib/menuFilters.ts'], { cwd: directory })).toMatchObject({ scope: 'full', risk: 'high' });
 });
 
@@ -220,6 +235,77 @@ test('label additions and removals rerun classification, and the final Verify jo
   expect(workflow.on.pull_request.types).toEqual(expect.arrayContaining(['opened', 'synchronize', 'reopened', 'labeled', 'unlabeled']));
   const original = execFileSync('git', ['show', 'HEAD:.github/workflows/verify.yml'], { cwd: root, env, encoding: 'utf8' });
   expect(workflowText.split('\n  verify:\n')[1]).toBe(original.split('\n  verify:\n')[1]);
+  const main = execFileSync('git', ['show', 'origin/main:.github/workflows/verify.yml'], { cwd: root, env, encoding: 'utf8' });
+  expect(workflowText.split('\n  verify:\n')[1]).toBe(main.split('\n  verify:\n')[1]);
+});
+
+const screen = (copy = 'Your goal', margin = 8, action = 'setGoal("performance")') =>
+  `import { StyleSheet, Text, Pressable } from 'react-native';\n` +
+  `export default function Screen() { return <Pressable onPress={() => ${action}}><Text>${copy}</Text></Pressable>; }\n` +
+  `const styles = StyleSheet.create({ title: { margin: ${margin}, color: 'red' } });\n`;
+
+test.each([
+  { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 12), mode: 'render', scope: 'affected', flow: 'onboarding-assisted-targets' },
+  { path: 'apps/mobile/app/notification-settings.tsx', after: screen('Notifications'), mode: 'render', scope: 'affected', flow: 'reminders' },
+  { path: 'apps/mobile/app/notification-settings.styles.ts', after: screen('Your goal', 12), mode: 'render', scope: 'affected', flow: 'reminders' },
+  { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'router.push("/welcome/tried")'), mode: 'e2e', scope: 'affected' },
+  { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'setGoal("lose_fat")'), mode: 'e2e', scope: 'affected' },
+  { path: 'apps/mobile/components/ContinueButton.tsx', after: screen('Continue'), mode: 'e2e', scope: 'full' },
+  { path: 'apps/mobile/app/_layout.tsx', after: screen('Fitsy'), mode: 'e2e', scope: 'full' },
+  { path: 'apps/mobile/app/auth/login.tsx', after: screen('Sign in'), mode: 'e2e', scope: 'full' },
+  { path: 'apps/mobile/app/welcome/payment.tsx', after: screen('Subscribe'), mode: 'e2e', scope: 'full' },
+  { path: 'apps/web/app/page.tsx', after: screen('Welcome'), mode: 'e2e', scope: 'full' },
+])('actual UI diff selects $scope $mode coverage for $path', entry => {
+  fixture(); write(entry.path, screen()); const base = commit();
+  write(entry.path, entry.after); const head = commit();
+  write('.evidence/github-output', '');
+  const result = spawnSync(process.execPath, ['scripts/verify/impact-plan.mjs', '--github-output'], {
+    cwd: directory, env: { ...env, CI: 'true', FITSY_DIFF_BASE: base, FITSY_DIFF_HEAD: head,
+      GITHUB_OUTPUT: join(directory, '.evidence/github-output') }, encoding: 'utf8',
+  });
+  expect({ status: result.status, error: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, error: '' });
+  const plan = JSON.parse(result.stdout);
+  expect(plan).toMatchObject({ build: true, simulator: { required: true, scope: entry.scope, mode: entry.mode } });
+  expect(result.stderr).toContain(`mode: ${entry.mode}`);
+  const outputs = readFileSync(join(directory, '.evidence/github-output'), 'utf8');
+  expect(outputs).toContain(`sim_mode=${entry.mode}\n`);
+  expect(outputs).toContain(`sim_smoke=${JSON.stringify(plan.simulator.smoke)}\n`);
+  if (entry.flow) {
+    expect(plan.simulator.flows).toEqual([entry.flow]);
+    expect(plan.simulator.smoke).toMatchObject([{ screen: entry.path, flow: entry.flow }]);
+  } else expect(plan.simulator.smoke).toEqual([]);
+  const execute = spawnSync(process.execPath, ['scripts/sim/ci.mjs', '--plan'], {
+    cwd: directory, env: { ...env, CI: 'true', FITSY_DIFF_BASE: base, FITSY_DIFF_HEAD: head,
+      FITSY_CI_SIM_SCOPE: plan.simulator.scope, FITSY_CI_SIM_MODE: plan.simulator.mode,
+      FITSY_CI_SIM_FLOWS: JSON.stringify(plan.simulator.flows), FITSY_CI_SIM_SMOKE: JSON.stringify(plan.simulator.smoke) }, encoding: 'utf8',
+  });
+  expect(execute.status).toBe(0);
+  expect(JSON.parse(execute.stdout)).toEqual(plan.simulator);
+});
+
+test.each([
+  { before: screen(), after: screen('Copy changed'), expected: true },
+  { before: screen(), after: screen('Your goal', 10), expected: true },
+  { before: screen(), after: screen('Your goal', 8, 'submitForm()'), expected: false },
+  { before: '<Text>{value}</Text>', after: '<Text>{other}</Text>', expected: false },
+  { before: '<Text testID="first">Copy</Text>', after: '<Text testID="second">Copy</Text>', expected: false },
+  { before: '<Text>Copy</Text>', after: '<Text>{dangerous()}</Text>', expected: false },
+  { before: 'const payload = "<Text>Copy</Text>";', after: 'const payload = "<Text>Changed</Text>";', expected: false },
+  { before: 'const pattern = /<Text>Copy<\\/Text>/;', after: 'const pattern = /<Text>Changed<\\/Text>/;', expected: false },
+  { before: "const s = StyleSheet.create({ value: route({ path: '/first' }) });", after: "const s = StyleSheet.create({ value: route({ path: '/second' }) });", expected: false },
+  { before: '', after: screen(), expected: false },
+])('presentation narrowing requires literal-only changes: %j', entry => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {presentationOnly} from ${JSON.stringify(modulePath)};
+     process.stdout.write(JSON.stringify(presentationOnly(${JSON.stringify(entry.before)}, ${JSON.stringify(entry.after)})));`], { env, encoding: 'utf8' });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toBe(entry.expected);
+});
+
+test('pre-push remains main\'s cheap gate and never runs simulator smoke', () => {
+  const hook = readFileSync(join(root, '.githooks/pre-push'), 'utf8');
+  expect(hook).toBe(execFileSync('git', ['show', 'origin/main:.githooks/pre-push'], { cwd: root, env, encoding: 'utf8' }));
+  expect(hook).not.toMatch(/mobile-e2e|sim\/ci|sim-plan/);
 });
 
 test.each([false, true])('registry caller skips low scope and fails required misconfigured execution (required=%s)', required => {

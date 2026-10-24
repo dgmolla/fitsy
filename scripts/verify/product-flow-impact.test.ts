@@ -26,6 +26,30 @@ test.each([
   expect(JSON.parse(result.stdout)).toMatchObject({ required, categories });
 });
 
+test('the canonical CLI selects billing, reminder and onboarding acceptance for a shared trial policy change', () => {
+  mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
+  copyFileSync(modulePath, join(directory, 'scripts/verify/product-flow.mjs'));
+  symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
+  writeFileSync(join(directory, '.gitignore'), 'node_modules\n');
+  const policy = 'packages/shared/src/contracts/trialPolicy.ts';
+  mkdirSync(dirname(join(directory, policy)), { recursive: true });
+  writeFileSync(join(directory, policy), 'export const reminderLeadHours = 30;\n');
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env: env(), encoding: 'utf8' }).trim();
+  git('init', '-q');
+  git('config', 'user.name', 'CLI fixture');
+  git('config', 'user.email', 'fixture@example.test');
+  git('config', 'core.hooksPath', '/dev/null');
+  git('add', '.'); git('commit', '-qm', 'base');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  writeFileSync(join(directory, policy), 'export const reminderLeadHours = 48;\n');
+  const plan = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
+    { cwd: directory, env: env(), encoding: 'utf8' });
+  expect(plan.status).toBe(0);
+  expect(JSON.parse(plan.stdout)).toMatchObject({ required: true, paths: [policy],
+    categories: ['billing', 'discovery', 'notifications', 'onboarding'],
+    baseline: ['cold-start-welcome', 'signin-options'] });
+});
+
 test('actual product-flow CLI returns N/A for health-only diff and requires proof for mixed API diff', () => {
   mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
   copyFileSync(modulePath, join(directory, 'scripts/verify/product-flow.mjs'));

@@ -1,22 +1,9 @@
 /**
- * The app's single entitlement verdict: `entitled` and the one function that
- * asks the server for it, stores it, and caches it.
- *
- * Why the server decides: every subscription incident so far came from two
- * sources of truth disagreeing (the phone's CustomerInfo gated screens while
- * the API gated data from a webhook-fed row). Screens gate on `entitled`;
- * the phone's RevenueCat state only triggers a sync, with exactly two
- * exception where it counts as a verdict: a confirmed store purchase/restore
- * (`markStoreConfirmed`). An account-bound fresh cache can bridge boot offline.
- *
- * `entitled === null` means "not settled on this launch" and is the hold
- * signal for every gate. It is set exactly once per resolution (boot, sign-in,
- * sign-out), never hydrated early from the cache: the cache only takes part
- * in the final fold, so a stale cached verdict can never gate a screen before
- * the server has had its chance to overrule it.
- *
- * Composed by PurchasesProvider (usePurchases.tsx), which owns the RevenueCat
- * side and hands this hook the CustomerInfo ref it needs for the device hint.
+ * One account-bound server verdict gates the app; RevenueCat on the phone
+ * triggers sync and only a confirmed store purchase/restore grants brief grace.
+ * A null entitlement holds gates while the server settles, with a fresh cache
+ * used only as a bounded offline fallback. PurchasesProvider supplies the
+ * device CustomerInfo hint.
  */
 import { useCallback, useRef, useState, type MutableRefObject } from 'react';
 import type { EntitlementVerdict } from './entitlementVerdictTypes';
@@ -45,10 +32,6 @@ import { trackEntitlementMismatch, trackEntitlementSyncFailed } from './analytic
 // who just paid. The API's data gate still protects paid rows meanwhile, and
 // the webhook corrects the server row well inside the window.
 export const STORE_GRACE_MS = 60_000;
-
-// Each boot/sign-in prerequisite uses this cap so a stalled read cannot hold
-// every gate indefinitely. A fresh account-bound cache can bridge an offline
-// boot; otherwise the gate holds unknown until a server answer applies.
 
 export type { EntitlementVerdict } from './entitlementVerdictTypes';
 
@@ -82,20 +65,15 @@ export function useEntitlementVerdict({
   // A native update or purchase may settle while boot is still reading the
   // older account verdict. Boot must not replace that newer result.
   const verdictGenerationRef = useRef(0);
-  // Counts sign-ins, so a sign-out can tell whether one overtook it without
-  // asking auth-js (see settleAfterSignOut).
+  // Sign-out must not overtake a newer sign-in or call auth-js reentrantly.
   const signInEpochRef = useRef(0);
   const signOutEpochRef = useRef(0);
   const inStoreGrace = useCallback(() => Date.now() - storeConfirmedAtRef.current < STORE_GRACE_MS, []);
 
   /** Server round trip only: no state. Null = couldn't ask, or the session moved on. */
   const fetchVerdict = useCallback(async (reason: EntitlementSyncReason, userId: string) => {
-    // Inside the grace window every re-read goes over the wire as 'purchase':
-    // the server's never-downgrade path. A 'mismatch' sync fires at 0 ms
-    // right after a purchase, and with a lagging RevenueCat read the server
-    // would otherwise persist "expired" with a fresh lastEventAt onto an
-    // existing row and mark the real INITIAL_PURCHASE webhook stale. The
-    // caller's reason still tags the client-side analytics below.
+    // During store grace, use the server's never-downgrade path so a lagging
+    // read cannot persist expired and supersede the real purchase webhook.
     const wireReason = reason !== 'boot' && inStoreGrace() ? 'purchase' : reason;
     const result = await fetchServerEntitlement(wireReason);
     if (result === null) {
@@ -209,6 +187,35 @@ export function useEntitlementVerdict({
     return settled === null || classificationRef.current === 'loading' ? 'unknown' : classificationRef.current;
   }, [syncEntitlement]);
 
+  const syncRestoredHistory = useCallback(async (userId: string): Promise<SubscriptionVerdict | null> => {
+    const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    if (data.session?.user.id !== userId) return null;
+    const generation = verdictGenerationRef.current;
+    const result = await fetchVerdict('restore_history', userId);
+    const current = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    if (current.data.session?.user.id !== userId) return null;
+    if (verdictGenerationRef.current !== generation) {
+      const latest = classificationRef.current;
+      return latest === 'active' || latest === 'expired' ? latest : null;
+    }
+    const verifiedAt = result?.lastRcVerifiedAt ? Date.parse(result.lastRcVerifiedAt) : NaN;
+    if (!result?.synced || result.stale || !Number.isFinite(verifiedAt) ||
+        Date.now() - verifiedAt > CACHE_MAX_AGE_MS || verifiedAt > Date.now() + 60_000 ||
+        (result.verdict !== 'active' && result.verdict !== 'expired')) {
+      // A prior DB proof cannot confirm this receipt transfer. Hold/retry
+      // without erasing known history or overriding a newer store purchase.
+      if (!inStoreGrace()) {
+        verdictGenerationRef.current += 1;
+        if (classificationRef.current === 'never_subscribed') void clearCachedEntitlement();
+        setClassification('unknown');
+        setEntitled(null);
+      }
+      return null;
+    }
+    applyVerdict('restore_history', result, userId);
+    return result.verdict;
+  }, [fetchVerdict, applyVerdict, inStoreGrace, setClassification, setEntitled]);
+
   const { resolveAtBoot, settleAfterBootFailure } = useBootEntitlement({
     verdictGenerationRef, customerInfoRef, fetchVerdict, applyVerdict, setEntitled, setClassification, rememberActivePeriod,
   });
@@ -226,7 +233,7 @@ export function useEntitlementVerdict({
       if (epoch !== signInEpochRef.current) return;
       const server = await withinMs(syncEntitlement('sign_in'), BOOT_VERDICT_CAP_MS);
       if (epoch !== signInEpochRef.current) return;
-      // Same fallback rule as boot; the still-running sync applies the late answer.
+      // The still-running sync applies its late answer, as at boot.
       if (server === null && classificationRef.current === 'loading') {
         setClassification('unknown');
         setEntitled(null);
@@ -288,6 +295,7 @@ export function useEntitlementVerdict({
     entitledRef,
     inStoreGrace,
     syncEntitlement,
+    syncRestoredHistory,
     syncForPaywall,
     resolveAtBoot,
     settleAfterBootFailure,

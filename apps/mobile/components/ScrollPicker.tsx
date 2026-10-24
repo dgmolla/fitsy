@@ -106,6 +106,7 @@ export function ScrollPicker({
 
       <ScrollView
         ref={scrollRef}
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         snapToInterval={itemHeight}
         decelerationRate={0.985}
@@ -158,8 +159,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    zIndex: 1,
     pointerEvents: 'none',
+  },
+  scrollView: {
+    zIndex: 1,
   },
   itemText: {
     fontFamily: FONTS.nunitoSans,

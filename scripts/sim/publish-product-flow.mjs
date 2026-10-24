@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { root, inputHash, impact, changedPaths, validate, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts } from './publication-artifacts.mjs';
-import { assertShippingSession } from '../verify/shipping-session.mjs';
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 16 * 1024 * 1024, ...opts })?.trim() || '';
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 async function fileDigest(file) {
@@ -82,7 +81,6 @@ export async function publishProductFlow(prNumber, {
   if (process.env.FITSY_PRODUCT_ROOT) {
     // A live externally admitted frozen comparison may use newer trusted
     // controls. Do not mutate its comparison ref or its source-bound receipts.
-    await assertShippingSession(root);
     const controls = resolve(fileURLToPath(new URL('../..', import.meta.url)));
     const trusted = run('git', ['rev-parse', 'HEAD'], { cwd: controls });
     assert(trusted === run('git', ['rev-parse', 'origin/main'], { cwd: controls }), 'Publisher controls must be exact main');

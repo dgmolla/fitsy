@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { TRIAL_CATALOG_POLICY } from '../../../packages/shared/src/contracts/trialPolicy';
 import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, type PlannedReminder, type ReminderPreferences } from './notificationPlan';
 
 export const REMINDER_CHANNEL = 'fitsy-meal-and-trial-reminders';
@@ -61,7 +62,7 @@ export function replaceReminders(userId: string | null | undefined, reminders: P
       const keepTrial = retainAllowed && request.content.data?.userId === userId && request.content.data?.kind === 'trial' &&
         Number.isFinite(scheduledAt) && scheduledAt > Date.now() &&
         (retainCurrentTrial || (retainExpiry !== null && request.identifier === `${REMINDER_PREFIX}trial.${retainExpiry}` &&
-          scheduledAt <= retainExpiry - 24 * 3_600_000));
+          scheduledAt <= retainExpiry - TRIAL_CATALOG_POLICY.cancellationLeadHours * 3_600_000));
       if (!keepTrial) await Notifications.cancelScheduledNotificationAsync(request.identifier);
     }
     const shown = await Notifications.getPresentedNotificationsAsync();

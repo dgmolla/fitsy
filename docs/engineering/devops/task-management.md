@@ -54,14 +54,15 @@ Do not interrupt an active command or create a second owner to deliver steering.
 Before transfer, persist current source, evidence, running operations, blockers and next action, confirm the prior owner stopped or released ownership, then record the successor.
 An issue assignment alone is not an atomic process lock; use the existing supported claim controls for runtime exclusion.
 Ordinary `local-dispatcher.py tick` admission refuses new work with `selected-brief-required` unless the selected coordinator supplies its in-process brief renderer.
-Disabled-config ticks still reconcile existing claims and the sole publisher.
+Disabled-config ticks still reconcile existing claims.
 Claims, resource protections, lifecycle reconciliation and verified terminal receipts remain executable contracts.
 If ownership cannot be established, reconcile it before launching another worker.
 
 For Codex-led work, one coordinator claims the issue and assigns one Sol implementation owner by default.
 Add agents only for bounded independent tasks with explicit file ownership; another lane's blocker does not hold unrelated work.
 Freeze and commit the candidate, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, then complete one independent canonical review before full suites and affected E2E acceptance.
-Repair findings and revalidate cheap checks and review before full acceptance; revalidate matching canonical review evidence through live shipping admission and retain the original issue review budget.
+Repair findings and revalidate cheap checks and review before full acceptance.
+Keep independent review evidence matched to the current source and preserve historical review records needed by unfinished tasks.
 Use the review domains, UI signoff, release approvals and shipping gates in [shipping.md](shipping.md).
 Send a separate Slack alert headed `🚨 *BLOCKED*` only when live evidence establishes a concrete action that requires the human.
 Keep agent-owned review, required-gate, execution and dependency recovery on the issue and handoff without human mentions.
@@ -87,35 +88,22 @@ P2/P3 follow-ups retain the source-bound disposition and named acceptance from t
 
 ## Progress and elapsed time
 
-Before implementation in an owned worktree, bind the real issue with `node scripts/delivery/phase-events.mjs bind --issue N`.
-Start an observed implementation interval with `begin --phase implementation` and save its returned attempt ID in the task handoff.
-End that attempt with `end --attempt-id ID --status pass` before verification, or use `interrupted` when pausing.
-Start a new implementation attempt for later fixes; never stretch an old interval across testing or review.
-The verify runner, review runner, and product-flow CLI record their own attempts when an issue is bound.
-Product-flow `build`, `run`, `finish`, and `check` attempts remain distinct; a completed build is not completed E2E acceptance.
-Before opening the PR, begin a `shipping` attempt and end it only after applicable main Verify, Deploy, and acceptance receipts are confirmed.
-Use `node scripts/delivery/phase-events.mjs publish` at material transitions and at least hourly while active; it reconciles bounded issue comments for each logical run.
-Long runs use stable transport shards without splitting worker identity or dropping attempts.
-Comment count is not worker count.
-Interrupted attempts retain their observed result; a hard-killed worker can leave an unfinished attempt whose duration remains unknown.
-If publication reports a retained lock, inspect its owner and confirm no publisher is active before removing only that lock; reconcile uncertain GitHub writes and never remove the pending-publication guard blindly.
-The pre-push hook requires a valid issue binding and attempts publication after its existing gates, but a GitHub outage leaves local timing evidence pending without bypassing those gates.
-The [half-hour delivery report](hourly-delivery-report.md) summarizes measured phase intervals and keeps missing evidence explicit.
+Use GitHub checks, PR state and deployment results for delivery status.
+Repository verification and push hooks do not collect or publish phase events.
+The repository no longer installs recurring dispatch, review or status-report jobs.
+The optional Slack bridge remains available for authorized notifications.
 
 Record actual UTC timestamps for request, ready, work start, PR opened, required gates ready, merged, deployed, and acceptance verified.
 Preserve unknown historical values rather than substituting commit times or reconstructing imaginary work starts.
 The execution owner sets the project's `Started at` to the observed ISO UTC time when work starts.
 At material progress or a blocker, update `Progress`, `Next action`, `Last progress at`, and the existing Blocker/Dependencies fields on that project item.
 Set `Verified at` only after acceptance and applicable main Verify, Deploy, and release receipts are linked; a merge or issue close is not verified delivery.
-The [half-hour delivery report](hourly-delivery-report.md) uses only valid timestamp pairs and counts missing values as unknown.
 Report request-to-verified-delivery separately from PR-open-to-merge, queue time, active execution, and blocked time.
 Do not sum overlapping reviewer/test durations and label the result wall time.
 Use request-to-verified delivery elapsed time and repeated review/repair/acceptance cycles to assess velocity; activity, log output and check counts alone do not prove delivery.
 Update the issue at material transitions, failures, ownership changes, and completion.
-For active work, publish a fresh checkpoint at the configured reporting interval; a missed checkpoint is a liveness signal, not permission to repeat stale progress.
-Use one configured reporting path with stable event identities and confirmed delivery receipts.
 Honor the task's communication authorization before sending external notifications.
-If reporting is unavailable, record the gap in the active handoff and report it through the current user conversation.
+If GitHub is unavailable, record the gap in the active handoff and report it through the current user conversation.
 
 ## Worker lifecycle
 
@@ -127,7 +115,7 @@ Reconcile workers on completion and on the supervisor's normal heartbeat.
 After recording completion, use FM's canonical teardown for the completed worker when no child work, owned running operation, pending delivery, or unrecorded evidence remains.
 Keep a completed worker only for a documented recovery need with an owner and expiry/recheck condition.
 Do not keep it idle indefinitely as a substitute for durable task state.
-Do not kill workers solely because of elapsed age outside an explicitly configured, issue-bound execution budget, and do not restart them to evade review budgets or erase failed attempts.
+Do not kill workers solely because of elapsed age outside an explicitly configured, issue-bound execution budget, and do not restart them to evade the AI review attempt limit or erase failed attempts.
 The local dispatcher enforces a 90-minute active claim budget, records a timeout, reconciles its owned process group, and parks the issue without resetting source-bound evidence or review history.
 Worker retirement and worktree deletion are separate operations: preserve unmerged changes, source-bound evidence, review history, and release/rollback receipts.
 Release simulator, Metro, database and other resource claims only through their ownership-aware procedures.
@@ -143,15 +131,11 @@ During an outage, preserve a bounded pending-update log keyed by issue and event
 Continue already-owned authorized work when safe; do not dispatch duplicate work or claim unsynchronized statuses were delivered.
 Replay and reconcile the pending updates after recovery, retaining their original observed timestamps.
 
-### Persistent reviewers and timing coverage
+### Review follow-up
 
 Every PR body includes exactly one `Delivery-Issue: #N` line within its first 4,000 characters, naming the authoritative outcome issue.
-PR-mode review runners isolate their timing binding by PR under `.evidence/review-delivery/` and publish on closeout.
-Missing, ambiguous or conflicting issue metadata creates an explicit timing gap and never borrows another task's binding.
-The poller publishes again after its selected lenses finish to reconcile their combined evidence.
-GitHub reporting outages retain local events and do not convert a failed review into a passing gate or block a passing review.
-Historical accepted observations count as tracked coverage; stale checkpoints remain a separate liveness signal even when their phases are outside the 24-hour duration window.
+The installed review caller publishes the existing `AI review` status for the exact candidate after its required lenses finish.
 
-At each review round closeout, record confirmed findings, impact priority, and either the detector plus prevention change or an owned follow-up under the review disposition contract.
+At each review round closeout, record confirmed findings, impact priority, and either the detector plus prevention change or an owned follow-up in the authoritative outcome issue.
 If no new hardening is warranted, state that explicitly instead of manufacturing a change.
-Publish shipped improvements using the [hourly report evidence contract](hourly-delivery-report.md#local-phases-and-review-hardening); queued fixes do not count as shipped improvements.
+Link merged fixes and successful checks or deployment results on the issue; queued fixes do not count as shipped improvements.

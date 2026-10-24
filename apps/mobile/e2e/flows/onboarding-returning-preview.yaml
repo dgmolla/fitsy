@@ -131,6 +131,43 @@ tags: [billing, discovery, onboarding, auth, changed-journey]
     timeout: 15000
 - assertNotVisible:
     id: preview-guide
+# This disposable simulator must have no signed-in Apple account. Exercise
+# native dismissal or the captured authorization error before any dev login.
+# This proves routing recovery, not successful Apple authentication.
+- extendedWaitUntil:
+    visible:
+      id: signup-selected-restaurant
+    timeout: 15000
+- copyTextFrom:
+    id: signup-selected-restaurant-name
+- evalScript: ${output.selectedRestaurant = maestro.copiedText}
+- tapOn:
+    id: signup-apple
+- extendedWaitUntil:
+    visible: "^(Sign In Failed|Cancel)$"
+    timeout: 15000
+- takeScreenshot: no-trial-native-apple-result
+- runFlow:
+    when:
+      visible: "^Cancel$"
+    commands:
+      - tapOn: "^Cancel$"
+- runFlow:
+    when:
+      visible: "Sign In Failed"
+    commands:
+      - tapOn: "OK"
+- extendedWaitUntil:
+    visible:
+      id: signup-apple
+      enabled: true
+    timeout: 15000
+- copyTextFrom:
+    id: signup-selected-restaurant-name
+- assertTrue: ${maestro.copiedText === output.selectedRestaurant}
+- assertNotVisible:
+    id: paywall-logo
+- assertNotVisible: "Test Store Purchase"
 # The locked choice survives interruption at sign-in, without a paywall flash.
 - stopApp
 - launchApp

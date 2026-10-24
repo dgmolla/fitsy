@@ -1,14 +1,15 @@
 # Pre-Launch Action Items â App Store
 
-> **Status:** Active tracker
+> **Status:** Historical June launch audit; not the current release checklist
 > **Created:** 2026-06-07
 > **Owner:** Product Manager (coordination); per-item owners tagged below
 > **Related:** `docs/product/archive/launch-plan.md`, `docs/product/app-store-listing.md`, `docs/product/archive/app-store-listing-spec.md`
 
-Single checklist of everything still required before Fitsy can ship to the
-App Store. Derived from the launch-readiness audit. Items are tagged with the
-owning domain (`#backend`, `#frontend`, `#product`, `#design`, `#cto`,
-`#infra`, `#human`) â cross-domain work must be split per CLAUDE.md.
+**TL;DR:** Use the [#444 review packet](../release/next-submission.md) for the next submission and its unresolved evidence.
+
+The June audit below retains historical observations, including obsolete setup, screenshot and reviewer-account assumptions.
+Do not use it to identify submitted Apple metadata or as instructions to build, upload or submit.
+The GitHub Fitsy Delivery board remains the sole task queue; [the iOS release runbook](../engineering/devops/ios-release-runbook.md) defines release boundaries.
 
 Legend: ð´ hard blocker Â· ð¡ needs attention Â· â done
 

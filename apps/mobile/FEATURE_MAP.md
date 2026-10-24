@@ -54,4 +54,5 @@ the disposable simulator keychain. See `docs/engineering/devops/shipping.md` for
 the blocking evidence procedure. A normal dev-client launcher is not this build.
 
 Use `npm run verify:sim-plan` to inspect CI's affected-screen flow selection and its reason.
+The plan also names render smoke checkpoints for proven screen-local copy/style edits; shared UI and app shell changes require the full suite.
 The existing Build job executes selected flows on macOS; this remains separate from local final-candidate evidence.

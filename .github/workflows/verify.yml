@@ -32,6 +32,8 @@ jobs:
       docs_only: ${{ steps.t.outputs.docs_only }}
       simulator: ${{ steps.t.outputs.simulator }}
       sim_scope: ${{ steps.t.outputs.sim_scope }}
+      sim_mode: ${{ steps.t.outputs.sim_mode }}
+      sim_smoke: ${{ steps.t.outputs.sim_smoke }}
       sim_flows: ${{ steps.t.outputs.sim_flows }}
     steps:
       - uses: actions/checkout@v4
@@ -194,6 +196,8 @@ jobs:
         if: needs.classify.outputs.simulator == 'true'
         env:
           FITSY_CI_SIM_SCOPE: ${{ needs.classify.outputs.sim_scope }}
+          FITSY_CI_SIM_MODE: ${{ needs.classify.outputs.sim_mode }}
+          FITSY_CI_SIM_SMOKE: ${{ needs.classify.outputs.sim_smoke }}
           FITSY_CI_SIM_FLOWS: ${{ needs.classify.outputs.sim_flows }}
           EXPO_PUBLIC_API_URL: https://dev.fitsy.org
           EXPO_PUBLIC_SUPABASE_URL: ${{ vars.FITSY_SIM_SUPABASE_URL }}

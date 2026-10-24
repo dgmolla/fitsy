@@ -43,6 +43,49 @@ test('hosted caller rejects a drifted classification before starting native reso
   expect(JSON.parse(result.stdout)).toMatchObject({ status: 'fail', summary: expect.stringContaining('drifted from CI classification') });
 });
 
+test.each([
+  { FITSY_CI_SIM_MODE: 'render' },
+  { FITSY_CI_SIM_SMOKE: '[{"flow":"reminders"}]' },
+])('hosted caller rejects drifted UI smoke mode or checkpoints: %j', extra => {
+  const result = spawnSync(process.execPath, [modulePath, '--scope=all'], {
+    env: { ...process.env, FITSY_CI_SIM_SCOPE: '', FITSY_CI_SIM_FLOWS: '', FITSY_CI_SIM_MODE: '', FITSY_CI_SIM_SMOKE: '', ...extra }, encoding: 'utf8',
+  });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ status: 'fail', summary: expect.stringContaining('drifted from CI classification') });
+});
+
+test('every render smoke uses real journey setup, asserts its affected screen and saves a screenshot', () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import { readFileSync } from 'node:fs';
+    import { createRequire } from 'node:module';
+    import { renderSmoke } from ${JSON.stringify(modulePath)};
+    import { renderCheckpoints, repository } from ${JSON.stringify(resolve(__dirname, '../verify/impact-plan.mjs'))};
+    const yaml = createRequire(import.meta.url)('js-yaml');
+    const cases = renderCheckpoints.map(([, flow, selector]) => {
+      const source = yaml.loadAll(readFileSync(repository + '/apps/mobile/e2e/flows/' + flow + '.yaml', 'utf8'));
+      const smoke = renderSmoke(source, selector);
+      return { flow, selector, sourceLength: source[1].length, header: smoke[0], commands: smoke[1] };
+    });
+    process.stdout.write(JSON.stringify(cases));`], { encoding: 'utf8' });
+  expect(result.status).toBe(0);
+  const cases = JSON.parse(result.stdout) as { flow: string; selector: object | string; sourceLength: number; header: object; commands: unknown[] }[];
+  expect(cases.length).toBeGreaterThan(0);
+  for (const entry of cases) {
+    expect(entry.header).toMatchObject({ appId: 'com.fitsy.mobile' });
+    expect(entry.commands.some(command => typeof command === 'object' && command !== null && 'launchApp' in command)).toBe(true);
+    expect(entry.commands.slice(-3)).toEqual(['waitForAnimationToEnd', { assertVisible: entry.selector }, { takeScreenshot: 'render' }]);
+    expect(entry.commands.length - 3).toBeLessThan(entry.sourceLength);
+  }
+});
+
+test('missing render checkpoint fails before launching a native device', () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {renderSmoke} from ${JSON.stringify(modulePath)};
+     renderSmoke([{appId:'com.fitsy.mobile'}, [{launchApp: {}}]], {id:'missing-screen'});`], { encoding: 'utf8' });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('Render smoke checkpoint is missing');
+});
+
 test('hosted execution cannot overwrite a local native session', () => {
   const result = spawnSync(process.execPath, [modulePath, '--scope=all'], {
     env: { ...process.env, GITHUB_ACTIONS: 'false', FITSY_CI_SIM_SCOPE: '', FITSY_CI_SIM_FLOWS: '' }, encoding: 'utf8',

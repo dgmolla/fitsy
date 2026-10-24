@@ -37,7 +37,6 @@ CONTROL_AREAS = ('scripts/review/', 'scripts/verify/', 'scripts/delivery/',
                  'scripts/deploy/native-compatibility.test.ts',
                  'docs/engineering/devops/', '.githooks/', 'AGENTS.md',
                  'scripts/sim/product-flow.mjs', 'scripts/sim/publish-product-flow.mjs',
-                 'scripts/sim/runner-controls.test.mjs',
                  '.github/workflows/deploy.yml', '.github/workflows/eas-build.yml',
                  '.github/workflows/dev-maintenance.yml', 'vercel.json')
 
@@ -559,6 +558,8 @@ def acceptance(body):
 
 def review_validator(name, expected, uid):
     """Execute only verified installed bytes, never a candidate-selected import."""
+    # These validators live beside INSTALL in operator custody; they are not
+    # imports of the retired helpers removed from this repository.
     require(name in ('review-round', 'review-gate'), 'unknown review validator')
     path = INSTALL.with_name(name + '.py')
     raw = protected_bytes(path, uid)
@@ -806,7 +807,7 @@ def validate_acceptance(receipt, policy, source):
                 'media acceptance source/input mismatch')
         command = ('FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- '
                    '--runInBand --runTestsByPath verify/product-flow.test.ts '
-                   'sim/xctest-attachments.test.ts sim/runner-controls.test.ts')
+                   'sim/xctest-attachments.test.ts')
         require(receipt.get('command') == command and receipt.get('result') == 'pass'
                 and type(receipt.get('exit_code')) is int and receipt['exit_code'] == 0,
                 'media acceptance recipe/result mismatch')
@@ -902,13 +903,9 @@ def validate_verify_jobs(config, run, source, names=VERIFY_JOBS):
         matches = [job for job in jobs['jobs'] if job['name'] == name]
         require(len(matches) == 1, 'required Verify job missing or ambiguous')
         job = matches[0]
-        # The approved workflow selects macOS only for Build's simulator lane.
-        # Workflow bytes, source, issuer, suite and successful execution stay bound.
-        standard_runner = job['labels'] == ['ubuntu-latest'] or (
-            name == 'Build (L3)' and job['labels'] == ['macos-15'])
         require(job['run_id'] == verify_id and job['run_attempt'] == run['run_attempt']
                 and job['head_sha'] == source and job['status'] == 'completed'
-                and job['conclusion'] == 'success' and standard_runner
+                and job['conclusion'] == 'success' and job['labels'] == ['ubuntu-latest']
                 and job['check_run_url'] == f'https://api.github.com/{endpoint}/check-runs/{job["id"]}',
                 'required Verify job failed, skipped or mismatched')
         check = github(config, f'{endpoint}/check-runs/{job["id"]}')

@@ -1,4 +1,4 @@
-import { fixtureProcess, signalFixtureProcess, startLockFixture, type FixtureProcess } from './lock-fixture-process';
+import { fixtureProcess, signalFixtureProcess } from './lock-fixture-process';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -48,12 +48,7 @@ function scenario(name: string) {
       spawned.push({ args, env: opts.env, resetBeforeSpawn: calls.some(call => call[0] === 'exec' && call.includes('psql')) });
       return { status: mode === 'migration_failure' && args[1] === 'migrate' ? 1 : 0 };
     }, disk: () => ({ bavail: mode === 'low_disk' ? 1 : 3 * 1024 ** 3, bsize: 1 }),
-    // This owned-container unit seam models runtime; combined Python cases exercise real canonical context.
-    runtimeContext: () => ({ identity: { fixture: true }, container: { id: 'owned-container-id', image_id: 'sha256:image' } }),
-    runtimeCheck: () => {}, assertLock: () => {}, env: { ...(mode === 'forged_phase' ? { FITSY_VERIFY_DB_PHASE: '1',
-      FITSY_VERIFY_DB_LOCKED: '1', FITSY_VERIFY_OWNED_DB: 'owned-container-id',
-      FITSY_VERIFY_DB_IMAGE: 'sha256:image', FITSY_VERIFY_DB_HOST: loopback,
-      FITSY_SHIPPING_SOCKET: '/unowned/session.sock', FITSY_SHIPPING_TOKEN: 'plausible-complete-token' } : {}),
+    assertLock: () => {}, env: {
       ...(mode.startsWith('stop_bound_') ? { FITSY_VERIFY_OWNED_DB: 'owned-container-id',
         FITSY_VERIFY_DB_IMAGE: mode === 'stop_bound_partial' ? '' : 'sha256:image' } : {}),
       POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
@@ -135,13 +130,6 @@ test('numeric DB suite host gate invokes the real owned assertion against inspec
     expect([current.dev, current.ino, current.uid]).toEqual([identity.dev, identity.ino, identity.uid]);
     rmSync(scratch, { recursive: true });
   }
-});
-
-test('complete forged phase metadata cannot reach a helper or Docker without the real inherited lock', () => {
-  const result = scenario('forged_phase');
-  expect(result.error).toMatch(/actual inherited lock descriptor/);
-  expect(result.calls).toHaveLength(0);
-  expect(result.spawned).toHaveLength(0);
 });
 
 test('forged numeric loopback metadata cannot pass the owned container assertion', () => {
@@ -244,45 +232,7 @@ test('lock fixture refuses unacquired and zero process cleanup without signaling
   } finally { kill.mockRestore(); }
 });
 
-test('concurrent CLI attempts cannot reset DB, even when a coordinator dies with a live child', async () => {
-  const root = mkdtempSync(resolve(tmpdir(), 'fitsy-db-flock-'));
-  const lockScript = resolve(__dirname, 'db-lock.py');
-  const marker = resolve(root, 'pids');
-  const { holder, contender } = startLockFixture(root, lockScript, marker);
-  let worker: FixtureProcess | undefined, child: FixtureProcess | undefined;
-  try {
-    for (let i = 0; i < 40 && !existsSync(marker); i++) await new Promise(resolve => setTimeout(resolve, 25));
-    expect(existsSync(marker)).toBe(true);
-    const pids = readFileSync(marker, 'utf8').split(' ');
-    const workerPid = Number(pids[0]), childPid = Number(pids[1]);
-    if (!holder.pid) throw new Error('lock fixture holder did not start');
-    worker = fixtureProcess(workerPid, holder.pid);
-    expect(worker).toBeDefined();
-    expect(worker?.pgid).toBe(workerPid);
-    child = fixtureProcess(childPid, workerPid);
-    expect(child).toBeDefined();
-    expect(contender().status).toBe(75);
-    holder.kill('SIGKILL');
-    expect(contender().status).toBe(75);
-    expect(signalFixtureProcess(worker, 'SIGKILL')).toBe(true);
-    expect(() => process.kill(childPid, 0)).not.toThrow();
-    expect(contender().status).toBe(75);
-    expect(signalFixtureProcess(child, 'SIGTERM')).toBe(true);
-    let result = contender();
-    for (let i = 0; i < 40 && result.status === 75; i++) {
-      spawnSync('sleep', ['0.05']);
-      result = contender();
-    }
-    expect(result.status).toBe(0);
-  } finally {
-    holder.kill('SIGTERM');
-    signalFixtureProcess(worker, 'SIGKILL', true);
-    signalFixtureProcess(child, 'SIGTERM');
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test('bound post-session stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {
+test('bound database stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {
   for (const mode of ['stop_bound_replaced', 'stop_bound_wrong_image', 'stop_bound_partial', 'stop_bound_unowned']) {
     const result = scenario(mode);
     expect(result.error).not.toBe('');
@@ -291,7 +241,7 @@ test('bound post-session stop rejects replacement, image drift, incomplete pins 
   }
 });
 
-test('bound post-session stop removes the genuine acquired immutable ID', () => {
+test('bound database stop removes the genuine acquired immutable ID', () => {
   const result = scenario('stop_bound_valid');
   expect(result.error).toBe('');
   expect(result.calls).toContainEqual(['rm', '-f', 'owned-container-id']);

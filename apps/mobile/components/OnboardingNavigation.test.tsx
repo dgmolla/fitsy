@@ -1,4 +1,8 @@
 import { mockState, selected, response, deferred, installEligibleTrialOffer, installPurchasedAccount, routes, renderJourney, Alert, AsyncStorage, ExpoNotifications, NotificationHelpers, act, fireEvent, waitFor, readReminderPreferences, getPaywallIntent, rememberPaywallIntent } from './OnboardingNavigationHarness';
+import { installAccountProfile } from './test-fixtures/accountProfile';
+import { getMacroTargets } from '../lib/macroStorage';
+import { recordOnboardingComplete } from '../lib/onboardingCompletion';
+import { replayPendingProfileSync } from '../lib/profileSync';
 import Payment from '../app/welcome/payment';
 
 it('asks an anonymous trial reminder opt-in to sign in before permission, then returns to the choice', async () => {
@@ -15,7 +19,7 @@ it('asks an anonymous trial reminder opt-in to sign in before permission, then r
   expect(await readReminderPreferences('buyer')).toEqual({ meals: false, trial: false });
   (global.fetch as jest.Mock).mockImplementation((url: string) => Promise.resolve(url.endsWith('/api/auth/login')
     ? response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: true })
-    : response({ active: false })));
+    : response(String(url).includes('/api/user/profile') ? { user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null }, macroTarget: null } : { active: false })));
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
   await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
@@ -137,4 +141,22 @@ it.each(['covered', 'empty', 'failure'])('ignores a %s area response after Back'
   await act(async () => { coverage.resolve(outcome === 'failure' ? { ...response({ error: 'Offline' }), ok: false } : response({ data: [], meta: { nearbyDishCount: outcome === 'covered' ? 1 : 0, radiusMiles: 3 } })); });
   expect(screen.getPathname()).toBe('/welcome/problem');
   expect(alert).not.toHaveBeenCalled();
+});
+it('hydrates a newer account target through selected-meal sign-in before completion can write it', async () => {
+  const userId = 'buyer';
+  await AsyncStorage.setItem(`@fitsy/macro_targets:${userId}`, JSON.stringify({
+    calories: '660', protein: '50', carbs: '70', fat: '20', _mode: 'complete', _owner: userId, _source: 'manual',
+  }));
+  await rememberPaywallIntent(selected);
+  const readTarget = installAccountProfile(userId, { calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' });
+  const screen = renderJourney('/welcome/signin?returnTo=payment');
+  await screen.findByTestId('signup-dev');
+  await act(async () => { fireEvent.press(screen.getByTestId('signup-dev')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/restaurant/varilla'));
+  expect(screen.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy();
+  expect(await getMacroTargets()).toEqual({ calories: '740', protein: '60', carbs: '80', fat: '20' });
+  expect(await getPaywallIntent()).toBeNull();
+  await recordOnboardingComplete(false);
+  await replayPendingProfileSync();
+  expect(readTarget()).toEqual({ calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' });
 });

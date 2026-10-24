@@ -8,11 +8,12 @@
 
 | Knob | Value | Enforced by |
 |---|---|---|
-| `merge-gate` | **advisory** (owner's deferral, 2026-09-07) | When flipped: GitHub ruleset on `main` - PR required, required checks = verify.yml jobs + `lens/correctness`, squash only, 0 required reviewers, admins included. Until then every check runs and reports, but direct pushes remain possible. |
-| `auto-merge` | manual (agents merge on green) | Becomes GitHub auto-merge-on-green when `merge-gate` flips. |
+| `merge-gate` | existing GitHub requirements | Preserve the final `Verify` job and `AI review` gate; local cleanup does not change repository settings. |
+| `auto-merge` | existing GitHub configuration | Follow the task's integration authorization and current required checks. |
 | `spec-requirement` | `feature` | `spec-conformance` lens runs when a PR body carries a `Spec:` line; a medium+ feature PR without one gets a CONFIRMED finding. Bug fixes reference their incident instead. |
-| `review` | every open PR, tiered | `com.fitsy.review-poller` LaunchAgent (every 3 min, Max subscription): correctness on medium/high tiers; + `danger-zone` on tier-high paths (`scripts/verify/risk-tiers.yml`); + `harness-audit` on the `incident` label; + `workflow-security` on CI/CD paths; + `test-quality` on test files; `docs-sanity` (comment-only) on tier-low. Statuses post as `lens/<name>`. |
+| `review` | one independent review per candidate | `scripts/review/simple-review.mjs` uses the retained router and severity rules; only CONFIRMED P0/P1 findings block. The installed local reviewer supplies `AI review`. |
 | `shadow-checks` | `own-code-mocks`, `mutation`, `dev-drift`, `api-e2e` | `blocking: shadow` in `scripts/verify/registry.yml`; promotion = a PR flipping the field after two clean weeks. |
+| `UI smoke` | required in CI for mobile/web UI | `impact-plan.mjs` selects render smoke for proven screen-local style/copy, affected E2E for behavior, and full coverage for shared UI/app shells; `mobile-e2e` fails Build without changing final Verify or pre-push semantics. |
 | `harden-on-incident` | required | `harness-audit` lens blocks incident-labeled PRs missing fix + detector + constraint + eval case + `Layer:` attribution. |
 | `size-gate` | 600 changed lines | `size-check` reports a review-size signal; scope is judged by coherent outcome and acceptance rather than a hard line cap. |
 | `mutation-break` | 50 (baseline 59.0%, 2026-09-07) | `stryker.config.mjs` `thresholds.break`; ratchet +5/month while green (rollout step 10). |
@@ -29,9 +30,9 @@ not here.
 
 | Situation | Change |
 |---|---|
-| Ready for no-human-merge | Flip `merge-gate`: create the ruleset, enable auto-merge, delete the review/merge steps from `.claude/agents/sprint.md` and `~/.claude/skills/ship-branch` (they conflict once the gate exists) |
+| Merge requirements need adjustment | Treat it as a separately authorized repository-settings change; tooling cleanup preserves existing gates. |
 | A shadow check has been quiet two weeks | PR the registry: `blocking: shadow` -> `true` |
-| A lens is noisy | Edit its `.claude/lenses/<name>.md`; `scripts/verify/evals/replay.sh` proves the edit kept recall on past incidents |
+| A lens is noisy | Edit its `.claude/lenses/<name>.md`, compare independent findings against captured incident examples, and run `node --test scripts/review/simple-review.test.mjs` |
 | Mutation score stuck | Surviving mutants in `.evidence/mutation/report.json` name the exact untested lines |
 | An agent needs prod data | It does not; `scripts/dev/` refuses prod, `FITSY_ALLOW_PROD=1` is the deliberate exception |
 
