@@ -42,6 +42,7 @@ if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   /usr/bin/env "${JEST_ENV[@]}" npm "${JEST_COMMAND[@]}" >&2 || FAIL="scripts"
 fi
 if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
+  node --test scripts/review/simple-review.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }simple-review"
   node --test scripts/delivery/*.test.mjs scripts/github/*.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }delivery/github"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-report.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-report"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-dispatcher.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-dispatcher"
