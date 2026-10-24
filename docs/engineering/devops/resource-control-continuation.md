@@ -113,20 +113,9 @@ Focused unprivileged checks:
 ```sh
 python3 -B scripts/delivery/resource-controls.test.py
 python3 -B scripts/review/external-approval.test.py ProfileCustodyTests
-python3 -B scripts/delivery/local-dispatcher.test.py ResourceRetentionTest
 ```
 
-The trusted coordinator needs a supported environment with real process inventory
-and disposable resource teardown for these affected process cases:
-
-```sh
-python3 -B scripts/delivery/local-dispatcher.test.py \
-  DispatcherProcessTest.test_success_and_failure_stop_unneeded_children_before_release \
-  DispatcherProcessTest.test_cancelled_launcher_settles_group_and_cannot_accept_late_success \
-  DispatcherProcessTest.test_cancel_during_acquisition_preserves_original_intent_without_new_worker \
-  DispatcherProcessTest.test_timeout_stops_surviving_worker_group_child
-python3 -B scripts/delivery/pressure-retention.test.py
-```
+The retired dispatcher process and cold-retention fixture suites are no longer part of repository verification.
 
 Run applicable canonical cheap checks against the frozen commit before any
 independent review. No additional reviewer allocation is authorized by the worker
