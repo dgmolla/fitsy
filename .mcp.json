@@ -1,10 +1,9 @@
 {
   "mcpServers": {
-    "mobile-mcp": {
-      "command": "npx",
+    "maestro": {
+      "command": "maestro",
       "args": [
-        "-y",
-        "@mobilenext/mobile-mcp@latest"
+        "mcp"
       ]
     },
     "slack": {

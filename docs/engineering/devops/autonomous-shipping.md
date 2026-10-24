@@ -287,19 +287,18 @@ It combines the retained reviewer ownership router and simulator path tiers with
 Navigation, auth, billing, native configuration, release candidates and unknown mobile impact select full coverage.
 All mobile/web UI changes trigger coverage: proven screen-local style/copy edits use render assertions and screenshots, behavior changes use affected E2E flows, and shared components or app shells use the full suite.
 Render smoke reuses maintained journey setup through its mapped screen checkpoint, and mixed or uncertain edits keep broader E2E coverage.
-This is a CI policy; the cheap pre-push hook does not run simulators.
+CI records selection in the `Sim scope` status and uploads `selection.json`; it never runs simulators or needs simulator secrets.
+Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
 The `needs-sim` label forces flows, and CI logs print the chosen scope and reason.
-The existing Build job runs on macOS when needed and propagates simulator failures through the unchanged final Verify aggregator.
-It checks configuration with `node scripts/sim/ci.mjs --scope=changed --preflight` before builds or native tool installation, using the same environment as execution and reporting every missing repository setting together.
+The existing Build job runs L3 on Ubuntu, and the final Verify aggregator is unchanged.
 The local source-bound acceptance gate remains required; see [shipping.md](shipping.md) for execution and configuration.
 
 Two complementary execution modes:
 
 1. **Deterministic flows (Maestro)**: the selected existing `apps/mobile/e2e/flows/*.yaml` run against dev services with a disposable Test Store account.
-   Hosted execution retains ordinary logs and screenshots, and missing tools or failed assertions fail Build.
-   Hosted billing fixtures use isolated empty and expired accounts; the explicit policy in `scripts/sim/hosted-journeys.mjs` retains Apple history-transfer Restore as separate required local acceptance.
-   The manually dispatched `.eas/workflows/mobile-e2e.yml` requires all documented starting states, including a compatible Apple store fixture, and cannot replace that separate Apple acceptance with Test Store evidence.
-2. **Agent-driven verification**: only for `affected_screens` without a Maestro flow, or when the PR body asks for it. A Sonnet agent uses the simulator CLI (below) and the feature map to drive the changed flow, saves screenshots and the Metro log excerpt to `.evidence/`, and writes a pass/fail JSON. This is the "verification skill" pattern from the talk.
+   The local runner retains logs and screenshots; missing tools or failed assertions fail the Simulator gate.
+   All billing flows retain their documented starting states, including separate Apple history-transfer acceptance.
+2. **Agent-driven verification**: only for `affected_screens` without a Maestro flow, or when the PR body asks for it. A Sonnet agent uses the simulator CLI (below) and the feature map to drive the changed flow, saves screenshots and the Metro log excerpt to `.evidence/`, and writes a pass/fail JSON. Use Maestro MCP for interactive diagnosis.
 
 | Tool | Status | Notes |
 |---|---|---|
@@ -307,13 +306,13 @@ Two complementary execution modes:
 | `apps/mobile/FEATURE_MAP.md` | **new** | screen-by-screen: route, entry, testIDs, what "correct" looks like, known flake. Maintained by a check: every screen under `apps/mobile/app/**` has an entry (T11). |
 | testIDs | **new convention** | every interactive element in a screen has `testID`; a lint rule on `Pressable`/`TouchableOpacity`/`TextInput` without `testID` |
 | Maestro flows | **new** | six flows to start; the Layer 10 loop adds one per escaped mobile defect |
-| EAS Workflows | **new** | `build` (profile `e2e-simulator`) then `maestro` job; this runs in EAS's cloud macOS, so it does not depend on Dawit's Mac. The local `sim` CLI is for the agent-driven mode and for local sessions. |
+| Local simulator gate | maintained | `scripts/sim/ci.mjs` runs the selected saved Maestro flows on the maintainer Mac; CI only records scope. |
 | agent-device (callstack) | evaluate | may replace the hand-rolled `sim` CLI; keep the CLI surface identical either way |
-| mobile-mcp | have | used by local sessions; the CI path uses the CLI so it runs without an MCP host |
+| Maestro MCP | installed CLI | `maestro mcp` exposes local device inspection and automation; saved YAML remains the scripted gate. |
 | Dev client vs Expo Go | **decide** | `eas.json`, `expo-dev-client` dependency, and `worktree-dev.md` say dev client; `CLAUDE.md` and role files say Expo Go. Standardize on the dev client; fix the four docs. |
 
-**Cost:** EAS build minutes for the simulator app (cache by native fingerprint: only rebuild when `needs-binary`); Maestro runs are minutes; the agent mode is 50-150k tokens and only runs for uncovered screens.
-**Lives in:** `scripts/sim/`, `apps/mobile/e2e/`, `apps/mobile/FEATURE_MAP.md`, `.eas/workflows/mobile-e2e.yml`.
+**Cost:** Local native builds reuse compatible artifacts; Maestro runs only the selected scope.
+**Lives in:** `scripts/sim/`, `apps/mobile/e2e/`, `apps/mobile/FEATURE_MAP.md`.
 
 **Changes:** "E2E: use mobile MCP tools to verify critical flows" in `CLAUDE.md` becomes: "run `npm run verify:mobile` (Maestro locally) and attach evidence".
 The local session's job is to add or update a Maestro flow when it changes a screen; the pipeline runs it.

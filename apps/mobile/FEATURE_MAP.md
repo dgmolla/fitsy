@@ -53,6 +53,6 @@ RevenueCat Test Store. Both use dev services; fresh-account runs explicitly rese
 the disposable simulator keychain. See `docs/engineering/devops/shipping.md` for
 the blocking evidence procedure. A normal dev-client launcher is not this build.
 
-Use `npm run verify:sim-plan` to inspect CI's affected-screen flow selection and its reason.
+Use `npm run verify:sim-plan` to inspect the affected-screen flow selection and its reason.
 The plan also names render smoke checkpoints for proven screen-local copy/style edits; shared UI and app shell changes require the full suite.
-The existing Build job executes selected flows on macOS; this remains separate from local final-candidate evidence.
+Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.

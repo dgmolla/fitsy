@@ -157,16 +157,16 @@ npm run verify -- --stage=cheap   # structural, safety, lint, types and selected
 # Optional local full diagnostics retain their normal contracts:
 npm run verify         # layers 0-2 on your changes (structural, secrets, lint, types, tests)
 npm run verify:all     # everything, including the production build
-# E2E: use mobile MCP tools to verify critical flows in the simulator
+# E2E: use saved Maestro YAML flows and Maestro MCP on the local simulator
 ```
 
 The check list lives in `scripts/verify/registry.yml`; CI (`verify.yml`), the
 pre-push hook, and agents all run the same scripts.
-Inspect CI's dynamic simulator scope with `npm run verify:sim-plan`; selection and flow mappings live in `scripts/verify/impact-plan.mjs`.
-The existing Build job runs selected native flows, while local source-bound product acceptance remains separate.
-Hosted billing fixture setup and separate required Apple acceptance are defined in `scripts/sim/hosted-journeys.mjs`; configuration and starting states live in the shipping contract and E2E README.
-Use `node scripts/sim/ci.mjs --scope=changed --preflight` to diagnose missing CI configuration; preserve required simulator scope until its reported repository settings are configured.
-Every mobile/web UI edit triggers CI smoke: screen-local style/copy uses render smoke, behavior uses affected E2E, and shared UI/app shells use the full suite.
+Inspect dynamic simulator scope with `npm run verify:sim-plan`; selection and render checkpoints live in `scripts/verify/impact-plan.mjs`.
+CI posts the `Sim scope` selection on the PR head and uploads `selection.json`; it never runs simulators or needs simulator credentials.
+Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
+Every mobile/web UI edit triggers local coverage: screen-local style/copy uses render smoke, behavior uses affected E2E, and shared UI/app shells use the full suite.
+Run `node scripts/sim/ci.mjs --scope=<none|smoke|flow|full> --flows=<comma-list> --udid=<UDID>` with configuration from the local machine.
 Keep simulator smoke out of the pre-push hook.
 
 Protected merge requires current trusted CI plus applicable local media/native evidence; old-head CI and candidate-controlled workflow changes cannot substitute.

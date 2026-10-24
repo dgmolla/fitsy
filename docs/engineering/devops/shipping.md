@@ -90,42 +90,39 @@ After committing, rerun `node scripts/verify/run.mjs --only=media-integration --
 The `product-flow/local` publisher checks that receipt before setting its exact-head status, including when mobile product evidence is not applicable.
 
 **Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes.
-CI runs static checks, unit tests and builds, plus impact-selected simulator flows inside the existing Build job.
-Run `npm run verify:sim-plan` to inspect `none`, `affected` or `full` scope and its reason before choosing journeys.
+CI runs static checks, unit tests and builds on Linux, without simulator execution or simulator secrets.
+Run `npm run verify:sim-plan` to inspect `none`, `smoke`, `flow` or `full` scope and its reason.
 The planner uses the retained reviewer ownership router and simulator path tiers, mapping changed mobile screens to the existing Maestro flows.
 Navigation, auth, billing, native configuration, release and unmapped mobile paths require all flows; ordinary non-mobile changes require no simulator.
-Verification-only package script edits and the EAS E2E workflow do not require simulator credentials; native dependencies, build profiles and release changes retain full coverage.
-Every mobile or web UI edit triggers coverage: proven screen-local copy/style edits use launch-and-render smoke, navigation/state/forms use affected E2E flows, and shared UI or app shells use the full suite.
+Verification-only package script edits do not require a simulator; native dependencies, build profiles and release changes retain full coverage.
+Every mobile or web UI edit triggers local coverage: proven screen-local copy/style edits use launch-and-render smoke, navigation/state/forms use affected E2E flows, and shared UI or app shells use the full suite.
 Render smoke reuses maintained flow setup through a mapped render assertion, then saves a screenshot; uncertain changes retain E2E coverage.
-CI owns this selection and execution; pre-push stays a cheap static and focused-test gate.
 The `needs-sim` label forces flows and its addition or removal reruns classification.
+CI prints the scope and reason, uploads the full plan as `selection.json` in the `sim-scope` artifact, and posts a successful `Sim scope` commit status on the PR head with `scope=<scope> flows=<comma-list or ->`.
+That status records selection, not a native test result.
 The final Verify job retains its existing applicability and failure semantics.
+Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
+The poller uses the saved YAML flows in `apps/mobile/e2e/flows/` through Maestro, with Maestro MCP available for interactive diagnosis.
+The pre-push hook stays a cheap static and focused-test gate.
+
+Load the dev environment on the Mac and build/install the current candidate through the native procedure below.
+The local scripted gate requires an explicitly owned, booted simulator and validates its native receipt, installed artifact, source and dev backend before driving it.
+It uses `FITSY_SIM_OWNER` for the existing exclusive device lease and releases its own Maestro processes and Metro after execution.
+It reads configuration only from the local process environment; it never fetches repository variables or secrets.
+Use the matching `FITSY_DIFF_BASE` and `FITSY_DIFF_HEAD` when reproducing CI's selection and render checkpoints.
+
+```sh
+npm run verify:sim-plan
+node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=changed --udid=<UDID>
+node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=flow --flows=signin-options,paywall-access --udid=<UDID>
+node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=full --udid=<UDID>
+```
+
+All selected flows require their documented starting states, including billing fixtures.
+Apple history-transfer acceptance still requires a compatible Apple store build; Test Store evidence cannot establish it.
 Applicable product acceptance and its exact-head publisher require fresh `.evidence/product-flow/report.json` when impact selection applies; ordinary publication does not claim that proof.
 Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
-
-Hosted execution uses `scripts/sim/ci.mjs`, the maintained native build recipe, a fresh simulator and RevenueCat Test Store against `https://dev.fitsy.org`.
-Configure repository variables `FITSY_SIM_SUPABASE_ANON_KEY`, `FITSY_SIM_REVENUECAT_TEST_KEY` and `FITSY_SIM_LOGIN_EMAIL`, plus secret `FITSY_SIM_LOGIN_PASSWORD` for a disposable dev account distinct from the shared Dev login.
-The Supabase URL uses variable `FITSY_SIM_SUPABASE_URL` when configured, otherwise the existing `DEV_SUPABASE_URL` secret.
-After installing dependencies, run `node scripts/sim/ci.mjs --scope=changed --preflight` with the same mobile environment to validate configuration without native tools or network calls.
-CI runs this preflight before L3 builds and Maestro installation and reports all missing repository settings together, without logging their values.
-When it reports missing settings, inspect repository configuration names with `gh variable list --repo dgmolla/fitsy --json name` and `gh secret list --repo dgmolla/fitsy --json name`, or the authenticated Actions settings page if CLI access is unavailable.
-The existing execution owner must configure the reported variables and secrets with the dev public keys and prepared disposable accounts before rerunning Verify.
-An existing `DEV_SUPABASE_URL` supplies only the URL; it does not supply the anon key, Test Store key or either account's credentials.
-Rerunning unchanged CI cannot supply absent configuration, and the resulting final Verify failure correctly reflects the failed Build job.
-Keep required simulator scope and Verify semantics intact; the separate Apple acceptance notice is informational and is not a configuration failure.
-This configuration check does not authenticate fixtures, run native journeys or supply acceptance evidence; the subsequent execution still verifies real account state and every selected hosted flow.
-Create that account before CI and keep it never subscribed; Dev login forwards its configured password, with the existing shared defaults retained for local development.
-Full hosted coverage also requires variable `FITSY_SIM_EXPIRED_LOGIN_EMAIL` and secret `FITSY_SIM_EXPIRED_LOGIN_PASSWORD` for a distinct account with a real expired same-account Test Store purchase.
-Prepare that purchase and expiry through the product; the runner verifies fresh subscription-sync verdicts and never manufactures billing state.
-Each hosted Restore journey clears app storage and keychain, signs in through the maintained billing setup, and asserts its starting screen independently of earlier flows.
-Switching accounts restarts owned Metro so the bundle contains the selected account's credentials.
-The explicit policy in `scripts/sim/hosted-journeys.mjs` assigns `subscription-restore-expired` to separate required Apple acceptance because Test Store cannot transfer purchase history between recreated accounts.
-CI logs and artifacts identify that journey as required and not run; complete it through the existing local product-flow procedure with an Apple-compatible build before acceptance.
-No production database or release credentials are supplied to this job.
-Missing configuration or tools and failed Maestro assertions fail the selected Build job.
-Selection, command reports, screenshots, build logs and Metro logs are retained as ordinary CI artifacts.
-These journeys exercise the candidate mobile source against the shared dev backend; they do not establish candidate-backend deployment, Apple billing or local final-candidate acceptance.
-The existing local `product-flow/local` gate remains required until its own replacement is accepted.
+The existing local `product-flow/local` gate retains its independent source-bound acceptance checks.
 
 Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID.
 Keep public configuration in the ignored mobile environment file.
@@ -154,7 +151,7 @@ export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
 # Run final acceptance against the current candidate:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name> --mode=final-candidate
-# Capture affected primary and recovery paths through Mobile MCP, then:
+# Capture affected primary and recovery paths through Maestro MCP, then:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
 ```
 
@@ -167,14 +164,15 @@ When a reviewer explicitly requests video, add `--record-video` to the final can
 Development runs remain separate from final publication even when recorded.
 
 The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`.
-Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Mobile MCP actions and screen observations.
+Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Maestro MCP actions and screen observations.
+Retain direct `tap_on`, `input_text`, `back` or `launch_app` interactions and `inspect_view_hierarchy` observations; a syntax check or scripted flow invocation alone does not establish an interactive walkthrough.
 Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
 
 ### Keep mobile walkthroughs focused and recoverable
 
 Before interacting, list the expected primary and recovery checkpoints, required assertions, and a task-appropriate action, retry and elapsed-time budget in the task evidence.
 Use the accessibility screen or relevant subtree where supported to find visible controls and confirm semantic state.
-Save complete successful Mobile MCP responses in the source-bound walkthrough trace, while bringing only the relevant controls and state change into working context.
+Save complete successful Maestro MCP responses in the source-bound walkthrough trace, while bringing only the relevant controls and state change into working context.
 Keep any failed response, including `isError: true`, in separate private diagnostic evidence because the product-flow validator rejects failed events in the walkthrough trace.
 Record the failed attempt in the diagnostic action history and include a successful retry in the validated trace only after it actually changes or observes the required state.
 If a target is offscreen, scroll to it deliberately, refresh the accessibility state, and verify reachability before tapping.
@@ -210,7 +208,7 @@ Republish before merge; code/test changes require fresh evidence.
 GitHub does not automatically expire an old success after 24 hours.
 This trusts repository writers like the existing local reviews; it is not an attestation against an administrator.
 Preserve existing required checks when configuring protection.
-Hosted simulator smoke cannot satisfy this separate local source-bound acceptance gate.
+The local scope run cannot substitute for this separate source-bound acceptance gate.
 
 For a backend change before its first push, deploy a clean committed checkout with `vercel deploy --target=preview`, then assign the ready preview to dev during a coordinated test window.
 The gate accepts Vercel's CLI `meta.gitCommitSha` identity as well as a Git deployment's `gitSource.sha`, rejects dirty CLI uploads, and still compares candidate backend contents and pins the deployment across the test and publication.

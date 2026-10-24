@@ -71,8 +71,9 @@ const documentationPath = path => /^[^/]+\.md$/.test(path) ||
 
 // Flow names are the existing Maestro sources, not another scenario registry.
 const screenFlows = [
+  [/^apps\/mobile\/(app\/\(tabs\)\/saved\.|lib\/menuBookmarks\.)/, /^log-meal$/],
   [/^apps\/mobile\/(app\/restaurant\/|components\/MenuItemCard\.|lib\/(menuFilters|menuLoadState)\.)/,
-    /^(chain-menu-serving|menu-load-recovery|menu-macro-serving)$/],
+    /^(chain-menu-serving|log-meal|menu-load-recovery|menu-macro-serving)$/],
   [/^apps\/mobile\/(app\/notification-settings\.|lib\/(notification|pushToken|useNotifications|useReminders))/,
     /^reminders$/],
   [/^apps\/mobile\/app\/macro-setup\./, /^onboarding-assisted-targets$/],
@@ -86,9 +87,6 @@ const screenFlows = [
     /^(cold-start-welcome|onboarding-.*)$/],
 ];
 const simulatorSource = path => !documentationPath(path) && !/\.(md|rst|txt)$/.test(path) &&
-  // E2E orchestration is verification tooling; native EAS build profiles still
-  // match highSimulatorPath. Editing this caller must not require dev secrets.
-  path !== '.eas/workflows/mobile-e2e.yml' &&
   !/(?:\.test\.|\.spec\.|\.d\.ts$|__tests__\/|__mocks__\/|(?:^|\/)(?:__fixtures__|test-fixtures)\/)/.test(path);
 const uiPath = path => /\.(?:[jt]sx?|mdx|css|scss|sass|less|svg|png|jpe?g|webp|gif|avif|ico|ttf|otf|woff2?)$/.test(path) &&
   /^(?:apps\/mobile\/(?:app|components|assets|styles|theme|tokens)\/|apps\/(?:web|landing|api)\/(?:src\/)?(?:app\/(?!api\/)|pages\/(?!api\/)|components\/|styles\/|public\/|assets\/)|(?:(?:web|src)\/)?(?:app\/(?!api\/)|pages\/(?!api\/)|components\/|styles\/|public\/|assets\/))/.test(path);
@@ -211,6 +209,7 @@ function renderOnly(path, range, cwd, env) {
 // Smoke reuses each maintained journey's setup, stopping at the screen's first
 // render assertion. No second YAML scenario catalog or duplicated login recipe.
 export const renderCheckpoints = [
+  [/^apps\/mobile\/app\/\(tabs\)\/saved\./, 'log-meal', 'Grilled Chicken Bowl'],
   [/^apps\/mobile\/app\/macro-setup\./, 'onboarding-assisted-targets', { id: 'macro-setup-save' }],
   [/^apps\/mobile\/app\/notification-settings\./, 'reminders', { id: 'reminder-permission' }],
   [/^apps\/mobile\/app\/restaurant\//, 'chain-menu-serving', 'Seed Bowl Co #01'],
@@ -261,14 +260,14 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
       if (!mapped.length) return { ...full(`Unmapped mobile path: ${path}; full coverage required`), reviewTier };
       for (const name of mapped) flows.add(name);
     }
-    if (flows.size) selection = result('medium', 'affected', [...flows].sort(),
+    if (flows.size) selection = result('medium', 'flow', [...flows].sort(),
       `Mapped affected screens from: ${mobile.join(', ')}`, reviewTier);
     if (mobile.length && source.every(path => uiPath(path) && renderOnly(path, range, cwd, env))) {
       const smoke = mobile.map(path => {
         const checkpoint = renderCheckpoints.find(([pattern]) => pattern.test(path));
         return checkpoint ? { screen: path, flow: checkpoint[1], selector: checkpoint[2] } : null;
       });
-      if (smoke.every(Boolean)) selection = { ...selection, mode: 'render', smoke,
+      if (smoke.every(Boolean)) selection = { ...selection, scope: 'smoke', mode: 'render', smoke,
         flows: [...new Set(smoke.map(item => item.flow))].sort(),
         reason: `Style/copy-only UI change; launch and render affected screens: ${mobile.join(', ')}` };
     }
@@ -319,7 +318,7 @@ export function impactPlan(options = {}) {
     /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(path) &&
     !/\.md$/.test(path) && !serviceHealthPath(path)));
   const simulator = simulatorSelection(selection.files, { ...simulatorContext(options.env || process.env), ...options, comparison: selection.comparison });
-  return { version: 1, ...selection, documentationOnly, code, tests: code, build: code || simulator.required, native, simulator,
+  return { version: 1, ...selection, documentationOnly, code, tests: code, build: code, native, simulator,
     testGroups: wholeTestGroups(selection.files) };
 }
 

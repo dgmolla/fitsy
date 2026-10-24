@@ -101,7 +101,6 @@ export async function verify(argv, prepareDatabase) {
       continue;
     }
     if (c.name === 'focused-tests') c = { ...c, selection: selectedRecipe, database: focusedDatabase() };
-    if (c.name === 'mobile-e2e') console.error(`Simulator scope: ${plan.simulator.scope} (${plan.simulator.mode}); ${plan.simulator.reason}`);
     selected.push(c);
   }
   if (!selected.length) {

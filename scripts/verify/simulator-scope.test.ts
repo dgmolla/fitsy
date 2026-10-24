@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -25,21 +25,22 @@ test.each([
   ['.github/workflows/verify.yml'],
   ['apps/web/lib/cache.ts'], ['apps/web/app/api/health/route.ts'],
   ['apps/mobile/components/test-fixtures/accountProfile.ts'],
-  ['.eas/workflows/mobile-e2e.yml'],
 ])('low simulator risk for %s retains no native work', path => {
   expect(select([path])).toMatchObject({ risk: 'low', scope: 'none', required: false, flows: [] });
 });
 
 test.each([
-  ['apps/mobile/app/restaurant/[id].tsx', ['chain-menu-serving', 'menu-load-recovery', 'menu-macro-serving']],
-  ['apps/mobile/lib/menuFilters.ts', ['chain-menu-serving', 'menu-load-recovery', 'menu-macro-serving']],
+  ['apps/mobile/app/restaurant/[id].tsx', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving']],
+  ['apps/mobile/lib/menuFilters.ts', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving']],
   ['apps/mobile/app/notification-settings.tsx', ['reminders']],
   ['apps/mobile/lib/notificationSchedule.ts', ['reminders']],
   ['apps/mobile/app/macro-setup.tsx', ['onboarding-assisted-targets']],
   ['apps/mobile/lib/macroCalculator.ts', ['onboarding-assisted-targets', 'onboarding-target-ranked-search']],
+  ['apps/mobile/app/(tabs)/saved.tsx', ['log-meal']],
+  ['apps/mobile/lib/menuBookmarks.ts', ['log-meal']],
   ['apps/mobile/e2e/flows/menu-load-recovery.yaml', ['menu-load-recovery']],
 ] as [string, string[]][])('medium change %s selects only mapped flows', (path, flows) => {
-  expect(select([path])).toMatchObject({ risk: 'medium', scope: 'affected', required: true, flows });
+  expect(select([path])).toMatchObject({ risk: 'medium', scope: 'flow', required: true, flows });
 });
 
 test.each([
@@ -50,7 +51,7 @@ test.each([
   'apps/mobile/lib/nativeIntent.ts', 'apps/mobile/lib/supabase.ts',
   'apps/mobile/lib/onboardingEntry.ts', 'apps/mobile/lib/onboardingResume.ts',
   'apps/mobile/lib/onboardingPreviewEntry.ts', 'apps/mobile/lib/pendingMealClaim.ts',
-  'apps/mobile/lib/macroStorage.ts', 'apps/mobile/lib/menuBookmarks.ts',
+  'apps/mobile/lib/macroStorage.ts',
   'apps/mobile/components/BookmarkButton.tsx', 'apps/mobile/components/OnboardingAccountSummary.tsx',
   'apps/mobile/components/PreviewRestaurantCard.tsx',
   'apps/mobile/app.config.ts', 'apps/mobile/eas.json', 'apps/mobile/package.json',
@@ -69,7 +70,7 @@ test.each([
 test('multiple affected areas union and deduplicate flows independently of path order', () => {
   const paths = ['apps/mobile/lib/menuFilters.ts', 'apps/mobile/app/notification-settings.tsx',
     'apps/mobile/app/restaurant/[id].tsx', 'docs/guide.md'];
-  const expected = ['chain-menu-serving', 'menu-load-recovery', 'menu-macro-serving', 'reminders'];
+  const expected = ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'reminders'];
   expect(select(paths).flows).toEqual(expected);
   expect(select(paths.reverse()).flows).toEqual(expected);
 });
@@ -86,7 +87,7 @@ test.each([[], ['docs/guide.md'], ['scripts/example.ts'], ['apps/mobile/lib/menu
   });
 
 test('needs-sim preserves an affected selection and cannot reduce a high selection', () => {
-  expect(select(['apps/mobile/lib/menuFilters.ts'], { labels: ['needs-sim'] }).scope).toBe('affected');
+  expect(select(['apps/mobile/lib/menuFilters.ts'], { labels: ['needs-sim'] }).scope).toBe('flow');
   expect(select(['apps/mobile/lib/authClient.ts'], { labels: ['needs-sim'] }).flows).toEqual(allFlows);
 });
 
@@ -97,6 +98,7 @@ test.each([null, ['apps/mobile/app/welcome/goal.tsx', '.github/workflows/verify.
 
 test('release candidates run the full set even without a mobile diff', () => {
   expect(select(['docs/guide.md'], { release: true })).toMatchObject({ risk: 'high', scope: 'full', flows: allFlows });
+  expect(allFlows).toEqual(expect.arrayContaining(['signin-options', 'paywall-access', 'onboarding-guided-preview', 'log-meal']));
 });
 
 test('release planning flag and tag events force all flows through the actual CLI', () => {
@@ -127,7 +129,6 @@ const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, e
 const commit = () => { git('add', '.'); git('commit', '-qm', 'fixture'); return git('rev-parse', 'HEAD'); };
 function fixture() {
   for (const path of ['scripts/verify/impact-plan.mjs', 'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh', 'scripts/sim/ci.mjs',
-    'scripts/sim/hosted-journeys.mjs', 'scripts/sim/build-profile.mjs',
     ...allFlows.map(name => `apps/mobile/e2e/flows/${name}.yaml`)]) {
     mkdirSync(dirname(join(directory, path)), { recursive: true }); copyFileSync(join(root, path), join(directory, path));
   }
@@ -150,7 +151,7 @@ test('actual classify CLI prints its reason, exports selection, and consumes the
   });
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout).simulator).toMatchObject({ scope: 'full', flows: allFlows });
-  expect(JSON.parse(result.stdout)).toMatchObject({ code: false, tests: false, build: true });
+  expect(JSON.parse(result.stdout)).toMatchObject({ code: false, tests: false, build: false });
   expect(result.stderr).toMatch(/Simulator scope: full.*needs-sim/);
   expect(readFileSync(output, 'utf8')).toContain('simulator=true\n');
   expect(readFileSync(output, 'utf8')).toContain('sim_scope=full\n');
@@ -192,10 +193,11 @@ test('verification modules import safely from stdin without executing their CLIs
 });
 
 const yaml = require('js-yaml') as { load(text: string): unknown };
-type Step = { name?: string; run?: string; if?: string; env?: Record<string, string> };
+type Step = { name?: string; run?: string; if?: string; uses?: string; with?: { script?: string; path?: string }; env?: Record<string, string> };
 const workflowText = readFileSync(join(root, '.github/workflows/verify.yml'), 'utf8');
 const workflow = yaml.load(workflowText) as { on: { pull_request: { types: string[] } };
-  jobs: Record<string, { if?: string; 'runs-on'?: string; steps: Step[] }> };
+  permissions: Record<string, string>;
+  jobs: Record<string, { if?: string; 'runs-on'?: string; permissions?: Record<string, string>; steps: Step[] }> };
 function expression(text: string, context: object) {
   // Evaluate the actual restricted GitHub boolean expressions, not a copy of
   // their branching logic. Inputs are repository YAML and fixture data only.
@@ -203,12 +205,12 @@ function expression(text: string, context: object) {
 }
 test.each([
   { path: 'docs/guide.md', label: false, staticResult: 'skipped', expected: false, host: 'ubuntu-latest' },
-  { path: 'docs/guide.md', label: true, staticResult: 'skipped', expected: true, host: 'macos-15' },
-  { path: 'apps/mobile/lib/menuFilters.ts', label: false, staticResult: 'success', expected: true, host: 'macos-15' },
-  { path: 'apps/mobile/lib/authClient.ts', label: false, staticResult: 'success', expected: true, host: 'macos-15' },
+  { path: 'docs/guide.md', label: true, staticResult: 'skipped', expected: false, host: 'ubuntu-latest' },
+  { path: 'apps/mobile/lib/menuFilters.ts', label: false, staticResult: 'success', expected: true, host: 'ubuntu-latest' },
+  { path: 'apps/mobile/lib/authClient.ts', label: false, staticResult: 'success', expected: true, host: 'ubuntu-latest' },
   { path: 'scripts/example.ts', label: false, staticResult: 'success', expected: true, host: 'ubuntu-latest' },
-  { path: 'apps/mobile/lib/menuFilters.ts', label: false, staticResult: 'failure', expected: false, host: 'macos-15' },
-  { path: 'apps/mobile/lib/menuFilters.ts', label: true, staticResult: 'cancelled', expected: false, host: 'macos-15' },
+  { path: 'apps/mobile/lib/menuFilters.ts', label: false, staticResult: 'failure', expected: false, host: 'ubuntu-latest' },
+  { path: 'apps/mobile/lib/menuFilters.ts', label: true, staticResult: 'cancelled', expected: false, host: 'ubuntu-latest' },
 ])('actual classifier routes $path (needs-sim=$label, static=$staticResult) through the existing build job', entry => {
   const base = fixture(); write(entry.path, 'Changed fixture.\n'); const head = commit();
   write('.evidence/event.json', JSON.stringify({ pull_request: {
@@ -222,12 +224,13 @@ test.each([
   const outputs = Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').map(line => {
     const index = line.indexOf('='); return [line.slice(0, index), line.slice(index + 1)];
   }));
+  const artifact = JSON.parse(readFileSync(join(directory, '.evidence/sim-scope/selection.json'), 'utf8'));
+  expect(artifact.comparison.head).toBe(head);
+  expect(artifact.simulator).toMatchObject({ scope: outputs.sim_scope, flows: JSON.parse(outputs.sim_flows!), smoke: JSON.parse(outputs.sim_smoke!) });
   const needs = { classify: { result: 'success', outputs }, static: { result: entry.staticResult } };
   const build = workflow.jobs.build!;
   expect(expression(build.if!, needs)).toBe(entry.expected);
-  expect(expression(build['runs-on']!, needs)).toBe(entry.host);
-  expect(expression(build.steps.find(step => step.name === 'Run selected simulator flows')!.if!, needs))
-    .toBe(outputs.simulator === 'true');
+  expect(build['runs-on']).toBe(entry.host);
   expect(JSON.parse(outputs.sim_flows!).length > 0).toBe(outputs.simulator === 'true');
   // A classification failure must stop both build and native work.
   expect(expression(build.if!, { ...needs, classify: { ...needs.classify, result: 'failure' } })).toBe(false);
@@ -254,23 +257,6 @@ test.each(['success', 'failure', 'skipped', 'cancelled'])(
   });
   expect(result.status).toBe(buildResult === 'success' ? 0 : 1);
   expect(result.stdout.trim()).toBe(buildResult === 'success' ? 'true' : 'false');
-});
-
-test('CI preflights the same simulator configuration before builds and native tool installation', () => {
-  const steps = workflow.jobs.build!.steps;
-  const preflight = steps.findIndex(step => step.name === 'Preflight simulator configuration');
-  expect(preflight).toBeGreaterThan(steps.findIndex(step => step.run === 'npm ci'));
-  expect(preflight).toBeLessThan(steps.findIndex(step => step.name === 'Run L3 checks'));
-  expect(preflight).toBeLessThan(steps.findIndex(step => step.name === 'Install Maestro'));
-  const execute = steps.find(step => step.name === 'Run selected simulator flows')!;
-  expect(steps[preflight]!.if).toBe(execute.if);
-  expect(steps[preflight]!.env).toEqual(execute.env);
-  expect(steps[preflight]!.run).toBe('node scripts/sim/ci.mjs --scope=changed --preflight');
-  const url = execute.env!.EXPO_PUBLIC_SUPABASE_URL!;
-  const resolveURL = (vars: object, secrets: object) =>
-    Function('vars', 'secrets', `return (${url.replace(/^\$\{\{\s*|\s*\}\}$/g, '')});`)(vars, secrets);
-  expect(resolveURL({}, { DEV_SUPABASE_URL: 'existing-dev-url' })).toBe('existing-dev-url');
-  expect(resolveURL({ FITSY_SIM_SUPABASE_URL: 'explicit-dev-url' }, { DEV_SUPABASE_URL: 'existing-dev-url' })).toBe('explicit-dev-url');
 });
 
 const screen = (copy = 'Your goal', margin = 8, action = 'setGoal("performance")') =>
@@ -302,15 +288,14 @@ test.each([
 
 test.each([
   { label: false, ui: false, scope: 'none', host: 'ubuntu-latest' },
-  { label: true, ui: false, scope: 'full', host: 'macos-15' },
+  { label: true, ui: false, scope: 'full', host: 'ubuntu-latest' },
   // UI mixed with workflow edits retains the canonical high review tier.
-  { label: false, ui: true, scope: 'full', host: 'macos-15' },
+  { label: false, ui: true, scope: 'full', host: 'ubuntu-latest' },
 ])('CI does not mistake verification wiring for native configuration: %j', entry => {
   fixture(); write('package.json', JSON.stringify(manifest));
   write('apps/api/package.json', JSON.stringify(manifest)); const base = commit();
   write('package.json', JSON.stringify({ ...manifest, scripts: { ...manifest.scripts, 'verify:sim-plan': 'node scripts/verify/impact-plan.mjs --simulator' } }));
   write('apps/api/package.json', JSON.stringify({ ...manifest, scripts: { 'type-check': 'prisma generate && tsc --noEmit' } }));
-  write('.eas/workflows/mobile-e2e.yml', '# Simulator CI orchestration, not a native build profile.\n');
   write('.github/workflows/verify.yml', workflowText);
   if (entry.ui) write('apps/mobile/app/notification-settings.tsx', screen());
   const head = commit();
@@ -324,19 +309,17 @@ test.each([
   expect(result.status).toBe(0);
   const plan = JSON.parse(result.stdout);
   expect(plan).toMatchObject({ code: true, tests: true, build: true, simulator: { scope: entry.scope } });
-  const needs = { classify: { outputs: { simulator: String(plan.simulator.required) } } };
-  expect(expression(workflow.jobs.build!['runs-on']!, needs)).toBe(entry.host);
-  expect(expression(workflow.jobs.build!.steps.find(step => step.name === 'Run selected simulator flows')!.if!, needs))
-    .toBe(entry.scope !== 'none');
+  expect(workflow.jobs.build!['runs-on']).toBe('ubuntu-latest');
 });
 
 test.each([
-  { path: 'apps/mobile/app/macro-setup.tsx', after: screen('Daily energy'), mode: 'render', scope: 'affected', flow: 'onboarding-assisted-targets' },
-  { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 12), mode: 'render', scope: 'affected', flow: 'onboarding-assisted-targets' },
-  { path: 'apps/mobile/app/notification-settings.tsx', after: screen('Notifications'), mode: 'render', scope: 'affected', flow: 'reminders' },
-  { path: 'apps/mobile/app/notification-settings.styles.ts', after: screen('Your goal', 12), mode: 'render', scope: 'affected', flow: 'reminders' },
-  { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'router.push("/welcome/tried")'), mode: 'e2e', scope: 'affected' },
-  { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'setGoal("lose_fat")'), mode: 'e2e', scope: 'affected' },
+  { path: 'apps/mobile/app/(tabs)/saved.tsx', after: screen('Saved meals'), mode: 'render', scope: 'smoke', flow: 'log-meal' },
+  { path: 'apps/mobile/app/macro-setup.tsx', after: screen('Daily energy'), mode: 'render', scope: 'smoke', flow: 'onboarding-assisted-targets' },
+  { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 12), mode: 'render', scope: 'smoke', flow: 'onboarding-assisted-targets' },
+  { path: 'apps/mobile/app/notification-settings.tsx', after: screen('Notifications'), mode: 'render', scope: 'smoke', flow: 'reminders' },
+  { path: 'apps/mobile/app/notification-settings.styles.ts', after: screen('Your goal', 12), mode: 'render', scope: 'smoke', flow: 'reminders' },
+  { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'router.push("/welcome/tried")'), mode: 'e2e', scope: 'flow' },
+  { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'setGoal("lose_fat")'), mode: 'e2e', scope: 'flow' },
   { path: 'apps/mobile/components/ContinueButton.tsx', after: screen('Continue'), mode: 'e2e', scope: 'full' },
   { path: 'apps/mobile/app/_layout.tsx', after: screen('Fitsy'), mode: 'e2e', scope: 'full' },
   { path: 'apps/mobile/app/auth/login.tsx', after: screen('Sign in'), mode: 'e2e', scope: 'full' },
@@ -362,9 +345,7 @@ test.each([
     expect(plan.simulator.smoke).toMatchObject([{ screen: entry.path, flow: entry.flow }]);
   } else expect(plan.simulator.smoke).toEqual([]);
   const execute = spawnSync(process.execPath, ['scripts/sim/ci.mjs', '--plan'], {
-    cwd: directory, env: { ...env, CI: 'true', FITSY_DIFF_BASE: base, FITSY_DIFF_HEAD: head,
-      FITSY_CI_SIM_SCOPE: plan.simulator.scope, FITSY_CI_SIM_MODE: plan.simulator.mode,
-      FITSY_CI_SIM_FLOWS: JSON.stringify(plan.simulator.flows), FITSY_CI_SIM_SMOKE: JSON.stringify(plan.simulator.smoke) }, encoding: 'utf8',
+    cwd: directory, env: { ...env, CI: 'true', FITSY_DIFF_BASE: base, FITSY_DIFF_HEAD: head }, encoding: 'utf8',
   });
   expect({ status: execute.status, error: execute.status === 0 ? '' : execute.stderr }).toEqual({ status: 0, error: '' });
   expect(JSON.parse(execute.stdout)).toEqual(plan.simulator);
@@ -395,28 +376,41 @@ test('pre-push remains main\'s cheap gate and never runs simulator smoke', () =>
   expect(hook).not.toMatch(/mobile-e2e|sim\/ci|sim-plan/);
 });
 
-test.each([false, true])('registry caller skips low scope and fails required misconfigured execution (required=%s)', required => {
-  const base = fixture();
-  for (const path of ['scripts/verify/run.mjs', 'scripts/verify/mobile-e2e.sh', 'scripts/verify/product-flow.mjs'])
-    copyFileSync(join(root, path), join(directory, path));
-  cpSync(join(root, 'scripts/sim'), join(directory, 'scripts/sim'), { recursive: true });
-  symlinkSync(join(root, 'node_modules'), join(directory, 'node_modules'));
-  const registry = readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8').split('  - name: mobile-e2e\n')[1]!.split('\n  - name:')[0];
-  write('scripts/verify/registry.yml', 'checks:\n  - name: mobile-e2e\n' + registry);
-  write('docs/guide.md', 'Docs.\n'); const head = commit();
-  write('.evidence/event.json', JSON.stringify({ pull_request: {
-    base: { sha: base }, head: { sha: head }, labels: required ? [{ name: 'needs-sim' }] : [],
-  } }));
-  // External native tools must remain untouched in both the skipped branch and
-  // the dev-environment preflight failure. The real runner/check are executed.
-  write('bin/xcrun', '#!/bin/sh\ntouch .evidence/native-called\nexit 99\n');
-  chmodSync(join(directory, 'bin/xcrun'), 0o755);
-  const result = spawnSync(process.execPath, ['scripts/verify/run.mjs', '--only=mobile-e2e', '--runs=ci', '--scope=changed'], {
-    cwd: directory, env: { ...env, CI: 'true', PATH: `${join(directory, 'bin')}:${env.PATH}`,
-      GITHUB_EVENT_NAME: 'pull_request', GITHUB_EVENT_PATH: join(directory, '.evidence/event.json') }, encoding: 'utf8', timeout: 10000,
-  });
-  expect(result.status).toBe(required ? 1 : 0);
-  expect(JSON.parse(result.stdout.trim())).toMatchObject({ name: 'mobile-e2e', blocking: true, status: required ? 'fail' : 'skipped' });
-  expect(result.stderr).toContain('Simulator scope:');
-  expect(existsSync(join(directory, '.evidence/native-called'))).toBe(false);
+
+test('CI only classifies simulator scope and grants status writes to classify alone', () => {
+  expect(workflow.permissions.statuses).toBeUndefined();
+  expect(Object.entries(workflow.jobs).filter(([, job]) => job.permissions?.statuses === 'write').map(([name]) => name)).toEqual(['classify']);
+  const upload = workflow.jobs.classify!.steps.find(step => step.name === 'Upload simulator selection')!;
+  expect(upload.uses).toBe('actions/upload-artifact@v4');
+  expect(upload.with?.path).toBe('.evidence/sim-scope/selection.json');
+  for (const file of readdirSync(join(root, '.github/workflows'))) {
+    const text = readFileSync(join(root, '.github/workflows', file), 'utf8');
+    expect(text).not.toMatch(/FITSY_(?:CI_)?SIM_|sim\/ci\.mjs|maestro|simctl|iphonesimulator|macos-15/);
+  }
+  expect(existsSync(join(root, '.eas/workflows/mobile-e2e.yml'))).toBe(false);
+  const registry = yaml.load(readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8')) as { checks: { name: string; script: string }[] };
+  expect(registry.checks.some(check => check.name === 'mobile-e2e')).toBe(false);
+});
+
+test.each([
+  { scope: 'none', flows: [] },
+  { scope: 'smoke', flows: ['reminders'] },
+  { scope: 'flow', flows: ['chain-menu-serving', 'menu-load-recovery'] },
+  { scope: 'full', flows: allFlows },
+])('actual status step posts exact $scope selection on the PR head', async simulator => {
+  write('.evidence/sim-scope/selection.json', JSON.stringify({ simulator }));
+  const script = workflow.jobs.classify!.steps.find(step => step.name === 'Record Sim scope on PR head')!;
+  expect(script.if).toBe("github.event_name == 'pull_request'");
+  const context = { repo: { owner: 'dgmolla', repo: 'fitsy' }, payload: { pull_request: { head: { sha: 'pr-head' } } },
+    sha: 'synthetic-merge', serverUrl: 'https://github.com', runId: 123 };
+  const status = jest.fn().mockResolvedValue({});
+  const localRequire = (name: string) => name === 'node:fs' ? {
+    readFileSync: (path: string, encoding: 'utf8') => readFileSync(join(directory, path), encoding),
+  } : require(name);
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+  await new AsyncFunction('require', 'github', 'context', script.with!.script)(localRequire,
+    { rest: { repos: { createCommitStatus: status } } }, context);
+  expect(status).toHaveBeenCalledWith({ owner: 'dgmolla', repo: 'fitsy', sha: 'pr-head', context: 'Sim scope', state: 'success',
+    description: `scope=${simulator.scope} flows=${simulator.flows.join(',') || '-'}`,
+    target_url: 'https://github.com/dgmolla/fitsy/actions/runs/123' });
 });

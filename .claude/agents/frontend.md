@@ -82,7 +82,7 @@ Run every required full gate before push; fix all failures in your session.
 2. `npx tsc --noEmit`
 3. `npm test`
 4. `npm run build`
-5. **Mobile E2E**: Use the mobile MCP (`@mobilenext/mobile-mcp`) to run smoke
+5. **Mobile E2E**: Use saved Maestro YAML flows and Maestro MCP locally to run smoke
    development reproduction and UI signoff before review, then final candidate acceptance after a passing review.
 
 ## After Pushing a PR

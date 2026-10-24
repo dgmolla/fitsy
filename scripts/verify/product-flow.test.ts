@@ -295,3 +295,28 @@ deterministicTest('submission-only EAS changes preserve JavaScript and acceptanc
   const after = JSON.parse(evaluate(`({js:gate.inputHash(${JSON.stringify(dir)},'js'), acceptance:gate.inputHash(${JSON.stringify(dir)})})`).stdout);
   expect(after).toEqual(before);
 });
+
+deterministicTest.each([
+  { actions: ['tap_on', 'inspect_view_hierarchy'], pass: true },
+  { actions: ['input_text', 'inspect_view_hierarchy'], pass: true },
+  { actions: ['back', 'inspect_view_hierarchy'], pass: true },
+  { actions: ['launch_app', 'inspect_view_hierarchy'], pass: true },
+  { actions: ['run_flow', 'inspect_view_hierarchy'], pass: false },
+  { actions: ['check_flow_syntax', 'inspect_view_hierarchy'], pass: false },
+  { actions: ['tap_on', 'take_screenshot'], pass: false },
+  { actions: ['tap_on', 'inspect_view_hierarchy'], pass: false, toolError: true },
+])('Maestro MCP walkthrough requires interactions and hierarchy observations: $actions (pass=$pass)', ({ actions, pass, toolError }) => {
+  const report = fixture();
+  report.videoRequested = false;
+  for (const flow of report.flows) {
+    delete (flow as { video?: string }).video;
+    delete (flow as { videoHash?: string }).videoHash;
+  }
+  const trace = actions.map(name => JSON.stringify({ at: report.finishedAt, command: { name },
+    result: { ...(toolError ? { isError: true } : {}), content: [{ type: 'text', text: 'Paywall visible' }] } })).join('\n');
+  writeFileSync(join(dir, 'trace.json'), trace); report.exploration[0]!.sha256 = sha(trace);
+  const result = validate(report);
+  expect({ status: result.status, error: result.status === 0 ? '' : result.stderr }).toEqual({
+    status: pass ? 0 : 1, error: pass ? '' : expect.stringMatching(/walkthrough needs actual interactions|invalid\/failed\/stale walkthrough/),
+  });
+});

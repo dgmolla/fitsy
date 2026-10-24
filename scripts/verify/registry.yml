@@ -1,6 +1,6 @@
 # Registry of verification checks. See README.md for the contract.
 # layer: 0 = fast local gate, 1 = static, 2 = unit tests, 3 = build/integration,
-#        6 = deployed-environment E2E, 7 = simulator E2E, 9 = post-deploy
+#        6 = deployed-environment E2E, 9 = post-deploy
 #        (numbers align with L-layers in docs/engineering/devops/autonomous-shipping.md)
 # blocking: true | shadow   (shadow = reported, never fails the run)
 # runs: local | ci | scheduled   (contexts this check executes in)
@@ -48,7 +48,7 @@ checks:
     layer: 1
     blocking: true
     runs: [local]
-    why: Local simulator evidence for mobile-facing changes; missing, stale, failed, or incomplete evidence fails. Hosted execution does not satisfy this local gate.
+    why: Local simulator evidence for mobile-facing changes; missing, stale, failed, or incomplete evidence fails.
 
   - name: boundaries
     script: boundaries.sh
@@ -145,22 +145,6 @@ checks:
       T5 - agent-written tests must be able to fail; mutation score is the
       proof. Scheduled-only (minutes even incremental); the break threshold
       (stryker.config.mjs) ratchets +5/month while green per rollout step 10.
-
-  - name: mobile-e2e
-    script: mobile-e2e.sh
-    layer: 7
-    blocking: true
-    runs: [ci, scheduled, local]
-    why: >
-      CI selects none, affected flows or full flows through impact-plan.mjs.
-      Screen-local style/copy edits stop at render assertions; UI behavior uses
-      affected E2E flows and shared UI or app shell changes use the full suite.
-      Configuration preflight reports missing repository settings before builds;
-      it does not replace actual native execution or fixture verification.
-      Hosted billing fixtures sign in independently; Apple history-transfer
-      acceptance is explicitly reported and retained for local product-flow.
-      Failures fail the selected mobile job. Local product-flow acceptance and
-      the final Verify aggregator retain their existing independent semantics.
 
   - name: dev-drift
     script: dev-drift.sh

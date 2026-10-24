@@ -13,7 +13,7 @@
 | `spec-requirement` | `feature` | `spec-conformance` lens runs when a PR body carries a `Spec:` line; a medium+ feature PR without one gets a CONFIRMED finding. Bug fixes reference their incident instead. |
 | `review` | one independent review per candidate | `scripts/review/simple-review.mjs` uses the retained router and severity rules; only CONFIRMED P0/P1 findings block. The installed local reviewer supplies `AI review`. |
 | `shadow-checks` | `own-code-mocks`, `mutation`, `dev-drift`, `api-e2e` | `blocking: shadow` in `scripts/verify/registry.yml`; promotion = a PR flipping the field after two clean weeks. |
-| `UI smoke` | required in CI for mobile/web UI | `impact-plan.mjs` selects render smoke for proven screen-local style/copy, affected E2E for behavior, and full coverage for shared UI/app shells; `mobile-e2e` fails Build without changing final Verify or pre-push semantics. |
+| `UI smoke` | local on the maintainer Mac for mobile/web UI | `impact-plan.mjs` records `Sim scope`; the sim-review poller runs Maestro and posts `Simulator`, required when scope is not none. Final Verify and pre-push semantics stay unchanged. |
 | `harden-on-incident` | required | `harness-audit` lens blocks incident-labeled PRs missing fix + detector + constraint + eval case + `Layer:` attribution. |
 | `size-gate` | 600 changed lines | `size-check` reports a review-size signal; scope is judged by coherent outcome and acceptance rather than a hard line cap. |
 | `mutation-break` | 50 (baseline 59.0%, 2026-09-07) | `stryker.config.mjs` `thresholds.break`; ratchet +5/month while green (rollout step 10). |

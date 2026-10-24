@@ -1,24 +1,30 @@
 # Native walkthrough helpers
 
 The canonical scenario, ownership, evidence and publication procedure is in `docs/engineering/devops/shipping.md`.
-Inspect CI's dynamic selection with `npm run verify:sim-plan` from the repository root.
+Inspect the dynamic selection with `npm run verify:sim-plan` from the repository root.
 The maintained path-to-flow mapping lives in `scripts/verify/impact-plan.mjs`; extend it and its table-driven tests when adding screen coverage.
 Unmapped mobile paths expand to the full flow set, and `needs-sim` forces flows for otherwise non-mobile changes.
-Every UI edit triggers CI coverage: proven screen-local style/copy reuses a maintained flow through the mapped render assertion and saves a screenshot, behavior changes run affected E2E flows, and shared UI/app shells run the full suite.
-Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the maintained YAML flows; missing checkpoints fail before a simulator is created.
-CI compares scope, mode, flows and checkpoints with classification; the pre-push hook stays free of simulator execution.
-CI execution does not replace the local source-bound product-flow gate.
-CI preflights its configuration before builds or native tool installation and reports all missing settings together; the Supabase URL falls back to the existing `DEV_SUPABASE_URL` secret.
-With dependencies and the mobile dev environment loaded, use `node scripts/sim/ci.mjs --scope=changed --preflight` to check configuration locally without running native tools or contacting services.
-Configure the named repository variables and secrets using the shipping contract; a preflight pass does not prove fixture history or native acceptance.
-Hosted billing setup and the explicit Apple-only coverage policy live in `scripts/sim/hosted-journeys.mjs`, consumed by `scripts/sim/ci.mjs`.
-Before each hosted Restore journey, CI clears app storage and keychain, signs in through `setup/billing-signin.yaml`, and asserts the required paywall or Welcome back starting screen.
-The empty and expired fixtures use distinct disposable Test Store accounts; the runner restarts its owned Metro when switching the bundled Dev login credentials.
-CI verifies each account through the real dev login and subscription-sync APIs before building and rechecks the billing fixture immediately before its journey.
-Prepare the expired account's same-account purchase and expiry through the real Test Store product, then configure `FITSY_SIM_EXPIRED_LOGIN_EMAIL` and secret `FITSY_SIM_EXPIRED_LOGIN_PASSWORD` alongside the ordinary never-subscribed account.
-Missing credentials, incorrect subscription history, stale verdicts and failed native assertions fail execution.
-`subscription-restore-expired` requires Apple history transfer and runs separately through the local product-flow acceptance procedure below.
-CI prints this required, unexecuted Apple obligation and retains it in `selection.json` and its result; a hosted pass supplies no Apple acceptance evidence.
+Every UI edit triggers local coverage: proven screen-local style/copy reuses a maintained flow through its mapped render assertion and saves a screenshot, behavior changes run affected E2E flows, and shared UI/app shells run the full suite.
+Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the maintained YAML flows.
+CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
+Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
+The pre-push hook stays free of simulator execution.
+Use `node scripts/sim/ci.mjs --scope=<none|smoke|flow|full> --flows=<comma-list> --udid=<UDID>` with environment configuration loaded from the Mac.
+The runner uses saved Maestro YAML and the existing exclusive simulator lease; use Maestro MCP (`maestro mcp`) for interactive inspection.
+It requires the current candidate installed through the canonical native procedure and refuses GitHub CI execution.
+Full scope includes every saved flow, including `signin-options`, `paywall-access`, `onboarding-guided-preview` and `log-meal`.
+`log-meal` verifies the existing bookmark-to-Saved journey because this checkout has no dietary meal log.
+It requires a disposable entitled dev account with a completed profile and reads `${EXPO_PUBLIC_DEV_LOGIN_EMAIL}` and `${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}` through the local runner.
+Use the Debug build with owned Metro so native Dev Login consumes those same environment values.
+It resets only the synthetic Grilled Chicken Bowl bookmark, saves the meal through the UI and verifies it in Saved after relaunch.
+Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
+A local scope pass does not replace the source-bound final-candidate product-flow gate.
+
+Check saved flow syntax with `maestro check-syntax apps/mobile/e2e/flows/<flow>.yaml` before acquiring a simulator.
+If Maestro cannot initialize its normal cache in a restricted workspace, set `JAVA_OPTS=-Duser.home=<owned-writable-temporary-directory>` for syntax checks.
+This uses a separate Java cache without modifying the normal installation or changing the shell's home directory.
+The canonical media check also requires host process-ownership inspection; a sandbox denial must be resolved through the existing host owner without disabling that preflight.
+
 The assisted-targets journey also opens `/macro-setup`, asserts its daily editor and exercises Save and Skip; macro-setup render smoke stops at `macro-setup-save` on that screen.
 Run the native accessibility helper regression tests from the repository root with `node --test apps/mobile/e2e/helpers/native-ax.test.mjs` when changing these helpers.
 

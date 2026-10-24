@@ -180,6 +180,14 @@ function installedApp(udid, appHash) {
   assert(installed && existsSync(installed) && treeHash(installed) === appHash,
     'Installed simulator app differs from the verified native artifact; reinstall the intact artifact');
 }
+// The local scope runner shares native, backend and installed-artifact checks.
+export function simulatorSession(udid) {
+  const config = environment(), built = receipt(udid), identity = device(udid), server = backend();
+  const embedded = embeddedBundleCompatibility(built, inputHash(root, 'js'), config.configHash);
+  assert(embedded.compatible, `${embedded.reason}; build the current candidate before running simulator scope`);
+  installedApp(udid, built.appHash);
+  return { built, ...identity, ...server, configHash: config.configHash, inputHash: inputHash() };
+}
 function existingReceipt() {
   try { return read(join(buildDir, 'receipt.json')); }
   catch (error) {
@@ -597,7 +605,7 @@ async function execute(udid, names, mode) {
     assert(server.backendDeployment === backend().backendDeployment, 'Dev deployment changed during tests');
     await checkBundle(report);
     completeMaestroRun(join(out, 'report.json'), timeline, report);
-    console.log('Maestro complete. Capture affected primary/recovery flows through Mobile MCP, then finish <walkthrough.json>.');
+    console.log('Maestro complete. Capture affected primary/recovery flows through Maestro MCP, then finish <walkthrough.json>.');
   } catch (error) {
     const evidenceErrors = recordRunFailure(join(out, 'report.json'), join(out, 'runner-timeline.jsonl'), error);
     if (evidenceErrors.length) console.error(`Failure receipt write errors: ${evidenceErrors.join('; ')}`);

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Local candidate evidence stays mandatory alongside hosted simulator execution.
+// Local candidate evidence stays mandatory alongside the local simulator scope gate.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
@@ -269,7 +269,12 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     insist(digest(trace) === observation.sha256, `changed walkthrough trace: ${category}`);
     const events = trace.toString().trim().split('\n').map(line => JSON.parse(line));
     insist(events.every(e => Date.parse(e.at) >= Date.parse(report.startedAt) && Date.parse(e.at) <= time && !e.result?.isError && e.result?.content?.length), `invalid/failed/stale walkthrough events: ${category}`);
-    insist(events.some(e => /mobile_(click|swipe|type|press|launch|open)/.test(e.command?.name)) && events.some(e => e.command?.name === 'mobile_list_elements_on_screen'), `walkthrough needs actual interactions and screen observations: ${category}`);
+    const maestro = events.some(e => ['tap_on', 'input_text', 'back', 'launch_app'].includes(e.command?.name)) &&
+      events.some(e => e.command?.name === 'inspect_view_hierarchy');
+    // Preserve existing source-bound traces while new walkthroughs use Maestro MCP.
+    const legacy = events.some(e => /mobile_(click|swipe|type|press|launch|open)/.test(e.command?.name)) &&
+      events.some(e => e.command?.name === 'mobile_list_elements_on_screen');
+    insist(maestro || legacy, `walkthrough needs actual interactions and screen observations: ${category}`);
   }
   return { status: 'pass', summary: `${report.flows.length} flows and ${plan.categories.length} changed-journey walkthroughs verified` };
 }

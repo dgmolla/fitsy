@@ -41,7 +41,6 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `own-code-mocks.sh` | 2 (shadow) | api tests mock only external services |
 | `build.sh` | 3 | production API build, no stray compiled output |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |
-| `mobile-e2e.sh` | 7 (CI, blocking) | Run the impact-selected flows on an isolated hosted simulator; local calls retain the retired-smoke skip |
 | `api-e2e.sh` | 6 | a deployed API serves health + teaser-lock invariants (read-only by default; `--write` adds the register probe) |
 
 Callers: `.githooks/pre-push` (size/domain checks plus cheap layers 0-1, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
@@ -50,11 +49,11 @@ Callers: `.githooks/pre-push` (size/domain checks plus cheap layers 0-1, changed
 Use `npm run verify:sim-plan -- --release-candidate` for explicit release planning; release events and tag refs also require the full flow set.
 `impact-plan.mjs` consumes the retained `route-reviewers.sh` ownership routing and `risk-tiers.yml` path policy, then maps mobile paths to flows.
 The retired review tier executable is not required; `REVIEW.md` severity rules and independent review remain separate.
-Docs, tests, scripts and ordinary non-mobile changes select `none`; mapped mobile screens select `affected`; navigation, auth, billing, native configuration, release and unknown mobile impact select `full`.
-Manifest edits confined to verification scripts and the EAS E2E workflow are verification tooling, so they do not request a simulator or dev credentials.
+Docs, tests, scripts and ordinary non-mobile changes select `none`; mapped mobile behavior selects `flow`; navigation, auth, billing, native configuration, release and unknown mobile impact select `full`.
+Manifest edits confined to verification scripts are verification tooling, so they do not request a simulator.
 Dependency, lifecycle/build script and other manifest changes retain their normal risk; unreadable manifest comparisons cannot narrow coverage.
 Every mobile or web UI source change requires simulator/E2E coverage.
-Proven literal copy or StyleSheet value edits on mapped screens select `mode: render`, using the maintained journey's setup through the screen's render assertion and a screenshot.
+Proven literal copy or StyleSheet value edits on mapped screens select `scope: smoke` and `mode: render`, using the maintained journey's setup through the screen's render assertion and a screenshot.
 Changed navigation, state, forms, new/deleted screens and uncertain syntax retain affected E2E flows.
 Shared components, theme/assets, app shells and unmapped UI require the full suite.
 Mixed changes keep the broader coverage; render smoke never narrows high risk.
@@ -62,24 +61,21 @@ The exact `needs-sim` PR label forces execution, using the affected selection wh
 Unavailable history or classification expands to full coverage.
 Adding or removing that label reruns Verify.
 
-The existing build job uses macOS when simulator work applies and Ubuntu otherwise.
-For a docs-only `needs-sim` override, classification requests the build job while static and unit-test jobs remain correctly skipped.
-Build first runs `node scripts/sim/ci.mjs --scope=changed --preflight` for required simulator selections, using the same configuration as execution.
-It reports every missing repository variable or secret together before the API build and native tool installation; the Supabase URL can reuse the existing `DEV_SUPABASE_URL` secret.
-A configuration pass supplies no native acceptance evidence and does not authenticate billing fixtures.
-Build then runs `--only=mobile-e2e --runs=ci --scope=changed` after any applicable API build.
-A simulator failure fails Build, so the unchanged final Verify aggregator rejects it.
-The native recipe uses dev services, a disposable Test Store account and an explicitly created device; ordinary logs and screenshots are uploaded for diagnosis.
-Hosted billing journeys establish isolated signed-in empty or expired Test Store fixtures using `scripts/sim/hosted-journeys.mjs` and the maintained billing sign-in YAML.
-The same policy reports Apple history-transfer Restore as a separate required acceptance journey, recorded as not run by hosted CI.
-It never reports Test Store evidence as Apple acceptance; the existing local product-flow gate remains authoritative for that proof.
-The classifier exports scope, mode, flow names and render checkpoints; execution rejects drift in any of these inputs.
-Caller fixtures must choose their own `FITSY_RUNS` context: L2 exports `ci`, which selects hosted execution even when the fixture intends to verify the local skip.
-Replay routing regressions with `FITSY_RUNS=ci CI=true npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/mobile-e2e.test.ts verify/simulator-scope.test.ts`.
-See [shipping.md](../../docs/engineering/devops/shipping.md) for CI configuration and the separate local product-flow acceptance requirement.
+The existing Build job runs only L3 checks on Ubuntu.
+CI computes `none|smoke|flow|full`, exports flow names and render checkpoints, and uploads the full plan as `selection.json` in the `sim-scope` artifact.
+It posts the `Sim scope` status on the PR head with `scope=<scope> flows=<comma-list or ->`; only classify has `statuses: write`.
+A docs-only `needs-sim` label requests local flows while static, tests and Build remain skipped.
+The final Verify aggregator is unchanged.
+Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
+Run the local scripted gate with `node scripts/sim/ci.mjs --scope=<scope> --flows=<comma-list> --udid=<UDID>` after loading the Mac's dev environment and preparing its candidate build.
+Use `--plan` to inspect explicit scope and flows without launching native tools; `--scope=changed` consumes the shared impact plan.
+Keep render checkpoints and the comparison range aligned with the selected PR head.
+CI execution is refused by the local runner, and the registry contains no native execution check.
+Replay scope regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/simulator-scope.test.ts sim/ci.test.ts`.
+See [shipping.md](../../docs/engineering/devops/shipping.md) for native setup, billing starting states and separate source-bound product acceptance.
 
 The local pre-push hook runs size/domain checks, then cheap static checks and focused tests.
-UI smoke selection and execution belong to CI, with no simulator step added to this hook.
+UI smoke executes locally on the Mac, with no simulator step added to this hook.
 A fresh checkout needs installed dependencies but no issue binding, review daemon or home-directory review state.
 Keep dependencies local to this checkout so workspace links resolve its own packages.
 Type checking calls each workspace's `npm run type-check`, including Prisma generation from the repository schema before compiling the API.

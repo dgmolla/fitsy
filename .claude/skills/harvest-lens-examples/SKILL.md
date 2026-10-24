@@ -37,13 +37,15 @@ lens edits).
    - Behavioral/user-facing -> also consider a Maestro flow or DB test.
      Inspect `npm run verify:sim-plan` and update `scripts/verify/impact-plan.mjs` plus its table-driven tests when adding affected-screen coverage.
      Keep the retained ownership router and simulator risk policy as inputs; do not restore deleted review executables.
-     UI changes require CI render smoke for proven screen-local style/copy, affected E2E for behavior, or full coverage for shared UI/app shells.
+     UI changes require local render smoke for proven screen-local style/copy, affected E2E for behavior, or full coverage for shared UI/app shells.
      Extend render checkpoints together with their maintained YAML assertions, and keep simulator execution out of pre-push.
      Keep verification-only manifest scripts and E2E orchestration out of native scope; test that dependency/build changes and `needs-sim` still force coverage.
      When changing verification caller routing, set each subprocess fixture's `FITSY_RUNS` explicitly and replay it under the L2 parent's `FITSY_RUNS=ci CI=true` environment.
-     For missing hosted simulator credentials, run `node scripts/sim/ci.mjs --scope=changed --preflight` and configure the reported repository settings through the existing owner.
-     Confirm setting names through `gh variable list` and `gh secret list`, or authenticated Actions settings if CLI access fails; unchanged reruns cannot repair absent settings, and the final Verify failure is the expected propagation of Build's failure.
-     Keep preflight and execution environment mappings identical, reuse the existing dev Supabase URL secret when available, and preserve required flow selection until real fixtures are configured.
+     Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
+     CI only posts `Sim scope` and uploads `selection.json`; never restore hosted simulator execution, preflight or simulator secrets.
+     Diagnose local setup through `node scripts/sim/ci.mjs --scope=changed --plan` and the shipping contract, preserving required flows and genuine billing starting states.
+     Use saved Maestro YAML and Maestro MCP for new walkthroughs; validate actual interactions plus hierarchy observations through the product-flow evidence consumer when changing tool routing.
+     If the canonical local media preflight cannot inspect process ownership, retain the failed result and route that check to the existing authorized host owner; do not weaken the preflight or move native execution into CI.
 4. **Eval cases**: for the sharpest escapes, capture
    `scripts/verify/evals/incidents/<pr-number>/` (diff.patch via
    `gh pr diff <n> --patch` of the ORIGINAL breaking change when identifiable,

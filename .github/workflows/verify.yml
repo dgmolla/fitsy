@@ -25,6 +25,10 @@ jobs:
   # locally. Main pushes use before/after, including every commit in a batch.
   classify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
     outputs:
       code: ${{ steps.t.outputs.code }}
       tests: ${{ steps.t.outputs.tests }}
@@ -41,9 +45,29 @@ jobs:
           fetch-depth: 0
       - run: git fetch origin main
       - id: t
-        # The shared planner distinguishes verification wiring from native inputs;
-        # a verification-only PR must not request simulator service credentials.
-        run: node scripts/verify/impact-plan.mjs --github-output
+        run: |
+          mkdir -p .evidence/sim-scope
+          node scripts/verify/impact-plan.mjs --github-output > .evidence/sim-scope/selection.json
+      - name: Upload simulator selection
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-scope
+          path: .evidence/sim-scope/selection.json
+          if-no-files-found: error
+      - name: Record Sim scope on PR head
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { simulator } = JSON.parse(require('node:fs').readFileSync('.evidence/sim-scope/selection.json', 'utf8'));
+            await github.rest.repos.createCommitStatus({
+              ...context.repo,
+              sha: context.payload.pull_request.head.sha,
+              context: 'Sim scope',
+              state: 'success',
+              description: `scope=${simulator.scope} flows=${simulator.flows.join(',') || '-'}`,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
       - name: Install gitleaks (docs PRs can leak secrets too)
         run: curl -sL "$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64.tar.gz | head -1 | cut -d '"' -f4)" | tar xz -C /usr/local/bin gitleaks || echo "gitleaks install failed; grep fallback covers"
       - name: Baseline checks (always, no npm ci)
@@ -163,16 +187,14 @@ jobs:
 
   build:
     needs: [classify, static]
-    # A docs-only needs-sim override can run after the correctly skipped static
-    # job. Every code change still requires successful static validation.
+    # Builds retain code applicability; simulator execution belongs to the Mac.
     if: >-
       always() && needs.classify.result == 'success' &&
       needs.classify.outputs.build == 'true' &&
       ((needs.classify.outputs.code == 'true' && needs.static.result == 'success') ||
        (needs.classify.outputs.code == 'false' && needs.static.result == 'skipped'))
     name: Build (L3)
-    runs-on: ${{ needs.classify.outputs.simulator == 'true' && 'macos-15' || 'ubuntu-latest' }}
-    timeout-minutes: 90
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -183,60 +205,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: git fetch origin main
-      - name: Preflight simulator configuration
-        if: needs.classify.outputs.simulator == 'true'
-        env:
-          FITSY_CI_SIM_SCOPE: ${{ needs.classify.outputs.sim_scope }}
-          FITSY_CI_SIM_MODE: ${{ needs.classify.outputs.sim_mode }}
-          FITSY_CI_SIM_SMOKE: ${{ needs.classify.outputs.sim_smoke }}
-          FITSY_CI_SIM_FLOWS: ${{ needs.classify.outputs.sim_flows }}
-          EXPO_PUBLIC_API_URL: https://dev.fitsy.org
-          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.FITSY_SIM_SUPABASE_URL || secrets.DEV_SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.FITSY_SIM_SUPABASE_ANON_KEY }}
-          EXPO_PUBLIC_REVENUECAT_TEST_KEY: ${{ vars.FITSY_SIM_REVENUECAT_TEST_KEY }}
-          EXPO_PUBLIC_DEV_LOGIN_EMAIL: ${{ vars.FITSY_SIM_LOGIN_EMAIL }}
-          EXPO_PUBLIC_DEV_LOGIN_PASSWORD: ${{ secrets.FITSY_SIM_LOGIN_PASSWORD }}
-          FITSY_SIM_EXPIRED_LOGIN_EMAIL: ${{ vars.FITSY_SIM_EXPIRED_LOGIN_EMAIL }}
-          FITSY_SIM_EXPIRED_LOGIN_PASSWORD: ${{ secrets.FITSY_SIM_EXPIRED_LOGIN_PASSWORD }}
-        run: node scripts/sim/ci.mjs --scope=changed --preflight
       - name: Run L3 checks
         if: needs.classify.outputs.code == 'true'
         run: node scripts/verify/run.mjs --layer=3 --runs=ci --scope=changed
-      - uses: actions/setup-java@v4
-        if: needs.classify.outputs.simulator == 'true'
-        with:
-          distribution: temurin
-          java-version: 17
-      - name: Install Maestro
-        if: needs.classify.outputs.simulator == 'true'
-        run: brew install mobile-dev-inc/tap/maestro
-      - name: Run selected simulator flows
-        if: needs.classify.outputs.simulator == 'true'
-        env:
-          FITSY_CI_SIM_SCOPE: ${{ needs.classify.outputs.sim_scope }}
-          FITSY_CI_SIM_MODE: ${{ needs.classify.outputs.sim_mode }}
-          FITSY_CI_SIM_SMOKE: ${{ needs.classify.outputs.sim_smoke }}
-          FITSY_CI_SIM_FLOWS: ${{ needs.classify.outputs.sim_flows }}
-          EXPO_PUBLIC_API_URL: https://dev.fitsy.org
-          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.FITSY_SIM_SUPABASE_URL || secrets.DEV_SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.FITSY_SIM_SUPABASE_ANON_KEY }}
-          EXPO_PUBLIC_REVENUECAT_TEST_KEY: ${{ vars.FITSY_SIM_REVENUECAT_TEST_KEY }}
-          EXPO_PUBLIC_DEV_LOGIN_EMAIL: ${{ vars.FITSY_SIM_LOGIN_EMAIL }}
-          EXPO_PUBLIC_DEV_LOGIN_PASSWORD: ${{ secrets.FITSY_SIM_LOGIN_PASSWORD }}
-          FITSY_SIM_EXPIRED_LOGIN_EMAIL: ${{ vars.FITSY_SIM_EXPIRED_LOGIN_EMAIL }}
-          FITSY_SIM_EXPIRED_LOGIN_PASSWORD: ${{ secrets.FITSY_SIM_EXPIRED_LOGIN_PASSWORD }}
-        run: node scripts/verify/run.mjs --only=mobile-e2e --runs=ci --scope=changed
-      - name: Preserve simulator logs and screenshots
-        if: always() && needs.classify.outputs.simulator == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobile-simulator-${{ github.run_attempt }}
-          path: |
-            .evidence/mobile-e2e/
-            .evidence/product-build/build.log
-            .evidence/product-build/metro.log
-          if-no-files-found: ignore
-          retention-days: 7
 
   verify:
     name: Verify
