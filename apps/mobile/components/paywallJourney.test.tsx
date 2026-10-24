@@ -8,15 +8,17 @@ import { StackActions, StackRouter, TabRouter } from '@react-navigation/routers'
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { openPurchasedDestination, resetWelcomeJourney } from '../lib/paywallJourney';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
-import { saveMacroTargets, clearMacroTargets } from '../lib/macroStorage';
+import { saveMacroTargets, clearMacroTargets, getMacroTargets, getDiscoveryMacroTargetSnapshot } from '../lib/macroStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+let mockSession: { access_token: string; user: { id: string } } | null = null;
+const originalFetch = global.fetch;
 jest.mock('posthog-react-native', () => jest.fn().mockImplementation(() => ({ capture() {}, identify() {} })));
 jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: {
-  getSession: async () => ({ data: { session: null } }),
+  getSession: async () => ({ data: { session: mockSession } }),
   startAutoRefresh: () => undefined,
   stopAutoRefresh: () => undefined,
   } }) };
@@ -74,6 +76,7 @@ function Meal() {
   return <Text>{JSON.stringify(route.params)}</Text>;
 }
 function MacroSetup() { return <Text>Set macro targets</Text>; }
+function Entry() { return <Text>Retry account recovery</Text>; }
 function WelcomeScreens() {
   return <Welcome.Navigator><Welcome.Screen name="payment" component={Payment} /><Welcome.Screen name="preview" component={Preview} /><Welcome.Screen name="notification-permission" component={Notifications} /></Welcome.Navigator>;
 }
@@ -81,7 +84,7 @@ function TabScreens() {
   return <Tabs.Navigator><Tabs.Screen name="saved" component={Saved} /><Tabs.Screen name="search" component={Search} /></Tabs.Navigator>;
 }
 function AppScreens() {
-  return <App.Navigator><App.Screen name="welcome" component={WelcomeScreens} /><App.Screen name="(tabs)" component={TabScreens} /><App.Screen name="restaurant/[id]" component={Meal} /><App.Screen name="macro-setup" component={MacroSetup} /></App.Navigator>;
+  return <App.Navigator><App.Screen name="welcome" component={WelcomeScreens} /><App.Screen name="(tabs)" component={TabScreens} /><App.Screen name="restaurant/[id]" component={Meal} /><App.Screen name="macro-setup" component={MacroSetup} /><App.Screen name="index" component={Entry} /></App.Navigator>;
 }
 function Journey() {
   // Expo wraps the app and carries deep-link destination params on its parent.
@@ -91,6 +94,7 @@ function Journey() {
   ] }}><Root.Navigator><Root.Screen name="__root" component={AppScreens} /></Root.Navigator></NavigationContainer>;
 }
 beforeEach(async () => {
+  mockSession = null;
   await AsyncStorage.clear();
   await saveMacroTargets({ calories: '700', protein: '40', carbs: '80', fat: '20' });
   paymentRenders = 0;
@@ -100,9 +104,26 @@ beforeEach(async () => {
 it('routes a restored account with no local targets through macro setup', async () => {
   action = 'resubscribe';
   await clearMacroTargets();
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null }, macroTarget: null,
+  }) });
   const screen = render(<Journey />);
   await waitFor(() => expect(screen.getByText('Set macro targets')).toBeTruthy());
   expect(screen.queryByText('Meal search')).toBeNull();
+});
+
+it('resumes search with a saved partial filter after purchase', async () => {
+  action = 'resubscribe';
+  await clearMacroTargets();
+  mockSession = { access_token: 'buyer-token', user: { id: 'buyer' } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null }, macroTarget: null,
+  }) });
+  await saveMacroTargets({ calories: '600', protein: '', carbs: '64', fat: '20' }, 'search');
+  const screen = render(<Journey />);
+  await waitFor(() => expect(screen.getByText('Meal search')).toBeTruthy());
+  expect(screen.queryByText('Set macro targets')).toBeNull();
 });
 
 it('shows optional reminders without replaying stale parent payment params', async () => {
@@ -150,4 +171,52 @@ it('continues the preview craving in the real search tab after purchase', async 
   await waitFor(() => expect(screen.getByText('Meal search: chicken')).toBeTruthy());
   expect(await getPaywallIntent()).toBeNull();
   expect(screen.queryByText('Decline subscription')).toBeNull();
+});
+
+afterEach(() => { mockSession = null; global.fetch = originalFetch; });
+
+it('hydrates a paid account target before the shared purchase/restore/late redirect', async () => {
+  action = 'resubscribe';
+  await clearMacroTargets();
+  mockSession = { access_token: 'buyer-token', user: { id: 'buyer' } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+    macroTarget: { calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' },
+  }) });
+  await rememberPaywallIntent({ action: 'menu', restaurantId: 'varilla',
+    restaurantName: 'Varilla', menuItemId: 'meal-1', query: 'pizza' });
+  const screen = render(<Journey />);
+  await waitFor(() => expect(screen.getByText(JSON.stringify({ id: 'varilla', selectedItemId: 'meal-1' }))).toBeTruthy());
+  expect(screen.queryByText('Set macro targets')).toBeNull();
+  expect(await getPaywallIntent()).toBeNull();
+});
+
+it('sends unavailable purchased recovery to the entry retry without consuming a selected meal', async () => {
+  action = 'resubscribe';
+  await clearMacroTargets();
+  mockSession = { access_token: 'buyer-token', user: { id: 'buyer' } };
+  await rememberPaywallIntent({ action: 'menu', restaurantId: 'varilla', menuItemId: 'meal-1' });
+  global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+  const screen = render(<Journey />);
+  await waitFor(() => expect(screen.getByText('Retry account recovery')).toBeTruthy());
+  expect(screen.queryByText('Set macro targets')).toBeNull();
+  expect(screen.queryByText('Meal search')).toBeNull();
+  expect((await getPaywallIntent())?.menuItemId).toBe('meal-1');
+});
+
+
+it('hydrates complete account targets at purchase while retaining an intentional partial filter', async () => {
+  action = 'resubscribe';
+  await clearMacroTargets();
+  mockSession = { access_token: 'buyer-token', user: { id: 'buyer' } };
+  const partial = { protein: '65', carbs: '', fat: '', calories: '' };
+  await saveMacroTargets(partial, 'search');
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+    user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null },
+    macroTarget: { calories: 2590, proteinG: 210, carbsG: 280, fatG: 70, source: 'manual' },
+  }) });
+  const screen = render(<Journey />);
+  await waitFor(() => expect(screen.getByText('Meal search')).toBeTruthy());
+  expect(await getMacroTargets()).toEqual({ calories: '740', protein: '60', carbs: '80', fat: '20' });
+  expect((await getDiscoveryMacroTargetSnapshot())?.targets).toEqual(partial);
 });

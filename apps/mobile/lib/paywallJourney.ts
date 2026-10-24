@@ -1,6 +1,8 @@
 import { StackRouter, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { clearPaywallIntent, getPaywallIntent, getPurchasedContinuation, markPurchasedContinuation } from './paywallIntent';
-import { getMacroTargets } from './macroStorage';
+import { getMacroTargets, hasSavedMealTargets } from './macroStorage';
+import { recoverStartupMealTargets } from './startupMacroRecovery';
+import { confirmLegacyMacroRecovery } from './macroRecoveryPrompt';
 import { recordOnboardingComplete } from './onboardingCompletion';
 
 type Navigation = Pick<NavigationProp<ParamListBase>, 'reset' | 'getParent'> & {
@@ -56,12 +58,16 @@ export async function openPurchasedDestination(navigation: Navigation, options?:
   if (!isCurrent() || (resume && !intent)) return false;
   if (options && 'requireTargets' in options && !(await getMacroTargets())) {
     if (!isCurrent()) return false;
-    // An entitled account may need targets before opening the selected meal.
-    // Persist the owned selection for that final setup step and cold resumes.
     await markPurchasedContinuation();
     if (!isCurrent()) return false;
-    resetJourney(navigation, { index: 0, routes: [{ name: 'macro-setup' }] });
-    return true;
+    const recovery = await recoverStartupMealTargets(confirmLegacyMacroRecovery);
+    if (!isCurrent() || recovery === 'account-changed') return false;
+    if (recovery !== 'restored' && !(recovery === 'unavailable' && await hasSavedMealTargets())) {
+      // The entry resolver owns retry for unavailable account data. Only a
+      // confirmed absent allocation may offer replacement target setup.
+      resetJourney(navigation, { index: 0, routes: [{ name: recovery === 'absent' ? 'macro-setup' : 'index' }] });
+      return true;
+    }
   }
   const routes = [nestedRoute('(tabs)', { index: 0, routes: [{ name: 'search', ...(intent?.query ? { params: { query: intent.query } } : {}) }] }),
     ...(intent?.restaurantId ? [{ name: 'restaurant/[id]', params: {
