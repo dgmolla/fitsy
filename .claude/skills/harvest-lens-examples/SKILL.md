@@ -17,6 +17,7 @@ lens edits).
 1. **Collect**: `gh pr list --state merged --limit 100 --json number,title,body,mergedAt`
    filtered to `fix(`/`revert(` titles or the `incident` label, with
    `number > last-harvest`.
+   If CLI access fails, use connected tools or an authenticated browser to read the exact CI run before requesting logs from the human.
 2. **Classify each PR** (read title/body; `gh pr diff <n>` when unclear).
    Answer three questions:
    - *What class of bug was this?* (one sentence, generalized past the specific file)
@@ -39,6 +40,7 @@ lens edits).
      UI changes require CI render smoke for proven screen-local style/copy, affected E2E for behavior, or full coverage for shared UI/app shells.
      Extend render checkpoints together with their maintained YAML assertions, and keep simulator execution out of pre-push.
      Keep verification-only manifest scripts and E2E orchestration out of native scope; test that dependency/build changes and `needs-sim` still force coverage.
+     When changing verification caller routing, set each subprocess fixture's `FITSY_RUNS` explicitly and replay it under the L2 parent's `FITSY_RUNS=ci CI=true` environment.
 4. **Eval cases**: for the sharpest escapes, capture
    `scripts/verify/evals/incidents/<pr-number>/` (diff.patch via
    `gh pr diff <n> --patch` of the ORIGINAL breaking change when identifiable,

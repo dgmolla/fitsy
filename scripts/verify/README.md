@@ -68,6 +68,8 @@ Build runs `--only=mobile-e2e --runs=ci --scope=changed` after any applicable AP
 A simulator failure fails Build, so the unchanged final Verify aggregator rejects it.
 The native recipe uses dev services, a disposable Test Store account and an explicitly created device; ordinary logs and screenshots are uploaded for diagnosis.
 The classifier exports scope, mode, flow names and render checkpoints; execution rejects drift in any of these inputs.
+Caller fixtures must choose their own `FITSY_RUNS` context: L2 exports `ci`, which selects hosted execution even when the fixture intends to verify the local skip.
+Replay routing regressions with `FITSY_RUNS=ci CI=true npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/mobile-e2e.test.ts verify/simulator-scope.test.ts`.
 See [shipping.md](../../docs/engineering/devops/shipping.md) for CI configuration and the separate local product-flow acceptance requirement.
 
 The local pre-push hook runs size/domain checks, then cheap static checks and focused tests.
