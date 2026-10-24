@@ -35,7 +35,8 @@ const config = {
             tsconfig: {
               module: 'CommonJS',
               moduleResolution: 'node',
-              paths: {},
+              // Keep the app's workspace aliases when dependencies are linked
+              // from another checkout, matching moduleNameMapper above.
               strict: true,
             },
           },
@@ -75,6 +76,7 @@ const config = {
       // no node override, so StyleSheet/Modal/etc. are the real RN mocks.
       displayName: 'components',
       preset: 'jest-expo',
+      setupFiles: ['<rootDir>/__mocks__/test-env.cjs'],
       testMatch: ['<rootDir>/components/**/*.test.tsx'],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',

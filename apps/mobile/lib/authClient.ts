@@ -11,6 +11,9 @@ import { supabase } from './supabase';
 import { clearPaywallIntent } from './paywallIntent';
 import { clearPaymentSignInContinuation } from './paymentSignInContinuation';
 import { clearPendingMealClaim } from './pendingMealClaim';
+import { archiveActiveMacroTargets, clearActiveMacroTargets } from './macroStorage';
+import { clearAccountOnboardingData } from './onboardingStorage';
+import { forgetPendingProfileSync } from './profileSyncStorage';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 // SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
@@ -47,7 +50,14 @@ export async function storeToken(token: string): Promise<void> {
  * Expiry retains account-bound checkout for reauthentication; explicit logout
  * abandons it before the SDK emits SIGNED_OUT.
  */
-export async function clearToken(reason: 'logout' | 'session-expired' = 'logout'): Promise<void> {
+export async function clearToken({ reason = 'logout', forgetTargets = false }: {
+  reason?: 'logout' | 'session-expired';
+  forgetTargets?: boolean;
+} = {}): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  if (forgetTargets && data.session?.user?.id) await forgetPendingProfileSync(data.session.user.id);
+  await archiveActiveMacroTargets(data.session?.user?.id ?? null, forgetTargets);
+  await clearAccountOnboardingData(data.session?.user?.id ?? null, forgetTargets);
   if (reason === 'logout') await Promise.allSettled([
     clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(),
   ]);
@@ -56,6 +66,7 @@ export async function clearToken(reason: 'logout' | 'session-expired' = 'logout'
     // signOut may fail offline — don't let that block local cleanup.
   });
   await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await clearActiveMacroTargets(data.session?.user?.id ?? null);
 }
 
 /**

@@ -6,7 +6,7 @@ test.each(goals)('%s recommendations meet adult ranges and reconcile calories', 
   for (const calories of [1200, 1800, 2400, 3500]) {
     const daily = calculateDailyMacros(calories, goal);
     expect(daily.protein * 4 / calories).toBeGreaterThanOrEqual(0.1);
-    expect(daily.protein * 4 / calories).toBeLessThanOrEqual(0.25);
+    expect(daily.protein * 4 / calories).toBeLessThanOrEqual(0.16);
     expect(daily.carbs * 4 / calories).toBeGreaterThanOrEqual(0.45);
     expect(daily.carbs * 4 / calories).toBeLessThanOrEqual(0.65);
     expect(daily.fat * 9 / calories).toBeGreaterThanOrEqual(0.2);
@@ -19,6 +19,11 @@ test.each([NaN, Infinity, -Infinity, -100, 0])('invalid calories %s use finite d
   expect(calculateDailyMacros(calories)).toEqual(calculateDailyMacros(2000));
 });
 
-test.each(['build_muscle', 'lose_fat'] as const)('%s uses moderate protein, sufficient carbohydrate and fat', (goal) => {
-  expect(calculateDailyMacros(2400, goal)).toEqual({ calories: 2400, protein: 150, carbs: 270, fat: 80 });
+test('goals keep distinct protein and carbohydrate allocations', () => {
+  expect(calculateDailyMacros(2400, 'build_muscle')).toEqual({ calories: 2400, protein: 90, carbs: 330, fat: 80 });
+  const loseFat = calculateDailyMacros(2400, 'lose_fat');
+  expect(loseFat.calories).toBe(2400);
+  expect(loseFat.protein).toBeCloseTo(84);
+  expect(loseFat.carbs).toBeCloseTo(336);
+  expect(loseFat.fat).toBeCloseTo(80);
 });

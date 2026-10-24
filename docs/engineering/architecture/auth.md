@@ -67,7 +67,7 @@ Successful sign-in preserves the meal and uses the account's entitlement verdict
 Purchase and restore recheck the session and native account before invoking the store, including when the session expires while plans are open.
 Automatic session expiry preserves the pending selection with its original account ownership, so another account cannot read or claim it.
 An authenticated API rejection resumes a pending no-trial checkout at sign-in after clearing expired tokens.
-Explicit logout and account deletion abandon the checkout through `clearToken()`; expiry uses `clearToken('session-expired')`.
+Explicit logout and account deletion abandon the checkout through `clearToken()`; expiry uses `clearToken({ reason: 'session-expired' })`.
 Trial invitations, reminders and out-of-area routes retain their existing behavior.
 Development login is guarded by `__DEV__` in both the interface and the shared authentication helper.
 

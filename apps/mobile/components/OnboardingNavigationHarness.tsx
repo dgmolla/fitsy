@@ -28,6 +28,7 @@ import { saveMacroTargets } from '../lib/macroStorage';
 import { saveOnboardingField } from '../lib/onboardingStorage';
 import { hasPaymentSignInContinuation, rememberPaymentSignInContinuation } from '../lib/paymentSignInContinuation';
 import { hasPendingMealClaim, rememberPendingMealClaim } from '../lib/pendingMealClaim';
+import type { ProfileResponse, UserGoalV2 } from '@fitsy/shared';
 
 type Session = { access_token: string; user: { id: string } } | null;
 type AuthListener = (event: string, session: Session) => void;
@@ -87,6 +88,52 @@ const originalFetch = global.fetch;
 export const selected = { action: 'menu' as const, restaurantId: 'varilla', restaurantName: 'Varilla', menuItemId: 'meal-1', query: 'pizza' };
 const defaultGetItem = (AsyncStorage.getItem as jest.Mock).getMockImplementation() as typeof AsyncStorage.getItem;
 export function response(body: unknown) { return { ok: true, status: 200, json: async () => body } as Response; }
+type AccountProfile = ProfileResponse<UserGoalV2>;
+let accountProfiles: Record<string, AccountProfile | undefined> = Object.create(null);
+function defaultAccountProfile(id: string): AccountProfile {
+  return {
+    user: { id, email: `${id}@example.test`, name: null, birthday: null, age: null,
+      heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null, onboardingStep: 0 },
+    macroTarget: null,
+  };
+}
+export function seedAccountProfile(id: string, seed: {
+  user?: Partial<Omit<AccountProfile['user'], 'id'>>;
+  macroTarget?: AccountProfile['macroTarget'];
+}) {
+  const profile = accountProfiles[id] ?? defaultAccountProfile(id);
+  accountProfiles[id] = {
+    user: { ...profile.user, ...seed.user },
+    macroTarget: seed.macroTarget === undefined ? profile.macroTarget : seed.macroTarget,
+  };
+}
+// Synthetic transport only. Real profileSync still owns claiming, conversion,
+// persistence and reconciliation; auth/subscription failures remain independent.
+export function withAccountProfile(other: (url: string, init?: RequestInit) => Promise<Response>,
+  profileOverride?: (url: string, init?: RequestInit) => Promise<Response>) {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = typeof input === 'object' && 'url' in input ? input.url : String(input);
+    if (new URL(url).pathname !== '/api/user/profile') return other(url, init);
+    const id = mockState.session?.user.id;
+    if (!id) return { ...response({ error: 'Unauthorized' }), ok: false, status: 401 };
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (method !== 'GET' && method !== 'PATCH')
+      return { ...response({ error: 'Method not allowed' }), ok: false, status: 405 };
+    if (profileOverride) return profileOverride(url, init);
+    const profile = accountProfiles[id] ?? defaultAccountProfile(id);
+    if (method === 'PATCH') {
+      const update = JSON.parse(String(init?.body)) as Partial<AccountProfile['user']> & {
+        macroTarget?: AccountProfile['macroTarget']; preserveMacroTarget?: boolean;
+      };
+      for (const key of ['birthday', 'heightCm', 'weightKg', 'sex', 'activityLevel', 'goal', 'onboardingStep'] as const)
+        if (update[key] !== undefined) Object.assign(profile.user, { [key]: update[key] });
+      if (update.macroTarget) profile.macroTarget = { ...update.macroTarget };
+      accountProfiles[id] = profile;
+    }
+    // Snapshot the response so a later PATCH cannot mutate an earlier read.
+    return response(JSON.parse(JSON.stringify(method === 'PATCH' ? { user: profile.user } : profile)));
+  };
+}
 export function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 function Preview() { return <><Text>Discovery preview</Text><Button title="Open selected menu" onPress={() => router.push('/welcome/signin')} /></>; }
 function Restaurant() { const params = useLocalSearchParams(); return <Text>{JSON.stringify(params)}</Text>; }
@@ -122,10 +169,11 @@ beforeEach(async () => {
   mockState.sessionRead = undefined;
   mockState.googleResponse = undefined;
   mockState.authListeners.clear();
+  accountProfiles = Object.create(null);
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
-  global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', expiresAt: null }));
+  global.fetch = jest.fn(withAccountProfile(async () => response({ active: true, status: 'active', expiresAt: null })));
 });
 
 export function installEligibleTrialOffer() {
@@ -145,8 +193,8 @@ export async function installPurchasedAccount() {
   jest.spyOn(Purchases, 'getAppUserID').mockResolvedValue('buyer');
   jest.spyOn(Purchases, 'isAnonymous').mockResolvedValue(false);
   jest.spyOn(Purchases, 'getCustomerInfo').mockResolvedValue(info);
-  global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', verdict: 'active',
-    synced: true, stale: false, lastRcVerifiedAt: new Date().toISOString(), expiresAt: '2030-01-08T12:00:00Z' }));
+  global.fetch = jest.fn(withAccountProfile(async () => response({ active: true, status: 'active', verdict: 'active',
+    synced: true, stale: false, lastRcVerifiedAt: new Date().toISOString(), expiresAt: '2030-01-08T12:00:00Z' })));
 }
 afterEach(() => { global.fetch = originalFetch; jest.restoreAllMocks(); });
 

@@ -119,7 +119,7 @@ describe('confirmed session adoption', () => {
   it.each(['logout', 'session-expired'] as const)('%s clears tokens and only explicit logout abandons checkout', async reason => {
     const keys = ['@fitsy/paywallIntent', '@fitsy/purchasedContinuation', '@fitsy/paymentSignInContinuation', '@fitsy/pendingMealClaim'];
     for (const key of keys) await AsyncStorage.setItem(key, 'retained-checkout');
-    await clearToken(reason);
+    await clearToken({ reason });
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('fitsy_authToken');
     for (const key of keys) expect(await AsyncStorage.getItem(key)).toBe(reason === 'logout' ? null : 'retained-checkout');
   });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
 import { calculateTdee } from "@/lib/tdeeCalculator";
-import { calculateAge } from "@fitsy/shared";
+import { calculateAge, caloriesFromMacros } from "@fitsy/shared";
 import type {
   ProfileUpdateRequest,
   ProfileResponse,
@@ -63,6 +63,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             proteinG: true,
             carbsG: true,
             fatG: true,
+            source: true,
           },
         },
       },
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             proteinG: user.macroTarget.proteinG,
             carbsG: user.macroTarget.carbsG,
             fatG: user.macroTarget.fatG,
+            source: user.macroTarget.source,
           }
         : null,
     };
@@ -123,6 +125,36 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   }
 
   const update = body as Partial<ProfileUpdateRequest>;
+
+  let macroTarget: ProfileUpdateRequest['macroTarget'];
+  if (update.macroTarget !== undefined) {
+    const target = update.macroTarget;
+    if (!target || typeof target !== "object" ||
+        typeof target.calories !== "number" || !Number.isFinite(target.calories) || target.calories <= 0 ||
+        ![target.proteinG, target.carbsG, target.fatG].every(value =>
+          typeof value === "number" && Number.isFinite(value) && value >= 0)) {
+      return NextResponse.json({ error: "macroTarget requires positive calories and complete nonnegative macro grams" }, { status: 400 });
+    }
+    const grams = { protein: Math.round(target.proteinG), carbs: Math.round(target.carbsG), fat: Math.round(target.fatG) };
+    const calories = caloriesFromMacros(grams);
+    if (!Number.isSafeInteger(calories) || calories <= 0) {
+      return NextResponse.json({ error: "macroTarget must have positive finite energy after whole-gram rounding" }, { status: 400 });
+    }
+    // Legacy clients can send stale calories. Complete explicit grams own energy.
+    macroTarget = { calories, proteinG: grams.protein, carbsG: grams.carbs, fatG: grams.fat, source: target.source ?? "manual" };
+  }
+
+  if (update.macroTarget?.source !== undefined &&
+      update.macroTarget.source !== "manual" && update.macroTarget.source !== "automatic") {
+    return NextResponse.json({ error: "macroTarget source must be manual or automatic" }, { status: 400 });
+  }
+
+  if (update.preserveMacroTarget !== undefined && typeof update.preserveMacroTarget !== "boolean") {
+    return NextResponse.json({ error: "preserveMacroTarget must be a boolean" }, { status: 400 });
+  }
+  if (update.preserveMacroTarget && update.macroTarget) {
+    return NextResponse.json({ error: "macroTarget cannot be combined with preserveMacroTarget" }, { status: 400 });
+  }
 
   // ─── Field validation ──────────────────────────────────────────────────────
 
@@ -250,31 +282,37 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
       // ─── Explicit macro targets override auto-calc ─────────────────────────
 
-      if (update.macroTarget) {
+      if (macroTarget) {
         await tx.macroTarget.upsert({
           where: { userId: auth.sub },
           create: {
             userId: auth.sub,
-            calories: update.macroTarget.calories,
-            proteinG: update.macroTarget.proteinG,
-            carbsG: update.macroTarget.carbsG,
-            fatG: update.macroTarget.fatG,
+            calories: macroTarget.calories,
+            proteinG: macroTarget.proteinG,
+            carbsG: macroTarget.carbsG,
+            fatG: macroTarget.fatG,
             goalType: "maintain",
+            source: macroTarget.source ?? "manual",
           },
           update: {
-            calories: update.macroTarget.calories,
-            proteinG: update.macroTarget.proteinG,
-            carbsG: update.macroTarget.carbsG,
-            fatG: update.macroTarget.fatG,
+            calories: macroTarget.calories,
+            proteinG: macroTarget.proteinG,
+            carbsG: macroTarget.carbsG,
+            fatG: macroTarget.fatG,
+            source: macroTarget.source ?? "manual",
           },
         });
       } else if (
+        !update.preserveMacroTarget &&
         user.birthday !== null &&
         user.heightCm !== null &&
         user.weightKg !== null &&
         user.activityLevel !== null &&
         user.goal !== null
       ) {
+        const existingTarget = await tx.macroTarget.findUnique({ where: { userId: auth.sub }, select: { source: true } });
+        // A sparse profile write may retune an automatic target, never a manual one.
+        if (existingTarget && existingTarget.source !== "automatic") return user;
         // Auto-calculate TDEE only when no explicit macros provided
         const tdee = calculateTdee(
           calculateAge(user.birthday),
@@ -294,12 +332,14 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
             carbsG: tdee.carbsG,
             fatG: tdee.fatG,
             goalType: "maintain",
+            source: "automatic",
           },
           update: {
             calories: tdee.calories,
             proteinG: tdee.proteinG,
             carbsG: tdee.carbsG,
             fatG: tdee.fatG,
+            source: "automatic",
           },
         });
       }

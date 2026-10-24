@@ -6,7 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
 import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
-import { pullProfileFromServer } from '@/lib/profileSync';
+import { requireProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { OnboardingAccountSummary } from '@/components/OnboardingAccountSummary';
 import { WelcomeAuthActions } from '@/components/WelcomeAuthActions';
@@ -175,9 +175,10 @@ export default function SignInScreen() {
       else await Promise.all([clearPaywallIntent(), clearPendingMealClaim()]);
     } else await claimPaywallIntent(r.user.id);
     if (!isCurrent()) return;
+    if (outOfArea !== '1' && isCurrent()) await requireProfileFromServer();
+    if (!isCurrent()) return;
     await captureIdentity(r.user.id, r.user.email);
     if (!isCurrent()) return;
-    if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent()) && isCurrent()) await pullProfileFromServer();
     await navigateAfterAuth(r.isNewUser, r.user.id, ownedCheckout, isCurrent);
   }, [navigateAfterAuth, outOfArea, returnTo]);
 

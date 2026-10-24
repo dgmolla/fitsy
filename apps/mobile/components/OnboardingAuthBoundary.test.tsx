@@ -1,4 +1,4 @@
-import { mockState, selected, response, routes, renderJourney, AsyncStorage, act, fireEvent, waitFor, getPaywallIntent, getStoredToken, rememberPaywallIntent, rememberPaymentSignInContinuation } from './OnboardingNavigationHarness';
+import { withAccountProfile, mockState, selected, response, routes, renderJourney, AsyncStorage, act, fireEvent, waitFor, getPaywallIntent, getStoredToken, rememberPaywallIntent, rememberPaymentSignInContinuation } from './OnboardingNavigationHarness';
 import { Alert } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-native-purchases';
@@ -37,7 +37,7 @@ it.each(['Apple failure', 'Apple cancellation', 'Google exchange failure', 'Goog
     if (kind === 'Google cancellation') mockState.googleResponse = 'cancel';
     if (kind === 'Google missing token') mockState.googleResponse = 'missing-token';
     let rejectGoogle = kind === 'Google exchange failure';
-    global.fetch = jest.fn((url: RequestInfo | URL) => {
+    global.fetch = jest.fn(withAccountProfile((url: string) => {
       if (String(url).endsWith('/api/auth/google') && rejectGoogle) {
         rejectGoogle = false;
         return Promise.resolve({ ...response({ error: 'Provider token rejected' }), ok: false, status: 401 });
@@ -45,7 +45,7 @@ it.each(['Apple failure', 'Apple cancellation', 'Google exchange failure', 'Goog
       return Promise.resolve(response(/\/api\/auth\/(apple|google)$/.test(String(url))
         ? { token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false }
         : { active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false }));
-    });
+    }));
     await rememberPaywallIntent(selected);
     await rememberPaymentSignInContinuation();
     const routeMap = { ...routes, 'welcome/payment': () => <Payment /> };
@@ -94,9 +94,9 @@ it.each(['welcome-continue', 'paywall-restore', 'api-401'])('session expiry befo
   jest.mocked(AppleAuthentication.signInAsync).mockResolvedValue({
     identityToken: 'apple-token', authorizationCode: 'apple-code',
   } as AppleAuthentication.AppleAuthenticationCredential);
-  global.fetch = jest.fn((url: RequestInfo | URL) => Promise.resolve(response(String(url).endsWith('/api/auth/apple')
+  global.fetch = jest.fn(withAccountProfile((url: string) => Promise.resolve(response(url.endsWith('/api/auth/apple')
     ? { token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false }
-    : { active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false })));
+    : { active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false }))));
   await rememberPaywallIntent(selected);
   await rememberPaymentSignInContinuation();
   const screen = renderJourney('/welcome/signin?returnTo=payment', { ...routes, 'welcome/payment': () => <Payment /> });
@@ -128,3 +128,41 @@ it.each(['welcome-continue', 'paywall-restore', 'api-401'])('session expiry befo
   expect(purchase).not.toHaveBeenCalled();
   expect(restore).not.toHaveBeenCalled();
 });
+
+it.each(['malformed', 'unavailable'] as const)(
+  'keeps checkout on sign-in for a %s account profile and continues after a valid-profile retry', async kind => {
+    const alert = jest.spyOn(Alert, 'alert');
+    const purchase = jest.spyOn(Purchases, 'purchasePackage');
+    jest.mocked(AppleAuthentication.signInAsync).mockReset().mockResolvedValue({
+      identityToken: 'apple-token', authorizationCode: 'apple-code',
+    } as AppleAuthentication.AppleAuthenticationCredential);
+    const authAndSubscription = async (url: string) => response(url.endsWith('/api/auth/apple')
+      ? { token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false }
+      : { active: false, synced: true, verdict: 'never_subscribed',
+        lastRcVerifiedAt: new Date().toISOString(), stale: false });
+    // Deliberately wrong profile transport, not a stub of profileSync or sign-in.
+    global.fetch = jest.fn(withAccountProfile(authAndSubscription, async () => kind === 'malformed'
+      ? response({ macroTarget: null })
+      : { ...response({ error: 'Profile unavailable' }), ok: false, status: 503 }));
+    await rememberPaywallIntent(selected);
+    await rememberPaymentSignInContinuation();
+    const screen = renderJourney('/welcome/payment', { ...routes, 'welcome/payment': () => <Payment /> });
+    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));
+    await act(async () => { fireEvent.press(screen.getByTestId('signup-apple')); });
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Sign In Failed',
+      'Could not load your account targets. Try again when you are connected.'));
+    expect(mockState.session?.user.id).toBe('buyer');
+    expect(screen.getPathname()).toBe('/welcome/signin');
+    expect(screen.queryByTestId('paywall-logo')).toBeNull();
+    expect(await getPaywallIntent('buyer')).toEqual(selected);
+    expect(purchase).not.toHaveBeenCalled();
+
+    global.fetch = jest.fn(withAccountProfile(authAndSubscription));
+    await act(async () => { fireEvent.press(screen.getByTestId('signup-apple')); });
+    await waitFor(() => expect(screen.getByTestId('paywall-offer-paid')).toBeTruthy());
+    expect(screen.getPathname()).toBe('/welcome/payment');
+    expect(screen.queryByTestId('signup-apple')).toBeNull();
+    expect(await getPaywallIntent('buyer')).toEqual(selected);
+    expect(purchase).not.toHaveBeenCalled();
+  },
+);

@@ -25,19 +25,19 @@ describe('PRESETS', () => {
   it('Cut preset has correct macro values', () => {
     const cut = PRESETS.find((p) => p.label === 'Cut (2000 kcal/day)');
     expect(cut).toBeDefined();
-    expect(cut!.values).toEqual({ calories: '2000', protein: '150', carbs: '200', fat: '67' });
+    expect(cut!.values).toEqual({ calories: '2000', protein: '110', carbs: '246', fat: '64' });
   });
 
   it('Bulk preset has correct macro values', () => {
     const bulk = PRESETS.find((p) => p.label === 'Bulk (3000 kcal/day)');
     expect(bulk).toBeDefined();
-    expect(bulk!.values).toEqual({ calories: '3000', protein: '180', carbs: '350', fat: '100' });
+    expect(bulk!.values).toEqual({ calories: '3000', protein: '130', carbs: '395', fat: '100' });
   });
 
   it('Maintain preset has correct macro values', () => {
     const maintain = PRESETS.find((p) => p.label === 'Maintain (2500 kcal/day)');
     expect(maintain).toBeDefined();
-    expect(maintain!.values).toEqual({ calories: '2500', protein: '160', carbs: '280', fat: '83' });
+    expect(maintain!.values).toEqual({ calories: '2500', protein: '115', carbs: '330', fat: '80' });
   });
 
   it('all preset calorie values match their labels', () => {
@@ -45,6 +45,8 @@ describe('PRESETS', () => {
       const labelKcal = preset.label.match(/(\d+) kcal/)?.[1];
       expect(labelKcal).toBeDefined();
       expect(preset.values.calories).toBe(labelKcal);
+      expect(Number(preset.values.calories)).toBe(Number(preset.values.protein) * 4 + Number(preset.values.carbs) * 4 + Number(preset.values.fat) * 9);
+      expect(Math.round(Number(preset.values.protein) / 3.5)).toBeLessThanOrEqual(40);
     }
   });
 });
@@ -73,6 +75,6 @@ describe('buildMacroParams', () => {
 
   it('Cut preset produces correct numeric params', () => {
     const cut = PRESETS.find((p) => p.label === 'Cut (2000 kcal/day)')!;
-    expect(buildMacroParams(cut.values)).toEqual({ protein: 150, carbs: 200, fat: 67, calories: 2000 });
+    expect(buildMacroParams(cut.values)).toEqual({ protein: 110, carbs: 246, fat: 64, calories: 2000 });
   });
 });
