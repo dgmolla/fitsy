@@ -8,6 +8,9 @@ import type {
   GoogleAuthResponse,
 } from '@fitsy/shared';
 import { supabase } from './supabase';
+import { archiveActiveMacroTargets, clearActiveMacroTargets } from './macroStorage';
+import { clearAccountOnboardingData } from './onboardingStorage';
+import { forgetPendingProfileSync } from './profileSyncStorage';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 // SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
@@ -42,12 +45,17 @@ export async function storeToken(token: string): Promise<void> {
  * Clear all auth state — Supabase session AND legacy token. Used by logout,
  * account deletion, and the 401 unauthorized handler in api.ts.
  */
-export async function clearToken(): Promise<void> {
+export async function clearToken(options: { forgetTargets?: boolean } = {}): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  if (options.forgetTargets && data.session?.user?.id) await forgetPendingProfileSync(data.session.user.id);
+  await archiveActiveMacroTargets(data.session?.user?.id ?? null, options.forgetTargets);
+  await clearAccountOnboardingData(data.session?.user?.id ?? null, options.forgetTargets);
   // Supabase's signOut clears its own SecureStore key (the session blob).
   await supabase.auth.signOut().catch(() => {
     // signOut may fail offline — don't let that block local cleanup.
   });
   await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await clearActiveMacroTargets(data.session?.user?.id ?? null);
 }
 
 /**
@@ -129,7 +137,9 @@ export async function registerAndStore(
 // registers on first run, then stores the token + adopts the session. Shared by
 // app/auth/login.tsx and app/welcome/signin.tsx — callers handle nav/analytics.
 export async function devLogin(): Promise<AuthResponse> {
-  const creds = { email: 'dev@fitsy.local', password: 'dev12345' };
+  // An isolated Test Store run can use a disposable development account
+  // without changing the shared Dev login account or its billing eligibility.
+  const creds = { email: (__DEV__ && process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL) || 'dev@fitsy.local', password: 'dev12345' };
   const attempt = async (path: string) => {
     const res = await fetch(`${BASE_URL}${path}`, {
       method: 'POST',

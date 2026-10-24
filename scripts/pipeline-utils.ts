@@ -13,13 +13,25 @@ import type {
 import { aggregateDietaryOptions, DIETARY_TAG_THRESHOLD } from "./constants.js";
 // Keep offline persistence independent of the shared barrel's environment initialization.
 import { macroWinnerSqlOrder } from "../packages/shared/src/utils/macroProvenance";
+import { validateReviewedChainWrites } from '../apps/api/services/chainWriteGuard';
+import { chainTransaction } from '../apps/api/services/chainTransaction';
 
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
 export const NON_FOOD_PATTERNS = /\b(t-?shirt|tee|hoodie|sweatshirt|hat|cap|beanie|mug|tumbler|bag|tote|merch|sticker|poster|gift\s*card|apron)\b/i;
-export const UTENSIL_PATTERNS = /\b(chopstick|fork|spoon|knife|napkin|straw|container|lid|cup\s*sleeve|utensil)\b/i;
+// A counted cookie order uses "tote" as its package; merchandise sections still reject it.
+const COUNTED_COOKIE_TOTE_PATTERN = /^\s*[1-9]\d*\s+cookies?\s+tote\s*$/i;
+export const UTENSIL_PATTERNS = /\b(chopsticks?|forks?|spoons?|knife|knives|napkins?|straws?|containers?|lids?|cup\s*sleeves?|utensils?|stir\s*sticks?|stirrers?)\b/i;
+// Match standalone contributions, not meals whose names or descriptions mention charity.
+const DONATION_PATTERN = /^\s*(?:round[\s-]+up\s+)?(?:toy\s+)?donation(?:\s+\$\s*\d+(?:\.\d{1,2})?)?\s*$/i;
+const NON_FOOD_SECTION_CATEGORY = "(?:utensils?|cutlery|paper\\s+(?:goods|supplies)|merchandise|drinkware|apparel)";
+// Require the entire section to describe non-food goods; mixed food sections stay eligible.
+const NON_FOOD_SECTION_PATTERN = new RegExp(`^\\s*${NON_FOOD_SECTION_CATEGORY}(?:\\s*(?:and|[&/+,|])\\s*${NON_FOOD_SECTION_CATEGORY})*\\s*$`, "i");
 export const CONDIMENT_PATTERNS = /\b(packet|sauce\s*cup|dressing\s*packet|ketchup|mustard|mayo|soy\s*sauce|hot\s*sauce|salt|pepper|sugar|cream|sweetener|butter\s*pat|jam|jelly|syrup|relish|vinegar|dipping\s*sauce)\b/i;
+const CONDIMENT_SECTION_EXCEPTIONS = /\b(sauce|butter|mayonnaise)\b/i;
 const BEVERAGE_PATTERNS = /\b(water|soda|juice|tea|coffee|lemonade|drink|beverage|sparkling|kombucha|milk|shake|smoothie)\b/i;
+// Brand-only drink titles need a complete match so branded food or merchandise is not exempted.
+const PEPSI_BEVERAGE_PATTERN = /^\s*(?:\d+(?:\.\d+)?\s*(?:fl\.?\s*)?oz\.?\s*)?(?:diet\s+pepsi|pepsi(?:\s+zero(?:\s+sugar)?)?)[®™]?(?:\s+(?:can|bottle))?\s*$/i;
 
 export interface RejectedItem {
   name: string;
@@ -67,9 +79,14 @@ export function validateItems(
     if (!item || !macro) continue;
 
     const name = item.name;
+    const isPepsiBeverage = PEPSI_BEVERAGE_PATTERN.test(name);
 
     // S-111: Non-food items
-    if (NON_FOOD_PATTERNS.test(name)) {
+    if (DONATION_PATTERN.test(name)) {
+      rejected.push({ name, reason: "non-food: donation" });
+      continue;
+    }
+    if (NON_FOOD_PATTERNS.test(name) && !COUNTED_COOKIE_TOTE_PATTERN.test(name)) {
       rejected.push({ name, reason: "non-food: merchandise" });
       continue;
     }
@@ -77,15 +94,21 @@ export function validateItems(
       rejected.push({ name, reason: "non-food: utensil" });
       continue;
     }
+    // Some menus place edible condiments under Utensils; preserve their calorie-based rule below.
+    if (NON_FOOD_SECTION_PATTERN.test(item.section ?? "")
+      && !CONDIMENT_PATTERNS.test(name) && !CONDIMENT_SECTION_EXCEPTIONS.test(name)) {
+      rejected.push({ name, reason: "non-food: supply or merchandise section" });
+      continue;
+    }
 
     // S-111: Zero-cal non-beverage items
-    if (macro.calories === 0 && !BEVERAGE_PATTERNS.test(name)) {
+    if (macro.calories === 0 && !BEVERAGE_PATTERNS.test(name) && !isPepsiBeverage) {
       rejected.push({ name, reason: "non-food: zero calories" });
       continue;
     }
 
     // S-112: Condiments (cal < 30 AND condiment pattern)
-    if (macro.calories < 30 && CONDIMENT_PATTERNS.test(name)) {
+    if (macro.calories < 30 && CONDIMENT_PATTERNS.test(name) && !isPepsiBeverage) {
       rejected.push({ name, reason: "condiment" });
       continue;
     }
@@ -190,6 +213,7 @@ export async function persistItemsInTx(
   // S-133: Dedup by item name — source data (esp. FatSecret) can have
   // duplicate names which violate the @@unique([restaurantId, name]) constraint.
   const validPairs = dedupByName(inputPairs);
+  await validateReviewedChainWrites(tx, [{ restaurantId, items: validPairs }]);
   if (validPairs.length < inputPairs.length) {
     console.log(`[persist] Deduped ${inputPairs.length - validPairs.length} duplicate item names for restaurant ${restaurantId}`); // eslint-disable-line no-console
   }
@@ -343,9 +367,9 @@ export async function persistItems(
   inputPairs: ValidatedPair[],
   prisma: PrismaClient,
 ): Promise<number> {
-  return prisma.$transaction(async (tx) => {
+  return chainTransaction(prisma, async (tx) => {
     return persistItemsInTx(restaurantId, inputPairs, tx);
-  });
+  }, 5_000);
 }
 
 // ─── Dietary summary ────────────────────────────────────────────────────────
@@ -376,6 +400,7 @@ export async function computeAndStoreDietaryOptions(
 
 export interface BulkRestaurantPersist {
   restaurantId: string;
+  brandId?: string;
   items: ValidatedPair[];
   /** Menu hash for incremental update tracking (S-127). */
   menuHash: string;
@@ -401,6 +426,7 @@ export async function persistHexBulkInTx(
   tx: TxClient,
 ): Promise<number> {
   if (restaurants.length === 0) return 0;
+  await validateReviewedChainWrites(tx, restaurants.map(r => ({ ...r, items: dedupByName(r.items) })));
 
   const restaurantIds = restaurants.map((r) => r.restaurantId);
   const menuHashes = restaurants.map((r) => r.menuHash);

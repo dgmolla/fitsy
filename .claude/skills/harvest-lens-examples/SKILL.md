@@ -28,10 +28,11 @@ lens edits).
    - Deterministic-catchable (a grep, a type, a structural invariant could
      have blocked it) -> file it as a `promote to lint` candidate in the
      relevant lens AND, if cheap, write the check now (registry + script).
-   - Judgment-only -> append a 2-4 line example to the matching lens under
+   - Judgment-only -> append a concise example to the matching lens under
      `## Examples from real incidents`: the class, the tell, and the PR
-     number. Keep lens files under ~80 lines - when a section grows past ~6
-     examples, generalize the oldest into the lens's main bullets.
+     number.
+     Keep each lens focused on its concern and retain actionable evidence.
+     Consolidate repeated examples when a shared rule preserves their failure scenarios.
    - Behavioral/user-facing -> also consider a Maestro flow or DB test.
 4. **Eval cases**: for the sharpest escapes, capture
    `scripts/verify/evals/incidents/<pr-number>/` (diff.patch via

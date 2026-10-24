@@ -1,0 +1,1261 @@
+{
+  "generated": true,
+  "asOf": "2026-09-14T01:30:06.365854+00:00",
+  "scope": "45 completed source batches; earlier WaBa/Yoshinoya excluded",
+  "reviewedCodeHead": "179be20e9a26eda262c428149630f72092730302",
+  "mergeCommit": "848f117952b60b62bd1ee03291151e73a1184e55",
+  "pr": "https://github.com/dgmolla/fitsy/pull/289",
+  "totals": {
+    "facts": 1863,
+    "aliases": 2615,
+    "patchedRows": 42293,
+    "numericChanges": 16393,
+    "attributionOnly": 25900,
+    "preservedMenuIds": 139245,
+    "unchangedUnselectedRows": 96952,
+    "restaurants": 1414
+  },
+  "batches": [
+    {
+      "batch": "first-batch",
+      "chains": "McDonald's, Panda Express, El Pollo Loco",
+      "brandSlugs": [
+        "el-pollo-loco",
+        "mcdonald-s",
+        "panda-express"
+      ],
+      "facts": 276,
+      "aliases": 365,
+      "patchedRows": 11972,
+      "numericChanges": 2076,
+      "attributionOnly": 9896,
+      "preservedMenuIds": 19580,
+      "unchangedUnselectedRows": 7608,
+      "restaurants": 195,
+      "httpVerifiedAt": "2026-09-12T06:47:32.918865+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "first-batch-resume-segments/007410.json.verified.json": "660b94a0c2f1776693507ca1347e73fb2391f7793971ee4fbe0728f110506853",
+        "first-batch-complete-http.json": "c4f9d6da38c37f3f717638f4ad0bc3bff99d010a14b98e68cb7f4a720470bf4f",
+        "first-batch-approved.json": "b424c9dc48a39322fb46722d1879bc1ff0b89d21382fdfe54bfeac6864533904",
+        "first-batch-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "first-batch-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "second-batch",
+      "chains": "Subway, Fatburger, Five Guys, Carl's Jr.",
+      "brandSlugs": [
+        "carl-s-jr",
+        "fatburger",
+        "five-guys",
+        "subway"
+      ],
+      "facts": 200,
+      "aliases": 275,
+      "patchedRows": 7165,
+      "numericChanges": 2246,
+      "attributionOnly": 4919,
+      "preservedMenuIds": 17266,
+      "unchangedUnselectedRows": 10101,
+      "restaurants": 164,
+      "httpVerifiedAt": "2026-09-12T07:09:13.725234+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "second-batch-segments/007110.json.verified.json": "c22384cc4878e7ee72642b3a409369d57c95fc37421a50233d2465e16b813602",
+        "second-batch-complete-http.json": "f68fb7f4ff7d3ac037d696754ad6040de96f2a02a2d954cc6168f4389e605ebc",
+        "second-batch-approved.json": "e6addb9f9d26b1b205d17033bcdc0d0177aa6518ec4a28d5443a7535da476bfa",
+        "second-batch-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "second-batch-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 103
+    },
+    {
+      "batch": "tacobell",
+      "chains": "Taco Bell",
+      "brandSlugs": [
+        "taco-bell"
+      ],
+      "facts": 53,
+      "aliases": 89,
+      "patchedRows": 1861,
+      "numericChanges": 1487,
+      "attributionOnly": 374,
+      "preservedMenuIds": 5945,
+      "unchangedUnselectedRows": 4084,
+      "restaurants": 48,
+      "httpVerifiedAt": "2026-09-12T15:44:48.353735+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "tacobell-segments/001810.json.verified.json": "5ec4abcebaaf8478d8e344213bb2e3e650d1bfe6650117057798b2a9ff651efe",
+        "tacobell-complete-http.json": "614aa899f4192fd6ec817e41cfb0c4842173076bb7746cdbd1ef0f801de27414",
+        "tacobell-approved.json": "b9946eac7074d528f1783b7ba802fefe923731b51eb7c1ab7d8db3a372e1d4ae",
+        "tacobell-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "tacobell-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "starbucks",
+      "chains": "Starbucks",
+      "brandSlugs": [
+        "starbucks"
+      ],
+      "facts": 56,
+      "aliases": 83,
+      "patchedRows": 2309,
+      "numericChanges": 1087,
+      "attributionOnly": 1222,
+      "preservedMenuIds": 8953,
+      "unchangedUnselectedRows": 6644,
+      "restaurants": 64,
+      "httpVerifiedAt": "2026-09-12T16:02:22.542712+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "starbucks-segments/002210.json.verified.json": "72e74d47bab1eb2ec7de4ad55e18f3d752ac73afd6da4e66303d073d33fada6e",
+        "starbucks-complete-http.json": "ed169a9f3c278fca1baacd97517409f4c034e328ade3f17132b8a86e952c8fac",
+        "starbucks-approved.json": "949026c1b5892b9cfcdf7fdb1efba500b78f5cad6df20b40ae95828d3b12f7dd",
+        "starbucks-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "starbucks-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "next-source",
+      "chains": "Boba Time, Pizza Hut",
+      "brandSlugs": [
+        "boba-time",
+        "pizza-hut"
+      ],
+      "facts": 85,
+      "aliases": 206,
+      "patchedRows": 2141,
+      "numericChanges": 1304,
+      "attributionOnly": 837,
+      "preservedMenuIds": 10322,
+      "unchangedUnselectedRows": 8181,
+      "restaurants": 72,
+      "httpVerifiedAt": "2026-09-12T16:10:50.272742+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "next-source-segments/002110.json.verified.json": "911fc25110a48770bc1149ff016e70ffbef37c80ade08a65c274d2586fcdc6e6",
+        "next-source-complete-http.json": "ef9d99cbf9e9a5a47bfe598b5c70641c4016bfdd760707c8f23804eebad6ec54",
+        "next-source-approved.json": "5f414265bb6accc05f41be3d01c18c4b85dce6111323c85ce00695bec5ffca97",
+        "next-source-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "next-source-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 300
+    },
+    {
+      "batch": "standard-chain",
+      "chains": "Jollibee, Goop Kitchen, Rubio's, Farmer Boys",
+      "brandSlugs": [
+        "farmer-boys",
+        "goop-kitchen",
+        "jollibee",
+        "rubio-s-coastal-grill"
+      ],
+      "facts": 106,
+      "aliases": 148,
+      "patchedRows": 423,
+      "numericChanges": 246,
+      "attributionOnly": 177,
+      "preservedMenuIds": 1582,
+      "unchangedUnselectedRows": 1159,
+      "restaurants": 23,
+      "httpVerifiedAt": "2026-09-12T16:42:09.083982+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "standard-chain-segments/000410.json.verified.json": "ef9cdf50c5edb47459c9ea0c7da96776a91a9e6b6872f7b532b0b81bab330720",
+        "standard-chain-complete-http.json": "06ac13e394495439b518ead9bbd8e030c00bbbb81f677d18ca024883c9919ece",
+        "standard-chain-approved.json": "376b0b25e65883c3c20e6dd389b77dc37bb2fdc0f6ef8b0cb6729a426dfbd418",
+        "standard-chain-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "standard-chain-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "dominos",
+      "chains": "Domino's",
+      "brandSlugs": [
+        "domino-s"
+      ],
+      "facts": 19,
+      "aliases": 23,
+      "patchedRows": 1031,
+      "numericChanges": 1030,
+      "attributionOnly": 1,
+      "preservedMenuIds": 3796,
+      "unchangedUnselectedRows": 2765,
+      "restaurants": 62,
+      "httpVerifiedAt": "2026-09-12T16:48:41.606599+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "dominos-segments/001010.json.verified.json": "07484bffed903f57ef6df83fd6c45fa066b9f6eca1f68b999ee17d98c1379adf",
+        "dominos-complete-http.json": "492af7be497859969d83add1420dc0fdcad93a3e05aa8b186b10d76325194006",
+        "dominos-approved.json": "6f0ba9d4c2fa21259031cf39cf9a0f5c65e99d51a620ef5cd3dd7db8bf1576d6",
+        "dominos-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "dominos-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 99
+    },
+    {
+      "batch": "cafe",
+      "chains": "Jamba, Panera, Robeks",
+      "brandSlugs": [
+        "jamba",
+        "jamba-juice",
+        "panera",
+        "panera-bread",
+        "robeks-fresh-juices-smoothies"
+      ],
+      "facts": 91,
+      "aliases": 112,
+      "patchedRows": 858,
+      "numericChanges": 546,
+      "attributionOnly": 312,
+      "preservedMenuIds": 5720,
+      "unchangedUnselectedRows": 4862,
+      "restaurants": 59,
+      "httpVerifiedAt": "2026-09-12T17:28:57.741948+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "cafe-production-segments/000810.json.verified.json": "5631611d0fe4360928914390b765cb12d95a455f53e429272296339f31bb5700",
+        "cafe-complete-http.json": "d4845f3a67d5caec1fbfa8ab529db99ea37e8474d77f427ae3f1a1cd66fc2072",
+        "cafe-approved.json": "e90766ebb8b99dba23bedb83a98e71948a8813d8ac4c4078185a1cb7353ba64b",
+        "cafe-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "cafe-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 124
+    },
+    {
+      "batch": "pizza-chain",
+      "chains": "Little Caesars, Papa Johns",
+      "brandSlugs": [
+        "little-caesars",
+        "papa-johns-pizza"
+      ],
+      "facts": 36,
+      "aliases": 55,
+      "patchedRows": 1213,
+      "numericChanges": 397,
+      "attributionOnly": 816,
+      "preservedMenuIds": 3769,
+      "unchangedUnselectedRows": 2556,
+      "restaurants": 68,
+      "httpVerifiedAt": "2026-09-12T17:41:39.047358+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "pizza-chain-segments/001210.json.verified.json": "f4d29c3ec5193a193fa9ce5048056035fbf288501e379e1472619e4a52051e08",
+        "pizza-chain-complete-http.json": "c9e1946b1ac0ebe15dfa415271762526836633f7c4d394fd965e52e492535e92",
+        "pizza-chain-approved.json": "9873cc1ab630f81d17537dd2e5b4d0034e48f2d40cbcae5a4d038ccb3caf2a87",
+        "pizza-chain-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "pizza-chain-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "jimmyjohns",
+      "chains": "Jimmy Johns",
+      "brandSlugs": [
+        "jimmy-john-s"
+      ],
+      "facts": 70,
+      "aliases": 79,
+      "patchedRows": 81,
+      "numericChanges": 78,
+      "attributionOnly": 3,
+      "preservedMenuIds": 532,
+      "unchangedUnselectedRows": 451,
+      "restaurants": 5,
+      "httpVerifiedAt": "2026-09-12T17:56:20.636546+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "jimmyjohns-segments/000010.json.verified.json": "7e15d6b12f13bfc720313fce0fb2f814775d2ff2b0a1256b1fa69006f45ce807",
+        "jimmyjohns-complete-http.json": "12b054fd3155d156938df9dd3423f3d6a81e26ec93e692dc5d8c3b2bc0cb48f3",
+        "jimmyjohns-approved.json": "068a7dfd891a306b29322a3f77fd8ce2ec9c9e6475965fbc3ccc4a88e2c417bc",
+        "jimmyjohns-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jimmyjohns-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 23
+    },
+    {
+      "batch": "wingstop",
+      "chains": "Wingstop",
+      "brandSlugs": [
+        "wingstop"
+      ],
+      "facts": 11,
+      "aliases": 11,
+      "patchedRows": 382,
+      "numericChanges": 12,
+      "attributionOnly": 370,
+      "preservedMenuIds": 2997,
+      "unchangedUnselectedRows": 2615,
+      "restaurants": 51,
+      "httpVerifiedAt": "2026-09-12T18:58:16.022993+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "wingstop-segments/000310.json.verified.json": "de3e2033db694642d2a5d52d20e4a9a331eb782a943593405e4c6f4bf68c1a9b",
+        "wingstop-complete-http.json": "e16a130f9d5fc9f91bcc5923c85b39789a8c0c61d9907aafe86465ad8a9ce103",
+        "wingstop-approved.json": "75ad4b10798b7b5227cd6e13556441e236797f7493d40ea358ec7273a727c73e",
+        "wingstop-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "wingstop-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "burgerking",
+      "chains": "Burger King",
+      "brandSlugs": [
+        "burger-king"
+      ],
+      "facts": 94,
+      "aliases": 124,
+      "patchedRows": 3033,
+      "numericChanges": 1673,
+      "attributionOnly": 1360,
+      "preservedMenuIds": 4544,
+      "unchangedUnselectedRows": 1511,
+      "restaurants": 42,
+      "httpVerifiedAt": "2026-09-12T19:11:02.770506+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "burgerking-segments/003010.json.verified.json": "b0b3549086f747139e96c8c438edcdc9e0c4024e833ea1162e1864589d223a2e",
+        "burgerking-complete-http.json": "dce91988d461e0918c4d6c1b4a3c3b6f1295db967ecb266cbe1bf11d5eb83201",
+        "burgerking-approved.json": "740c3eeb7919575840d35e5499a537bf71c14712f6b377c3f2a4b9d386d670cf",
+        "burgerking-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "burgerking-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "ihop",
+      "chains": "IHOP",
+      "brandSlugs": [
+        "ihop"
+      ],
+      "facts": 68,
+      "aliases": 82,
+      "patchedRows": 1421,
+      "numericChanges": 224,
+      "attributionOnly": 1197,
+      "preservedMenuIds": 4295,
+      "unchangedUnselectedRows": 2874,
+      "restaurants": 29,
+      "httpVerifiedAt": "2026-09-12T19:15:29.956593+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "ihop-segments/001410.json.verified.json": "e2dde0488961544aa66bb1482395a9d6cac065c300689ad9a4532e0d37fbdcc8",
+        "ihop-complete-http.json": "4174efa41efd743d7a7ac804f76059f6295d9f536bfc28aa62f51acd6cb0f1af",
+        "ihop-approved.json": "c915e2a8999f9361d8469c35c3df1a3f8a10120fd1ba1291179b011b6a9f73ca",
+        "ihop-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "ihop-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "shakeshack",
+      "chains": "Shake Shack",
+      "brandSlugs": [
+        "shake-shack"
+      ],
+      "facts": 35,
+      "aliases": 44,
+      "patchedRows": 446,
+      "numericChanges": 56,
+      "attributionOnly": 390,
+      "preservedMenuIds": 2031,
+      "unchangedUnselectedRows": 1585,
+      "restaurants": 17,
+      "httpVerifiedAt": "2026-09-12T19:53:29.709652+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "shakeshack-segments/000410.json.verified.json": "4da99738aa0974f79363dd79c9736572251129b16f00d21dbda9c47fef322fc7",
+        "shakeshack-http.json": "0c0a17f641856c52c1ce49e9b8315d4c0bf5853c3330a5ba5bc38d8612a33837",
+        "shakeshack-approved.json": "08cf31d2190565dd79b5f37388065bbf0c4ccf525511f9f552c9dfb309fcba71",
+        "shakeshack-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "shakeshack-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 130
+    },
+    {
+      "batch": "cava",
+      "chains": "CAVA",
+      "brandSlugs": [
+        "cava"
+      ],
+      "facts": 16,
+      "aliases": 27,
+      "patchedRows": 170,
+      "numericChanges": 71,
+      "attributionOnly": 99,
+      "preservedMenuIds": 1240,
+      "unchangedUnselectedRows": 1070,
+      "restaurants": 15,
+      "httpVerifiedAt": "2026-09-12T20:16:18.273920+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "cava-segments/000110.json.verified.json": "ca5ecb82aaf3f161cb7c86327db1d89170b6a3cc4bad7ca1857d68e065b82a25",
+        "cava-complete-http.json": "c8da7a2cbced888e861b41caee22216ee248af8769d5f887b8bdf517b1932f4f",
+        "cava-approved.json": "343061c318ca62457a0ab24f77fce3a965cc7c667aab645862d679b2d384abbc",
+        "cava-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "cava-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "habit",
+      "chains": "Habit Burger & Grill",
+      "brandSlugs": [
+        "habit-burger-grill"
+      ],
+      "facts": 5,
+      "aliases": 5,
+      "patchedRows": 107,
+      "numericChanges": 107,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1494,
+      "unchangedUnselectedRows": 1387,
+      "restaurants": 22,
+      "httpVerifiedAt": "2026-09-12T20:19:05.121211+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "habit-segments/000010.json.verified.json": "fdb4c1ffa31ed67a802d53c10fcc8bbd7f8b8c6927916d24fe8b3e3ab3f6eccf",
+        "habit-complete-http.json": "769e79fc3436f0962d5839952af0c8e8d1e9e6aaeb9ace60a956d7e3b419fdb5",
+        "habit-approved.json": "c13d06744e26cddfe5f7d57c5f8484355cbcf7abf389b1aa56d28c314df53369",
+        "habit-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "habit-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 100
+    },
+    {
+      "batch": "wendys",
+      "chains": "Wendy's",
+      "brandSlugs": [
+        "wendy-s"
+      ],
+      "facts": 12,
+      "aliases": 23,
+      "patchedRows": 201,
+      "numericChanges": 111,
+      "attributionOnly": 90,
+      "preservedMenuIds": 1923,
+      "unchangedUnselectedRows": 1722,
+      "restaurants": 18,
+      "httpVerifiedAt": "2026-09-12T20:36:44.532159+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "wendys-segments/000110.json.verified.json": "ca6d104c3ec679971d9418bcb84eb8dfdcf78d65ccc34b2edec3d7689713af74",
+        "wendys-complete-http.json": "e11f03a4ce6fd96950d52c6da286e93502a07560eca21bd1f658e460344545d4",
+        "wendys-approved.json": "9632eb3c5aa3b7e575410be234c43ee7623c11377f44532e38ce67a217ac5dda",
+        "wendys-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "wendys-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "freshbrothers",
+      "chains": "Fresh Brothers",
+      "brandSlugs": [
+        "fresh-brothers"
+      ],
+      "facts": 2,
+      "aliases": 6,
+      "patchedRows": 18,
+      "numericChanges": 18,
+      "attributionOnly": 0,
+      "preservedMenuIds": 3284,
+      "unchangedUnselectedRows": 3266,
+      "restaurants": 10,
+      "httpVerifiedAt": "2026-09-12T21:02:56.811069+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "freshbrothers-segments/000010.json.verified.json": "7e025eb2f06692c2ceb1bdee16bf51fff7eb6b45212b7cca314757cff5d188f6",
+        "freshbrothers-complete-http.json": "46740b804bb933253114994d9ab1a303a3848c285ee9a0a9236caa39095db34b",
+        "freshbrothers-approved.json": "1a22c4b643c9ae75eed3ac792b8ec306563112d87878019ffa2d81250d1f3af2",
+        "freshbrothers-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "freshbrothers-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 149
+    },
+    {
+      "batch": "bww",
+      "chains": "Buffalo Wild Wings",
+      "brandSlugs": [
+        "buffalo-wild-wings"
+      ],
+      "facts": 17,
+      "aliases": 19,
+      "patchedRows": 55,
+      "numericChanges": 25,
+      "attributionOnly": 30,
+      "preservedMenuIds": 1537,
+      "unchangedUnselectedRows": 1482,
+      "restaurants": 11,
+      "httpVerifiedAt": "2026-09-12T21:13:48.576125+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "bww-segments/000010.json.verified.json": "ee5e9b4900b00dc29f13d89026847f526fcac54a5e84b4e0aa23b71d3e58dd5d",
+        "bww-complete-http.json": "4b091f6bff5d2a9d3e99f70dce6fb1e02a237faa9c9248794b1ddc338284354f",
+        "bww-approved.json": "aebee161a1cdcb656a2dfc76b28b90ed4dc3b43ba42aaea32668ee3ec33f44b3",
+        "bww-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "bww-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "dunkin",
+      "chains": "Dunkin",
+      "brandSlugs": [
+        "dunkin"
+      ],
+      "facts": 13,
+      "aliases": 13,
+      "patchedRows": 230,
+      "numericChanges": 230,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1378,
+      "unchangedUnselectedRows": 1148,
+      "restaurants": 19,
+      "httpVerifiedAt": "2026-09-12T21:32:32.262026+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "dunkin-segments/000210.json.verified.json": "bd9c2558de1e26b8cde76544da3bd34abe972c4290a278aabb8bcc2e155f8b84",
+        "dunkin-complete-http.json": "3ee6215b42aa004702213a80de6711529687746fdf1278be3aaa92306c98fee1",
+        "dunkin-approved.json": "cf9095ef0a53f83540e9dab70309ede03ee675af1919072c6a7187e91c2c50ec",
+        "dunkin-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "dunkin-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 278
+    },
+    {
+      "batch": "jerseymikes",
+      "chains": "Jersey Mike's",
+      "brandSlugs": [
+        "jersey-mike-s-subs"
+      ],
+      "facts": 2,
+      "aliases": 2,
+      "patchedRows": 60,
+      "numericChanges": 60,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1049,
+      "unchangedUnselectedRows": 989,
+      "restaurants": 31,
+      "httpVerifiedAt": "2026-09-12T21:41:07.328420+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "jerseymikes-segments/000010.json.verified.json": "7f86bfa51be8ce0934949fabaa1c41e84a44fc123bafc3317e423781cc2600cf",
+        "jerseymikes-complete-http.json": "b4289c94fa0a6b059988670eeaae88f2f6f7ac29f4e765622a5d6745f26b8712",
+        "jerseymikes-approved.json": "31e694b98830e9e7b5a6eaaa341f7f7c1d5ddf649b8980495c30c2632d9cb3ad",
+        "jerseymikes-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jerseymikes-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "popeyes",
+      "chains": "Popeyes",
+      "brandSlugs": [
+        "popeyes",
+        "popeyes-louisiana-chicken"
+      ],
+      "facts": 8,
+      "aliases": 14,
+      "patchedRows": 108,
+      "numericChanges": 108,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1465,
+      "unchangedUnselectedRows": 1357,
+      "restaurants": 28,
+      "httpVerifiedAt": "2026-09-12T22:09:53.747004+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "popeyes-segments/000010.json.verified.json": "9ab3d10cf60fcc9ce5a969c78387df8655d27ded75bf5afec93a740e31be78a6",
+        "popeyes-complete-http.json": "77438875deb8064629faeaa1163af70f1a9df4a510c85c28507fd4b47142a58e",
+        "popeyes-approved.json": "ac6e837029a2459ee979241a0aa0e8c779429c6fdb882e1562d3b313b603cf3c",
+        "popeyes-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "popeyes-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "cpk",
+      "chains": "California Pizza Kitchen",
+      "brandSlugs": [
+        "california-pizza-kitchen"
+      ],
+      "facts": 50,
+      "aliases": 66,
+      "patchedRows": 380,
+      "numericChanges": 190,
+      "attributionOnly": 190,
+      "preservedMenuIds": 1660,
+      "unchangedUnselectedRows": 1280,
+      "restaurants": 12,
+      "httpVerifiedAt": "2026-09-12T22:54:52.118057+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "cpk-segments/000310.json.verified.json": "89a3839b2fc004cd541b7bee8bdf89ec4959f4695b3743e6c052d73a06c31786",
+        "cpk-complete-http.json": "45d7f78b70acbcc94b18106049bfbbe0d652a36df5701ea9d0cd3fb22b78cbc9",
+        "cpk-approved.json": "2921d1a3c9098e73ab889b772adfd6369c91bd2182aa120841e9bf7395dfdf3c",
+        "cpk-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "cpk-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "bjs",
+      "chains": "BJ's Restaurant & Brewhouse",
+      "brandSlugs": [
+        "bj-s-restaurant-brewhouse"
+      ],
+      "facts": 35,
+      "aliases": 36,
+      "patchedRows": 243,
+      "numericChanges": 243,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1444,
+      "unchangedUnselectedRows": 1201,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-12T23:33:21.991473+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "bjs-segments/000210.json.verified.json": "7353bf27004447bb83a02d426374e68f856dfbfd4095f2ce14743607dade72fe",
+        "bjs-complete-http.json": "1628fc270dbc17bf30b8b3c11496eccf190251b92e0130d349df27dde0553b68",
+        "bjs-approved.json": "dc7be6c423698e8dc3a718b5208cf9843d13bf310c9f4e7f3c6a276847cf2fa0",
+        "bjs-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "bjs-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "nothing-bundt",
+      "chains": "Nothing Bundt Cakes",
+      "brandSlugs": [
+        "nothing-bundt-cakes"
+      ],
+      "facts": 23,
+      "aliases": 41,
+      "patchedRows": 49,
+      "numericChanges": 49,
+      "attributionOnly": 0,
+      "preservedMenuIds": 104,
+      "unchangedUnselectedRows": 55,
+      "restaurants": 10,
+      "httpVerifiedAt": "2026-09-13T06:13:40.370852+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "nothing-bundt-segments/000010.json.verified.json": "919f516573efd11117169609c0c4afbfa3769ecc67c8c433ad06d0680bf85474",
+        "nothing-bundt-complete-http.json": "b4050fba56778c92c46f846c8dde7af074dc57c67dc57dd952777528ddd205b8",
+        "nothing-bundt-approved.json": "f43f236e30e0f6c5bf9ba933c9e5d78d070cd3ed267bd9e06ae7b9d52d932d33",
+        "nothing-bundt-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "nothing-bundt-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "daves-sides",
+      "chains": "Dave's Hot Chicken",
+      "brandSlugs": [
+        "dave-s-hot-chicken"
+      ],
+      "facts": 4,
+      "aliases": 8,
+      "patchedRows": 28,
+      "numericChanges": 4,
+      "attributionOnly": 24,
+      "preservedMenuIds": 128,
+      "unchangedUnselectedRows": 100,
+      "restaurants": 13,
+      "httpVerifiedAt": "2026-09-13T06:49:35.269070+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "daves-sides-segments/000010.json.verified.json": "978ff0e91d372ec4fa655e2e56195afe0534254da4125738b648d62f69b276b4",
+        "daves-sides-complete-http.json": "537c146bb195ae326c707d74f8c33bee80a3625fb9195228b42590e831e513b7",
+        "daves-sides-approved.json": "04461959affae73135c2f8d6d08a25666a512f6f0580dac3c0331cda68baa042",
+        "daves-sides-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "daves-sides-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "charleys-fixed",
+      "chains": "Charleys",
+      "brandSlugs": [
+        "charleys-cheesesteaks-and-wings"
+      ],
+      "facts": 2,
+      "aliases": 3,
+      "patchedRows": 8,
+      "numericChanges": 8,
+      "attributionOnly": 0,
+      "preservedMenuIds": 558,
+      "unchangedUnselectedRows": 550,
+      "restaurants": 8,
+      "httpVerifiedAt": "2026-09-13T07:31:24.003549+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "charleys-fixed-segments/000000.json.verified.json": "66e6848f22dfc7abb54057021cdbf0d5f8346e326cfa689398b6b9bc5915dd68",
+        "charleys-fixed-complete-http.json": "75d9b962bcabcb25ab9f919fe75458620749c3d52a7ca2597b5412a7f3412780",
+        "charleys-fixed-approved.json": "4568a3ef3d6d4f191f9ea1ceb156d93d42c3432026fdf1779db7a501c3e86aeb",
+        "charleys-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "charleys-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 39
+    },
+    {
+      "batch": "jerseymikes-expanded",
+      "chains": "Jersey Mike's (second identity)",
+      "brandSlugs": [
+        "jersey-mike-s"
+      ],
+      "facts": 6,
+      "aliases": 6,
+      "patchedRows": 31,
+      "numericChanges": 7,
+      "attributionOnly": 24,
+      "preservedMenuIds": 756,
+      "unchangedUnselectedRows": 725,
+      "restaurants": 11,
+      "httpVerifiedAt": "2026-09-13T07:39:16.553941+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "jerseymikes-expanded-segments/000010.json.verified.json": "24cd81408364cb4d7d8f50c2a54fd3399afc0a55715edd6e244cf02a8293e6c6",
+        "jerseymikes-expanded-complete-http.json": "f9ca29fafa8870c118e35725d20dc94d83388780340789baab7d7547d132f4dd",
+        "jerseymikes-expanded-approved.json": "6d44249c5041e1e905340ca4b6e9b77c01bcde3d3132ea5e3f97cfe3d6a0e0b3",
+        "jerseymikes-expanded-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jerseymikes-expanded-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "paninikabob-meals-v2",
+      "chains": "Panini Kabob Grill",
+      "brandSlugs": [
+        "panini-kabob-grill"
+      ],
+      "facts": 15,
+      "aliases": 20,
+      "patchedRows": 150,
+      "numericChanges": 150,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1109,
+      "unchangedUnselectedRows": 959,
+      "restaurants": 10,
+      "httpVerifiedAt": "2026-09-13T08:28:47.194882+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "paninikabob-meals-v2-segments/000115.json.verified.json": "cb362c4d20c6d5656f10ed62b1fe9435c6ba8698441da6d691bbb32ada3375ed",
+        "paninikabob-meals-v2-complete-http.json": "0ac5f0971721b2b3563c6569c801f5c8a3c7942ebdc47d9b540c272f07696766",
+        "paninikabob-meals-v2-approved.json": "f744e64c2471eb32c1e84a6cc31cebbdcc2cf3d3c3ba80bb5485f28e36739b0d",
+        "paninikabob-meals-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "paninikabob-meals-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "baskin-fixed",
+      "chains": "Baskin-Robbins",
+      "brandSlugs": [
+        "baskin-robbins"
+      ],
+      "facts": 25,
+      "aliases": 29,
+      "patchedRows": 481,
+      "numericChanges": 143,
+      "attributionOnly": 338,
+      "preservedMenuIds": 1190,
+      "unchangedUnselectedRows": 709,
+      "restaurants": 36,
+      "httpVerifiedAt": "2026-09-13T09:13:18.730480+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "baskin-fixed-segments/000424.json.verified.json": "6e6b8525f0ca70a06e7c75cdc667eb36c89f7b532c2cf2597ca622bc0cffeb9e",
+        "baskin-fixed-complete-http.json": "8b043c09ec14fd2842c550139a213f50525e4adfb51d9d4f8cdfcd2d657914f8",
+        "baskin-fixed-approved.json": "c77761c4680bec0925e21084beea50e265fc7c9660d16a4cf96dcade71270e74",
+        "baskin-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "baskin-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 10
+    },
+    {
+      "batch": "coldstone-fixed-v2",
+      "chains": "Cold Stone Creamery",
+      "brandSlugs": [
+        "cold-stone-creamery"
+      ],
+      "facts": 61,
+      "aliases": 63,
+      "patchedRows": 917,
+      "numericChanges": 32,
+      "attributionOnly": 885,
+      "preservedMenuIds": 2389,
+      "unchangedUnselectedRows": 1472,
+      "restaurants": 18,
+      "httpVerifiedAt": "2026-09-13T09:54:20.617640+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "coldstone-fixed-v2-segments/000861.json.verified.json": "50ed6f772090a3e63777f5c66484098c11ff9f7f0991d860e42c91f79c1cbb36",
+        "coldstone-fixed-v2-complete-http.json": "a62e62ecccbff65bb4b0cd799670bf2782d7b56d0efd139da5f18c7286905812",
+        "coldstone-fixed-v2-approved.json": "15e348acc7cb6ac87c2868cbd365ad1f908ec1706f8eaf56d5ce0a42c284640f",
+        "coldstone-fixed-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "coldstone-fixed-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "norms-fixed",
+      "chains": "NORMS",
+      "brandSlugs": [
+        "norms"
+      ],
+      "facts": 19,
+      "aliases": 19,
+      "patchedRows": 133,
+      "numericChanges": 133,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1031,
+      "unchangedUnselectedRows": 898,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-13T10:25:21.597558+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "norms-fixed-segments/000119.json.verified.json": "9b797e9fc546f77d6de9e34e5d797a6d34b9d98e9ea0efb53e078060da4116b5",
+        "norms-fixed-complete-http.json": "76dda2511801f3fd765722b6e8e37dd2493352ab5d958af62d1aa23689f002ab",
+        "norms-fixed-approved.json": "ef797b5223e5ee12ff83e28f980d66adbfb92603bec3ae32a58d1d27508adf8d",
+        "norms-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "norms-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "kreation-organic-juicery-bottles",
+      "chains": "Kreation Organic Juicery",
+      "brandSlugs": [
+        "kreation-organic-juicery"
+      ],
+      "facts": 5,
+      "aliases": 9,
+      "patchedRows": 63,
+      "numericChanges": 63,
+      "attributionOnly": 0,
+      "preservedMenuIds": 2981,
+      "unchangedUnselectedRows": 2918,
+      "restaurants": 15,
+      "httpVerifiedAt": "2026-09-13T10:59:59.816668+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "kreation-organic-juicery-bottles-segments/000010.json.verified.json": "4eb18b36e3d51d780737a5eda3bedce4eda135669537bc6928d982a5e1cb38c9",
+        "kreation-organic-juicery-bottles-complete-http.json": "ecbafd20eb11b494b0702d247628b40eafdedfe391b7d6b41e966c0774b7f349",
+        "kreation-organic-juicery-bottles-approved.json": "169089d7ee2bdf554c9f0dcc3ab0e46d3826a29e94a1dfb01a54dacb225f8223",
+        "kreation-organic-juicery-bottles-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "kreation-organic-juicery-bottles-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "kreation-organic-bottles",
+      "chains": "Kreation Organic",
+      "brandSlugs": [
+        "kreation-organic"
+      ],
+      "facts": 5,
+      "aliases": 9,
+      "patchedRows": 9,
+      "numericChanges": 9,
+      "attributionOnly": 0,
+      "preservedMenuIds": 306,
+      "unchangedUnselectedRows": 297,
+      "restaurants": 2,
+      "httpVerifiedAt": "2026-09-13T11:01:30.756475+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "kreation-organic-bottles-segments/000000.json.verified.json": "606c27a8e359290f6be67be653ad36334a4c07132e6a7a653d3df5ee9ff31fde",
+        "kreation-organic-bottles-complete-http.json": "7f0e733dfa185d657bf0949093b81b15247a93b8ac945da0a0ea4b789ce4e774",
+        "kreation-organic-bottles-approved.json": "b65acf56c8cfc38aad8d0bf169547be20a03a34efdf7ae1ff68c89760a61dc56",
+        "kreation-organic-bottles-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "kreation-organic-bottles-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "kreation-kafe-juicery-bottles",
+      "chains": "Kreation Kafe & Juicery",
+      "brandSlugs": [
+        "kreation-kafe-juicery"
+      ],
+      "facts": 5,
+      "aliases": 5,
+      "patchedRows": 10,
+      "numericChanges": 10,
+      "attributionOnly": 0,
+      "preservedMenuIds": 490,
+      "unchangedUnselectedRows": 480,
+      "restaurants": 2,
+      "httpVerifiedAt": "2026-09-13T11:02:50.290772+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "kreation-kafe-juicery-bottles-segments/000000.json.verified.json": "ff46011d860f59979aa7a4c0f61d6f9066946780f0394fb3a4aff4bd49b7b03d",
+        "kreation-kafe-juicery-bottles-complete-http.json": "87ae55de5138864229c262c01911b4e4b74642dd9d3fde3d68c80107382184bd",
+        "kreation-kafe-juicery-bottles-approved.json": "4cbcdc599775f8032e3edb44fbcee5179987c99f26c7b13114704cbb86a73ab4",
+        "kreation-kafe-juicery-bottles-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "kreation-kafe-juicery-bottles-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "pressed-bottles-v2",
+      "chains": "Pressed",
+      "brandSlugs": [
+        "pressed"
+      ],
+      "facts": 33,
+      "aliases": 57,
+      "patchedRows": 289,
+      "numericChanges": 289,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1267,
+      "unchangedUnselectedRows": 978,
+      "restaurants": 11,
+      "httpVerifiedAt": "2026-09-13T11:50:50.057621+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "pressed-bottles-v2-segments/000232.json.verified.json": "096022372cee6571a38a7a062c77b078269a3d7e82424208dc0f50d71db3dfa0",
+        "pressed-bottles-v2-complete-http.json": "62834044e3caf36c6b15935eb6971acd71cbdd81ee47df20abc984aa605e8045",
+        "pressed-bottles-v2-approved.json": "4864d2737b662a8b9915dd0571add4e341ab39cc995320ea8ed54062d3c508d5",
+        "pressed-bottles-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "pressed-bottles-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "paris-fixed",
+      "chains": "Paris Baguette",
+      "brandSlugs": [
+        "paris-baguette"
+      ],
+      "facts": 65,
+      "aliases": 103,
+      "patchedRows": 224,
+      "numericChanges": 97,
+      "attributionOnly": 127,
+      "preservedMenuIds": 789,
+      "unchangedUnselectedRows": 565,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-13T12:31:30.486189+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "paris-fixed-segments/000154.json.verified.json": "efe8119fb73c12f1204e19f4175a6cd5ced21a65e77cf6ce8f6130ffc8dbeffc",
+        "paris-fixed-complete-http.json": "83fa0ee84f25d721253e2f2a94acdd64078102ca4e336433f2577f13e871734c",
+        "paris-fixed-approved.json": "de40ae1fae97e137c4cce60a4e3ccade997b050df2cf372e1168301e0a9a3767",
+        "paris-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "paris-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 249
+    },
+    {
+      "batch": "benihana-standard",
+      "chains": "Benihana",
+      "brandSlugs": [
+        "benihana"
+      ],
+      "facts": 20,
+      "aliases": 32,
+      "patchedRows": 56,
+      "numericChanges": 20,
+      "attributionOnly": 36,
+      "preservedMenuIds": 697,
+      "unchangedUnselectedRows": 641,
+      "restaurants": 4,
+      "httpVerifiedAt": "2026-09-13T12:59:22.769580+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "benihana-standard-segments/000020.json.verified.json": "b0648b1e0f96d95dce096d2ef8f5d0afdf9cf5f8c424d158bdfe39ac6cc92679",
+        "benihana-standard-http.json": "3aff1e1bf48453c87de95c24049ba40086e37970ddffbe0669713fe42c2a8a5a",
+        "benihana-standard-approved.json": "49909b4bff15ed5e1dff80f86fdcc0b80a030bac89f0bd7cf792bfd4c99bcfbb",
+        "benihana-standard-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "benihana-standard-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "peets",
+      "chains": "Peet's Coffee",
+      "brandSlugs": [
+        "peet-s-coffee"
+      ],
+      "facts": 20,
+      "aliases": 34,
+      "patchedRows": 155,
+      "numericChanges": 155,
+      "attributionOnly": 0,
+      "preservedMenuIds": 1638,
+      "unchangedUnselectedRows": 1483,
+      "restaurants": 9,
+      "httpVerifiedAt": "2026-09-13T13:31:36.620513+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "receiptHashes": {
+        "peets-segments/000120.json.verified.json": "edc64b89d1bacc61904f1774b1ceacb57e4ce520d732644a0eae4b3240d4ef02",
+        "peets-complete-http.json": "0b66add75dc2b9f987d397e5cd355f3a7b68a832a26aeba6d0f5b3537811955f",
+        "peets-approved.json": "6c87747c163f68bfc0920d71bfe4edfbac693dcc49b3e6b26680c0c81054a055",
+        "peets-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "peets-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      },
+      "originalCatalogRowsPreserved": 0
+    },
+    {
+      "batch": "jinya-revised",
+      "chains": "JINYA Ramen Bar",
+      "brandSlugs": [
+        "jinya-ramen-bar"
+      ],
+      "facts": 57,
+      "aliases": 73,
+      "patchedRows": 226,
+      "numericChanges": 226,
+      "attributionOnly": 0,
+      "preservedMenuIds": 448,
+      "unchangedUnselectedRows": 222,
+      "restaurants": 5,
+      "httpVerifiedAt": "2026-09-13T20:11:30.862380+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 135,
+      "receiptHashes": {
+        "jinya-revised-segments/000149.json.verified.json": "729e8568f668fc80c883396669e4ad0136be2b81acfc964df56f51890ba62ad8",
+        "jinya-revised-complete-http.json": "0b74143c9be7b036e66cf64c1e65898196dd77810db75e1aaa3bd42699481312",
+        "jinya-revised-approved.json": "bb52b25547b86b94f986c10e1e416b1f5a9692dbc506cdd8543d0c70110e37b9",
+        "jinya-revised-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jinya-revised-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "noahs-2026-standard",
+      "chains": "Noah's Bagels",
+      "brandSlugs": [
+        "noah-s-bagels"
+      ],
+      "facts": 7,
+      "aliases": 8,
+      "patchedRows": 48,
+      "numericChanges": 48,
+      "attributionOnly": 0,
+      "preservedMenuIds": 461,
+      "unchangedUnselectedRows": 413,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-13T20:20:09.638369+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 118,
+      "receiptHashes": {
+        "noahs-2026-standard-segments/000010.json.verified.json": "d6ca5670185957bb07ac94a6b25fdc04f387431853932836dcec420b07db5abe",
+        "noahs-2026-standard-complete-http.json": "59d8c5e5dab41afd6a834d183ddf3e7bbd2a6f319ec7745aad673a44d1baa3fa",
+        "noahs-2026-standard-approved.json": "f36f60cfd708bdcc2940d87734e48b5a6acc4e451fc5e3f8a92a192e804c9fc8",
+        "noahs-2026-standard-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "noahs-2026-standard-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "jack-2026-standard",
+      "chains": "Jack in the Box",
+      "brandSlugs": [
+        "jack-in-the-box"
+      ],
+      "facts": 35,
+      "aliases": 62,
+      "patchedRows": 1062,
+      "numericChanges": 933,
+      "attributionOnly": 129,
+      "preservedMenuIds": 6179,
+      "unchangedUnselectedRows": 5117,
+      "restaurants": 56,
+      "httpVerifiedAt": "2026-09-13T21:19:31.950567+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 24,
+      "receiptHashes": {
+        "jack-2026-standard-segments/001034.json.verified.json": "3266a5e70c6edc2ce6cee4f1b95a289468b028f697dd54de90d6f262d8bf77a0",
+        "jack-2026-standard-complete-http.json": "e81ebc6acc98baef9ad1dc9e9fa377151b6333b30ba30a58a8d3bea2001a63e7",
+        "jack-2026-standard-approved.json": "551cd670a6d83a4852811ef120273875cdcfa4a274d81bb8caf5f2b2af86be46",
+        "jack-2026-standard-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "jack-2026-standard-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "ono-2021-fixed",
+      "chains": "Ono Hawaiian BBQ",
+      "brandSlugs": [
+        "ono-hawaiian-bbq"
+      ],
+      "facts": 11,
+      "aliases": 14,
+      "patchedRows": 71,
+      "numericChanges": 58,
+      "attributionOnly": 13,
+      "preservedMenuIds": 448,
+      "unchangedUnselectedRows": 377,
+      "restaurants": 17,
+      "httpVerifiedAt": "2026-09-13T22:59:53.643814+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 5,
+      "receiptHashes": {
+        "ono-2021-fixed-segments/000011.json.verified.json": "f766c66ccfb8f0f93d749e99b73057d671a6ec29f2fed6ee2c46d5dc441b1143",
+        "ono-2021-fixed-complete-http.json": "2040fc88b0adb4e5c95d8f78aa62049e823f1bf02aa06e05c00711dda6c3b0c9",
+        "ono-2021-fixed-approved.json": "4b74533248a351d88defbf85f0ff1cb7bb7819b72c84d1c03e6321b98a700582",
+        "ono-2021-fixed-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "ono-2021-fixed-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "chipotle-2024-fixed-v2",
+      "chains": "Chipotle",
+      "brandSlugs": [
+        "chipotle-mexican-grill"
+      ],
+      "facts": 51,
+      "aliases": 65,
+      "patchedRows": 2140,
+      "numericChanges": 100,
+      "attributionOnly": 2040,
+      "preservedMenuIds": 7753,
+      "unchangedUnselectedRows": 5613,
+      "restaurants": 87,
+      "httpVerifiedAt": "2026-09-14T00:40:45.653441+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 0,
+      "receiptHashes": {
+        "chipotle-2024-fixed-v2-segments/002051.json.verified.json": "a6fbb210d8d9f23e33f42ec1b124d9c61d2e18da45d148669945115b51123072",
+        "chipotle-2024-fixed-v2-complete-http.json": "2bd54e4dc9af66e542bfdfb1b36318440a8a9c2c67a780b2dcb8040494a06a9b",
+        "chipotle-2024-fixed-v2-approved.json": "87a70100576cbb3ae256915cbd79d837e23072faaf062cf453b5368560c3275d",
+        "chipotle-2024-fixed-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "chipotle-2024-fixed-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    },
+    {
+      "batch": "tocaya-2024-standard-v2",
+      "chains": "Tocaya",
+      "brandSlugs": [
+        "tocaya-modern-mexican"
+      ],
+      "facts": 34,
+      "aliases": 48,
+      "patchedRows": 235,
+      "numericChanges": 234,
+      "attributionOnly": 1,
+      "preservedMenuIds": 717,
+      "unchangedUnselectedRows": 482,
+      "restaurants": 7,
+      "httpVerifiedAt": "2026-09-14T01:30:06.365854+00:00",
+      "aprilNoop": true,
+      "catalogNoop": true,
+      "originalCatalogRowsPreserved": 39,
+      "receiptHashes": {
+        "tocaya-2024-standard-v2-segments/000234.json.verified.json": "539c1e0b95a486e433cd14017110ce3e594f2c4b0b227c54728be9a49c767e9f",
+        "tocaya-2024-standard-v2-complete-http.json": "e093ef1e1513abde4643ff096ac0f0c0b32dd4d595dea07e0ad88fc1a1c46eb0",
+        "tocaya-2024-standard-v2-approved.json": "8c09f510d01bd3a3bffa7b11e9a62fc8022bd6ac41f3e12cf27bb5bc6781e56a",
+        "tocaya-2024-standard-v2-complete-april-noop.json": "e2c10e656ca9268c589ff31a9963fdc53cb1d8d9e9e4b031af33b2c62f20e7dd",
+        "tocaya-2024-standard-v2-complete-catalog-noop.json": "d254416c5d6c31de4cba47b4c046801a437cbe4e031cf363a5c0336900e31ff2"
+      }
+    }
+  ],
+  "receiptArchive": "Local task work/chain-national; full journals and baselines are intentionally excluded from this aggregate repository record",
+  "limits": [
+    "Exact serving and preserved identity consistency, not measured restaurant nutrition",
+    "Source review coverage varies by batch; retained independent reviews distinguish exhaustive source transcription checks from samples",
+    "Current captured UE menus and simulated historical imports are different evidence",
+    "No actual production new hex created"
+  ],
+  "regionalRuntime": {
+    "reviewedCodeHead": "e805ee2c63ec4e0f19563c6b8ff9fc4a8a3c121d",
+    "mergeCommit": "e63f0fc48c9ede443fc60180be43c7c6628b007e",
+    "pr": "https://github.com/dgmolla/fitsy/pull/302",
+    "productionDeployment": "dpl_CJJ2SPtWipxrTcTb4Hdv2mmfxjKT",
+    "releaseEvidenceSha256": "d4698242f6e9b494a96084ec5733f9559510ab18a6bf49169042dc7c8d7ab50e",
+    "appliesToBatches": [
+      "peets",
+      "jinya-revised",
+      "noahs-2026-standard",
+      "jack-2026-standard",
+      "ono-2021-fixed"
+    ],
+    "productionDeploymentNote": "Historical runtime release deployment, not a claim that this deployment ID remains the latest production deployment."
+  },
+  "classificationRuntime": {
+    "reviewedCodeHead": "e8aeb655eb5b437239466b3c071b9b97830f9fb7",
+    "runtimeDigest": "076409d20ae9a0e244548845db1f26bc91a465e1131c239fd67160f20d46bd77",
+    "pullRequest": 314,
+    "mainVerify": 34792552138,
+    "deploy": 34792552165,
+    "productionDeployment": 6428215802,
+    "appliesToBatches": [
+      "chipotle-2024-fixed-v2"
+    ],
+    "receiptHashes": {
+      "classification-release-receipt.json": "7a7f1eb4874357acedb79771ecbc504b3c0457eced8cfd7fd049205b654b9df7",
+      "classification-identity-source-approval.json": "072c2e2e07f1dbee45feb7d0a1e7944e06891a8d0fd1ccfb4f5f33c0fcf7172d",
+      "classification-production-identity-plan.json.applied.json": "8481b0214caa25e53c9a57f38ede407a3b71b4ec1aec4baaba10cea015a87e3e",
+      "chipotle-2024-fixed-v2-post-identity-baseline.json": "d18ba8cafe14f8366499e2e0c4fb8f28cc271452f92aaf24f450a353a9088a00",
+      "chipotle-2024-fixed-v2-approval-evidence.json": "df45c26a428c9801fda949a4843760dff7fd0467aa54d911985557f5be95af99"
+    }
+  },
+  "ingestionFilterRuntime": {
+    "reviewedCodeHead": "89e2df08d202ed98e93d23c34614866a38d4a114",
+    "runtimeDigest": "e1ed7774b6869ee8b0c65bef22ea4832795d0e52e4a4afd9437c1d2726c96626",
+    "pullRequest": 316,
+    "mainVerify": 34795591423,
+    "deploy": 34795591441,
+    "appliesToBatches": [
+      "tocaya-2024-standard-v2"
+    ],
+    "receiptHashes": {
+      "utensil-filter-release-receipt.json": "9dcd8140aeb58ea1b7779825c0f32b9fd50cddf3460fa780f24e74fc712fe116",
+      "tocaya-2024-standard-v2-approval-evidence.json": "714b9b0fa75e87dca83f739f9cd494d927d708966225555b78320366b259325c",
+      "tocaya-2024-standard-v2-root-review-disposition.json": "a37e09f55aaa40932154f251d9fea2b5f2a99489e2ba15a0d6e0cecff44d4f2b",
+      "tocaya-source-render-verification.json": "5d69b155903f70aa4ac2305f29a4b7b15314397743a32806f52cc3d439c7bd59"
+    }
+  }
+}

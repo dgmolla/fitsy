@@ -1,0 +1,1 @@
+{"lens":"correctness","must_find":"The drift check feeds PostgreSQL-collated migration names directly to comm, whose shell ordering can differ, producing an unsorted-input failure even when all expected migrations are applied."}

@@ -1,7 +1,7 @@
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockReadUserAndRow = jest.fn();
-const mockSubscriptionUpsert = jest.fn();
+const mockSubscriptionCreate = jest.fn();
 const mockSubscriptionUpdateMany = jest.fn();
 const mockSync = jest.fn();
 const mockLogStatusChange = jest.fn();
@@ -9,7 +9,8 @@ const mockLogStatusChange = jest.fn();
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
     subscription: {
-      upsert: mockSubscriptionUpsert,
+      create: mockSubscriptionCreate,
+      findUnique: jest.fn(),
       updateMany: mockSubscriptionUpdateMany,
     },
   },
@@ -29,7 +30,8 @@ beforeEach(() => {
   jest.resetAllMocks();
   process.env["REVENUECAT_WEBHOOK_AUTH"] = AUTH;
   mockReadUserAndRow.mockResolvedValue({ userExists: true, row: null });
-  mockSubscriptionUpsert.mockResolvedValue({});
+  mockSubscriptionCreate.mockResolvedValue({});
+  mockSubscriptionUpdateMany.mockResolvedValue({ count: 1 });
   warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 });
 
@@ -48,7 +50,7 @@ describe("POST /api/revenuecat/webhook — auth", () => {
   it("returns 401 when the Authorization header does not match", async () => {
     const res = await POST(makeRequest(event(), "Bearer wrong"));
     expect(res.status).toBe(401);
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionCreate).not.toHaveBeenCalled();
   });
 });
 
@@ -66,7 +68,7 @@ describe("POST /api/revenuecat/webhook — parsing", () => {
   it("acknowledges TEST events without writing", async () => {
     const res = await POST(makeRequest(event({ type: "TEST" }), AUTH));
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionCreate).not.toHaveBeenCalled();
   });
 
   it("acknowledges UNKNOWN event types without writing (no accidental grant)", async () => {
@@ -74,7 +76,7 @@ describe("POST /api/revenuecat/webhook — parsing", () => {
       makeRequest(event({ type: "SOME_FUTURE_PAUSE_EVENT" }), AUTH),
     );
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionCreate).not.toHaveBeenCalled();
   });
 
   it("falls back to the merged (non-anonymous) alias when the purchase was made pre-login", async () => {
@@ -88,8 +90,8 @@ describe("POST /api/revenuecat/webhook — parsing", () => {
       ),
     );
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: "user-1" } }),
+    expect(mockSubscriptionCreate).toHaveBeenCalledWith(
+      { data: expect.objectContaining({ userId: "user-1" }) },
     );
   });
 
@@ -98,7 +100,7 @@ describe("POST /api/revenuecat/webhook — parsing", () => {
       makeRequest(event({ app_user_id: "$RCAnonymousID:abc" }), AUTH),
     );
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionCreate).not.toHaveBeenCalled();
   });
 });
 
@@ -107,22 +109,18 @@ describe("POST /api/revenuecat/webhook — persistence", () => {
     mockReadUserAndRow.mockResolvedValue({ userExists: false, row: null });
     const res = await POST(makeRequest(event(), AUTH));
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionCreate).not.toHaveBeenCalled();
   });
 
-  it("upserts an active subscription on INITIAL_PURCHASE", async () => {
+  it("creates an active subscription on INITIAL_PURCHASE", async () => {
     const res = await POST(makeRequest(event(), AUTH));
     expect(res.status).toBe(200);
-    expect(mockSubscriptionUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { userId: "user-1" },
-        create: expect.objectContaining({
+    expect(mockSubscriptionCreate).toHaveBeenCalledWith(
+      { data: expect.objectContaining({
           userId: "user-1",
           plan: "fitsy.annual",
           status: "active",
-        }),
-        update: expect.objectContaining({ status: "active" }),
-      }),
+        }) },
     );
   });
 
@@ -133,24 +131,24 @@ describe("POST /api/revenuecat/webhook — persistence", () => {
         AUTH,
       ),
     );
-    expect(mockSubscriptionUpsert).toHaveBeenCalledWith(
+    expect(mockSubscriptionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({ status: "expired" }),
+        data: expect.objectContaining({ status: "expired" }),
       }),
     );
   });
 
   it("keeps access active on CANCELLATION until the period ends", async () => {
     await POST(makeRequest(event({ type: "CANCELLATION" }), AUTH));
-    expect(mockSubscriptionUpsert).toHaveBeenCalledWith(
+    expect(mockSubscriptionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({ status: "active" }),
+        data: expect.objectContaining({ status: "active" }),
       }),
     );
   });
 
   it("returns 500 on a transient DB error so RevenueCat retries", async () => {
-    mockSubscriptionUpsert.mockRejectedValue(new Error("db down"));
+    mockSubscriptionCreate.mockRejectedValue(new Error("db down"));
     const res = await POST(makeRequest(event(), AUTH));
     expect(res.status).toBe(500);
   });
@@ -179,7 +177,7 @@ describe("POST /api/revenuecat/webhook — TRANSFER", () => {
     expect(mockSync).toHaveBeenCalledWith("user-new");
     expect(mockSync).toHaveBeenCalledWith("user-old");
     expect(mockSync).not.toHaveBeenCalledWith("$RCAnonymousID:x");
-    expect(mockSubscriptionUpsert).not.toHaveBeenCalled();
+    expect(mockSubscriptionCreate).not.toHaveBeenCalled();
     expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
   });
 

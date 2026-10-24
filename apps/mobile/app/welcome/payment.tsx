@@ -1,26 +1,99 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
-import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { AnimatedPress } from '@/components/AnimatedPress';
+import React, { useEffect, useRef, useState } from 'react';
+import { useOnboardingStep } from '@/lib/onboardingResume';
+import { useIsFocused } from '@react-navigation/native';
+import { Alert } from 'react-native';
+import { Redirect, router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { PaywallView } from '@/components/PaywallView';
+import { PurchaseIdentityRecovery } from '@/components/PurchaseIdentityRecovery';
 import { PaywallExitModals, type PaywallExitModal } from '@/components/PaywallExitModals';
-import { EDITORIAL, FONTS } from '@/lib/brand';
 import { recordOnboardingComplete } from '@/lib/onboardingCompletion';
-import { usePurchases } from '@/lib/usePurchases';
+import { BOOT_VERDICT_CAP_MS, usePurchases } from '@/lib/usePurchases';
+import { withinMs } from '@/lib/async';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
-import { openLegalLink } from '@/lib/legalLinks';
-import { trackOnboardingScreenView } from '@/lib/analytics';
-
-type PlanId = 'monthly' | 'yearly';
+import { trackOnboardingScreenView, trackPaywallExperimentExposure, trackPaywallShown, trackTrialCatalogMismatch } from '@/lib/analytics';
+import { usePreviewAccess } from '@/lib/usePreviewAccess';
+import { rememberPaywallDecline } from '@/lib/paywallAccess';
+import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
+import { annualSavingPercent, purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
+import { defaultTrialPlan, trialPresentation, type PlanId } from '@/lib/trialPresentation';
+import { TRIAL_CATALOG_POLICY } from '../../../../packages/shared/src/contracts/trialPolicy';
+import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
+import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
+import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
+import { paywallVariantConfig, resolvePaywallVariant, type PaywallVariant } from '@/lib/paywallVariant';
+import { supabase } from '@/lib/supabase';
+import { usePaywallReminderAvailability } from '@/lib/usePaywallReminderAvailability';
+import { clearPaymentSignInContinuation, navigateBackFromPayment } from '@/lib/paymentSignInContinuation';
+import { useOwnedHardwareBack } from '@/lib/useOwnedHardwareBack';
 
 export default function PaymentScreen() {
-  const [plan, setPlan] = useState<PlanId>('yearly');
+  const { devTrialVisual, devPaywallVariant, devReminderEnabled } = useLocalSearchParams<{ devTrialVisual?: string; devPaywallVariant?: string; devReminderEnabled?: string }>();
+  const visualRequested = __DEV__ && (devTrialVisual === '1' || devTrialVisual === '7' || devTrialVisual === '14');
+  const simulatedReminder = visualRequested && devReminderEnabled === '1';
+  useOnboardingStep('payment');
+  const navigation = useNavigation();
+  const focused = useIsFocused();
+  useEffect(() => {
+    if (focused) void clearOnboardingPreviewEntry();
+  }, [focused]);
+  const [chosenPlan, setChosenPlan] = useState<PlanId | null>(null);
+  const variants = usePreviewAccess();
+  const exposure = useRef('');
+  const reportedCatalogMismatches = useRef(new Set<string>());
+  const identityResolvedForFocus = useRef(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [identityReady, setIdentityReady] = useState(false);
+  const [identityUnavailable, setIdentityUnavailable] = useState(false);
+  const [identityAttempt, setIdentityAttempt] = useState(0);
+  const reminderAvailability = usePaywallReminderAvailability(focused, userId);
+  const testerOverride: PaywallVariant | undefined = __DEV__ && (devPaywallVariant === 'A' || devPaywallVariant === 'B') ? devPaywallVariant : undefined;
+  useEffect(() => {
+    identityResolvedForFocus.current = false;
+    setIdentityReady(false);
+    setIdentityUnavailable(false);
+    if (!focused) { setUserId(null); return; }
+    let active = true;
+    let authEventReceived = false;
+    const resolveIdentity = (id: string | null) => {
+      if (!active) return;
+      setUserId(id);
+      identityResolvedForFocus.current = true;
+      setIdentityReady(true);
+      setIdentityUnavailable(false);
+    };
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      authEventReceived = true;
+      resolveIdentity(session?.user.id ?? null);
+    });
+    const sessionRead = supabase.auth.getSession();
+    void withinMs(sessionRead, BOOT_VERDICT_CAP_MS).then(result => {
+      if (authEventReceived) return;
+      if (result) resolveIdentity(result.data.session?.user.id ?? null);
+      else {
+        if (active) setIdentityUnavailable(true);
+        void sessionRead.then(({ data }) => {
+          // A slow read is still unknown, not proof of an anonymous visitor.
+          // Keep purchase controls hidden until its late answer arrives.
+          if (!authEventReceived) resolveIdentity(data.session?.user.id ?? null);
+        }).catch(() => { if (active) setIdentityUnavailable(true); });
+      }
+    }).catch(() => { if (active) setIdentityUnavailable(true); });
+    return () => { active = false; listener.subscription.unsubscribe(); };
+  }, [focused, identityAttempt]);
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [modal, setModal] = useState<PaywallExitModal>('none');
-  const { offering, refreshOffering, purchase, restore, entitled } = usePurchases();
+  const { ready: purchasesReady, isLapsed, isUnknown, offering, introEligibility, introEligibilityReady, refreshOffering, purchase, restore, showManageSubscriptions, entitled } = usePurchases();
+  const variantConfig = paywallVariantConfig(offering?.metadata);
+  const paywallVariant = resolvePaywallVariant(variantConfig, userId, testerOverride);
+  const discovery = usePaywallDiscovery(focused && identityReady && !!userId && paywallVariant === 'A', userId);
+  const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, devTrialVisual === '7' ? 7 : 14);
+  const shownOffering = visual?.offering ?? offering;
+  const shownEligibility = visual?.eligibility ?? introEligibility;
+  const eligibilityReady = !!visual || introEligibilityReady;
+  const purchaseBusy = useRef(false);
+  const settledDefaultPlan = useRef<PlanId | null>(null);
 
   // A verdict that turns true while this screen is up (late boot / sign-in
   // answer, a subscription bought on another device) goes through
@@ -28,37 +101,73 @@ export default function PaymentScreen() {
   // just like a buyer (flag, profile push, onboarding_completed), and that
   // helper tracks no purchase event. See useRedirectOnceEntitled.
   const { claim } = useRedirectOnceEntitled({
-    entitled,
-    busy: loading || restoring,
+    entitled: userId ? entitled : null,
+    busy: loading || restoring || !focused,
     onEntitled: () => { void completeOnboarding(false); },
   });
 
-  // Live, store-localized prices from the current RevenueCat offering, with the
-  // designed copy as a fallback while offerings load (or in Expo Go / no key).
-  // Fallbacks carry no period, matching the live priceString: the period is
-  // added once where it is displayed, so the copy reads the same either way.
-  const annualPrice = offering?.annual?.product.priceString ?? '$39.99';
-  const monthlyPrice = offering?.monthly?.product.priceString ?? '$7.99';
-  // Exit-intent discount: a dedicated, lower-priced annual package (RevenueCat
-  // package id `annual_discount`, backed by the ASC product
-  // `com.fitsy.mobile.yearly_discount` - 25% off, billed immediately: that
-  // product has NO introductory offer, so the copy below must not promise a
-  // trial). Live price with the designed copy as fallback; if the package
-  // isn't configured the discount CTA says so rather than silently charging
-  // full price (see handleStart).
-  const discountedAnnual =
-    offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
-  const discountPrice = discountedAnnual?.product.priceString ?? '$29.99';
+  const annualTerms = purchaseTerms(shownOffering?.annual?.product, shownOffering?.annual ? shownEligibility[shownOffering.annual.product.identifier] : false);
+  const monthlyTerms = purchaseTerms(shownOffering?.monthly?.product, shownOffering?.monthly ? shownEligibility[shownOffering.monthly.product.identifier] : false);
+  // Follow the trial promised earlier in onboarding unless the user has
+  // explicitly chosen another available plan. Recompute when store terms or
+  // eligibility change while the paywall is open.
+  const defaultPlan = defaultTrialPlan(annualTerms, monthlyTerms);
+  const checkingPlans = !!shownOffering && !eligibilityReady;
+  if (!checkingPlans) settledDefaultPlan.current = defaultPlan;
+  const heldPlan = settledDefaultPlan.current;
+  const automaticPlan = checkingPlans && heldPlan && (heldPlan === 'yearly' ? annualTerms : monthlyTerms) ? heldPlan : defaultPlan;
+  const plan = chosenPlan && (chosenPlan === 'yearly' ? annualTerms : monthlyTerms) ? chosenPlan : automaticPlan;
+  const discountedAnnual = offering?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null;
+  const selected = plan === 'yearly' ? offering?.annual : offering?.monthly;
+  const terms = purchaseTerms(selected?.product, selected ? introEligibility[selected.product.identifier] : false);
+  const discountTerms = purchaseTerms(discountedAnnual?.product, discountedAnnual ? introEligibility[discountedAnnual.product.identifier] : false);
+  const discountPercent = savingPercent(offering?.annual?.product, discountedAnnual?.product);
+  const onBack = useOwnedHardwareBack(() => {
+    void navigateBackFromPayment(navigation.canGoBack(), userId ?? undefined,
+      () => router.back(), () => setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'));
+  });
+  const paywallVisible = focused && identityReady && !!userId && purchasesReady && !isUnknown && !isLapsed && entitled !== true && !visualRequested;
 
   useEffect(() => {
-    trackOnboardingScreenView('payment');
-  }, []);
+    if (paywallVisible) trackOnboardingScreenView('payment');
+  }, [paywallVisible, userId]);
 
   // The boot-time offering fetch can fail (offline at launch, StoreKit hiccup).
   // Retry when this screen opens without one so the CTA isn't dead on arrival.
   useEffect(() => {
     if (!offering) void refreshOffering();
   }, [offering, refreshOffering]);
+
+  useEffect(() => {
+    if (!focused) { exposure.current = ''; return; }
+    if (!offering || !paywallVisible || !identityResolvedForFocus.current) return;
+    const key = `${userId}:${offering.identifier}:${variants.access}:${paywallVariant}:${variantConfig.version}:${!!testerOverride}`;
+    if (exposure.current === key) return;
+    exposure.current = key;
+    const attribution = { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride };
+    trackPaywallShown({ source: 'onboarding', ...attribution });
+    trackPaywallExperimentExposure({ offering_id: offering.identifier, access_variant: variants.access, image_variant: paywallVariant === 'A' ? 'meal' : 'none', layout_variant: paywallVariant === 'A' ? 'mosaic_benefits' : 'trial_timeline', ...attribution });
+  }, [offering, variants.access, paywallVisible, userId, focused, paywallVariant, variantConfig.version, testerOverride]);
+
+  useEffect(() => {
+    if (visualRequested || !offering || !selected || !eligibilityReady) return;
+    const presentation = trialPresentation(terms);
+    if (!presentation.catalogMismatch || !presentation.trial) return;
+    const key = `${offering.identifier}:${selected.product.identifier}:${presentation.trial}`;
+    if (reportedCatalogMismatches.current.has(key)) return;
+    reportedCatalogMismatches.current.add(key);
+    trackTrialCatalogMismatch({ offering_id: offering.identifier, product_id: selected.product.identifier,
+      actual_days: presentation.days, actual_period: presentation.trial, desired_days: TRIAL_CATALOG_POLICY.desiredDays });
+  }, [visualRequested, offering, selected, eligibilityReady, terms]);
+
+  async function declineSubscription() {
+    try {
+      await rememberPaywallDecline();
+      await clearPaymentSignInContinuation();
+      setModal('none');
+      resetWelcomeJourney(navigation, variants.access === 'preview' ? 'preview' : 'payment');
+    } catch { Alert.alert('Could not save your choice', 'Please try again.'); }
+  }
 
   // Onboarding completes once the user holds Pro - whether freshly purchased or
   // restored. Shared by handleStart and handleRestore.
@@ -68,41 +177,45 @@ export default function PaymentScreen() {
     // itself is idempotent (a re-entered paywall must not double-count).
     claim();
     await recordOnboardingComplete(discounted);
-    router.replace('/(tabs)/search');
+    await openPurchasedDestination(navigation);
+    await clearPaymentSignInContinuation();
   }
 
   // This screen IS the paywall - it renders Fitsy's own design and buys the
   // selected package directly through the RevenueCat SDK (no dashboard-designed
   // hosted paywall).
   async function handleStart(discounted = false) {
-    // The discount CTA buys the dedicated discounted annual package; the normal
-    // CTA buys the selected plan. Buying the regular annual here would charge
-    // full price despite the "25% off" promise, so a missing discount package
-    // is surfaced, not silently substituted.
-    const pick = (off: typeof offering) =>
-      discounted
-        ? off?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null
-        : plan === 'yearly'
-          ? off?.annual
-          : off?.monthly;
-    // One live retry before giving up: the boot-time fetch may have failed.
-    const pkg = pick(offering) ?? pick(await refreshOffering());
-    if (!pkg) {
-      Alert.alert(
-        'Just a moment',
-        discounted
-          ? "This offer isn't available right now - you can still start your free trial."
-          : 'Plans are still loading, please try again.',
-      );
+    if (visualRequested) {
+      Alert.alert('Visual preview only', 'This synthetic trial cannot be purchased. Open the regular paywall for live Test Store plans.');
       return;
     }
-    if (!(await ensureSessionForPurchase())) return;
+    if (purchaseBusy.current || restoring || checkingPlans) return;
+    purchaseBusy.current = true;
     setLoading(true);
     try {
-      const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding');
+      const pick = (off: typeof offering) =>
+        discounted
+          ? off?.availablePackages.find((p) => p.identifier === 'annual_discount') ?? null
+          : plan === 'yearly'
+            ? off?.annual
+            : off?.monthly;
+      // One live retry before giving up: the boot-time fetch may have failed.
+      const pkg = pick(offering) ?? pick(await refreshOffering());
+      if (!pkg || !purchaseTerms(pkg.product)) {
+        Alert.alert(
+          'Just a moment',
+          discounted
+            ? 'This offer is unavailable. You can choose one of the plans shown here.'
+            : 'Plans are still loading, please try again.',
+        );
+        return;
+      }
+      if (!(await ensureSessionForPurchase())) return;
+      const isPro = await purchase(pkg, discounted ? 'onboarding_discount' : 'onboarding', { paywall_variant: paywallVariant, paywall_config_version: variantConfig.version, paywall_tester_override: !!testerOverride });
       if (!isPro) return; // cancelled or errored - stay on screen
       await completeOnboarding(discounted);
     } finally {
+      purchaseBusy.current = false;
       setLoading(false);
     }
   }
@@ -110,150 +223,69 @@ export default function PaymentScreen() {
   // Apple requires a Restore Purchases path. It lives here (the paywall) rather
   // than in-app, since a reinstalled subscriber re-runs onboarding.
   async function handleRestore() {
-    if (!(await ensureSessionForPurchase())) return;
+    if (visualRequested) {
+      Alert.alert('Visual preview only', 'Restore is unavailable in the synthetic trial preview.');
+      return;
+    }
+    if (purchaseBusy.current || restoring) return;
+    purchaseBusy.current = true;
     setRestoring(true);
     try {
+      if (!(await ensureSessionForPurchase())) return;
       const isPro = await restore();
       if (isPro) {
         await completeOnboarding();
-      } else {
+      } else if (isPro === false) {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
       }
     } finally {
+      purchaseBusy.current = false;
       setRestoring(false);
     }
   }
-
+  if (!identityReady) return identityUnavailable
+    ? <PurchaseIdentityRecovery onRetry={() => setIdentityAttempt(attempt => attempt + 1)} /> : null;
+  // Anonymous deep links and resumes authenticate first; visual fixtures cannot purchase or restore.
+  if (!userId && !visualRequested) return <Redirect href="/welcome/signin?returnTo=payment" />;
+  if (userId && !purchasesReady) return null;
+  if (userId && isUnknown) return <Redirect href="/welcome/subscription-check" />;
+  if (userId && isLapsed && entitled !== true) return <Redirect href="/welcome/resubscribe" />;
+  if (userId && entitled === true) return null;
   return (
     <>
-      <WelcomeScreen
-        title={`Try Fitsy free\nfor 3 days.`}
-        subtitle="Cancel anytime. No charge until your trial ends."
-        onContinue={() => handleStart(false)}
-        canContinue={!loading}
-        continueLabel={loading ? 'Setting up...' : 'Start Free Trial'}
-        onSkip={() => setModal('discount')}
-      >
-        <View style={s.features}>
-          <Text style={s.feature}>Find restaurants near you by macros</Text>
-          <Text style={s.feature}>Tweak your targets anytime</Text>
-          <Text style={s.feature}>Save meals you love</Text>
-        </View>
-
-        <View style={s.plans}>
-          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-            <AnimatedPress
-              style={[s.plan, plan === 'yearly' && s.planOn]}
-              onPress={() => setPlan('yearly')}
-              haptic
-              accessibilityRole="button"
-              accessibilityState={{ selected: plan === 'yearly' }}
-            >
-              <View>
-                <View style={s.planRow}>
-                  <Text style={[s.planName, plan === 'yearly' && s.planNameOn]}>Annual</Text>
-                  <View style={s.badge}><Text style={s.badgeTxt}>Best Value</Text></View>
-                </View>
-                <Text style={s.planSub}>Billed yearly</Text>
-              </View>
-              <Text style={[s.planPrice, plan === 'yearly' && s.planPriceOn]}>{annualPrice}</Text>
-            </AnimatedPress>
-          </Animated.View>
-
-          <Animated.View entering={FadeInDown.duration(400).delay(180)}>
-            <AnimatedPress
-              style={[s.plan, plan === 'monthly' && s.planOn]}
-              onPress={() => setPlan('monthly')}
-              haptic
-              accessibilityRole="button"
-              accessibilityState={{ selected: plan === 'monthly' }}
-            >
-              <Text style={[s.planName, plan === 'monthly' && s.planNameOn]}>Monthly</Text>
-              <Text style={[s.planPrice, plan === 'monthly' && s.planPriceOn]}>{monthlyPrice}</Text>
-            </AnimatedPress>
-          </Animated.View>
-        </View>
-
-        <AnimatedPress
-          style={s.restore}
-          onPress={handleRestore}
-          disabled={restoring}
-          accessibilityRole="button"
-        >
-          <Text style={s.restoreTxt}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
-        </AnimatedPress>
-
-        {/* Subscription disclosure + legal links - required by App Store
-            Guideline 3.1.2(c). Title, length, and price of the auto-renewing
-            subscription, plus functional Terms of Use (EULA) and Privacy
-            Policy links, must appear in the purchase flow. */}
-        <Text style={s.disclosure}>
-          Fitsy Pro is an auto-renewing subscription ({annualPrice}/yr or {monthlyPrice}/mo after a
-          3-day free trial). Payment is charged to your Apple ID at confirmation. It renews
-          automatically unless cancelled at least 24 hours before the period ends. Manage or
-          cancel in your App Store account settings.
-        </Text>
-        <View style={s.legalRow}>
-          <Pressable hitSlop={8} onPress={() => openLegalLink('terms')} accessibilityRole="link">
-            <Text style={s.legalLink}>Terms of Use</Text>
-          </Pressable>
-          <Text style={s.legalDot}>·</Text>
-          <Pressable hitSlop={8} onPress={() => openLegalLink('privacy')} accessibilityRole="link">
-            <Text style={s.legalLink}>Privacy Policy</Text>
-          </Pressable>
-        </View>
-      </WelcomeScreen>
-
+      <PaywallView
+        plan={plan}
+        annual={annualTerms}
+        monthly={monthlyTerms}
+        annualSavingPercent={annualSavingPercent(shownOffering?.annual?.product, shownOffering?.monthly?.product)}
+        discovery={discovery}
+        variant={paywallVariant}
+        reminderAvailability={simulatedReminder ? 'enabled' : reminderAvailability}
+        loading={loading}
+        restoring={restoring}
+        checkingPlans={checkingPlans}
+        visualPreview={visual ? (devTrialVisual === '7' ? 7 : 14) : undefined}
+        visualReminderSimulated={simulatedReminder}
+        onSelect={setChosenPlan}
+        onBack={onBack}
+        onRestore={() => { void handleRestore(); }}
+        onManage={() => { void showManageSubscriptions(); }}
+        onRetry={() => { void refreshOffering(); }}
+        onPurchase={() => { void handleStart(false); }}
+        onDecline={() => { if (!loading && !restoring) setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'); }}
+      />
       <PaywallExitModals
         modal={modal}
-        discountPrice={discountPrice}
+        discountPercent={discountPercent}
+        discountDisclosure={discountTerms?.disclosure ?? ''}
+        trialAvailable={!!terms?.trial}
         onClose={() => setModal('none')}
         onClaimDiscount={() => { setModal('none'); handleStart(true); }}
         onDeclineDiscount={() => setModal('goodbye')}
         onStartTrial={() => { setModal('none'); handleStart(false); }}
-        // Declining every offer still gets the locked search teaser -
-        // real browsing with macro-match data blurred - rather than a
-        // dead end. Same mechanic a first-time visitor gets before
-        // signing up, and what resubscribe.tsx's skip does too.
-        onMaybeLater={() => { setModal('none'); router.replace('/(tabs)/search?preview=1'); }}
+        declineLabel={variants.access === 'hard' ? 'Close' : 'Browse the preview'}
+        onMaybeLater={() => { void declineSubscription(); }}
       />
     </>
   );
 }
-
-const s = StyleSheet.create({
-  features: { gap: 14, marginBottom: 40 },
-  feature: { fontFamily: FONTS.nunitoSans, fontSize: 15, color: EDITORIAL.textSoft, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: EDITORIAL.border },
-  plans: { gap: 12 },
-  plan: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: EDITORIAL.creamCard,
-    borderRadius: 18,
-    padding: 22,
-  },
-  planOn: { backgroundColor: EDITORIAL.green },
-  restore: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
-  restoreTxt: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft },
-  disclosure: {
-    fontFamily: FONTS.nunitoSans,
-    fontSize: 11,
-    lineHeight: 16,
-    color: EDITORIAL.textSoft,
-    textAlign: 'center',
-    marginTop: 12,
-  },
-  legalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
-  legalLink: { fontFamily: FONTS.nunitoSans, fontSize: 12, fontWeight: '500', color: EDITORIAL.text, textDecorationLine: 'underline' },
-  legalDot: { fontSize: 12, color: EDITORIAL.creamDeep },
-  planRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  planName: { fontFamily: FONTS.frauncesDisplay, fontSize: 18, color: EDITORIAL.text },
-  planNameOn: { color: EDITORIAL.cream },
-  planSub: { fontFamily: FONTS.nunitoSans, fontSize: 13, color: EDITORIAL.textSoft, marginTop: 2 },
-  badge: { backgroundColor: 'rgba(253,251,247,0.2)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 10, fontWeight: '700', color: EDITORIAL.cream, letterSpacing: 0.5 },
-  planPrice: { fontFamily: FONTS.frauncesDisplay, fontSize: 17, color: EDITORIAL.text },
-  planPriceOn: { color: EDITORIAL.cream },
-
-});

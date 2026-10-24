@@ -1,5 +1,6 @@
 import React, { type ComponentProps, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
   Modal,
@@ -26,14 +27,14 @@ interface ChoiceOption {
 interface BaseProps {
   visible: boolean;
   title: string;
-  onClose: () => void;
+  onClose: () => void | Promise<void>;
 }
 
 interface ChoiceProps extends BaseProps {
   type: 'choice';
   options: ChoiceOption[];
   value: string;
-  onApply: (value: string) => void;
+  onApply: (value: string) => void | Promise<void>;
 }
 
 interface NumericProps extends BaseProps {
@@ -41,13 +42,13 @@ interface NumericProps extends BaseProps {
   value: string;
   unit: string;
   placeholder?: string;
-  onApply: (value: string) => void;
+  onApply: (value: string) => void | Promise<void>;
 }
 
 interface HeightProps extends BaseProps {
   type: 'height';
   valueCm: string;
-  onApply: (valueCm: string) => void;
+  onApply: (valueCm: string) => void | Promise<void>;
 }
 
 export type ProfileEditSheetProps = ChoiceProps | NumericProps | HeightProps;
@@ -100,13 +101,13 @@ export function ProfileEditSheet(props: ProfileEditSheetProps) {
   const { scaleAnim, opacityAnim, blurOpacity, translateY, dismiss } = useSheetAnimation(visible);
 
   return (
-    <Modal visible={visible} transparent animationType="none">
+    <Modal visible={visible} transparent animationType="none" onRequestClose={() => dismiss(onClose)}>
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: blurOpacity }]}>
         <BlurView tint="light" intensity={60} style={StyleSheet.absoluteFill as ViewStyle} />
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
       </Animated.View>
 
-      <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss(onClose)} />
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss(onClose)} accessibilityRole="button" accessibilityLabel="Cancel edit" testID="profile-edit-cancel" />
 
       <View style={s.overlay} pointerEvents="box-none">
         <Animated.View style={[s.card, { opacity: opacityAnim, transform: [{ scale: scaleAnim }, { translateY }] }]}>
@@ -123,7 +124,7 @@ export function ProfileEditSheet(props: ProfileEditSheetProps) {
 
 // ─── Choice content ─────────────────────────────────────────────────────────
 
-function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dismiss: (cb: () => void) => void }) {
+function ChoiceContent({ options, value, onApply }: ChoiceProps & { dismiss: (cb: () => void) => void }) {
   const [selected, setSelected] = useState(value);
 
   useEffect(() => { setSelected(value); }, [value]);
@@ -138,6 +139,8 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
               key={opt.id}
               style={[s.choiceRow, active && s.choiceRowActive]}
               onPress={() => setSelected(opt.id)}
+              accessibilityRole="radio" accessibilityState={{ checked: active }}
+              accessibilityLabel={[opt.label, opt.description].filter(Boolean).join('. ')} testID={`profile-choice-${opt.id}`}
             >
               {opt.icon && (
                 <Ionicons name={opt.icon as ComponentProps<typeof Ionicons>['name']} size={18} color={active ? EDITORIAL.cream : EDITORIAL.textSoft} />
@@ -153,7 +156,7 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
           );
         })}
       </View>
-      <Pressable style={s.applyBtn} onPress={() => dismiss(() => onApply(selected))}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(selected); } catch (error) { Alert.alert("Save failed", error instanceof Error ? error.message : "Your edits are still here. Please try again."); } }}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>
@@ -162,7 +165,7 @@ function ChoiceContent({ options, value, onApply, dismiss }: ChoiceProps & { dis
 
 // ─── Numeric content ────────────────────────────────────────────────────────
 
-function NumericContent({ title, value, unit, placeholder, onApply, dismiss }: NumericProps & { dismiss: (cb: () => void) => void }) {
+function NumericContent({ title, value, unit, placeholder, onApply }: NumericProps & { dismiss: (cb: () => void) => void }) {
   const [draft, setDraft] = useState(value);
 
   useEffect(() => { setDraft(value); }, [value]);
@@ -181,7 +184,7 @@ function NumericContent({ title, value, unit, placeholder, onApply, dismiss }: N
           onStep={(dir) => setDraft((prev) => String(clampInt((parseInt(prev, 10) || 0) + dir, 0, 99999)))}
         />
       </View>
-      <Pressable style={s.applyBtn} onPress={() => dismiss(() => onApply(draft))}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(draft); } catch (error) { Alert.alert("Save failed", error instanceof Error ? error.message : "Your edits are still here. Please try again."); } }}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>
@@ -190,7 +193,7 @@ function NumericContent({ title, value, unit, placeholder, onApply, dismiss }: N
 
 // ─── Height content (ft/in or cm) ───────────────────────────────────────────
 
-function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (cb: () => void) => void }) {
+function HeightContent({ valueCm, onApply }: HeightProps & { dismiss: (cb: () => void) => void }) {
   const [mode, setMode] = useState<'imperial' | 'metric'>('metric');
   const [cm, setCm] = useState(valueCm);
   const [ft, setFt] = useState('');
@@ -217,10 +220,10 @@ function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (
     <>
       {/* Unit toggle */}
       <View style={s.toggleRow}>
-        <Pressable style={[s.toggleBtn, mode === 'imperial' && s.toggleActive]} onPress={() => setMode('imperial')}>
+        <Pressable style={[s.toggleBtn, mode === 'imperial' && s.toggleActive]} onPress={() => setMode('imperial')} accessibilityRole="radio" accessibilityState={{ checked: mode === 'imperial' }} accessibilityLabel="Feet and inches" testID="profile-height-imperial">
           <Text style={[s.toggleText, mode === 'imperial' && s.toggleTextActive]}>ft / in</Text>
         </Pressable>
-        <Pressable style={[s.toggleBtn, mode === 'metric' && s.toggleActive]} onPress={() => setMode('metric')}>
+        <Pressable style={[s.toggleBtn, mode === 'metric' && s.toggleActive]} onPress={() => setMode('metric')} accessibilityRole="radio" accessibilityState={{ checked: mode === 'metric' }} accessibilityLabel="Centimeters" testID="profile-height-metric">
           <Text style={[s.toggleText, mode === 'metric' && s.toggleTextActive]}>cm</Text>
         </Pressable>
       </View>
@@ -245,7 +248,7 @@ function HeightContent({ valueCm, onApply, dismiss }: HeightProps & { dismiss: (
         </View>
       )}
 
-      <Pressable style={s.applyBtn} onPress={() => dismiss(() => onApply(getCm()))}>
+      <Pressable style={s.applyBtn} accessibilityRole="button" accessibilityLabel="Apply" testID="profile-edit-apply" onPress={async () => { try { await onApply(getCm()); } catch (error) { Alert.alert("Save failed", error instanceof Error ? error.message : "Your edits are still here. Please try again."); } }}>
         <Text style={s.applyText}>Apply</Text>
       </Pressable>
     </>

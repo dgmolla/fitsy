@@ -7,7 +7,6 @@ console-log apps/api/services/menuSources/resolver.ts
 console-log apps/api/services/menuSources/uberEatsSource.ts
 console-log apps/api/services/menuSources/ueSitemapIndex.ts
 console-log apps/mobile/lib/apiClient.ts
-console-log apps/mobile/lib/useLocation.ts
 console-log packages/shared/src/env.ts
 console-log scripts/axiom-setup.ts
 console-log scripts/backfill-chain-flag.ts
@@ -58,7 +57,6 @@ console-log scripts/ue-feed-spike.ts
 console-log scripts/ue-mode-smoke.ts
 direct-api apps/api/app/restaurants/[slug]/page.tsx
 direct-api apps/mobile/app/(tabs)/saved.tsx
-direct-api apps/mobile/app/(tabs)/search.tsx
 direct-api apps/mobile/app/mockups/search-v3a.tsx
 direct-api apps/mobile/app/mockups/search-v3b.tsx
 direct-api apps/mobile/app/mockups/search-v3c.tsx
@@ -87,13 +85,11 @@ long-file apps/api/services/menuSources/uberEatsSource.ts
 long-file apps/api/services/menuSources/ueApiClient.ts
 long-file apps/mobile/app/(tabs)/profile.tsx
 long-file apps/mobile/app/(tabs)/saved.tsx
-long-file apps/mobile/app/(tabs)/search.tsx
 long-file apps/mobile/app/macro-setup.tsx
 long-file apps/mobile/app/mockups/search-v3b.tsx
 long-file apps/mobile/app/mockups/search-v3c.tsx
 long-file apps/mobile/app/mockups/search-v3d.tsx
 long-file apps/mobile/app/restaurant/[id].tsx
-long-file apps/mobile/components/FilterPopup.tsx
 long-file apps/mobile/components/MacroTargetsSection.tsx
 long-file apps/mobile/components/ProfileEditSheet.tsx
 long-file apps/mobile/components/RestaurantCard.tsx

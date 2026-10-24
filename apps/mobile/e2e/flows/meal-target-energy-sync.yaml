@@ -1,0 +1,138 @@
+# Real onboarding and discovery edits on the dev backend.
+appId: com.fitsy.mobile
+tags: [onboarding, discovery, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
+- tapOn:
+    point: "92%,93%"
+- tapOn:
+    id: welcome-start
+- tapOn:
+    id: location-choose-area
+- swipe:
+    start: "50%,78%"
+    end: "50%,47%"
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: goal-build_muscle
+    timeout: 30000
+- tapOn:
+    id: goal-build_muscle
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: tried-meal_prep
+    timeout: 30000
+- tapOn:
+    id: tried-meal_prep
+- tapOn:
+    id: welcome-continue
+- tapOn:
+    id: welcome-continue
+- tapOn:
+    id: welcome-continue
+- tapOn:
+    id: target-mode-known
+- tapOn:
+    id: welcome-continue
+- assertVisible: "What works.*for one meal.*"
+- tapOn:
+    id: meal-target-protein
+- waitForAnimationToEnd
+- inputText: "40"
+- swipe:
+    start: "50%,46%"
+    end: "50%,25%"
+- tapOn:
+    id: meal-target-carbs
+- waitForAnimationToEnd
+- inputText: "65"
+- tapOn:
+    id: meal-target-fat
+- waitForAnimationToEnd
+- inputText: "20"
+- tapOn:
+    id: meal-target-protein
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${Number(maestro.copiedText) === 600}
+- eraseText: 7
+- inputText: "55"
+- tapOn:
+    id: meal-target-fat
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${Number(maestro.copiedText) === 660}
+- tapOn:
+    id: meal-target-calories
+- eraseText: 7
+- inputText: "700"
+- tapOn:
+    id: meal-target-fat
+- copyTextFrom:
+    id: meal-target-protein
+- evalScript: ${output.p = Number(maestro.copiedText)}
+- copyTextFrom:
+    id: meal-target-carbs
+- evalScript: ${output.c = Number(maestro.copiedText)}
+- copyTextFrom:
+    id: meal-target-fat
+- evalScript: ${output.f = Number(maestro.copiedText)}
+- copyTextFrom:
+    id: meal-target-calories
+- evalScript: ${output.kcal = Number(maestro.copiedText)}
+- assertTrue: ${output.kcal === 4 * output.p + 4 * output.c + 9 * output.f && output.p > 55}
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
+- tapOn:
+    id: welcome-back
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${Number(maestro.copiedText) === output.kcal}
+- copyTextFrom:
+    id: meal-target-protein
+- assertTrue: ${Number(maestro.copiedText) === output.p}
+- tapOn:
+    id: welcome-continue
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+    timeout: 30000
+- tapOn:
+    id: coachmark-skip
+- extendedWaitUntil:
+    visible:
+      id: preview-edit-targets
+    timeout: 30000
+- tapOn:
+    id: preview-edit-targets
+- tapOn: "Increase Protein"
+- copyTextFrom: "Calories per meal"
+- assertTrue: ${Number(maestro.copiedText) === output.kcal + 20}
+- tapOn:
+    id: meal-filter-apply
+- extendedWaitUntil:
+    visible: "${output.kcal + 20}"
+    timeout: 30000
+- tapOn:
+    id: preview-edit-targets
+- copyTextFrom: "Calories per meal"
+- assertTrue: ${Number(maestro.copiedText) === output.kcal + 20}
+- tapOn:
+    id: meal-filter-close

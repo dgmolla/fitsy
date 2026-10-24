@@ -1,38 +1,47 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Newsreader, Outfit, Fraunces, Nunito_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const newsreader = Newsreader({
-  subsets: ["latin"],
+const newsreader = localFont({
+  src: [
+    { path: "./fonts/newsreader.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/newsreader.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/newsreader-italic.woff2", weight: "400", style: "italic" },
+    { path: "./fonts/newsreader-italic.woff2", weight: "700", style: "italic" },
+  ],
   display: "swap",
   variable: "--font-newsreader",
-  weight: ["400", "700"],
-  style: ["normal", "italic"],
+  adjustFontFallback: "Times New Roman",
 });
 
-const outfit = Outfit({
-  subsets: ["latin"],
+const outfit = localFont({
+  src: "./fonts/outfit.woff2",
   display: "swap",
   variable: "--font-body",
+  weight: "100 900",
 });
 
-const fraunces = Fraunces({
-  subsets: ["latin"],
+const fraunces = localFont({
+  src: [
+    { path: "./fonts/fraunces.woff2", weight: "100 900", style: "normal" },
+    { path: "./fonts/fraunces-italic.woff2", weight: "100 900", style: "italic" },
+  ],
   display: "swap",
   variable: "--font-fraunces",
-  // Variable font + optical size axis — without `opsz`, Fraunces renders large
-  // headings using its body cut, which looks chunky and over-sized.
-  weight: "variable",
-  style: ["normal", "italic"],
-  axes: ["opsz"],
+  adjustFontFallback: "Times New Roman",
+  // Both local files retain the optical size axis used by the display CSS.
 });
 
-const nunito = Nunito_Sans({
-  subsets: ["latin"],
+const nunito = localFont({
+  src: [
+    { path: "./fonts/nunito-sans.woff2", weight: "300", style: "normal" },
+    { path: "./fonts/nunito-sans.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/nunito-sans.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/nunito-sans.woff2", weight: "700", style: "normal" },
+  ],
   display: "swap",
   variable: "--font-nunito",
-  weight: ["300", "400", "600", "700"],
 });
 
 export const metadata: Metadata = {

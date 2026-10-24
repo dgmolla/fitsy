@@ -1,7 +1,9 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
@@ -12,18 +14,20 @@ const MACROS = [
   { label: 'Fat', abbr: 'F', desc: 'Supports hormones and brain function', color: '#7A4B8A' },
 ];
 
-export default function MacrosIntroScreen() {
+function MacrosIntroScreen() {
+  useOnboardingStep('macros-intro');
+  const navigation = useNavigation();
   useEffect(() => {
     trackOnboardingScreenView('macros_intro');
   }, []);
 
   return (
     <WelcomeScreen
-      progress={9 / 18}
       title="What are macros?"
       subtitle="Every meal breaks down into three macronutrients. Knowing yours helps you eat smarter."
-      onContinue={() => router.push('/welcome/macros-fitsy')}
+      onContinue={() => navigation.canGoBack() ? router.back() : router.replace('/welcome/target-setup')}
       canContinue={true}
+      continueLabel="Got it"
     >
       <View style={s.cards}>
         {MACROS.map((m, i) => (
@@ -77,3 +81,5 @@ const s = StyleSheet.create({
     marginTop: 2,
   },
 });
+
+export default requireWelcomeGoal(MacrosIntroScreen, '/welcome/target-setup');

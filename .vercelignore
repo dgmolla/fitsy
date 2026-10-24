@@ -1,0 +1,7 @@
+# Local verification and simulator artifacts are never deployment inputs.
+.evidence/
+apps/mobile/ios/
+node_modules/
+apps/mobile/node_modules/
+.env*
+.vercel/

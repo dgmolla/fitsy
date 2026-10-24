@@ -1,0 +1,627 @@
+# Real dev coverage and live offering terms. No purchase on the shared dev account.
+appId: com.fitsy.mobile
+tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      notifications: deny
+# XCTest can reject the first AX snapshot after reinstall (HTTP 500).
+# Retry only the initial observation, before any product interaction.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    point: "92%,93%"
+- tapOn:
+    id: welcome-start
+- assertVisible:
+    id: location-use-current
+- assertVisible:
+    id: location-choose-area
+- tapOn:
+    id: location-choose-area
+# On a small iPhone, DTLA exists in accessibility but sits below the visible sheet.
+- swipe:
+    start: "50%,78%"
+    end: "50%,47%"
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: goal-lose_fat
+    timeout: 30000
+- assertVisible: "What's your goal.*"
+- tapOn:
+    id: goal-lose_fat
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: tried-calorie_apps
+    timeout: 30000
+- assertVisible: "What have you tried.*for healthy eating.*"
+# The native option groups its emoji and label into one accessible button.
+- assertVisible:
+    id: tried-meal_prep
+    text: ".*Meal prepping at home.*"
+- tapOn:
+    id: tried-calorie_apps
+- tapOn:
+    id: welcome-continue
+- assertVisible: "That restaurant dish.*can be hard to find.*"
+- assertVisible:
+    id: story-calorie_apps
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: goal-progress-graph
+- assertVisible: ".*beyond tracker entries.*"
+- assertVisible: "Consistency with your fat-loss plan"
+- assertVisible: "With Fitsy"
+- assertVisible: "Without Fitsy"
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: target-mode-known
+- assertVisible:
+    id: target-mode-estimate
+- tapOn:
+    id: target-mode-known
+- assertVisible:
+    id: target-mode-known
+    text: "radio button, checked"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "What works.*for one meal.*"
+- assertNotVisible: "What's your goal.*"
+- assertNotVisible: "How active are you.*"
+- tapOn:
+    id: meal-target-calories
+# Let the native keyboard and initial selection settle before automated typing.
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "600"
+- assertVisible: "600"
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${maestro.copiedText === '600'}
+- tapOn:
+    id: meal-target-protein
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "0"
+- assertVisible: "0"
+- copyTextFrom:
+    id: meal-target-protein
+- assertTrue: ${maestro.copiedText === '0'}
+# The numeric keyboard leaves the second target row below the visible body.
+# Scroll the body above the keyboard before tapping carbs or fat.
+- swipe:
+    start: "50%,46%"
+    end: "50%,25%"
+- waitForAnimationToEnd
+- assertVisible:
+    id: meal-target-carbs
+- tapOn:
+    id: meal-target-carbs
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "0"
+- assertVisible: "0"
+- copyTextFrom:
+    id: meal-target-carbs
+- assertTrue: ${maestro.copiedText === '0'}
+- tapOn:
+    id: meal-target-fat
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "0"
+- assertVisible: "0"
+- copyTextFrom:
+    id: meal-target-fat
+- assertTrue: ${maestro.copiedText === '0'}
+# Blur fat without navigating, then prove the all-zero draft cannot be saved.
+- tapOn:
+    text: "Fat / meal"
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${maestro.copiedText === '0'}
+- assertVisible:
+    id: welcome-continue
+    enabled: false
+- tapOn:
+    id: welcome-continue
+- assertVisible: "What works.*for one meal.*"
+- assertNotVisible: "A little context.*A better choice.*"
+# Recover using calories, then explicitly retain zero protein with positive energy.
+# Settle the previous field before focusing the next input. Calorie rebalancing
+# changes generated text and can invalidate its initial native selection.
+- tapOn:
+    text: "Calories / meal"
+- waitForAnimationToEnd
+- tapOn:
+    id: meal-target-calories
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "600"
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${maestro.copiedText === '600'}
+- tapOn:
+    text: "Protein / meal"
+- waitForAnimationToEnd
+- tapOn:
+    id: meal-target-protein
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "0"
+- copyTextFrom:
+    id: meal-target-protein
+- assertTrue: ${maestro.copiedText === '0'}
+- tapOn:
+    text: "Carbs / meal"
+- waitForAnimationToEnd
+- tapOn:
+    id: meal-target-carbs
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "105"
+- copyTextFrom:
+    id: meal-target-carbs
+- assertTrue: ${maestro.copiedText === '105'}
+- tapOn:
+    text: "Fat / meal"
+- waitForAnimationToEnd
+- tapOn:
+    id: meal-target-fat
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "20"
+- copyTextFrom:
+    id: meal-target-fat
+- assertTrue: ${maestro.copiedText === '20'}
+- tapOn:
+    text: "Fat / meal"
+- copyTextFrom:
+    id: meal-target-protein
+- evalScript: ${output.targetProtein = Number(maestro.copiedText)}
+- assertTrue: ${output.targetProtein === 0}
+- copyTextFrom:
+    id: meal-target-carbs
+- evalScript: ${output.targetCarbs = Number(maestro.copiedText)}
+- assertTrue: ${output.targetCarbs === 105}
+- copyTextFrom:
+    id: meal-target-fat
+- evalScript: ${output.targetFat = Number(maestro.copiedText)}
+- assertTrue: ${output.targetFat === 20}
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${Number(maestro.copiedText) === 600 && Number(maestro.copiedText) === 4 * output.targetProtein + 4 * output.targetCarbs + 9 * output.targetFat}
+- assertVisible:
+    id: welcome-continue
+    enabled: true
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Published"
+- assertVisible: "Estimated"
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+    timeout: 30000
+- assertVisible: "Your meal targets"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Follow your craving"
+# Back stays in place even as the search/loading action changes width.
+- assertVisible:
+    id: coachmark-back
+    width: 44
+    height: 44
+    tolerance: 1
+# Its hit target must stay in the counter's left column, not follow Next right.
+- assertNotVisible:
+    id: coachmark-back
+    rightOf: "2 OF 5"
+- tapOn:
+    id: coachmark-back
+- assertVisible: "Your meal targets"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Follow your craving"
+# The search tip types into the real field and waits for the real backend response.
+# Its native Modal masks the underlying input from accessibility until dismissed.
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+      enabled: true
+    timeout: 30000
+- assertNotVisible:
+    id: coachmark-back
+    rightOf: "2 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Real meals. Know the source."
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Wherever your day takes you"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "5 OF 5"
+- assertVisible: ".*Try your first craving now.*"
+- tapOn: "Find my meal"
+- assertNotVisible:
+    id: coachmark-next
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'pizza'}
+- assertNotVisible:
+    id: discovery-loading
+# Native bounds guard the approved compact chrome, not just its presence.
+# Visual pills stay compact while their enclosing touch targets remain 44pt.
+- assertVisible:
+    id: discovery-location-pill
+    height: 28
+    tolerance: 1
+- assertVisible:
+    id: discovery-edit-pill
+    height: 28
+    tolerance: 1
+- assertVisible:
+    id: discovery-macro-strip
+    height: 46
+    tolerance: 1
+- assertVisible:
+    id: discovery-location
+    height: 44
+    tolerance: 1
+- assertVisible:
+    id: preview-edit-targets
+    height: 44
+    tolerance: 1
+# Replay starts with an empty field. Skipping the first tip must leave it empty.
+- tapOn:
+    id: preview-show-tour
+- assertVisible: "1 OF 5"
+- tapOn:
+    id: coachmark-skip
+- assertNotVisible:
+    id: discovery-clear-search
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+# Skip the typing tip, then enter our own craving. Cancelled timers must not overwrite it.
+- tapOn:
+    id: preview-show-tour
+- assertVisible: "Your meal targets"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Follow your craving"
+- tapOn:
+    id: coachmark-skip
+- tapOn:
+    id: discovery-search
+- eraseText: 100
+- inputText: "chicken"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertNotVisible:
+    id: discovery-loading
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'chicken'}
+- assertVisible: "600"
+- assertVisible: "0g"
+- tapOn:
+    id: preview-edit-targets
+- assertVisible: "600"
+- tapOn: "Increase Calories"
+- assertVisible: "654"
+- copyTextFrom:
+    text: "Protein grams"
+- assertTrue: ${maestro.copiedText === '0'}
+- copyTextFrom:
+    text: "Carbs grams"
+- assertTrue: ${maestro.copiedText === '114'}
+- copyTextFrom:
+    text: "Fat grams"
+- assertTrue: ${maestro.copiedText === '22'}
+- tapOn:
+    id: meal-filter-apply
+- extendedWaitUntil:
+    visible: "654"
+    timeout: 30000
+- assertVisible: "654"
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'chicken'}
+- tapOn:
+    id: discovery-clear-search
+- extendedWaitUntil:
+    visible:
+      id: discovery-search
+    timeout: 30000
+- tapOn:
+    id: discovery-search
+- inputText: "pizza"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "pizza"
+- assertNotVisible:
+    id: discovery-loading
+# The oracle uses the same manual area, craving and active target as the app.
+# This complete target has zero protein, an inactive protein search constraint.
+# Its carbs/fat constraints remain active and its calories equal their energy.
+- evalScript: ${output.contextResponse = http.get('https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&q=pizza&calories=654&protein=0&carbs=114&fat=22')}
+- assertTrue: ${output.contextResponse.status === 200}
+- evalScript: ${output.context = json(output.contextResponse.body)}
+- assertTrue: ${output.context.data.length === 3 && output.context.data.every(function (r) { return r.bestMatch && r.bestMatch.calories > 0 && r.bestMatch.matchScore !== null; })}
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText.includes(output.context.data[0].name) && maestro.copiedText.includes(output.context.data[0].bestMatch.name)}
+- scrollUntilVisible:
+    element:
+      id: preview-pick-2
+    direction: DOWN
+- copyTextFrom:
+    id: preview-pick-2
+- assertTrue: ${maestro.copiedText.includes(output.context.data[1].name) && maestro.copiedText.includes(output.context.data[1].bestMatch.calories + ' kcal') && !maestro.copiedText.includes(output.context.data[1].bestMatch.name)}
+- scrollUntilVisible:
+    element:
+      id: preview-pick-3
+    direction: DOWN
+- copyTextFrom:
+    id: preview-pick-3
+- assertTrue: ${maestro.copiedText.includes(output.context.data[2].name) && maestro.copiedText.includes('protein ' + output.context.data[2].bestMatch.proteinG + 'g') && !maestro.copiedText.includes(output.context.data[2].bestMatch.name)}
+- assertNotVisible:
+    id: preview-pick-4
+- tapOn:
+    id: preview-pick-3
+- assertVisible: "Continue with Apple"
+- assertVisible: "Continue with Google"
+- assertNotVisible: "Continue with email"
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: preview-back
+# Back preserves the user's list position; scroll to inspect the retained query.
+- scrollUntilVisible:
+    element:
+      id: preview-guide
+    direction: UP
+- assertVisible:
+    id: preview-guide
+- assertVisible: "pizza"
+# The locked choice above reached sign-in before any plans. Continue from
+# preview and use its selected-pick sign-in for the live terms assertion below.
+# Sign in through the real dev auth seam and preserve the tapped third pick.
+# This never purchases on the shared dev account.
+- scrollUntilVisible:
+    element:
+      id: preview-pick-3
+    direction: DOWN
+- tapOn:
+    id: preview-pick-3
+# The summary is a container with separately accessible text children.
+# Assert the actual labels; copying the container does not include its children.
+- assertVisible:
+    id: signup-selected-restaurant
+- assertVisible: ${output.context.data[2].name}
+- assertVisible: "pizza · DTLA"
+- assertVisible: "654 kcal · 0g protein · 114g carbs · 22g fat"
+- tapOn: "Dev login"
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 30000
+- assertNotVisible: "Get a trial reminder"
+- assertVisible:
+    id: paywall-offer-paid
+- copyTextFrom:
+    id: paywall-price-yearly
+- evalScript: ${output.annualPrice = maestro.copiedText}
+- assertTrue: ${output.annualPrice !== 'Loading…' && output.annualPrice.length > 0}
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically') && maestro.copiedText.includes('24 hours')}
+- assertNotVisible: "Leave a review"
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: preview-back
+# This fresh preview has no prior decline or owned payment continuation.
+# Its Back path returns to preview; the owned checkout exit-modal branch is
+# covered separately in onboarding-returning-preview.yaml.
+# Back preserves the user's list position; scroll to inspect the retained query.
+- scrollUntilVisible:
+    element:
+      id: preview-guide
+    direction: UP
+- assertVisible:
+    id: preview-guide
+- assertVisible: "pizza"
+- assertVisible: "654"
+- scrollUntilVisible:
+    element:
+      id: locked-value-cta
+    direction: DOWN
+- assertVisible:
+    id: locked-value-cta
+# Replaying target setup requires explicit confirmation and preserves the search.
+- openLink: com.fitsy.mobile://welcome/target-setup
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: target-mode-saved
+    timeout: 15000
+- assertVisible: "Edit my meal targets.*"
+- assertVisible: "Help me set targets.*"
+- assertVisible:
+    id: target-mode-saved
+    text: "radio button, checked"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "654"
+- assertVisible: "0g"
+- assertVisible: "pizza"
+# A legacy preview link must reach the welcome preview, without a paywall loop.
+- openLink: com.fitsy.mobile://search?preview=1
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "pizza"
+- assertNotVisible:
+    id: paywall-price-yearly
+- stopApp
+- openLink: com.fitsy.mobile://search?preview=1
+# Relaunch can briefly invalidate the native accessibility hierarchy.
+# Retry the first hierarchy read with the required preview assertion.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - tapOn:
+          text: "^Open$"
+          optional: true
+      - extendedWaitUntil:
+          visible:
+            id: preview-guide
+          timeout: 30000
+- assertVisible: "pizza"
+- assertVisible: "654"
+
+- assertNotVisible:
+    id: coachmark-next
+- tapOn:
+    id: preview-show-tour
+- assertVisible: "1 OF 5"
+- tapOn:
+    id: coachmark-skip
+# Replay cleared the previous pizza craving before the user skipped.
+- assertNotVisible:
+    id: discovery-clear-search
+# An empty craving result must not reuse the previous picks or imply no coverage.
+- extendedWaitUntil:
+    visible:
+      id: discovery-search
+    timeout: 30000
+- tapOn:
+    id: discovery-search
+- inputText: "fitsy-e2e-no-dish-9f71c2"
+- pressKey: Enter
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'fitsy-e2e-no-dish-9f71c2'}
+- extendedWaitUntil:
+    visible: "No matches for this search"
+    timeout: 30000
+- assertVisible:
+    id: discovery-empty-edit
+- assertVisible:
+    id: discovery-empty-clear
+- assertNotVisible:
+    id: discovery-loading
+- assertNotVisible:
+    id: discovery-hero
+- assertNotVisible:
+    id: preview-pick-2
+- assertNotVisible:
+    id: preview-pick-3
+- assertVisible:
+    id: preview-show-tour
+# The empty-result tour starts with the missing-meal tip and keeps this craving.
+- tapOn:
+    id: preview-show-tour
+- assertVisible: "1 OF 5"
+- assertVisible: "Make room for your craving"
+# The tour covers the search input in the accessibility tree. Verify its value
+# after closing the tour; the exact value was already checked before opening it.
+- tapOn:
+    id: coachmark-next
+- assertVisible: "2 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "3 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "4 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "5 OF 5"
+- tapOn:
+    id: coachmark-skip
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'fitsy-e2e-no-dish-9f71c2'}
+- assertNotVisible:
+    id: discovery-join-waitlist
+- scrollUntilVisible:
+    element:
+      id: locked-value-cta
+    direction: DOWN
+- copyTextFrom:
+    id: locked-value-cta
+- assertTrue: ${maestro.copiedText.includes('Keep exploring.') && maestro.copiedText.includes('Try another dish or area. Unlock full menus with Pro.') && maestro.copiedText.includes('Explore Pro plans')}
+- tapOn:
+    id: discovery-clear-search
+- extendedWaitUntil:
+    visible:
+      id: discovery-search
+    timeout: 30000
+- tapOn:
+    id: discovery-search
+- inputText: "pizza"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertNotVisible:
+    id: discovery-loading
+- assertVisible: "pizza"
+- assertVisible: "654"
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText.includes(output.context.data[0].name) && maestro.copiedText.includes(output.context.data[0].bestMatch.name)}

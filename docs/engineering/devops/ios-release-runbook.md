@@ -1,176 +1,101 @@
-# iOS Build & App Store Release Runbook
+# Fitsy iOS release runbook
 
-**Task**: S-51 · S-207
-**Owner**: CTO
-**Last updated**: 2026-06-12
+**TL;DR:** Prepare and verify one exact candidate, then obtain explicit human approval before publishing metadata or submitting for review.
 
-> **Status:** living · **Last verified:** 2026-06-12
->
-> **No TestFlight beta.** Light user testing was deemed sufficient (decision 2026-06-12), so the release path goes straight from an EAS production build to App Store submission. This runbook covers EAS Build → App Store Connect → App Store review.
+> **Status:** living
+> **Last inspected:** 2026-10-24
+> **Next release:** [issue #444 review packet](../../release/next-submission.md)
 
-## Overview
-
-This runbook covers the full EAS Build + App Store submission setup for Fitsy iOS.
+Follow [shipping.md](shipping.md) and the human-selected ship-branch/verify-fitsy skills for checks, ownership and source-bound evidence.
+The GitHub Fitsy Delivery board is the sole queue; the existing release owner coordinates prerequisite acceptance and the human gate.
+This runbook is not permission to execute Apple/EAS mutations.
+The current task expressly prohibits EAS builds/submissions and any Apple submission; version edits, uploads and publication are also outside this preparation.
 
 ```mermaid
 flowchart LR
-    A[git tag v*] --> B[eas-build.yml triggered]
-    B --> C[eas build --profile production --platform ios]
-    C --> D[EAS Cloud Build]
-    D --> E[.ipa artifact]
-    E --> F[eas submit --platform ios]
-    F --> G[App Store Connect processing]
-    G --> H[Submit for App Store review]
+  A[Read actual Apple baseline and feedback] --> B[Accept intended scope and freeze source]
+  B --> C[Separately authorized production build and private processing]
+  C --> D[Device proof, artwork, metadata and answers]
+  D --> E[Human approves exact candidate and packet]
+  E --> F[Authorized metadata publication and Submit for Review]
+  F --> G[Apple verdict]
+  G --> H[Authorized public release and verification]
 ```
 
----
+## Establish the actual baseline
 
-## Prerequisites
+Read the last submitted App Store version/build, metadata, screenshots, review access, declarations, product/offer configuration, release mode and prior Apple feedback.
+Record actual returned IDs, statuses and timestamps; preserve unknown source/native/runtime mappings rather than inferring them from tags.
+Compare that submission with current served main/backend, intervening OTA updates and the intended embedded production binary.
+A processed build, Git tag, OTA publication or repository listing draft does not prove an App Review submission or public release.
 
-### Apple Developer Account
-- Active Apple Developer Program membership ($99/yr)
-- App ID registered: `app.fitsy.mobile`
-- App created in App Store Connect: **Fitsy**
+The current [verified binary anchor](../../../scripts/deploy/ios-binary-baseline.json) is version `1.0.0`, build `5`, bundle `com.fitsy.mobile`, runtime `1.0.0`, production channel, source `2e515fdc339d27e33110e128379fb16bd3a2d3a5`.
+Its [provenance](ios-ota-baseline.md) establishes historical EAS/Apple processing and actual IPA identity, not the last submission.
+Use [app.config.ts](../../../apps/mobile/app.config.ts) and [eas.json](../../../apps/mobile/eas.json) for current repository identity; preserve the established bundle instead of matching obsolete `app.fitsy.mobile` drafts.
+Read ASC and EAS allocations before proposing an increasing unused build number.
 
-### EAS CLI (local setup)
-```bash
-npm install -g eas-cli
-eas login          # authenticate with Expo account
-eas whoami         # verify
-```
+### Agreement or access failure
 
-### Required Secrets (GitHub + EAS)
+For `FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`, retain the exact read-only refusal and stop unchanged retries.
+The account owner resolves the applicable agreement and notifies the existing release owner, who resumes baseline reads after that changed condition.
+Do not guess agreement type/terms, accept agreements on the human's behalf, request passwords/keys in chat, or treat missing data as an empty Apple baseline.
+The next packet links the retained coordinator receipt and records what was and was not returned.
 
-| Secret | Location | Purpose |
-|--------|----------|---------|
-| `EXPO_TOKEN` | GitHub Actions secret | EAS CLI auth in CI |
-| `APPLE_ID` | EAS secret (`eas secret:create`) | App Store Connect login |
-| `APPLE_APP_SPECIFIC_PASSWORD` | EAS secret | ASC API (2FA bypass) |
-| `ASC_APP_ID` | EAS secret | App Store Connect app numeric ID |
+Assess supported skills/tools before waiting: existing connected readers, bounded CLI reads, retained source-bound receipts and public official sources can still support preparation.
+Keep credentials in the existing protected workflow and host-owned account context; workspace network/authentication restrictions do not authorize an alternate private-account access path.
+Record the selected skills, attempted recovery, remaining boundary, owner and resume event in the current packet/handoff.
+When an execution helper or orchestration hook caused the failure, have its existing owner validate the narrow correction through the actual consumer before another assignment; do not create a second release pipeline.
 
-Add EAS secrets:
-```bash
-eas secret:create --scope project --name APPLE_ID --value "your@apple.id"
-eas secret:create --scope project --name APPLE_APP_SPECIFIC_PASSWORD --value "xxxx-xxxx-xxxx-xxxx"
-eas secret:create --scope project --name ASC_APP_ID --value "1234567890"
-```
+## Freeze the release scope and production identity
 
-Add GitHub secret:
-```
-Settings → Secrets and variables → Actions → New repository secret
-Name: EXPO_TOKEN
-Value: <token from expo.dev/accounts/[username]/settings/access-tokens>
-```
+For #444, verify #431, #433, #442 and #443 delivery/acceptance or record an explicit human scope decision for each unresolved item.
+Preserve #431's human trial-test ownership and genuine review/UI approvals without granting fresh prerequisite budgets.
+Freeze exact source commit/tree, native inputs, lockfile, EAS profile/environment/channel, runtime, configuration identities and eventual binary ID/hash in the packet.
+Run applicable cheap/focused checks, matching independent review and trusted exact-source Verify, then retain API/native/device and release evidence under the existing shipping contracts.
+Document which checks have actually passed and which remain unknown; old-head CI and Test Store fixtures cannot stand in for final-candidate acceptance.
 
----
+The production build must use the production backend, Supabase project, real iOS RevenueCat app key and `pro` entitlement, not localhost/dev, keyless or `test_` configuration.
+Confirm the evaluated configuration and actual embedded IPA, including Google sign-in scheme, signing/team, bundle, version/build, SDK, runtime and production updates channel.
+Do not expose credentials when recording identities.
+Under `runtimeVersion.policy = appVersion`, a marketing-version change also changes OTA runtime; retain [native compatibility and rollback protections](ios-ota-baseline.md).
+Verify both embedded startup and applicable update behavior; an OTA in the same project does not prove the installed store binary received it.
 
-## One-Time Mobile Setup (Frontend Agent)
+## Build/upload boundary for a later authorized task
 
-> **Frontend ticket required** — CTO does not own `apps/mobile/`. The following must be done by the frontend agent before the workflow can succeed.
+The existing [.github/workflows/eas-build.yml](../../../.github/workflows/eas-build.yml) reacts to `v*.*.*` tags or manual dispatch and performs both a production EAS build and an upload under `production-native`.
+Creating a version tag can trigger that work; do not tag or dispatch during preparation.
+Inspect the actual workflow and installed EAS CLI contract before using them in a later authorized task.
+For an authorized upload, select and record the exact frozen build rather than assuming an unrelated latest build is the candidate.
+Do not change protected environment/release controls to make a candidate eligible.
 
-### 1. Add `apps/mobile/eas.json`
-```json
-{
-  "cli": {
-    "version": ">= 10.0.0"
-  },
-  "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
-    },
-    "preview": {
-      "distribution": "internal",
-      "ios": {
-        "simulator": false
-      }
-    },
-    "production": {
-      "ios": {
-        "buildConfiguration": "Release"
-      }
-    }
-  },
-  "submit": {
-    "production": {}
-  }
-}
-```
+An EAS upload is distinct from Apple's processing and from Submit for Review.
+Record EAS build ID, source, IPA SHA-256, native/configuration identities, ASC build ID and processing result separately.
+Do not claim a binary was built, uploaded or processed without its receipts.
+Apple's [current upload requirement](https://developer.apple.com/news/?id=ueeok6yw) is Xcode 26 or later with the iOS 26 SDK or later; inspect the build logs/toolchain and recheck current requirements at execution time.
 
-### 2. Update `apps/mobile/app.config.ts`
-Add explicit bundle identifier and iOS config:
-```typescript
-// In the config object:
-ios: {
-  bundleIdentifier: "app.fitsy.mobile",
-  buildNumber: "1",
-  supportsTablet: false,
-},
-```
+## Complete the review packet
 
----
+Prepare actual old Apple value/state -> proposed value/state, reason, evidence and any human decision for every material change.
+Label confirmed facts, recommended edits and unknowns; [listing copy](../../product/app-store-listing.md) remains a proposal until approved.
+Include onboarding/preview and post-fetch coachmarks, sign-in/payment/resubscribe, eligible/ineligible terms, trial reminders/timeline, linked calorie/macro editing and recommendation claims.
+Verify current localized StoreKit/RevenueCat product prices, renewal periods, eligibility and introductory terms; catalog policy alone cannot promise a free trial.
+Test working reviewer access and all applicable real-device/billing recovery paths without presenting a reviewer bypass as a paid subscription.
 
-## CI/CD: Automated Builds (`.github/workflows/eas-build.yml`)
+Use [Apple's current screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/) and actual ASC required slots, rather than a historical device matrix.
+The next packet specifies the current iPhone dimensions, proposed scenes and unresolved artwork; capture the exact accepted candidate and inspect it visually.
+Verify live privacy/support/terms pages, contact inboxes, review instructions, deletion/restoration and prior-review remedies.
+Review actual profile sync and SDK practices before answering [App Privacy](https://developer.apple.com/app-store/app-privacy-details/) questions; do not preserve stale local-only, anonymous-analytics, content-rights or age-rating claims mechanically.
+Account/declaration decisions and legal agreements remain explicit human/account-owner choices.
 
-The workflow triggers on version tags (`v*.*.*`). It:
-1. Installs EAS CLI
-2. Runs `eas build --platform ios --profile production --non-interactive`
-3. Uploads the build to App Store Connect via `eas submit`
+## Human approval and later submission
 
-See `.github/workflows/eas-build.yml` for the full workflow definition.
+Do not ask for submission approval until the concrete packet, native candidate, checks, artwork, review access and consequential answers are complete.
+Request explicit approval identifying exact source/build/hash, metadata/assets/answers and release mode before publishing metadata or clicking Submit for Review.
+Recommended mode is manual release after Apple acceptance, subject to the human's explicit choice and later release authority.
+If source, binary or consequential answers change after approval, reconcile that approval with the human before submitting a materially different candidate.
 
----
-
-## Manual Build (when CI is not available)
-
-```bash
-cd apps/mobile
-
-# Build for App Store (production distribution)
-eas build --platform ios --profile production
-
-# Submit to App Store Connect (after build completes)
-eas submit --platform ios --latest
-```
-
-Monitor build at: https://expo.dev/accounts/[username]/projects/fitsy/builds
-
----
-
-## App Store Submission
-
-1. Once `eas submit` uploads the build, it appears in App Store Connect → your app → the build list (Apple processes it, ~5–15 min).
-2. Complete the App Store listing (metadata, screenshots, description, keywords) — see `docs/product/app-store-listing.md` (tickets S-214/S-215/S-216).
-3. Select the processed build for the version.
-4. Answer the export-compliance / encryption prompt (see Troubleshooting for the `ITSAppUsesNonExemptEncryption` shortcut).
-5. Provide the demo review account so Apple can bypass the subscription paywall.
-6. **Submit for review.** Apple review typically takes ~24–48h.
-7. On approval, release (manual or automatic). Track in `proj-mgmt/sprints/sprint-12.md` (S-207 → S-213).
-
-> TestFlight is skipped intentionally — uploading to App Store Connect technically also makes the build available on TestFlight, but no external beta tester group is recruited (light user testing was sufficient).
-
----
-
-## Troubleshooting
-
-### Build fails with "No bundle identifier"
-Frontend ticket not complete — `app.config.ts` missing `ios.bundleIdentifier`.
-
-### `eas submit` fails with authentication error
-Verify `APPLE_ID` and `APPLE_APP_SPECIFIC_PASSWORD` EAS secrets are set:
-```bash
-eas secret:list
-```
-
-### Build queued but not starting
-EAS free tier has limited concurrent builds. Check queue at expo.dev.
-
-### App Store Connect shows "Missing Compliance"
-Add to `apps/mobile/app.config.ts`:
-```typescript
-ios: {
-  infoPlist: {
-    ITSAppUsesNonExemptEncryption: false,
-  },
-}
-```
+Only after the required approval, the authorized owner follows [Apple's current submission steps](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-app/) using the supported ASC tools, selects the exact processed build and records the submission receipt/status.
+Adding a version for review is not the final Submit for Review action.
+Monitor and retain Apple acceptance/rejection separately from upload/processing, handle review feedback under the same ownership, then perform any separately authorized public release using the approved [release option](https://developer.apple.com/help/app-store-connect/manage-your-apps-availability/select-an-app-store-version-release-option/).
+Verify the actual public listing/build and affected production behavior before reporting public release complete.
+Do not claim Apple acceptance from an upload, successful CI, private walkthrough or processed build.

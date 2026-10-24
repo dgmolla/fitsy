@@ -1,0 +1,182 @@
+# Native permission outcomes use the unentitled shared dev account, without purchases.
+# The MCP walkthrough purchases only on an owned Test Store account and verifies
+# actual native scheduling, delivery and account cleanup separately.
+appId: com.fitsy.mobile
+tags: [billing, onboarding, discovery, notifications, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      notifications: unset
+# Retry only the first accessibility read through the Debug launch transition.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: "92%,93%"
+- openLink: com.fitsy.mobile://notification-settings
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- assertVisible:
+    id: reminder-permission
+- assertVisible:
+    id: reminders-empty
+- assertNotVisible:
+    id: reminder-meals-toggle
+- assertNotVisible:
+    id: reminder-trial-toggle
+- assertNotVisible: "Allow"
+- openLink: com.fitsy.mobile://welcome/signin
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- tapOn: "Dev login"
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 30000
+# The ordinary journey requests notifications after purchase. Explicit links
+# exercise skip and denied recovery without purchasing on the shared dev user.
+- openLink: com.fitsy.mobile://welcome/notification-permission
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- assertVisible: "Remind me"
+- assertNotVisible: "Choose reminders"
+- tapOn:
+    id: notification-skip
+- openLink: com.fitsy.mobile://notification-settings
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: reminder-permission
+    timeout: 15000
+- assertVisible: "Device notifications are off"
+- assertVisible:
+    id: reminders-empty
+- assertNotVisible:
+    id: reminder-meals-toggle
+- openLink: com.fitsy.mobile://welcome/notification-permission
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- tapOn:
+    id: notification-allow
+- extendedWaitUntil:
+    visible: "Don.t Allow"
+    timeout: 15000
+- assertVisible: "Allow"
+- tapOn: "Don.t Allow"
+- openLink: com.fitsy.mobile://notification-settings
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: reminder-permission
+    timeout: 15000
+- assertVisible: "Device notifications are off"
+- assertVisible:
+    id: reminders-empty
+- assertNotVisible:
+    id: reminder-trial-toggle
+# Reset the disposable app's permission to exercise the independent grant path.
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      notifications: unset
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: "92%,93%"
+- openLink: com.fitsy.mobile://welcome/signin
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- tapOn: "Dev login"
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 30000
+- openLink: com.fitsy.mobile://welcome/notification-permission
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- assertVisible: "Remind me"
+- assertNotVisible:
+    id: reminder-meals-toggle
+- assertNotVisible:
+    id: reminder-trial-toggle
+- tapOn:
+    id: notification-allow
+- extendedWaitUntil:
+    visible: "Allow"
+    timeout: 15000
+- tapOn: "Allow"
+- openLink: com.fitsy.mobile://notification-settings
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: reminder-permission
+    timeout: 15000
+- assertVisible: "Device notifications allowed"
+# Granting permission alone cannot invent a schedule for an inactive subscriber.
+- assertVisible:
+    id: reminders-empty
+- assertNotVisible:
+    id: reminder-meals-toggle
+- assertNotVisible:
+    id: reminder-trial-toggle
+- stopApp
+- launchApp
+- openLink: com.fitsy.mobile://notification-settings
+# Relaunch can briefly invalidate the native accessibility hierarchy.
+# Retry the first hierarchy read as well as the required persisted-state assertion.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - tapOn:
+          text: "^Open$"
+          optional: true
+      - assertVisible: "Device notifications allowed"
+- assertVisible:
+    id: reminders-empty
+- assertNotVisible:
+    id: reminder-meals-toggle
+- assertNotVisible:
+    id: reminder-trial-toggle

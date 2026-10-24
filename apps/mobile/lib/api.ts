@@ -4,6 +4,10 @@ import { clearToken } from './authClient';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
+export class ApiRequestError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
+
 /**
  * Source the access token from the Supabase SDK rather than the legacy
  * SecureStore key. The SDK proactively refreshes ~5 min before expiry and
@@ -19,42 +23,56 @@ async function handleUnauthorized(): Promise<never> {
   // wipes the legacy fitsy_authToken key for users mid-upgrade.
   await clearToken();
   router.replace('/welcome/problem');
-  throw new Error('Session expired');
+  throw new ApiRequestError(401, 'Session expired');
 }
 
-async function get<T>(path: string, authenticated = false): Promise<T> {
+async function get<T>(path: string, authenticated = false, options: { signal?: AbortSignal } = {},
+  expectedUserId?: string): Promise<T> {
   const headers: Record<string, string> = {};
+  let requestToken: string | undefined;
 
   if (authenticated) {
-    const token = await getAccessToken();
+    const { data } = await supabase.auth.getSession();
+    if (expectedUserId && data.session?.user.id !== expectedUserId) throw new Error('Account changed before request');
+    const token = data.session?.access_token;
+    requestToken = token;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
   }
 
   const init: RequestInit =
-    Object.keys(headers).length > 0 ? { headers } : {};
+    { headers, signal: options.signal };
 
   const res = await fetch(`${BASE_URL}${path}`, init);
 
   if (res.status === 401 && authenticated) {
+    if (expectedUserId) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user.id !== expectedUserId || data.session?.access_token !== requestToken)
+        throw new ApiRequestError(401, 'Previous account request expired');
+    }
     return handleUnauthorized();
   }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(body.error ?? `Request failed: ${res.status}`);
+    throw new ApiRequestError(res.status, body.error ?? `Request failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
 
-async function post<T>(path: string, body: unknown, authenticated = true): Promise<T> {
+async function post<T>(path: string, body: unknown, authenticated = true, expectedUserId?: string): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
+  let requestToken: string | undefined;
 
   if (authenticated) {
-    const token = await getAccessToken();
+    const { data } = await supabase.auth.getSession();
+    if (expectedUserId && data.session?.user.id !== expectedUserId) throw new Error('Account changed before request');
+    const token = data.session?.access_token;
+    requestToken = token;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -67,6 +85,12 @@ async function post<T>(path: string, body: unknown, authenticated = true): Promi
   });
 
   if (res.status === 401 && authenticated) {
+    if (expectedUserId) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user.id !== expectedUserId || data.session?.access_token !== requestToken) {
+        throw new ApiRequestError(401, 'Previous account request expired');
+      }
+    }
     return handleUnauthorized();
   }
 
@@ -103,13 +127,17 @@ async function del(path: string, authenticated = true): Promise<void> {
   // 204 No Content - nothing to parse
 }
 
-async function patch<T>(path: string, body: unknown, authenticated = true): Promise<T> {
+async function patch<T>(path: string, body: unknown, authenticated = true, expectedUserId?: string): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
+  let requestToken: string | undefined;
 
   if (authenticated) {
-    const token = await getAccessToken();
+    const { data } = await supabase.auth.getSession();
+    if (expectedUserId && data.session?.user.id !== expectedUserId) throw new Error('Account changed before request');
+    const token = data.session?.access_token;
+    requestToken = token;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -122,6 +150,12 @@ async function patch<T>(path: string, body: unknown, authenticated = true): Prom
   });
 
   if (res.status === 401 && authenticated) {
+    if (expectedUserId) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user.id !== expectedUserId || data.session?.access_token !== requestToken) {
+        throw new ApiRequestError(401, 'Previous account request expired');
+      }
+    }
     return handleUnauthorized();
   }
 

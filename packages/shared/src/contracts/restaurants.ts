@@ -11,6 +11,7 @@
  * tsc fail if a field is added to the interfaces but not the schemas.
  */
 import { z } from "zod";
+import { goalMatchSchema } from './goalMatch';
 import type { BestMatchSummary, RestaurantResult, RestaurantsMeta, RestaurantsResponse } from "../types/index";
 
 export const bestMatchSummarySchema = z.object({
@@ -22,6 +23,7 @@ export const bestMatchSummarySchema = z.object({
   fatG: z.number(),
   confidence: z.enum(["HIGH", "MEDIUM", "LOW"]),
   matchScore: z.number().nullable(),
+  nutritionBasis: z.enum(["published", "estimated"]).optional(),
 });
 
 export const restaurantResultSchema = z.object({
@@ -64,3 +66,14 @@ void _coversBestMatch;
 void _coversResult;
 void _coversMeta;
 void _coversResponse;
+
+/** Public guided sample: up to three ranked picks, never menu pagination. */
+export const guidedPreviewResponseSchema = z.object({
+  data: z.array(restaurantResultSchema).max(3),
+  meta: z.object({
+    nearbyDishCount: z.number().int().nonnegative(),
+    radiusMiles: z.literal(3),
+    goalMatch: goalMatchSchema.nullable().optional(),
+  }),
+});
+export type GuidedPreviewResponse = z.infer<typeof guidedPreviewResponseSchema>;

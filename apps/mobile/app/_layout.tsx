@@ -6,6 +6,7 @@ import { useFonts } from 'expo-font';
 import { PostHogProvider } from 'posthog-react-native';
 import { ThemeProvider } from '@/lib/theme';
 import { PurchasesProvider } from '@/lib/usePurchases';
+import { ReminderProvider } from '@/lib/useReminders';
 import { getPostHogClient } from '@/lib/analytics';
 import { installGlobalErrorReporting } from '@/lib/errorReporting';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
@@ -106,7 +107,7 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <ThemeProvider>
             <PurchasesProvider>
-              <Stack screenOptions={{ headerShown: false }} />
+              <ReminderProvider><Stack screenOptions={{ headerShown: false }} /></ReminderProvider>
             </PurchasesProvider>
           </ThemeProvider>
         </SafeAreaProvider>

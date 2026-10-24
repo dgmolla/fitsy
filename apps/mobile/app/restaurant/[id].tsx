@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -11,17 +12,22 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { Redirect, Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { BookmarkButton, FitsyLoader, LockedUnlockCard, MenuItemCard } from '@/components';
-import { fetchMenu, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
-import { getMacroTargets } from '@/lib/macroStorage';
+import { fetchMenuOutcome, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
+import { getDiscoveryMacroTargets } from '@/lib/macroStorage';
+import { reconcileMenuBookmarks } from '@/lib/menuBookmarks';
+import { reconcileMenuLoad } from '@/lib/menuLoadState';
 import { recordSaveAndMaybePrompt } from '@/lib/ratingPrompt';
 import { markPreviewSampleUsed, routeToPaywall } from '@/lib/teaserGate';
 import { supabase } from '@/lib/supabase';
 import type { MacroValues } from '@/lib/macroPresets';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { useTheme } from '@/lib/theme';
+import { usePurchases } from '@/lib/usePurchases';
+import { useIsReviewer } from '@/lib/reviewAccess';
+import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import {
   trackItemSaved,
   trackMenuFilterChipToggled,
@@ -69,15 +75,19 @@ const PCT_TIP_KEY = '@fitsy/pctTipDismissed';
 
 export default function RestaurantDetailScreen() {
   const { colors } = useTheme();
+  const purchases = usePurchases();
+  const reviewer = useIsReviewer();
+  const previewAccess = usePreviewAccess();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ id: string; distance?: string }>();
+  const params = useLocalSearchParams<{ id: string; distance?: string; selectedItemId?: string; saveSelected?: string }>();
   const id = params.id;
 
   const [menu, setMenu] = useState<MenuResponse | null>(null);
   const [targets, setTargets] = useState<MacroValues | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
   const [savedMap, setSavedMap] = useState<Map<string, string>>(new Map());
   const [query, setQuery] = useState('');
   const [activeChips, setActiveChips] = useState<Set<ChipId>>(new Set());
@@ -111,34 +121,40 @@ export default function RestaurantDetailScreen() {
       // to /welcome/problem the instant this screen opens. The session check
       // runs inside the same Promise.all as the menu fetch (rather than
       // ahead of it) so it doesn't add latency to every detail-screen open.
-      const [result, session, macroTargets] = await Promise.all([
-        fetchMenu(id), supabase.auth.getSession().then((r) => r.data.session), getMacroTargets(),
+      const [outcome, session, macroTargets] = await Promise.all([
+        fetchMenuOutcome(id, { selectedItemId: params.selectedItemId }), supabase.auth.getSession().then((r) => r.data.session), getDiscoveryMacroTargets(),
       ]);
       const savedResult = session ? await getSavedItems() : null;
       if (cancelled) return;
+      const result = outcome.menu;
+      setMenu(previous => reconcileMenuLoad(previous, id, outcome));
       if (result === null) {
         setError('Could not load menu.');
-        // `fetchMenu` swallows errors and returns null on any failure (network
-        // error, non-2xx response). We can't distinguish failure modes from
-        // here, but the event itself is enough to monitor detail-screen
-        // reliability without server-side log diving.
         trackRestaurantDetailFailed({ restaurant_id: id });
       }
       else {
-        setMenu(result);
         trackRestaurantDetailViewed({ restaurant_id: id, item_count: result.menuItems.length });
       }
       setTargets(macroTargets);
-      if (savedResult) {
-        const m = new Map<string, string>();
-        for (const saved of savedResult.data) { if (saved.menuItemId) m.set(saved.menuItemId, saved.id); }
-        setSavedMap(m);
+      const fetchedBookmarks = savedResult ? new Map<string, string>() : null;
+      for (const saved of savedResult?.data ?? []) { if (saved.menuItemId) fetchedBookmarks?.set(saved.menuItemId, saved.id); }
+      let confirmedSave: { menuItemId: string; id: string } | undefined;
+      // A failed saved-list read must not silently consume a purchase's save
+      // intent. The save endpoint is idempotent and returns an existing save.
+      if (session && params.saveSelected === '1' && params.selectedItemId && result && !result.locked && result.menuItems.some(item => item.id === params.selectedItemId) && !fetchedBookmarks?.has(params.selectedItemId)) {
+        const saved = await saveItem(params.selectedItemId);
+        if (cancelled) return;
+        if (saved) confirmedSave = { menuItemId: params.selectedItemId, id: saved.id };
+        else Alert.alert('Could not save this meal', 'The selected meal is shown first. Tap its bookmark to try again.');
       }
+      // A failed read is not an empty saved list. Preserve known bookmarks
+      // through Retry, while merging any newly completed save intent.
+      setSavedMap(previous => reconcileMenuBookmarks(previous, fetchedBookmarks, confirmedSave));
       setLoading(false);
     }
     void load();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, params.selectedItemId, params.saveSelected, reload]);
 
   const isLocked = menu?.locked === true;
   // `beforeRemove` closures capture whatever `isLocked` was when the
@@ -149,37 +165,25 @@ export default function RestaurantDetailScreen() {
   const isLockedRef = useRef(isLocked);
   useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
 
-  // A locked (truncated, unentitled) menu is the "one free look" teaser - the
-  // API never sends more than a small real sample. Leaving this screen (back
-  // button, hardware back, swipe-back, or any other removal) spends that
-  // sample and sends the user to the paywall instead of back to the search
-  // list. Every removal is intercepted while locked; the one exception is
-  // our own redirect, which sets `redirectingRef` right before it dispatches
-  // so it isn't cancelled by this same listener (that self-cancel is exactly
-  // what stranded users on this screen before). `leftRef` makes the
-  // mark-and-redirect fire once, so a repeated back while the redirect is
-  // still in flight stays blocked rather than slipping through.
-  const leftRef = useRef(false);
-  const redirectingRef = useRef(false);
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (!isLockedRef.current || redirectingRef.current) return;
-      e.preventDefault();
-      if (leftRef.current) return;
-      leftRef.current = true;
-      markPreviewSampleUsed();
-      redirectingRef.current = true;
-      void routeToPaywall({ replace: true });
-    });
-    return unsubscribe;
-  }, [navigation]);
+  // Leaving consumes the sample, while Back keeps its normal destination.
+  // Buying is an explicit action on the unlock CTA, never a navigation trap.
+  useEffect(() => navigation.addListener('beforeRemove', () => {
+    if (isLockedRef.current) markPreviewSampleUsed();
+  }), [navigation]);
 
   const handleToggleSave = useCallback(async (menuItemId: string) => {
     // Saving requires a real account. A session-less caller tapping the
     // bookmark is really asking to unlock, not save - send them there instead
     // of letting the request 401.
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { void routeToPaywall(); return; }
+    if (!session) {
+      const item = menu?.menuItems.find(candidate => candidate.id === menuItemId);
+      void routeToPaywall({ intent: {
+        action: 'save', restaurantId: id, menuItemId,
+        mealName: item?.name, restaurantName: menu?.restaurantName,
+      } });
+      return;
+    }
     const existingId = savedMap.get(menuItemId);
     if (existingId) {
       const ok = await unsaveItem(existingId);
@@ -200,7 +204,7 @@ export default function RestaurantDetailScreen() {
         trackSaveFailed({ menu_item_id: menuItemId, restaurant_id: id ?? '', action: 'save', entry_point: 'restaurant_detail' });
       }
     }
-  }, [savedMap, id]);
+  }, [savedMap, id, menu]);
 
   const scored = useMemo(() => {
     if (!menu) return [];
@@ -223,8 +227,8 @@ export default function RestaurantDetailScreen() {
         }
         return true;
       })
-      .sort((a, b) => compareBySort(a, b, sort));
-  }, [scored, query, activeChips, sort, targets]);
+      .sort((a, b) => a.item.id === params.selectedItemId ? -1 : b.item.id === params.selectedItemId ? 1 : compareBySort(a, b, sort));
+  }, [scored, query, activeChips, sort, targets, params.selectedItemId]);
 
   // `totalCount` is the loaded set (the free sample, when locked) - used for
   // the sort bar's "filtered from N" math, which only ever operates over what's
@@ -261,23 +265,40 @@ export default function RestaurantDetailScreen() {
     trackMenuSortChanged({ sort: s });
   }, []);
 
-  if (loading) {
+  if (!purchases.ready || !reviewer.ready || !previewAccess.ready) return null;
+  if (!purchases.entitled && !reviewer.isReviewer && !previewAccess.canPreview) {
+    return <Redirect href={purchases.isUnknown ? '/welcome/subscription-check' : purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment'} />;
+  }
+
+  const backControl = <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/search')} style={s.navBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back" testID="restaurant-back">
+    <Ionicons name="chevron-back" size={18} color={EDITORIAL.text} />
+  </Pressable>;
+  const retryControl = <Pressable onPress={() => setReload(value => value + 1)} disabled={loading} style={s.retryButton} accessibilityRole="button" testID="menu-retry">
+    <Text style={s.retryText}>{loading ? 'Loading remaining dishes…' : 'Retry loading menu'}</Text>
+  </Pressable>;
+
+  if (loading && (!menu || menu.restaurantId !== id)) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={[s.container, s.centered]}><FitsyLoader size="md" /></View>
+        <View style={[s.container, { paddingTop: insets.top }]}>
+          <View style={s.nav}>{backControl}</View>
+          <View style={[s.container, s.centered]}><FitsyLoader size="md" /></View>
+        </View>
       </>
     );
   }
-  if (error || !menu) {
+  if (!menu || menu.restaurantId !== id) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={s.container}>
+        <View style={[s.container, { paddingTop: insets.top }]}>
+          <View style={s.nav}>{backControl}</View>
           <View style={[s.errorBanner, { backgroundColor: colors.errorBg }]}>
             <Ionicons name="alert-circle" size={16} color={colors.error} />
             <Text style={[s.errorText, { color: colors.error }]}>{error ?? 'Could not load menu.'}</Text>
           </View>
+          {retryControl}
         </View>
       </>
     );
@@ -289,9 +310,7 @@ export default function RestaurantDetailScreen() {
       <View style={[s.container, { paddingTop: insets.top }]}>
         {/* Compact top nav: back · name · heart (saves top match) */}
         <View style={s.nav}>
-          <Pressable onPress={() => router.back()} style={s.navBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={18} color={EDITORIAL.text} />
-          </Pressable>
+          {backControl}
           <View style={s.navBtn}>
             {topPickId ? (
               <BookmarkButton
@@ -307,6 +326,7 @@ export default function RestaurantDetailScreen() {
 
         <FlatList
           data={filtered}
+          keyboardShouldPersistTaps="handled"
           keyExtractor={({ item }) => item.id}
           renderItem={({ item: scoredItem, index }) => (
             <MenuItemCard
@@ -321,6 +341,10 @@ export default function RestaurantDetailScreen() {
                   restaurant_id: id ?? '',
                   position: index,
                 });
+                if (isLocked) void routeToPaywall({ intent: {
+                  action: 'menu', restaurantId: id, menuItemId: scoredItem.item.id,
+                  mealName: scoredItem.item.name, restaurantName,
+                } });
               }}
               onToggleSave={() => handleToggleSave(scoredItem.item.id)}
             />
@@ -362,6 +386,11 @@ export default function RestaurantDetailScreen() {
                 </View>
               </View>
 
+              {!isLocked && !!menu.nextCursor && <View style={s.partialMenu} testID="menu-incomplete">
+                <Text style={s.partialText}>Showing {menu.menuItems.length} of {fullMenuCount} dishes. Some dishes couldn&apos;t load.</Text>
+                {retryControl}
+              </View>}
+
               {/* Search input pill */}
               <View style={s.search}>
                 <Text style={s.searchIco}>⌕</Text>
@@ -369,13 +398,15 @@ export default function RestaurantDetailScreen() {
                   value={query}
                   onChangeText={onChangeQuery}
                   placeholder="Search the menu…"
+                  accessibilityLabel="Search the menu"
+                  testID="menu-search"
                   placeholderTextColor={EDITORIAL.textSoft}
                   style={s.searchInput}
                   autoCorrect={false}
                   autoCapitalize="none"
                 />
                 {query.length > 0 ? (
-                  <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+                  <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search" testID="menu-search-clear">
                     <Text style={s.searchClear}>×</Text>
                   </Pressable>
                 ) : null}
@@ -392,6 +423,7 @@ export default function RestaurantDetailScreen() {
                   return (
                     <Pressable
                       key={def.id}
+                      testID={`menu-filter-${def.id}`}
                       onPress={() => toggleChip(def.id)}
                       style={[s.chip, on && s.chipOn]}
                       accessibilityRole="button"
@@ -407,7 +439,7 @@ export default function RestaurantDetailScreen() {
               {/* Dark sort bar */}
               <View style={s.sortBar}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.sortBarTitle}>{matchCount} dishes match</Text>
+                  <Text style={s.sortBarTitle}>{matchCount} {matchCount === 1 ? 'dish matches' : 'dishes match'}</Text>
                   <Text style={s.sortBarSub}>
                     filtered from {totalCount} · sorted by {SORT_DEFS.find((d) => d.id === sort)?.label.toLowerCase()}
                   </Text>
@@ -417,6 +449,7 @@ export default function RestaurantDetailScreen() {
                   style={s.sortBtn}
                   accessibilityRole="button"
                   accessibilityLabel="Change sort"
+                  testID="menu-sort"
                 >
                   <Text style={s.sortBtnTxt}>Sort ↓</Text>
                 </Pressable>
@@ -427,9 +460,9 @@ export default function RestaurantDetailScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={s.pctTipText}>
                       The <Text style={s.pctTipStrong}>%</Text> is each dish's macro fit — how closely it
-                      matches your daily targets. 100% is a perfect fit.
+                      matches your per-meal targets. 100% is a perfect fit.
                     </Text>
-                    <Pressable onPress={dismissPctTip} hitSlop={8} accessibilityRole="button">
+                    <Pressable onPress={dismissPctTip} hitSlop={8} accessibilityRole="button" testID="menu-tip-dismiss">
                       <Text style={s.pctTipDismiss}>Got it</Text>
                     </Pressable>
                   </View>
@@ -440,6 +473,7 @@ export default function RestaurantDetailScreen() {
                   {SORT_DEFS.map((def) => (
                     <Pressable
                       key={def.id}
+                      testID={`menu-sort-${def.id}`}
                       onPress={() => onSelectSort(def.id)}
                       style={[s.sortOpt, sort === def.id && s.sortOptOn]}
                     >
@@ -460,9 +494,9 @@ export default function RestaurantDetailScreen() {
             isLocked && menu && hiddenItemCount > 0 ? (
               <LockedUnlockCard
                 title={`+${hiddenItemCount} more dishes`}
-                subtitle="Subscribe to unlock the full menu, with macros for every item."
+                subtitle="See the full menu and choose a meal that fits your macros."
                 onPress={() => { void routeToPaywall(); }}
-                accessibilityLabel="Subscribe to unlock the full menu"
+                accessibilityLabel="Find meals that fit — view subscription plans"
               />
             ) : null
           }
@@ -481,6 +515,10 @@ const s = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   errorBanner: { margin: 16, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
   errorText: { fontFamily: FONTS.nunitoSans, fontSize: 14, flex: 1 },
+  partialMenu: { marginHorizontal: 18, marginBottom: 12, padding: 14, borderRadius: 14, backgroundColor: EDITORIAL.creamCard },
+  partialText: { fontFamily: FONTS.nunitoSans, fontSize: 13, lineHeight: 19, color: EDITORIAL.textMid },
+  retryButton: { minHeight: 44, paddingHorizontal: 18, justifyContent: 'center' },
+  retryText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, color: EDITORIAL.green },
 
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 10 },
   navBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: EDITORIAL.creamCard, alignItems: 'center', justifyContent: 'center' },
@@ -496,7 +534,7 @@ const s = StyleSheet.create({
 
   search: { marginHorizontal: 18, marginTop: 6, backgroundColor: EDITORIAL.creamCard, borderWidth: 1, borderColor: EDITORIAL.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchIco: { fontFamily: FONTS.nunitoSans, fontSize: 16, color: EDITORIAL.textSoft },
-  searchInput: { fontFamily: FONTS.nunitoSans, flex: 1, fontSize: 13.5, color: EDITORIAL.text, padding: 0 },
+  searchInput: { fontFamily: FONTS.nunitoSans, flex: 1, fontSize: 13.5, lineHeight: 20, minHeight: 24, color: EDITORIAL.text, padding: 0, textAlignVertical: 'center' },
   searchClear: { fontFamily: FONTS.nunitoSans, fontSize: 18, color: EDITORIAL.textSoft, paddingHorizontal: 4 },
 
   chipRow: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 6, gap: 8 },

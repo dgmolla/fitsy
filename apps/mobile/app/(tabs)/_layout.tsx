@@ -1,9 +1,11 @@
 import { useRef } from 'react';
 import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs, Redirect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
+import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { useIsReviewer } from '@/lib/reviewAccess';
 import { trackTabSwitched, type TabId } from '@/lib/analytics';
 
@@ -13,17 +15,19 @@ export default function TabLayout() {
   // null on cold start so PostHog can distinguish "first tab opened after
   // sign-in" from a mid-session switch.
   const lastTabRef = useRef<TabId | null>(null);
+  const insets = useSafeAreaInsets();
 
   // Subscription hard-wall: the tabbed app is Pro-only. The gate is the
   // SERVER's verdict (`purchases.entitled`; null while boot / sign-in /
   // sign-out is settling it, which is the hold below), the same truth the
   // API uses to lock data (optionalSubscription), so the two cannot disagree
-  // for longer than one sync. The phone's RevenueCat state is never the gate. `__DEV__`
-  // bypasses local development; App Review demo accounts (`useIsReviewer`,
+  // for longer than one sync. Local development exercises this same gate.
+  // App Review demo accounts (`useIsReviewer`,
   // mirroring the server `DEMO_REVIEW_EMAILS` allowlist) skip the paywall so the
   // reviewer can see the app without a subscription - the API still gates data.
   const purchases = usePurchases();
   const reviewer = useIsReviewer();
+  const previewAccess = usePreviewAccess();
   const entitled = purchases.entitled === true || reviewer.isReviewer;
   // `useLocalSearchParams`, not `useGlobalSearchParams` - the latter updates
   // for every navigation anywhere in the app (including this navigator being
@@ -33,24 +37,19 @@ export default function TabLayout() {
   // redirect underneath the screen the user is actually looking at.
   const { preview } = useLocalSearchParams<{ preview?: string }>();
 
-  // Onboarding / lapsed-subscriber / declined-paywall teaser: an unentitled
-  // visitor who arrives with `?preview=1` may browse the search tab with
-  // server-locked results (`/api/restaurants` `meta.locked`). Entry is never
-  // gated on the one-free-look flag (lib/teaserGate) - that flag only decides
-  // whether tapping a top-3 row opens a real detail sample or goes straight
-  // to the paywall (see search.tsx). Gating entry on it too would bounce a
-  // returning visitor to /welcome/payment, whose own "Maybe later" comes
-  // right back here: an infinite redirect loop with no way to just browse.
-  const allowTeaser = !entitled && preview === '1';
+  // Keep the onboarding sample; post-decline browsing requires the explicit
+  // live offering experiment. The launch baseline is a hard paywall.
+  const allowTeaser = !entitled && preview === '1' && previewAccess.canPreview;
   // A lapsed subscriber can reach the tabs first (cached verdict, or the
   // win-back screen's own entitled redirect) and be bounced by a later
   // server "false": they belong on the win-back screen, not the free-trial
   // paywall, which promises a trial Apple won't grant them twice.
   const unentitledTarget = purchases.isLapsed ? '/welcome/resubscribe' : '/welcome/payment';
-  if (!__DEV__) {
-    if (purchases.entitled === null || !reviewer.ready) return null; // hold until the verdict + session settle, avoids a flash
-    if (!entitled && !allowTeaser) return <Redirect href={unentitledTarget} />;
-  }
+  if (!purchases.ready || !reviewer.ready || !previewAccess.ready) return null;
+  if (purchases.isUnknown) return <Redirect href="/welcome/subscription-check" />;
+  if (purchases.entitled === null) return null;
+  if (allowTeaser) return <Redirect href="/welcome/preview" />;
+  if (!entitled && !allowTeaser) return <Redirect href={unentitledTarget} />;
 
   function emitTabSwitched(next: TabId) {
     if (lastTabRef.current === next) return;
@@ -58,24 +57,25 @@ export default function TabLayout() {
     lastTabRef.current = next;
   }
 
-  // Teaser browsing hides the tab bar - Saved/Profile require a real
-  // subscription and shouldn't be reachable from an unentitled preview.
-  const tabBarStyle = allowTeaser
-    ? { display: 'none' as const }
-    : {
-        backgroundColor: EDITORIAL.cream,
-        borderTopWidth: 1,
-        borderTopColor: EDITORIAL.border,
-        elevation: 0,
-        paddingTop: 8,
-        height: 80,
-      };
+  // Preview redirects above. Tabs own the bottom inset for the main app;
+  // reserve a full icon row independently of the device's home indicator.
+  const bottomPadding = Math.max(insets.bottom, 8);
+  const tabBarStyle = {
+    backgroundColor: EDITORIAL.cream,
+    borderTopWidth: 1,
+    borderTopColor: EDITORIAL.border,
+    elevation: 0,
+    paddingTop: 6,
+    paddingBottom: bottomPadding,
+    height: 64 + bottomPadding,
+  };
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle,
+        tabBarLabelPosition: 'below-icon',
         tabBarActiveTintColor: EDITORIAL.green,
         tabBarInactiveTintColor: EDITORIAL.textSoft,
         tabBarLabelStyle: {
@@ -99,16 +99,19 @@ export default function TabLayout() {
       <Tabs.Screen
         name="search"
         options={{
-          title: '',
+          title: 'Search',
+          tabBarAccessibilityLabel: 'Search',
+          // showLabel belongs to the whole active bar. Hide only this label.
+          tabBarLabel: () => null,
+          tabBarIconStyle: { width: 44, height: 44 },
           tabBarIcon: () => (
             <View style={{
-              width: 52,
-              height: 52,
-              borderRadius: 26,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
               backgroundColor: EDITORIAL.green,
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: 20,
               shadowColor: EDITORIAL.green,
               shadowOpacity: 0.25,
               shadowRadius: 8,

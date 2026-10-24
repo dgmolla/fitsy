@@ -21,28 +21,29 @@ describe("calculateTdee", () => {
       BASE_CASE.activityLevel,
       BASE_CASE.goal,
     );
-    expect(result.calories).toBe(1939);
+    expect(Math.abs(result.calories - 1939)).toBeLessThanOrEqual(9);
+    expect(result.calories).toBe(result.proteinG * 4 + result.carbsG * 4 + result.fatG * 9);
   });
 
   it("applies the sex term: +5 male / -161 female / -78 unknown", () => {
     const male = calculateTdee(30, 175, 75, "sedentary", "maintain", "male");
     const female = calculateTdee(30, 175, 75, "sedentary", "maintain", "female");
     const unknown = calculateTdee(30, 175, 75, "sedentary", "maintain");
-    expect(male.calories).toBe(2039); // +5  → 1698.75 * 1.2
-    expect(female.calories).toBe(1839); // -161 → 1532.75 * 1.2
-    expect(unknown.calories).toBe(1939); // -78 midpoint
+    expect(Math.abs(male.calories - 2039)).toBeLessThanOrEqual(9);
+    expect(Math.abs(female.calories - 1839)).toBeLessThanOrEqual(9);
+    expect(Math.abs(unknown.calories - 1939)).toBeLessThanOrEqual(9);
   });
 
   it("applies -500 offset for lose_fat goal", () => {
     const maintain = calculateTdee(30, 175, 75, "sedentary", "maintain");
     const loseFat = calculateTdee(30, 175, 75, "sedentary", "lose_fat");
-    expect(loseFat.calories).toBe(maintain.calories - 500);
+    expect(Math.abs(loseFat.calories - (maintain.calories - 500))).toBeLessThanOrEqual(9);
   });
 
-  it("applies +300 offset for build_muscle goal", () => {
+  it("applies +250 offset for build_muscle goal", () => {
     const maintain = calculateTdee(30, 175, 75, "sedentary", "maintain");
     const buildMuscle = calculateTdee(30, 175, 75, "sedentary", "build_muscle");
-    expect(buildMuscle.calories).toBe(maintain.calories + 300);
+    expect(Math.abs(buildMuscle.calories - (maintain.calories + 250))).toBeLessThanOrEqual(9);
   });
 
   it("applies activity multipliers correctly", () => {
@@ -52,15 +53,16 @@ describe("calculateTdee", () => {
     expect(veryActive.calories).toBeGreaterThan(sedentary.calories);
   });
 
-  it("returns macro split with correct ratios (30/40/30)", () => {
+  it("returns macro split with tuned maintenance ratios (12/58/30)", () => {
     const result = calculateTdee(30, 175, 75, "active", "maintain");
-    // protein = 30% of cals / 4 kcal/g
-    const expectedProtein = Math.round((result.calories * 0.3) / 4);
-    const expectedCarbs = Math.round((result.calories * 0.4) / 4);
-    const expectedFat = Math.round((result.calories * 0.3) / 9);
+    const rawCalories = Math.round(Math.round(10 * 75 + 6.25 * 175 - 5 * 30 - 78) * 1.55);
+    const expectedProtein = Math.round((rawCalories * 0.12) / 4);
+    const expectedCarbs = Math.round((rawCalories * 0.58) / 4);
+    const expectedFat = Math.round((rawCalories * 0.3) / 9);
     expect(result.proteinG).toBe(expectedProtein);
     expect(result.carbsG).toBe(expectedCarbs);
     expect(result.fatG).toBe(expectedFat);
+    expect(result.calories).toBe(result.proteinG * 4 + result.carbsG * 4 + result.fatG * 9);
   });
 
   it("all macros are positive numbers", () => {
@@ -69,4 +71,56 @@ describe("calculateTdee", () => {
     expect(result.carbsG).toBeGreaterThan(0);
     expect(result.fatG).toBeGreaterThan(0);
   });
+});
+
+test("performance retains maintenance calories and prioritizes carbohydrate", () => {
+  const result = calculateTdee(30, 175, 75, "active", "performance");
+  const maintain = calculateTdee(30, 175, 75, "active", "maintain");
+  expect(Math.abs(result.calories - maintain.calories)).toBeLessThanOrEqual(9);
+  const rawCalories = Math.round(Math.round(10 * 75 + 6.25 * 175 - 5 * 30 - 78) * 1.55);
+  expect(result.proteinG).toBe(Math.round(rawCalories * 0.13 / 4));
+  expect(result.carbsG).toBe(Math.round(rawCalories * 0.62 / 4));
+  expect(result.fatG).toBe(Math.round(rawCalories * 0.25 / 9));
+});
+
+test('fallback profiles and supported extremes stay within 40 g per meal without a protein cap', () => {
+  for (const age of [18, 30, 70]) for (const weight of [45, 75, 180])
+    for (const activity of ['sedentary', 'lightly_active', 'active', 'very_active'] as const)
+      for (const goal of ['build_muscle', 'lose_fat', 'performance', 'maintain'] as const) {
+        const result = calculateTdee(age, 175, weight, activity, goal);
+        expect(Math.round(result.proteinG / 3.5)).toBeLessThanOrEqual(40);
+        expect(result.calories).toBe(result.proteinG * 4 + result.carbsG * 4 + result.fatG * 9);
+      }
+});
+
+// External mobile persistence is not used by the pure recommendation calculation.
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn() },
+}));
+jest.mock('react-native-url-polyfill/auto', () => ({}));
+jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn() }));
+jest.mock('@supabase/supabase-js', () => {
+  process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
+  return { createClient: () => ({ auth: {} }) };
+});
+import { calculateMacros, dailyToPerMealMacros } from '../../mobile/lib/macroCalculator';
+import { calculateAge } from '../../../packages/shared/src/utils/dateUtils';
+const goals = ['build_muscle', 'lose_fat', 'performance', 'maintain'] as const;
+// Pulling an API-generated daily allocation and reapplying the unchanged profile
+// must produce exactly the same meal target, including whole-gram boundaries.
+test('API profile generation and mobile profile edits use identical recommendations', () => {
+  const birthday = '1996-01-15';
+  for (const goal of goals) for (const sex of [undefined, 'female', 'male'] as const)
+    for (const activity of ['sedentary', 'lightly_active', 'active', 'very_active'] as const)
+      for (const weightKg of [23, 45.125, 75, 75.05, 320]) for (const heightCm of [122, 175, 175.25, 229]) {
+        const api = calculateTdee(calculateAge(birthday), heightCm, weightKg, activity, goal, sex);
+        const pulled = dailyToPerMealMacros({ calories: api.calories, protein: api.proteinG, carbs: api.carbsG, fat: api.fatG });
+        expect(calculateMacros({ birthday, heightCm, weightKg, activity, goal, ...(sex ? { sex } : {}) })).toEqual(pulled);
+        expect(pulled.protein).toBeLessThanOrEqual(40);
+      }
+  const fallback = calculateTdee(NaN, NaN, NaN, undefined as never, 'maintain');
+  expect(calculateMacros({})).toEqual(dailyToPerMealMacros({
+    calories: fallback.calories, protein: fallback.proteinG, carbs: fallback.carbsG, fat: fallback.fatG,
+  }));
 });

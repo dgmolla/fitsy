@@ -120,7 +120,14 @@ model MacroTarget {
   carbsG    Float
   fatG      Float
   goalType  GoalType @default(maintain)
+  source    MacroTargetSource @default(manual)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Legacy allocations have no trustworthy provenance and remain user-owned.
+enum MacroTargetSource {
+  manual
+  automatic
 }
 
 model Restaurant {

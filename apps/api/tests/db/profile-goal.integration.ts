@@ -1,0 +1,103 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { NextRequest } from 'next/server';
+import { PATCH, GET } from '../../app/api/user/profile/route';
+import { token, userId } from './authenticated-route.fixture';
+import { prisma } from '../../lib/restaurantService';
+
+const request = (body?: unknown, schema?: string) => new NextRequest(`http://localhost/api/user/profile${schema ? '?goalSchema=' + schema : ''}`, {
+  method: body ? 'PATCH' : 'GET',
+  headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+  ...(body ? { body: JSON.stringify(body) } : {}),
+});
+
+test('performance profile persists, calculates balanced macros and preserves explicit targets', async () => {
+  const response = await PATCH(request({
+    birthday: '1996-01-15', heightCm: 175, weightKg: 75,
+    activityLevel: 'active', goal: 'performance', sex: 'male',
+  }));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).user.goal, 'maintain');
+  const stored = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { macroTarget: true } });
+  assert.equal(stored.goal, 'performance');
+  assert.ok(stored.macroTarget);
+  assert.equal(stored.macroTarget.source, 'automatic');
+  assert.equal(stored.macroTarget.calories,
+    stored.macroTarget.proteinG * 4 + stored.macroTarget.carbsG * 4 + stored.macroTarget.fatG * 9);
+  assert.ok(stored.macroTarget.proteinG / 3.5 <= 40);
+  assert.ok(Math.abs(stored.macroTarget.proteinG * 4 / stored.macroTarget.calories - 0.13) < 0.01);
+
+  // Reproduce a legacy stale-calorie request against the actual database.
+  const staleTarget = { calories: 2100, proteinG: 120, carbsG: 250, fatG: 69 };
+  const macroTarget = { ...staleTarget, calories: 2101 };
+  for (const schema of [undefined, '999', '2']) {
+    const patched = await PATCH(request({ goal: 'performance', macroTarget: staleTarget }, schema));
+    assert.equal(patched.status, 200);
+    assert.equal((await patched.json()).user.goal, schema === '2' ? 'performance' : 'maintain');
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).goal, 'performance');
+  }
+  assert.equal((await PATCH(request({ weightKg: 75, preserveMacroTarget: true }, '2'))).status, 200);
+  const preserved = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { macroTarget: true } });
+  assert.deepEqual({ calories: preserved.macroTarget?.calories, proteinG: preserved.macroTarget?.proteinG,
+    carbsG: preserved.macroTarget?.carbsG, fatG: preserved.macroTarget?.fatG }, macroTarget);
+  const legacy = await GET(request());
+  assert.equal(legacy.status, 200);
+  const legacyProfile = await legacy.json();
+  assert.equal(legacyProfile.user.goal, 'maintain', 'old clients receive a supported goal');
+  assert.deepEqual(legacyProfile.macroTarget, { ...macroTarget, source: 'manual' });
+  const unknownSchema = await GET(request(undefined, '999'));
+  assert.equal((await unknownSchema.json()).user.goal, 'maintain');
+  const refreshed = await GET(request(undefined, '2'));
+  assert.equal(refreshed.status, 200);
+  const profile = await refreshed.json();
+  assert.equal(profile.user.goal, 'performance');
+  assert.deepEqual(profile.macroTarget, { ...macroTarget, source: 'manual' });
+  // Sparse legacy/profile-only edits must preserve intentional manual targets.
+  assert.equal((await PATCH(request({ weightKg: 81 }, '2'))).status, 200);
+  assert.deepEqual((await (await GET(request(undefined, '2'))).json()).macroTarget,
+    { ...macroTarget, source: 'manual' });
+  const persisted = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  assert.equal(persisted.goal, 'performance', 'compatibility serialization must not overwrite the stored goal');
+  // The old client pushes its aliased goal alongside a weight-only edit.
+  const legacyEdit = await PATCH(request({ goal: legacyProfile.user.goal, weightKg: 76, macroTarget }));
+  assert.equal(legacyEdit.status, 200);
+  const afterLegacyEdit = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  assert.equal(afterLegacyEdit.weightKg, 76);
+  assert.equal(afterLegacyEdit.goal, 'performance');
+  // An updated client can deliberately switch performance to maintenance.
+  assert.equal((await PATCH(request({ goal: 'maintain', macroTarget }, '2'))).status, 200);
+  assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).goal, 'maintain');
+  for (const goal of ['lose_fat', 'build_muscle', 'maintain']) {
+    assert.equal((await PATCH(request({ goal, macroTarget }))).status, 200);
+    for (const schema of [undefined, '2']) {
+      const unchanged = await GET(request(undefined, schema));
+      assert.equal((await unchanged.json()).user.goal, goal);
+    }
+  }
+  // Explicit generated provenance survives persistence and a fresh GET.
+  assert.equal((await PATCH(request({ macroTarget: { ...macroTarget, source: 'automatic' } }, '2'))).status, 200);
+  assert.equal((await (await GET(request(undefined, '2'))).json()).macroTarget.source, 'automatic');
+  assert.equal((await PATCH(request({ weightKg: 80, preserveMacroTarget: true }, '2'))).status, 200);
+  assert.equal((await (await GET(request(undefined, '2'))).json()).macroTarget.source, 'automatic');
+  assert.equal((await PATCH(request({ weightKg: 90 }, '2'))).status, 200);
+  const regenerated = (await (await GET(request(undefined, '2'))).json()).macroTarget;
+  assert.equal(regenerated.source, 'automatic');
+  assert.notEqual(regenerated.calories, macroTarget.calories);
+  assert.equal(regenerated.calories, regenerated.proteinG * 4 + regenerated.carbsG * 4 + regenerated.fatG * 9);
+  // A legacy explicit allocation is manual, even when its numbers match.
+  assert.equal((await PATCH(request({ macroTarget }, '2'))).status, 200);
+  assert.equal((await (await GET(request(undefined, '2'))).json()).macroTarget.source, 'manual');
+  assert.equal((await PATCH(request({ macroTarget: { ...macroTarget, source: 'guessed' } }, '2'))).status, 400);
+  for (const invalid of [null, {}, { ...macroTarget, calories: '' }, { ...macroTarget, proteinG: '' },
+    { ...macroTarget, fatG: -1 }, { calories: 100, proteinG: 0, carbsG: 0, fatG: 0 },
+    { ...macroTarget, proteinG: 0.1, carbsG: 0.1, fatG: 0.1 }]) {
+    assert.equal((await PATCH(request({ macroTarget: invalid }, '2'))).status, 400);
+    assert.deepEqual((await (await GET(request(undefined, '2'))).json()).macroTarget,
+      { ...macroTarget, source: 'manual' }, 'invalid drafts must not overwrite the saved target');
+  }
+  // Manual daily protein above the recommendation range stays editable.
+  const rounded = { calories: 999, proteinG: 210.6, carbsG: 244.6, fatG: 69.6, source: 'manual' };
+  assert.equal((await PATCH(request({ macroTarget: rounded }, '2'))).status, 200);
+  assert.deepEqual((await (await GET(request(undefined, '2'))).json()).macroTarget,
+    { calories: 2454, proteinG: 211, carbsG: 245, fatG: 70, source: 'manual' });
+});

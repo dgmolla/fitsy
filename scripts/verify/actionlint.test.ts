@@ -20,9 +20,9 @@ test("CI rejects missing ShellCheck even when actionlint exists", () => {
 test.each([0, 1])("installed tool exit %i determines the check verdict", code => {
   tool("actionlint", code); tool("shellcheck"); const result = run(); expect(result.status).toBe(code); expect(JSON.parse(result.stdout).status).toBe(code ? "fail" : "pass");
 });
-test.each([false, true])("local callers explicitly skip incomplete tools (actionlint installed: %s)", installed => {
+test.each([false, true])("local callers fail incomplete required tools (actionlint installed: %s)", installed => {
   if (installed) tool("actionlint");
-  const result = run("local"); expect(result.status).toBe(2); expect(JSON.parse(result.stdout).status).toBe("skipped");
+  const result = run("local"); expect(result.status).toBe(1); expect(JSON.parse(result.stdout).status).toBe("fail");
 });
 function registryEntry(name: string) {
   const registry = readFileSync(join(root, "scripts/verify/registry.yml"), "utf8");
@@ -31,6 +31,9 @@ function registryEntry(name: string) {
 function select(entry: string, layers = "0-1", runs = "ci") {
   const verify = join(directory, "scripts/verify"); mkdirSync(verify, { recursive: true });
   copyFileSync(join(root, "scripts/verify/run.mjs"), join(verify, "run.mjs"));
+  copyFileSync(join(root, "scripts/verify/impact-plan.mjs"), join(verify, "impact-plan.mjs"));
+  // Local cacheable entries dynamically import the real cache implementation.
+  copyFileSync(join(root, "scripts/verify/receipt-cache.mjs"), join(verify, "receipt-cache.mjs"));
   writeFileSync(join(verify, "registry.yml"), "checks:\n" + entry);
   const script = entry.match(/script: (\S+)/)![1]!;
   writeFileSync(join(verify, script), '#!/bin/sh\nprintf \'{"status":"pass"}\\n\'\n');
@@ -48,7 +51,7 @@ test.each(["ci", "local"])("workflow lint cannot be scoped away for an API-only 
 });
 test.each(["lint", "typecheck", "boundaries", "context-freshness", "test", "build"])("a future path filter cannot disable blocking %s", name => {
   const entry = registryEntry(name), layer = entry.match(/layer: (\d+)/)![1]!;
-  expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer)).toMatchObject({ name, status: "pass", blocking: true });
+  expect(select(entry + '\n    paths: ["unrelated/**"]\n', "0-" + layer, name === "context-freshness" ? "local" : "ci")).toMatchObject({ name, status: "pass", blocking: true });
 });
 test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a new check", blocking => {
   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;

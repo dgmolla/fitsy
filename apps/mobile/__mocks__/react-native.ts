@@ -15,3 +15,7 @@ export const Platform = {
 export const Linking = {
   openURL: async (_url: string): Promise<boolean> => true,
 };
+
+export const Alert = {
+  alert: jest.fn(),
+};

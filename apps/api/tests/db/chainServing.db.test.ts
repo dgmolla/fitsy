@@ -181,5 +181,7 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     await expect(persistHex(scope, fixture.slug + "-conflict", [{ restaurantId: aprilRestaurant.id, brandId: randomUUID(), items: pairs, menuHash: "bad" }], p)).rejects.toThrow("brand changed");
     expect(await p.pipelineCompletedHex.count({ where: { runId: scope, hexId: fixture.slug + "-conflict" } })).toBe(0);
     expect(await p.menuItem.count({ where: { restaurantId: aprilRestaurant.id } })).toBe(1);
-  });
+  // This writer/recovery scenario performs many real transactions per chain.
+  // Keep assertions intact while allowing the shared CI database to be busy.
+  }, 30_000);
 });

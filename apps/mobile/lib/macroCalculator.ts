@@ -1,5 +1,8 @@
+import { calculateSettledDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
+export { calculateDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
 import { calculateSuggestedCalories, type OnboardingData } from './onboardingStorage';
 import type { StoredMacroTargets } from './macroStorage';
+import { macroCalories } from './macroEnergy';
 
 interface Macros {
   protein: number;
@@ -12,9 +15,9 @@ interface Macros {
  * How many meals we split a user's daily macro target across to produce the
  * per-meal targets the client stores and the search screen matches against.
  *
- * INVARIANT: per-meal × MEALS_PER_DAY = daily. Every place that converts
+ * Before rounding, per-meal × MEALS_PER_DAY = daily. Every place that converts
  * between daily and per-meal (macroCalculator, macro-setup, profileSync,
- * tuning) MUST use this constant so the round-trip to the server stays lossless.
+ * tuning) MUST use this constant; whole-gram rounding can cause small differences.
  * Changing this single value re-tunes the per-meal split everywhere.
  *
  * Set to 3.5 (not 3) intentionally: dividing the daily target by a literal 3
@@ -25,18 +28,17 @@ interface Macros {
  */
 export const MEALS_PER_DAY = 3.5;
 
-export function calculateMacros(data: OnboardingData): Macros {
-  const dailyCal = calculateSuggestedCalories(data);
-  const cal = dailyCal / MEALS_PER_DAY;
-  const goal = data.goal ?? 'maintain';
-  const pPct = goal === 'build_muscle' ? 0.35 : goal === 'lose_fat' ? 0.40 : 0.30;
-  const fPct = 0.25;
-  return {
-    protein: Math.round((cal * pPct) / 4),
-    carbs: Math.round((cal * (1 - pPct - fPct)) / 4),
-    fat: Math.round((cal * fPct) / 9),
-    calories: Math.round(cal),
+export function dailyToPerMealMacros(daily: Macros): Macros {
+  const grams = {
+    protein: Math.round(daily.protein / MEALS_PER_DAY),
+    carbs: Math.round(daily.carbs / MEALS_PER_DAY),
+    fat: Math.round(daily.fat / MEALS_PER_DAY),
   };
+  return { ...grams, calories: macroCalories(grams) };
+}
+
+export function calculateMacros(data: OnboardingData): Macros {
+  return dailyToPerMealMacros(calculateSettledDailyMacros(calculateSuggestedCalories(data), data.goal));
 }
 
 export function macrosToStored(m: Macros): StoredMacroTargets {

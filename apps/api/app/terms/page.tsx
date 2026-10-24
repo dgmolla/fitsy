@@ -45,13 +45,16 @@ export default function TermsPage() {
           <h2>Subscriptions and billing</h2>
           <p>
             Fitsy is a paid subscription app offered through an auto-renewing
-            subscription. Both plans include a free trial; after the trial,
-            your subscription begins unless you cancel beforehand.
+            subscription. An introductory free trial may be available if you
+            are eligible. The purchase screen shows your current price and any
+            offer before you confirm. If a trial applies, your paid
+            subscription begins when it ends unless you cancel beforehand.
           </p>
           <ul>
             <li>
               Payment is charged to your Apple ID account at confirmation of
-              purchase.
+              purchase or after an applicable free trial, as shown on the
+              purchase screen.
             </li>
             <li>
               Your subscription automatically renews at the end of each period

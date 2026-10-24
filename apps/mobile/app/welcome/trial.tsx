@@ -1,174 +1,79 @@
-import React, { useEffect } from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { EDITORIAL, FONTS, TEXT } from '@/lib/brand';
-import { AnimatedPress } from '@/components/AnimatedPress';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
+import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { TrialArtwork } from '@/components/TrialArtwork';
+import { useOnboardingStep } from '@/lib/onboardingResume';
+import { usePurchases } from '@/lib/usePurchases';
+import { purchaseTerms } from '@/lib/purchaseTerms';
+import { defaultTrialPlan, trialPresentation } from '@/lib/trialPresentation';
+import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
+import { EDITORIAL, TEXT } from '@/lib/brand';
 import { trackOnboardingScreenView } from '@/lib/analytics';
+import { withinMs } from '@/lib/async';
+import { useRouteContinuation } from '@/lib/useRouteContinuation';
 
-const STEPS = [
-  {
-    icon: 'lock-open-outline' as const,
-    title: 'Today: Full access',
-    desc: 'Unlock macro-matched restaurant search, personalized targets, and confidence scores.',
-  },
-  {
-    icon: 'notifications-outline' as const,
-    title: 'Day 2: Reminder',
-    desc: "We'll notify you before your trial ends. No surprises.",
-  },
-  {
-    icon: 'star-outline' as const,
-    title: 'Day 3: Trial ends',
-    desc: 'Choose a plan that works for you, or cancel — no charge.',
-  },
-];
+const OFFERING_RETRY_CAP_MS = 5000;
 
 export default function TrialScreen() {
-  useEffect(() => {
-    trackOnboardingScreenView('trial');
-  }, []);
-
-  return (
-    <SafeAreaView style={s.safe}>
-      <View style={s.content}>
-        {/* Top bar */}
-        <View style={s.topBar}>
-          <Pressable onPress={() => router.back()} hitSlop={16} style={s.close} accessibilityRole="button">
-            <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
-          </Pressable>
-          <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round((17 / 18) * 100)}%` }]} />
-          </View>
-        </View>
-
-        {/* Hero */}
-        <Animated.Text entering={FadeInDown.duration(500)} style={s.hero}>
-          3 days on us.
-        </Animated.Text>
-        <Animated.Text entering={FadeInDown.duration(500).delay(100)} style={s.subtitle}>
-          Here's how your free trial works.
-        </Animated.Text>
-
-        {/* Timeline */}
-        <View style={s.timeline}>
-          {STEPS.map((step, i) => (
-            <Animated.View
-              key={step.title}
-              entering={FadeInDown.duration(400).delay(200 + i * 100)}
-              style={s.step}
-            >
-              <View style={s.stepLeft}>
-                <View style={[s.dot, i === 0 && s.dotActive]}>
-                  <Ionicons name={step.icon} size={16} color={i === 0 ? EDITORIAL.cream : EDITORIAL.greenAccent} />
-                </View>
-                {i < STEPS.length - 1 && <View style={s.line} />}
-              </View>
-              <View style={s.stepContent}>
-                <Text style={s.stepTitle}>{step.title}</Text>
-                <Text style={s.stepDesc}>{step.desc}</Text>
-              </View>
-            </Animated.View>
-          ))}
-        </View>
-
-        <Animated.Text entering={FadeIn.duration(400).delay(600)} style={s.legal}>
-          Cancel anytime in the App Store. Terms of Service and Privacy Policy apply.
-        </Animated.Text>
-
-        <View style={{ flex: 1 }} />
-
-        {/* CTA */}
-        <Animated.View entering={FadeIn.duration(400).delay(500)} style={s.footer}>
-          <AnimatedPress
-            style={s.cta}
-            onPress={() => router.push('/welcome/payment')}
-            haptic
-            accessibilityRole="button"
-          >
-            <Text style={s.ctaTxt}>See plans</Text>
-            <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
-          </AnimatedPress>
-        </Animated.View>
-      </View>
-    </SafeAreaView>
-  );
+  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
+  const visualRequested = __DEV__ && devTrialVisual === '1';
+  const focused = useIsFocused();
+  useOnboardingStep('trial');
+  const { ready, offering, introEligibility, introEligibilityReady, refreshOffering, entitled } = usePurchases();
+  const visual = devTrialVisualOffer(offering, visualRequested);
+  const shownOffering = visual?.offering ?? offering;
+  const shownEligibility = visual?.eligibility ?? introEligibility;
+  const eligibilityReady = !!visual || introEligibilityReady;
+  const annual = purchaseTerms(shownOffering?.annual?.product, shownOffering?.annual ? shownEligibility[shownOffering.annual.product.identifier] : undefined);
+  const monthly = purchaseTerms(shownOffering?.monthly?.product, shownOffering?.monthly ? shownEligibility[shownOffering.monthly.product.identifier] : undefined);
+  const selectedPlan = defaultTrialPlan(annual, monthly);
+  const selectedTerms = selectedPlan === 'yearly' ? annual : monthly;
+  const trial = trialPresentation(selectedTerms).trial;
+  const [plansChecked, setPlansChecked] = useState(false);
+  const retryInFlight = useRef(false);
+  const navigating = useRef(false);
+  const { begin } = useRouteContinuation();
+  const checkingPlans = !ready || (shownOffering ? !eligibilityReady : !plansChecked);
+  useEffect(() => { if (focused && entitled === true) router.replace('/welcome/payment'); }, [focused, entitled]);
+  useEffect(() => { if (!visualRequested) trackOnboardingScreenView('trial'); }, [visualRequested]);
+  useFocusEffect(useCallback(() => {
+    navigating.current = false;
+    if (offering) return;
+    let current = true;
+    setPlansChecked(false);
+    void withinMs(refreshOffering(), OFFERING_RETRY_CAP_MS).catch(() => null).finally(() => { if (current) setPlansChecked(true); });
+    return () => { current = false; };
+  }, [offering, refreshOffering]));
+  async function continueOrRetry() {
+    if (checkingPlans || navigating.current) return;
+    if (!offering) {
+      if (retryInFlight.current) return;
+      retryInFlight.current = true;
+      const isCurrent = begin();
+      setPlansChecked(false);
+      try { await withinMs(refreshOffering(), OFFERING_RETRY_CAP_MS); } catch { /* The retry button remains available. */ }
+      finally { retryInFlight.current = false; if (isCurrent()) setPlansChecked(true); }
+      return;
+    }
+    navigating.current = true;
+    router.push(visualRequested ? '/welcome/trial-reminder?devTrialVisual=1' : '/welcome/trial-reminder');
+  }
+  if (entitled === true || (shownOffering && eligibilityReady && !trial)) return <Redirect href="/welcome/payment" />;
+  return <WelcomeScreen progress={1} title={trial ? 'Try Fitsy' : 'Checking your plans'}
+    subtitle={trial ? 'We want you to try Fitsy for free' : 'Your available plans will appear next.'}
+    continueLabel={checkingPlans ? 'Checking plans…' : shownOffering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}
+    onContinue={() => { void continueOrRetry(); }}
+    beforeContinue={trial && !checkingPlans ? <View style={s.reassurance} testID="trial-no-payment"><Ionicons name="checkmark" size={20} color={EDITORIAL.green} /><Text style={s.reassuranceText}>No payment due now</Text></View> : undefined}
+    afterContinue={visual ? <Text style={s.note} testID="trial-visual-note">Synthetic trial eligibility for visual testing. Purchase is disabled.</Text>
+      : !offering && plansChecked ? <Text style={s.note} testID="trial-offer-note">Plans could not load. Check your connection and retry.</Text> : undefined}>
+    <TrialArtwork />
+  </WelcomeScreen>;
 }
-
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: EDITORIAL.cream },
-  content: { flex: 1, paddingHorizontal: 32, paddingBottom: 20 },
-
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 52,
-  },
-  close: { width: 44, height: 44, justifyContent: 'center' },
-  progressTrack: {
-    flex: 1,
-    height: 4,
-    backgroundColor: EDITORIAL.border,
-    borderRadius: 2,
-    marginLeft: 12,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: EDITORIAL.greenAccent,
-    borderRadius: 2,
-  },
-
-  hero: { ...TEXT.headline, marginTop: 8 },
-  subtitle: { ...TEXT.subtitle, marginTop: 10, marginBottom: 40 },
-
-  timeline: { gap: 0 },
-  step: { flexDirection: 'row', gap: 16 },
-  stepLeft: { alignItems: 'center', width: 36 },
-  dot: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: EDITORIAL.creamCard,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dotActive: { backgroundColor: EDITORIAL.green },
-  line: {
-    width: 2,
-    flex: 1,
-    backgroundColor: EDITORIAL.border,
-    marginVertical: 4,
-  },
-  stepContent: { flex: 1, paddingBottom: 28 },
-  stepTitle: {
-    fontFamily: FONTS.nunitoSansSemiBold,
-    fontSize: 16,
-    color: EDITORIAL.text,
-    marginBottom: 4,
-  },
-  stepDesc: { ...TEXT.bodySmall, color: EDITORIAL.textSoft },
-
-  legal: {
-    ...TEXT.bodySmall,
-    fontSize: 12,
-    lineHeight: 18,
-    color: EDITORIAL.textSoft,
-    textAlign: 'center',
-    marginTop: 16,
-  },
-
-  footer: { alignItems: 'center' },
-  cta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: EDITORIAL.green,
-    borderRadius: 32,
-    paddingVertical: 18,
-    width: '100%',
-  },
-  ctaTxt: { ...TEXT.cta, fontSize: 16 },
+  reassurance: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginBottom: 8 },
+  reassuranceText: { ...TEXT.body, color: EDITORIAL.green },
+  note: { ...TEXT.bodySmall, color: EDITORIAL.textMid, textAlign: 'center', lineHeight: 19, marginTop: 8 },
 });

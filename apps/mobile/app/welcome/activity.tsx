@@ -1,10 +1,12 @@
+import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
+import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { AnimatedPress } from '@/components/AnimatedPress';
-import { saveOnboardingField, type ActivityLevel } from '@/lib/onboardingStorage';
+import { getOnboardingData, saveOnboardingField, type ActivityLevel } from '@/lib/onboardingStorage';
 import { trackOnboardingChoiceSelected, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 
@@ -15,24 +17,26 @@ const OPTIONS: { id: ActivityLevel; label: string; desc: string; days: string }[
   { id: 'very_active', label: 'Intense', desc: 'Training almost every day', days: '6–7' },
 ];
 
-export default function ActivityScreen() {
+function ActivityScreen() {
+  useOnboardingStep('activity');
   const [selected, setSelected] = useState<ActivityLevel | null>(null);
 
   useEffect(() => {
     trackOnboardingScreenView('activity');
+    void getOnboardingData().then(data => setSelected(data.activity ?? null));
   }, []);
 
   return (
     <WelcomeScreen
-      progress={14 / 18}
+      progress={0.51}
       title="How active are you?"
       subtitle="How many days per week are you active?"
       onContinue={async () => {
         if (selected) await saveOnboardingField('activity', selected);
-        router.push('/welcome/dietary');
+        router.push('/welcome/tuning');
       }}
       canContinue={selected !== null}
-      onSkip={() => router.push('/welcome/dietary')}
+      onSkip={() => router.push('/welcome/tuning')}
     >
       <View style={s.list}>
         {OPTIONS.map((opt, i) => {
@@ -105,3 +109,5 @@ const s = StyleSheet.create({
   desc: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft, marginTop: 3, fontWeight: '500' },
   descOn: { color: 'rgba(253,251,247,0.5)' },
 });
+
+export default requireWelcomeGoal(ActivityScreen, '/welcome/target-setup');

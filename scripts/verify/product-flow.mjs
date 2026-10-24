@@ -1,0 +1,296 @@
+#!/usr/bin/env node
+// Local simulator evidence is mandatory; CI does not execute a simulator.
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, existsSync, realpathSync } from 'node:fs';
+import { resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { isDeepStrictEqual, parseEnv } from 'node:util';
+const yaml = createRequire(import.meta.url)('js-yaml');
+
+export const root = resolve(process.env.FITSY_PRODUCT_ROOT || fileURLToPath(new URL('../..', import.meta.url)));
+// Explicit worktree identity must win over a surrounding Git hook's pointers.
+export const repoEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+const git = (args, cwd = root) => execFileSync('git', args, { cwd, encoding: 'utf8', env: repoEnv() }).trim();
+export const digest = value => createHash('sha256').update(value).digest('hex');
+export const baseline = ['cold-start-welcome', 'signin-options'];
+const rules = [
+  // Include the screens/routes that apply entitlement guards, not just their helpers.
+  ['billing', /^(apps\/mobile\/(.*(payment|paywall|Paywall|purchase|Purchase|entitlement|Entitlement|resubscribe|trial|teaserGate|LockedUnlock)|app\/(welcome\/notification|_layout|index|\(tabs\)\/|restaurant\/|auth\/reviewer)|lib\/(reviewAccess|authClient))|apps\/api\/(app\/api\/(revenuecat|subscriptions|restaurants)|lib\/subscription|services\/revenuecat))/],
+  ['notifications', /^(apps\/mobile\/.*([Nn]otification|push)|apps\/api\/.*([Nn]otification|push-token|launchPush|trialReminder))/],
+  ['auth', /^(apps\/mobile\/(app\/auth|lib\/.*([Aa]uth|[Ss]ession|supabase))|apps\/api\/(app\/api\/auth|lib\/auth))/],
+  ['onboarding', /^apps\/mobile\/(app\/welcome\/|components\/Welcome|lib\/(onboarding|macroCalculator))/],
+  ['discovery', /^(apps\/mobile\/app\/\(tabs\)|apps\/mobile\/app\/restaurant|apps\/api\/app\/api\/(restaurants|search|user)|packages\/shared\/src\/)/],
+];
+// The health response serves deployment monitors and is verified over HTTP.
+const serviceHealthPath = path => /^apps\/api\/app\/api\/health\/route(?:\.test)?\.ts$/.test(path);
+
+export function publicConfigIdentity(cwd = root, env = process.env) {
+  const file = resolve(cwd, 'apps/mobile/.env.development.local');
+  const effective = { ...(existsSync(file) ? parseEnv(readFileSync(file, 'utf8')) : {}), ...env };
+  const entries = Object.entries(effective).filter(([key]) => key.startsWith('EXPO_PUBLIC_'))
+    .sort(([a], [b]) => a.localeCompare(b));
+  return { configHash: digest(JSON.stringify(entries)),
+    publicConfig: Object.fromEntries(entries.map(([key, value]) => [key, digest(value)])) };
+}
+
+export function changedPublicConfigKeys(previous, current) {
+  if (!previous || previous.configHash === current.configHash) return [];
+  if (!previous.publicConfig) return ['<unknown>'];
+  const changed = [...new Set([...Object.keys(previous.publicConfig), ...Object.keys(current.publicConfig)])]
+    .filter(key => previous.publicConfig[key] !== current.publicConfig[key]).sort();
+  return changed.length ? changed : ['<unknown>'];
+}
+
+export function buildPublicConfigAcceptance(previous, current, retained = null) {
+  return { keys: [...new Set([
+    ...(previous?.publicConfigAcceptance?.keys || []),
+    ...(retained?.publicConfigAcceptance?.keys || []),
+    ...changedPublicConfigKeys(previous, current),
+  ])].sort() };
+}
+
+export function requiredPublicConfigKeys(report, build, current) {
+  const accepted = report?.result === 'pass' && report.evidenceMode === 'final-candidate' &&
+    report.publicConfigAcceptance?.verifiedConfigHash === current.configHash;
+  const matchingArtifact = typeof report?.appHash === 'string' && report.appHash === build?.appHash;
+  const servedConfig = build?.buildMode === 'owned-metro-test-store';
+  const buildAccepted = (servedConfig || build?.configHash === current.configHash) && matchingArtifact &&
+    (build.publicConfigAcceptance?.keys || []).every(key => report.publicConfigAcceptance?.keys?.includes(key));
+  if (accepted && buildAccepted)
+    return [];
+  return [...new Set([
+    ...(report?.publicConfigAcceptance?.keys || []),
+    ...(build?.publicConfigAcceptance?.keys || []),
+    ...changedPublicConfigKeys(report, current),
+    ...changedPublicConfigKeys(build, current),
+    ...(accepted && !matchingArtifact && build?.configHash === current.configHash ? ['<unknown>'] : []),
+  ])].sort();
+}
+
+export function impact(paths, configKeys = []) {
+  const source = paths.filter(p => !/\.md$/.test(p) &&
+    p !== 'apps/mobile/eas.json' &&
+    !/(?:\.test\.|\.spec\.|__tests__\/|__mocks__\/)/.test(p));
+  const affected = source.filter(p => /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(p) && !serviceHealthPath(p));
+  const categories = new Set();
+  for (const path of affected) {
+    const matched = rules.filter(([, pattern]) => pattern.test(path));
+    for (const [category] of matched) categories.add(category);
+    // Unknown client/config/schema changes need a changed-journey charter too.
+    if (!matched.length) categories.add('changed-journey');
+  }
+  for (const key of configKeys) {
+    if (key === '<unknown>') for (const category of ['billing', 'notifications', 'auth', 'onboarding', 'discovery', 'changed-journey'])
+      categories.add(category);
+    else if (/REVENUECAT|STORE|PURCHASE|PAYWALL/i.test(key)) categories.add('billing');
+    else if (/SUPABASE|AUTH|GOOGLE_.*CLIENT_ID/i.test(key)) categories.add('auth');
+    else if (/PUSH|NOTIFICATION/i.test(key)) categories.add('notifications');
+    else categories.add('changed-journey');
+  }
+  return { required: affected.length > 0 || configKeys.length > 0,
+    paths: [...affected, ...configKeys.map(key => `public-env:${key}`)], categories: [...categories].sort(), baseline };
+}
+
+export function changedPaths(base, cwd = root) {
+  // Explicit CI base avoids origin/main...HEAD becoming empty after merge.
+  const revision = base || git(['merge-base', 'origin/main', 'HEAD'], cwd);
+  const paths = [...new Set([
+    ...git(['diff', '--name-only', '--no-renames', revision, 'HEAD'], cwd).split('\n'),
+    ...git(['diff', '--name-only', 'HEAD'], cwd).split('\n'),
+    ...git(['ls-files', '--others', '--exclude-standard'], cwd).split('\n'),
+  ].filter(Boolean))];
+  // The API test runner's GC script cannot change a user journey. Compare the
+  // entire parsed manifest, so runtime, lifecycle and dependency edits still apply.
+  if (paths.includes('apps/api/package.json')) {
+    try {
+      const previousText = git(['show', `${revision}:apps/api/package.json`], cwd);
+      const currentText = readFileSync(resolve(cwd, 'apps/api/package.json'), 'utf8');
+      // JSON.parse silently collapses duplicate keys; ambiguous manifests cannot receive this exemption.
+      yaml.load(previousText, { schema: yaml.JSON_SCHEMA });
+      yaml.load(currentText, { schema: yaml.JSON_SCHEMA });
+      const previous = JSON.parse(previousText);
+      const current = JSON.parse(currentText);
+      const scripts = current?.scripts;
+      if (previous?.scripts && !Object.hasOwn(previous.scripts, 'test:coverage:gc') &&
+        scripts && !Array.isArray(scripts) &&
+        scripts['test:coverage:gc'] === 'node --expose-gc ../../node_modules/jest/bin/jest.js --coverage') {
+        const withoutGc = { ...current, scripts: { ...scripts } };
+        delete withoutGc.scripts['test:coverage:gc'];
+        if (isDeepStrictEqual(previous, withoutGc))
+          return paths.filter(path => path !== 'apps/api/package.json');
+      }
+    } catch {
+      // Missing or malformed manifests remain product-impacting.
+    }
+  }
+  return paths;
+}
+
+export function inputHash(cwd = root, mobileOnly = false) {
+  // Working contents matter; a report remains reusable after an evidence-only commit.
+  const paths = git(['ls-files', '-z', '--cached', '--others', '--exclude-standard'], cwd).split('\0')
+    .filter(p => p && p !== 'apps/mobile/eas.json' && !p.startsWith('.evidence/') && !p.endsWith('.md'))
+    .filter(p => mobileOnly === true || !/(?:\.test\.|\.spec\.|__tests__\/|__mocks__\/|^scripts\/review\/)/.test(p))
+    .filter(p => mobileOnly === 'js'
+      ? /^(apps\/mobile\/(?!e2e\/|ios\/|android\/)|packages\/shared\/|package(-lock)?\.json$)/.test(p) && !/(?:\.test\.|\.spec\.|__tests__\/)/.test(p)
+      : !mobileOnly || /^(apps\/mobile\/(?!e2e\/)|packages\/shared\/|package(-lock)?\.json$)/.test(p));
+  const hash = createHash('sha256');
+  for (const path of [...new Set(paths)].sort()) {
+    hash.update(path + '\0');
+    const file = resolve(cwd, path);
+    hash.update(existsSync(file) ? readFileSync(file) : '<deleted>');
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
+const insist = (condition, message) => { if (!condition) throw new Error(message); };
+export function artifactPath(file, directory) {
+  insist(typeof file === 'string' && file.length > 0, 'missing artifact path');
+  const absolute = realpathSync(resolve(directory, file));
+  insist(absolute.startsWith(realpathSync(directory) + sep), 'artifact escapes evidence directory');
+  return absolute;
+}
+export function artifact(file, directory) {
+  return readFileSync(artifactPath(file, directory));
+}
+export function isPlayableVideo(file) {
+  let probe;
+  try {
+    probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries',
+      'stream=codec_type,codec_name,duration:format=duration', '-of', 'json', file],
+    { encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }));
+  } catch (error) {
+    if (error.code === 'ENOENT') throw new Error('ffprobe is required to validate product-flow video');
+    return false;
+  }
+  const hasDuration = probe.streams?.some(stream => stream.codec_type === 'video' && stream.codec_name &&
+    (Number(stream.duration) > 0 || Number(probe.format?.duration) > 0)) === true;
+  if (!hasDuration) return false;
+  try {
+    // Decode one frame, not the recording. A metadata-only MP4 can pass ffprobe.
+    const decoded = execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-xerror', '-i', file,
+      '-map', '0:v:0', '-frames:v', '1', '-f', 'framecrc', 'pipe:1'],
+    { encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+    return /^\d+,\s*\d+,\s*\d+,\s*\d+,\s*\d+,\s*0x[\da-f]+$/im.test(decoded);
+  } catch (error) {
+    if (error.code === 'ENOENT') throw new Error('ffmpeg is required to validate product-flow video');
+    return false;
+  }
+}
+
+export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = null, mode = 'final-candidate') {
+  insist(report.version === 1 && report.inputHash === hash, 'missing or stale source/test identity');
+  insist(['development', 'final-candidate', 'requested-video'].includes(mode) && report.evidenceMode === mode,
+    `Expected ${mode} evidence; development or requested-video proof cannot satisfy final publication`);
+  const time = Date.parse(report.finishedAt);
+  insist(Number.isFinite(time) && time <= now && now - time <= 24 * 3600_000, 'evidence expired or invalid timestamp');
+  insist(report.result === 'pass', 'product flow did not pass');
+  for (const field of ['appHash', 'bundleHash', 'backendRevision', 'simulator', 'os', 'storeMode', 'fixture', 'maestroVersion']) {
+    insist(typeof report[field] === 'string' && report[field].trim() && !/^(unknown|none|n\/a)$/i.test(report[field]), `missing ${field}`);
+  }
+  insist(Boolean(report.nativeIdentity?.hash || report.nativeSourceHash), 'missing native binary identity');
+  if (report.nativeIdentity) insist(typeof report.jsHash === 'string' && report.jsHash.length === 64,
+    'missing JavaScript identity');
+  if (nativeHash) insist((report.nativeIdentity?.hash || report.nativeSourceHash) === nativeHash, 'native build was not produced from these inputs');
+  insist(!plan.categories.includes('billing') || report.storeMode !== 'unconfigured', 'billing requires a configured store');
+  insist(/^https:\/\/dev\.fitsy\.org\/?$|^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(report.backend), 'product tests require an identified dev backend');
+  insist(Array.isArray(report.flows) && report.flows.length > 0, 'no flows executed');
+  insist(report.videoRequested === undefined || typeof report.videoRequested === 'boolean', 'invalid recording selection');
+  const videoRequested = report.videoRequested ?? report.flows.every(flow => Boolean(flow.video && flow.videoHash));
+  insist(mode !== 'requested-video' || videoRequested, 'requested-video proof requires a complete recording');
+  const covered = new Set();
+  const names = new Set();
+  for (const flow of report.flows) {
+    insist(!names.has(flow.name), 'duplicate flow result'); names.add(flow.name);
+    insist(/^apps\/mobile\/e2e\/flows\/[a-z0-9-]+\.yaml$/.test(flow.source), 'invalid flow source');
+    const source = readFileSync(resolve(cwd, flow.source));
+    insist(digest(source) === flow.sourceHash, `changed flow source: ${flow.name}`);
+    const config = yaml.load(source.toString().split(/^---\s*$/m)[0]);
+    insist((config.name || flow.source.split('/').at(-1).replace('.yaml', '')) === flow.name, 'flow identity mismatch');
+    const data = artifact(flow.commands, directory);
+    insist(digest(data) === flow.sha256, `changed command artifact: ${flow.name}`);
+    const commands = JSON.parse(data.toString());
+    insist(Array.isArray(commands) && commands.length > 0, 'empty command report');
+    const applied = commands.find(c => c.command?.applyConfigurationCommand)?.command.applyConfigurationCommand.config;
+    insist(applied?.appId === 'com.fitsy.mobile' && (!applied.name || applied.name === flow.name), 'wrong app/flow in command report');
+    const assertions = commands.filter(c => c.command?.assertConditionCommand && !c.command.assertConditionCommand.optional);
+    insist(assertions.length > 0 && assertions.every(c => c.metadata?.status === 'COMPLETED'), `missing/skipped/failed assertions: ${flow.name}`);
+    insist(!commands.some(c => c.metadata?.status === 'FAILED'), `failed command: ${flow.name}`);
+    insist(commands.every(c => c.metadata?.status === 'COMPLETED' || Object.values(c.command || {}).some(v => v?.optional === true)), `incomplete required command: ${flow.name}`);
+    const screen = artifact(flow.screenshot, directory);
+    insist(digest(screen) === flow.screenshotHash && screen.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')), `missing/changed/non-PNG screenshot: ${flow.name}`);
+    const capture = artifact(flow.captureReceipt, directory);
+    insist(digest(capture) === flow.captureReceiptHash, `changed XCTest capture receipt: ${flow.name}`);
+    const captures = capture.toString().trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+    insist(captures.length > 0 && captures.every(item => item.udid === report.simulator && item.preferredScreenCaptureFormat === 'screenshots'),
+      `missing screenshots-only XCTest launch proof: ${flow.name}`);
+    if (mode === 'final-candidate')
+      insist(flow.attachmentCloseout && flow.attachmentCloseoutHash, `missing XCTest attachment closeout: ${flow.name}`);
+    if (flow.attachmentCloseout || flow.attachmentCloseoutHash) {
+      insist(flow.attachmentCloseout && flow.attachmentCloseoutHash, `incomplete XCTest attachment closeout: ${flow.name}`);
+      const closeout = artifact(flow.attachmentCloseout, directory);
+      insist(digest(closeout) === flow.attachmentCloseoutHash, `changed XCTest attachment closeout: ${flow.name}`);
+      const receipt = JSON.parse(closeout.toString());
+      insist(receipt.udid === report.simulator && receipt.generated?.videos === 0 && receipt.deleted?.length === 0,
+        `unexpected XCTest recording: ${flow.name}`);
+    }
+    if (!videoRequested) insist(!flow.video && !flow.videoHash, `Unrequested video claim: ${flow.name}`);
+    else {
+      insist(flow.video && flow.videoHash, `missing/changed/empty video: ${flow.name}`);
+      let video;
+      try { video = artifact(flow.video, directory); }
+      catch { throw new Error(`missing/changed/empty video: ${flow.name}`); }
+      insist(video.length > 0 && digest(video) === flow.videoHash, `missing/changed/empty video: ${flow.name}`);
+      insist(isPlayableVideo(artifactPath(flow.video, directory)), `unplayable video: ${flow.name}`);
+    }
+    if (!baseline.includes(flow.name) && assertions.length >= 2) {
+      for (const tag of config.tags || []) covered.add(tag);
+    }
+  }
+  for (const name of baseline) insist(names.has(name), `missing baseline flow: ${name}`);
+  // A completed configuration acceptance remains part of the retained proof
+  // even when that configuration no longer requires a new run.
+  const acceptedCategories = typeof report.publicConfigAcceptance?.verifiedConfigHash === 'string' &&
+    report.publicConfigAcceptance.verifiedConfigHash === report.configHash
+    ? impact([], report.publicConfigAcceptance.keys || []).categories : [];
+  for (const category of new Set([...plan.categories, ...acceptedCategories])) {
+    insist(covered.has(category), `no deterministic coverage for ${category}`);
+    const observation = report.exploration?.find(o => o.category === category);
+    insist(observation?.result === 'pass' && observation.expected?.trim() && observation.observed?.trim(), `missing walkthrough outcome: ${category}`);
+    insist(observation.branches?.includes('primary') && observation.branches?.includes('recovery'), `walkthrough needs primary and recovery: ${category}`);
+    const trace = artifact(observation.trace, directory);
+    insist(digest(trace) === observation.sha256, `changed walkthrough trace: ${category}`);
+    const events = trace.toString().trim().split('\n').map(line => JSON.parse(line));
+    insist(events.every(e => Date.parse(e.at) >= Date.parse(report.startedAt) && Date.parse(e.at) <= time && !e.result?.isError && e.result?.content?.length), `invalid/failed/stale walkthrough events: ${category}`);
+    insist(events.some(e => /mobile_(click|swipe|type|press|launch|open)/.test(e.command?.name)) && events.some(e => e.command?.name === 'mobile_list_elements_on_screen'), `walkthrough needs actual interactions and screen observations: ${category}`);
+  }
+  return { status: 'pass', summary: `${report.flows.length} flows and ${plan.categories.length} changed-journey walkthroughs verified` };
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    insist(!process.env.CI || process.env.FITSY_DIFF_BASE, 'CI must supply the candidate diff base');
+    const reportFile = resolve(root, '.evidence/product-flow/report.json');
+    const buildFile = resolve(root, '.evidence/product-build/receipt.json');
+    const previous = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null;
+    const build = existsSync(buildFile) ? JSON.parse(readFileSync(buildFile, 'utf8')) : null;
+    const configKeys = requiredPublicConfigKeys(previous, build, publicConfigIdentity());
+    const plan = impact(changedPaths(process.env.CI ? process.env.FITSY_DIFF_BASE : undefined), configKeys);
+    if (process.argv.includes('--plan')) {
+      console.log(JSON.stringify({ ...plan, inputHash: inputHash() }));
+    } else if (!plan.required) {
+      console.log(JSON.stringify({ name: 'product-flow', status: 'pass', applicability: 'not_applicable', summary: 'no mobile-facing product changes', fix: '' }));
+    } else {
+      const report = JSON.parse(readFileSync(reportFile, 'utf8'));
+      const result = validate(report, plan, inputHash(), resolve(reportFile, '..'));
+      execFileSync(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check'], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'] });
+      console.log(JSON.stringify({ name: 'product-flow', ...result, fix: '' }));
+    }
+  } catch (error) {
+    console.log(JSON.stringify({ name: 'product-flow', status: 'fail', summary: error.message, fix: 'run the identified simulator build, required Maestro scenarios, and changed-journey walkthrough; regenerate product-flow evidence' }));
+    process.exitCode = 1;
+  }
+}

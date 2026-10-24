@@ -433,7 +433,7 @@
 .menuCardFoot {
   display: flex;
   justify-content: space-between;
-  align-items: end;
+  align-items: flex-end;
   padding-top: 22px;
   border-top: 1px dashed rgba(27, 26, 23, 0.16);
   margin-top: auto;
@@ -790,7 +790,7 @@
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 48px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .editorialEyebrow {

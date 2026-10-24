@@ -86,6 +86,9 @@ describe("persistHex transaction semantics (mock)", () => {
 
     await persistHex("run-1", "hex-1", restaurants, mockPrisma as any);
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: 'Serializable', timeout: 300_000, maxWait: 30_000,
+    });
   });
 
   it("calls persistHexBulkInTx exactly once with all restaurants", async () => {

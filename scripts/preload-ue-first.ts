@@ -1,5 +1,5 @@
 import { validateHexInTx } from "./preload-invariants";
-import { loadChainServing, resolveChainMacros, chainMenuResolver, type ChainServing } from "../apps/api/services/chainServing";
+import { loadChainServing, chainMenuResolver, type ChainServing } from "../apps/api/services/chainServing";
 /**
  * UE-First Preload Orchestrator (Stage 3)
  *
@@ -723,7 +723,7 @@ async function processRestaurant(
     return null;
   }
 
-  const { brandId, resolver } = chainMenuResolver(r, chainServing, API_SEMAPHORES.ubereats);
+  const { brandId, resolver, resolveMacros } = chainMenuResolver(r, chainServing, API_SEMAPHORES.ubereats);
 
   // The UE semaphore lives inside UeApiDirectSource now — it only wraps the
   // UE getStoreV1 call. Holding it around the whole resolver wastes UE slots
@@ -799,7 +799,7 @@ async function processRestaurant(
     );
   } else {
     try {
-      macros = await resolveChainMacros(resolverResult.items, brandId, chainServing.match, async unresolved => {
+      macros = await resolveMacros(resolverResult.items, async unresolved => {
         stats.anthropicCalls++;
         const { result } = await withRetry(
           () => API_SEMAPHORES.haiku.run(() => estimateMacros(unresolved, anthropic)),

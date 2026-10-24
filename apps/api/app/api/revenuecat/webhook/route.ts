@@ -2,10 +2,16 @@ import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import {
-  logStatusChange,
   readUserAndRow,
   syncSubscriptionFromRevenueCat,
+  type SubscriptionRow,
 } from "@/lib/subscription";
+import { persistEvent } from "./persistEvent";
+
+function activePeriodRecorded(row: SubscriptionRow, expiresAt: Date | null): boolean {
+  return row?.status === "active" &&
+    (!expiresAt || (row.expiresAt != null && row.expiresAt.getTime() >= expiresAt.getTime()));
+}
 
 /** Constant-time compare for the webhook auth header (avoids timing leaks). */
 function safeEqual(a: string, b: string): boolean {
@@ -218,6 +224,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ? new Date(event.expiration_at_ms)
       : null;
   const status = statusForEvent(event.type, expiresAt);
+  const activePeriodEvent = status === "active" &&
+    ["INITIAL_PURCHASE", "RENEWAL", "NON_RENEWING_PURCHASE", "SUBSCRIPTION_EXTENDED"].includes(event.type);
   const plan = event.product_id ?? "unknown";
   const appleTransactionId =
     event.original_transaction_id ?? event.transaction_id ?? null;
@@ -259,33 +267,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           `[subscription] ${appUserId} stale ${event.type} (${eventAt.toISOString()}) ` +
             `disagrees with row @ ${existing.lastEventAt.toISOString()} (${differs.join(", ")}); re-syncing`,
         );
-        if ((await syncSubscriptionFromRevenueCat(appUserId)) === null) {
-          console.warn(`[subscription] ${appUserId} tiebreak sync failed: RevenueCat unreachable`);
-          return NextResponse.json({ error: "RevenueCat lookup unavailable" }, { status: 500 });
+        const reconciled = await syncSubscriptionFromRevenueCat(appUserId);
+        const pendingPeriod = activePeriodEvent && !activePeriodRecorded((await readUserAndRow(appUserId)).row, expiresAt);
+        if (reconciled === null || pendingPeriod) {
+          console.warn(`[subscription] ${appUserId} tiebreak sync failed: RevenueCat ${reconciled === null ? "unreachable" : "still inactive after purchase"}`);
+          return NextResponse.json({ error: "RevenueCat lookup unresolved" }, { status: 500 });
         }
       }
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
-    await prisma.subscription.upsert({
-      where: { userId: appUserId },
-      create: {
-        userId: appUserId,
-        plan,
-        status,
-        expiresAt,
-        appleTransactionId,
-        lastEventAt: eventAt,
-      },
-      update: {
-        plan,
-        status,
-        expiresAt,
-        appleTransactionId,
-        lastEventAt: eventAt,
-      },
-    });
-    logStatusChange(appUserId, existing?.status ?? null, status, "webhook");
+    const applied = await persistEvent({ userId: appUserId, existing, plan, status, expiresAt, appleTransactionId, eventAt });
+    if (!applied && activePeriodEvent) {
+      const latest = (await readUserAndRow(appUserId)).row;
+      if (!activePeriodRecorded(latest, expiresAt)) {
+        await syncSubscriptionFromRevenueCat(appUserId);
+        if (!activePeriodRecorded((await readUserAndRow(appUserId)).row, expiresAt)) {
+          return NextResponse.json({ error: "RevenueCat purchase reconciliation pending" }, { status: 500 });
+        }
+      }
+    }
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch {

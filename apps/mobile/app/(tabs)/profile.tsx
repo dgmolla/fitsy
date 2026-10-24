@@ -16,15 +16,17 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
-import { getMacroTargets, saveMacroTargets } from '@/lib/macroStorage';
-import { getOnboardingData, saveOnboardingField, type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
+import { getMacroTargets, getQuarantinedLegacyTarget, restoreQuarantinedLegacyTarget,
+  saveMacroTargets, type MacroTargetMode } from '@/lib/macroStorage';
+import { getOnboardingData, getLegacyOnboardingData, restoreLegacyOnboardingData, retireLegacyOnboardingData,
+  type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
 import { calculateAge } from '@fitsy/shared';
-import { pushProfileToServer } from '@/lib/profileSync';
+import { syncSavedProfileToServer, queueSavedProfileToServer, deliverQueuedProfile } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
 import { MACRO_COLORS } from '@/lib/macroColors';
-import { calculateMacros, macrosToStored } from '@/lib/macroCalculator';
+import { updateProfileFieldAndTargets, refreshAutomaticProfileTargets } from '@/lib/profileTargetUpdate';
 import { openLegalLink } from '@/lib/legalLinks';
 import {
   trackMacroTargetsEdited,
@@ -39,6 +41,7 @@ import { usePurchases } from '@/lib/usePurchases';
 const GOAL_OPTIONS = [
   { id: 'lose_fat', label: 'Lose Weight', icon: 'flame-outline', description: 'Calorie deficit for fat loss' },
   { id: 'build_muscle', label: 'Build Muscle', icon: 'barbell-outline', description: 'Calorie surplus for growth' },
+  { id: 'performance', label: 'Improve performance', icon: 'fitness-outline', description: 'Fuel training and recovery' },
   { id: 'maintain', label: 'Maintain', icon: 'shield-checkmark-outline', description: 'Stay at current weight' },
   { id: 'eat_healthier', label: 'Eat Healthier', icon: 'leaf-outline', description: 'Better food choices' },
 ];
@@ -54,6 +57,7 @@ const GOAL_ICONS: Record<string, string> = {
   lose_fat: 'flame-outline',
   build_muscle: 'barbell-outline',
   maintain: 'shield-checkmark-outline',
+  performance: 'fitness-outline',
   explore: 'compass-outline',
   eat_healthier: 'leaf-outline',
 };
@@ -70,6 +74,8 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
+  const [legacyTargetMode, setLegacyTargetMode] = useState<MacroTargetMode | null>(null);
+  const [hasLegacyProfile, setHasLegacyProfile] = useState(false);
   const [filterVisible, setFilterVisible] = useState(false);
   const [profile, setProfile] = useState<OnboardingData>({});
   const [editField, setEditField] = useState<EditField>(null);
@@ -86,10 +92,12 @@ export default function ProfileScreen() {
           ]);
           if (token) setEmail(decodeEmailFromToken(token));
           if (stored) setMacroTargets(stored as unknown as MacroValues);
+          setLegacyTargetMode((await getQuarantinedLegacyTarget())?.mode ?? null);
+          setHasLegacyProfile(Boolean(await getLegacyOnboardingData()));
           setProfile(onboarding);
           const snapshot = JSON.stringify(onboarding);
           if (prevProfile.current && prevProfile.current !== snapshot) {
-            pushProfileToServer();
+            await syncSavedProfileToServer();
           }
           prevProfile.current = snapshot;
         } catch (err) {
@@ -113,7 +121,7 @@ export default function ProfileScreen() {
     try {
       await api.del('/api/user');
       trackProfileAccountDeleted({ success: true });
-      await clearToken();
+      await clearToken({ forgetTargets: true });
       router.replace('/welcome/problem');
     } catch {
       trackProfileAccountDeleted({ success: false });
@@ -121,17 +129,15 @@ export default function ProfileScreen() {
     }
   }, []);
 
-  // Deleting the Fitsy account does NOT cancel the App Store subscription:
-  // that lives on the Apple ID and keeps renewing until cancelled there. A
-  // Pro user gets told so, with a one-tap route to the manage sheet, before
-  // they can delete. Device RevenueCat state is fine for this: it is copy,
-  // not a gate.
+  // Deleting the Fitsy account does not cancel the subscription with its
+  // owning store. A Pro user gets a management action before deletion.
+  // Device RevenueCat state is fine for this copy; it is not an access gate.
   const { isPro, showManageSubscriptions } = usePurchases();
   const confirmDelete = useCallback(() => {
     if (isPro) {
       Alert.alert(
         'Delete account?',
-        'Deleting your account does not cancel your Fitsy Pro subscription. It stays on your Apple ID and keeps renewing until you cancel it in the App Store.',
+        'Deleting your account does not cancel your Fitsy Pro subscription. It may keep renewing until you cancel it with the store where you subscribed.',
         [
           { text: 'Manage subscription', onPress: () => void showManageSubscriptions() },
           { text: 'Delete anyway', style: 'destructive', onPress: handleDelete },
@@ -151,14 +157,49 @@ export default function ProfileScreen() {
   }, [handleDelete, isPro, showManageSubscriptions]);
 
   async function updateFieldAndRecalc<K extends keyof OnboardingData>(field: K, value: OnboardingData[K]) {
-    await saveOnboardingField(field, value);
-    const updated = await getOnboardingData();
+    const { profile: updated, targets } = await updateProfileFieldAndTargets(field, value);
+    await queueSavedProfileToServer();
+    deliverQueuedProfile();
     setProfile(updated);
-    const newMacros = calculateMacros(updated);
-    const stored = macrosToStored(newMacros);
-    await saveMacroTargets(stored);
-    setMacroTargets(stored);
-    pushProfileToServer();
+    if (targets) setMacroTargets(targets);
+    setEditField(null);
+  }
+
+  function offerLegacyRestore() {
+    const kind = legacyTargetMode === 'search' ? 'search filter' : 'meal target';
+    Alert.alert(`Restore older ${kind}?`,
+      `This device has an older ${kind} without an account label. Restore it to this account?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Restore', onPress: () => {
+          void restoreQuarantinedLegacyTarget().then(async snapshot => {
+            if (!snapshot) return;
+            setLegacyTargetMode(null);
+            if (snapshot.mode === 'complete') {
+              await queueSavedProfileToServer();
+              deliverQueuedProfile();
+              setMacroTargets(snapshot.targets);
+            }
+          }).catch(() => Alert.alert("Save failed", "Please try restoring again."));
+        } },
+      ]);
+  }
+
+  function offerLegacyProfileRestore() {
+    Alert.alert('Restore older profile facts?',
+      'This device has older measurements and goals without an account label. Restore them to this account, replacing its current facts?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Restore', onPress: () => {
+          void restoreLegacyOnboardingData().then(async restored => {
+            const updated = await refreshAutomaticProfileTargets(restored.owner);
+            await queueSavedProfileToServer();
+            await retireLegacyOnboardingData(restored.owner);
+            deliverQueuedProfile();
+            setProfile(updated.profile);
+            if (updated.targets) setMacroTargets(updated.targets);
+            setHasLegacyProfile(false);
+          }).catch(() => Alert.alert('Restore failed', 'Your older facts are still available. Please try again.'));
+        } },
+      ]);
   }
 
   // `editField` is the key used internally by ProfileEditSheet, but the
@@ -190,7 +231,7 @@ export default function ProfileScreen() {
           title: 'Your Goal',
           options: GOAL_OPTIONS,
           value: profile.goal ?? 'maintain',
-          onApply: (v) => { setEditField(null); updateFieldAndRecalc('goal', v as Goal); },
+          onApply: (v) => { return updateFieldAndRecalc('goal', v as Goal); },
           onClose: () => setEditField(null),
         };
       case 'activity':
@@ -200,7 +241,7 @@ export default function ProfileScreen() {
           title: 'Activity Level',
           options: ACTIVITY_OPTIONS,
           value: profile.activity ?? 'lightly_active',
-          onApply: (v) => { setEditField(null); updateFieldAndRecalc('activity', v as ActivityLevel); },
+          onApply: (v) => { return updateFieldAndRecalc('activity', v as ActivityLevel); },
           onClose: () => setEditField(null),
         };
       case 'height':
@@ -209,7 +250,7 @@ export default function ProfileScreen() {
           visible: true,
           title: 'Height',
           valueCm: profile.heightCm ? String(profile.heightCm) : '',
-          onApply: (v) => { setEditField(null); updateFieldAndRecalc('heightCm', parseInt(v) || undefined); },
+          onApply: (v) => { return updateFieldAndRecalc('heightCm', v.trim() ? Number(v) : undefined); },
           onClose: () => setEditField(null),
         };
       case 'weight':
@@ -220,7 +261,7 @@ export default function ProfileScreen() {
           value: profile.weightKg ? String(Math.round(profile.weightKg * 2.20462)) : '',
           unit: 'lbs',
           placeholder: '70',
-          onApply: (v) => { setEditField(null); updateFieldAndRecalc('weightKg', Math.round(((parseInt(v) || 0) * 0.453592) * 10) / 10 || undefined); },
+          onApply: (v) => { return updateFieldAndRecalc('weightKg', v.trim() ? Math.round(Number(v) * 0.453592 * 10) / 10 : undefined); },
           onClose: () => setEditField(null),
         };
       case 'age':
@@ -232,10 +273,9 @@ export default function ProfileScreen() {
           unit: 'years',
           placeholder: '25',
           onApply: (v) => {
-            setEditField(null);
-            const ageNum = parseInt(v) || 25;
+            const ageNum = v.trim() ? Number(v) : NaN;
             const year = new Date().getFullYear() - ageNum;
-            updateFieldAndRecalc('birthday', `${year}-01-01`);
+            return updateFieldAndRecalc('birthday', `${year}-01-01`);
           },
           onClose: () => setEditField(null),
         };
@@ -263,7 +303,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Goal banner */}
-        <Pressable style={s.goalBanner} onPress={() => openEditField('goal')}>
+        <Pressable testID="profile-edit-goal" style={s.goalBanner} onPress={() => openEditField('goal')}>
           <View style={s.goalIconCircle}>
             <Ionicons name={goalIcon as ComponentProps<typeof Ionicons>['name']} size={18} color={EDITORIAL.greenAccent} />
           </View>
@@ -276,22 +316,22 @@ export default function ProfileScreen() {
 
         {/* Body stats row */}
         <View style={s.statsCard}>
-          <Pressable style={s.statBlock} onPress={() => openEditField('age')}>
+          <Pressable testID="profile-edit-age" style={s.statBlock} onPress={() => openEditField('age')}>
             <Text style={s.statValue}>{age ?? '—'}</Text>
             <Text style={s.statLabel}>Age</Text>
           </Pressable>
           <View style={s.statDivider} />
-          <Pressable style={s.statBlock} onPress={() => openEditField('height')}>
+          <Pressable testID="profile-edit-height" style={s.statBlock} onPress={() => openEditField('height')}>
             <Text style={s.statValue}>{profile.heightCm ? `${Math.floor(profile.heightCm / 2.54 / 12)}'${Math.round(profile.heightCm / 2.54 % 12)}"` : '—'}</Text>
             <Text style={s.statLabel}>Height</Text>
           </Pressable>
           <View style={s.statDivider} />
-          <Pressable style={s.statBlock} onPress={() => openEditField('weight')}>
+          <Pressable testID="profile-edit-weight" style={s.statBlock} onPress={() => openEditField('weight')}>
             <Text style={s.statValue}>{profile.weightKg ? `${Math.round(profile.weightKg * 2.20462)}lbs` : '—'}</Text>
             <Text style={s.statLabel}>Weight</Text>
           </Pressable>
           <View style={s.statDivider} />
-          <Pressable style={s.statBlock} onPress={() => openEditField('activity')}>
+          <Pressable testID="profile-edit-activity" style={s.statBlock} onPress={() => openEditField('activity')}>
             <Text style={s.statValueWord}>
               {ACTIVITY_OPTIONS.find((o) => o.id === profile.activity)?.label ?? '—'}
             </Text>
@@ -301,7 +341,7 @@ export default function ProfileScreen() {
 
         {/* Per-meal targets */}
         {macroTargets && (
-          <Pressable onPress={() => setFilterVisible(true)} style={s.macroCard}>
+          <Pressable testID="profile-edit-meal-targets" onPress={() => setFilterVisible(true)} style={s.macroCard}>
             <View style={s.macroHeader}>
               <Text style={s.macroTitle}>Per-Meal Targets</Text>
               <View style={s.editChip}>
@@ -318,9 +358,23 @@ export default function ProfileScreen() {
             </View>
           </Pressable>
         )}
+        {legacyTargetMode && (
+          <Pressable testID="profile-restore-older-target" style={s.feedbackBanner}
+            accessibilityRole="button" onPress={offerLegacyRestore}>
+            <Text style={s.feedbackValue}>Restore older {legacyTargetMode === 'search' ? 'search filter' : 'meal target'}</Text>
+            <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
+          </Pressable>
+        )}
+        {hasLegacyProfile && (
+          <Pressable testID="profile-restore-older-facts" style={s.feedbackBanner}
+            accessibilityRole="button" onPress={offerLegacyProfileRestore}>
+            <Text style={s.feedbackValue}>Restore older profile facts</Text>
+            <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
+          </Pressable>
+        )}
 
         {/* Feedback */}
-        <Pressable style={s.feedbackBanner} onPress={() => router.push('/feedback-board')}>
+        <Pressable testID="profile-feedback" style={s.feedbackBanner} onPress={() => router.push('/feedback-board')}>
           <View style={s.goalIconCircle}>
             <Ionicons name="chatbubble-ellipses-outline" size={18} color={EDITORIAL.greenAccent} />
           </View>
@@ -331,28 +385,33 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
         </Pressable>
 
+        {/* Reminders */}
+        <Pressable style={s.feedbackBanner} onPress={() => router.push('/notification-settings')} accessibilityRole="button" testID="profile-reminders">
+          <Text style={s.feedbackValue}>Notifications</Text>
+          <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
+        </Pressable>
         {/* Logout */}
-        <Pressable style={s.logoutBtn} onPress={handleLogout}>
+        <Pressable testID="profile-logout" style={s.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={16} color="#B85450" />
           <Text style={s.logoutText}>Log out</Text>
         </Pressable>
 
         {/* Delete account — subtle, destructive */}
-        <Pressable style={s.deleteBtn} onPress={confirmDelete}>
+        <Pressable testID="profile-delete-account" style={s.deleteBtn} onPress={confirmDelete}>
           <Text style={s.deleteText}>Delete account</Text>
         </Pressable>
 
         {/* Legal / support — quiet footer */}
         <View style={s.legalRow}>
-          <Pressable hitSlop={8} onPress={() => openLegalLink('privacy')}>
+          <Pressable testID="profile-privacy" hitSlop={8} onPress={() => openLegalLink('privacy')}>
             <Text style={s.legalLink}>Privacy</Text>
           </Pressable>
           <Text style={s.legalDot}>·</Text>
-          <Pressable hitSlop={8} onPress={() => openLegalLink('terms')}>
+          <Pressable testID="profile-terms" hitSlop={8} onPress={() => openLegalLink('terms')}>
             <Text style={s.legalLink}>Terms</Text>
           </Pressable>
           <Text style={s.legalDot}>·</Text>
-          <Pressable hitSlop={8} onPress={() => openLegalLink('support')}>
+          <Pressable testID="profile-support" hitSlop={8} onPress={() => openLegalLink('support')}>
             <Text style={s.legalLink}>Support</Text>
           </Pressable>
         </View>
@@ -363,11 +422,14 @@ export default function ProfileScreen() {
     <FilterPopup
       visible={filterVisible}
       values={macroTargets ?? { protein: '', carbs: '', fat: '', calories: '' }}
+      mode="complete"
+      goal={profile.goal}
       onApply={async (updated) => {
+        if (!await saveMacroTargets(updated)) throw new Error('Account changed while saving targets');
+        await queueSavedProfileToServer();
+        deliverQueuedProfile();
         setFilterVisible(false);
         setMacroTargets(updated);
-        await saveMacroTargets(updated);
-        pushProfileToServer();
         trackMacroTargetsEdited({
           entry_point: 'profile',
           has_protein: updated.protein !== '',

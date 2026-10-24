@@ -1,0 +1,228 @@
+# A fresh user explicitly chooses an estimate and completes every profile question.
+appId: com.fitsy.mobile
+tags: [onboarding, discovery, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+# Retry only the startup read if XCTest catches an invalid transient AX frame.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    point: "92%,93%"
+- tapOn:
+    id: welcome-start
+- tapOn:
+    id: location-choose-area
+# On a small iPhone, DTLA exists in accessibility but sits below the visible sheet.
+- swipe:
+    start: "50%,78%"
+    end: "50%,47%"
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: goal-performance
+    timeout: 30000
+- tapOn:
+    id: goal-performance
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: tried-meal_prep
+    timeout: 30000
+- tapOn:
+    id: tried-meal_prep
+- tapOn:
+    id: welcome-continue
+- assertVisible: "You’ve got home.*We’ve got meals out.*"
+- tapOn:
+    id: welcome-back
+- assertVisible:
+    id: tried-meal_prep
+    selected: true
+- tapOn:
+    id: welcome-continue
+- assertVisible: "You’ve got home.*We’ve got meals out.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: goal-progress-graph
+- assertVisible: ".*When dinner isn't prepped.*"
+- assertVisible: "Consistency with your training nutrition"
+- tapOn:
+    id: welcome-continue
+- tapOn:
+    id: target-macro-help
+- assertVisible: ".*macros.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: target-mode-estimate
+- tapOn:
+    id: target-mode-estimate
+- assertVisible:
+    id: target-mode-estimate
+    text: "radio button, checked"
+- tapOn:
+    id: welcome-continue
+- assertNotVisible: "What's your goal.*"
+- assertVisible: "How tall are you.*"
+- waitForAnimationToEnd
+- tapOn:
+    id: welcome-continue
+- assertVisible: "What do you weigh.*"
+- waitForAnimationToEnd
+- tapOn:
+    id: welcome-continue
+- assertVisible: "How old are you.*"
+- waitForAnimationToEnd
+- tapOn:
+    id: welcome-continue
+- assertVisible: "What's your biological sex.*"
+- waitForAnimationToEnd
+- tapOn: "Male"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "How active are you.*"
+- waitForAnimationToEnd
+- tapOn: ".*Moderate.*"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Estimated from your answers.*"
+# The fourth goal starts below the scroll viewport, behind the fixed footer.
+# Scroll the form first so Maestro cannot tap the footer at its stale AX bounds.
+- swipe:
+    start: "50%,70%"
+    end: "50%,35%"
+- waitForAnimationToEnd
+- tapOn:
+    id: meal-goal-build_muscle
+- assertVisible:
+    id: meal-goal-build_muscle
+    selected: true
+- swipe:
+    start: "50%,35%"
+    end: "50%,70%"
+- waitForAnimationToEnd
+# Read the calculated targets rather than hardcoding the previous formula.
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${Number(maestro.copiedText) > 0}
+- copyTextFrom:
+    id: meal-target-protein
+- evalScript: ${output.assistedProtein = Number(maestro.copiedText)}
+- copyTextFrom:
+    id: meal-target-carbs
+- evalScript: ${output.assistedCarbs = Number(maestro.copiedText)}
+- copyTextFrom:
+    id: meal-target-fat
+- evalScript: ${output.assistedFat = Number(maestro.copiedText)}
+- assertTrue: ${output.assistedProtein > 0 && output.assistedCarbs > 0 && output.assistedFat > 0}
+# Ask the real backend about these exact targets before asserting the UI outcome.
+- evalScript: ${output.assistedUrl = 'https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=700&protein=' + output.assistedProtein + '&carbs=' + output.assistedCarbs + '&fat=' + output.assistedFat}
+- evalScript: ${output.assistedBaseResponse = http.get(output.assistedUrl)}
+- assertTrue: ${output.assistedBaseResponse.status === 200}
+- evalScript: ${output.assistedBase = json(output.assistedBaseResponse.body)}
+- assertTrue: ${output.assistedBase.data.length > 0}
+- evalScript: ${output.assistedPizzaResponse = http.get(output.assistedUrl + '&q=pizza')}
+- assertTrue: ${output.assistedPizzaResponse.status === 200}
+- evalScript: ${output.assistedPizza = json(output.assistedPizzaResponse.body)}
+# Targets rank matching meals; they must not filter out a common craving.
+- assertTrue: ${output.assistedPizza.data.length > 0}
+- tapOn:
+    id: meal-target-calories
+- eraseText: 7
+- inputText: "700"
+- assertVisible: "700"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+    timeout: 30000
+- assertVisible: "Follow your craving"
+# Keep the calculated targets and every tour step with a real ranked pizza result.
+- assertVisible: "1 OF 5"
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+      enabled: true
+    timeout: 30000
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Your meal targets"
+- assertVisible: "2 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "3 OF 5"
+- assertVisible: "Real meals. Know the source."
+- tapOn:
+    id: coachmark-next
+- extendedWaitUntil:
+    visible: "Wherever your day takes you"
+    timeout: 15000
+- assertVisible: "4 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "5 OF 5"
+- tapOn: "Find my meal"
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'pizza'}
+- assertVisible: "700"
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText.includes(output.assistedPizza.data[0].name) && maestro.copiedText.includes(output.assistedPizza.data[0].bestMatch.name)}
+- assertNotVisible:
+    id: discovery-loading
+- assertNotVisible:
+    id: discovery-join-waitlist
+# Clearing the demo restores real ranked meals, without changing targets.
+- tapOn:
+    id: discovery-clear-search
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "700"
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText.includes(output.assistedBase.data[0].name) && maestro.copiedText.includes(output.assistedBase.data[0].bestMatch.name)}
+- tapOn:
+    id: preview-back
+- assertVisible: "A little context.*A better choice.*"
+- tapOn:
+    id: welcome-back
+- assertVisible: "700"
+- assertVisible:
+    id: meal-goal-build_muscle
+    selected: true
+- tapOn:
+    id: welcome-back
+- assertVisible: "How active are you.*"
+- waitForAnimationToEnd
+- tapOn:
+    id: welcome-continue
+- assertVisible: "700"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- assertVisible: "700"

@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+// Scoped to the owned Maestro process via PATH. Never installed system-wide.
+import { execFileSync, spawnSync } from 'node:child_process';
+import { appendFileSync, lstatSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, sep } from 'node:path';
+
+const args = process.argv.slice(2);
+const marker = process.env.FITSY_XCTEST_CAPTURE_RECEIPT;
+const udid = process.env.FITSY_XCTEST_SIM_UDID;
+const real = process.env.FITSY_XCODEBUILD_REAL || '/usr/bin/xcodebuild';
+const index = args.indexOf('-xctestrun');
+try {
+  if (index >= 0) {
+    if (!marker || !/^[A-F0-9-]{36}$/i.test(udid || '') || args[0] !== 'test-without-building' ||
+      args[args.indexOf('-destination') + 1] !== `id=${udid}` || index + 1 >= args.length)
+      throw new Error('Unexpected Maestro XCTest launch; capture policy cannot be verified');
+    const file = args[index + 1];
+    const resolved = realpathSync(file);
+    if (!resolved.startsWith(realpathSync(tmpdir()) + sep) || basename(resolved) !== 'maestro-driver-ios-config.xctestrun' ||
+      !lstatSync(file).isFile() || !resolved.includes(`/${udid}`))
+      throw new Error('Unexpected XCTest configuration path; refusing unscoped capture change');
+    const plist = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', resolved], { encoding: 'utf8' }));
+    const suites = Object.keys(plist).filter(key => key !== '__xctestrun_metadata__');
+    if (suites.length !== 1 || plist[suites[0]].PreferredScreenCaptureFormat !== 'screenRecording')
+      throw new Error('Unknown XCTest capture configuration; inspect Maestro driver before running');
+    execFileSync('/usr/libexec/PlistBuddy', ['-c', `Set :${suites[0]}:PreferredScreenCaptureFormat screenshots`, resolved]);
+    const checked = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', resolved], { encoding: 'utf8' }));
+    if (checked[suites[0]].PreferredScreenCaptureFormat !== 'screenshots')
+      throw new Error('XCTest capture override did not persist');
+    appendFileSync(marker, JSON.stringify({ at: new Date().toISOString(), udid, configuration: resolved,
+      preferredScreenCaptureFormat: 'screenshots', xcodebuildArgs: args }) + '\n');
+  }
+  const result = spawnSync(real, args, { stdio: 'inherit', env: process.env });
+  if (result.error) throw result.error;
+  if (result.signal) { process.kill(process.pid, result.signal); throw new Error(`xcodebuild stopped by ${result.signal}`); }
+  process.exitCode = result.status ?? 1;
+} catch (error) {
+  console.error(`Fitsy XCTest capture policy: ${error.message}`);
+  process.exitCode = 1;
+}

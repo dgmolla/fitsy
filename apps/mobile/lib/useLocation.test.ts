@@ -56,6 +56,18 @@ beforeEach(() => {
 });
 
 describe('useLocation', () => {
+  it('does not request GPS while discovery uses an explicitly chosen preview area', async () => {
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetLastKnown.mockResolvedValue({ coords: GPS_COORDS });
+    const { rerender, result } = renderHook(({ enabled }) => useLocation({ enabled }), { initialProps: { enabled: false } });
+    await act(async () => {});
+    expect(mockRequestPermissions).not.toHaveBeenCalled();
+    expect(SecureStore.getItemAsync).not.toHaveBeenCalled();
+    rerender({ enabled: true });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.source).toBe('gps');
+  });
+
   it('exports the correct Silver Lake fallback coordinates', () => {
     expect(FALLBACK_LAT).toBe(34.0868);
     expect(FALLBACK_LNG).toBe(-118.3273);
@@ -146,18 +158,21 @@ describe('useLocation', () => {
 
     const { result } = renderHook(() => useLocation());
 
-    // Flush SecureStore hydration + permission + lastKnown promises so the
-    // GPS-vs-setTimeout race is actually armed before we advance the clock.
-    // Without this, the 3001ms advance happens before the setTimeout(3000)
-    // is installed, and the test sees 'fallback-denied' from the initial state.
-    await jest.advanceTimersByTimeAsync(0);
-    await jest.advanceTimersByTimeAsync(0);
-    await jest.advanceTimersByTimeAsync(3001);
-    jest.useRealTimers();
+    try {
+      // Observe the GPS request before advancing its timeout. Waiting through
+      // the hook lifecycle also lets React apply hydration and loading updates.
+      await waitFor(() => expect(mockGetPosition).toHaveBeenCalled());
+      expect(result.current.loading).toBe(true);
 
-    await waitFor(() => {
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(3000);
+      });
+
       expect(result.current.source).toBe('fallback-timeout');
-    });
+      expect(result.current.loading).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
 
     expect(result.current.lat).toBe(FALLBACK_LAT);
     expect(result.current.lng).toBe(FALLBACK_LNG);

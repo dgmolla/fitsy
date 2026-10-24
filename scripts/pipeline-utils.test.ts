@@ -55,6 +55,17 @@ describe("validateItems", () => {
     expect(rejected.every((r) => r.reason === "non-food: utensil")).toBe(true);
   });
 
+  it("keeps a counted cookie order sold as a tote without admitting merchandise", () => {
+    const order = makeItem("13 Cookie Tote", {
+      section: "Sweets & Treats", description: "Comes with 13 cookies.", calories: 2160,
+    });
+    const items = [order, makeItem("Cookie Tote Bag"), makeItem("13 Cookie Tote Bag"),
+      makeItem("Logo Tote"), makeItem("13 Cookie Tote", { section: "Merchandise" })];
+    const result = validateItems(items, items.map(() => makeMacro({ calories: 2160 })));
+    expect(result.valid.map(({ item }) => item)).toEqual([order]);
+    expect(result.rejected.map(({ name }) => name)).toEqual(items.slice(1).map(({ name }) => name));
+  });
+
   it("rejects zero-cal non-beverage items", () => {
     const items = [makeItem("Decorative Topping")];
     const macros = [makeMacro({ calories: 0 })];

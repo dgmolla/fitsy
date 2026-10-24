@@ -1,10 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { supabase } from './supabase';
-import { fetchCustomerInfo, hasLapsedEntitlement } from './purchases';
+import { rememberPaywallIntent, type PaywallIntent } from './paywallIntent';
+import type { SubscriptionVerdict } from './apiClient';
+import { readPaywallDecline } from './paywallAccess';
+import { clearOnboardingPreviewEntry } from './onboardingPreviewEntry';
+import { rememberPendingMealClaim } from './pendingMealClaim';
+import { rememberPaymentSignInContinuation } from './paymentSignInContinuation';
 
 const PREVIEW_SAMPLE_USED_KEY = '@fitsy/previewSampleUsed';
 const PREVIEW_TOUR_SEEN_KEY = '@fitsy/previewTourSeen';
+const PREVIEW_TOUR_VERSION = '2';
 
 // In-memory mirror of the persisted flag: reads after the first one are
 // free (no bridge round-trip on every locked-row tap), and mark/reset flip
@@ -35,7 +41,7 @@ export async function hasUsedPreviewSample(): Promise<boolean> {
   return sampleUsedCache;
 }
 
-/** Fresh onboarding pass = fresh tease: the free look and the three-step
+/** Fresh onboarding pass = fresh tease: the free look and the guided
  * search tour both come back. Sync in memory; the storage writes are
  * fire-and-forget (a failure just means the look stays spent on disk). */
 export function resetPreviewSample(): void {
@@ -55,7 +61,7 @@ let tourSeenCache: boolean | null = null;
 export async function hasSeenPreviewTour(): Promise<boolean> {
   if (tourSeenCache !== null) return tourSeenCache;
   try {
-    tourSeenCache = (await AsyncStorage.getItem(PREVIEW_TOUR_SEEN_KEY)) === '1';
+    tourSeenCache = (await AsyncStorage.getItem(PREVIEW_TOUR_SEEN_KEY)) === PREVIEW_TOUR_VERSION;
   } catch {
     tourSeenCache = true;
   }
@@ -64,7 +70,7 @@ export async function hasSeenPreviewTour(): Promise<boolean> {
 
 export function markPreviewTourSeen(): void {
   tourSeenCache = true;
-  AsyncStorage.setItem(PREVIEW_TOUR_SEEN_KEY, '1').catch(() => {});
+  AsyncStorage.setItem(PREVIEW_TOUR_SEEN_KEY, PREVIEW_TOUR_VERSION).catch(() => {});
 }
 
 /** Sync in memory; storage write is fire-and-forget (a failure just means
@@ -79,12 +85,23 @@ export function markPreviewSampleUsed(): void {
 // otherwise fire two independent navigations (two overlapping getSession()
 // calls, two router.push calls) before either resolves.
 let navigating = false;
+let paywallVerdictSync: (() => Promise<SubscriptionVerdict>) | null = null;
+
+/** The mounted purchases provider owns both the API read and the applied gate. */
+export function registerPaywallVerdictSync(sync: () => Promise<SubscriptionVerdict>): () => void {
+  paywallVerdictSync = sync;
+  return () => { if (paywallVerdictSync === sync) paywallVerdictSync = null; };
+}
+
+/** Reuse the provider's account-bound verdict for a post-auth checkout. */
+export async function syncPaywallVerdictForCheckout(): Promise<SubscriptionVerdict> {
+  return await paywallVerdictSync?.() ?? 'unknown';
+}
 
 /**
  * Sends a locked-out browser to the right paywall entry point:
- * - no session: account creation (sign-in), which then flows through the
- *   normal post-signup onboarding tail into payment - payment itself
- *   assumes an authenticated user, so it can't be the direct target;
+ * - no session: sign-in first, including after an explicit decline. A
+ *   declined offer continues to payment only after the account is known;
  * - signed in with a *lapsed* entitlement: the win-back screen
  *   (welcome/resubscribe), never the first-time paywall - that one promises
  *   a free trial Apple won't grant a second time to the same Apple ID;
@@ -94,26 +111,38 @@ let navigating = false;
  * use this when leaving a screen that's "spent" (e.g. the one free detail
  * view) so backing out of the paywall doesn't land the user back on it.
  */
-export async function routeToPaywall(options: { replace?: boolean } = {}): Promise<void> {
+export async function routeToPaywall(options: { replace?: boolean; intent?: PaywallIntent } = {}): Promise<void> {
   if (navigating) return;
   navigating = true;
   const replace = options.replace ?? false;
-  // Default to sign-in on a failed session check - most locked-teaser
-  // visitors are anonymous (onboarding), not a signed-in lapsed subscriber,
-  // so this is the more common correct outcome, not a guaranteed-safe one:
-  // an authenticated user hitting this branch would have to re-authenticate
-  // rather than landing straight on payment.
-  let target: '/welcome/payment' | '/welcome/resubscribe' | '/welcome/signin' = '/welcome/signin';
+  // Persisted decline survives anonymous sessions and legacy preview links.
+  let target: '/welcome/payment' | '/welcome/resubscribe' | '/welcome/signin' | '/welcome/signin?returnTo=payment' | '/welcome/subscription-check' = '/welcome/signin';
   try {
+    // A locked choice ends this onboarding preview pass. Returning to the
+    // preview now requires another Continue from the nutrition-source screen.
+    await clearOnboardingPreviewEntry();
+    if (await readPaywallDecline()) target = '/welcome/signin?returnTo=payment';
+    if (options.intent) await rememberPaywallIntent(options.intent);
     try {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        // fetchCustomerInfo is null when RevenueCat isn't configured or the
-        // read fails - treated as "never subscribed", i.e. the paywall.
-        target = hasLapsedEntitlement(await fetchCustomerInfo()) ? '/welcome/resubscribe' : '/welcome/payment';
+        // The same authenticated backend verdict gates paid data and decides
+        // which paywall is appropriate. A failed or stale lookup is never a
+        // claim that this account has not subscribed before.
+        target = '/welcome/subscription-check';
+        const verdict = await syncPaywallVerdictForCheckout();
+        const current = await supabase.auth.getSession();
+        if (current.data.session?.user.id !== data.session.user.id) return;
+        if (verdict === 'expired') target = '/welcome/resubscribe';
+        else if (verdict === 'never_subscribed') target = '/welcome/payment';
+        else if (verdict === 'active') return;
+      } else if (target === '/welcome/signin?returnTo=payment') {
+        await rememberPaymentSignInContinuation();
+      } else if (options.intent) {
+        await rememberPendingMealClaim();
       }
     } catch {
-      // Fall through with the sign-in default set above.
+      target = '/welcome/subscription-check';
     }
     if (replace) router.replace(target);
     else router.push(target);

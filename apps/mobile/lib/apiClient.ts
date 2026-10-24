@@ -1,5 +1,6 @@
 import { FeedbackBoardPost, FeedbackBoardResponse, FeedbackVoteResponse, MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
-import { api } from './api';
+import { api, ApiRequestError } from './api';
+import { getDiscoveryMacroTargets } from './macroStorage';
 
 export interface FetchRestaurantsParams {
   protein?: number;
@@ -33,7 +34,8 @@ export interface FetchRestaurantsParams {
  */
 export async function fetchRestaurantsPage(
   params: FetchRestaurantsParams,
-): Promise<{ data: RestaurantResult[]; nextCursor: string | null; locked: boolean; networkError: boolean }> {
+  options: { signal?: AbortSignal } = {},
+): Promise<{ data: RestaurantResult[]; nextCursor: string | null; locked: boolean; networkError: boolean; restartRequired?: boolean }> {
   const { lat, lng } = params;
 
   const qs = new URLSearchParams();
@@ -50,6 +52,7 @@ export async function fetchRestaurantsPage(
   if (params.minRating !== undefined) qs.set('minRating', String(params.minRating));
   if (params.query !== undefined && params.query.trim() !== '') qs.set('q', params.query.trim());
   if (params.cursor !== undefined) qs.set('cursor', params.cursor);
+  // Targets rank relevant meals. Close-fit count qualification belongs to the paywall only.
 
   const reqId = Math.random().toString(36).slice(2, 8);
   const t0 = Date.now();
@@ -59,6 +62,7 @@ export async function fetchRestaurantsPage(
     const response = await api.get<RestaurantsApiResponse>(
       `/api/restaurants?${qs.toString()}`,
       true,
+      options,
     );
     const t1 = Date.now();
 
@@ -72,6 +76,10 @@ export async function fetchRestaurantsPage(
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: true, client_total_ms: t1 - t0, results: response.data.length }));
     return { data: response.data, nextCursor: response.meta.nextCursor ?? null, locked: response.meta.locked ?? false, networkError: false };
   } catch (err) {
+    if (options.signal?.aborted) throw err;
+    if (params.cursor && err instanceof ApiRequestError && err.status === 400 && err.message === 'Cursor belongs to another search context') {
+      return { data: [], nextCursor: null, locked: false, networkError: false, restartRequired: true };
+    }
     const t1 = Date.now();
     // eslint-disable-next-line no-console
     console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0, err: String(err) }));
@@ -97,19 +105,48 @@ export async function fetchRestaurants(
   return data;
 }
 
-export async function fetchMenu(restaurantId: string): Promise<MenuResponse | null> {
+export async function fetchMenu(restaurantId: string, options: { selectedItemId?: string } = {}): Promise<MenuResponse | null> {
+  return (await fetchMenuOutcome(restaurantId, options)).menu;
+}
+
+export type MenuLoadOutcome = { menu: MenuResponse; error: null } | { menu: null; error: 'transient' | 'unavailable' };
+export async function fetchMenuOutcome(restaurantId: string, options: { selectedItemId?: string } = {}): Promise<MenuLoadOutcome> {
   try {
-    const response = await api.get<MenuApiResponse>(
-      `/api/restaurants/${restaurantId}/menu`, true
-    );
-
-    if ('error' in response) {
-      return null;
+    const targets = await getDiscoveryMacroTargets();
+    const params = new URLSearchParams();
+    if (targets) for (const [key, value] of Object.entries(targets)) if (value) params.set(key, value);
+    if (options.selectedItemId) params.set('selectedItemId', options.selectedItemId);
+    const page = async () => {
+      // React Native's URLSearchParams supports serialization but not .size.
+      const query = params.toString();
+      const response = await api.get<MenuApiResponse>(`/api/restaurants/${restaurantId}/menu${query ? `?${query}` : ''}`, true);
+      // An error envelope is not proof that cached unlocked data remains valid.
+      if ('error' in response) throw new ApiRequestError(400, 'Menu unavailable');
+      return response.data;
+    };
+    const result = await page();
+    const cursors = new Set<string>();
+    while (!result.locked && result.nextCursor) {
+      if (cursors.has(result.nextCursor)) return { menu: result, error: null };
+      cursors.add(result.nextCursor);
+      params.set('cursor', result.nextCursor);
+      let next: MenuResponse;
+      try { next = await page(); }
+      catch (error) {
+        // Keep available dishes on a transient failure, with nextCursor so
+        // the screen labels the partial menu and offers Retry. Access errors
+        // must discard unlocked pages instead of preserving stale access.
+        if (error instanceof ApiRequestError && error.status < 500) throw error;
+        return { menu: result, error: null };
+      }
+      if (next.locked) return { menu: next, error: null };
+      if (next.nextCursor && cursors.has(next.nextCursor)) return { menu: result, error: null };
+      result.menuItems.push(...next.menuItems);
+      result.nextCursor = next.nextCursor;
     }
-
-    return response.data;
-  } catch {
-    return null;
+    return { menu: result, error: null };
+  } catch (error) {
+    return { menu: null, error: error instanceof ApiRequestError && error.status < 500 ? 'unavailable' : 'transient' };
   }
 }
 
@@ -189,12 +226,12 @@ export async function voteFeedback(
   }
 }
 
-export interface SubscriptionSyncResult {
-  /** Server-trusted entitlement after the sync. */
-  active: boolean;
+export interface SubscriptionSyncResult extends SubscriptionStatusResult {
   /** False when the server couldn't reach RevenueCat and `active` is its existing state. */
   synced: boolean;
 }
+
+export type SubscriptionVerdict = 'active' | 'expired' | 'never_subscribed' | 'unknown';
 
 /** Why the client asks for a re-read; the server refuses to persist a downgrade on 'purchase'/'restore'. */
 export type SubscriptionSyncReason = 'purchase' | 'restore' | 'sign_in' | 'mismatch';
@@ -216,6 +253,9 @@ export interface SubscriptionStatusResult {
   active: boolean;
   status: string | null;
   expiresAt: string | null;
+  verdict: SubscriptionVerdict;
+  lastRcVerifiedAt: string | null;
+  stale: boolean;
 }
 
 /**

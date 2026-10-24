@@ -1,0 +1,1395 @@
+{
+  "data": {
+    "title": "Yoshinoya (2850 South Crenshaw Boulevard)",
+    "heroImageUrls": [
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/b93b3f7bf676b0b360ce6f4fffd0a31f/7d9011fd8e36c5a7ce512c5a2f2d7fe5.jpeg",
+        "width": 240
+      },
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/b93b3f7bf676b0b360ce6f4fffd0a31f/d69908760640e6133b4375321dd259b9.jpeg",
+        "width": 550
+      },
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/b93b3f7bf676b0b360ce6f4fffd0a31f/43ccd9166b0265640aa777e38d450c62.jpeg",
+        "width": 640
+      },
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/b93b3f7bf676b0b360ce6f4fffd0a31f/6d44b3c28bb0a4f9019a35eaca8e1ec5.jpeg",
+        "width": 750
+      },
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/b93b3f7bf676b0b360ce6f4fffd0a31f/8dc943a74b6bb40c68ebe46123465da2.jpeg",
+        "width": 1080
+      },
+      {
+        "url": "https://tb-static.uber.com/prod/image-proc/processed_images/b93b3f7bf676b0b360ce6f4fffd0a31f/5e48b5818af0117f322d7c4ae77977a8.jpeg",
+        "width": 2880
+      }
+    ],
+    "location": {
+      "address": "2850 South Crenshaw Boulevard, Los Angeles, CA 90016",
+      "streetAddress": "2850 South Crenshaw Boulevard",
+      "city": "Los Angeles",
+      "country": "US",
+      "postalCode": "90016",
+      "region": "CA",
+      "latitude": 34.0297535,
+      "longitude": -118.3346349,
+      "geo": {
+        "city": "los-angeles-ca",
+        "country": "us",
+        "neighborhood": "west-adams-los-angeles-ca",
+        "region": "ca"
+      },
+      "locationType": "DEFAULT"
+    },
+    "catalogSectionsMap": {
+      "27f69dd1-5564-5423-a1c2-ad36aebe7151": [
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Featured items"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "5e6ac87f-4601-5749-b67a-84a1559f630a",
+                  "title": "Combo XL Bowl",
+                  "itemDescription": "Pick two large proteins with your choice of fluffy rice or udon noodles and mixed veggies",
+                  "price": 1839,
+                  "priceTagline": {
+                    "text": "$18.39 • 1150 - 2596 Cal.",
+                    "textFormat": "<span>$18.39<span style=\"color:#757575\"> • 1150 - 2596 Cal.</span></span>",
+                    "accessibilityText": "$18.39, 1150 - 2596 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "642fa5af-673d-5a0f-8f6a-4cc8603f433a",
+                  "title": "Combo Bowl",
+                  "itemDescription": "Two regular sized entrees with your choice of rice and veggies.",
+                  "price": 1549,
+                  "priceTagline": {
+                    "text": "$15.49 • 890 - 1858 Cal.",
+                    "textFormat": "<span>$15.49<span style=\"color:#757575\"> • 890 - 1858 Cal.</span></span>",
+                    "accessibilityText": "$15.49, 890 - 1858 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "8cd935d9-5952-54fa-903f-c9ff89b632bf",
+                  "title": "Large Grilled Chicken",
+                  "itemDescription": "Fresh, grilled chicken, glazed with our signature teriyaki or Habanero sauce, then lightly sprinkled with toasted sesame seeds and green onions. Served with your choice of rice and veggies.",
+                  "price": 1389,
+                  "priceTagline": {
+                    "text": "$13.89 • 870 Cal.",
+                    "textFormat": "<span>$13.89<span style=\"color:#757575\"> • 870 Cal.</span></span>",
+                    "accessibilityText": "$13.89, 870 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "edd25f61-ccc5-5923-8240-a0d359381334",
+                  "title": "Grilled Chicken",
+                  "itemDescription": "Fresh, grilled chicken, glazed with our signature teriyaki or Habanero sauce, then lightly sprinkled with toasted sesame seeds and green onions. Served with your choice of rice and veggies.",
+                  "price": 1229,
+                  "priceTagline": {
+                    "text": "$12.29 • 580 Cal.",
+                    "textFormat": "<span>$12.29<span style=\"color:#757575\"> • 580 Cal.</span></span>",
+                    "accessibilityText": "$12.29, 580 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "14d3036b-d308-5462-b4d4-caee9733a28d",
+                  "title": "Large Gyudon Beef Bowl®",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth. Served with our award-winning steamed rice, or another base of your choice.",
+                  "price": 1389,
+                  "priceTagline": {
+                    "text": "$13.89 • 920 Cal.",
+                    "textFormat": "<span>$13.89<span style=\"color:#757575\"> • 920 Cal.</span></span>",
+                    "accessibilityText": "$13.89, 920 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "16073bef-2edf-56e5-9832-f1ca895dc581",
+                  "title": "Original Gyudon Beef Bowl®",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth. Served with our award-winning steamed rice, or another base of your choice.",
+                  "price": 1229,
+                  "priceTagline": {
+                    "text": "$12.29 • 600 Cal.",
+                    "textFormat": "<span>$12.29<span style=\"color:#757575\"> • 600 Cal.</span></span>",
+                    "accessibilityText": "$12.29, 600 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "db43ccda-e088-5840-9f1f-aa1359ad9490",
+                  "title": "Large Gyudon Beef Bowl® with Veggies",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth. Served with your choice of rice and veggies.",
+                  "price": 1389,
+                  "priceTagline": {
+                    "text": "$13.89 • 885 Cal.",
+                    "textFormat": "<span>$13.89<span style=\"color:#757575\"> • 885 Cal.</span></span>",
+                    "accessibilityText": "$13.89, 885 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "31addc3f-9044-50e5-b688-9f0829584afa",
+                  "title": "Original Gyudon Beef Bowl® with Veggie",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth. Served with your choice of rice and veggies.",
+                  "price": 1229,
+                  "priceTagline": {
+                    "text": "$12.29 • 635 Cal.",
+                    "textFormat": "<span>$12.29<span style=\"color:#757575\"> • 635 Cal.</span></span>",
+                    "accessibilityText": "$12.29, 635 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "cb30dd97-35ca-56cf-8c6e-59949eebdf7d",
+                  "title": "Clam Chowder",
+                  "itemDescription": "A creamy soup featuring clams, cooked with potatoes, celery and onion.",
+                  "price": 559,
+                  "priceTagline": {
+                    "text": "$5.59 • 300 Cal.",
+                    "textFormat": "<span>$5.59<span style=\"color:#757575\"> • 300 Cal.</span></span>",
+                    "accessibilityText": "$5.59, 300 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "7b831a69-4639-5514-89d9-0d6c7ef3d9be",
+                  "title": "Kids Original Gyudon Beef",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth. Served with your choice of rice and veggies.",
+                  "price": 999,
+                  "priceTagline": {
+                    "text": "$9.99 • 300 Cal.",
+                    "textFormat": "<span>$9.99<span style=\"color:#757575\"> • 300 Cal.</span></span>",
+                    "accessibilityText": "$9.99, 300 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "0db69369-9ae2-589c-8321-e156856dfe0a",
+                  "title": "Teriyaki Grilled Salmon",
+                  "itemDescription": "Grilled Teriyaki Glazed Salmon with Teriyaki Sauce, Green Onions and Sesame Seeds.",
+                  "price": 1289,
+                  "priceTagline": {
+                    "text": "$12.89 • 270 Cal.",
+                    "textFormat": "<span>$12.89<span style=\"color:#757575\"> • 270 Cal.</span></span>",
+                    "accessibilityText": "$12.89, 270 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "34bb4e79-7cf1-5af3-b27e-4969d2840586",
+                  "title": "Teriyaki Grilled Chicken",
+                  "itemDescription": "Fresh, grilled chicken, glazed with our signature teriyaki sauce, then lightly sprinkled with toasted sesame seeds and green onions.",
+                  "price": 979,
+                  "priceTagline": {
+                    "text": "$9.79 • 250 Cal.",
+                    "textFormat": "<span>$9.79<span style=\"color:#757575\"> • 250 Cal.</span></span>",
+                    "accessibilityText": "$9.79, 250 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "9ee4b312-87c4-555b-ac3f-f5e43aa4c444",
+                  "title": "Large Grilled Ribeye",
+                  "itemDescription": "Our new juicy, tender, USDA Choice steak. Our ribeye is seared, grilled and glazed with our signature Teriyaki or habanero sauce, topped with green onions and sesame seeds.",
+                  "price": 1829,
+                  "priceTagline": {
+                    "text": "$18.29 • 925 Cal.",
+                    "textFormat": "<span>$18.29<span style=\"color:#757575\"> • 925 Cal.</span></span>",
+                    "accessibilityText": "$18.29, 925 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "1877bf33-1f94-54a9-b3e8-b13264b4e154",
+                  "title": "Yoshi Milk Tea",
+                  "itemDescription": "Smooth, sweet milk tea with a perfect balance of tea and creaminess.",
+                  "price": 849,
+                  "priceTagline": {
+                    "text": "$8.49 • 396 Cal.",
+                    "textFormat": "<span>$8.49<span style=\"color:#757575\"> • 396 Cal.</span></span>",
+                    "accessibilityText": "$8.49, 396 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "453a0a96-64ed-5337-aeab-846af030fb34",
+                  "title": "Kids Teriyaki Grilled Chicken",
+                  "itemDescription": "Fresh, grilled chicken, glazed with our signature teriyaki sauce, then lightly sprinkled with toasted sesame seeds and green onions. Served with your choice of rice and veggies.",
+                  "price": 999,
+                  "priceTagline": {
+                    "text": "$9.99 • 220 Cal.",
+                    "textFormat": "<span>$9.99<span style=\"color:#757575\"> • 220 Cal.</span></span>",
+                    "accessibilityText": "$9.99, 220 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "3309120e-7678-591f-a1f7-d793d8e6055c",
+                  "title": "Original Gyudon Beef",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth.",
+                  "price": 979,
+                  "priceTagline": {
+                    "text": "$9.79 • 310 Cal.",
+                    "textFormat": "<span>$9.79<span style=\"color:#757575\"> • 310 Cal.</span></span>",
+                    "accessibilityText": "$9.79, 310 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "2d48865c-fb39-50e6-a9d4-9610672ff8d2",
+                  "title": "Grilled Ribeye",
+                  "itemDescription": "Our new juicy, tender, USDA Choice steak. Our ribeye is seared, grilled and glazed with our signature Teriyaki sauce or Habanero sauce, topped with green onions and sesame seeds.",
+                  "price": 1539,
+                  "priceTagline": {
+                    "text": "$15.39 • 620 Cal.",
+                    "textFormat": "<span>$15.39<span style=\"color:#757575\"> • 620 Cal.</span></span>",
+                    "accessibilityText": "$15.39, 620 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "1b50dce2-22de-54c3-88cb-b92556a21078",
+                  "title": "Large Grilled Salmon",
+                  "itemDescription": "Fresh, grilled salmon, glazed with teriyaki or habanero sauce, green onions and sesame seeds.",
+                  "price": 1829,
+                  "priceTagline": {
+                    "text": "$18.29 • 1025 Cal.",
+                    "textFormat": "<span>$18.29<span style=\"color:#757575\"> • 1025 Cal.</span></span>",
+                    "accessibilityText": "$18.29, 1025 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f7574463-4d70-5e79-86fe-f4e567133ccf",
+                  "title": "Large Spicy Yaki BBQ Beef",
+                  "itemDescription": "Gyudon Beef, grilled in a bold, savory sweet Japanese BBQ Sauce for that smoky, umami-rich flavor. Then topped with Crispy Onions for that irresistible crunchTry it Spicy!",
+                  "price": 1549,
+                  "priceTagline": {
+                    "text": "$15.49",
+                    "textFormat": "<span>$15.49</span>",
+                    "accessibilityText": "$15.49"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "91a971bb-0bf1-501e-a703-5ea4dfe62bb1",
+                  "title": "Pepsi Zero",
+                  "itemDescription": "",
+                  "price": 469,
+                  "priceTagline": {
+                    "text": "$4.69 • 0 Cal.",
+                    "textFormat": "<span>$4.69<span style=\"color:#757575\"> • 0 Cal.</span></span>",
+                    "accessibilityText": "$4.69, 0 Cal."
+                  },
+                  "hasCustomizations": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Featured"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "a7fbe3da-7deb-5b7a-8e09-82d503d09681",
+                  "title": "Regular Yaki BBQ Beef",
+                  "itemDescription": "Gyudon Beef, grilled in a bold, savory sweet Japanese BBQ Sauce for that smoky, umami-rich flavor. Then topped with Crispy Onions for that irresistible crunchTry it Spicy!",
+                  "price": 1359,
+                  "priceTagline": {
+                    "text": "$13.59",
+                    "textFormat": "<span>$13.59</span>",
+                    "accessibilityText": "$13.59"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "fe388681-1a47-536c-b16a-cceb6f085a62",
+                  "title": "Regular Spicy Yaki BBQ Beef",
+                  "itemDescription": "Gyudon Beef, grilled in a bold, savory sweet Japanese BBQ Sauce for that smoky, umami-rich flavor. Then topped with Crispy Onions for that irresistible crunchTry it Spicy!",
+                  "price": 1419,
+                  "priceTagline": {
+                    "text": "$14.19",
+                    "textFormat": "<span>$14.19</span>",
+                    "accessibilityText": "$14.19"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "3b5ea283-32d2-5a2f-bf6a-c88a644f2fbe",
+                  "title": "Chili Crisp Crispy Gyoza",
+                  "itemDescription": "Japanese dumplings filled with pork, ginger, garlic, and green onions. Flash fried and served with Gyoza dipping sauce and Chili Crisp",
+                  "price": 309,
+                  "priceTagline": {
+                    "text": "$3.09",
+                    "textFormat": "<span>$3.09</span>",
+                    "accessibilityText": "$3.09"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "bc318542-3184-5244-a4c5-074b6247ad74",
+                  "title": "Chili Crisp",
+                  "itemDescription": "Chili Crisp",
+                  "price": 69,
+                  "priceTagline": {
+                    "text": "$0.69",
+                    "textFormat": "<span>$0.69</span>",
+                    "accessibilityText": "$0.69"
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "8cf179d2-1979-52ce-a184-a218f471521d",
+                  "title": "Crispy Onions",
+                  "itemDescription": "Crispy Onions",
+                  "price": 69,
+                  "priceTagline": {
+                    "text": "$0.69",
+                    "textFormat": "<span>$0.69</span>",
+                    "accessibilityText": "$0.69"
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "939a92c7-a0c4-57b4-95ae-2935f3c5b750",
+                  "title": "Jamaica (Hibiscus)",
+                  "itemDescription": "Bright, floral and refreshingly Tart",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79",
+                    "textFormat": "<span>$3.79</span>",
+                    "accessibilityText": "$3.79"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "fdf6b1d5-a7ec-5032-8e1c-f2524e0b7369",
+                  "title": "Horchata",
+                  "itemDescription": "refreshing sweet & creamy cinnamon rice classic.",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79",
+                    "textFormat": "<span>$3.79</span>",
+                    "accessibilityText": "$3.79"
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Regular Bowls"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "32a4d584-0dcd-5fcf-bfbd-6b4d71c8f7d8",
+                  "title": "Yaki BBQ Beef",
+                  "itemDescription": "Gyudon Beef, grilled in a bold, savory sweet Japanese BBQ Sauce for that smoky, umami-rich flavor. Then topped with Crispy Onions for that irresistible crunchTry it Spicy!",
+                  "price": 1359,
+                  "priceTagline": {
+                    "text": "$13.59",
+                    "textFormat": "<span>$13.59</span>",
+                    "accessibilityText": "$13.59"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "c7972f84-5249-51df-9ad3-c8baf27bab7c",
+                  "title": "Regular Spicy Yaki BBQ Beef",
+                  "itemDescription": "Gyudon Beef, grilled in a bold, savory sweet Japanese BBQ Sauce for that smoky, umami-rich flavor. Then topped with Crispy Onions for that irresistible crunchTry it Spicy!",
+                  "price": 1419,
+                  "priceTagline": {
+                    "text": "$14.19",
+                    "textFormat": "<span>$14.19</span>",
+                    "accessibilityText": "$14.19"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "edd25f61-ccc5-5923-8240-a0d359381334",
+                  "title": "Grilled Chicken",
+                  "itemDescription": "Fresh, grilled chicken, glazed with our signature teriyaki or Habanero sauce, then lightly sprinkled with toasted sesame seeds and green onions. Served with your choice of rice and veggies.",
+                  "price": 1229,
+                  "priceTagline": {
+                    "text": "$12.29 • 580 Cal.",
+                    "textFormat": "<span>$12.29<span style=\"color:#757575\"> • 580 Cal.</span></span>",
+                    "accessibilityText": "$12.29, 580 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "16073bef-2edf-56e5-9832-f1ca895dc581",
+                  "title": "Original Gyudon Beef Bowl®",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth. Served with our award-winning steamed rice, or another base of your choice.",
+                  "price": 1229,
+                  "priceTagline": {
+                    "text": "$12.29 • 600 Cal.",
+                    "textFormat": "<span>$12.29<span style=\"color:#757575\"> • 600 Cal.</span></span>",
+                    "accessibilityText": "$12.29, 600 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "31addc3f-9044-50e5-b688-9f0829584afa",
+                  "title": "Original Gyudon Beef Bowl® with Veggie",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth. Served with your choice of rice and veggies.",
+                  "price": 1229,
+                  "priceTagline": {
+                    "text": "$12.29 • 635 Cal.",
+                    "textFormat": "<span>$12.29<span style=\"color:#757575\"> • 635 Cal.</span></span>",
+                    "accessibilityText": "$12.29, 635 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "2d48865c-fb39-50e6-a9d4-9610672ff8d2",
+                  "title": "Grilled Ribeye",
+                  "itemDescription": "Our new juicy, tender, USDA Choice steak. Our ribeye is seared, grilled and glazed with our signature Teriyaki sauce or Habanero sauce, topped with green onions and sesame seeds.",
+                  "price": 1539,
+                  "priceTagline": {
+                    "text": "$15.39 • 620 Cal.",
+                    "textFormat": "<span>$15.39<span style=\"color:#757575\"> • 620 Cal.</span></span>",
+                    "accessibilityText": "$15.39, 620 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "28e7c4c5-259a-5f38-8ef8-6003da8919c1",
+                  "title": "Grilled Salmon",
+                  "itemDescription": "Fresh, grilled salmon, glazed with teriyaki or habanero sauce, green onions and sesame seeds.",
+                  "price": 1539,
+                  "priceTagline": {
+                    "text": "$15.39 • 600 Cal.",
+                    "textFormat": "<span>$15.39<span style=\"color:#757575\"> • 600 Cal.</span></span>",
+                    "accessibilityText": "$15.39, 600 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "add40383-c578-5893-acdb-eb10dcf23072",
+                  "title": "Mixed Vegetables",
+                  "itemDescription": "Nutrient-rich broccoli, cauliflower, carrots and green cabbage in a savory ginger sauce. Served with our award-winning steamed rice, or another base of your choice.",
+                  "price": 699,
+                  "priceTagline": {
+                    "text": "$6.99 • 470 Cal.",
+                    "textFormat": "<span>$6.99<span style=\"color:#757575\"> • 470 Cal.</span></span>",
+                    "accessibilityText": "$6.99, 470 Cal."
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Large Bowls"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "699253a7-a972-55e7-840a-39e9b9007e86",
+                  "title": "Large Yaki BBQ Beef",
+                  "itemDescription": "Gyudon Beef, grilled in a bold, savory sweet Japanese BBQ Sauce for that smoky, umami-rich flavor. Then topped with Crispy Onions for that irresistible crunchTry it Spicy!",
+                  "price": 1489,
+                  "priceTagline": {
+                    "text": "$14.89",
+                    "textFormat": "<span>$14.89</span>",
+                    "accessibilityText": "$14.89"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f7574463-4d70-5e79-86fe-f4e567133ccf",
+                  "title": "Large Spicy Yaki BBQ Beef",
+                  "itemDescription": "Gyudon Beef, grilled in a bold, savory sweet Japanese BBQ Sauce for that smoky, umami-rich flavor. Then topped with Crispy Onions for that irresistible crunchTry it Spicy!",
+                  "price": 1549,
+                  "priceTagline": {
+                    "text": "$15.49",
+                    "textFormat": "<span>$15.49</span>",
+                    "accessibilityText": "$15.49"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "8cd935d9-5952-54fa-903f-c9ff89b632bf",
+                  "title": "Large Grilled Chicken",
+                  "itemDescription": "Fresh, grilled chicken, glazed with our signature teriyaki or Habanero sauce, then lightly sprinkled with toasted sesame seeds and green onions. Served with your choice of rice and veggies.",
+                  "price": 1389,
+                  "priceTagline": {
+                    "text": "$13.89 • 870 Cal.",
+                    "textFormat": "<span>$13.89<span style=\"color:#757575\"> • 870 Cal.</span></span>",
+                    "accessibilityText": "$13.89, 870 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "14d3036b-d308-5462-b4d4-caee9733a28d",
+                  "title": "Large Gyudon Beef Bowl®",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth. Served with our award-winning steamed rice, or another base of your choice.",
+                  "price": 1389,
+                  "priceTagline": {
+                    "text": "$13.89 • 920 Cal.",
+                    "textFormat": "<span>$13.89<span style=\"color:#757575\"> • 920 Cal.</span></span>",
+                    "accessibilityText": "$13.89, 920 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "db43ccda-e088-5840-9f1f-aa1359ad9490",
+                  "title": "Large Gyudon Beef Bowl® with Veggies",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth. Served with your choice of rice and veggies.",
+                  "price": 1389,
+                  "priceTagline": {
+                    "text": "$13.89 • 885 Cal.",
+                    "textFormat": "<span>$13.89<span style=\"color:#757575\"> • 885 Cal.</span></span>",
+                    "accessibilityText": "$13.89, 885 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "9ee4b312-87c4-555b-ac3f-f5e43aa4c444",
+                  "title": "Large Grilled Ribeye",
+                  "itemDescription": "Our new juicy, tender, USDA Choice steak. Our ribeye is seared, grilled and glazed with our signature Teriyaki or habanero sauce, topped with green onions and sesame seeds.",
+                  "price": 1829,
+                  "priceTagline": {
+                    "text": "$18.29 • 925 Cal.",
+                    "textFormat": "<span>$18.29<span style=\"color:#757575\"> • 925 Cal.</span></span>",
+                    "accessibilityText": "$18.29, 925 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "1b50dce2-22de-54c3-88cb-b92556a21078",
+                  "title": "Large Grilled Salmon",
+                  "itemDescription": "Fresh, grilled salmon, glazed with teriyaki or habanero sauce, green onions and sesame seeds.",
+                  "price": 1829,
+                  "priceTagline": {
+                    "text": "$18.29 • 1025 Cal.",
+                    "textFormat": "<span>$18.29<span style=\"color:#757575\"> • 1025 Cal.</span></span>",
+                    "accessibilityText": "$18.29, 1025 Cal."
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Combo Bowls"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "642fa5af-673d-5a0f-8f6a-4cc8603f433a",
+                  "title": "Combo Bowl",
+                  "itemDescription": "Two regular sized entrees with your choice of rice and veggies.",
+                  "price": 1549,
+                  "priceTagline": {
+                    "text": "$15.49 • 890 - 1858 Cal.",
+                    "textFormat": "<span>$15.49<span style=\"color:#757575\"> • 890 - 1858 Cal.</span></span>",
+                    "accessibilityText": "$15.49, 890 - 1858 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "5e6ac87f-4601-5749-b67a-84a1559f630a",
+                  "title": "Combo XL Bowl",
+                  "itemDescription": "Pick two large proteins with your choice of fluffy rice or udon noodles and mixed veggies",
+                  "price": 1839,
+                  "priceTagline": {
+                    "text": "$18.39 • 1150 - 2596 Cal.",
+                    "textFormat": "<span>$18.39<span style=\"color:#757575\"> • 1150 - 2596 Cal.</span></span>",
+                    "accessibilityText": "$18.39, 1150 - 2596 Cal."
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Appetizers"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "b20162d1-af31-5d2d-97fa-454edead1728",
+                  "title": "Tempura Shrimp",
+                  "itemDescription": "Tempura Shrimp is shrimp coated in a special tempura batter and then deep-fried until perfectly crispy golden brown and served with tempura sauce. It's the perfect complement to your favorite Yoshinoya bowl.",
+                  "price": 339,
+                  "priceTagline": {
+                    "text": "$3.39 • 186 - 708 Cal.",
+                    "textFormat": "<span>$3.39<span style=\"color:#757575\"> • 186 - 708 Cal.</span></span>",
+                    "accessibilityText": "$3.39, 186 - 708 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "c9e883ed-6fd1-5942-8ca6-8ff7e1c8ed4d",
+                  "title": "Crispy Gyoza",
+                  "itemDescription": "Japanese dumplings filled with pork, ginger, garlic, and green onions. Flash fried and served with Gyoza dipping sauce.",
+                  "price": 249,
+                  "priceTagline": {
+                    "text": "$2.49 • 250 - 510 Cal.",
+                    "textFormat": "<span>$2.49<span style=\"color:#757575\"> • 250 - 510 Cal.</span></span>",
+                    "accessibilityText": "$2.49, 250 - 510 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "d1eebf8c-c105-501e-a68b-a4b8f68f0d9f",
+                  "title": "Chili Crisp Crispy Gyoza",
+                  "itemDescription": "Japanese dumplings filled with pork, ginger, garlic, and green onions. Flash fried and served with Chili Crisp",
+                  "price": 309,
+                  "priceTagline": {
+                    "text": "$3.09",
+                    "textFormat": "<span>$3.09</span>",
+                    "accessibilityText": "$3.09"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "9d257027-637d-5869-aa07-9e9f66d686db",
+                  "title": "Spring Rolls",
+                  "itemDescription": "Packed with green cabbage, carrots, green beans and mushrooms. Comes with a sweet and sour dipping sauce.",
+                  "price": 249,
+                  "priceTagline": {
+                    "text": "$2.49 • 280 - 560 Cal.",
+                    "textFormat": "<span>$2.49<span style=\"color:#757575\"> • 280 - 560 Cal.</span></span>",
+                    "accessibilityText": "$2.49, 280 - 560 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "cb30dd97-35ca-56cf-8c6e-59949eebdf7d",
+                  "title": "Clam Chowder",
+                  "itemDescription": "A creamy soup featuring clams, cooked with potatoes, celery and onion.",
+                  "price": 559,
+                  "priceTagline": {
+                    "text": "$5.59 • 300 Cal.",
+                    "textFormat": "<span>$5.59<span style=\"color:#757575\"> • 300 Cal.</span></span>",
+                    "accessibilityText": "$5.59, 300 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "6c3202e5-49dd-59e7-858e-72303c134a7d",
+                  "title": "Salted Edamame",
+                  "itemDescription": "“Salted edamame is a Japanese snack that is tender, nutrient-rich beans with a subtly savory, naturally sweet, and umami flavor.",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 170 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 170 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 170 Cal."
+                  },
+                  "hasCustomizations": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Craft Beverages"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "f6627ee8-8d08-5527-814e-095ff9abcbcc",
+                  "title": "Mango Coconut Refresher",
+                  "itemDescription": "Sweet mango blended with fragrant Thai coconut syrup and a twist of citrus. The perfect summer combination.",
+                  "price": 689,
+                  "priceTagline": {
+                    "text": "$6.89",
+                    "textFormat": "<span>$6.89</span>",
+                    "accessibilityText": "$6.89"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "c12d2536-4d36-5d8f-a8b2-66bf5afe873b",
+                  "title": "Thai Milk Tea",
+                  "itemDescription": "Bold, spiced Thai milk tea with a smooth, creamy sweetness.",
+                  "price": 849,
+                  "priceTagline": {
+                    "text": "$8.49 • 447 Cal.",
+                    "textFormat": "<span>$8.49<span style=\"color:#757575\"> • 447 Cal.</span></span>",
+                    "accessibilityText": "$8.49, 447 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "1877bf33-1f94-54a9-b3e8-b13264b4e154",
+                  "title": "Yoshi Milk Tea",
+                  "itemDescription": "Smooth, sweet milk tea with a perfect balance of tea and creaminess.",
+                  "price": 849,
+                  "priceTagline": {
+                    "text": "$8.49 • 396 Cal.",
+                    "textFormat": "<span>$8.49<span style=\"color:#757575\"> • 396 Cal.</span></span>",
+                    "accessibilityText": "$8.49, 396 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "16d169c3-d5a1-513e-8fdb-0db091667c89",
+                  "title": "Yoshi Punch",
+                  "itemDescription": "Bold and refreshing dragonfruit with sweet mango come together with brown sugar boba.",
+                  "price": 719,
+                  "priceTagline": {
+                    "text": "$7.19 • 293 Cal.",
+                    "textFormat": "<span>$7.19<span style=\"color:#757575\"> • 293 Cal.</span></span>",
+                    "accessibilityText": "$7.19, 293 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "a0430d1c-bd65-52f7-8f1a-31e0733eeaaa",
+                  "title": "Dragonfruit Lemonade",
+                  "itemDescription": "Tropical dragon fruit mixed with bright and refreshing berries.",
+                  "price": 719,
+                  "priceTagline": {
+                    "text": "$7.19 • 337 Cal.",
+                    "textFormat": "<span>$7.19<span style=\"color:#757575\"> • 337 Cal.</span></span>",
+                    "accessibilityText": "$7.19, 337 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "b498a521-0015-529d-97ad-ce1bf8d80058",
+                  "title": "Mango Lemonade",
+                  "itemDescription": "Juicy mango and sweet, tart lemonade served with brown sugar boba.",
+                  "price": 719,
+                  "priceTagline": {
+                    "text": "$7.19 • 293 Cal.",
+                    "textFormat": "<span>$7.19<span style=\"color:#757575\"> • 293 Cal.</span></span>",
+                    "accessibilityText": "$7.19, 293 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "bace6be2-ef32-5630-bcd4-1ef6af816b04",
+                  "title": "Strawberry Lemonade",
+                  "itemDescription": "Sweet, ripe strawberries paired with a tart lemonade served with brown sugar boba.",
+                  "price": 719,
+                  "priceTagline": {
+                    "text": "$7.19 • 322 Cal.",
+                    "textFormat": "<span>$7.19<span style=\"color:#757575\"> • 322 Cal.</span></span>",
+                    "accessibilityText": "$7.19, 322 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "ad8c8a1b-67d5-5c36-9681-0af2b5c0c080",
+                  "title": "Lemonade Black Tea",
+                  "itemDescription": "Mellow sweet tea with a zesty kick and served with brown sugar boba.",
+                  "price": 719,
+                  "priceTagline": {
+                    "text": "$7.19 • 337 Cal.",
+                    "textFormat": "<span>$7.19<span style=\"color:#757575\"> • 337 Cal.</span></span>",
+                    "accessibilityText": "$7.19, 337 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "0eafa9a2-3449-5c39-87ab-63323079e5d6",
+                  "title": "Mango Black Tea",
+                  "itemDescription": "Bold black tea with ripe juicy mango flavor served with brown sugar boba.",
+                  "price": 719,
+                  "priceTagline": {
+                    "text": "$7.19 • 263 Cal.",
+                    "textFormat": "<span>$7.19<span style=\"color:#757575\"> • 263 Cal.</span></span>",
+                    "accessibilityText": "$7.19, 263 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "101e7157-26a8-5da3-aee7-43a30c726965",
+                  "title": "Strawberry Black Tea",
+                  "itemDescription": "Juicy strawberry with bold black tea and brown sugar boba.",
+                  "price": 719,
+                  "priceTagline": {
+                    "text": "$7.19 • 307 Cal.",
+                    "textFormat": "<span>$7.19<span style=\"color:#757575\"> • 307 Cal.</span></span>",
+                    "accessibilityText": "$7.19, 307 Cal."
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Sips"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "f380b4bd-5cce-5e00-92ef-2ae589461900",
+                  "title": "Apple Juice",
+                  "itemDescription": "100% apple juice, bottle",
+                  "price": 469,
+                  "priceTagline": {
+                    "text": "$4.69 • 140 - 280 Cal.",
+                    "textFormat": "<span>$4.69<span style=\"color:#757575\"> • 140 - 280 Cal.</span></span>",
+                    "accessibilityText": "$4.69, 140 - 280 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "354c5780-a30c-5230-a22c-6225782df726",
+                  "title": "Aquafina",
+                  "itemDescription": "Pure water for a perfect taste, 20oz bottle.",
+                  "price": 469,
+                  "priceTagline": {
+                    "text": "$4.69 • 0 Cal.",
+                    "textFormat": "<span>$4.69<span style=\"color:#757575\"> • 0 Cal.</span></span>",
+                    "accessibilityText": "$4.69, 0 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "a3519789-57fb-500c-8c4c-7803c63e56d8",
+                  "title": "Dole Strawberry Lemonade",
+                  "itemDescription": "The perfect balance of sweet and tart, with a delicious homemade taste from the juice of real lemons, 20oz bottle.",
+                  "price": 469,
+                  "priceTagline": {
+                    "text": "$4.69 • 280 Cal.",
+                    "textFormat": "<span>$4.69<span style=\"color:#757575\"> • 280 Cal.</span></span>",
+                    "accessibilityText": "$4.69, 280 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "36f65368-3eb6-5438-a467-5d0ba1aefcaa",
+                  "title": "Gatorade Lime Cucumber",
+                  "itemDescription": "The thirst-quenching tastes of lime and cucumber to rehydrate and energize without caffeine, 20oz bottle.",
+                  "price": 469,
+                  "priceTagline": {
+                    "text": "$4.69 • 140 Cal.",
+                    "textFormat": "<span>$4.69<span style=\"color:#757575\"> • 140 Cal.</span></span>",
+                    "accessibilityText": "$4.69, 140 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "0ed4526e-9f78-595c-9b5f-b4b1e05ad2ef",
+                  "title": "Orange Crush",
+                  "itemDescription": "The original orange soda, 20oz bottle.",
+                  "price": 469,
+                  "priceTagline": {
+                    "text": "$4.69 • 270 Cal.",
+                    "textFormat": "<span>$4.69<span style=\"color:#757575\"> • 270 Cal.</span></span>",
+                    "accessibilityText": "$4.69, 270 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "91a971bb-0bf1-501e-a703-5ea4dfe62bb1",
+                  "title": "Pepsi Zero",
+                  "itemDescription": "",
+                  "price": 469,
+                  "priceTagline": {
+                    "text": "$4.69 • 0 Cal.",
+                    "textFormat": "<span>$4.69<span style=\"color:#757575\"> • 0 Cal.</span></span>",
+                    "accessibilityText": "$4.69, 0 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "7db9e164-4e97-548c-94d3-80fbd4575f89",
+                  "title": "Pepsi",
+                  "itemDescription": "",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 140 - 200 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 140 - 200 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 140 - 200 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "516e5963-d548-549a-af4f-209dd2e81a56",
+                  "title": "Pepsi Zero",
+                  "itemDescription": "",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 0 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 0 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 0 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "0b7e6ec2-7b40-530a-a3ea-f3b5ccc8cde8",
+                  "title": "Mountain Dew",
+                  "itemDescription": "Mountain Dew exhilarates and quenches thirst with its one of a kind citrus taste.",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 150 - 220 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 150 - 220 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 150 - 220 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "ae19f58a-b087-54d7-8cc6-b485f8c49056",
+                  "title": "Starry",
+                  "itemDescription": "",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79",
+                    "textFormat": "<span>$3.79</span>",
+                    "accessibilityText": "$3.79"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "8925769f-75e3-5656-a74b-cd4a7c159458",
+                  "title": "Jamaica (Hibiscus)",
+                  "itemDescription": "Bright, floral and refreshingly Tart",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79",
+                    "textFormat": "<span>$3.79</span>",
+                    "accessibilityText": "$3.79"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "1a507d97-1984-504b-8e58-8e6a0cfd438d",
+                  "title": "Horchata",
+                  "itemDescription": "refreshing sweet & creamy cinnamon rice classic.",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79",
+                    "textFormat": "<span>$3.79</span>",
+                    "accessibilityText": "$3.79"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "24e8d24c-3eee-5d15-932d-77134e1b1f2d",
+                  "title": "Brisk Raspberry Iced Tea",
+                  "itemDescription": "",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 70 - 100 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 70 - 100 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 70 - 100 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "06cf1e2c-3d49-564e-a3b1-90af58ee5ebb",
+                  "title": "Pink Lemonade",
+                  "itemDescription": "",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 140 - 200 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 140 - 200 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 140 - 200 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "f74b7fd1-e4f8-515d-a37d-837ae0f0a31b",
+                  "title": "Fruit Punch",
+                  "itemDescription": "",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 150 - 220 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 150 - 220 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 150 - 220 Cal."
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Sweets"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "6f7d0c64-0feb-501c-936f-710fbdf3666f",
+                  "title": "2 Chocolate Chip Cookies",
+                  "itemDescription": "2 Rich, chewy cookies filled with big chunks of chocolate chips.",
+                  "price": 249,
+                  "priceTagline": {
+                    "text": "$2.49 • 340 Cal.",
+                    "textFormat": "<span>$2.49<span style=\"color:#757575\"> • 340 Cal.</span></span>",
+                    "accessibilityText": "$2.49, 340 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "427d7e15-2473-5525-b356-5c4428630136",
+                  "title": "Original Cheesecake",
+                  "itemDescription": "",
+                  "price": 559,
+                  "priceTagline": {
+                    "text": "$5.59 • 380 Cal.",
+                    "textFormat": "<span>$5.59<span style=\"color:#757575\"> • 380 Cal.</span></span>",
+                    "accessibilityText": "$5.59, 380 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "bf58f6ed-d3cb-5056-80b1-ebd2107ab817",
+                  "title": "Double Chocolate Cheesecake",
+                  "itemDescription": "",
+                  "price": 559,
+                  "priceTagline": {
+                    "text": "$5.59 • 430 Cal.",
+                    "textFormat": "<span>$5.59<span style=\"color:#757575\"> • 430 Cal.</span></span>",
+                    "accessibilityText": "$5.59, 430 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "e8cd0729-13ce-5d48-a5dc-2634979aa5b0",
+                  "title": "Strawberry Cheesecake",
+                  "itemDescription": "",
+                  "price": 559,
+                  "priceTagline": {
+                    "text": "$5.59 • 350 Cal.",
+                    "textFormat": "<span>$5.59<span style=\"color:#757575\"> • 350 Cal.</span></span>",
+                    "accessibilityText": "$5.59, 350 Cal."
+                  },
+                  "hasCustomizations": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Ala Carte"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "3309120e-7678-591f-a1f7-d793d8e6055c",
+                  "title": "Original Gyudon Beef",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth.",
+                  "price": 979,
+                  "priceTagline": {
+                    "text": "$9.79 • 310 Cal.",
+                    "textFormat": "<span>$9.79<span style=\"color:#757575\"> • 310 Cal.</span></span>",
+                    "accessibilityText": "$9.79, 310 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "34bb4e79-7cf1-5af3-b27e-4969d2840586",
+                  "title": "Teriyaki Grilled Chicken",
+                  "itemDescription": "Fresh, grilled chicken, glazed with our signature teriyaki sauce, then lightly sprinkled with toasted sesame seeds and green onions.",
+                  "price": 979,
+                  "priceTagline": {
+                    "text": "$9.79 • 250 Cal.",
+                    "textFormat": "<span>$9.79<span style=\"color:#757575\"> • 250 Cal.</span></span>",
+                    "accessibilityText": "$9.79, 250 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "b9fdae47-a5f0-57c1-94cb-94df19ab645d",
+                  "title": "Yaki BBQ Beef",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, in a Yakiniku BBQ Sauce",
+                  "price": 1109,
+                  "priceTagline": {
+                    "text": "$11.09",
+                    "textFormat": "<span>$11.09</span>",
+                    "accessibilityText": "$11.09"
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "0283d80f-aad3-5960-8ff4-a62d570775ff",
+                  "title": "Teriyaki Grilled Ribeye",
+                  "itemDescription": "Our juicy, tender, USDA Choice steak. Our ribeye is seared, grilled and glazed with our signature Teriyaki sauce, topped with green onions and sesame seeds.",
+                  "price": 1289,
+                  "priceTagline": {
+                    "text": "$12.89 • 287 Cal.",
+                    "textFormat": "<span>$12.89<span style=\"color:#757575\"> • 287 Cal.</span></span>",
+                    "accessibilityText": "$12.89, 287 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "0db69369-9ae2-589c-8321-e156856dfe0a",
+                  "title": "Teriyaki Grilled Salmon",
+                  "itemDescription": "Grilled Teriyaki Glazed Salmon with Teriyaki Sauce, Green Onions and Sesame Seeds.",
+                  "price": 1289,
+                  "priceTagline": {
+                    "text": "$12.89 • 270 Cal.",
+                    "textFormat": "<span>$12.89<span style=\"color:#757575\"> • 270 Cal.</span></span>",
+                    "accessibilityText": "$12.89, 270 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "ef63126d-f2ae-5801-9a40-fd4c78775724",
+                  "title": "Habanero Grilled Chicken",
+                  "itemDescription": "Fresh, grilled chicken, glazed with our spicy and sweet habanero sauce and then topped with sesame seeds and green onions.",
+                  "price": 979,
+                  "priceTagline": {
+                    "text": "$9.79 • 290 Cal.",
+                    "textFormat": "<span>$9.79<span style=\"color:#757575\"> • 290 Cal.</span></span>",
+                    "accessibilityText": "$9.79, 290 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "6c8ec982-d355-5198-a2cf-f1d5e6eb17e6",
+                  "title": "Udon Noodles",
+                  "itemDescription": "Slurp-worthy, stir-fried wheat noodles, grilled fresh with carrots, cabbage, and onions in a savory soy sauce.",
+                  "price": 459,
+                  "priceTagline": {
+                    "text": "$4.59",
+                    "textFormat": "<span>$4.59</span>",
+                    "accessibilityText": "$4.59"
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "6e7af50e-ef37-5674-80ab-91073472739e",
+                  "title": "Crispy Onions",
+                  "itemDescription": "Crispy Onions",
+                  "price": 69,
+                  "priceTagline": {
+                    "text": "$0.69",
+                    "textFormat": "<span>$0.69</span>",
+                    "accessibilityText": "$0.69"
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "08cfeec5-7c32-58fd-b63c-ed097bfc4ff8",
+                  "title": "Chili Crisp",
+                  "itemDescription": "Chili Crisp",
+                  "price": 69,
+                  "priceTagline": {
+                    "text": "$0.69",
+                    "textFormat": "<span>$0.69</span>",
+                    "accessibilityText": "$0.69"
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "2d2b6a42-553c-5a9a-94ad-50e9d32b6626",
+                  "title": "White Rice",
+                  "itemDescription": "Award-winning steamed white rice.",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 290 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 290 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 290 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "9b9e7faa-c49e-5851-8535-939b5aef100e",
+                  "title": "Brown Rice",
+                  "itemDescription": "Whole grain, fiber-rich brown rice.",
+                  "price": 389,
+                  "priceTagline": {
+                    "text": "$3.89 • 250 Cal.",
+                    "textFormat": "<span>$3.89<span style=\"color:#757575\"> • 250 Cal.</span></span>",
+                    "accessibilityText": "$3.89, 250 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "4d3a319b-251d-57fb-8071-aa0b3ed44dc6",
+                  "title": "Vegetables",
+                  "itemDescription": "Nutrient-rich broccoli, cauliflower, carrots and fresh green cabbage steamed in vegetable broth.",
+                  "price": 379,
+                  "priceTagline": {
+                    "text": "$3.79 • 35 Cal.",
+                    "textFormat": "<span>$3.79<span style=\"color:#757575\"> • 35 Cal.</span></span>",
+                    "accessibilityText": "$3.79, 35 Cal."
+                  },
+                  "hasCustomizations": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Sauces"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "e2d682b9-97f3-5915-a680-e8bcfdeb2f09",
+                  "title": "Teriyaki Sauce",
+                  "itemDescription": "",
+                  "price": 89,
+                  "priceTagline": {
+                    "text": "$0.89 • 70 Cal.",
+                    "textFormat": "<span>$0.89<span style=\"color:#757575\"> • 70 Cal.</span></span>",
+                    "accessibilityText": "$0.89, 70 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "118ff883-c168-588b-b178-3a842bc3e674",
+                  "title": "Habanero Sauce",
+                  "itemDescription": "",
+                  "price": 89,
+                  "priceTagline": {
+                    "text": "$0.89 • 90 Cal.",
+                    "textFormat": "<span>$0.89<span style=\"color:#757575\"> • 90 Cal.</span></span>",
+                    "accessibilityText": "$0.89, 90 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "5fb0ad7e-c920-5b61-bbff-a10b5e526a8d",
+                  "title": "Beef Broth",
+                  "itemDescription": "Max 2 Per Order",
+                  "price": 89,
+                  "priceTagline": {
+                    "text": "$0.89 • 40 Cal.",
+                    "textFormat": "<span>$0.89<span style=\"color:#757575\"> • 40 Cal.</span></span>",
+                    "accessibilityText": "$0.89, 40 Cal."
+                  },
+                  "hasCustomizations": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Condiments"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "3c59bb4d-2340-519e-b67c-f93f7a5b2974",
+                  "title": "Ginger",
+                  "itemDescription": "Shredded red ginger, pickled to spicy perfection.",
+                  "price": 0,
+                  "priceTagline": {
+                    "text": "$0.00 • 2 Cal.",
+                    "textFormat": "<span>$0.00<span style=\"color:#757575\"> • 2 Cal.</span></span>",
+                    "accessibilityText": "$0.00, 2 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "ff912c3d-ea90-5b2e-a399-fbcd27c2c41d",
+                  "title": "Soy Sauce",
+                  "itemDescription": "",
+                  "price": 0,
+                  "priceTagline": {
+                    "text": "$0.00 • 4 Cal.",
+                    "textFormat": "<span>$0.00<span style=\"color:#757575\"> • 4 Cal.</span></span>",
+                    "accessibilityText": "$0.00, 4 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "05455a76-aa93-5f4d-920f-dad5cff871b1",
+                  "title": "Sriracha Sauce",
+                  "itemDescription": "Hot sauce made from sun-ripened chili peppers with a hint of garlic.",
+                  "price": 0,
+                  "priceTagline": {
+                    "text": "$0.00 • 5 Cal.",
+                    "textFormat": "<span>$0.00<span style=\"color:#757575\"> • 5 Cal.</span></span>",
+                    "accessibilityText": "$0.00, 5 Cal."
+                  },
+                  "hasCustomizations": false
+                },
+                {
+                  "uuid": "9f0b9c17-1463-599e-b37a-8a4079259e00",
+                  "title": "Japanese Red Pepper",
+                  "itemDescription": "Crushed red pepper.",
+                  "price": 0,
+                  "priceTagline": {
+                    "text": "$0.00 • 3 Cal.",
+                    "textFormat": "<span>$0.00<span style=\"color:#757575\"> • 3 Cal.</span></span>",
+                    "accessibilityText": "$0.00, 3 Cal."
+                  },
+                  "hasCustomizations": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "payload": {
+            "standardItemsPayload": {
+              "title": {
+                "text": "Kids Meals"
+              },
+              "catalogItems": [
+                {
+                  "uuid": "7b831a69-4639-5514-89d9-0d6c7ef3d9be",
+                  "title": "Kids Original Gyudon Beef",
+                  "itemDescription": "Thin juicy ribbons of Gyudon Beef and chopped onions, slowly simmered in a sweet and savory herb miso soy broth. Served with your choice of rice and veggies.",
+                  "price": 999,
+                  "priceTagline": {
+                    "text": "$9.99 • 300 Cal.",
+                    "textFormat": "<span>$9.99<span style=\"color:#757575\"> • 300 Cal.</span></span>",
+                    "accessibilityText": "$9.99, 300 Cal."
+                  },
+                  "hasCustomizations": true
+                },
+                {
+                  "uuid": "453a0a96-64ed-5337-aeab-846af030fb34",
+                  "title": "Kids Teriyaki Grilled Chicken",
+                  "itemDescription": "Fresh, grilled chicken, glazed with our signature teriyaki sauce, then lightly sprinkled with toasted sesame seeds and green onions. Served with your choice of rice and veggies.",
+                  "price": 999,
+                  "priceTagline": {
+                    "text": "$9.99 • 220 Cal.",
+                    "textFormat": "<span>$9.99<span style=\"color:#757575\"> • 220 Cal.</span></span>",
+                    "accessibilityText": "$9.99, 220 Cal."
+                  },
+                  "hasCustomizations": true
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

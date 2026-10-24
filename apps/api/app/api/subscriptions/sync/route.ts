@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import {
-  isEntitled,
+  getEntitlementStatus,
   subscriptionBypass,
   syncSubscriptionFromRevenueCat,
 } from "@/lib/subscription";
@@ -24,9 +24,8 @@ import {
  * view can lag StoreKit by seconds): an inactive read is retried briefly
  * and, if still inactive, nothing is written. Unknown reasons are ignored.
  *
- * Response: `{ active, synced }` - `synced: false` means nothing was written
- * (RevenueCat couldn't be consulted, or a downgrade was withheld) and
- * `active` is the existing DB state instead.
+ * Response: the same account-bound verdict/freshness fields as GET status,
+ * plus `synced`. A failed or withheld sync retains the existing proof.
  */
 const NEVER_DOWNGRADE_REASONS = new Set(["purchase", "restore"]);
 
@@ -50,18 +49,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (auth instanceof NextResponse) return auth;
 
   if (subscriptionBypass(auth.email)) {
-    return NextResponse.json({ active: true, synced: false });
+    return NextResponse.json({ ...(await getEntitlementStatus(auth.sub, auth.email)), synced: false });
   }
 
   const reason = await readReason(request);
   const active = await syncSubscriptionFromRevenueCat(auth.sub, {
     neverDowngrade: reason !== null && NEVER_DOWNGRADE_REASONS.has(reason),
   });
-  if (active === null) {
-    return NextResponse.json({
-      active: await isEntitled(auth.sub, auth.email),
-      synced: false,
-    });
-  }
-  return NextResponse.json({ active, synced: true });
+  const status = await getEntitlementStatus(auth.sub, auth.email);
+  return NextResponse.json({
+    ...status,
+    expiresAt: status.expiresAt?.toISOString() ?? null,
+    lastRcVerifiedAt: status.lastRcVerifiedAt?.toISOString() ?? null,
+    synced: active !== null,
+  });
 }

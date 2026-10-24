@@ -3,6 +3,9 @@ import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
 import type { JwtPayload } from "@/services/authService";
 import { fetchProEntitlement } from "@/services/revenuecatService";
+import { classifySubscription, type SubscriptionRow, type SubscriptionVerdict } from "./subscriptionVerdict";
+export { classifySubscription, RC_VERDICT_MAX_AGE_MS } from "./subscriptionVerdict";
+export type { SubscriptionRow, SubscriptionVerdict } from "./subscriptionVerdict";
 
 /**
  * Server-trusted subscription gate.
@@ -37,22 +40,7 @@ export function subscriptionBypass(email: string): boolean {
   return demoEmails().has(email.toLowerCase());
 }
 
-/**
- * Statuses that grant access while `expiresAt` is still in the future.
- * `billing_issue` is included on purpose: the store failed to charge a
- * renewal and the subscription is in its grace period, during which Apple
- * (and RevenueCat's entitlement) keep the user subscribed - locking them out
- * early would punish a card hiccup. The period's own expiry still applies.
- */
-const ENTITLED_STATUSES = new Set(["active", "billing_issue"]);
-
-export type SubscriptionRow = {
-  status: string;
-  expiresAt: Date | null;
-  lastEventAt: Date | null;
-} | null;
-
-/** The fields every entitlement read or write needs; null when the user never subscribed. */
+/** The fields every entitlement read or write needs; null means history is unknown. */
 function readRow(userId: string): Promise<SubscriptionRow> {
   return prisma.subscription.findUnique({
     where: { userId },
@@ -77,9 +65,7 @@ export async function readUserAndRow(
 
 /** The row grants access iff its status is entitled and it hasn't lapsed. */
 function rowEntitled(sub: SubscriptionRow): boolean {
-  if (!sub || !ENTITLED_STATUSES.has(sub.status)) return false;
-  if (sub.expiresAt && sub.expiresAt.getTime() < Date.now()) return false;
-  return true;
+  return classifySubscription(sub).verdict === "active";
 }
 
 /**
@@ -95,9 +81,12 @@ export async function isEntitled(userId: string, email: string): Promise<boolean
 export interface EntitlementStatus {
   /** Same verdict as `isEntitled` (bypass included). */
   active: boolean;
-  /** Stored row status, or null when the user has never subscribed. */
+  /** Stored row status, or null when no RC proof has been persisted. */
   status: string | null;
   expiresAt: Date | null;
+  verdict: SubscriptionVerdict;
+  lastRcVerifiedAt: Date | null;
+  stale: boolean;
 }
 
 /**
@@ -110,10 +99,14 @@ export async function getEntitlementStatus(
   email: string,
 ): Promise<EntitlementStatus> {
   const sub = await readRow(userId);
+  const classification = classifySubscription(sub);
+  const bypass = subscriptionBypass(email);
   return {
-    active: subscriptionBypass(email) || rowEntitled(sub),
+    active: bypass || classification.verdict === "active",
     status: sub?.status ?? null,
     expiresAt: sub?.expiresAt ?? null,
+    ...classification,
+    ...(bypass ? { verdict: "active" as const, stale: false } : {}),
   };
 }
 
@@ -171,8 +164,8 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * `neverDowngrade` blocked an inactive result. Either way a transient
  * condition can never downgrade a paying user.
  *
- * A user RevenueCat has never seen subscribe gets no row (nothing to record);
- * an existing row is updated to whatever RevenueCat says, including
+ * A user RevenueCat confirms has never subscribed gets a `never_subscribed`
+ * row; an existing row is updated to whatever RevenueCat says, including
  * `expired` when the entitlement moved to another account (TRANSFER).
  */
 export async function syncSubscriptionFromRevenueCat(
@@ -209,41 +202,66 @@ export async function syncSubscriptionFromRevenueCat(
   // No User row = nothing the FK will let us attach to (deleted account, or
   // an id we never provisioned). Report what RevenueCat says, persist nothing.
   if (!userExists) return state.active;
-  if (!state.active && !existing) return false;
-
   // Same status vocabulary as the webhook (`statusForEvent`), so the two
   // write paths never disagree on what a row means.
-  const status = !state.active ? "expired" : state.billingIssue ? "billing_issue" : "active";
+  const status = !state.active
+    ? (state.hadProEntitlement || (existing && existing.status !== "never_subscribed")
+      ? "expired" : "never_subscribed")
+    : state.billingIssue ? "billing_issue" : "active";
   // The row's lastEventAt orders this read against webhook events, whose
   // event_timestamp_ms is on RevenueCat's clock, so stamp RevenueCat's own
   // response time: a RENEWAL emitted after it is applied even if Vercel's
   // clock runs ahead, and one emitted before it is stale by definition.
   const lastEventAt = state.requestDate ?? readStartedAt;
-  await prisma.subscription.upsert({
-    where: { userId },
-    create: {
-      userId,
-      plan: state.plan ?? "unknown",
-      status,
-      expiresAt: state.expiresAt,
-      appleTransactionId: state.transactionId,
-      lastEventAt,
-    },
-    // Only overwrite what RevenueCat actually reported. Once an entitlement
-    // is gone (lapsed, or transferred to another account) it comes back with
-    // no product/expiry/transaction, and the row should keep the record of
-    // what was subscribed to and when it ended - support and refund disputes
-    // need it, and "expired" is already what revokes access.
-    update: {
-      status,
-      lastEventAt,
-      ...(state.plan ? { plan: state.plan } : {}),
-      ...(state.expiresAt ? { expiresAt: state.expiresAt } : {}),
-      ...(state.transactionId ? { appleTransactionId: state.transactionId } : {}),
-    },
-  });
-  logStatusChange(userId, existing?.status ?? null, status, "sync");
-  return state.active;
+  const updateExisting = async (observed: NonNullable<SubscriptionRow>): Promise<boolean | null> => {
+    if (observed.lastEventAt && observed.lastEventAt.getTime() >= lastEventAt.getTime()) {
+      return rowEntitled(observed);
+    }
+    const updated = await prisma.subscription.updateMany({
+      where: {
+        userId,
+        OR: [{ lastEventAt: null }, { lastEventAt: { lt: lastEventAt } }],
+      },
+      // Only overwrite what RevenueCat actually reported. Once an entitlement
+      // is gone (lapsed, or transferred to another account) it comes back with
+      // no product/expiry/transaction, and the row should keep the record of
+      // what was subscribed to and when it ended - support and refund disputes
+      // need it, and "expired" is already what revokes access.
+      data: {
+        status,
+        lastEventAt,
+        ...(state.plan ? { plan: state.plan } : {}),
+        ...(state.expiresAt ? { expiresAt: state.expiresAt } : {}),
+        ...(state.transactionId ? { appleTransactionId: state.transactionId } : {}),
+      },
+    });
+    if (updated.count === 0) {
+      // The webhook or a second sync won after our initial row read.
+      const raced = await readRow(userId);
+      return raced ? rowEntitled(raced) : null;
+    }
+    logStatusChange(userId, observed.status, status, "sync");
+    return state.active;
+  };
+  if (!existing) {
+    // Insert only: a webhook may create a newer row while this read is in
+    // flight. A blind upsert would overwrite that purchase or renewal.
+    try {
+      await prisma.subscription.create({
+        data: {
+          userId, plan: state.plan ?? "unknown", status, expiresAt: state.expiresAt,
+          appleTransactionId: state.transactionId, lastEventAt,
+        },
+      });
+      logStatusChange(userId, null, status, "sync");
+      return state.active;
+    } catch (error) {
+      const raced = await readRow(userId);
+      if (!raced) throw error;
+      return updateExisting(raced);
+    }
+  }
+  return updateExisting(existing);
 }
 
 /**

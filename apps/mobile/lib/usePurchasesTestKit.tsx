@@ -8,7 +8,23 @@
  * jest.mock calls must be registered before `./usePurchases` is required.
  */
 import React, { useEffect } from 'react';
+import { Alert } from 'react-native';
 import { act, renderHook } from '@testing-library/react-native';
+
+export const mockForeground: { listener?: (state: string) => void } = {};
+jest.mock('react-native', () => {
+  const actual = jest.requireActual('react-native');
+  // Preserve native getters without eagerly spreading them (which loads
+  // DevMenu outside an iOS binary in Jest).
+  const mocked = Object.create(actual);
+  Object.defineProperty(mocked, 'AppState', { enumerable: true, value: {
+    addEventListener: (_event: string, listener: (state: string) => void) => {
+      mockForeground.listener = listener;
+      return { remove: () => { if (mockForeground.listener === listener) mockForeground.listener = undefined; } };
+    },
+  } });
+  return mocked;
+});
 
 export type Info = { entitlements: { active: Record<string, unknown>; all: Record<string, unknown> } };
 export const proInfo: Info = { entitlements: { active: { pro: {} }, all: { pro: {} } } };
@@ -30,9 +46,14 @@ function mockLazy<T extends object>(get: () => T): T {
 export const mockRc = {
   configurePurchases: jest.fn(() => true),
   identifyPurchasesUser: jest.fn(async () => freeInfo),
+  ensurePurchasesUser: jest.fn(async () => true),
   fetchCustomerInfo: jest.fn(async () => freeInfo),
+  currentPurchasesUserId: jest.fn(async () => mockAuth.session?.user.id ?? null),
   fetchCurrentOffering: jest.fn(async () => null),
-  addCustomerInfoListener: jest.fn(() => () => undefined),
+  // Exercise the real new seam; do not add another mock of our own code.
+  fetchIntroEligibility: (ids: string[]) =>
+    jest.requireActual<typeof import('./purchases')>('./purchases').fetchIntroEligibility(ids),
+  addCustomerInfoListener: jest.fn((_cb: (info: Info) => void) => () => undefined),
   logoutPurchasesUser: jest.fn(async () => undefined),
   purchasePackage: jest.fn(),
   restorePurchases: jest.fn(),
@@ -73,6 +94,7 @@ jest.mock('./supabase', () => ({
 }));
 
 export const mockAnalytics = {
+  trackOnboardingScreenView: jest.fn(),
   trackEntitlementMismatch: jest.fn(),
   trackEntitlementSyncFailed: jest.fn(),
   trackPaywallShown: jest.fn(),
@@ -82,6 +104,16 @@ export const mockAnalytics = {
 jest.mock('./analytics', () => mockLazy(() => mockAnalytics));
 
 export const mockStore: Record<string, string> = {};
+export function seedEntitlementCache(verdict: 'active' | 'expired' | 'never_subscribed', userId = 'u1'): void {
+  mockStore['@fitsy/entitlement'] = JSON.stringify({
+    userId, active: verdict === 'active', verdict, expiresAt: null,
+    lastRcVerifiedAt: new Date().toISOString(),
+  });
+}
+export function cachedEntitlementVerdict(): string | null {
+  const raw = mockStore['@fitsy/entitlement'];
+  return raw ? (JSON.parse(raw) as { verdict: string }).verdict : null;
+}
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {
@@ -137,13 +169,17 @@ export function deferred<T>() {
 export function setupPurchasesMocks(): void {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     for (const k of Object.keys(mockStore)) delete mockStore[k];
     mockAuth.session = { user: { id: 'u1' } };
     mockAuth.listener = undefined;
+    mockForeground.listener = undefined;
     mockRc.identifyPurchasesUser.mockResolvedValue(freeInfo);
+    mockRc.ensurePurchasesUser.mockResolvedValue(true);
     mockRc.fetchCustomerInfo.mockResolvedValue(freeInfo);
-    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: null, expiresAt: null });
-    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true });
+    mockRc.currentPurchasesUserId.mockImplementation(async () => mockAuth.session?.user.id ?? null);
+    mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: false, status: null, expiresAt: null, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() });
+    mockApi.syncSubscription.mockResolvedValue({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString() });
     jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
   afterEach(() => jest.restoreAllMocks());

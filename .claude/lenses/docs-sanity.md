@@ -1,6 +1,9 @@
 # Lens: docs-sanity
 
-One concern: **docs that lie**. Runs on tier-low (docs/bookkeeping) PRs. Comment-only: this lens never blocks, so its verdict is always `pass`; findings are posted for the author.
+One concern: **docs that lie**.
+Runs on tier-low (docs/bookkeeping) PRs.
+Return the normal REVIEW.md verdict: `fail` when confirmed findings exist, otherwise `pass`.
+This lens remains advisory: the runner posts findings for the author without blocking integration.
 Read `REVIEW.md` first.
 
 ## Look for

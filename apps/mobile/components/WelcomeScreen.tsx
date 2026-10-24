@@ -3,17 +3,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { AnimatedPress } from './AnimatedPress';
+import { WelcomeNav } from './WelcomeNav';
 
 interface Props {
   step?: number;
@@ -30,6 +32,10 @@ interface Props {
   showBack?: boolean;
   onBack?: () => void;
   hideFooter?: boolean;
+  beforeTitle?: React.ReactNode;
+  footerContent?: React.ReactNode;
+  beforeContinue?: React.ReactNode;
+  afterContinue?: React.ReactNode;
 }
 
 export function WelcomeScreen({
@@ -46,12 +52,17 @@ export function WelcomeScreen({
   showBack = true,
   onBack,
   hideFooter = false,
+  beforeTitle,
+  footerContent,
+  beforeContinue,
+  afterContinue,
 }: Props) {
   const navigation = useNavigation();
+  const { height, fontScale } = useWindowDimensions();
+  const compact = height < 780 && fontScale <= 1.2;
 
   const handleBack = onBack ?? (() => {
     if (navigation.canGoBack()) router.back();
-    else router.navigate('/welcome/problem');
   });
 
   return (
@@ -60,39 +71,20 @@ export function WelcomeScreen({
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* ── Top bar ── */}
-        <View style={styles.topBar}>
-          {showBack ? (
-            <Pressable
-              onPress={handleBack}
-              hitSlop={16}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              style={styles.backHit}
-            >
-              <Ionicons name="chevron-back" size={22} color={EDITORIAL.textMid} />
-            </Pressable>
-          ) : (
-            <View style={styles.backHit} />
-          )}
-          {progress != null && (
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
-            </View>
-          )}
-        </View>
+        <WelcomeNav progress={progress} onBack={showBack && (navigation.canGoBack() || onBack) ? handleBack : undefined} />
 
         {/* ── Body ── */}
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={styles.body}
+          contentContainerStyle={[styles.body, compact && styles.bodyCompact]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           bounces={false}
         >
+          {beforeTitle}
           <Animated.Text
             entering={FadeInDown.duration(500).delay(80)}
-            style={styles.title}
+            style={[styles.title, compact && styles.titleCompact]}
           >
             {title}
           </Animated.Text>
@@ -100,7 +92,7 @@ export function WelcomeScreen({
           {subtitle && (
             <Animated.Text
               entering={FadeInDown.duration(500).delay(180)}
-              style={styles.subtitle}
+              style={[styles.subtitle, compact && styles.subtitleCompact]}
             >
               {subtitle}
             </Animated.Text>
@@ -112,22 +104,9 @@ export function WelcomeScreen({
         </ScrollView>
 
         {/* ── Footer ── */}
-        {!hideFooter && (
-          <Animated.View entering={FadeIn.duration(300).delay(400)} style={styles.footer}>
-            {onSkip ? (
-              <Pressable
-                onPress={onSkip}
-                hitSlop={16}
-                style={styles.skipHit}
-                accessibilityRole="button"
-                accessibilityLabel="Skip"
-              >
-                <Text style={styles.skipTxt}>Skip</Text>
-              </Pressable>
-            ) : (
-              <View style={styles.skipHit} />
-            )}
-
+        {footerContent ? <View style={[styles.customFooter, compact && styles.footerCompact]}>{footerContent}</View> : !hideFooter && (
+          <Animated.View entering={FadeIn.duration(300).delay(400)} style={[styles.footer, compact && styles.footerCompact]}>
+            {beforeContinue}
             <AnimatedPress
               style={[styles.continueBtn, !canContinue ? styles.continueDim : undefined]}
               onPress={onContinue}
@@ -135,10 +114,14 @@ export function WelcomeScreen({
               haptic
               accessibilityRole="button"
               accessibilityLabel={continueLabel}
+              testID="welcome-continue"
             >
               <Text style={styles.continueTxt}>{continueLabel}</Text>
               <Ionicons name="arrow-forward" size={15} color={EDITORIAL.cream} />
             </AnimatedPress>
+            {afterContinue}
+            {onSkip && <Pressable onPress={onSkip} style={styles.skipHit} accessibilityRole="button"
+              accessibilityLabel="Skip" testID="welcome-skip"><Text style={styles.skipTxt}>Skip</Text></Pressable>}
           </Animated.View>
         )}
       </KeyboardAvoidingView>
@@ -150,58 +133,43 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: EDITORIAL.cream },
   flex: { flex: 1 },
 
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    height: 52,
-  },
-  backHit: { width: 44, height: 44, justifyContent: 'center' },
-  progressTrack: {
-    flex: 1,
-    height: 4,
-    backgroundColor: EDITORIAL.border,
-    borderRadius: 2,
-    marginLeft: 12,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: EDITORIAL.greenAccent,
-    borderRadius: 2,
-  },
-
   body: {
-    paddingHorizontal: 36,
-    paddingTop: 0,
-    paddingBottom: 24,
+    paddingHorizontal: 28,
+    paddingTop: 18,
+    paddingBottom: 12,
     flexGrow: 1,
   },
+  bodyCompact: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 8 },
   title: {
     ...TEXT.headline,
-    marginBottom: 14,
+    marginBottom: 10,
   },
+  titleCompact: { fontSize: 28, lineHeight: 34, marginBottom: 6 },
   subtitle: {
     ...TEXT.subtitle,
-    marginBottom: 36,
+    marginBottom: 18,
   },
+  subtitleCompact: { marginBottom: 10 },
   childWrap: { flex: 1 },
 
   footer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 36,
-    paddingBottom: 16,
-    paddingTop: 8,
+    paddingHorizontal: 28,
+    paddingBottom: 10,
+    paddingTop: 4,
   },
-  skipHit: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
+  customFooter: { paddingHorizontal: 28, paddingTop: 4, paddingBottom: 10 },
+  footerCompact: { paddingHorizontal: 24, paddingBottom: 4, paddingTop: 2 },
+  skipHit: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
   skipTxt: { ...TEXT.body, color: EDITORIAL.textSoft },
 
   continueBtn: {
+    flexShrink: 1,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
     backgroundColor: EDITORIAL.green,
     paddingVertical: 16,
@@ -209,5 +177,5 @@ const styles = StyleSheet.create({
     borderRadius: 32,
   },
   continueDim: { opacity: 0.25 },
-  continueTxt: TEXT.cta,
+  continueTxt: { ...TEXT.cta, flexShrink: 1, textAlign: 'center' },
 });

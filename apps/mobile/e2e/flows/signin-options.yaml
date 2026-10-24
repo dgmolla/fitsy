@@ -1,16 +1,26 @@
 # From the welcome screen, the login link opens /auth/login ("Welcome back"
-# with Apple/Google/email options).
+# with Apple and Google options).
 # Target: the e2e-simulator build (embedded JS bundle). clearState is correct
 # there; against a dev-client install it would drop you in the launcher UI.
 appId: com.fitsy.mobile
 ---
 - launchApp:
     clearState: true
-- extendedWaitUntil:
-    visible: ".*Log in.*"
-    timeout: 15000
-- tapOn: ".*Log in.*"
+    clearKeychain: true
+# Retry only the first accessibility read: XCTest can reject a moving React frame.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible: ".*Log in.*"
+          timeout: 15000
+- tapOn:
+    id: welcome-login
 - extendedWaitUntil:
     visible: "Welcome back"
     timeout: 10000
 - assertVisible: "Continue with Apple"
+- assertVisible: "Continue with Google"
+- assertNotVisible: "Continue with email"

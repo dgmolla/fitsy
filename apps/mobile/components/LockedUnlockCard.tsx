@@ -9,6 +9,7 @@ interface LockedUnlockCardProps {
   /** One-line pitch under the headline. */
   subtitle: string;
   onPress: () => void;
+  ctaLabel?: string;
   accessibilityLabel: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -19,19 +20,24 @@ interface LockedUnlockCardProps {
  * results (after the three open restaurants). One tap = the paywall entry
  * point for whoever is looking (see lib/teaserGate routeToPaywall).
  */
-export function LockedUnlockCard({ title, subtitle, onPress, accessibilityLabel, style }: LockedUnlockCardProps) {
+export function LockedUnlockCard({ title, subtitle, onPress, accessibilityLabel, style, ctaLabel = 'Find meals that fit' }: LockedUnlockCardProps) {
   return (
     <Pressable
       style={({ pressed }) => [s.card, pressed && s.pressed, style]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      testID="locked-value-cta"
     >
       <View style={s.icon}>
         <Ionicons name="lock-closed" size={18} color={EDITORIAL.cream} />
       </View>
       <Text style={s.title}>{title}</Text>
       <Text style={s.subtitle}>{subtitle}</Text>
+      <View style={s.cta}>
+        <Text style={s.ctaText}>{ctaLabel}</Text>
+        <Ionicons name="arrow-forward" size={16} color={EDITORIAL.text} />
+      </View>
     </Pressable>
   );
 }
@@ -44,6 +50,8 @@ const s = StyleSheet.create({
     alignItems: 'center', gap: 4,
   },
   pressed: { opacity: 0.9 },
+  cta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, backgroundColor: EDITORIAL.cream, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 24 },
+  ctaText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 14, color: EDITORIAL.text },
   icon: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: EDITORIAL.greenAccent,

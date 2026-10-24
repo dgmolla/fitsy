@@ -128,6 +128,7 @@ export interface BestMatchSummary {
   carbsG: number;
   fatG: number;
   confidence: ConfidenceLevel;
+  nutritionBasis?: "published" | "estimated";
   /**
    * Macro-fit score (lower = better fit). `null` when the caller set no macro
    * targets - there is nothing to score against. (Historically the server put
@@ -285,6 +286,7 @@ export type ActivityLevel =
   | "very_active";
 
 export type UserGoal = "lose_fat" | "maintain" | "build_muscle";
+export type UserGoalV2 = UserGoal | "performance";
 
 // Biological sex — used only for the Mifflin-St Jeor BMR term.
 export type Sex = "female" | "male";
@@ -324,10 +326,14 @@ export interface ProfileUpdateRequest {
     proteinG: number;
     carbsG: number;
     fatG: number;
+    /** Missing provenance from older clients means a user-owned allocation. */
+    source?: 'automatic' | 'manual';
   };
+  /** Keep an existing complete target when this request only edits profile fields. */
+  preserveMacroTarget?: boolean;
 }
 
-export interface ProfileResponse {
+export interface ProfileResponse<Goal extends UserGoalV2 = UserGoal> {
   user: {
     id: string;
     email: string;
@@ -338,7 +344,7 @@ export interface ProfileResponse {
     weightKg: number | null;
     sex: Sex | null;
     activityLevel: ActivityLevel | null;
-    goal: UserGoal | null;
+    goal: Goal | null;
     onboardingStep: number;
   };
   macroTarget: {
@@ -346,6 +352,7 @@ export interface ProfileResponse {
     proteinG: number;
     carbsG: number;
     fatG: number;
+    source?: 'automatic' | 'manual';
   } | null;
 }
 
@@ -411,4 +418,3 @@ export interface FeedbackVoteResponse {
 }
 
 export type FeedbackVoteApiResponse = { data: FeedbackVoteResponse } | ApiError;
-

@@ -1,16 +1,46 @@
-#!/usr/bin/env bash
-# Full local gate on every push: layers 0-2 (structural, secrets, lint, types,
-# tests) plus size and domain checks, against the exact branch state being
-# pushed. Wired automatically by `npm install` (prepare -> core.hooksPath).
-# Bypass (emergencies only, CI still gates): git push --no-verify
-set -u
-ROOT="$(git rev-parse --show-toplevel)"
-bash "$ROOT/scripts/verify/run.sh" --layer=0-2 --scope=changed --runs=local || exit 1
-# exit 2 = skipped (not applicable), which must not block the push
-for check in size-check domain-check; do
-  bash "$ROOT/scripts/verify/$check.sh"; code=$?
-  if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
-    echo "pre-push: $check failed (see above)" >&2
-    exit 1
+#!/bin/bash -p
+# Run size/domain checks, cheap static checks and focused tests before every push.
+# GitHub owns merge requirements and heavy validation.
+set -euo pipefail
+unset NODE_OPTIONS NODE_PATH BASH_ENV ENV
+hook_path="$PATH"
+export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+# The canonical hook lives in a direct child of its reviewed checkout.
+# Caller Git worktree selectors cannot choose the verification source.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd "$ROOT"
+# Git exports repository-local pointers into hooks. Child Git fixtures must
+# resolve their own repositories rather than the outer push checkout.
+while IFS= read -r name; do
+  unset "$name"
+done < <(git rev-parse --local-env-vars)
+[ "$(git rev-parse --show-toplevel)" = "$ROOT" ] || exit 1
+# Apple's Git launcher prepends its private executables and supplies default
+# Xcode paths to hooks. Restore the ordinary shell environment before running
+# the same local verification; keep caller-supplied nondefault values bound.
+git_core="${hook_path%%:*}"
+if [[ "$git_core" == */usr/libexec/git-core ]]; then
+  developer_dir="${git_core%/usr/libexec/git-core}"
+  if [[ "${CPATH-}" == /usr/local/include ]]; then unset CPATH
+  elif [[ "${CPATH-}" == *:/usr/local/include ]]; then export CPATH="${CPATH%:/usr/local/include}"
   fi
-done
+  if [[ "${LIBRARY_PATH-}" == /usr/local/lib ]]; then unset LIBRARY_PATH
+  elif [[ "${LIBRARY_PATH-}" == *:/usr/local/lib ]]; then export LIBRARY_PATH="${LIBRARY_PATH%:/usr/local/lib}"
+  fi
+  if [[ "${SDKROOT-}" == "$developer_dir/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" ]]; then unset SDKROOT; fi
+  default_manpath="$developer_dir/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/share/man:$developer_dir/Platforms/MacOSX.platform/usr/share/man:$developer_dir/usr/share/man:$developer_dir/Toolchains/XcodeDefault.xctoolchain/usr/share/man:"
+  if [[ "${MANPATH-}" == "$default_manpath" ]]; then unset MANPATH
+  elif [[ "${MANPATH-}" == "$default_manpath"* ]]; then export MANPATH="${MANPATH#"$default_manpath"}"
+  fi
+fi
+# Privileged Bash ignores exported functions but retains their environment
+# entries for ordinary child shells. Remove them before any verification child.
+function_environment=()
+while IFS= read -r -d '' name; do
+  function_environment+=(-u "$name")
+done < <(node -e 'for (const key of Object.keys(process.env)) if (key.startsWith("BASH_FUNC_")) process.stdout.write(key + "\0")')
+if [ "${#function_environment[@]}" -gt 0 ]; then
+  exec /usr/bin/env "${function_environment[@]}" /bin/bash -p "$0" "$@"
+fi
+node "$ROOT/scripts/verify/run.mjs" --only=size-check,domain-check --scope=changed --runs=local
+node "$ROOT/scripts/verify/run.mjs" --layer=0-1 --stage=cheap --scope=changed --runs=local

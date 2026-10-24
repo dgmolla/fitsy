@@ -1,3 +1,4 @@
+import { chainTransaction } from "./chainTransaction";
 import { Prisma, type PrismaClient, type MacroEstimate } from "@prisma/client";
 import { approvedChainRow, buildChainMatcher, chainMenuFingerprint, type ApprovedChainRow, type ChainMatch } from "./chainCatalog";
 // Offline adapters need the pure ordering utility without the shared barrel's environment initialization.
@@ -6,15 +7,28 @@ import { MenuSourceResolver } from "./menuSources/resolver";
 import { FatSecretSource } from "./menuSources/fatSecretSource";
 import { UeApiDirectSource, type UeConcurrencyGate } from "./menuSources/ueApiDirectSource";
 import type { MacroData, StructuredMenuItem } from "./menuSources/types";
+import type { ChainLocation } from './chainGeography';
 
 interface ChainBrand { id: string; slug: string; displayName: string; aliases: string[]; detectionConf: string | null; menuKind: string }
-const brandName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-export function verifiedBrand(restaurant: { name: string; brandId?: string | null }, brands: ChainBrand[]): string | undefined {
-  const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
-  const candidates = brands.filter(b => ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && b.menuKind === "restaurant"
-    && [b.displayName, b.slug, ...b.aliases].some(alias => brandName(alias) === name));
-  if (candidates.length !== 1 || (restaurant.brandId && restaurant.brandId !== candidates[0]!.id)) return undefined;
-  return candidates[0]!.id;
+export const brandName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+type RestaurantBrandIdentity = { name: string; brandId?: string | null };
+/** Build once per catalog/snapshot; duplicate claims remain ambiguous. */
+export function buildBrandIdentityMatcher(brands: ChainBrand[]) {
+  const claims = new Map<string, string[]>();
+  for (const b of brands.filter(b => ["high", "llm-confirmed"].includes(b.detectionConf ?? "") && b.menuKind === "restaurant")) {
+    for (const name of new Set([b.displayName, b.slug, ...b.aliases].map(brandName))) {
+      claims.set(name, [...(claims.get(name) ?? []), b.id]);
+    }
+  }
+  return (restaurant: RestaurantBrandIdentity): string | undefined => {
+    const name = brandName(restaurant.name.replace(/\s*\([^()]+\)\s*$/, "").split(/\s+-\s+/)[0]!);
+    const candidates = claims.get(name) ?? [];
+    if (candidates.length !== 1 || (restaurant.brandId && restaurant.brandId !== candidates[0])) return undefined;
+    return candidates[0];
+  };
+}
+export function verifiedBrand(restaurant: RestaurantBrandIdentity, brands: ChainBrand[]): string | undefined {
+  return buildBrandIdentityMatcher(brands)(restaurant);
 }
 export function officialMacro(row: ApprovedChainRow, item: StructuredMenuItem): MacroData & { reasoning: string } {
   return { calories: row.calories, proteinG: row.proteinG, carbsG: row.carbsG, fatG: row.fatG, confidence: "HIGH", source: "official", dietaryTags: [],
@@ -26,23 +40,25 @@ export async function loadChainServing(prisma: Pick<PrismaClient, "brand" | "cha
   const rows = await prisma.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
   const enabled = new Set(rows.filter(r => (approvedChainRow(r)?.review.aliases.length ?? 0) > 0).map(r => r.brandId));
   const matcher = buildChainMatcher(rows);
+  const identity = buildBrandIdentityMatcher(brands);
   return { brandId: (restaurant: { name: string; brandId?: string | null }) => {
-    const id = verifiedBrand(restaurant, brands); return id && enabled.has(id) ? id : undefined;
+    const id = identity(restaurant); return id && enabled.has(id) ? id : undefined;
   }, match: matcher };
 }
 export type ChainServing = Awaited<ReturnType<typeof loadChainServing>>;
 /** Reviewed brands require location menu evidence. Empty UE menus have no national-catalog fallback; unmatched UE items use estimation, not unverified FatSecret servings. */
-export function chainMenuResolver(restaurant: { name: string; brandId?: string | null; storeUuid: string }, runtime: ChainServing, gate?: UeConcurrencyGate) {
+export function chainMenuResolver(restaurant: { name: string; brandId?: string | null; storeUuid: string } & ChainLocation, runtime: ChainServing, gate?: UeConcurrencyGate) {
   const brandId = runtime.brandId(restaurant);
   return { brandId, resolver: new MenuSourceResolver([
     ...(brandId ? [] : [new FatSecretSource()]), new UeApiDirectSource(restaurant.storeUuid, {}, gate),
-  ]) };
+  ]), resolveMacros: (items: StructuredMenuItem[], estimate: Parameters<typeof resolveChainMacros>[3]) =>
+    resolveChainMacros(items, brandId, runtime.match, estimate, restaurant) };
 }
 /** Only unmatched UE items reach estimation; a resolver never invents menu membership. */
 export async function resolveChainMacros(items: StructuredMenuItem[], brandId: string | undefined,
-  match: (brandId: string | undefined, item: StructuredMenuItem) => ChainMatch,
-  estimate: (items: StructuredMenuItem[]) => Promise<(MacroData | null)[]>): Promise<(MacroData | null)[]> {
-  const matches = items.map(item => match(brandId, item)), unresolved = items.filter((_, i) => matches[i]!.status !== "matched");
+  match: (brandId: string | undefined, item: StructuredMenuItem, location?: ChainLocation) => ChainMatch,
+  estimate: (items: StructuredMenuItem[]) => Promise<(MacroData | null)[]>, location?: ChainLocation): Promise<(MacroData | null)[]> {
+  const matches = items.map(item => match(brandId, item, location)), unresolved = items.filter((_, i) => matches[i]!.status !== "matched");
   const fallback = unresolved.length ? await estimate(unresolved) : [];
   if (fallback.length !== unresolved.length) throw new Error("Estimator result count does not match unresolved menu items");
   let next = 0;
@@ -58,15 +74,16 @@ export const aprilMenuIdentity = (item: AprilItem): StructuredMenuItem => ({ nam
 // Only pre-write validation failures use this type; callers may journal a safely stopped batch.
 export class AprilPlanChangedError extends Error {}
 export async function applyAprilChainMatch(prisma: PrismaClient, expected: AprilItem & { macroEstimates: MacroEstimate[] }, approved: ApprovedChainRow) {
-  return prisma.$transaction(async tx => {
+  return chainTransaction(prisma, async tx => {
     await tx.$queryRaw`SELECT id FROM "ChainItem" WHERE id = ${approved.id} FOR SHARE`;
     const current = await tx.chainItem.findUnique({ where: { id: approved.id } });
     if (!current || approvedChainRow(current)?.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("Chain review changed; rebuild the plan");
-    const restaurant = await tx.restaurant.findUnique({ where: { id: expected.restaurantId }, select: { brandId: true, name: true } });
+    await tx.$queryRaw`SELECT id FROM "Restaurant" WHERE id = ${expected.restaurantId} FOR SHARE`;
+    const restaurant = await tx.restaurant.findUnique({ where: { id: expected.restaurantId }, select: { brandId: true, name: true, lat: true, lng: true } });
     const brands = await tx.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
     if (!restaurant || verifiedBrand(restaurant, brands) !== approved.brandId) throw new AprilPlanChangedError("Restaurant brand identity changed");
     const catalog = await tx.chainItem.findMany({ where: { brandId: approved.brandId } });
-    const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(approved.brandId, item);
+    const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(approved.brandId, item, restaurant);
     if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("April item has no current reviewed binding");
     // Lock and compare the row before adding an estimate. A concurrent edit fails closed.
     const locked = await tx.$queryRaw<{ updatedAt: Date; name: string; section: string | null; description: string | null }[]>`
@@ -86,5 +103,5 @@ export async function applyAprilChainMatch(prisma: PrismaClient, expected: April
       FROM (SELECT e.* FROM "MacroEstimate" e WHERE e."menuItemId" = ${expected.id} ORDER BY ${Prisma.raw(macroWinnerSqlOrder("e"))} LIMIT 1) w WHERE m.id = ${expected.id}
       AND (m.calories, m."proteinG", m."carbsG", m."fatG") IS DISTINCT FROM (w.calories, w."proteinG", w."carbsG", w."fatG")`;
     return tx.menuItem.findUniqueOrThrow({ where: { id: expected.id }, include: { macroEstimates: { orderBy: { id: "asc" } } } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 });
+  });
 }

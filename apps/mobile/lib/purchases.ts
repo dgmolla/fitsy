@@ -9,8 +9,8 @@
  *
  * The SERVER is the source of truth for "is this user allowed in?" (see
  * `syncEntitlement` in usePurchases.tsx). What this file reads client-side
- * via `customerInfo.entitlements.active` is a fast hint that triggers a sync,
- * plus the copy source for lapsed-vs-never-subscribed. The client does NOT
+ * via `customerInfo.entitlements.active` is a fast hint that triggers a sync.
+ * The backend classifies lapsed-vs-never-subscribed. The client does NOT
  * validate receipts itself.
  *
  * Keys are read from `app.config.ts` → `extra.revenueCat`, which pulls from
@@ -20,6 +20,7 @@
 import { Linking, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import Purchases, {
+  INTRO_ELIGIBILITY_STATUS,
   LOG_LEVEL,
   type CustomerInfo,
   type PurchasesOffering,
@@ -135,10 +136,19 @@ export function hasLapsedEntitlement(
 // follow the account across devices and reinstalls (rather than living on an
 // anonymous, device-local id).
 
+// Native logIn can finish after a later logOut (which sees an anonymous user).
+// Serialize identity mutations so the last auth event owns the SDK account.
+let identityWork: Promise<void> = Promise.resolve();
+function changeIdentity<T>(operation: () => Promise<T>): Promise<T> {
+  const result = identityWork.then(operation);
+  identityWork = result.then(() => undefined, () => undefined);
+  return result;
+}
+
 export async function identifyPurchasesUser(userId: string): Promise<CustomerInfo | null> {
   if (!configured) return null;
   try {
-    const { customerInfo } = await Purchases.logIn(userId);
+    const { customerInfo } = await changeIdentity(() => Purchases.logIn(userId));
     return customerInfo;
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -147,10 +157,29 @@ export async function identifyPurchasesUser(userId: string): Promise<CustomerInf
   }
 }
 
+/** Confirm the native account at checkout, retrying identity only when needed. */
+export async function ensurePurchasesUser(userId: string): Promise<boolean> {
+  if (!configured) return false;
+  try {
+    return await changeIdentity(async () => {
+      if (await Purchases.getAppUserID() !== userId) await Purchases.logIn(userId);
+      return await Purchases.getAppUserID() === userId;
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[purchases] checkout identity failed', err);
+    return false;
+  }
+}
+
 export async function logoutPurchasesUser(): Promise<void> {
   if (!configured) return;
   try {
-    await Purchases.logOut();
+    await changeIdentity(async () => {
+      // Check inside the queue: an earlier login may still be settling.
+      // Anonymous logout is a native SDK error, even when its rejection is caught.
+      if (!(await Purchases.isAnonymous())) await Purchases.logOut();
+    });
   } catch {
     // logOut throws when the current user is already anonymous - expected, ignore.
   }
@@ -169,6 +198,16 @@ export async function fetchCustomerInfo(): Promise<CustomerInfo | null> {
   }
 }
 
+/** Read the native identity without changing the serialized identity queue. */
+export async function currentPurchasesUserId(): Promise<string | null> {
+  if (!configured) return null;
+  try {
+    return await Purchases.getAppUserID();
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchOfferings(): Promise<PurchasesOfferings | null> {
   if (!configured) return null;
   try {
@@ -180,10 +219,18 @@ export async function fetchOfferings(): Promise<PurchasesOfferings | null> {
   }
 }
 
-export async function restorePurchases(): Promise<CustomerInfo | null> {
+export async function restorePurchases(
+  userId: string,
+  isCurrentUser: () => Promise<boolean>,
+): Promise<CustomerInfo | null> {
   if (!configured) return null;
   try {
-    return await Purchases.restorePurchases();
+    // The identity check and native restore must stay in the same queue so
+    // a pending login or logout cannot move the restore to another account.
+    return await changeIdentity(async () => {
+      if (await Purchases.getAppUserID() !== userId || !(await isCurrentUser())) return null;
+      return Purchases.restorePurchases();
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[purchases] restorePurchases failed', err);
@@ -200,6 +247,23 @@ export async function restorePurchases(): Promise<CustomerInfo | null> {
 export async function fetchCurrentOffering(): Promise<PurchasesOffering | null> {
   const offerings = await fetchOfferings();
   return offerings?.current ?? null;
+}
+
+/** A free-trial promise requires an affirmative store eligibility result. */
+export async function fetchIntroEligibility(productIds: string[]): Promise<Record<string, boolean>> {
+  if (!configured || Platform.OS !== 'ios' || productIds.length === 0) return {};
+  try {
+    const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIds);
+    return Object.fromEntries(productIds.flatMap<[string, boolean]>(id => {
+      const status = result[id]?.status;
+      if (status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE) return [[id, true]];
+      if (status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_INELIGIBLE ||
+        status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_NO_INTRO_OFFER_EXISTS) return [[id, false]];
+      return []; // An unknown answer must not be presented as ineligible.
+    }));
+  } catch {
+    return {};
+  }
 }
 
 export type PurchaseOutcome = 'purchased' | 'cancelled' | 'error';
@@ -223,10 +287,19 @@ export function interpretPurchaseError(err: unknown): Exclude<PurchaseOutcome, '
  */
 export async function purchasePackage(
   pkg: PurchasesPackage,
+  userId: string,
+  isCurrentUser: () => Promise<boolean>,
 ): Promise<{ outcome: PurchaseOutcome; customerInfo: CustomerInfo | null }> {
   if (!configured) return { outcome: 'error', customerInfo: null };
   try {
-    const { customerInfo } = await Purchases.purchasePackage(pkg);
+    // Auth events and native logIn/logOut can race with a pressed paywall CTA.
+    // Keep this final identity read and the store call in the same queue.
+    const result = await changeIdentity(async () => {
+      if (await Purchases.getAppUserID() !== userId || !(await isCurrentUser())) return null;
+      return Purchases.purchasePackage(pkg);
+    });
+    if (!result) return { outcome: 'error', customerInfo: null };
+    const { customerInfo } = result;
     return { outcome: 'purchased', customerInfo };
   } catch (err) {
     const outcome = interpretPurchaseError(err);
@@ -303,15 +376,22 @@ export async function presentPaywallIfNeeded(
 }
 
 export const MANAGE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
+export const MANAGE_SUBSCRIPTIONS_ANDROID_URL = 'https://play.google.com/store/account/subscriptions';
 
 /**
- * Open the App Store's manage-subscriptions sheet. Falls back to the account
- * subscriptions URL when the native sheet isn't available (older iOS, the
- * SDK not configured, Android), so the user always lands somewhere they can
- * cancel. Used by the delete-account dialog: deleting a Fitsy account does
- * not cancel the Apple subscription, and this is the one-tap way to do that.
+ * Open the active subscription's store when RevenueCat knows it. A purchase
+ * made on another platform must be managed there. Otherwise use the device
+ * store; the native sheet is iOS-only. Used by paywall and account actions.
  */
-export async function showManageSubscriptions(): Promise<void> {
+export async function showManageSubscriptions(customerInfo: CustomerInfo | null = null): Promise<void> {
+  if (customerInfo?.managementURL) {
+    await Linking.openURL(customerInfo.managementURL);
+    return;
+  }
+  if (Platform.OS === 'android') {
+    await Linking.openURL(MANAGE_SUBSCRIPTIONS_ANDROID_URL);
+    return;
+  }
   try {
     await Purchases.showManageSubscriptions();
   } catch (err) {

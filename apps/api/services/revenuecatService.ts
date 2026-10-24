@@ -27,6 +27,8 @@ export const PRO_ENTITLEMENT_ID = "pro";
 export interface RevenueCatEntitlementState {
   /** Entitlement present and not past its expiry. */
   active: boolean;
+  /** Whether RevenueCat has ever recorded this entitlement for the account. */
+  hadProEntitlement: boolean;
   /** Store product identifier backing the entitlement, when present. */
   plan: string | null;
   /** `null` for lifetime / non-expiring grants. */
@@ -111,6 +113,7 @@ export async function fetchProEntitlement(
     if (!ent) {
       return {
         active: false,
+        hadProEntitlement: false,
         plan: null,
         expiresAt: null,
         transactionId: null,
@@ -120,13 +123,14 @@ export async function fetchProEntitlement(
     }
 
     const expiresAt = ent.expires_date ? new Date(ent.expires_date) : null;
-    const validExpiry = expiresAt && !Number.isNaN(expiresAt.getTime()) ? expiresAt : null;
+    if (expiresAt && Number.isNaN(expiresAt.getTime())) return null;
     const plan = ent.product_identifier ?? null;
     const sub = plan ? subscriber.subscriptions?.[plan] : undefined;
     return {
-      active: validExpiry ? validExpiry.getTime() > Date.now() : true,
+      active: expiresAt ? expiresAt.getTime() > Date.now() : true,
+      hadProEntitlement: true,
       plan,
-      expiresAt: validExpiry,
+      expiresAt,
       transactionId: sub?.original_transaction_id ?? sub?.store_transaction_id ?? null,
       billingIssue: Boolean(sub?.billing_issues_detected_at),
       requestDate,

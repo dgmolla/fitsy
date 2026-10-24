@@ -5,13 +5,13 @@
  *
  * The menu API does not yet expose `MenuItem.dietaryTags` (the column exists
  * in Postgres but the response shape is intentionally out of scope for S-229),
- * so we derive vegan / gluten-free / spicy signals client-side from name and
- * description text. This is intentionally conservative — a false negative is
+ * so dietary badges require an explicit claim in the name or description,
+ * never an ingredient guess. This is intentionally conservative — a false negative is
  * better than a false positive when users may make dietary decisions.
  */
 
 import type { MenuItemResult } from '@fitsy/shared';
-import type { MacroValues } from '@/lib/macroPresets';
+import type { MacroValues } from './macroPresets';
 
 export type ChipId =
   | 'high_protein'
@@ -39,10 +39,11 @@ export const SORT_DEFS: { id: SortId; label: string }[] = [
   { id: 'price', label: 'Price' },
 ];
 
-const VEGAN_PATTERNS = /\b(vegan|tofu|tempeh|seitan|plant[- ]based)\b/i;
+const VEGAN_PATTERNS = /\bvegan\b/i;
+const NOT_VEGAN = /\b(?:not|non)[ -]+vegan\b/i;
 const NON_VEGAN_PATTERNS = /\b(chicken|beef|pork|salmon|tuna|shrimp|bacon|cheese|egg|yogurt|butter|milk|cream|fish|lamb|turkey|prosciutto|ham)\b/i;
 const GLUTEN_FREE_PATTERNS = /\b(gluten[- ]free|gf\b)\b/i;
-const GLUTEN_PATTERNS = /\b(bread|bun|pasta|noodle|wheat|tortilla|flour|pita|naan|crouton|breaded)\b/i;
+const NOT_GLUTEN_FREE = /\b(?:not|non)[ -]+(?:gluten[- ]free|gf)\b/i;
 const SPICY_PATTERNS = /\b(spicy|sriracha|jalape[ñn]o|habanero|chipotle|buffalo|cayenne|chili|hot sauce|szechuan|fiery|peri[- ]?peri)\b/i;
 
 /** Tags inferred from item text — used by both filter chips and badge row. */
@@ -55,10 +56,8 @@ export interface DerivedTags {
 export function deriveTags(item: MenuItemResult): DerivedTags {
   const text = `${item.name} ${item.description ?? ''}`;
   return {
-    vegan: VEGAN_PATTERNS.test(text) && !NON_VEGAN_PATTERNS.test(text),
-    glutenFree:
-      GLUTEN_FREE_PATTERNS.test(text) ||
-      (text.length > 0 && !GLUTEN_PATTERNS.test(text) && /\b(bowl|salad|grilled)\b/i.test(text)),
+    vegan: VEGAN_PATTERNS.test(text) && !NOT_VEGAN.test(text) && !NON_VEGAN_PATTERNS.test(text),
+    glutenFree: GLUTEN_FREE_PATTERNS.test(text) && !NOT_GLUTEN_FREE.test(text),
     spicy: SPICY_PATTERNS.test(text),
   };
 }

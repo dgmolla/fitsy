@@ -36,7 +36,7 @@ touch multiple domains will be rejected.
 ## Constraints
 - Follow the design system / component library — no one-off styles
 - API calls go through the API client layer (`apps/mobile/lib/`), never directly from components
-- Keep components under 200 lines — extract when larger
+- Keep components cohesive with clear responsibilities and interfaces; extract when it clarifies behavior.
 - Accessibility: proper accessibility labels, touch targets (44x44pt min), screen reader support
 - Follow patterns established in existing code
 - Mobile-first: optimize for thumb-zone, progressive disclosure, minimal input
@@ -66,19 +66,22 @@ Review mobile client code and specs that touch your domain. Check:
 - [ ] Loading, error, and empty states handled
 - [ ] Accessibility (labels, touch targets, screen reader)
 - [ ] No hardcoded strings (if using i18n)
-- [ ] Component size reasonable (<200 lines)
+- [ ] Components have cohesive responsibilities and readable interfaces
 - [ ] Works on both iOS and Android
 
 ## Before Opening a PR
 
-Run the full pre-PR gate locally. Fix all failures in your session.
+Follow [canonical shipping](../../docs/engineering/devops/shipping.md): freeze and commit source, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, and complete one passing independent review before full suites and affected E2E acceptance.
+Repair findings and revalidate affected cheap checks and review before full acceptance.
+Preserve UI signoff, release approvals, source identity and the active AI review attempt limit.
+Run every required full gate before push; fix all failures in your session.
 
 1. `bash scripts/structural-tests.sh`
 2. `npx tsc --noEmit`
 3. `npm test`
 4. `npm run build`
 5. **Mobile E2E**: Use the mobile MCP (`@mobilenext/mobile-mcp`) to run smoke
-   tests against the Expo Go simulator before requesting review.
+   development reproduction and UI signoff before review, then final candidate acceptance after a passing review.
 
 ## After Pushing a PR
 

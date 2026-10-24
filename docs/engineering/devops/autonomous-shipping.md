@@ -1,7 +1,7 @@
 # Autonomous Shipping
 
 > **Status:** Design v2, 2026-08-28 · **Owner:** CTO · Supersedes v1 (2026-08-28, same file)
-> **Rollout status (2026-09-07):** steps 2-5 LIVE (verify registry #233, static completeness #236, lenses + local poller #238-240, deploy/rollback #241; dev environment 2026-08-29). Step 1 (ruleset) deliberately deferred by owner decision - checks are advisory until it flips. Poller LaunchAgent `com.fitsy.review-poller` reviews every open PR on the Max subscription. Steps 6-8 buildable core LIVE 2026-09-07 (#244-#251): migration safety, own-code-mock + mutation shadows (59% baseline), real-DB tests + response contract (which caught the matchScore null wire bug, #245/#246), sim CLI + FEATURE_MAP + first Maestro flows + EAS e2e workflow, all seven lenses + multi-lens poller + incident eval corpus/replay + escaped-defects metric. Remaining, gated by design: step 8 lens tuning (first real incidents), step 9 routines (two stable weeks), step 10 ratchet (ongoing), step 1 ruleset (owner's call).
+> **Rollout status (2026-09-07):** steps 2-5 LIVE (verify registry #233, static completeness #236, lenses + local poller #238-240, deploy/rollback #241; dev environment 2026-08-29). Step 1 (ruleset) deliberately deferred by owner decision - checks are advisory until it flips. Steps 6-8 buildable core LIVE 2026-09-07 (#244-#251): migration safety, own-code-mock + mutation shadows (59% baseline), real-DB tests + response contract (which caught the matchScore null wire bug, #245/#246), sim CLI + FEATURE_MAP + first Maestro flows + EAS e2e workflow, all seven lenses + multi-lens poller + incident eval corpus/replay + escaped-defects metric. Remaining, gated by design: step 8 lens tuning (first real incidents), step 9 routines (two stable weeks), step 10 ratchet (ongoing), step 1 ruleset (owner's call).
 > Goal: any code change, from any origin, reaches production with no human in the merge path, and every escape makes the pipeline stronger.
 
 This document is the plan.
@@ -58,7 +58,7 @@ Each row names the mechanism; a tenet with "convention" as its mechanism is a TO
 | T5 | **Tests are the spec, and they must be able to fail.** No `--passWithNoTests`. New behavior lands with a test that fails without the change. Agent-written tests are checked by mutation score on the touched files. | Jest config, Stryker incremental with `thresholds.break`, "test-fails-without-change" check on incident PRs |
 | T6 | **Deterministic before probabilistic.** Cheap binary checks run first and short-circuit. Agents run only where judgment is needed, only on the paths that need it, at the smallest model that works. A finding an agent has made twice becomes a deterministic check. | Layer ordering in `scripts/verify`, `risk-tiers.yml` path routing, lens files carry a "promote to lint" field |
 | T7 | **Evidence, not assertions.** "Verified" means an artifact exists: test output, screenshot, log excerpt, deploy URL. PR bodies are generated from `.evidence/`, not typed. | `scripts/verify` writes `.evidence/`; CI uploads it; the review lens rejects PRs whose test plan has no artifact |
-| T8 | **Small, single-domain, revertable PRs.** Hard cap of 600 changed lines excluding lockfiles, migrations, generated files, and snapshots. One domain per PR. Every PR is squash-merged so `git revert` is one commit. | `size-check` in Layer 1, existing `domain-check`, squash-only ruleset |
+| T8 | **Coherent, reviewable and revertable PRs.** Keep one accepted outcome together when its source and controls require joint validation; split only independently useful, testable and safely shippable units, using reviewability and complete evidence rather than a line quota. | `size-check` in Layer 1, existing `domain-check`, squash-only ruleset |
 | T9 | **Deploys are reversible in one command.** Migrations are additive unless the PR carries a down migration. Risky behavior ships behind a flag. Mobile ships as staged OTA. | `migration-safety` check, `scripts/deploy/rollback.sh`, `eas update --rollout-percentage` |
 | T10 | **Danger zones get the strictest tier.** Auth, subscriptions, macro estimation, external clients, migrations, workflows, and deploy config are `tier: high` and run every layer at the strongest model. | `risk-tiers.yml` consumed by CI job conditions and lens selection |
 | T11 | **Fail closed on the unknown.** A route without a guard declaration, an env var without a schema entry, a check without a registry entry, a workflow change without the workflow lens: each fails, never warns. | Structural checks are FAIL-only; env schema in `packages/shared/src/env.ts` is the only reader of `process.env` |
@@ -180,9 +180,9 @@ Agents stop reading a checklist and run the command.
 | eslint mobile | **new** | mobile is entirely unlinted; add `react-native` and `react-hooks` plugin configs |
 | `dependency-cruiser` (T3) | **new** | the boundary graph from T3 as config; also forbids circular imports and `apps/api/app/**` importing `@prisma/client` directly |
 | `knip` dead exports and unused deps | **new**, shadow first | prevents agent-created orphans from accumulating |
-| structural tests | have, **fix** | convert 4-8 from WARN to FAIL with a grandfather allowlist file that can only shrink (a check asserts the allowlist never grows); make 3 and 5 use `--scope=changed` |
+| structural tests | have, **fix** | retain explicit security and architectural invariants with their existing shrink-only exceptions; source-file length does not fail verification |
 | route guard + schema check (T4) | extend existing check 12 | every `route.ts` exports `auth: 'public' \| 'user' \| 'subscriber'` and a schema; check reads the export |
-| `size-check` (T8) | **new** | 600 lines, exclusions listed in registry; `override-size` label with justification logs to Layer 10 |
+| `size-check` (T8) | **new** | reports counted review scope without blocking by line count or requiring a size-override label |
 | secrets scan | have (grep), **upgrade** | `gitleaks` on the diff; the grep is weak |
 | `actionlint` + workflow-diff lens trigger | **new** | any `.github/**` change is tier high |
 | `passWithNoTests` removed | **fix** | all three jest configs |
@@ -271,7 +271,7 @@ The verifier runs on a different model tier from the finder (Sonnet finds, Haiku
 We cannot get a different model family inside one vendor; the compensating controls are the different lens, the refute pass, and Layer 1-3 catching the mechanical classes regardless.
 Escape rate in Layer 10 tells us whether this is enough.
 
-**Lens files** live in `.claude/lenses/<lens>.md`, each under 80 lines: what to look for, evidence bar, examples from real incidents, and a `promote-to-lint:` section listing findings this lens has made more than once (T6 requires those to become deterministic checks; the harness-audit lens checks this list is shrinking).
+**Lens files** live in `.claude/lenses/<lens>.md`, organized around what to look for, the evidence bar, examples from real incidents, and a `promote-to-lint:` section listing findings this lens has made more than once (T6 requires those to become deterministic checks; the harness-audit lens checks this list is shrinking).
 A `REVIEW.md` at repo root carries the shared rules: severity definitions, skip paths (lockfiles, generated, snapshots, `.evidence/`), `file:line` evidence bar, nit cap of 5, "do not comment on what CI enforces".
 
 **Mechanism:** `claude-code-action@v1` in `.github/workflows/review.yml`, mode "once after PR creation, then on `@claude review`" (not every push; the author agent asks for re-review after fixing).
@@ -282,7 +282,7 @@ Human dispute path: reply on the finding; the author agent may close a finding w
 **Cost:** Sonnet lenses roughly 30-60k tokens each; typical medium PR runs 2-3 lenses, roughly $1-3.
 Tier high adds a Fable pass, roughly $5-10.
 At current volume (5-20 PRs/month) this is under $100/month.
-Cap: a monthly spend limit on the CI API key and a per-PR token budget in the workflow; over budget fails closed with a `review-budget` label for a human.
+Review attempts are limited to two per head SHA by the local AI review poller; workflow and provider timeouts bound individual execution.
 
 **Changes:** the spawned-subagent review in `sprint.md` §3b is removed.
 Review happens in CI for every PR, whoever opened it.
@@ -290,12 +290,13 @@ Review happens in CI for every PR, whoever opened it.
 Role files keep their "review lens" sections only as input to the lens files, then drop them.
 
 **Runners.** The pipeline requires a check-run on the PR named `lens/<name>`; it does not care which process posts it.
-`scripts/review/run-lens.sh <pr> <lens>` is the single implementation: reads the lens file and `REVIEW.md`, runs `claude -p` with the restricted tool set, writes `.evidence/review-<lens>.json`, posts the check-run via `gh api`.
+`scripts/review/run-review.sh <pr>` is the canonical implementation: selects all required domains, invokes one independent read-only reviewer, validates complete domain results and projects existing `lens/<name>` statuses.
+See [shipping.md](shipping.md) for current provider, cache and budget policy; the legacy `run-lens.sh` entrypoint delegates the full round.
 Callers, in the order we adopt them:
 
 | Runner | Mechanism | Cost | When |
 |---|---|---|---|
-| `local` (**default now**) | launchd job on Dawit's Mac (same pattern as the daily-memo job) polls `gh pr list` every 2 minutes for open PRs missing a lens check-run and runs them; also reachable by hand as `npm run review -- <pr>` | covered by the Max subscription | from rollout step 4 |
+| `local` | `bash scripts/review/poller.sh` runs on demand; the repository no longer installs a review daemon | covered by the Max subscription | legacy local runner |
 | `cloud-routine` | Claude Code routine on PR-open events runs the same script | subscription usage, no Mac | once lenses are trusted, so PRs merge while the Mac is asleep |
 | `actions-oauth` | `claude-code-action@v1` with `CLAUDE_CODE_OAUTH_TOKEN` | subscription usage | alternative to routines; note Anthropic announced and then paused (2026-06) moving `claude -p` and Actions off subscription pools, so this may become per-token with notice |
 | `actions-api` | same action with `ANTHROPIC_API_KEY` | per token (§9) | fallback if subscription paths are cut off |
@@ -454,7 +455,7 @@ The pipeline's job is to extract the project context they would otherwise need a
 
 | The author would need to know | Supplied by | Layer |
 |---|---|---|
-| how to build, test, run, and what "done" means | `npm run verify`, `npm run dev:*`; root `CLAUDE.md` under 100 lines with only commands and pointers; nested `apps/api/CLAUDE.md`, `apps/mobile/CLAUDE.md`, `scripts/CLAUDE.md` with that surface's conventions | L0 |
+| how to build, test, run, and what "done" means | `npm run verify`, `npm run dev:*`; root `CLAUDE.md` with clear commands and pointers; nested `apps/api/CLAUDE.md`, `apps/mobile/CLAUDE.md`, `scripts/CLAUDE.md` with that surface's conventions | L0 |
 | the correct shape of a route, screen, service, migration, test | `scripts/gen/*` emits it; the author fills in logic | T1 |
 | where a file is allowed to import from | dependency-cruiser failure names the rule and the allowed targets | L1 |
 | which routes are guarded, what the request/response looks like | `packages/shared/src/contracts/`; the contract test fails with the schema diff | L3, L4 |
@@ -538,7 +539,7 @@ Anything without a mechanism is deleted rather than documented.
 | `auto-merge` | `on-green` | GitHub auto-merge enabled by the classify job after checks pass (GitHub rejects enabling it earlier since 2026-03) |
 | `spec-requirement` | `feature` | `spec-conformance` lens fails a `medium+` feature PR with no `Spec:` line; bug fixes need an `incident` link instead |
 | `shadow-checks` | list | registry `blocking: shadow`; promoted by editing the registry in a PR that shows two weeks of zero false positives |
-| `review-budget` | `$X/month`, `N tokens/PR` | API key spend cap, workflow budget guard |
+| AI review attempts | Two per head SHA | Local AI review poller; workflow and provider timeouts |
 | `harden-on-incident` | `required` | `harness-audit` lens + `replay.sh` |
 | `human-override` | label `override-check` + justification | logged to L10, sampled weekly |
 

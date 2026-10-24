@@ -1,0 +1,181 @@
+# Run with an identified Test Store build and a freshly reset disposable keychain.
+# Compare each disclosure to the price actually returned by the store.
+appId: com.fitsy.mobile
+tags: [auth, billing, onboarding, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true # Disposable simulator: isolate auth between flows.
+# XCTest can reject an accessibility read while the first React frame enters.
+# Retry only this startup read; every billing interaction remains single-pass.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - assertVisible:
+          id: welcome-start
+# Fresh welcome has no controls in this corner. Dismiss the Debug warning
+# window here; native LogBox is absent from the app accessibility hierarchy.
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: "92%,93%"
+# A direct no-trial entry authenticates before displaying Test Store terms.
+- openLink: com.fitsy.mobile://welcome/payment
+# A fresh simulator can require system confirmation for an app link.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible: "Continue with Apple"
+    timeout: 15000
+- assertNotVisible:
+    id: paywall-price-yearly
+- tapOn: "Dev login"
+- extendedWaitUntil:
+    visible:
+      id: paywall-price-yearly
+    timeout: 30000
+- assertVisible:
+    id: paywall-offer-paid
+- assertNotVisible:
+    id: paywall-hero
+- assertVisible:
+    id: paywall-logo
+- assertVisible: "Discover meals in Los Angeles"
+- assertVisible: "Find nearby options for your goals"
+- assertVisible: "Compare estimated nutrition"
+- assertVisible: "No commitment, cancel anytime"
+- assertVisible: "Continue to purchase"
+- assertNotVisible: "Try Fitsy free"
+- extendedWaitUntil:
+    visible:
+      id: paywall-price-yearly
+    timeout: 15000
+- assertNotVisible: "Get a trial reminder"
+- assertNotVisible:
+    id: paywall-timeline
+- copyTextFrom:
+    id: paywall-price-yearly
+- evalScript: ${output.annualPrice = maestro.copiedText}
+- scrollUntilVisible:
+    element:
+      id: paywall-plan-monthly
+    direction: DOWN
+- tapOn:
+    id: paywall-plan-monthly
+- copyTextFrom:
+    id: paywall-price-monthly
+- evalScript: ${output.monthlyPrice = maestro.copiedText}
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes(output.monthlyPrice) && maestro.copiedText.includes('Renews automatically')}
+- scrollUntilVisible:
+    element:
+      id: paywall-plan-yearly
+    direction: UP
+- tapOn:
+    id: paywall-plan-yearly
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically')}
+# Continue on the authenticated paywall to exercise its decline flow.
+# The decline action follows the legal links and may be below the safe area.
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
+- tapOn:
+    id: welcome-skip
+- assertVisible: "Eat well for less."
+- tapOn:
+    id: paywall-back-to-plans
+- assertVisible:
+    id: paywall-restore
+# The decline action follows the legal links and may be below the safe area.
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
+- tapOn:
+    id: welcome-skip
+- tapOn:
+    id: paywall-discount-decline
+- assertVisible: "Your next meal,.*"
+- tapOn:
+    id: paywall-back-to-plans
+- assertVisible:
+    id: paywall-terms
+- tapOn:
+    id: paywall-restore
+- extendedWaitUntil:
+    visible: "Nothing to restore"
+    timeout: 15000
+- tapOn: "OK"
+# The native purchase branch uses the already authenticated, unentitled
+# development account selected by EXPO_PUBLIC_DEV_LOGIN_EMAIL.
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 15000
+- assertVisible:
+    id: paywall-offer-paid
+- assertNotVisible: "Leave a review"
+- openLink: com.fitsy.mobile://welcome/payment
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: paywall-plan-yearly
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
+- tapOn:
+    id: welcome-skip
+- tapOn:
+    id: paywall-discount-buy
+- extendedWaitUntil:
+    visible: "Test Store Purchase"
+    timeout: 15000
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 15000
+- assertNotVisible: "Test Store Purchase"
+- tapOn:
+    point: "92%,93%"
+- scrollUntilVisible:
+    element:
+      id: welcome-skip
+    direction: DOWN
+- tapOn:
+    id: welcome-skip
+- tapOn:
+    id: paywall-discount-buy
+- extendedWaitUntil:
+    visible: "Test Store Purchase"
+    timeout: 15000
+- tapOn: "Test failed purchase"
+- assertVisible: "Purchase not completed"
+- assertVisible: "Please try again. You can also restore an existing subscription."
+- tapOn: "OK"
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 15000
+- assertNotVisible: "Test Store Purchase"

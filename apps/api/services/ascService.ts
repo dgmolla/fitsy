@@ -66,7 +66,7 @@ export interface AscGetOptions {
 
 /**
  * GET an ASC endpoint (path relative to /v1) and parse JSON.
- * Throws `Error("ASC <status> for <path>")` on a non-2xx response.
+ * Throws a status and sanitized Apple error code on a non-2xx response.
  */
 export async function ascGet<T = unknown>(
   path: string,
@@ -76,7 +76,19 @@ export async function ascGet<T = unknown>(
     headers: { Authorization: `Bearer ${opts.token ?? ascToken()}` },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`ASC ${res.status} for ${path}`);
+  if (!res.ok) {
+    let code: string | undefined;
+    try {
+      const body: unknown = await res.json();
+      const candidate = (body as { errors?: Array<{ code?: unknown }> })?.errors?.[0]?.code;
+      if (typeof candidate === "string" && /^[A-Z0-9_.-]{1,100}$/.test(candidate)) {
+        code = candidate;
+      }
+    } catch {
+      // A malformed upstream response must retain the HTTP status.
+    }
+    throw new Error(`ASC ${res.status}${code ? ` ${code}` : ""} for ${path}`);
+  }
   return (await res.json()) as T;
 }
 

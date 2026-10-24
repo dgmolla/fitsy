@@ -130,4 +130,19 @@ describe("ascGet", () => {
     expect(ascErrorStatus(err)).toBe(401);
     expect(ascErrorStatus(new Error("boom"))).toBeNull();
   });
+
+  it("keeps a safe Apple error code but discards error details", async () => {
+    jest.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ errors: [{
+        code: "FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED",
+        detail: "private account detail",
+      }] }),
+    } as Response);
+    const err = await ascGet("/apps/1/subscriptionGroups", { token: "tok" }).catch((e: unknown) => e);
+    expect((err as Error).message).toContain("FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED");
+    expect((err as Error).message).not.toContain("private account detail");
+    expect(ascErrorStatus(err)).toBe(403);
+  });
 });

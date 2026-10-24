@@ -17,6 +17,7 @@ const config = {
         tsconfig: {
           module: "CommonJS",
           moduleResolution: "node",
+          jsx: "react-jsx",
           paths: {},
           strict: true,
         },

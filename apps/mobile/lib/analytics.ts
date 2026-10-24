@@ -815,7 +815,7 @@ export function trackFeedbackUpvoted(props: {
 // (onboarding vs profile upsell). No pricing/receipt data is logged; that lives
 // in RevenueCat + the Subscription table.
 
-export function trackPaywallShown(props: { source: string }): void {
+export function trackPaywallShown(props: { source: string; paywall_variant?: 'A' | 'B'; paywall_config_version?: string; paywall_tester_override?: boolean }): void {
   try {
     getPostHogClient().capture('paywall_shown', props as unknown as Record<string, JsonType>);
   } catch (err) {
@@ -823,7 +823,7 @@ export function trackPaywallShown(props: { source: string }): void {
   }
 }
 
-export function trackPaywallResult(props: { source: string; outcome: string }): void {
+export function trackPaywallResult(props: { source: string; outcome: string; paywall_variant?: 'A' | 'B'; paywall_config_version?: string; paywall_tester_override?: boolean }): void {
   try {
     getPostHogClient().capture('paywall_result', props as unknown as Record<string, JsonType>);
   } catch (err) {
@@ -868,4 +868,20 @@ export function trackEntitlementSyncFailed(props: { reason: string }): void {
 
 export function __resetForTesting(): void {
   _client = null;
+}
+
+/** Offering assignment is supplied by RevenueCat; this records the shown UI. */
+export function trackPaywallExperimentExposure(props: { offering_id: string; access_variant: 'hard' | 'preview'; image_variant: 'none' | 'meal'; layout_variant?: 'choice_c' | 'trial_timeline' | 'mosaic_benefits'; paywall_variant?: 'A' | 'B'; paywall_config_version?: string; paywall_tester_override?: boolean }): void {
+  try { getPostHogClient().capture('paywall_experiment_exposed', props); }
+  catch (error) { logCaptureError('paywall_experiment_exposed', error); }
+}
+
+export function trackTrialCatalogMismatch(props: { offering_id: string; product_id: string; actual_days: number | null; actual_period: string; desired_days: number }): void {
+  try { getPostHogClient().capture('trial_catalog_mismatch', props); }
+  catch (error) { logCaptureError('trial_catalog_mismatch', error); }
+}
+
+export function trackReminderAction(props: { action: 'opened'; kind: 'meal' | 'trial' } | { action: 'preferences_changed'; meals: boolean; trial: boolean }): void {
+  try { getPostHogClient().capture('reminder_action', props); }
+  catch (error) { logCaptureError('reminder_action', error); }
 }

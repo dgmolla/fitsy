@@ -17,6 +17,7 @@
 
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { prepareReminderChannel } from './notificationSchedule';
 
 export type NotificationPermissionStatus = 'granted' | 'denied' | 'undetermined';
 
@@ -32,8 +33,14 @@ export interface RequestPermissionResult {
  * as a soft denial — they cannot prompt again, only deep-link to Settings.
  */
 export async function requestPermissionsAsync(): Promise<RequestPermissionResult> {
+  await prepareReminderChannel();
   const { status } = await Notifications.requestPermissionsAsync();
   return { status: status as NotificationPermissionStatus };
+}
+
+export async function getNotificationPermission(): Promise<NotificationPermissionStatus> {
+  try { return (await Notifications.getPermissionsAsync()).status as NotificationPermissionStatus; }
+  catch { return 'undetermined'; }
 }
 
 /**

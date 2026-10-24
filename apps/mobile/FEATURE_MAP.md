@@ -11,27 +11,44 @@ signed in without targets -> `/macro-setup`.
 
 | Route | Reached by | Anchor (visible text) | Notes |
 |---|---|---|---|
-| `/welcome/problem` | fresh install | "continue" (lowercase CTA); login link reads "Have an account? Log in" | animated dish columns; first onboarding screen |
-| `/welcome/*` (story flow) | tapping continue repeatedly | per-screen headlines | ~20 screens: tried, promise, how-it-works, value-*, data-scale, sex, age, height, weight, activity, goal, dietary, macros-*, tuning, finding, response, location/notification permission, leave-review, trial, payment; email signup at `/auth/register` |
+| `/welcome/problem` | fresh install | "Find meals that fit"; login link reads "Have an account? Log in" | animated dish columns; first onboarding screen |
+| `/welcome/promise` | legacy links | redirects to location | Retired duplicate introduction |
+| `/welcome/goal` | covered area | `goal-performance`, `goal-build_muscle`, `goal-lose_fat` | Goal personalizes the story and assisted targets |
+| `/welcome/tried` | goal choice | `tried-meal_prep`, `tried-calorie_apps` | Four prior approaches personalize the response, graph payoff and tour |
+| `/welcome/response` | prior approach | `welcome-continue` | First payoff, then the personalized goal graph |
+| `/welcome/location-permission` | welcome CTA | `location-use-current`, `location-choose-area`, `location-continue-area` | Saved area becomes the primary action; GPS and manual alternatives remain; actual coverage determines continuation |
+| `/welcome/value-abundance` | legacy links only | redirects to goal-payoff | Retired benefits screen |
+| `/welcome/value-payoff` | legacy links only | redirects to goal-payoff | Retired middle payoff screen |
+| `/welcome/goal-payoff` | response | `goal-progress-graph` | Second payoff; conceptual graph and copy reflect goal and prior approach, then target choice |
+| `/welcome/how-it-works` | confirmed meal targets | `nutrition-source-published`, `nutrition-source-estimated` | Source transparency and portion uncertainty before discovery |
+| `/welcome/target-setup` | fitness payoff | `target-mode-saved`, `target-mode-known`, `target-mode-estimate` | Choose saved, own or assisted targets, then confirm once; saved targets still visit nutrition trust |
+| `/welcome/macros-intro` | optional target help | `welcome-continue` | Returns to target choice |
+| `/welcome/height`, `/welcome/weight`, `/welcome/age`, `/welcome/sex`, `/welcome/activity` | estimate choice only | `welcome-continue` | Original profile questions; known targets bypass body questions |
+| `/welcome/tuning` | known-target choice or profile questions | `meal-target-calories` | Editable per-meal targets; goal and edits persist |
+| `/welcome/preview` | nutrition trust | `preview-pick-1`, `preview-guide` | Real search, restaurant photos, three visible picks and guided tour; locked menus and extra results open plans |
+| `/welcome/trial` | account creation with selected preview | `trial-offer-note` | Free trial introduction only with live eligibility; other offers route directly to payment |
+| `/welcome/trial-reminder` | trial introduction | `trial-reminder-allow`, `trial-reminder-skip` | Optional OS permission; schedule only after verified trial purchase |
+| `/welcome/payment` | reminder screen or locked action | `paywall-plan-yearly` | Live plans; root launch has no fabricated Back; explicit decline resets the stack |
+| `/welcome/notification-permission` | legacy links | `notification-allow`, `notification-skip` | Remind me directly asks OS permission; no choices; then selected meal |
 | `/auth/login` | "Have an account? Log in" link on the problem screen (router.push, no intermediate screen) | "Welcome back", "Continue with Apple" | Apple/Google/email in one screen |
-| `/welcome/signin` | within the onboarding story flow | "Continue with Apple" | onboarding-time account creation |
+| `/welcome/signin` | locked preview action | `signup-selected-restaurant`, `signup-apple`, `signup-google` | Selected restaurant/search/targets remain visible; authenticated onboarding continues to trial introduction |
 | `/auth/reviewer` | App Store review deep link | - | demo access |
 | `/macro-setup` | signed in, no targets | - | standalone target editor |
-| `/(tabs)/search` | cold start when entitled; tab bar | "Search restaurants or dishes" | main surface; teaser lock when unentitled |
+| `/(tabs)/search` | cold start when entitled; tab bar | "Search restaurants or dishes" | same discovery component as preview; tabs require entitlement; hard paywall after decline by default |
 | `/(tabs)/saved` | tab bar | - | saved restaurants/items |
 | `/(tabs)/profile` | tab bar | "YOUR GOAL" | targets, plan, sign out |
 | `/restaurant/[id]` | tapping a search result | restaurant name | menu + macro detail |
+| `/welcome/leave-review` | legacy links only | redirects to permission/out-of-area | no rating prompt in onboarding |
 | `/welcome/resubscribe` | cold start when lapsed | - | win-back screen |
 | out-of-area state | search preview returns 0 nearby | "Keep me posted" (inline on the search screen, not a separate route) | LA-only launch teaser; `/welcome/out-of-area` also exists in the onboarding flow |
+| `/notification-settings` | Profile -> Notifications; trial reminder | `reminder-permission`, `reminders-device-settings` | Device notification settings and actual upcoming schedule; no per-reminder configuration |
 | `/feedback-board` | profile | - | feedback list |
 
 Known flake: first cold start after install animates for ~2s before "continue"
 is tappable - flows use extended waits on that screen.
 
-E2E flows run against the `e2e-simulator` EAS build (embedded bundle, dev API;
-Supabase env intentionally unset - the app treats it as signed-out, which the
-cold-start flow depends on). A dev-client install will NOT work with
-`clearState` flows: it lands in the launcher UI.
-
-Simulator basics: `scripts/sim/sim boot`, install the e2e (or dev-client) build, then
-`sim launch <bundle-id>`. Metro logs: `sim logs --grep ERROR`.
+E2E uses the identified local build produced by `scripts/sim/product-flow.mjs`:
+embedded Release for normal app flows, or signed Debug with its owned Metro for
+RevenueCat Test Store. Both use dev services; fresh-account runs explicitly reset
+the disposable simulator keychain. See `docs/engineering/devops/shipping.md` for
+the blocking evidence procedure. A normal dev-client launcher is not this build.

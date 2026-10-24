@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { pushProfileToServer } from './profileSync';
+import { clearOnboardingResume } from './onboardingResume';
+import { queueSavedProfileToServer, deliverQueuedProfile } from './profileSync';
 import { getOnboardingData } from './onboardingStorage';
 import { trackOnboardingCompleted } from './analytics';
+import { markPurchasedContinuation } from './paywallIntent';
 
 export const ONBOARDING_COMPLETE_KEY = 'onboardingComplete';
 export const DISCOUNT_APPLIED_KEY = 'discountApplied';
@@ -15,10 +17,17 @@ export const DISCOUNT_APPLIED_KEY = 'discountApplied';
  * event. Resolves to whether this call did the recording.
  */
 export async function recordOnboardingComplete(discounted: boolean): Promise<boolean> {
+  // Save the owned destination before clearing the checkpoint or showing the
+  // optional notification screen, so termination here can safely continue it.
+  if ((await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)) !== 'true') {
+    await queueSavedProfileToServer();
+    deliverQueuedProfile();
+  }
+  await markPurchasedContinuation();
+  await clearOnboardingResume();
   if ((await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)) === 'true') return false;
   await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
   if (discounted) await AsyncStorage.setItem(DISCOUNT_APPLIED_KEY, 'true');
-  pushProfileToServer();
   const d = await getOnboardingData();
   trackOnboardingCompleted({
     goal: d.goal,

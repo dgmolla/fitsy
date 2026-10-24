@@ -1,0 +1,95 @@
+import { canOfferTrialReminder, DEFAULT_REMINDER_PREFERENCES, planReminders, trialReminderDate } from './notificationPlan';
+import { purchaseTerms } from './purchaseTerms';
+
+const now = new Date(2026, 8, 7, 9); // Monday, local time.
+const active = { isActive: true, periodType: 'TRIAL' as const, willRenew: true,
+  latestPurchaseDate: new Date(2026, 8, 7, 8).toISOString(), expirationDate: new Date(2026, 8, 14, 12).toISOString() };
+const input = { now, userId: 'synthetic-account', entitled: true, preferences: { meals: true, trial: true }, subscription: active };
+
+test('reminder choice follows eligible store trial length', () => {
+  const product = { priceString: '$59.99', subscriptionPeriod: 'P1Y', introPrice: { price: 0, priceString: '$0', period: 'P1W', periodUnit: 'WEEK', periodNumberOfUnits: 1, cycles: 1 } };
+  expect(canOfferTrialReminder(purchaseTerms(product, true))).toBe(true);
+  expect(canOfferTrialReminder(purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P2D' } }, true))).toBe(false);
+  expect(canOfferTrialReminder(purchaseTerms({ ...product, introPrice: { ...product.introPrice, period: 'P1M' } }, true))).toBe(true);
+  expect(canOfferTrialReminder(purchaseTerms(product, false))).toBe(false);
+  expect(canOfferTrialReminder(null)).toBe(false);
+});
+
+test('reminders are opt-in and never scheduled for signed-out or unentitled users', () => {
+  expect(planReminders({ ...input, preferences: DEFAULT_REMINDER_PREFERENCES })).toEqual([]);
+  expect(planReminders({ ...input, userId: null })).toEqual([]);
+  expect(planReminders({ ...input, entitled: false })).toEqual([]);
+});
+test('inactive store entitlement stops every reminder even while the server verdict is stale', () => {
+  expect(planReminders({ ...input, subscription: { ...active, isActive: false } })).toEqual([]);
+});
+test('trial timing follows actual expiry rather than a hardcoded trial length', () => {
+  for (const days of [3, 7, 14]) {
+    const end = new Date(2026, 8, 7 + days, 12);
+    const reminder = planReminders({ ...input, subscription: { ...active, expirationDate: end.toISOString() } }).find(r => r.kind === 'trial');
+    expect(reminder?.date).toEqual(trialReminderDate(end));
+    expect(end.getTime() - reminder!.date.getTime()).toBeGreaterThanOrEqual(48 * 3_600_000);
+  }
+});
+test('an exact three-day trial has the same schedulable target as its offer presentation', () => {
+  const start = new Date(2026, 8, 7, 12);
+  const end = new Date(2026, 8, 10, 12);
+  const reminders = planReminders({ ...input, now: start, preferences: { meals: false, trial: true },
+    subscription: { ...active, latestPurchaseDate: start.toISOString(), expirationDate: end.toISOString() } });
+  expect(reminders).toHaveLength(1);
+  expect(reminders[0].date).toEqual(new Date(2026, 8, 8, 12));
+});
+test('a purchase days after opt-in schedules from verified expiry, not the opt-in date', () => {
+  const optIn = new Date(2026, 8, 7, 12);
+  const purchase = new Date(2026, 8, 12, 12);
+  const expiry = new Date(2026, 8, 26, 12);
+  const reminders = planReminders({ ...input, now: purchase, preferences: { meals: false, trial: true },
+    subscription: { ...active, latestPurchaseDate: purchase.toISOString(), expirationDate: expiry.toISOString() } });
+  expect(reminders).toHaveLength(1);
+  expect(reminders[0].date).toEqual(new Date(2026, 8, 24, 12));
+  expect(reminders[0].date.getTime() - optIn.getTime()).toBe(17 * 24 * 3_600_000);
+});
+test.each([
+  { ...active, isActive: false }, { ...active, willRenew: false },
+  { ...active, periodType: 'NORMAL' as const }, { ...active, expirationDate: null },
+  { ...active, expirationDate: 'invalid' }, { ...active, expirationDate: new Date(2026, 8, 6).toISOString() },
+])('canceled, paid, unknown or expired trials do not receive renewal reminders: %j', subscription => {
+  expect(planReminders({ ...input, subscription }).filter(r => r.kind === 'trial')).toEqual([]);
+});
+test('quiet-hour trial reminders move earlier and preserve the cancellation window', () => {
+  const end = new Date(2026, 8, 14, 3);
+  const reminder = planReminders({ ...input, subscription: { ...active, expirationDate: end.toISOString() } }).find(r => r.kind === 'trial');
+  expect(reminder?.date.getHours()).toBe(19);
+  expect(reminder?.date.getDate()).toBe(11);
+  expect(end.getTime() - reminder!.date.getTime()).toBeGreaterThanOrEqual(48 * 3_600_000);
+  const morningEnd = new Date(2026, 8, 14, 9);
+  expect(trialReminderDate(morningEnd).getTime()).toBeLessThanOrEqual(morningEnd.getTime() - 48 * 3_600_000);
+});
+test('late opt-in never schedules a stale reminder', () => {
+  expect(planReminders({ ...input, now: new Date(2026, 8, 14, 10) }).filter(r => r.kind === 'trial')).toEqual([]);
+});
+test('an opted-in account does not get a reminder for a shorter or unverifiable trial', () => {
+  for (const subscription of [
+    { ...active, expirationDate: new Date(2026, 8, 9, 8).toISOString() },
+    { ...active, latestPurchaseDate: 'invalid' },
+  ]) expect(planReminders({ ...input, subscription }).filter(r => r.kind === 'trial')).toEqual([]);
+});
+test('meal reminders stay at 11:30 Tuesday/Friday and stop at known expiry', () => {
+  const meals = planReminders(input).filter(r => r.kind === 'meal');
+  expect(meals.map(r => r.date.getDate())).toEqual([8, 11]);
+  for (const meal of meals) {
+    expect(meal.date.getHours()).toBe(11); expect(meal.date.getMinutes()).toBe(30);
+  }
+  expect(planReminders({ ...input, subscription: null }).filter(r => r.kind === 'meal')).toHaveLength(4);
+});
+test('a trial reminder replaces a meal nudge on the same local day', () => {
+  const reminders = planReminders({ ...input, subscription: { ...active, expirationDate: new Date(2026, 8, 13, 12).toISOString() } });
+  expect(reminders.filter(r => r.date.getDate() === 11).map(r => r.kind)).toEqual(['trial']);
+});
+test('reopening before a meal keeps its due time; past dates expire and toggles are independent', () => {
+  for (const hour of [8, 10, 11, 12]) {
+    const reminders = planReminders({ ...input, now: new Date(2026, 8, 8, hour), preferences: { meals: true, trial: false } });
+    expect(reminders[0].date).toEqual(new Date(2026, 8, hour < 12 ? 8 : 11, 11, 30));
+  }
+  expect(planReminders({ ...input, preferences: { meals: false, trial: true } }).map(r => r.kind)).toEqual(['trial']);
+});

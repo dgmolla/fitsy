@@ -1,6 +1,6 @@
 // Reviewed against the exact official PDFs below. Aliases describe standard published servings.
 export const chainPilot = {
-  version: 1,
+  version: 1 as const,
   reviewedBy: "Codex official-PDF audit, September 2026",
   changes: [
     {

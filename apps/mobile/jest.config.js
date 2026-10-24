@@ -50,8 +50,13 @@ const config = {
         '<rootDir>/lib/useLocation.test.ts',
         '<rootDir>/lib/useEntitlementMismatch.test.ts',
         '<rootDir>/lib/useRedirectOnceEntitled.test.ts',
-        '<rootDir>/lib/usePurchases.boot.test.tsx',
+        '<rootDir>/lib/usePurchases.boot.catalog.test.tsx',
+        '<rootDir>/lib/usePurchases.boot.eligibility.test.tsx',
+        '<rootDir>/lib/usePurchases.boot.verdict.test.tsx',
+        '<rootDir>/lib/usePurchases.staleBoot.test.tsx',
         '<rootDir>/lib/usePurchases.sync.test.tsx',
+        '<rootDir>/lib/usePurchases.signin.test.tsx',
+        '<rootDir>/lib/usePurchases.signout.test.tsx',
         '<rootDir>/lib/usePurchases.purchase.test.tsx',
       ],
       moduleNameMapper: {
@@ -70,9 +75,12 @@ const config = {
       // no node override, so StyleSheet/Modal/etc. are the real RN mocks.
       displayName: 'components',
       preset: 'jest-expo',
+      setupFiles: ['<rootDir>/__mocks__/test-env.cjs'],
       testMatch: ['<rootDir>/components/**/*.test.tsx'],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
+        // Expo Router's hoisted test helper resolves the mobile workspace peer here.
+        '^@testing-library/react-native$': require.resolve('@testing-library/react-native'),
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
         '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
       },

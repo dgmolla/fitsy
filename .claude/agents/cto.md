@@ -31,7 +31,7 @@ touch multiple domains will be rejected.
 - Positioning, launch strategy (GTM)
 
 ## Constraints
-- CLAUDE.md stays under 200 lines. Link to docs/ for depth.
+- Keep CLAUDE.md focused on project context; link to docs/ for supporting detail.
 - Every harness change must have a clear reason (metric, bug, or gap)
 - Don't over-engineer the harness — start strict on danger zones, light elsewhere
 - Specs must be approved by human + relevant domain agent before breaking into tasks
@@ -82,7 +82,10 @@ Review cross-cutting changes and architecture decisions. Check:
 
 ## Before Opening a PR
 
-Run the full pre-PR gate locally. Fix all failures in your session.
+Follow [canonical shipping](../../docs/engineering/devops/shipping.md): freeze and commit source, select meaningful focused regressions, run `npm run verify -- --stage=cheap`, and complete one passing independent review before full suites and affected E2E acceptance.
+Repair findings and revalidate affected cheap checks and review before full acceptance.
+Preserve UI signoff, release approvals, source identity and the active AI review attempt limit.
+Run every required full gate before push; fix all failures in your session.
 
 1. `bash scripts/structural-tests.sh`
 2. Verify CLAUDE.md accuracy against codebase

@@ -4,8 +4,11 @@
 # classes: DROP TABLE/COLUMN, column type changes, TRUNCATE.
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
-git rev-parse origin/main >/dev/null 2>&1 || { printf '{"name":"migration-safety","status":"fail","summary":"origin/main unresolvable; cannot audit migrations","fix":"git fetch origin main and re-run"}\n'; exit 1; }
-CHANGED="$(git diff --name-only origin/main...HEAD -- 'prisma/migrations/**/migration.sql' 2>/dev/null || true)"
+CHANGED="$(node scripts/verify/impact-plan.mjs --files)" || {
+  printf '{"name":"migration-safety","status":"fail","summary":"comparison history unavailable","fix":"fetch the event base and head before verification"}\n'
+  exit 1
+}
+CHANGED="$(printf '%s\n' "$CHANGED" | grep -E '^prisma/migrations/.*/migration\.sql$' || true)"
 if [ -z "$CHANGED" ]; then
   printf '{"name":"migration-safety","status":"skipped","summary":"no new migrations in branch","fix":""}\n'
   exit 2
