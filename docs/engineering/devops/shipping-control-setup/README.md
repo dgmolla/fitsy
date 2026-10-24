@@ -104,7 +104,8 @@ Self-consistent hashes or a copied transcript do not establish genuine independe
 The config pins the existing completed manifest and post-reconciliation ledger, not a new projected verdict cache.
 Its `accounting_provenance` points to the coordinator's actual source-bound accounting verification.
 Every failed, incomplete and malformed historical execution remains retained and charged.
-Use the separately approved installed existing accounting operator to reconcile bootstrap execution before publishing checks.
+For unfinished tasks, preserve the already-approved accounting snapshot; new review attempts use the active local AI review poller.
+The retired ledger commands no longer reconcile or allocate execution.
 The adapter neither grants review capacity nor edits original history.
 
 The installation owner checks the committed adapter digest and `control_sha` against the independently approved frozen control review.

@@ -2,7 +2,7 @@ import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync,
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { installedFixtureHook, timingHook, installVerificationFixture } from './hook-fixture';
+import { installedFixtureHook, hookEnvironment, installVerificationFixture } from './hook-fixture';
 
 const root = resolve(__dirname, '../..');
 const yaml = require('js-yaml') as { load(value: string): unknown };
@@ -107,7 +107,7 @@ test.each([
   const result = fixture.run(extra);
   expect({ status: result.status, stderr: result.status === 0 ? '' : result.stderr }).toEqual({ status: 0, stderr: '' });
   const actual = fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call));
-  expect(actual).toEqual(groups);
+  expect(actual).toEqual(['scripts', 'api', 'mobile'].filter(group => groups.includes(group)));
   expect(fixture.calls().includes('scripts-node')).toBe(groups.includes('scripts'));
   expect(fixture.calls().includes('scripts-python')).toBe(groups.includes('scripts'));
   if (groups.includes('api')) expect(readFileSync(join(directory, '.evidence/group-argv'), 'utf8')).toContain('test:coverage');
@@ -119,7 +119,7 @@ test.each(['api', 'scripts', 'mobile'])('a failed selected whole %s group blocks
   const result = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head, FAIL_GROUP: group });
   expect(result.status).toBe(1);
   expect(result.stdout).toContain('"name":"test","status":"fail"');
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
 });
 
 test('whole groups use the integrated main range and the actual pinned PR range', () => {
@@ -158,21 +158,21 @@ test('whole groups cover deleted and cross-group renamed paths', () => {
   mkdirSync(join(directory, 'scripts/review'), { recursive: true });
   git('mv', 'apps/api/lib/moved.ts', 'scripts/review/moved.ts'); const renamed = commit();
   expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: renameBase, FITSY_DIFF_HEAD: renamed }).status).toBe(0);
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api']);
 });
 
 test('whole groups expand unknown history and explicit all scope, and direct invocation defaults to full', () => {
   const fixture = wholeGroupFixture();
   write('scripts/review/example.py', 'value = True\n'); const head = commit();
   expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: '0'.repeat(40), FITSY_DIFF_HEAD: head }).status).toBe(0);
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
   expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head },
     ['--layer=2', '--runs=ci', '--scope=all']).status).toBe(0);
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
   write('.evidence/group-calls', '');
   const direct = cli('test.sh', [], { PATH: `${join(directory, 'bin')}:${env.PATH}` });
   expect(direct.status).toBe(0);
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
 });
 
 test.each([
@@ -190,7 +190,7 @@ test.each([
   const result = fixture.run(extra, ['--layer=2', '--runs=ci', '--scope=changed', invalidArg]);
   expect(result.status).toBe(failure ? 1 : 0);
   expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call)))
-    .toEqual(['api', 'scripts', 'mobile']);
+    .toEqual(['scripts', 'api', 'mobile']);
   expect(fixture.calls()).toContain('scripts-node');
   expect(fixture.calls()).toContain('scripts-python');
   if (failure) {
@@ -204,7 +204,7 @@ test('forged subset selectors cannot hide whole groups and a failed planner cann
   write('packages/shared/src/example.ts', 'export const value = true;\n'); const head = commit();
   expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head,
     FITSY_VERIFY_TEST_GROUPS: 'scripts', FITSY_TEST_GROUPS: 'scripts' }).status).toBe(0);
-  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['api', 'scripts', 'mobile']);
+  expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
   const forged = cli('test.sh', ['--scope=changed', '--groups=scripts'], { PATH: `${join(directory, 'bin')}:${env.PATH}` });
   expect(forged.status).toBe(1);
   write('bin/node', '#!/bin/sh\nexit 1\n');
@@ -454,29 +454,38 @@ const calls = (file = 'calls') => readFileSync(join(directory, `.evidence/${file
 function cheapCacheFixture() {
   cacheFixture();
   write('scripts/verify/registry.yml', `checks:
-  - name: resource-admission
-    script: admission.sh
-    layer: 0
-    preflight: true
-    blocking: true
   - name: focused-tests
     script: fixture.sh
     layer: 1
     cache: true
     blocking: true
 `);
-  write('scripts/verify/admission.sh', 'echo admission >> .evidence/admission-calls\necho \'{"status":"pass"}\'\n');
   write('.evidence/verify/focused-tests.json', JSON.stringify({ version: 1, tests: ['scripts/example.test.mjs'] }));
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
 }
 const cheapReuse = ['--stage=cheap', '--layer=0-2', '--runs=local', '--scope=changed', '--reuse'];
 
-test('cheap focused checks reuse a pass while resource admission executes every time', () => {
+test('cheap focused checks reuse a matching pass', () => {
   cheapCacheFixture();
   expect(cli('run.mjs', cheapReuse).status).toBe(0);
   const second = cli('run.mjs', cheapReuse);
   expect(second.status).toBe(0); expect(second.stdout).toContain('"cached":true');
-  expect(calls()).toBe(1); expect(calls('admission-calls')).toBe(2);
+  expect(calls()).toBe(1);
+});
+
+test('focused receipts bind actual child flags when full and cheap select different dependencies', () => {
+  cheapCacheFixture();
+  write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
+    '  - name: test\n    script: acceptance.sh\n    layer: 2\n    blocking: true\n');
+  write('scripts/verify/fixture.sh', 'echo "$FITSY_VERIFY_NEEDS_TEST_DEPS" >> .evidence/child-flags\necho \'{"status":"pass"}\'\n');
+  write('scripts/verify/acceptance.sh', 'echo \'{"status":"pass"}\'\n');
+  commit();
+  expect(cli('run.mjs', cheapReuse).status).toBe(0);
+  expect(cli('run.mjs', cheapReuse).stdout).toContain('"cached":true');
+  const full = cli('run.mjs', cheapReuse.filter(arg => arg !== '--stage=cheap'));
+  expect(full.status).toBe(0);
+  expect(full.stdout).not.toContain('"cached":true');
+  expect(readFileSync(join(directory, '.evidence/child-flags'), 'utf8').trim().split('\n')).toEqual(['0', '1']);
 });
 
 test.each(['missing', 'malformed', 'failed', 'expired', 'future', 'old-version'])(
@@ -659,53 +668,6 @@ test('required comparison assertion',()=>{writeFileSync('.evidence/focused-calle
   expect(existsSync(join(directory, '.evidence/focused-called'))).toBe(comparison === 'explicit');
 });
 
-test('npm publication and sanitized push reuse the fixed payload; genuine child environment changes rerun', () => {
-  cheapCacheFixture();
-  const hookEnv = timingHook(root, directory, env);
-  // candidate_checks invokes the launcher with a scrubbed operator environment;
-  // the launcher emits its fixed profile env-i payload for both publication callers.
-  // This existing synthetic owner models that transport, not kernel isolation.
-  const payloadEnv = { ...env, PATH: hookEnv.PATH, NODE: hookEnv.NODE };
-  write('.evidence/payload-environment.json', JSON.stringify(payloadEnv));
-  const payloadFile = join(directory, '.evidence/payload-environment.json');
-  write('scripts/verify/shipping-session.mjs', `#!/usr/bin/env node
-import {readFileSync} from 'node:fs';
-import {execFileSync,spawnSync} from 'node:child_process';
-if(process.argv[2]==='--check') process.exit(0);
-if(process.argv[2]!=='--candidate-checks') process.exit(1);
-const environment=JSON.parse(readFileSync(${JSON.stringify(payloadFile)},'utf8'));
-const node=${JSON.stringify(hookEnv.NODE)};
-const git=(ref)=>execFileSync('git',['rev-parse',ref],{env:environment,encoding:'utf8'}).trim();
-const command=process.argv[3]==='cheap'?[node,['scripts/verify/run.mjs','--layer=0-2','--stage=cheap','--scope=changed','--runs=local','--reuse','--base='+git('origin/main'),'--head='+git('HEAD')]]:['/bin/bash',['-p','-c','for c in size-check domain-check; do /bin/bash -p scripts/verify/$c.sh; code=$?; [ "$code" = 0 ] || [ "$code" = 2 ] || exit "$code"; done']];
-process.exit(spawnSync(command[0],command[1],{stdio:'inherit',env:environment}).status??1);
-`);
-  write('package.json', JSON.stringify({ private: true, scripts: {
-    verify: 'node scripts/verify/shipping-session.mjs --candidate-checks cheap',
-  } }));
-  write('.githooks/pre-push', installedFixtureHook(root, directory, true));
-  chmodSync(join(directory, '.githooks/pre-push'), 0o755);
-  commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-  const initial = spawnSync('npm', ['run', 'verify'],
-    { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
-  expect({ status: initial.status, output: initial.status === 0 ? '' : initial.stdout + initial.stderr }).toEqual({ status: 0, output: '' });
-  const receiptFile = join(directory, '.evidence/verify/check-cache/focused-tests.json');
-  const firstEnvironment = JSON.parse(readFileSync(receiptFile, 'utf8')).environment;
-  const remote = join(directory, '.evidence/remote.git');
-  execFileSync('git', ['init', '--bare', '-q', remote], { cwd: directory, env });
-  const push = (ref: string, extra = {}) => spawnSync('git', ['-c', 'core.hooksPath=.githooks', 'push', remote, `HEAD:refs/heads/${ref}`],
-    { cwd: directory, encoding: 'utf8', env: { ...hookEnv, ...extra }, timeout: 30000 });
-  const reused = push('reused', { FEATURE_FLAG: 'operator-only-not-forwarded' });
-  expect({ status: reused.status, output: reused.status === 0 ? '' : reused.stdout + reused.stderr }).toEqual({ status: 0, output: '' });
-  expect(reused.stdout + reused.stderr).toContain('"cached":true'); expect(calls()).toBe(1);
-  expect(JSON.parse(readFileSync(receiptFile, 'utf8')).environment).toBe(firstEnvironment);
-  expect(calls('admission-calls')).toBe(2); expect(calls('size-calls')).toBe(1); expect(calls('domain-calls')).toBe(1);
-  write('.evidence/payload-environment.json', JSON.stringify({ ...payloadEnv, FEATURE_FLAG: 'different-child-input' }));
-  const changed = push('changed');
-  expect(changed.status).toBe(0); expect(changed.stdout + changed.stderr).not.toContain('"cached":true'); expect(calls()).toBe(2);
-  expect(JSON.parse(readFileSync(receiptFile, 'utf8')).environment).not.toBe(firstEnvironment);
-  expect(calls('admission-calls')).toBe(3); expect(calls('size-calls')).toBe(2); expect(calls('domain-calls')).toBe(2);
-});
-
 test('unchanged successful L2 is reused; source, environment, and definition changes rerun it', () => {
   cacheFixture();
   expect(cli('run.mjs', ['--layer=2']).status).toBe(0); expect(calls()).toBe(1);
@@ -758,7 +720,7 @@ test('source mutation during a cached run retires the prior receipt', () => {
 
 test('CI-first real push preserves prior unit receipt without rerunning heavy checks', () => {
   cacheFixture();
-  const hookEnv = timingHook(root, directory, env);
+  const hookEnv = hookEnvironment(root, directory, env);
   write('.githooks/pre-push', installedFixtureHook(root, directory, true));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
@@ -774,36 +736,66 @@ test('CI-first real push preserves prior unit receipt without rerunning heavy ch
   expect(pushed.status).toBe(0); expect(calls()).toBe(1);
   expect(readFileSync(receiptFile, 'utf8')).toBe(receipt);
   expect(pushed.stdout + pushed.stderr).not.toMatch(/"name":"test"/);
-  expect(readFileSync(join(directory, '.evidence/gh-calls'), 'utf8')).toContain('POST repos/dgmolla/fitsy/issues/355/comments');
+  expect(existsSync(join(hookEnv.HOME, '.fitsy-review'))).toBe(false);
 });
 
-test('pre-push refuses an unbound issue before checks or publication', () => {
-  cacheFixture();
-  const hookEnv = timingHook(root, directory, env);
+test('pre-push works from a fresh home without an issue binding or review installation', () => {
+  cheapCacheFixture();
+  const hookEnv = hookEnvironment(root, directory, env);
   write('.githooks/pre-push', installedFixtureHook(root, directory));
-  rmSync(join(directory, '.evidence/delivery/binding.json'));
-  const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
-  expect({ status: hook.status, output: hook.status === 1 ? '' : `${hook.error?.message}\n${hook.stdout}\n${hook.stderr}` }).toEqual({ status: 1, output: '' }); expect(hook.stderr).toContain('bind --issue N');
-  expect(existsSync(join(directory, '.evidence/gh-calls'))).toBe(false);
+  const hook = spawnSync('/bin/bash', ['-p', '.githooks/pre-push'], {
+    cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
+  expect({ status: hook.status, output: hook.status === 0 ? '' : hook.stdout + hook.stderr })
+    .toEqual({ status: 0, output: '' });
+  expect(calls()).toBe(1);
+  expect(calls('size-calls')).toBe(1);
+  expect(calls('domain-calls')).toBe(1);
+  expect(existsSync(join(hookEnv.HOME, '.fitsy-review'))).toBe(false);
+  expect(existsSync(join(directory, '.evidence/delivery/binding.json'))).toBe(false);
+});
+
+test.each(['size-check', 'domain-check', 'static', 'focused-tests'])('pre-push blocks a failed %s without review state', failing => {
+  cheapCacheFixture();
+  const hookEnv = hookEnvironment(root, directory, env);
+  write('scripts/verify/registry.yml', readFileSync(join(directory, 'scripts/verify/registry.yml'), 'utf8') +
+    '  - name: static\n    script: static.sh\n    layer: 1\n    blocking: true\n');
+  write('scripts/verify/static.sh', 'echo static >> .evidence/static-calls\n');
+  const script = failing === 'focused-tests' ? 'fixture' : failing;
+  write(`scripts/verify/${script}.sh`, (failing === 'focused-tests' ? 'echo failed >> .evidence/calls\n' : '') + 'exit 1\n');
+  write('.githooks/pre-push', installedFixtureHook(root, directory));
+  const result = spawnSync('/bin/bash', ['-p', '.githooks/pre-push'], {
+    cwd: directory, env: hookEnv, encoding: 'utf8', timeout: 30000 });
+  expect(result.status).toBe(1);
+  expect(result.stdout.trim().split('\n').map(line => JSON.parse(line)))
+    .toContainEqual(expect.objectContaining({ name: failing, status: 'fail' }));
+  expect(existsSync(join(directory, '.evidence/calls'))).toBe(failing === 'focused-tests');
+  expect(existsSync(join(hookEnv.HOME, '.fitsy-review'))).toBe(false);
+});
+
+test('the runner reports missing dependencies without a local admission helper', () => {
+  unlinkSync(join(directory, 'node_modules'));
+  const result = cli('run.mjs', ['--stage=cheap']);
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: 'dependencies', status: 'fail', fix: 'run npm ci before verification' });
 });
 
 test('pre-push accepts an inapplicable domain gate but refuses its real failure', () => {
   cacheFixture();
-  const hookEnv = timingHook(root, directory, env);
+  const hookEnv = hookEnvironment(root, directory, env);
   write('.githooks/pre-push', installedFixtureHook(root, directory));
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"skipped"}\'\nexit 2\n');
   const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
   const initial = hook();
   expect({ status: initial.status, output: initial.status === 0 ? '' : `${initial.error?.message}\n${initial.stdout}\n${initial.stderr}` }).toEqual({ status: 0, output: '' });
-  const before = readFileSync(join(directory, '.evidence/gh-calls'), 'utf8').split('\n').filter(line => line.startsWith('POST ')).length;
+  const before = calls('size-calls');
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"fail"}\'\nexit 1\n');
   expect(hook().status).toBe(1);
-  expect(readFileSync(join(directory, '.evidence/gh-calls'), 'utf8').split('\n').filter(line => line.startsWith('POST '))).toHaveLength(before);
+  expect(calls('size-calls')).toBe(before + 1);
 });
 
 test('real Git push hook preserves outer refs, isolates Git and reruns cheap size/domain gates', () => {
   cacheFixture();
-  const hookEnv = timingHook(root, directory, env);
+  const hookEnv = hookEnvironment(root, directory, env);
   write('scripts/verify/fixture.sh', `mkdir -p .evidence/inner\ngit -C .evidence/inner init -q\ngit -C .evidence/inner config user.name fixture\ngit -C .evidence/inner config user.email fixture@example.test\necho nested > .evidence/inner/file\ngit -C .evidence/inner add file\ngit -C .evidence/inner commit -qm nested\ngit -C .evidence/inner checkout -qb nested\ntest "$(git -C .evidence/inner branch --show-current)" = nested\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\n`);
   write('.githooks/pre-push', installedFixtureHook(root, directory));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);

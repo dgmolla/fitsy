@@ -1,0 +1,15 @@
+# Pipeline, review and release controls, including this ownership file.
+/.github/ @dgmolla
+/.githooks/ @dgmolla
+/.claude/ @dgmolla
+/scripts/ @dgmolla
+/AGENTS.md @dgmolla
+/CLAUDE.md @dgmolla
+/REVIEW.md @dgmolla
+/docs/engineering/devops/ @dgmolla
+/docs/engineering/tuning-guide.md @dgmolla
+/docs/branch-protection.md @dgmolla
+package*.json @dgmolla
+*.config.* @dgmolla
+vercel.json @dgmolla
+eas.json @dgmolla

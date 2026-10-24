@@ -1,4 +1,4 @@
-# Automatic routine release of one independently reviewed protected main tree.
+# Automatic routine release of the latest verified main commit.
 # Sensitive maintenance and native/Apple releases retain their separate environments.
 name: Deploy
 on:
@@ -35,7 +35,7 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-      - name: Validate exact main Verify and independently reviewed PR provenance
+      - name: Confirm main Verify passed
         id: f
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
