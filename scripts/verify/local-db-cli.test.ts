@@ -6,6 +6,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fixtureProcess, signalFixtureProcess, type FixtureProcess } from './lock-fixture-process';
 
 const source = resolve(__dirname, '../..');
+// Exercise the Linux CI check selection in the portable CLI fixtures too.
+// Admission no longer adds cheap checks to an explicit --only selection.
+const databaseChecks = 'structural,build,db-fixture';
 function linuxDatabaseMemory(read: (path: string) => string = path => readFileSync(path, 'utf8'),
   runtimeAvailable: () => number = () => process.availableMemory()) {
   // The supported Node runtime accounts for the process's actual OS/cgroup
@@ -196,7 +199,7 @@ if (process.env.FITSY_TEST_HIJACK === '1') {
       write(wholeGroup === 'scripts' ? 'scripts/review/example.py' : `apps/${wholeGroup}/lib/example.ts`, 'changed = true\n');
       git('add', '-A'); git('commit', '-qm', 'group candidate');
     }
-    const verifyArgs = [canonical ? '--only=baseline,structural,focused-tests,build,db-fixture'
+    const verifyArgs = [canonical ? `--only=baseline,focused-tests,${databaseChecks}`
       : `--only=baseline,${delegation ? 'structural,focused-tests,db-fixture' : wholeGroup ? 'test' : focused ? 'focused-tests' : 'db-fixture'}${devDrift ? ',dev-drift' : ''}`,
       '--runs=local', ...(delegation ? ['--stage=full', '--reuse'] : [])];
     const command = standalone ? 'python3' : process.execPath;
@@ -431,7 +434,7 @@ realLinuxDatabase('real Linux CI database delegation resets seeded state without
     const at = Date.now();
     acquisitionAttempted = true;
     const child = spawn(process.execPath, ['scripts/verify/run.mjs', '--stage=full', '--runs=local',
-      '--only=build,db-fixture', '--reuse'], { cwd: directory, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      `--only=${databaseChecks}`, '--reuse'], { cwd: directory, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     if (!child.pid || !child.stdout || !child.stderr) throw Error('real CLI did not acquire its pipes/PID');
     const identity = fixtureProcess(child.pid); expect(identity?.pgid).toBe(child.pid);
     if (!identity) throw Error('real CLI start identity unavailable');
