@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 export const repository = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 export function isMain(url) {
@@ -84,6 +85,9 @@ const screenFlows = [
     /^(cold-start-welcome|onboarding-.*)$/],
 ];
 const simulatorSource = path => !documentationPath(path) && !/\.(md|rst|txt)$/.test(path) &&
+  // E2E orchestration is verification tooling; native EAS build profiles still
+  // match highSimulatorPath. Editing this caller must not require dev secrets.
+  path !== '.eas/workflows/mobile-e2e.yml' &&
   !/(?:\.test\.|\.spec\.|\.d\.ts$|__tests__\/|__mocks__\/|(?:^|\/)(?:__fixtures__|test-fixtures)\/)/.test(path);
 const uiPath = path => /\.(?:[jt]sx?|mdx|css|scss|sass|less|svg|png|jpe?g|webp|gif|avif|ico|ttf|otf|woff2?)$/.test(path) &&
   /^(?:apps\/mobile\/(?:app|components|assets|styles|theme|tokens)\/|apps\/(?:web|landing|api)\/(?:src\/)?(?:app\/(?!api\/)|pages\/(?!api\/)|components\/|styles\/|public\/|assets\/)|(?:(?:web|src)\/)?(?:app\/(?!api\/)|pages\/(?!api\/)|components\/|styles\/|public\/|assets\/))/.test(path);
@@ -172,12 +176,30 @@ export function presentationOnly(before, after) {
   return normalize(before) === normalize(after);
 }
 
+function sourceVersions(path, range, cwd, env) {
+  return [git(['show', `${range.base}:${path}`], cwd, env),
+    env.CI || env.GITHUB_EVENT_NAME ? git(['show', `${range.head}:${path}`], cwd, env)
+      : readFileSync(resolve(cwd, path), 'utf8').trimEnd()];
+}
+
+function verificationScriptsOnly(path, range, cwd, env) {
+  if (!/^(?:package\.json|apps\/(?:api|mobile)\/package\.json)$/.test(path) || !range || range.unknown) return false;
+  try {
+    const manifests = sourceVersions(path, range, cwd, env).map(text => {
+      const { scripts = {}, ...runtime } = JSON.parse(text);
+      // Compare every dependency, lifecycle/build script and other manifest
+      // field. Only known verification commands are irrelevant to native work.
+      return { ...runtime, scripts: Object.fromEntries(Object.entries(scripts)
+        .filter(([name]) => !/^(?:(?:verify|test|lint)(?::|$)|type-check$)/.test(name))) };
+    });
+    return isDeepStrictEqual(manifests[0], manifests[1]);
+  } catch { return false; } // Missing or invalid manifests retain full coverage.
+}
+
 function renderOnly(path, range, cwd, env) {
   if (!range || range.unknown) return false;
   try {
-    const before = git(['show', `${range.base}:${path}`], cwd, env);
-    const after = env.CI || env.GITHUB_EVENT_NAME ? git(['show', `${range.head}:${path}`], cwd, env)
-      : readFileSync(resolve(cwd, path), 'utf8').trimEnd();
+    const [before, after] = sourceVersions(path, range, cwd, env);
     // Screen-local CSS has no application logic. Imports and additions/deletions
     // cannot prove a purely presentational edit and retain E2E coverage.
     if (/\.(?:css|scss|sass|less)$/.test(path)) return Boolean(before && after && !/@(?:import|use|forward)/.test(before + after));
@@ -214,13 +236,13 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   if (files === null) return full('Comparison history unavailable; all journeys may be affected');
   if (unknownContext) return full('Event context unavailable; simulator overrides cannot be ruled out');
   if (release) return full('Release candidate requires the full simulator flow set');
-  const source = files.filter(simulatorSource);
+  const source = files.filter(path => simulatorSource(path) && !verificationScriptsOnly(path, range, cwd, env));
   const highPath = source.find(highSimulatorPath);
   if (highPath) return full(`Navigation, auth, billing, native configuration or release path: ${highPath}`);
   const sharedUI = source.find(sharedUIPath);
   if (sharedUI) return full(`Shared UI or app shell requires the full smoke suite: ${sharedUI}`);
   const mobile = source.filter(path => path.startsWith('apps/mobile/'));
-  let selection = result('low', 'none', [], 'Docs, tests, scripts or non-mobile change; unit and focused tests only');
+  let selection = result('low', 'none', [], 'Verification tooling or non-mobile change; unit and focused tests only');
   if (mobile.length || source.some(path => uiPath(path) || (mobileContract(path) && !serviceHealthPath(path)))) {
     let reviewTier;
     try {

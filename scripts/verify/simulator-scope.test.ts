@@ -25,6 +25,7 @@ test.each([
   ['.github/workflows/verify.yml'],
   ['apps/web/lib/cache.ts'], ['apps/web/app/api/health/route.ts'],
   ['apps/mobile/components/test-fixtures/accountProfile.ts'],
+  ['.eas/workflows/mobile-e2e.yml'],
 ])('low simulator risk for %s retains no native work', path => {
   expect(select([path])).toMatchObject({ risk: 'low', scope: 'none', required: false, flows: [] });
 });
@@ -243,6 +244,58 @@ const screen = (copy = 'Your goal', margin = 8, action = 'setGoal("performance")
   `import { StyleSheet, Text, Pressable } from 'react-native';\n` +
   `export default function Screen() { return <Pressable onPress={() => ${action}}><Text>${copy}</Text></Pressable>; }\n` +
   `const styles = StyleSheet.create({ title: { margin: ${margin}, color: 'red' } });\n`;
+
+const manifest = { private: true, dependencies: { expo: '~54.0.33' }, scripts: { 'type-check': 'tsc --noEmit' } };
+test.each([
+  { path: 'package.json', after: { ...manifest, scripts: { ...manifest.scripts, 'verify:sim-plan': 'node scripts/verify/impact-plan.mjs --simulator' } }, scope: 'none' },
+  { path: 'apps/api/package.json', after: { ...manifest, scripts: { 'type-check': 'prisma generate && tsc --noEmit' } }, scope: 'none' },
+  { path: 'apps/mobile/package.json', after: { ...manifest, scripts: { ...manifest.scripts, 'test:coverage': 'jest --coverage' } }, scope: 'none' },
+  { path: 'package.json', after: { ...manifest, scripts: {} }, scope: 'none' },
+  { path: 'package.json', after: { ...manifest, dependencies: { expo: '~55.0.0' } }, scope: 'full' },
+  { path: 'package.json', after: { ...manifest, scripts: { ...manifest.scripts, postinstall: 'patch-package' } }, scope: 'full' },
+  { path: 'apps/mobile/package.json', after: { ...manifest, scripts: { ...manifest.scripts, ios: 'expo run:ios' } }, scope: 'full' },
+  { path: 'package.json', after: { ...manifest, workspaces: ['apps/*'] }, scope: 'full' },
+  { path: 'package.json', after: '{invalid json', scope: 'full' },
+  { path: 'apps/mobile/eas.json', after: { ...manifest, scripts: {} }, scope: 'full' },
+])('actual manifest diff selects $scope for $path: $after', entry => {
+  fixture(); write(entry.path, JSON.stringify(manifest)); const base = commit();
+  write(entry.path, typeof entry.after === 'string' ? entry.after : JSON.stringify(entry.after)); const head = commit();
+  const result = spawnSync(process.execPath, ['scripts/verify/impact-plan.mjs', '--simulator'], {
+    cwd: directory, env: { ...env, CI: 'true', FITSY_DIFF_BASE: base, FITSY_DIFF_HEAD: head }, encoding: 'utf8',
+  });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ scope: entry.scope, required: entry.scope !== 'none' });
+});
+
+test.each([
+  { label: false, ui: false, scope: 'none', host: 'ubuntu-latest' },
+  { label: true, ui: false, scope: 'full', host: 'macos-15' },
+  // UI mixed with workflow edits retains the canonical high review tier.
+  { label: false, ui: true, scope: 'full', host: 'macos-15' },
+])('CI does not mistake verification wiring for native configuration: %j', entry => {
+  fixture(); write('package.json', JSON.stringify(manifest));
+  write('apps/api/package.json', JSON.stringify(manifest)); const base = commit();
+  write('package.json', JSON.stringify({ ...manifest, scripts: { ...manifest.scripts, 'verify:sim-plan': 'node scripts/verify/impact-plan.mjs --simulator' } }));
+  write('apps/api/package.json', JSON.stringify({ ...manifest, scripts: { 'type-check': 'prisma generate && tsc --noEmit' } }));
+  write('.eas/workflows/mobile-e2e.yml', '# Simulator CI orchestration, not a native build profile.\n');
+  write('.github/workflows/verify.yml', workflowText);
+  if (entry.ui) write('apps/mobile/app/notification-settings.tsx', screen());
+  const head = commit();
+  write('.evidence/event.json', JSON.stringify({ pull_request: {
+    base: { sha: base }, head: { sha: head }, labels: entry.label ? [{ name: 'needs-sim' }] : [],
+  } }));
+  const result = spawnSync(process.execPath, ['scripts/verify/impact-plan.mjs', '--github-output'], {
+    cwd: directory, env: { ...env, CI: 'true', GITHUB_EVENT_NAME: 'pull_request',
+      GITHUB_EVENT_PATH: join(directory, '.evidence/event.json'), GITHUB_OUTPUT: join(directory, '.evidence/github-output') }, encoding: 'utf8',
+  });
+  expect(result.status).toBe(0);
+  const plan = JSON.parse(result.stdout);
+  expect(plan).toMatchObject({ code: true, tests: true, build: true, simulator: { scope: entry.scope } });
+  const needs = { classify: { outputs: { simulator: String(plan.simulator.required) } } };
+  expect(expression(workflow.jobs.build!['runs-on']!, needs)).toBe(entry.host);
+  expect(expression(workflow.jobs.build!.steps.find(step => step.name === 'Run selected simulator flows')!.if!, needs))
+    .toBe(entry.scope !== 'none');
+});
 
 test.each([
   { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 12), mode: 'render', scope: 'affected', flow: 'onboarding-assisted-targets' },

@@ -51,6 +51,8 @@ Use `npm run verify:sim-plan -- --release-candidate` for explicit release planni
 `impact-plan.mjs` consumes the retained `route-reviewers.sh` ownership routing and `risk-tiers.yml` path policy, then maps mobile paths to flows.
 The retired review tier executable is not required; `REVIEW.md` severity rules and independent review remain separate.
 Docs, tests, scripts and ordinary non-mobile changes select `none`; mapped mobile screens select `affected`; navigation, auth, billing, native configuration, release and unknown mobile impact select `full`.
+Manifest edits confined to verification scripts and the EAS E2E workflow are verification tooling, so they do not request a simulator or dev credentials.
+Dependency, lifecycle/build script and other manifest changes retain their normal risk; unreadable manifest comparisons cannot narrow coverage.
 Every mobile or web UI source change requires simulator/E2E coverage.
 Proven literal copy or StyleSheet value edits on mapped screens select `mode: render`, using the maintained journey's setup through the screen's render assertion and a screenshot.
 Changed navigation, state, forms, new/deleted screens and uncertain syntax retain affected E2E flows.

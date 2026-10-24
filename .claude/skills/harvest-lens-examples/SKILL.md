@@ -38,6 +38,7 @@ lens edits).
      Keep the retained ownership router and simulator risk policy as inputs; do not restore deleted review executables.
      UI changes require CI render smoke for proven screen-local style/copy, affected E2E for behavior, or full coverage for shared UI/app shells.
      Extend render checkpoints together with their maintained YAML assertions, and keep simulator execution out of pre-push.
+     Keep verification-only manifest scripts and E2E orchestration out of native scope; test that dependency/build changes and `needs-sim` still force coverage.
 4. **Eval cases**: for the sharpest escapes, capture
    `scripts/verify/evals/incidents/<pr-number>/` (diff.patch via
    `gh pr diff <n> --patch` of the ORIGINAL breaking change when identifiable,

@@ -41,6 +41,8 @@ jobs:
           fetch-depth: 0
       - run: git fetch origin main
       - id: t
+        # The shared planner distinguishes verification wiring from native inputs;
+        # a verification-only PR must not request simulator service credentials.
         run: node scripts/verify/impact-plan.mjs --github-output
       - name: Install gitleaks (docs PRs can leak secrets too)
         run: curl -sL "$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64.tar.gz | head -1 | cut -d '"' -f4)" | tar xz -C /usr/local/bin gitleaks || echo "gitleaks install failed; grep fallback covers"

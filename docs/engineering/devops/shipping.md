@@ -94,6 +94,7 @@ CI runs static checks, unit tests and builds, plus impact-selected simulator flo
 Run `npm run verify:sim-plan` to inspect `none`, `affected` or `full` scope and its reason before choosing journeys.
 The planner uses the retained reviewer ownership router and simulator path tiers, mapping changed mobile screens to the existing Maestro flows.
 Navigation, auth, billing, native configuration, release and unmapped mobile paths require all flows; ordinary non-mobile changes require no simulator.
+Verification-only package script edits and the EAS E2E workflow do not require simulator credentials; native dependencies, build profiles and release changes retain full coverage.
 Every mobile or web UI edit triggers coverage: proven screen-local copy/style edits use launch-and-render smoke, navigation/state/forms use affected E2E flows, and shared UI or app shells use the full suite.
 Render smoke reuses maintained flow setup through a mapped render assertion, then saves a screenshot; uncertain changes retain E2E coverage.
 CI owns this selection and execution; pre-push stays a cheap static and focused-test gate.
