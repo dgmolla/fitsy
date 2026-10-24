@@ -37,7 +37,6 @@ test("builds before acquiring the modeled owned database and reports the full se
     runs: [local]
 `);
   writeFileSync(join(verify, "review-admission.sh"), `#!/bin/bash
-if [ "$MUTATE_SOURCE" = 1 ]; then printf changed > source.marker; fi
 [ "\${FAIL_REVIEW:-0}" = 0 ] || exit 1
 printf '%s\\n' '{"summary":"review admitted"}'
 `);
@@ -70,8 +69,6 @@ export async function runWithLocalDatabase(args) {
   });
 }
 `);
-  writeFileSync(join(directory, "source.marker"), "original");
-  writeFileSync(join(verify, "receipt-cache.mjs"), "import { readFileSync } from 'node:fs'; export const sourceIdentity = () => readFileSync('source.marker', 'utf8');\n");
   for (const args of [["init", "-q", "-b", "main"], ["config", "user.name", "Fixture"],
     ["config", "user.email", "fixture@example.test"], ["add", "."], ["commit", "-qm", "fixture"],
     ["update-ref", "refs/remotes/origin/main", "HEAD"]]) {
@@ -130,12 +127,6 @@ export async function runWithLocalDatabase(args) {
   expect(reviewFailed.status).toBe(1);
   expect(readFileSync(join(directory, "order.log"), "utf8")).toBe("");
   expect(reviewFailed.stdout).toContain('"name":"build","status":"skipped"');
-
-  const mutated = run({ MUTATE_SOURCE: "1" });
-  expect(mutated.status).toBe(1);
-  expect(readFileSync(join(directory, "order.log"), "utf8")).toBe("");
-  expect(mutated.stdout).toContain('"name":"source-stability","status":"fail"');
-  writeFileSync(join(directory, "source.marker"), "original");
 
   expect(run({}, ["--only=unknown"]).status).toBe(1);
 });

@@ -67,7 +67,7 @@ Externally authorized original completed evidence remains subject to the source,
 No candidate controls are installed as trusted, and no new persisted admission or saved-pass projection is created.
 Changing material review inputs invalidates reuse.
 
-The live shipping session binds committed head, base, source/configuration, delivery issue, authorization and focused selection through acceptance and push.
+The live shipping session binds committed head, base, clean checkout, delivery issue, authorization and focused selection through acceptance and push.
 Closing it removes execution ownership; a later session revalidates matching evidence without demanding another reviewer.
 Final-candidate simulator acceptance requires that live ownership.
 Source drift invalidates the session and requires affected evidence to be revalidated before shipping.
@@ -77,9 +77,10 @@ Hosted checks retain their independent required suites.
 Apple/legal approvals, product-flow status, hooks, PR checks, main Verify, Deploy and actual affected release proof remain required.
 
 Keep source frozen throughout checks, review and acceptance.
-Source drift fails the run, and later source changes require current cheap checks, review and affected full acceptance.
-Reuse unchanged receipts only through the canonical runners; review-budget attempts and raw failure history never reset.
-Verification retains each stage attempt under `.evidence/verify/attempts/` and archives retired test receipts under `check-cache/history/`.
+Later source changes require current cheap checks, review and affected full acceptance.
+Every selected verification check executes afresh, and full affected test groups include the focused test files.
+Empty selections, missing scripts and zero passing test cases fail verification.
+Review-budget attempts and raw failure history never reset.
 UI signoff and development walkthroughs precede final UI acceptance.
 The publishable `final-candidate` simulator entry point requires the live shipping session's matching canonical review before native journeys.
 Keep each publishable native journey and its finish inside live matching-review ownership, using `set -e` or `&&` to stop on failure.

@@ -18,7 +18,9 @@ stderr: human-readable detail
 ## Registry
 
 `registry.yml` lists every check with its layer, tier, path filters, blocking mode, and the reason it exists.
-Blocking checks are selected by layer and run context, never by changed-path filters. Path filters apply only to advisory checks; explicit standalone checks still require `--only`. Individual checks may limit their own work using `--scope` or report no applicable work.
+Blocking checks are selected by layer and run context, never by changed-path filters.
+Path filters apply only to advisory checks; explicit standalone checks still require `--only`.
+Individual checks may limit their own work using `--scope` or report no applicable work.
 A check without a registry entry, or an entry without a script, is itself a failure (tenet T11).
 
 | Check | Layer | What it proves |
@@ -45,11 +47,13 @@ A check without a registry entry, or an entry without a script, is itself a fail
 Callers: `.githooks/pre-push` (layers 0-3, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
 
 The local pre-push hook requires layers 0-3, including production build acceptance, and still runs size and domain checks on every push.
-For the L2 test check, `--reuse` accepts a successful local receipt no older than six hours only when source files, the selected diff, local configuration, environment, dependency lock, runtime and check definition still match.
-A fresh failure invalidates an older pass, and a source change during verification fails the run and archives the retired receipt.
-The receipt saves repeated local test work; it is not an independent review or product-flow attestation.
-Hosted CI runs applicable checks independently.
-The owned PostGIS admission and migration steps still run before local database tests, including a cached L2 result.
+Every selected check executes on each invocation and reports its actual exit status.
+An empty check selection or a missing registry script fails verification.
+The L2 test check runs complete affected API, scripts and mobile groups, including files already run in the focused selection.
+Unknown comparison history expands full-suite selection to every group.
+An empty group selection or an engine reporting zero passing tests fails the test check.
+Temporary engine reports count the current execution and are removed afterward.
+The owned PostGIS admission and migration steps still run before local database tests.
 
 ## Candidate validation order
 
@@ -61,7 +65,7 @@ Shipping admission completes the cheap stage, restores main reviewer controls fr
 Repair findings and repeat cheap checks and review on the committed repair.
 Use `scripts/verify/shipping-session.mjs -- <shipping command>` to own one fresh admission across final product-flow acceptance, verification and pre-push.
 The child command runs affected journeys, full verification and push in sequence, stopping on failure.
-The live parent checks source identity and focused selection for every admission request and closes admission on exit.
+The live parent checks the committed head, clean checkout and focused selection for every admission request and closes admission on exit.
 It neither reads nor writes saved review verdicts.
 Standalone final-candidate journeys fail closed outside the live session; direct verification still requests fresh review.
 Source drift invalidates the session rather than automatically consuming another bounded review round.
@@ -73,6 +77,6 @@ Admission executes the canonical main `run-review.sh --local` in a new execution
 Candidate caches never satisfy shipping admission, and raw attempts remain under `.evidence/review-admission/`.
 CI remains an independent full gate without local review execution.
 
-Every production local invocation retains stage, source identity, timestamps and raw check results under `.evidence/verify/attempts/`.
-Retired cache receipts move to `check-cache/history/` rather than being deleted.
-A cheap stage, a review pass and a cached test receipt each prove their own stage; none replaces required final full acceptance or shipping gates.
+The saved focused recipe contains test paths and an optional Jest pattern, never a passing result.
+Selected tests execute even for a documentation-only comparison; missing or empty recipes fail.
+A cheap stage and a review pass each prove their own stage; full acceptance executes its affected groups afresh.

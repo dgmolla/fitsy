@@ -14,6 +14,50 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
+test.each(['--layer=99', '--only='])('empty check selection fails for %s', arg => {
+  writeFileSync(join(directory, 'scripts/verify/registry.yml'), 'checks: []\n');
+  const result = spawnSync(process.execPath, ['scripts/verify/run.mjs', '--runs=ci', arg],
+    { cwd: directory, encoding: 'utf8' });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toMatch(/no verification checks selected|requires at least one check/);
+});
+
+test.each([true, 'shadow'])('a missing registry script always fails, blocking=%s', blocking => {
+  writeFileSync(join(directory, 'scripts/verify/registry.yml'), `checks:\n  - name: fixture\n    script: missing.sh\n    layer: 1\n    blocking: ${blocking}\n`);
+  const result = spawnSync(process.execPath, ['scripts/verify/run.mjs', '--runs=ci'],
+    { cwd: directory, encoding: 'utf8' });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: 'fixture', status: 'fail', blocking: true });
+});
+
+test('an aliased executable path still runs and fails an empty selection', () => {
+  writeFileSync(join(directory, 'scripts/verify/registry.yml'), 'checks: []\n');
+  const alias = join(directory, 'verify-alias.mjs');
+  symlinkSync(join(directory, 'scripts/verify/run.mjs'), alias);
+  const result = spawnSync(process.execPath, [alias, '--runs=ci'], { cwd: directory, encoding: 'utf8' });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('no verification checks selected');
+  const imported = spawnSync(process.execPath, ['--input-type=module', '-'], {
+    cwd: directory, encoding: 'utf8',
+    input: "import {verify} from './scripts/verify/run.mjs'; process.exitCode = await verify(['--runs=ci']);",
+  });
+  expect(imported.status).toBe(1);
+  expect(imported.stderr).toContain('no verification checks selected');
+});
+
+test('repeated verification executes again and reports the fresh failure', () => {
+  const verify = join(directory, 'scripts/verify');
+  writeFileSync(join(verify, 'registry.yml'), 'checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 1\n    blocking: true\n');
+  writeFileSync(join(verify, 'fixture.sh'), 'echo run >> calls\necho \'{"status":"pass"}\'\nexit "${FAIL_CHECK:-0}"\n');
+  const run = (fail: string) => spawnSync(process.execPath, ['scripts/verify/run.mjs', '--runs=ci'],
+    { cwd: directory, encoding: 'utf8', env: { ...process.env, FAIL_CHECK: fail } });
+  expect(run('0').status).toBe(0);
+  const failed = run('1');
+  expect(failed.status).toBe(1);
+  expect(JSON.parse(failed.stdout).status).toBe('fail');
+  expect(readFileSync(join(directory, 'calls'), 'utf8')).toBe('run\nrun\n');
+});
+
 test("scopes an optional build heap to the production build command", () => {
   const bin = join(directory, "bin");
   mkdirSync(bin);

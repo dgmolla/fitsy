@@ -37,7 +37,6 @@ CONTROL_AREAS = ('scripts/review/', 'scripts/verify/', 'scripts/delivery/',
                  'scripts/deploy/native-compatibility.test.ts',
                  'docs/engineering/devops/', '.githooks/', 'AGENTS.md',
                  'scripts/sim/product-flow.mjs', 'scripts/sim/publish-product-flow.mjs',
-                 'scripts/sim/runner-controls.test.mjs',
                  '.github/workflows/deploy.yml', '.github/workflows/eas-build.yml',
                  '.github/workflows/dev-maintenance.yml', 'vercel.json')
 
@@ -225,7 +224,7 @@ def candidate_checks(config, issue, source, base, root, check, product_root=None
             'candidate check delivery issue differs from active authority')
     commands = {
         'cheap': ['/usr/bin/env', 'node', 'scripts/verify/run.mjs', '--layer=0-2',
-                  '--stage=cheap', '--scope=changed', '--runs=local', '--reuse',
+                  '--stage=cheap', '--scope=changed', '--runs=local',
                   f'--base={base}', f'--head={source}'],
         'push-gates': ['/bin/bash', '-p', '-c',
             'set -eu; for check in size-check domain-check; do '
@@ -806,7 +805,7 @@ def validate_acceptance(receipt, policy, source):
                 'media acceptance source/input mismatch')
         command = ('FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- '
                    '--runInBand --runTestsByPath verify/product-flow.test.ts '
-                   'sim/xctest-attachments.test.ts sim/runner-controls.test.ts')
+                   'sim/xctest-attachments.test.ts')
         require(receipt.get('command') == command and receipt.get('result') == 'pass'
                 and type(receipt.get('exit_code')) is int and receipt['exit_code'] == 0,
                 'media acceptance recipe/result mismatch')

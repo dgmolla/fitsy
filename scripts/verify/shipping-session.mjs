@@ -8,7 +8,6 @@ import { mkdtempSync, readFileSync, rmSync, existsSync, realpathSync } from 'nod
 import { tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { sourceIdentity } from './receipt-cache.mjs';
 import { git } from './impact-plan.mjs';
 
 const administratorPath = '/Applications/Xcode.app/Contents/Developer/usr/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
@@ -29,7 +28,7 @@ function identity(root, env = process.env) {
   const managedMain = existsSync(join(managedRepo, '.git')) ? readGit(['rev-parse', 'origin/main'], managedRepo).trim() : null;
   const authorization = issue ? join(userInfo().homedir, '.fitsy-review/completed', `issue-${issue}.json`) : null;
   return JSON.stringify({ head: readGit(['rev-parse', 'HEAD'], root).trim(),
-    base: readGit(['rev-parse', 'origin/main'], root).trim(), managedMain, source: sourceIdentity(root, trustedEnv), binding,
+    base: readGit(['rev-parse', 'origin/main'], root).trim(), managedMain, binding,
     authorization: authorization && existsSync(authorization) ? readFileSync(authorization, 'utf8') : null,
     focused: existsSync(recipe) ? readFileSync(recipe, 'utf8') : null });
 }

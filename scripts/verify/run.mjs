@@ -16,12 +16,11 @@
  * last stdout line is JSON {name, status, summary, fix}.
  */
 import { execFile } from "node:child_process";
-import { readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { randomUUID } from "node:crypto";
-import { impactPlan, git, focusedDatabaseRequired, allTestGroups } from "./impact-plan.mjs";
+import { impactPlan, focusedDatabaseRequired } from "./impact-plan.mjs";
 
 export async function verify(argv, prepareDatabase) {
   // Clear shell startup selectors before checks launch nested npm or Bash shells.
@@ -51,7 +50,8 @@ export async function verify(argv, prepareDatabase) {
   const stage = args.stage ?? 'full';
   if (!['cheap', 'full'].includes(stage)) throw new Error('stage must be cheap or full');
   const isAcceptance = c => c.stage === 'acceptance' || c.layer >= 2;
-  const only = args.only ? new Set(args.only.split(",")) : null;
+  const only = args.only === undefined ? null : new Set(args.only.split(","));
+  if (only?.has("")) throw new Error("--only requires at least one check name");
   let delivery;
   const activeAttempts = new Set();
   if (runsCtx === 'local' && existsSync(join(REPO_ROOT, 'scripts/delivery/phase-events.mjs'))) {
@@ -119,8 +119,6 @@ export async function verify(argv, prepareDatabase) {
       continue;
     }
     if (c.name === 'focused-tests') c = { ...c, selection: frozenSelection, database: focusedDatabase() };
-    if (c.name === 'test') c = { ...c, selection: {
-      groups: scope === 'changed' ? plan.testGroups : allTestGroups, comparison: plan.comparison } };
     selected.push(c);
   }
   const acceptance = selected.filter(c => isAcceptance(c) && !c.preflight);
@@ -137,15 +135,9 @@ export async function verify(argv, prepareDatabase) {
       selected.push({ ...gate, missing: !existsSync(join(VERIFY_DIR, gate.script)) });
     }
   }
-  const observedStart = new Date().toISOString();
-  const observedHead = plan.comparison.head;
-  let sourceIdentity, frozenSource;
-  if (runsCtx === 'local' && registry.checks.some(c => c.name === 'review-admission')) {
-    ({ sourceIdentity } = await import('./receipt-cache.mjs'));
-    frozenSource = sourceIdentity(REPO_ROOT);
-  }
-  function sourceStable() {
-    return !sourceIdentity || (focusedSelection() === frozenSelection && sourceIdentity(REPO_ROOT) === frozenSource && git(['rev-parse', 'HEAD'], REPO_ROOT).trim() === observedHead);
+  if (!selected.length) {
+    for (const result of skipped) console.log(JSON.stringify(result));
+    throw new Error("no verification checks selected");
   }
   const cheap = selected.filter(c => !c.preflight && !isAcceptance(c));
   const remaining = selected.filter(c => !c.preflight && isAcceptance(c));
@@ -165,14 +157,6 @@ export async function verify(argv, prepareDatabase) {
       prepared = true;
     }
   }
-  let scriptsEnvironment;
-  try {
-    const recipe = JSON.parse(frozenSelection ?? '{}');
-    if (selected.some(c => c.name === 'focused-tests' && c.script === 'focused-tests.sh') &&
-        recipe.tests?.length && recipe.tests.every(path => /^scripts\/.*\.test\.tsx?$/.test(path))) {
-      ({ scriptsJestEnvironment: scriptsEnvironment } = await import('./receipt-cache.mjs'));
-    }
-  } catch { /* The focused launcher reports invalid selections. */ }
   let wholeAttempt = process.env.FITSY_LOCAL_DB === '1' ? null : beginTiming('verification', 'whole');
   function interruptTiming() {
     for (const attempt of [...activeAttempts]) endTiming(attempt, 'interrupted');
@@ -201,9 +185,6 @@ export async function verify(argv, prepareDatabase) {
       if (c.name === 'dev-drift' && process.env.FITSY_VERIFY_OWNED_DB) {
         checkEnv.POSTGRES_URL_NON_POOLING = process.env.FITSY_VERIFY_CALLER_NON_POOLING_URL ?? '';
       }
-      if (c.name === 'focused-tests' && scriptsEnvironment) {
-        Object.assign(checkEnv, scriptsEnvironment(checkEnv), { FITSY_VERIFY_FOCUSED_RECIPE: c.selection ?? '' });
-      }
       // Unknown parent history must not become a narrower child comparison.
       const checkArgs = [`--scope=${c.name === 'test' && plan.comparison.unknown ? 'all' : scope}`];
       if (c.name === 'test' && scope === 'changed' && !plan.comparison.unknown) {
@@ -218,7 +199,7 @@ export async function verify(argv, prepareDatabase) {
     const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
     if (c.missing) {
       endTiming(attempt, 'fail');
-      return Promise.resolve({ name: c.name, status: "fail", summary: `registry entry has no script ${c.script}`, fix: "add the script or remove the entry", blocking: c.blocking !== "shadow" });
+      return Promise.resolve({ name: c.name, status: "fail", summary: `registry entry has no script ${c.script}`, fix: "add the script or remove the entry", blocking: true });
     }
     return new Promise((resolve) => {
       const t0 = Date.now();
@@ -232,7 +213,7 @@ export async function verify(argv, prepareDatabase) {
         } catch {
           parsed = { name: c.name, summary: (stderr || stdout).trim().split("\n").at(-1)?.slice(0, 200) ?? "" };
         }
-        const status = code === 0 ? "pass" : code === 2 ? "skipped" : "fail";
+        const status = code === 0 && parsed.status !== "fail" ? "pass" : code === 2 ? "skipped" : "fail";
         endTiming(attempt, status);
         resolve({
           ...parsed,
@@ -249,54 +230,10 @@ export async function verify(argv, prepareDatabase) {
   }
 
   async function runChecks(checks, sequential = false) {
-    const completedResults = [];
-    // DB-backed focused runs retain fresh execution. Their new complete-file
-    // reports may only cover residual work in this same live invocation.
-    const cacheable = checks.filter(c => c.cache && runsCtx === 'local' &&
-      (c.name !== 'focused-tests' || !c.database));
-    let cache;
-    try {
-      if (cacheable.length && !plan.comparison.unknown) {
-        const { verificationCache } = await import('./receipt-cache.mjs');
-        cache = verificationCache(REPO_ROOT, process.env, plan, scope, checkInputs);
-      }
-    } catch (error) {
-      completedResults.push({ name: 'receipt-cache', status: 'fail', blocking: true, summary: error.message,
-        fix: 'repair the local cache directory and rerun verification' });
-    }
-    if (completedResults.some(result => result.status === 'fail' && result.blocking)) {
-      completedResults.push(...checks.map(c => ({ name: c.name, status: 'skipped', summary: 'receipt cache admission failed' })));
-    } else {
-      const runSelected = c => {
-        const reusable = cacheable.includes(c);
-        const prior = args.reuse && reusable &&
-          !(['focused-tests', 'test'].includes(c.name) && focusedDatabaseRequired([])) && cache?.read(c);
-        if (prior) {
-          const attempt = beginTiming(c.layer === 2 ? 'unit' : 'verification', c.name);
-          endTiming(attempt, 'cached');
-        }
-        if (!prior && reusable && cache) cache.invalidate(c);
-        return prior || runCheck(c);
-      };
-      const completed = sequential ? [] : await Promise.all(checks.map(runSelected));
-      if (sequential) {
-        for (const check of checks) completed.push(await runSelected(check));
-      }
-      if (cache) {
-        if (cache.unchanged() && sourceStable()) {
-          for (const check of cacheable) {
-            const result = completed.find(r => r.name === check.name);
-            if (!result.cached) cache.write(check, { ...result, invocation_pid: process.pid });
-          }
-        } else {
-          for (const check of cacheable) cache.invalidate(check);
-          completed.push({ name: 'source-stability', status: 'fail', blocking: true,
-            summary: 'source or local configuration changed during verification', fix: 'finish edits and rerun verification on stable inputs' });
-        }
-      }
-      completedResults.push(...completed);
-    }
-    return completedResults;
+    if (!sequential) return Promise.all(checks.map(c => runCheck(c)));
+    const results = [];
+    for (const check of checks) results.push(await runCheck(check));
+    return results;
   }
 
   const preflight = await Promise.all(selected.filter(c => c.preflight && c.name !== 'review-admission').map(runCheck));
@@ -315,8 +252,6 @@ export async function verify(argv, prepareDatabase) {
   } else {
     skipped.push(...cheap.map(c => ({ name: c.name, status: 'skipped', summary: 'preflight failed' })));
   }
-  if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
-    summary: 'candidate changed during cheap checks', fix: 'freeze candidate source and rerun cheap/focused checks and review' });
   // A full local build remains database-free and precedes real acquisition.
   // The same pipeline then prepares the DB and runs its selected focused/full
   // checks, so neither a second runner nor a skipped-cheap trust marker is needed.
@@ -324,37 +259,25 @@ export async function verify(argv, prepareDatabase) {
     ? remaining.filter(c => c.name === 'build' && !c.database) : [];
   if (preDatabaseBuild.length && !results.some(result => result.status === 'fail' && result.blocking)) {
     results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
-    if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
-      summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
     if (!results.some(result => result.status === 'fail' && result.blocking)) {
       for (const build of preDatabaseBuild) results.push(await runCheck(build, { withoutDatabase: true }));
-      if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
-        summary: 'candidate changed during production build', fix: 'revalidate the changed candidate' });
     }
   }
   if (!preDatabaseBuild.length && fullContextFocused && !results.some(r => r.status === 'fail' && r.blocking)) {
     results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
-    if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
-      summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
   }
   if ((databaseFocused || fullContextFocused) && !results.some(result => result.status === 'fail' && result.blocking)) {
     try {
       prepareOwnedDatabase();
       const { assertOwnedDatabase } = await import('./local-db-control.mjs');
       assertOwnedDatabase();
-      // Cache identities are computed from the actual prepared environment.
-      // DB-focused checks remain ineligible for reusable receipts.
       results.push(...await runChecks(focused));
     } catch (error) {
       results.push({ name: 'focused-database', status: 'fail', blocking: true, summary: error.message });
     }
-    if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
-      summary: 'candidate changed during focused database checks', fix: 'revalidate the changed candidate' });
   }
   if (!preDatabaseBuild.length && !fullContextFocused && !results.some(r => r.status === 'fail' && r.blocking)) {
     results.push(...await Promise.all(selected.filter(c => c.name === 'review-admission').map(runCheck)));
-    if (!sourceStable()) results.push({ name: 'source-stability', status: 'fail', blocking: true,
-      summary: 'candidate changed during review admission', fix: 'revalidate the changed candidate' });
   }
   if (results.some(result => result.status === 'fail' && result.blocking)) {
     skipped.push(...remaining.filter(c => !results.some(result => result.name === c.name))
@@ -386,18 +309,6 @@ export async function verify(argv, prepareDatabase) {
       else skipped.push(...pending.filter(c => c.name !== 'build').map(c => ({ name: c.name, status: 'skipped', summary: 'production build failed' })));
     }
   }
-  if (!sourceStable()) {
-    process.exitCode = 1;
-    results.push({ name: 'source-stability', status: 'fail', blocking: true,
-    summary: 'candidate changed during verification', fix: 'revalidate cheap checks, review and affected full acceptance' });
-  }
-  if (runsCtx === 'local' && registry.checks.some(c => c.name === 'review-admission')) {
-    const directory = join(REPO_ROOT, '.evidence/verify/attempts');
-    mkdirSync(directory, { recursive: true, mode: 0o700 });
-    writeFileSync(join(directory, `${randomUUID()}.json`), JSON.stringify({ version: 1, started_at: observedStart,
-      finished_at: new Date().toISOString(), head_sha: observedHead, source_identity: frozenSource,
-      stage, delegated: false, arguments: argv, results, skipped }) + '\n', { mode: 0o600 });
-  }
   for (const r of [...results, ...skipped]) {
     const { stderr, ...line } = r;
     console.log(JSON.stringify(line));
@@ -421,7 +332,7 @@ export async function verify(argv, prepareDatabase) {
   return status;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && existsSync(process.argv[1]) && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   verify(process.argv.slice(2)).then(status => { process.exitCode = status; })
     .catch(error => { console.error(error); process.exitCode = 1; });
 }

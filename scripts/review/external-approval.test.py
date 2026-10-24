@@ -1369,39 +1369,8 @@ class ProfileCustodyTests(unittest.TestCase):
         observed = json.loads((self.checkout / '.evidence/child.json').read_text())
         self.assertEqual(observed['home'], '/var/empty'); self.assertFalse(observed['token'])
         self.assertEqual(observed['args'], ['--layer=0-2', '--stage=cheap', '--scope=changed', '--runs=local',
-            '--reuse', f'--base={self.boundary["comparison_base"]}', f'--head={self.boundary["source_sha"]}'])
+            f'--base={self.boundary["comparison_base"]}', f'--head={self.boundary["source_sha"]}'])
 
-    def test_candidate_cheap_reuses_actual_runner_checks_and_keeps_fresh_admission_and_custody(self):
-        import shutil
-        self.prepare_candidate_checks()
-        scripts = self.checkout / 'scripts/verify'
-        for name in ('run.mjs', 'receipt-cache.mjs', 'impact-plan.mjs'):
-            shutil.copyfile(REPO_ROOT / 'scripts/verify' / name, scripts / name)
-        (self.checkout / 'node_modules').symlink_to(REPO_ROOT / 'node_modules', target_is_directory=True)
-        (self.checkout / '.gitignore').write_text('.evidence/\nnode_modules\n')
-        (scripts / 'registry.yml').write_text('checks:\n'
-            '  - name: resource-admission\n    script: admission.sh\n    layer: 0\n    blocking: true\n    preflight: true\n'
-            '  - name: focused-tests\n    script: focused.sh\n    layer: 1\n    blocking: true\n    cache: true\n')
-        for name in ('admission', 'focused'):
-            (scripts / (name + '.sh')).write_text(f'echo run >> .evidence/{name}-calls\n' + "echo '{\"status\":\"pass\"}'\n")
-        recipe = self.checkout / '.evidence/verify/focused-tests.json'
-        recipe.parent.mkdir(parents=True)
-        recipe.write_text('{"version":1,"tests":["scripts/example.test.mjs"]}')
-        git = '/Applications/Xcode.app/Contents/Developer/usr/bin/git' if sys.platform == 'darwin' else '/usr/bin/git'
-        env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
-        for args in (['add','.'], ['commit','-qm','actual cheap runner fixture']):
-            REAL_RUN([git,'-C',str(self.checkout),*args],env=env,check=True)
-        source = subprocess.check_output([git,'-C',str(self.checkout),'rev-parse','HEAD'],env=env).decode().strip()
-        REAL_RUN([git,'-C',str(self.checkout),'update-ref','refs/remotes/origin/main',source],env=env,check=True)
-        self.boundary.update(source_sha=source, comparison_base=source)
-        self.receipt.update(source_sha=source, comparison_base=source)
-        self.save()
-        with patch.object(external, 'candidate_custody', wraps=external.candidate_custody) as custody:
-            self.assertEqual(self.candidate_command(), 0)
-            self.assertEqual(self.candidate_command(), 0)
-            self.assertEqual(custody.call_count, 4)
-        self.assertEqual((self.checkout / '.evidence/focused-calls').read_text().splitlines(), ['run'])
-        self.assertEqual((self.checkout / '.evidence/admission-calls').read_text().splitlines(), ['run', 'run'])
 
     def test_candidate_push_gates_preserve_exit_two_and_real_failure(self):
         source = self.prepare_candidate_checks()

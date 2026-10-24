@@ -354,7 +354,7 @@ sys.exit(subprocess.call([{NODE!r},{str(shipping)!r},'--','/bin/bash',{str(task)
     def use_real_deferred_pipeline(self):
         # Only external checks and host/Docker observations are modeled.
         # The actual runner, lock, CLI and preparation callback remain intact.
-        for name in ('run.mjs', 'receipt-cache.mjs'):
+        for name in ('run.mjs'):
             shutil.copyfile(SOURCE / name, self.verify / name)
             self.assertEqual(self.sha(self.verify / name), self.sha(SOURCE / name))
         (self.root / 'node_modules/js-yaml').symlink_to(SOURCE.parents[1] / 'node_modules/js-yaml')
