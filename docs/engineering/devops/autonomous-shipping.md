@@ -325,9 +325,18 @@ Local-runner security: a dedicated macOS user with only `gh` auth and the Claude
 
 **Catches:** broken flows, navigation loops (the `+not-found` boot loop from the worktree memory is exactly this class), visual regressions, native-module breakage.
 
-Two modes, deliberately separated for cost:
+The current CI selection is maintained by `scripts/verify/impact-plan.mjs`; inspect it with `npm run verify:sim-plan`.
+It combines the canonical review risk tier with changed-screen mappings: low selects no simulator, medium selects affected flows, and high selects the full flow set.
+Navigation, auth, billing, native configuration, release candidates and unknown mobile impact select full coverage.
+The `needs-sim` label forces flows, and CI logs print the chosen scope and reason.
+The existing Build job runs on macOS when needed and propagates simulator failures through the unchanged final Verify aggregator.
+The local source-bound acceptance gate remains required; see [shipping.md](shipping.md) for execution and configuration.
 
-1. **Deterministic flows (Maestro)**: `apps/mobile/e2e/flows/*.yaml` for onboarding, search, detail, save, paywall, sign-in stub, run against the PR's preview API on the dev environment (`EXPO_PUBLIC_API_URL` injected at run time). Runs on every `surface:mobile` PR. No model involved. Screenshots at named steps are the visual baseline; a pixel diff over threshold on a touched screen is a finding for the `mobile-ui` lens, not an automatic failure (fonts and dates cause noise).
+Two complementary execution modes:
+
+1. **Deterministic flows (Maestro)**: the selected existing `apps/mobile/e2e/flows/*.yaml` run against dev services with a disposable Test Store account.
+   Hosted execution retains ordinary logs and screenshots, and missing tools or failed assertions fail Build.
+   The manually dispatched `.eas/workflows/mobile-e2e.yml` remains an explicit full-suite alternative.
 2. **Agent-driven verification**: only for `affected_screens` without a Maestro flow, or when the PR body asks for it. A Sonnet agent uses the simulator CLI (below) and the feature map to drive the changed flow, saves screenshots and the Metro log excerpt to `.evidence/`, and writes a pass/fail JSON. This is the "verification skill" pattern from the talk.
 
 | Tool | Status | Notes |

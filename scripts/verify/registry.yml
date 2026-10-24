@@ -70,7 +70,7 @@ checks:
     layer: 1
     blocking: true
     runs: [local]
-    why: Local simulator evidence for mobile-facing changes; missing, stale, failed, or incomplete evidence fails. CI does not run a simulator.
+    why: Local simulator evidence for mobile-facing changes; missing, stale, failed, or incomplete evidence fails. Hosted execution does not satisfy this local gate.
 
   - name: boundaries
     cache: true
@@ -176,12 +176,12 @@ checks:
   - name: mobile-e2e
     script: mobile-e2e.sh
     layer: 7
-    blocking: shadow
-    runs: [scheduled, local]
-    paths: ["apps/mobile/**"]
+    blocking: true
+    runs: [ci, scheduled, local]
     why: >
-      Legacy native smoke diagnostic only. Source-bound product-flow owns
-      native execution; this skip cannot satisfy its blocking evidence gate.
+      CI selects none, affected flows or full flows through impact-plan.mjs.
+      Failures fail the selected mobile job. Local product-flow acceptance and
+      the final Verify aggregator retain their existing independent semantics.
 
   - name: dev-drift
     script: dev-drift.sh

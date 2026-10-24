@@ -25,6 +25,7 @@ Thumbs.db
 
 # Testing
 coverage/
+__pycache__/
 
 # Prisma
 prisma/*.db

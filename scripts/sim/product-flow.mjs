@@ -109,7 +109,7 @@ function writeAttachmentCloseout({ before, after, udid, dir, timeline, flow }) {
     return { receipt: null, file, error: error.message };
   }
 }
-async function stopMetro() {
+export async function stopMetro() {
   if (!existsSync(metroFile)) return;
   const m = read(metroFile);
   let current;
@@ -133,7 +133,7 @@ async function metroBundle(m) {
   assert(response.ok, `Metro bundle failed: HTTP ${response.status}`);
   return digest(Buffer.from(await response.arrayBuffer()));
 }
-async function startMetro(r) {
+export async function startMetro(r) {
   await stopMetro();
   // Refuse a busy port; never attach to or terminate another task's server.
   await new Promise((resolvePort, reject) => {
@@ -277,7 +277,7 @@ function receipt(udid) {
   assert(r === checkedActive, 'A retained compatible artifact must be activated through build before product flows');
   return checkedActive;
 }
-function prepareNative(profile, testStore) {
+export function prepareNative(profile, testStore) {
   // Keyless Release is useful for baseline navigation, but cannot verify billing.
   const env = { ...repoEnv(), EXPO_NO_DOTENV: '1', NODE_ENV: testStore ? 'development' : 'production',
     FITSY_ALLOW_MISSING_PUBLIC_ENV: '1', CI: '1', FORCE_BUNDLING: '1', SKIP_BUNDLING: '' };
@@ -303,7 +303,7 @@ function prepareNative(profile, testStore) {
   run('pod', ['install'], { cwd: join(mobile, 'ios'), env, stdio: 'inherit' });
   return env;
 }
-function compileNative(profile, udid, env) {
+export function compileNative(profile, udid, env) {
   const log = join(buildDir, 'build.log');
   const fd = openSync(log, 'w');
   try {

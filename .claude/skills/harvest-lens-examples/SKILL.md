@@ -34,6 +34,7 @@ lens edits).
      Keep each lens focused on its concern and retain actionable evidence.
      Consolidate repeated examples when a shared rule preserves their failure scenarios.
    - Behavioral/user-facing -> also consider a Maestro flow or DB test.
+     Inspect `npm run verify:sim-plan` and update `scripts/verify/impact-plan.mjs` plus its table-driven tests when adding affected-screen coverage.
 4. **Eval cases**: for the sharpest escapes, capture
    `scripts/verify/evals/incidents/<pr-number>/` (diff.patch via
    `gh pr diff <n> --patch` of the ORIGINAL breaking change when identifiable,

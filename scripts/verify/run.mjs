@@ -21,7 +21,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
-import { impactPlan, git, focusedDatabaseRequired, allTestGroups } from "./impact-plan.mjs";
+import { impactPlan, git, focusedDatabaseRequired, allTestGroups, isMain } from "./impact-plan.mjs";
 
 export async function verify(argv, prepareDatabase) {
   // Clear shell startup selectors before checks launch nested npm or Bash shells.
@@ -121,6 +121,7 @@ export async function verify(argv, prepareDatabase) {
     if (c.name === 'focused-tests') c = { ...c, selection: frozenSelection, database: focusedDatabase() };
     if (c.name === 'test') c = { ...c, selection: {
       groups: scope === 'changed' ? plan.testGroups : allTestGroups, comparison: plan.comparison } };
+    if (c.name === 'mobile-e2e') console.error(`Simulator scope: ${plan.simulator.scope}; ${plan.simulator.reason}`);
     selected.push(c);
   }
   const acceptance = selected.filter(c => isAcceptance(c) && !c.preflight);
@@ -421,7 +422,7 @@ export async function verify(argv, prepareDatabase) {
   return status;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (isMain(import.meta.url)) {
   verify(process.argv.slice(2)).then(status => { process.exitCode = status; })
     .catch(error => { console.error(error); process.exitCode = 1; });
 }

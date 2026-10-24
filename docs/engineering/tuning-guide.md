@@ -12,7 +12,7 @@
 | `auto-merge` | manual (agents merge on green) | Becomes GitHub auto-merge-on-green when `merge-gate` flips. |
 | `spec-requirement` | `feature` | `spec-conformance` lens runs when a PR body carries a `Spec:` line; a medium+ feature PR without one gets a CONFIRMED finding. Bug fixes reference their incident instead. |
 | `review` | every open PR, tiered | `com.fitsy.review-poller` LaunchAgent (every 3 min, Max subscription): correctness on medium/high tiers; + `danger-zone` on tier-high paths (`scripts/verify/risk-tiers.yml`); + `harness-audit` on the `incident` label; + `workflow-security` on CI/CD paths; + `test-quality` on test files; `docs-sanity` (comment-only) on tier-low. Statuses post as `lens/<name>`. |
-| `shadow-checks` | `own-code-mocks`, `mutation`, `mobile-e2e`, `dev-drift`, `api-e2e` | `blocking: shadow` in `scripts/verify/registry.yml`; promotion = a PR flipping the field after two clean weeks. |
+| `shadow-checks` | `own-code-mocks`, `mutation`, `dev-drift`, `api-e2e` | `blocking: shadow` in `scripts/verify/registry.yml`; promotion = a PR flipping the field after two clean weeks. |
 | `harden-on-incident` | required | `harness-audit` lens blocks incident-labeled PRs missing fix + detector + constraint + eval case + `Layer:` attribution. |
 | `size-gate` | 600 changed lines | `size-check` reports a review-size signal; scope is judged by coherent outcome and acceptance rather than a hard line cap. |
 | `mutation-break` | 50 (baseline 59.0%, 2026-09-07) | `stryker.config.mjs` `thresholds.break`; ratchet +5/month while green (rollout step 10). |

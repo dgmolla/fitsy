@@ -902,9 +902,13 @@ def validate_verify_jobs(config, run, source, names=VERIFY_JOBS):
         matches = [job for job in jobs['jobs'] if job['name'] == name]
         require(len(matches) == 1, 'required Verify job missing or ambiguous')
         job = matches[0]
+        # The approved workflow selects macOS only for Build's simulator lane.
+        # Workflow bytes, source, issuer, suite and successful execution stay bound.
+        standard_runner = job['labels'] == ['ubuntu-latest'] or (
+            name == 'Build (L3)' and job['labels'] == ['macos-15'])
         require(job['run_id'] == verify_id and job['run_attempt'] == run['run_attempt']
                 and job['head_sha'] == source and job['status'] == 'completed'
-                and job['conclusion'] == 'success' and job['labels'] == ['ubuntu-latest']
+                and job['conclusion'] == 'success' and standard_runner
                 and job['check_run_url'] == f'https://api.github.com/{endpoint}/check-runs/{job["id"]}',
                 'required Verify job failed, skipped or mismatched')
         check = github(config, f'{endpoint}/check-runs/{job["id"]}')

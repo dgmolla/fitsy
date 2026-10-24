@@ -52,3 +52,6 @@ embedded Release for normal app flows, or signed Debug with its owned Metro for
 RevenueCat Test Store. Both use dev services; fresh-account runs explicitly reset
 the disposable simulator keychain. See `docs/engineering/devops/shipping.md` for
 the blocking evidence procedure. A normal dev-client launcher is not this build.
+
+Use `npm run verify:sim-plan` to inspect CI's affected-screen flow selection and its reason.
+The existing Build job executes selected flows on macOS; this remains separate from local final-candidate evidence.

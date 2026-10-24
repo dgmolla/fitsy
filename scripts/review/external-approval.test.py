@@ -1681,6 +1681,19 @@ class CIAcceptanceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'issuer/execution'): self.publish()
         self.assertFalse(self.f.writes)
 
+    def test_only_build_can_use_the_approved_standard_macos_runner(self):
+        import copy
+        original = copy.deepcopy(self.f.candidate_jobs)
+        build = next(job for job in self.f.candidate_jobs if job['name'] == 'Build (L3)')
+        build['labels'] = ['macos-15']
+        self.publish()
+        for name, labels in [('Static (L0-L1)', ['macos-15']), ('Build (L3)', ['self-hosted', 'macos-15']),
+                             ('Build (L3)', ['macos-15-large']), ('Build (L3)', ['macos-latest'])]:
+            self.f.candidate_jobs = copy.deepcopy(original)
+            next(job for job in self.f.candidate_jobs if job['name'] == name)['labels'] = labels
+            with self.subTest(name=name, labels=labels), self.assertRaisesRegex(ValueError, 'job failed'):
+                self.publish()
+
     def test_changed_workflow_or_coverage_suppressing_source_tree_refuses(self):
         import base64
         endpoint = f'repos/{external.REPO}'

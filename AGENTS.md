@@ -157,6 +157,8 @@ npm run verify:all     # everything, including the production build
 
 The check list lives in `scripts/verify/registry.yml`; CI (`verify.yml`), the
 pre-push hook, and agents all run the same scripts.
+Inspect CI's dynamic simulator scope with `npm run verify:sim-plan`; selection and flow mappings live in `scripts/verify/impact-plan.mjs`.
+The existing Build job runs selected native flows, while local source-bound product acceptance remains separate.
 
 Protected merge requires current trusted CI plus applicable local media/native evidence; old-head CI and candidate-controlled workflow changes cannot substitute.
 

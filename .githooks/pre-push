@@ -1,6 +1,7 @@
 #!/bin/bash -p
 # Publish only a frozen, independently reviewed candidate after cheap/focused checks.
 # Trusted existing Verify owns heavy pre-merge acceptance; local media/native proof remains separate.
+# Inspect its dynamic native scope with npm run verify:sim-plan before local journeys.
 # Size and domain checks still run on every push.
 set -euo pipefail
 unset NODE_OPTIONS NODE_PATH BASH_ENV ENV

@@ -57,8 +57,13 @@ beforeEach(() => {
   for (const name of ["run-lens.sh", "run-review.sh", "review-round.py", "review-domains.py", "execute-review.py", "extract-verdict.py", "format-comment.py", "review-gate.py", "review-budget.py", "tier.mjs"]) {
     cpSync(join(source, "scripts/review", name), join(root, "scripts/review", name));
   }
+  // Unit fixtures simulate a stable host boot identity outside the candidate.
+  // The real monotonic clock and production's absolute sysctl path stay intact.
+  const sysctl = join(admin, 'sysctl-fixture');
+  writeFileSync(sysctl, '#!/bin/sh\n[ "$*" = "-n kern.boottime" ] || exit 1\nprintf \'{ sec = 1700000000, usec = 0 }\\n\'\n', { mode: 0o700 });
   const budgetScript = join(root, 'scripts/review/review-budget.py');
   writeFileSync(budgetScript, readFileSync(budgetScript, 'utf8')
+    .replace('["/usr/sbin/sysctl", "-n", "kern.boottime"]', JSON.stringify([sysctl, '-n', 'kern.boottime']))
     .replace('ADMIN_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)', `ADMIN_HOME = Path(${JSON.stringify(admin)})`)
     .replace('ADMIN_CACHE = ADMIN_HOME / ".cache/fitsy-review"', `ADMIN_CACHE = Path(${JSON.stringify(cache)})`)
     .replace('ADMIN_BUDGET = ADMIN_CACHE / "budgets"', `ADMIN_BUDGET = Path(${JSON.stringify(join(root, 'budgets'))})`));

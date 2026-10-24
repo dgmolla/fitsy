@@ -101,15 +101,29 @@ Allowlist additions, unrelated removals, deletion of the allowlist and unreadabl
 
 Changes under `scripts/sim/` or the product-flow verification controls run the blocking local `media-integration` lane in `npm run verify`.
 Install `ffprobe` and `ffmpeg` locally before that run.
+The media preflight also requires working `ps` process ownership inspection; a sandbox denial fails before native fixture children start.
 The lane runs real decoder, XCTest attachment and opt-in recorder cases, then records `.evidence/verify/media-integration.json` with the candidate SHA and source/test hash.
 Hosted L2 runs deterministic tests without media tools.
 After committing, rerun `node scripts/verify/run.mjs --only=media-integration --runs=local` so the receipt names the PR head.
 The `product-flow/local` publisher checks that receipt before setting its exact-head status, including when mobile product evidence is not applicable.
 
 **Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes.
-CI runs static checks, unit tests and builds; its optional simulator workflow remains experimental.
+CI runs static checks, unit tests and builds, plus impact-selected simulator flows inside the existing Build job.
+Run `npm run verify:sim-plan` to inspect `none`, `affected` or `full` scope and its reason before choosing journeys.
+The planner reuses review's deterministic risk tier and maps changed mobile screens to the existing Maestro flows.
+Navigation, auth, billing, native configuration, release and unmapped mobile paths require all flows; ordinary non-mobile changes require no simulator.
+The `needs-sim` label forces flows and its addition or removal reruns classification.
+The final Verify job retains its existing applicability and failure semantics.
 Applicable product acceptance and its exact-head publisher require fresh `.evidence/product-flow/report.json` when impact selection applies; ordinary publication does not claim that proof.
 Missing tools, skipped/failed assertions, missing coverage and stale evidence fail; unrelated changes get explicit `not_applicable`.
+
+Hosted execution uses `scripts/sim/ci.mjs`, the maintained native build recipe, a fresh simulator and RevenueCat Test Store against `https://dev.fitsy.org`.
+Configure repository variables `FITSY_SIM_SUPABASE_URL`, `FITSY_SIM_SUPABASE_ANON_KEY`, `FITSY_SIM_REVENUECAT_TEST_KEY` and `FITSY_SIM_LOGIN_EMAIL`, plus secret `FITSY_SIM_LOGIN_PASSWORD` for a disposable dev account distinct from the shared Dev login.
+No production database or release credentials are supplied to this job.
+Missing configuration or tools and failed Maestro assertions fail the selected Build job.
+Selection, command reports, screenshots, build logs and Metro logs are retained as ordinary CI artifacts.
+These journeys exercise the candidate mobile source against the shared dev backend; they do not establish candidate-backend deployment, Apple billing or local final-candidate acceptance.
+The existing local `product-flow/local` gate remains required until its own replacement is accepted.
 
 Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID.
 Keep public configuration in the ignored mobile environment file.

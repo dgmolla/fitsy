@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Local simulator evidence is mandatory; CI does not execute a simulator.
+// Local candidate evidence stays mandatory alongside hosted simulator execution.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync, realpathSync } from 'node:fs';

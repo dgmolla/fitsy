@@ -39,10 +39,25 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `own-code-mocks.sh` | 2 (shadow) | api tests mock only external services |
 | `build.sh` | 3 | production API build, no stray compiled output |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |
-| `mobile-e2e.sh` | 7 (shadow) | Retired unscoped native smoke; use required source-bound product-flow with an exact owned UDID |
+| `mobile-e2e.sh` | 7 (CI, blocking) | Run the impact-selected flows on an isolated hosted simulator; local calls retain the retired-smoke skip |
 | `api-e2e.sh` | 6 | a deployed API serves health + teaser-lock invariants (read-only by default; `--write` adds the register probe) |
 
 Callers: `.githooks/pre-push` (layers 0-3, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
+
+`npm run verify:sim-plan` prints the simulator scope, reason and exact existing Maestro flow names.
+Use `npm run verify:sim-plan -- --release-candidate` for explicit release planning; release events and tag refs also require the full flow set.
+`impact-plan.mjs` consumes the canonical review tier from `scripts/review/tier.mjs` and `risk-tiers.yml`, then maps mobile paths to flows.
+Docs, tests, scripts and ordinary non-mobile changes select `none`; mapped mobile screens select `affected`; navigation, auth, billing, native configuration, release and unknown mobile impact select `full`.
+The exact `needs-sim` PR label forces execution, using the affected selection when available and the full set otherwise.
+Unavailable history or classification expands to full coverage.
+Adding or removing that label reruns Verify.
+
+The existing build job uses macOS when simulator work applies and Ubuntu otherwise.
+For a docs-only `needs-sim` override, classification requests the build job while static and unit-test jobs remain correctly skipped.
+Build runs `--only=mobile-e2e --runs=ci --scope=changed` after any applicable API build.
+A simulator failure fails Build, so the unchanged final Verify aggregator rejects it.
+The native recipe uses dev services, a disposable Test Store account and an explicitly created device; ordinary logs and screenshots are uploaded for diagnosis.
+See [shipping.md](../../docs/engineering/devops/shipping.md) for CI configuration and the separate local product-flow acceptance requirement.
 
 The local pre-push hook requires layers 0-3, including production build acceptance, and still runs size and domain checks on every push.
 For the L2 test check, `--reuse` accepts a successful local receipt no older than six hours only when source files, the selected diff, local configuration, environment, dependency lock, runtime and check definition still match.

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { fileURLToPath } from 'node:url';
+import { isMain } from './impact-plan.mjs';
 import { assertPhaseLock, assertOwnedDatabase, databaseControl, withOwnedLock } from './local-db-control.mjs';
 export { assertPhaseLock, assertOwnedDatabase, databaseControl, runWithLocalDatabase } from './local-db-control.mjs';
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (isMain(import.meta.url)) {
   try {
     if (process.argv[2] === '--assert-owned-db') assertOwnedDatabase();
     else if (process.argv[2] === '--stop-owned-db') process.exitCode = withOwnedLock('--locked-stop');
