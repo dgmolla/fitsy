@@ -241,6 +241,21 @@ test('label additions and removals rerun classification, and the final Verify jo
   expect(workflowText.split('\n  verify:\n')[1]).toBe(main.split('\n  verify:\n')[1]);
 });
 
+test.each(['success', 'failure', 'skipped', 'cancelled'])(
+  'actual final Verify requires success from the selected Build job (Build=%s)', buildResult => {
+  const needs = {
+    classify: { result: 'success', outputs: { code: 'true', tests: 'true', build: 'true' } },
+    static: { result: 'success' }, test: { result: 'success' },
+    'domain-check': { result: 'success' }, build: { result: buildResult },
+  };
+  const command = workflow.jobs.verify!.steps.find(step => step.name === 'Require every applicable job')!.run!;
+  const result = spawnSync('bash', ['-e', '-c', command], {
+    env: { ...env, GITHUB_EVENT_NAME: 'pull_request', NEEDS_JSON: JSON.stringify(needs) }, encoding: 'utf8',
+  });
+  expect(result.status).toBe(buildResult === 'success' ? 0 : 1);
+  expect(result.stdout.trim()).toBe(buildResult === 'success' ? 'true' : 'false');
+});
+
 test('CI preflights the same simulator configuration before builds and native tool installation', () => {
   const steps = workflow.jobs.build!.steps;
   const preflight = steps.findIndex(step => step.name === 'Preflight simulator configuration');

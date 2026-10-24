@@ -29,12 +29,22 @@ function preflight(extra: NodeJS.ProcessEnv) {
   });
 }
 
-test('configuration preflight lists every missing repository setting together', () => {
-  const result = preflight({ EXPO_PUBLIC_API_URL: configuration.EXPO_PUBLIC_API_URL });
+test.each([
+  { existingURL: false },
+  // Matches hosted CI with DEV_SUPABASE_URL already configured: six settings remain.
+  { existingURL: true },
+])('configuration preflight reports the exact setup gap (existing URL=$existingURL)', ({ existingURL }) => {
+  const result = preflight({ EXPO_PUBLIC_API_URL: configuration.EXPO_PUBLIC_API_URL,
+    ...(existingURL ? { EXPO_PUBLIC_SUPABASE_URL: configuration.EXPO_PUBLIC_SUPABASE_URL } : {}) });
   expect(result.status).toBe(1);
   const receipt = JSON.parse(result.stdout);
   expect(receipt.status).toBe('fail');
-  for (const [, setting] of settings) expect(receipt.summary).toContain(setting);
+  expect(receipt.summary).toBe('Missing hosted simulator configuration: ' + settings.slice(existingURL ? 1 : 0)
+    .map(([key, setting]) => key === 'EXPO_PUBLIC_SUPABASE_URL' ? 'variable FITSY_SIM_SUPABASE_URL or secret DEV_SUPABASE_URL'
+      : `${key.includes('PASSWORD') ? 'secret' : 'variable'} ${setting}`).join('; '));
+  // The informational Apple obligation is not what failed this preflight.
+  expect(result.stderr).toContain('Apple acceptance required separately');
+  expect(receipt.summary).not.toContain('Apple acceptance');
   expect(receipt.fix).toContain('docs/engineering/devops/shipping.md');
 });
 

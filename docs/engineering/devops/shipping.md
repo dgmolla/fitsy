@@ -108,6 +108,11 @@ Configure repository variables `FITSY_SIM_SUPABASE_ANON_KEY`, `FITSY_SIM_REVENUE
 The Supabase URL uses variable `FITSY_SIM_SUPABASE_URL` when configured, otherwise the existing `DEV_SUPABASE_URL` secret.
 After installing dependencies, run `node scripts/sim/ci.mjs --scope=changed --preflight` with the same mobile environment to validate configuration without native tools or network calls.
 CI runs this preflight before L3 builds and Maestro installation and reports all missing repository settings together, without logging their values.
+When it reports missing settings, inspect repository configuration names with `gh variable list --repo dgmolla/fitsy --json name` and `gh secret list --repo dgmolla/fitsy --json name`, or the authenticated Actions settings page if CLI access is unavailable.
+The existing execution owner must configure the reported variables and secrets with the dev public keys and prepared disposable accounts before rerunning Verify.
+An existing `DEV_SUPABASE_URL` supplies only the URL; it does not supply the anon key, Test Store key or either account's credentials.
+Rerunning unchanged CI cannot supply absent configuration, and the resulting final Verify failure correctly reflects the failed Build job.
+Keep required simulator scope and Verify semantics intact; the separate Apple acceptance notice is informational and is not a configuration failure.
 This configuration check does not authenticate fixtures, run native journeys or supply acceptance evidence; the subsequent execution still verifies real account state and every selected hosted flow.
 Create that account before CI and keep it never subscribed; Dev login forwards its configured password, with the existing shared defaults retained for local development.
 Full hosted coverage also requires variable `FITSY_SIM_EXPIRED_LOGIN_EMAIL` and secret `FITSY_SIM_EXPIRED_LOGIN_PASSWORD` for a distinct account with a real expired same-account Test Store purchase.

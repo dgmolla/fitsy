@@ -31,6 +31,8 @@ export function hostedConfiguration(flows, env) {
     ] : []),
   ];
   const missing = required.filter(([key]) => !env[key]?.trim()).map(([, setting]) => setting);
+  // Missing repository settings are a setup failure, never a reason to narrow
+  // the selected flows or return skipped. Final Verify must retain Build's failure.
   if (missing.length) throw new Error(`Missing hosted simulator configuration: ${missing.join('; ')}`);
   return { profile: buildProfile(true, env), accounts: hostedAccounts(flows, env) };
 }

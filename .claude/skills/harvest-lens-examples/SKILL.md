@@ -42,6 +42,7 @@ lens edits).
      Keep verification-only manifest scripts and E2E orchestration out of native scope; test that dependency/build changes and `needs-sim` still force coverage.
      When changing verification caller routing, set each subprocess fixture's `FITSY_RUNS` explicitly and replay it under the L2 parent's `FITSY_RUNS=ci CI=true` environment.
      For missing hosted simulator credentials, run `node scripts/sim/ci.mjs --scope=changed --preflight` and configure the reported repository settings through the existing owner.
+     Confirm setting names through `gh variable list` and `gh secret list`, or authenticated Actions settings if CLI access fails; unchanged reruns cannot repair absent settings, and the final Verify failure is the expected propagation of Build's failure.
      Keep preflight and execution environment mappings identical, reuse the existing dev Supabase URL secret when available, and preserve required flow selection until real fixtures are configured.
 4. **Eval cases**: for the sharpest escapes, capture
    `scripts/verify/evals/incidents/<pr-number>/` (diff.patch via
