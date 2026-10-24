@@ -18,10 +18,9 @@ Low-confidence answers remain unknown, and deterministic risk floors cannot be l
 Provider errors fall back deterministically; neither Jev nor issue text can choose executable commands or alter review gates.
 The current default implementation profile is Codex with Sol; a trusted configuration can select the supported Claude adapter for a future claim.
 
-The installer starts paused from a clean, current main revision.
-Enabling requires that revision's main Verify and Deploy success and no active claim.
+The dispatcher runs on demand from the repository; no recurring service is installed.
+Enabling requires the selected revision's main Verify and Deploy success and no active claim.
 The dispatcher posts actionable blocker incidents through the shared Slack limiter with a stable key, history reconciliation and confirmed receipt.
-It does not publish the periodic digest.
 
 Before admitting the next claim, an idle dispatcher makes one bounded simulator-retirement attempt for a terminal-verified issue.
 The exact claim checkout, build receipt, passing product-flow report, exported app digest, and device UDID must agree; a dedicated device name alone proves nothing.
@@ -73,14 +72,6 @@ Other expired resources are explicit assessment actions for the coordinator and 
 Incoming dependency links protect a donor only through a chain ending in a known live consumer; a historical idle checkout's link alone does not establish current execution.
 No source, dirty work, user-owned device, queued pinned app or required historical evidence becomes disposable solely through age.
 
-Paused runtime updates are separate from worker admission.
-The installer atomically copies the small reviewed scripts under dispatcher.lock with enough free bytes for the update and reports available and required worker capacity.
-It can install recovery code during a resource hold without lowering the worker floor or admitting work.
-The installer binds an absolute ownership-tool path, pauses the previous runtime identity, verifies each installed file digest, and publishes the new identity last.
-Enabling checks those digests so interrupted or mixed runtime updates remain disabled until reinstalled.
-Enable reports resource-hold explicitly when headroom is insufficient; the existing tick still forbids launching any worker below floor plus reserve.
-Active claims continue to prevent installation or enabling.
-
 Checkout creation records its exact path and branch intent before invoking Git.
 Crash recovery archives that intent with the terminal time and reuses an already-created checkout after the same source and ownership checks.
 An intent that created neither a registered checkout nor a branch can retry without inventing retained source.
@@ -106,7 +97,7 @@ Simulator claim updates use atomic fsync and replacement under the existing shar
 A malformed legacy claim remains unchanged and blocks device commands with an explicit owner-reconciliation action; corrupt metadata never proves the device is free.
 The coordinator preserves its raw bytes, checks live task ownership and command evidence under the existing locks, and restores a verified claim or retires only a positively ended owner claim.
 
-Tick admission rereads and validates the installed configuration inside dispatcher.lock, so a completed installer pause wins over an earlier enabled snapshot.
+Tick admission rereads and validates the current configuration inside dispatcher.lock, so a completed pause wins over an earlier enabled snapshot.
 Device completion consumes one outstanding owner-bound intent; retries without another actual action cannot renew its use clock.
 
 ## Pressure recovery and cold checkout retirement
@@ -124,7 +115,7 @@ Completed mobile checkouts retain their hot proof paths until the existing issue
 The incoming-reference scan traverses nested dependency links without following symlinks and stops after incoming_reference_scan_seconds (30 seconds maximum/default).
 A scan deadline or filesystem error preserves the checkout and records the unresolved assessment and next action; it never authorizes removal.
 Before normal Git removal, private Gitbundle recovery and every source/environment/app/raw-evidence archive member must pass exact content verification.
-Dirty or untracked source is retained in that verified archive; no original branch, terminal receipt, failure, review budget or UI approval is deleted or reset.
+Dirty or untracked source is retained in that verified archive; no original branch, terminal receipt, failure, historical review record or UI approval is deleted or reset.
 One immutable content-addressed source bundle serves covered recoveries instead of copying repository history into every archive.
 Identical app files of at least 8 MiB use one private compressed recovery object with compressed and decoded hashes recorded in each manifest.
 Restore those objects to their exact manifest paths and recorded file modes, then verify decoded hashes; a damaged object retains the next hot source and cannot satisfy completed-source recovery.
@@ -173,7 +164,7 @@ Already-authorized independent issues without a matching retained checkout remai
 ### Complete queue reads and quota cooldown
 
 The canonical `snapshot` mode reads the same complete live GitHub queue as dispatch admission.
-Use `python3 ~/.fitsy-dispatcher/runtime/local-dispatcher.py snapshot --config ~/.fitsy-dispatcher/config.json` for coordination instead of a separate broad project CLI query.
+Use `python3 scripts/delivery/local-dispatcher.py snapshot --config ~/.fitsy-dispatcher/config.json` for coordination instead of a separate broad project CLI query.
 The transport pages at 100 cards and requests only delivery fields and issue labels; total counts, unique IDs and advancing cursors must agree before dispatch.
 A truncated label connection fails closed so a hold cannot disappear through truncation.
 The private `github-queue-quota.json` stores observed cost and quota reset timing, never board content or launch permission.

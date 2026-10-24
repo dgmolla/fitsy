@@ -6,7 +6,7 @@ The [shipping contracts](shipping.md) retain supported commands, product accepta
 Current human issue-bound review limits govern execution; historical dispatcher defaults do not override them.
 Model selection never waives those gates or grants permission to start extra work.
 The local dispatcher snapshots a configured implementation provider, model and effort and an independent reviewer provider, model and effort for each claim.
-Its current default is Codex with Sol; a trusted operator can configure the supported Claude worker adapter for a later claim without changing queue ownership, review budgets or release gates.
+Its current default is Codex with Sol; a trusted operator can configure the supported Claude worker adapter for a later claim without changing queue ownership, AI review attempt limits or release gates.
 Jev provides advisory task planning and cannot choose an executable, provider, reviewer or required lens.
 An active claim retains its original profiles when the configuration changes.
 
@@ -69,6 +69,6 @@ Keep deterministic checks and deliberate negative controls as complementary evid
 Run one canonical round covering every required domain, with advisory domains handled by the shipping policy.
 Do not add parallel generic reviewers or repeat a valid review solely to gain confidence.
 Reuse verdicts only when the canonical identity and context checks allow it.
-Charge every executed round and retry against the shared cumulative review-time budget across repaired versions; preserve all prior history.
+The active local AI review poller allows two attempts per head SHA; preserve historical review records needed by unfinished tasks.
 A fresh verdict must cover changed review inputs before it can satisfy the final candidate's gates.
 Record escalation reason and outcome so model changes can be evaluated against actual retries, quality and delivery time.

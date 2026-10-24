@@ -38,7 +38,7 @@ Finish implementation and commit the frozen candidate before review.
 Select meaningful focused reproduction and regression tests for the changed behavior.
 Run applicable structural, lint, type and safety checks plus that focused selection before independent review.
 Local admission completes cheap checks and revalidates matching independent evidence through immutable trusted-main reviewer controls.
-Reviewer execution is a separate explicit operation under the original issue accounting.
+Reviewer execution is a separate operation with attempts controlled by the local AI review poller.
 
 ```sh
 node scripts/verify/focused-tests.mjs --set scripts/verify/impact-plan.test.ts
@@ -59,11 +59,10 @@ A focused selection is not full acceptance; correctness review still judges scen
 
 Admission checks out the frozen candidate in a disposable directory and restores immutable reviewer controls from the managed external review repository main.
 Default admission uses `run-review.sh --local --cached-only` and cannot execute a provider when matching evidence is missing.
-Explicit `--execute-review` uses the same authenticated overlay, ignores cached results and charges the original issue ledger.
+The legacy explicit `--execute-review` path uses the same authenticated overlay and ignores cached results.
 The existing canonical review cache must remain outside every Git checkout; candidate-local caches cannot admit shipping.
-Cached verdicts require a retained matching provider execution, source/base/key binding, the result digest recorded by trusted closeout, and unchanged original raw artifacts.
+Legacy cached verdicts require a matching provider identity, base/key binding and unchanged original raw artifacts.
 Bare or legacy unproven cache JSON cannot admit shipping.
-Externally authorized original completed evidence remains subject to the source, base, issue, acceptance, provider, domain and raw-artifact checks.
 No candidate controls are installed as trusted, and no new persisted admission or saved-pass projection is created.
 Changing material review inputs invalidates reuse.
 
@@ -78,7 +77,7 @@ Apple/legal approvals, product-flow status, hooks, PR checks, main Verify, Deplo
 
 Keep source frozen throughout checks, review and acceptance.
 Source drift fails the run, and later source changes require current cheap checks, review and affected full acceptance.
-Reuse unchanged receipts only through the canonical runners; review-budget attempts and raw failure history never reset.
+Reuse unchanged receipts only through the canonical runners and preserve raw failure history for unfinished tasks.
 Verification retains each stage attempt under `.evidence/verify/attempts/` and archives retired test receipts under `check-cache/history/`.
 UI signoff and development walkthroughs precede final UI acceptance.
 The publishable `final-candidate` simulator entry point requires the live shipping session's matching canonical review before native journeys.
@@ -218,7 +217,7 @@ An `incident` label, `Spec:` line or test file does not by itself add a separate
 ```sh
 bash scripts/verify/review-admission.sh
 # Admission revalidates the canonical matching result without provider execution.
-# Required domain coverage and issue-wide budget history remain canonical.
+# Required domain coverage remains canonical; the active poller owns review attempt limits.
 ```
 
 Group material defects and mandatory acceptance failures into one repair pass, while preserving bounded P2 debt as owned, source-bound follow-ups.
@@ -252,10 +251,10 @@ A changed identity requires one new complete round; identity failure withdraws r
 Existing `lens/<domain>` statuses are derived only from one complete independent result.
 Missing domain results make the entire round incomplete.
 PR patches are generated from the exact checked-out head and immutable target base commit, with a head recheck before execution.
-Changed-input success statuses are withdrawn before replacement execution, including when the finite budget denies that execution.
+Changed-input success statuses are withdrawn before replacement execution.
 Legacy `run-lens.sh` delegates the whole round and cannot run separate routine reviewers.
 The default independent provider is Codex, model `gpt-6-sol`, high reasoning effort.
-Each actual round execution or retry charges the retained issue ledger once; cached projections charge no new execution.
+The active local AI review poller controls attempts per head SHA; legacy cached projections do not execute a reviewer.
 A changed diff or changed review inputs invalidates that reuse.
 The selected skills and current human issue limits control execution and retry decisions.
 Incomplete review is never a pass or an automatic retry entitlement.
@@ -263,23 +262,12 @@ An implementer cannot replace the independent required domains with its own asse
 Every finding has a separate impact priority, and raw reviewer verdicts remain unchanged.
 The canonical runner accepts an owned, source-bound P2 follow-up only through the disposition and required-test contract in [review-dispositions.md](review-dispositions.md).
 P0/P1 impacts, malformed dispositions, stale receipts and missing required tests remain blocking.
-Retain all actual execution, reservations, failures and original issue-bound limits across source repairs, providers and workers.
-Do not infer a lifetime attempt count from one combined domain review.
-True explicit human attempt limits and cumulative ceilings remain binding.
-A coordinator-imposed count error may be reconciled only by the supported trusted operator, never by editing ledger bytes or installing candidate controls to approve themselves.
-`review-budget.py reconcile-count` requires a private external operator manifest binding the original limit and complete ledger digests, candidate, issue and issue-bound coordinator/human provenance.
-It appends one idempotent reconciliation event and preserves the original baseline, elapsed costs, timeout ceiling and cumulative stop.
-It refuses unfinished or incomplete history, explicit human-count declarations, mismatched authority and capacity changes.
-The existing prospective execution policy can narrow the remaining window; it cannot reset cumulative accounting or authorize an incomplete retry.
-See [review-dispositions.md](review-dispositions.md#review-budget) for the retained ledger and disposition contracts.
-Do not invoke an unreviewed candidate operator against a live ledger.
-The permanent human exception permits issue463 bootstrap using a private external installation of the independently reviewed exact-source operator and authorized original raw evidence.
-Set `FITSY_REVIEW_BOOTSTRAP_OPERATOR` only after that independent review and installation; this issue-specific path retains actual main identity and cannot admit nutrition.
-`review-budget.py reconcile-allocation` appends a source-bound bounded allocation authorized by the private permanent human receipt, preserving the original limit and every elapsed attempt.
-Completed failed bootstrap reviews are accounted as failed verdicts and cannot admit shipping.
-All bootstrap allocations and execution must be reconciled before final acceptance.
-After verified main release, install through the ordinary trusted-main path and stop using the bootstrap operator.
-Exhaustion and admission refusal are neither review approval nor permission to bypass hooks.
+The active local AI review poller allows two attempts per head SHA and publishes `AI review`.
+A new head SHA receives its own attempt allowance; workflow and provider timeouts bound individual execution.
+The repository no longer allocates cumulative issue budgets or reconciles execution counts, grants or completed-review accounting.
+Keep existing historical review records needed by unfinished tasks unchanged.
+See [review attempts and historical evidence](review-dispositions.md#review-attempts-and-historical-evidence).
+Incomplete execution and exhausted attempts cannot satisfy the independent review gate or bypass required checks.
 P3 findings remain advisory; confirmed P0/P1, required tests and essential acceptance continue to block independently.
 The Jev review-triage evaluation is a later shadow experiment under issue #372, with no gate or merge authority.
 A rebase may alter the actual diff and requires checking again.
