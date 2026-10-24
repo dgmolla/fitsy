@@ -1,0 +1,63 @@
+name: Simple review
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: simple-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test scripts/review/simple-review.test.mjs
+
+  review:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-review')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # Execute controls from the immutable base, never the candidate under review.
+      # Initial installation needs this file on the base branch before review can run.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: controls
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install reviewer CLI
+        run: npm install --global @openai/codex
+      - name: Review exact PR diff
+        working-directory: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FITSY_REVIEW_PROVIDER: codex
+          FITSY_REVIEW_MODEL: ${{ vars.FITSY_REVIEW_MODEL || 'gpt-6-sol' }}
+        run: node ../controls/scripts/review/simple-review.mjs
