@@ -8,7 +8,7 @@ jest.mock("@fitsy/shared", () => ({
   macroWinnerSqlOrder: jest.requireActual("../packages/shared/src/utils/macroProvenance").macroWinnerSqlOrder,
 }));
 
-import { validateItems, checkMacroMismatch, namesMatch, dedupByName, decodeHtml } from "./pipeline-utils";
+import { validateItems, checkMacroMismatch, namesMatch, dedupByIdentity, decodeHtml } from "./pipeline-utils";
 import type { MacroData, StructuredMenuItem } from "../apps/api/services/menuSources/types";
 
 function makeMacro(overrides: Partial<MacroData> = {}): MacroData {
@@ -165,13 +165,13 @@ describe("checkMacroMismatch", () => {
   });
 });
 
-describe("dedupByName (S-133)", () => {
+describe("dedupByIdentity (S-133)", () => {
   it("returns all items when no duplicates", () => {
     const pairs = [
       { item: makeItem("Chicken Bowl"), macro: makeMacro() },
       { item: makeItem("Beef Burrito"), macro: makeMacro() },
     ];
-    const result = dedupByName(pairs);
+    const result = dedupByIdentity(pairs);
     expect(result).toHaveLength(2);
   });
 
@@ -183,14 +183,14 @@ describe("dedupByName (S-133)", () => {
       { item: makeItem("chicken bowl"), macro: macro2 },
       { item: makeItem("CHICKEN BOWL"), macro: makeMacro() },
     ];
-    const result = dedupByName(pairs);
+    const result = dedupByIdentity(pairs);
     expect(result).toHaveLength(1);
     expect(result[0]!.item.name).toBe("Chicken Bowl");
     expect(result[0]!.macro.calories).toBe(500);
   });
 
   it("handles empty input", () => {
-    expect(dedupByName([])).toHaveLength(0);
+    expect(dedupByIdentity([])).toHaveLength(0);
   });
 
   it("deduplicates Chick-fil-A items from multiple sources", () => {
@@ -201,7 +201,7 @@ describe("dedupByName (S-133)", () => {
       { item: makeItem("Lemonade"), macro: makeMacro() },
       { item: makeItem("waffle fries"), macro: makeMacro() },
     ];
-    const result = dedupByName(pairs);
+    const result = dedupByIdentity(pairs);
     expect(result).toHaveLength(3);
     expect(result.map((r) => r.item.name)).toEqual([
       "Chick-fil-A Chicken Sandwich",
@@ -217,7 +217,7 @@ describe("dedupByName (S-133)", () => {
       { item: makeItem("zeta"), macro: makeMacro() },
       { item: makeItem("Beta"), macro: makeMacro() },
     ];
-    const result = dedupByName(pairs);
+    const result = dedupByIdentity(pairs);
     expect(result.map((r) => r.item.name)).toEqual(["Zeta", "Alpha", "Beta"]);
   });
 });

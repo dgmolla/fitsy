@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 1
 node scripts/verify/media-integration.mjs --required >/dev/null
 applicability=$?
 if [ "$applicability" -eq 2 ]; then
@@ -17,7 +18,7 @@ for tool in ffprobe ffmpeg; do
     exit 1
   fi
 done
-if ! FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- --runInBand --runTestsByPath verify/product-flow.test.ts sim/xctest-attachments.test.ts sim/runner-controls.test.ts >&2; then
+if ! FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- --runInBand --runTestsByPath verify/product-flow.test.ts sim/xctest-attachments.test.ts >&2; then
   printf '{"name":"media-integration","status":"fail","summary":"real-media integration tests failed","fix":"run the named local suites with FFmpeg and fix the failure"}\n'
   exit 1
 fi

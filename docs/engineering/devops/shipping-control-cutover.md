@@ -22,9 +22,8 @@ Candidate-written statuses, stale reviews and incomplete execution cannot replac
 The final Verify job requires every applicable classified job to succeed and permits only legitimate skips.
 Keep predecessor review triggers disabled so only the current AI review publisher owns that status.
 
-The retained local shipping session and review-admission helpers support local verification until their separate retirement.
-Candidate cheap/focused and size/domain checks run directly through repository entrypoints.
-They do not require an approval App, operator UID separation, a custody profile or pinned workflow bytes.
+The pre-push hook runs size/domain checks followed by cheap static checks and focused tests through `scripts/verify/run.mjs`.
+Independent review uses the retained simple review runner before publication.
 Local check results and fixtures prove their own execution; they do not establish GitHub merge or release acceptance.
 Keep source frozen during local verification and rerun affected checks when source or focused selection changes.
 Retain original raw evidence and accounting needed by unfinished outcomes.

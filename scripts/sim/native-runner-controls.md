@@ -5,9 +5,8 @@ Set `FITSY_SIM_OWNER` and pass the owned simulator UDID.
 The runner checks resolved native/profile identity, app and installed-app hashes, separate JavaScript and public configuration hashes, simulator state, disk headroom and the owned Metro process before starting each Maestro flow.
 The [native binary reuse cookbook](../../docs/engineering/devops/native-binary-reuse.md) lists the exact compile cases and example decisions.
 Development and review `run` invocations default to `--mode=development`, which executes the same Maestro assertions and screenshots without starting the explicit recorder.
-Use `--mode=final-candidate` once the PR candidate is stable for publication evidence, inside `scripts/verify/shipping-session.mjs -- <shipping command>`.
-The live session owns one fresh review across final journeys, full verification and pre-push; a closed session or changed source fails admission.
-Standalone final-candidate runs cannot launch another reviewer or consume a saved verdict.
+Use `--mode=final-candidate` once the PR candidate is stable for publication evidence.
+Run final acceptance directly against the current source and retain its app/backend/evidence identities.
 Add `--record-video` when a complete video is specifically requested; final candidate runs otherwise retain command receipts and screenshots without starting the explicit recorder.
 The flow helper requires an explicit boolean recording choice and fails before starting children if the CLI omits it.
 The product-flow CLI passes its selected mode through `runSelectedRecordedFlow`, which supplies that boolean to the helper; a child-process fixture exercises both CLI choices through this production bridge.
@@ -17,8 +16,8 @@ Use `--mode=requested-video` only for an explicit video request; that report is 
 Install `ffprobe` and `ffmpeg` before a video run; the runner checks for them before Maestro and rejects a zero-duration video or one whose first video frame cannot decode, with a failure receipt after recording.
 The validation decodes at most one frame with a 15-second limit and retains the complete original video.
 It refuses a busy Metro port and never stops another worker's server.
-The build and run phases enforce an 8 GiB free-space floor; the operational phase admission also checks the larger observed-draw requirement.
-If admission fails, clear only proven task-owned disposable data at an idle boundary and retry.
+The build and run phases enforce an 8 GiB free-space floor.
+If the free-space check fails, clear only proven task-owned disposable data at an idle boundary and retry.
 
 Each run writes `.evidence/product-flow/runner-timeline.jsonl` with wall and monotonic runner boundaries.
 Each flow retains its original Maestro command JSON, screenshots, an XCTest capture policy receipt and a derived `timing-summary.json`.

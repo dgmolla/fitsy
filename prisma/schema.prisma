@@ -104,7 +104,14 @@ model MacroTarget {
   carbsG    Float
   fatG      Float
   goalType  GoalType @default(maintain)
+  source    MacroTargetSource @default(manual)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Legacy allocations have no trustworthy provenance and remain user-owned.
+enum MacroTargetSource {
+  manual
+  automatic
 }
 
 model Restaurant {
@@ -193,6 +200,8 @@ model MenuItem {
   id             String          @id @default(cuid())
   restaurantId   String
   name           String
+  sourceItemId   String?         // Provider-qualified ID; scoped to this restaurant, independent of macro provenance.
+  retiredAt      DateTime?       // Missing/ambiguous legacy products remain addressable by saved/logged dish ID.
   description    String?
   photoUrl       String?
   category       String?
@@ -214,7 +223,9 @@ model MenuItem {
   macroEstimates MacroEstimate[]
   savedItems     SavedItem[]
 
-  @@unique([restaurantId, name])
+  @@unique([restaurantId, sourceItemId])
+  // Name fallback uniqueness applies only to active rows without a source ID.
+  // The partial index is maintained in the source_item_identity migration.
   @@index([restaurantId])
 }
 

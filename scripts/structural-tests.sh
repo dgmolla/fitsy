@@ -132,7 +132,7 @@ DIRECT_API=$(grep -rn --include="*.tsx" \
 DIRECT_PATHS=$(echo "$DIRECT_API" | cut -d: -f1 | sed "s|^$REPO_ROOT/||" | sed '/^$/d' | sort -u)
 gate_allowlisted "direct-api" "$DIRECT_PATHS" "Route network calls through the lib/ API layer."
 
-ALLOWED_DOCS_DOMAINS="product engineering design gtm"
+ALLOWED_DOCS_DOMAINS="product engineering design gtm release"
 
 echo -n "9. Docs directory structure (domain/subdomain)... "
 BAD_DOCS=""

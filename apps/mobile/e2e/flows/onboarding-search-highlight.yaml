@@ -1,0 +1,210 @@
+# Issue #433: actual onboarding with Search as the first preview tip.
+# Run on an owned small and normal iPhone against the real dev backend.
+appId: com.fitsy.mobile
+tags: [discovery, onboarding, changed-journey]
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      notifications: deny
+# XCTest can reject the first AX snapshot after reinstall (HTTP 500).
+# Retry only the initial observation, before any product interaction.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    point: "92%,93%"
+- tapOn:
+    id: welcome-start
+- assertVisible:
+    id: location-use-current
+- assertVisible:
+    id: location-choose-area
+- tapOn:
+    id: location-choose-area
+# On a small iPhone, DTLA exists in accessibility but sits below the visible sheet.
+- swipe:
+    start: "50%,78%"
+    end: "50%,47%"
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: goal-lose_fat
+    timeout: 30000
+- assertVisible: "What's your goal.*"
+- tapOn:
+    id: goal-lose_fat
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: tried-meal_prep
+    timeout: 30000
+- assertVisible: "What have you tried.*for healthy eating.*"
+# The native option groups its emoji and label into one accessible button.
+- assertVisible:
+    id: tried-meal_prep
+    text: ".*Meal prepping at home.*"
+- tapOn:
+    id: tried-meal_prep
+- tapOn:
+    id: welcome-continue
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: goal-progress-graph
+- assertVisible: "Consistency with your fat-loss plan"
+- assertVisible: "With Fitsy"
+- assertVisible: "Without Fitsy"
+- tapOn:
+    id: welcome-continue
+- assertVisible:
+    id: target-mode-known
+- assertVisible:
+    id: target-mode-estimate
+- tapOn:
+    id: target-mode-known
+- assertVisible:
+    id: target-mode-known
+    text: "radio button, checked"
+- tapOn:
+    id: welcome-continue
+- assertVisible: "What works.*for one meal.*"
+- assertNotVisible: "What's your goal.*"
+- assertNotVisible: "How active are you.*"
+- tapOn:
+    id: meal-target-calories
+# Let the native keyboard and initial selection settle before automated typing.
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "544"
+- assertVisible: "544"
+- copyTextFrom:
+    id: meal-target-calories
+- assertTrue: ${maestro.copiedText === '544'}
+- tapOn:
+    id: meal-target-protein
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "34"
+- assertVisible: "34"
+- copyTextFrom:
+    id: meal-target-protein
+- assertTrue: ${maestro.copiedText === '34'}
+# The numeric keyboard leaves the second target row below the visible body.
+# Scroll the body above the keyboard before tapping carbs or fat.
+- swipe:
+    start: "50%,46%"
+    end: "50%,25%"
+- waitForAnimationToEnd
+- assertVisible:
+    id: meal-target-carbs
+- tapOn:
+    id: meal-target-carbs
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "61"
+- assertVisible: "61"
+- copyTextFrom:
+    id: meal-target-carbs
+- assertTrue: ${maestro.copiedText === '61'}
+- tapOn:
+    id: meal-target-fat
+- waitForAnimationToEnd
+- eraseText: 100
+- inputText: "18"
+- assertVisible: "18"
+- copyTextFrom:
+    id: meal-target-fat
+- assertTrue: ${maestro.copiedText === '18'}
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Published"
+- assertVisible: "Estimated"
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+    timeout: 30000
+- assertVisible: "Follow your craving"
+- assertVisible: "1 OF 5"
+- assertVisible:
+    id: coachmark-ring
+    height: 58
+    tolerance: 1
+# This captures the first observed state, which can precede the search response.
+- takeScreenshot: search-highlight-entry
+# Wait for the real pizza response while keeping the first tip visible.
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+      enabled: true
+    timeout: 30000
+- assertVisible: "1 OF 5"
+- assertVisible: "Follow your craving"
+- assertVisible:
+    id: coachmark-ring
+    height: 58
+    tolerance: 1
+- takeScreenshot: search-highlight-results
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Your meal targets"
+- assertVisible: "2 OF 5"
+# Returning to Search starts its real demo again and exercises results relayout.
+- tapOn:
+    id: coachmark-back
+- assertVisible: "Follow your craving"
+- extendedWaitUntil:
+    visible:
+      id: coachmark-next
+      enabled: true
+    timeout: 30000
+- assertVisible: "1 OF 5"
+- takeScreenshot: search-highlight-back-results
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Your meal targets"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Real meals. Know the source."
+- tapOn:
+    id: coachmark-next
+- assertVisible: "Wherever your day takes you"
+- tapOn:
+    id: coachmark-next
+- assertVisible: "5 OF 5"
+- tapOn:
+    id: coachmark-next
+- assertNotVisible:
+    id: coachmark-next
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'pizza'}
+- assertVisible:
+    id: discovery-hero
+- assertNotVisible:
+    id: discovery-loading
+# Replay and Skip must still return to the interactive preview.
+- tapOn:
+    id: preview-show-tour
+- assertVisible: "1 OF 5"
+- assertVisible: "Follow your craving"
+- tapOn:
+    id: coachmark-skip
+- assertNotVisible:
+    id: coachmark-next
+- assertVisible:
+    id: discovery-search
+- assertVisible:
+    id: preview-guide

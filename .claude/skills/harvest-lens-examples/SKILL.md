@@ -39,10 +39,12 @@ lens edits).
    `gh pr diff <n> --patch` of the ORIGINAL breaking change when identifiable,
    expected.json naming the lens + finding). Skip when the breaking diff
    cannot be isolated - a bad eval case is worse than none.
-5. **Prove recall** for any lens you edited:
-   `bash scripts/verify/evals/replay.sh <case>` for its cases, and
-   `bash scripts/review/run-lens.sh --local <lens>` still passes on a clean
-   branch.
+5. **Prove recall** for any lens you edited: supply its captured incident diffs
+   and expected findings to the independent reviewer using `REVIEW.md` and that lens.
+   Record actual findings and misses with the lens change.
+   Run `node --test scripts/review/simple-review.test.mjs` for routing, severity,
+   complete domain coverage and independent-provider behavior.
+   See `scripts/review/simple-review.md` for the supported review interface.
 6. **Ship**: one cto-domain PR with the lens edits + eval cases + updated
    `last-harvest`. PR body lists each harvested PR -> where its learning went.
 

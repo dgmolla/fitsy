@@ -36,12 +36,7 @@ export function readPreviousReportForReuse(file) {
 const save = (file, value) => writeFileSync(file, JSON.stringify(value, null, 2) + '\n');
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 32 * 1024 * 1024, ...opts })?.trim() || '';
-export function admitFinalCandidate(mode, command = run) {
-  if (!mode.publishable) return;
-  // Final journeys belong to the live shipping execution, after fresh review.
-  // Standalone journeys fail rather than consume another bounded review round.
-  command(fileURLToPath(new URL('../verify/shipping-session.mjs', import.meta.url)), ['--check']);
-}
+
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]).sort();
 }
@@ -428,9 +423,6 @@ async function execute(udid, names, mode) {
     try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
   }
-  // Development walkthroughs remain available for reproduction and UI signoff.
-  // Publishable full acceptance requires the canonical reviewed candidate.
-  admitFinalCandidate(mode);
   const r = receipt(udid), identity = device(udid), server = backend();
   const embedded = embeddedBundleCompatibility(r, inputHash(root, 'js'), environment().configHash);
   assert(embedded.compatible,
@@ -654,25 +646,8 @@ async function check() {
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-let timing, delivery;
-let reused = false;
-function closeTiming(status) {
-  if (!timing) return;
-  const attempt = timing; timing = null;
-  try { delivery.finish(root, attempt, status); }
-  catch (error) { console.error(`delivery telemetry: ${error.message}`); }
-}
-process.on('exit', () => closeTiming('interrupted'));
 try {
   const [command, ...args] = process.argv.slice(2);
-  const testHarness = process.env.JEST_WORKER_ID || process.env.NODE_TEST_CONTEXT || process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE;
-  if (!testHarness && ['build', 'run', 'finish', 'check'].includes(command)) {
-    try {
-      delivery = await import('../delivery/phase-events.mjs');
-      timing = delivery.start(root, 'e2e', 'product-flow', { check: command });
-      if (timing) delivery.closeOnSignals(() => closeTiming('interrupted'));
-    } catch (error) { console.error(`delivery telemetry: ${error.message}`); }
-  }
   if (['build', 'run'].includes(command) && process.platform === 'darwin') {
     const awake = spawn('/usr/bin/caffeinate', ['-i', '-w', String(process.pid)], { stdio: 'ignore' });
     awake.on('error', error => console.error(`Could not prevent idle sleep: ${error.message}`));
@@ -689,16 +664,14 @@ try {
       'Diagnostic force rebuild requires --force-rebuild and a recorded --reason of at least eight characters');
     assert(!refresh || (force < 0 && !args.includes('--test-store')),
       '--refresh-embedded-js is only for an existing stale Release artifact');
-    reused = await build(args[0], args.includes('--test-store'), reason, refresh);
+    await build(args[0], args.includes('--test-store'), reason, refresh);
   }
-  else if (command === 'run') { const selected = runSelection(args); reused = await execute(selected.udid, selected.names, selected.mode) === true; }
+  else if (command === 'run') { const selected = runSelection(args); await execute(selected.udid, selected.names, selected.mode); }
   else if (command === 'finish') await finish(args[0]);
   else if (command === 'check') await check();
   else if (command === 'stop-metro') await stopMetro();
   else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] | finish [walkthrough.json]');
-  closeTiming(reused ? 'cached' : 'pass');
 } catch (e) {
-  closeTiming('fail');
   console.error(e.message); process.exitCode = 1;
 }
 }

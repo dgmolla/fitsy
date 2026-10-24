@@ -1,6 +1,6 @@
 import { FeedbackBoardPost, FeedbackBoardResponse, FeedbackVoteResponse, MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
 import { api, ApiRequestError } from './api';
-import { getMacroTargets } from './macroStorage';
+import { getDiscoveryMacroTargets } from './macroStorage';
 
 export interface FetchRestaurantsParams {
   protein?: number;
@@ -112,7 +112,7 @@ export async function fetchMenu(restaurantId: string, options: { selectedItemId?
 export type MenuLoadOutcome = { menu: MenuResponse; error: null } | { menu: null; error: 'transient' | 'unavailable' };
 export async function fetchMenuOutcome(restaurantId: string, options: { selectedItemId?: string } = {}): Promise<MenuLoadOutcome> {
   try {
-    const targets = await getMacroTargets();
+    const targets = await getDiscoveryMacroTargets();
     const params = new URLSearchParams();
     if (targets) for (const [key, value] of Object.entries(targets)) if (value) params.set(key, value);
     if (options.selectedItemId) params.set('selectedItemId', options.selectedItemId);
@@ -233,8 +233,8 @@ export interface SubscriptionSyncResult extends SubscriptionStatusResult {
 
 export type SubscriptionVerdict = 'active' | 'expired' | 'never_subscribed' | 'unknown';
 
-/** Why the client asks for a re-read; the server refuses to persist a downgrade on 'purchase'/'restore'. */
-export type SubscriptionSyncReason = 'purchase' | 'restore' | 'sign_in' | 'mismatch';
+/** A lapsed restored receipt uses a distinct reason so the server can persist its history. */
+export type SubscriptionSyncReason = 'purchase' | 'restore' | 'restore_history' | 'sign_in' | 'mismatch';
 
 /**
  * Ask the API to re-read this user's entitlement straight from RevenueCat

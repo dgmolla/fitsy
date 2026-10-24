@@ -1,4 +1,4 @@
-import { getMacroTargets } from './macroStorage';
+import { getDiscoveryMacroTargets } from './macroStorage';
 import { getCachedCoords } from './locationCache';
 import { api } from './api';
 
@@ -15,7 +15,7 @@ export interface PreviewRestaurant {
 export async function fetchPreviewRestaurants(
   coordsOverride?: { lat: number; lng: number },
 ): Promise<PreviewRestaurant[]> {
-  const [macros, cached] = await Promise.all([getMacroTargets(), getCachedCoords()]);
+  const [macros, cached] = await Promise.all([getDiscoveryMacroTargets(), getCachedCoords()]);
   const coords = coordsOverride ?? cached;
   if (!coords) return [];
   const params = new URLSearchParams({

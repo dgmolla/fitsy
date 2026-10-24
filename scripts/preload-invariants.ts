@@ -13,7 +13,7 @@ export async function validateHexInTx(
            COUNT(DISTINCT mi.id)::bigint AS "itemCount",
            COUNT(DISTINCT me."menuItemId")::bigint AS "macroCount"
     FROM "Restaurant" r
-    LEFT JOIN "MenuItem" mi ON mi."restaurantId" = r.id
+    LEFT JOIN "MenuItem" mi ON mi."restaurantId" = r.id AND mi."retiredAt" IS NULL
     LEFT JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
     WHERE r.id = ANY(${ids}::text[])
     GROUP BY r.id

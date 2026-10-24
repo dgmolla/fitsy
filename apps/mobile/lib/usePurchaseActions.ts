@@ -4,17 +4,19 @@ import type { CustomerInfo, PurchasesPackage } from 'react-native-purchases';
 import { supabase } from './supabase';
 import { withinMs } from './async';
 import type { EntitlementSyncReason } from './entitlement';
+import type { SubscriptionVerdict } from './apiClient';
 import { ensurePurchasesUser, fetchCustomerInfo, isProActive, presentPaywall as rcPresentPaywall,
-  purchasePackage as rcPurchasePackage, restorePurchases as rcRestore } from './purchases';
+  hasLapsedEntitlement, purchasePackage as rcPurchasePackage, restorePurchases as rcRestore } from './purchases';
 import { trackPaywallResult, trackPaywallShown, trackPurchasesRestored } from './analytics';
 
 export const POST_PURCHASE_SYNC_CAP_MS = 4000;
 export const PURCHASE_IDENTITY_CAP_MS = 5000;
 
-export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEntitlement }: {
+export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEntitlement, syncRestoredHistory }: {
   setCustomerInfo: (info: CustomerInfo | null) => void;
   markStoreConfirmed: () => Promise<void>;
   syncEntitlement: (reason: EntitlementSyncReason) => Promise<boolean | null>;
+  syncRestoredHistory: (userId: string) => Promise<SubscriptionVerdict | null>;
 }) {
   // After RevenueCat reports Pro right out of the StoreKit flow: the user
   // just paid, so `entitled` flips true immediately (cached) and the caller
@@ -77,7 +79,7 @@ export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEn
     [setCustomerInfo, settleAfterStore],
   );
 
-  const restore = useCallback(async (): Promise<boolean | null> => {
+  const restore = useCallback(async (): Promise<'active' | 'expired' | 'none' | null> => {
     const { data } = await supabase.auth.getSession();
     const userId = data.session?.user.id;
     const identified = userId
@@ -101,8 +103,21 @@ export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEn
     }
     setCustomerInfo(info);
     trackPurchasesRestored({ is_pro: isProActive(info) });
-    return settleAfterStore(info, 'restore');
-  }, [setCustomerInfo, settleAfterStore]);
+    if (isProActive(info)) {
+      await settleAfterStore(info, 'restore');
+      return await isCurrentUser() ? 'active' : null;
+    }
+    // An App Store receipt can report a past product before RevenueCat's
+    // entitlement mapping is visible on the transferred account. Both are
+    // sync triggers only; the backend must confirm a Pro history verdict.
+    if (!hasLapsedEntitlement(info) && !info.allPurchasedProductIdentifiers?.length) return 'none';
+    const verdict = await syncRestoredHistory(userId);
+    if (!(await isCurrentUser())) return null;
+    if (verdict === 'active') return 'active';
+    if (verdict === 'expired') return 'expired';
+    Alert.alert('Could not verify purchase history', 'Please check your connection and try Restore Purchases again.');
+    return null;
+  }, [setCustomerInfo, settleAfterStore, syncRestoredHistory]);
 
   return { purchase, presentPaywall, restore };
 }

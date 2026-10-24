@@ -6,7 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
 import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
-import { pullProfileFromServer } from '@/lib/profileSync';
+import { requireProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { OnboardingAccountSummary } from '@/components/OnboardingAccountSummary';
 import { WelcomeAuthActions } from '@/components/WelcomeAuthActions';
@@ -175,9 +175,10 @@ export default function SignInScreen() {
       else await Promise.all([clearPaywallIntent(), clearPendingMealClaim()]);
     } else await claimPaywallIntent(r.user.id);
     if (!isCurrent()) return;
+    if (outOfArea !== '1' && isCurrent()) await requireProfileFromServer();
+    if (!isCurrent()) return;
     await captureIdentity(r.user.id, r.user.email);
     if (!isCurrent()) return;
-    if (!r.isNewUser && outOfArea !== '1' && !(await getPaywallIntent()) && isCurrent()) await pullProfileFromServer();
     await navigateAfterAuth(r.isNewUser, r.user.id, ownedCheckout, isCurrent);
   }, [navigateAfterAuth, outOfArea, returnTo]);
 
@@ -193,17 +194,15 @@ export default function SignInScreen() {
   useEffect(() => {
     if (response?.type === 'success') {
       const idToken = response.params['id_token'];
-      if (idToken) {
-        const isCurrent = googleContinuation.current;
-        if (isCurrent()) setGoogleLoading(true);
-        completeGoogleSignIn(idToken)
-          .then(r => finishAuth(r, 'google', isCurrent))
-          .catch((err: Error) => {
-            trackAuthFailure({ provider: 'google', error_message: err.message });
-            if (isCurrent()) Alert.alert('Sign In Failed', err.message);
-          })
-          .finally(() => { if (isCurrent()) setGoogleLoading(false); });
-      }
+      const isCurrent = googleContinuation.current;
+      if (isCurrent()) setGoogleLoading(true);
+      completeGoogleSignIn(idToken)
+        .then(r => finishAuth(r, 'google', isCurrent))
+        .catch((err: Error) => {
+          trackAuthFailure({ provider: 'google', error_message: err.message });
+          if (isCurrent()) Alert.alert('Sign In Failed', err.message);
+        })
+        .finally(() => { if (isCurrent()) setGoogleLoading(false); });
     } else if (response?.type === 'error') {
       trackAuthFailure({ provider: 'google', error_message: response.error?.message });
       if (googleContinuation.current()) Alert.alert('Google Sign In Error', response.error?.message ?? 'Unknown error');

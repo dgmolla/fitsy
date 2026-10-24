@@ -55,6 +55,28 @@ describe("POST /api/subscriptions/sync", () => {
     expect(mockSync).toHaveBeenCalledWith("user-1", { neverDowngrade: true });
   });
 
+  it("reconciles restored inactive receipt history without purchase downgrade protection", async () => {
+    mockSync.mockResolvedValue(false);
+    mockGetEntitlementStatus.mockResolvedValue({
+      active: false, status: "expired", expiresAt: null,
+      verdict: "expired", lastRcVerifiedAt: new Date(), stale: false,
+    });
+    const res = await POST(withReason("restore_history"));
+    expect(mockSync).toHaveBeenCalledWith("user-1", { neverDowngrade: false, awaitHistory: true });
+    expect(await res.json()).toEqual(expect.objectContaining({ active: false, verdict: "expired", synced: true }));
+  });
+
+  it("binds restored history to the authenticated Apple ID rather than email or a body user ID", async () => {
+    mockRequireAuth.mockResolvedValue({ sub: "apple-user-id", email: "hidden@privaterelay.appleid.com" });
+    const request = new NextRequest("http://localhost/api/subscriptions/sync", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "restore_history", userId: "other-user", email: "different@example.test" }),
+    });
+    await POST(request);
+    expect(mockSync).toHaveBeenCalledWith("apple-user-id", { neverDowngrade: false, awaitHistory: true });
+    expect(mockGetEntitlementStatus).toHaveBeenCalledWith("apple-user-id", "hidden@privaterelay.appleid.com");
+  });
+
   it.each(["boot", "sign_in", "mismatch", "bogus", 42])("allows a downgrade for reason %p", async (reason) => {
     mockSync.mockResolvedValue(false);
     await POST(withReason(reason));

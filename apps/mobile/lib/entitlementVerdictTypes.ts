@@ -18,6 +18,8 @@ export interface EntitlementVerdict {
    * (`entitled` unchanged); `false` without a session, with no request made.
    */
   syncEntitlement: (reason: EntitlementSyncReason) => Promise<boolean | null>;
+  /** Reconcile an inactive restored receipt and return only a fresh, account-bound server classification. */
+  syncRestoredHistory: (userId: string) => Promise<SubscriptionVerdict | null>;
   syncForPaywall: () => Promise<SubscriptionVerdict>;
   /**
    * Boot: bounded cache, server, and RevenueCat identity reads run in

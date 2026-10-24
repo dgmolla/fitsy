@@ -48,7 +48,7 @@ async function inventory() {
 async function main() {
   if (command === "menu-inventory") {
     const { brands } = await inventory();
-    const items = await p.menuItem.findMany({ where: { restaurant: { brandId: { in: brands.map(b => b.id) } } },
+    const items = await p.menuItem.findMany({ where: { retiredAt: null, restaurant: { brandId: { in: brands.map(b => b.id) } } },
       select: { id: true, name: true, section: true, description: true, restaurant: { select: { brandId: true } } }, orderBy: { id: "asc" } });
     const variants = new Map<string, { slug: string; name: string; section: string; description: string; itemIds: string[] }>();
     for (const item of items) {
@@ -72,7 +72,7 @@ async function main() {
     const match = buildChainMatcher(catalog), byRestaurant = new Map(restaurants.map(r => [r.id, verifiedBrand(r, verified)]));
     const locations = new Map(restaurants.map(r => [r.id, r]));
     const unresolvedRestaurants = restaurants.filter(r => !byRestaurant.get(r.id)).map(({ id, name, brandId }) => ({ id, name, brandId }));
-    const items = await p.menuItem.findMany({ where: { restaurantId: { in: [...byRestaurant.keys()] } }, include: { macroEstimates: { orderBy: { id: "asc" } } }, orderBy: { id: "asc" } });
+    const items = await p.menuItem.findMany({ where: { retiredAt: null, restaurantId: { in: [...byRestaurant.keys()] } }, include: { macroEstimates: { orderBy: { id: "asc" } } }, orderBy: { id: "asc" } });
     const rows: AprilEntry[] = [];
     for (const before of items) {
       const result = match(byRestaurant.get(before.restaurantId), aprilMenuIdentity(before), locations.get(before.restaurantId));

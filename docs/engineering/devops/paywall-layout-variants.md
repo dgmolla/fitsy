@@ -45,4 +45,5 @@ Plan prices and renewal terms remain in the plan controls and billing disclosure
 The middle step distinguishes opted-in, available opt-in, permission-off and unavailable states, and never claims a notification has been scheduled before the store confirms the trial end.
 No-trial offers show only the three supported benefits in the main content area, with immediate paid terms in the purchase disclosure.
 The store confirms the actual purchase and charge date before checkout.
-When #431 ships a centralized selected-offer model, this projection should consume that model rather than maintaining a separate policy.
+The timeline consumes `trialPresentation.ts`, which derives reminder timing from the shared `contracts/trialPolicy.ts` used by native scheduling.
+Changes to that shared policy select billing, notification and onboarding acceptance through the canonical product-flow check.

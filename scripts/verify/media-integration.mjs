@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The local real-media lane produces the same source-bound receipt shape used
-// by review dispositions. The product-flow publisher checks it on PR heads.
+// by local verification. The product-flow publisher checks it on PR heads.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { changedPaths, inputHash, repoEnv, root } from './product-flow.mjs';
 
 const receiptFile = resolve(root, '.evidence/verify/media-integration.json');
-const command = 'FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- --runInBand --runTestsByPath verify/product-flow.test.ts sim/xctest-attachments.test.ts sim/runner-controls.test.ts';
+const command = 'FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- --runInBand --runTestsByPath verify/product-flow.test.ts sim/xctest-attachments.test.ts';
 const head = () => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', env: repoEnv() }).trim();
 
 export function mediaIntegrationRequired(paths) {

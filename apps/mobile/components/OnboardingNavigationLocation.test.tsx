@@ -94,6 +94,7 @@ const routes = {
   'welcome/tried': () => <Text>Healthy eating approaches</Text>,
   'welcome/out-of-area': () => <Text>Area waitlist</Text>,
   'welcome/complete': CompletePurchase,
+  'macro-setup': () => <Text>Macro setup</Text>,
   '(tabs)/_layout': () => <Stack />, '(tabs)/search': () => <Text>Meal search</Text>,
   'restaurant/[id]': Restaurant,
 };
@@ -106,7 +107,11 @@ beforeEach(async () => {
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
-  global.fetch = jest.fn().mockResolvedValue(response({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString(), stale: false }));
+  global.fetch = jest.fn().mockImplementation((url: string) => Promise.resolve(response(
+    String(url).includes('/api/user/profile')
+      ? { user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null }, macroTarget: null }
+      : { active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString(), stale: false },
+  )));
 });
 afterEach(() => { global.fetch = originalFetch; jest.restoreAllMocks(); });
 

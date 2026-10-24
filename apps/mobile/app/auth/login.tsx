@@ -7,7 +7,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable } from 'react-native';
 import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
-import { pullProfileFromServer } from '@/lib/profileSync';
+import { requireProfileFromServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { BRAND, EDITORIAL, FONTS } from '@/lib/brand';
 import { getMacroTargets } from '@/lib/macroStorage';
@@ -48,22 +48,20 @@ export default function LoginScreen() {
   useEffect(() => {
     if (response?.type === 'success') {
       const idToken = response.params['id_token'];
-      if (idToken) {
-        setGoogleLoading(true);
-        completeGoogleSignIn(idToken)
-          .then(async (result) => {
-            trackAuthSuccess({ provider: 'google', is_new_user: result.isNewUser });
-            await captureIdentity(result.user.id, result.user.email);
-            await pullProfileFromServer();
-            setGoogleLoading(false);
-            router.replace('/(tabs)/search');
-          })
-          .catch((err: Error) => {
-            trackAuthFailure({ provider: 'google', error_message: err.message });
-            setGoogleLoading(false);
-            Alert.alert('Sign In Failed', err.message);
-          });
-      }
+      setGoogleLoading(true);
+      completeGoogleSignIn(idToken)
+        .then(async (result) => {
+          trackAuthSuccess({ provider: 'google', is_new_user: result.isNewUser });
+          await captureIdentity(result.user.id, result.user.email);
+          await requireProfileFromServer();
+          setGoogleLoading(false);
+          router.replace('/(tabs)/search');
+        })
+        .catch((err: Error) => {
+          trackAuthFailure({ provider: 'google', error_message: err.message });
+          setGoogleLoading(false);
+          Alert.alert('Sign In Failed', err.message);
+        });
     } else if (response?.type === 'error') {
       trackAuthFailure({ provider: 'google', error_message: response.error?.message });
       Alert.alert('Google Sign In Error', response.error?.message ?? 'Unknown error');
@@ -76,7 +74,7 @@ export default function LoginScreen() {
       const result = await appleSignIn();
       trackAuthSuccess({ provider: 'apple', is_new_user: result.isNewUser });
       await captureIdentity(result.user.id, result.user.email);
-      if (!result.isNewUser) await pullProfileFromServer();
+      await requireProfileFromServer();
       router.replace('/(tabs)/search');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
@@ -105,6 +103,7 @@ export default function LoginScreen() {
       const r = await devLogin();
       trackAuthSuccess({ provider: 'dev', is_new_user: false });
       await captureIdentity(r.user.id, r.user.email);
+      await requireProfileFromServer();
       router.replace('/(tabs)/search');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Dev login failed';
