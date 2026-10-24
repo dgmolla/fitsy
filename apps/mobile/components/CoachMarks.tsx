@@ -16,6 +16,11 @@ export interface CoachMarkStep {
 
 interface Rect { x: number; y: number; width: number; height: number }
 
+/** Convert a target's window measurement into the overlay's local coordinates. */
+export function relativeToOverlay(target: Rect, overlay: Rect): Rect {
+  return { ...target, x: target.x - overlay.x, y: target.y - overlay.y };
+}
+
 interface CoachMarksProps {
   visible: boolean;
   steps: CoachMarkStep[];
@@ -24,6 +29,19 @@ interface CoachMarksProps {
   onBeforeStep?: (step: CoachMarkStep) => Promise<void>;
   onStepShown?: (step: CoachMarkStep, index: number) => void;
   onStepLeaving?: () => void;
+  /** Native scroll/content/viewport changes can move an already-visible target. */
+  layoutVersion?: number;
+}
+
+function measureTarget(target: View | null, overlay: View | null, fallback: Rect, show: (bounds: Rect) => void) {
+  if (!target || !overlay?.measureInWindow) { show(fallback); return; }
+  target.measureInWindow((x, y, width, height) => {
+    if (width === 0 || height === 0) { show(fallback); return; }
+    overlay.measureInWindow((overlayX, overlayY, overlayW, overlayH) => {
+      show(overlayW === 0 || overlayH === 0 ? fallback
+        : relativeToOverlay({ x, y, width, height }, { x: overlayX, y: overlayY, width: overlayW, height: overlayH }));
+    });
+  });
 }
 
 const CUTOUT_PAD = 6;
@@ -40,9 +58,11 @@ const SCRIM = 'rgba(15,31,21,0.55)';
  * Next / Got it. Targets are measured in window coordinates when their step
  * shows; an unavailable target gets an unanchored tip so no lesson is skipped.
  */
-export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving, onBeforeStep, doneLabel = 'Got it' }: CoachMarksProps) {
+export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving, onBeforeStep, layoutVersion = 0, doneLabel = 'Got it' }: CoachMarksProps) {
   const { width: winW, height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const overlayRef = useRef<View>(null);
+  const [overlayReady, setOverlayReady] = useState(false);
   const moving = useRef(false);
   const [bubbleHeight, setBubbleHeight] = useState(BUBBLE_EST_H);
   const [visited, setVisited] = useState<number[]>([]);
@@ -56,7 +76,7 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
   }, [visible]);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || !overlayReady) return;
     if (!step) {
       onDone();
       return;
@@ -66,19 +86,16 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
     // Small delay so a header that just re-rendered has laid out.
     const measure = () => {
       if (cancelled) return;
-      const node = step.target.current;
       const show = (bounds: Rect) => {
+        if (cancelled) return;
         moving.current = false;
         setRect(bounds);
         setVisited(previous => previous.includes(index) ? previous : [...previous, index]);
         onStepShown?.(step, index);
       };
       const fallback = { x: winW / 2, y: winH / 2, width: 0, height: 0 };
-      if (!node) { show(fallback); return; }
-      node.measureInWindow((x, y, width, height) => {
-        if (cancelled) return;
-        show(width === 0 || height === 0 ? fallback : { x, y, width, height });
-      });
+      // Screen and native Modal window origins can differ.
+      measureTarget(step.target.current, overlayRef.current, fallback, show);
     };
     const t = setTimeout(() => {
       if (onBeforeStep) void onBeforeStep(step).then(measure).catch(() => { if (!cancelled) onDone(); });
@@ -92,7 +109,24 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
     // parents rebuild step arrays and callbacks on re-render, and re-measuring
     // then would flicker the cutout and double-fire onStepShown.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, stepKey, index, winW, winH]);
+  }, [visible, overlayReady, stepKey, index, winW, winH]);
+
+  const anchored = rect !== null;
+  useEffect(() => {
+    if (!visible || !overlayReady || !anchored || !step) return;
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      measureTarget(step.target.current, overlayRef.current,
+        { x: winW / 2, y: winH / 2, width: 0, height: 0 }, bounds => {
+          if (cancelled) return;
+          setRect(previous => previous && previous.x === bounds.x && previous.y === bounds.y
+            && previous.width === bounds.width && previous.height === bounds.height ? previous : bounds);
+        });
+    });
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+    // Refresh geometry only; parent renders must not restart preparation or demos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, overlayReady, anchored, stepKey, index, layoutVersion, winW, winH]);
 
   if (!visible || !step) return null;
 
@@ -131,7 +165,7 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
 
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onDone}>
-      <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
+      <View ref={overlayRef} collapsable={false} testID="coachmark-overlay" onLayout={() => setOverlayReady(true)} style={StyleSheet.absoluteFill} accessibilityViewIsModal>
         {cutout && rect && rect.width > 0 ? (
           <>
             <View accessible={false} testID="coachmark-scrim" style={[s.scrim, { top: 0, left: 0, right: 0, height: cutout.y }]} />
@@ -140,6 +174,7 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
             <View accessible={false} testID="coachmark-scrim" style={[s.scrim, { top: cutout.y, left: cutout.x + cutout.width, right: 0, height: cutout.height }]} />
             <View
               pointerEvents="none"
+              testID="coachmark-ring"
               style={[s.ring, { top: cutout.y, left: cutout.x, width: cutout.width, height: cutout.height }]}
             />
           </>

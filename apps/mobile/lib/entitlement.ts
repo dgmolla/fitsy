@@ -76,7 +76,7 @@ export async function clearCachedEntitlement(): Promise<void> {
  * (token wiped, bounced to the problem screen), which is the wrong outcome
  * for an anonymous teaser visitor.
  */
-export async function fetchServerEntitlement(reason: EntitlementSyncReason): Promise<SubscriptionStatusResult | null> {
+export async function fetchServerEntitlement(reason: EntitlementSyncReason): Promise<(SubscriptionStatusResult & { synced?: boolean }) | null> {
   try {
     const result = reason === 'boot' ? await fetchSubscriptionStatus() : await syncSubscription(reason);
     if (result.verdict !== 'active' && result.verdict !== 'expired' &&
