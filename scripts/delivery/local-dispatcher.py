@@ -5,6 +5,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -18,14 +19,49 @@ from datetime import datetime, timezone
 import urllib.request
 import uuid
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from resource_lifecycle import (cleanup_released, resume_checkout, assess_retention, retention,
-                                read_claims, resource_intent, resource_acquired, execution_capacity)
-from cold_retention import recover as recover_pressure
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'sim'))
-from retire_task_device import retire as retire_task_device
-from sim_resource_uses import owner_release
+def execution_capacity(budget, observed, now):
+    """Admission over coordinator observations, never candidate env or a failed inventory."""
+    def number(value, positive=False):
+        return type(value) in (int, float) and math.isfinite(value) and value >= (1 if positive else 0)
+    if not isinstance(budget, dict) or not isinstance(observed, dict) or not number(now):
+        return {'state': 'resource-hold', 'reason': 'invalid resource observation'}
+    required = ('peak_memory_bytes', 'host_reserve_bytes', 'cpus', 'scratch_bytes')
+    if any(not number(budget.get(key), True) for key in required):
+        return {'state': 'resource-hold', 'reason': 'missing numeric execution budget'}
+    if (observed.get('state') != 'available' or not number(observed.get('at'))
+            or not 0 <= now - observed['at'] <= 60
+            or any(not number(observed.get(key)) for key in (
+                'free_disk_bytes', 'disk_floor_bytes', 'available_memory_bytes', 'heavy_jobs',
+                'swap_growth_bytes', 'host_memory_bytes', 'available_cpus'))):
+        return {'state': 'resource-hold', 'reason': 'missing or stale host inventory'}
+    if observed['swap_growth_bytes'] or observed.get('memory_pressure') != 'normal':
+        return {'state': 'resource-hold', 'reason': 'host memory pressure or growing swap'}
+    # One heavy job initially, including jobs outside this claim. Expansion needs separate measured authority.
+    if observed['heavy_jobs']:
+        return {'state': 'resource-hold', 'reason': 'heavy execution already active'}
+    if observed['free_disk_bytes'] < observed['disk_floor_bytes'] + budget['scratch_bytes']:
+        return {'state': 'resource-hold', 'reason': 'disk floor plus scratch reserve unavailable'}
+    if (budget['peak_memory_bytes'] + budget['host_reserve_bytes'] > observed['available_memory_bytes']
+            or budget['cpus'] > observed['available_cpus']):
+        return {'state': 'resource-hold', 'reason': 'host memory or CPU headroom unavailable'}
+    if budget.get('docker'):
+        docker = observed.get('docker') or {}
+        keys = ('vm_memory_bytes', 'vm_swap_bytes', 'vm_cpus', 'used_memory_budget_bytes',
+                'used_memory_swap_budget_bytes', 'used_cpus',
+                'effective_memory_bytes', 'effective_memory_swap_bytes', 'effective_cpus')
+        if docker.get('state') != 'available' or any(not number(docker.get(key)) for key in keys):
+            return {'state': 'resource-hold', 'reason': 'Docker inventory or effective limits unavailable'}
+        if (not number(budget.get('memory_swap_bytes'), True)
+                or budget['memory_swap_bytes'] < budget['peak_memory_bytes']
+                or docker['effective_memory_bytes'] != budget['peak_memory_bytes']
+                or docker['effective_memory_swap_bytes'] != budget['memory_swap_bytes']
+                or docker['effective_cpus'] != budget['cpus']
+                or docker['used_memory_budget_bytes'] + budget['peak_memory_bytes'] > docker['vm_memory_bytes']
+                or docker['used_memory_swap_budget_bytes'] + budget['memory_swap_bytes'] > docker['vm_memory_bytes'] + docker['vm_swap_bytes']
+                or docker['used_cpus'] + budget['cpus'] > docker['vm_cpus']
+                or docker['vm_memory_bytes'] + budget['host_reserve_bytes'] > observed['host_memory_bytes']):
+            return {'state': 'resource-hold', 'reason': 'Docker effective limits or aggregate VM budget mismatch'}
+    return {'state': 'admitted', 'observed_at': observed['at'], 'budget': dict(budget)}
 
 
 def incident(state, claim, reason):
@@ -721,101 +757,73 @@ def wait_worker(child, timeout):
 def archive(state, claim, status, state_path):
     claim['terminal'] = status
     claim['reconciled_at'] = utc()
-    checkout = claim.get('resources', {}).get('checkout')
-    if checkout and checkout.get('state') == 'acquired' and claim.get('finished_at'):
-        checkout.update(state='released', released_at=datetime.fromisoformat(
-            claim['finished_at'].replace('Z', '+00:00')).timestamp())
-        checkout['observations'].append({'event': 'execution-released', 'at': checkout['released_at'],
-                                         'source_retained': True, 'terminal': status})
     write_json(state_path.parent / 'claims' / claim['id'] / 'receipt.json', claim)
     state.setdefault('history', []).append(claim)
     state['history'] = state['history'][-100:]
     state['active'] = None
 
 
-def retire_verified_simulator(config, state, state_path, assessment_board=None):
-    """One exact terminal claim per tick, before the next disk admission."""
-    if state.get('active'):
-        return
-    verified = state.get('verified') or {}
-    identities = {value.get('id'): (number, value) for number, value in verified.items()}
-    receipts, uncertain = read_claims(config, state)
-    if uncertain:
-        write_json(state_path, state); return
-    for receipt, claim in receipts:
-        if (claim.get('terminal') == 'verified' and isinstance(claim.get('issue'), int) and
-                claim.get('finished_at') and claim.get('branch') and receipt.parent.name == claim.get('id')):
-            identities.setdefault(claim['id'], (str(claim['issue']), claim))
-    ordered = sorted(identities.values(), key=lambda entry: (int(entry[0]), entry[1].get('id', '')))
-    cursor = state.get('simulator_retirement_claim_cursor')
-    if cursor in [identity.get('id') for _, identity in ordered]:
-        index = next(index for index, (_, identity) in enumerate(ordered) if identity.get('id') == cursor)
-        ordered = ordered[index + 1:] + ordered[:index + 1]
-    for issue_text, identity in ordered:
-        issue = int(issue_text)
-        claim_id = identity.get('id', '')
-        if identity.get('issue') != issue or not re.fullmatch(r'[0-9a-f-]{36}', claim_id):
-            continue
-        matching = [entry for entry in state.get('history', []) if
-                    entry.get('terminal') == 'verified' and entry.get('issue') == issue and
-                    entry.get('id') == claim_id and entry.get('branch') == identity.get('branch')]
-        if len(matching) > 1:
-            continue
-        claim = matching[0] if matching else read_json(
-            Path(config['state_dir']) / 'claims' / claim_id / 'receipt.json', {})
-        if (claim.get('terminal') != 'verified' or claim.get('issue') != issue or
-                claim.get('id') != claim_id or claim.get('branch') != identity.get('branch')):
-            continue
-        worktree = Path(claim.get('worktree', '')).resolve()
-        origin_claim = claim.get('worktree_origin_claim', claim_id)
-        if not re.fullmatch(r'[0-9a-f-]{36}', origin_claim):
-            continue
-        expected = Path(config['worktree_root']).resolve() / f'fitsy-issue-{issue}-{origin_claim[:8]}'
-        if worktree != expected:
-            continue
-        receipt_file = worktree / '.evidence/product-build/receipt.json'
-        if not receipt_file.is_file():
-            continue
-        udid = None
+def resume_checkout(config, state, issue):
+    """Reuse the latest ended, unfinished checkout in place; never archive source."""
+    receipts, uncertain = {}, False
+    for receipt in (Path(config['state_dir']) / 'claims').glob('*/receipt.json'):
         try:
-            udid = json.loads(receipt_file.read_text()).get('simulator')
-            if not isinstance(udid, str):
-                continue
-            previous = (state.get('simulator_retirement') or {}).get(udid)
-            if previous and previous.get('status') == 'retired':
-                continue
-            def still_verified():
-                current = next((entry for entry in board(config) if
-                                entry.get('content', {}).get('number') == issue), None)
-                use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
-                return bool(current and terminal_verified(config, current, identity, archived=True, historical=True) and
-                            retention(config, 'task_simulator', use, time.time())['state'] == 'assessment-due')
-            current = next((entry for entry in (assessment_board or (lambda: board(config)))()
-                            if entry.get('content', {}).get('number') == issue), None)
-            if not current or not terminal_verified(config, current, identity, archived=True, historical=True):
-                raise ValueError('issue is no longer terminal-verified')
-            use = owner_release(config.get('simulator_use_file', Path.home() / '.fitsy-sim-uses.json'), udid)
-            grace = retention(config, 'task_simulator', use, time.time())
-            if grace['state'] != 'assessment-due':
-                raise ValueError(grace['reason'])
-            result = retire_task_device(
-                issue=issue, udid=udid, worktree=worktree,
-                archive_root=Path(config['state_dir']) / 'retired-simulator-evidence',
-                device_root=Path.home() / 'Library/Developer/CoreSimulator/Devices',
-                claim_file=Path.home() / '.fitsy-sim-claim.json', confirm_verified=still_verified)
-            state.setdefault('simulator_retirement', {})[udid] = {
-                'status': 'retired', 'issue': issue,
-                'receipt': str(Path(config['state_dir']) / 'retired-simulator-evidence' / udid / 'retired.json'),
-                'freeBeforeBytes': result['freeBeforeBytes'], 'freeAfterBytes': result['freeAfterBytes']}
-        except Exception as error:
-            # Retirement is best effort; an uncertain proof must never delete or stall dispatch.
-            state.setdefault('simulator_retirement', {})[udid or f'claim:{claim_id}'] = {
-                'status': 'held',
-                'issue': issue, 'reason': str(error)[:300], 'attemptedAt': utc()}
-        state['simulator_retirement_cursor'] = issue_text
-        state['simulator_retirement_claim_cursor'] = claim_id
-        write_json(state_path, state)
-        return
+            value = json.loads(receipt.read_text())
+            if not isinstance(value, dict) or value.get('id') != receipt.parent.name or type(value.get('issue')) is not int:
+                raise ValueError('invalid ownership receipt')
+            receipts[value['id']] = (receipt, value)
+        except (OSError, ValueError):
+            uncertain = True
+    registered = command([config['git_bin'], '-C', config['repo_root'], 'worktree', 'list', '--porcelain'])
+    root = Path(config['worktree_root']).resolve()
+    if uncertain and any(Path(line[9:]).parent == root and
+                         re.fullmatch(r'fitsy-issue-' + str(issue) + r'-[0-9a-f]{8}', Path(line[9:]).name)
+                         for line in registered.splitlines() if line.startswith('worktree ')):
+        raise RuntimeError('uncertain durable ownership for retained same-issue checkout')
+    for entry in state.get('history', []):
+        if entry.get('issue') == issue and entry.get('worktree'):
+            if entry.get('id') not in receipts or receipts[entry['id']][1] != entry:
+                raise RuntimeError('known predecessor lacks matching durable ownership receipt')
+    candidates = [(path, value) for path, value in receipts.values()
+                  if value['issue'] == issue and value.get('worktree')]
+    if not candidates:
+        return None
+    if any(not value.get('terminal') or not value.get('finished_at') for _, value in candidates):
+        raise RuntimeError('checkout successor lacks terminal release proof')
+    receipt, previous = max(candidates, key=lambda item: item[1].get('finished_at') or '')
+    if (not previous.get('terminal') or not previous.get('finished_at') or
+            sum(value.get('finished_at') == previous['finished_at'] for _, value in candidates) != 1):
+        raise RuntimeError('latest checkout owner lacks an unambiguous release')
+    if previous['terminal'] == 'verified':
+        return None  # Reopened completed work starts on current main; old source stays untouched.
+    origin = previous.get('worktree_origin_claim', previous['id'])
+    if not re.fullmatch(r'[0-9a-f-]{36}', origin):
+        raise RuntimeError('missing checkout creation identity')
+    path = Path(previous['worktree'])
+    expected = root / f'fitsy-issue-{issue}-{origin[:8]}'
+    if path.is_symlink() or path.resolve() != expected:
+        raise RuntimeError('checkout ownership path mismatch')
+    for field in ('pid', 'launcher_pid'):
+        if previous.get(field) and pid_identity(previous[field]) is not None:
+            raise RuntimeError('previous owner process remains live')
+    if previous.get('worker_pgid') and group_alive(previous['worker_pgid']):
+        raise RuntimeError('previous worker group remains live')
+    if previous.get('worktree_creation_intent') and not path.exists():
+        branch = subprocess.run([config['git_bin'], '-C', config['repo_root'], 'show-ref', '--verify', '--quiet',
+                                 'refs/heads/' + previous['branch']], capture_output=True, timeout=30)
+        if f'worktree {expected}\n' not in registered and branch.returncode == 1:
+            return None
+    if (not path.is_dir() or f'worktree {expected}\n' not in registered or
+            command([config['git_bin'], '-C', str(path), 'branch', '--show-current']).strip() != previous.get('branch')):
+        raise RuntimeError('retained checkout or branch changed')
+    opened = subprocess.run([config.get('lsof_bin') or 'lsof', '-nP', '+D', str(path)],
+                            capture_output=True, text=True, timeout=30)
+    if opened.returncode != 1 or opened.stdout or opened.stderr:
+        raise RuntimeError('checkout has open files or uncertain consumers')
+    if json.loads(receipt.read_text()) != previous:
+        raise RuntimeError('terminal receipt changed')
+    return {'worktree': str(path), 'branch': previous['branch'], 'worktree_origin_claim': origin,
+            'resumed_from_claim': previous['id']}
 
 
 def tick(config, state, state_path, script):
@@ -950,32 +958,7 @@ def tick(config, state, state_path, script):
         pass  # A notification fault never changes claim ownership or queue decisions.
     if not config.get('enabled'):
         return {'state': 'disabled'}
-    assess_retention(config, state, time.time())
     write_json(state_path, state)
-    cleanup_released(config, state, lambda: write_json(state_path, state))
-    assessment = {}
-    def recovery_board():
-        # Only assessment shares this live, complete read inside this locked tick.
-        # Destructive confirmation and final dispatch confirmation remain independent.
-        if not assessment:
-            try:
-                assessment['items'] = board(config)
-            except Exception as error:
-                assessment['error'] = error
-        if 'error' in assessment:
-            raise assessment['error']
-        return assessment['items']
-    def completed_recovery_verified(claim):
-        identity = (state.get('verified') or {}).get(str(claim['issue']))
-        if not identity or identity.get('id') != claim['id']:
-            return False
-        try:
-            current = next((item for item in recovery_board() if item.get('content', {}).get('number') == claim['issue']), None)
-            return bool(current and terminal_verified(config, current, identity, archived=True, historical=True))
-        except Exception:
-            return False  # Unavailable live acceptance is uncertainty, never retirement permission.
-    recover_pressure(config, state, lambda: write_json(state_path, state), time.time(), completed_recovery_verified)
-    retire_verified_simulator(config, state, state_path, recovery_board)
     floor = config.get('min_free_bytes', 8 * 1024**3)
     reserve = config.get('scratch_reserve_bytes', 4 * 1024**3)
     if not isinstance(reserve, int) or isinstance(reserve, bool) or reserve < 0:
@@ -1050,20 +1033,12 @@ def tick(config, state, state_path, script):
             if reused:
                 worktree, branch = Path(reused['worktree']), reused['branch']
                 claim.update(reused)
-                resource_intent(claim, 'checkout', 'checkout', 'implementation',
-                                [config['git_bin'], 'worktree', 'add', str(worktree), branch])
-                resource_acquired(claim, 'checkout', {'path': str(worktree), 'branch': branch,
-                    'head': command([config['git_bin'], '-C', str(worktree), 'rev-parse', 'HEAD'])}, time.time())
             else:
-                resource_intent(claim, 'checkout', 'checkout', 'implementation',
-                                [config['git_bin'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'])
                 claim.update({'worktree': str(worktree), 'branch': branch,
                               'worktree_origin_claim': claim_id, 'worktree_creation_intent': True})
                 write_json(state_path, state)
                 command([config['git_bin'], '-C', config['repo_root'], 'worktree', 'add', '-b', branch, str(worktree), 'origin/main'], timeout=60)
                 claim['worktree_creation_intent'] = False
-                resource_acquired(claim, 'checkout', {'path': str(worktree), 'branch': branch,
-                    'head': command([config['git_bin'], '-C', str(worktree), 'rev-parse', 'HEAD'])}, time.time())
         except Exception as error:
             reason = f"Worktree preparation failed ({type(error).__name__}); inspect claim {claim_id}"
             gh(config, 'issue', 'edit', str(number), '-R', 'dgmolla/fitsy', '--add-label', 'dispatch-hold')
@@ -1144,8 +1119,6 @@ def _worker(config, state_path, lock_path, claim_id):
         claim['stage'] = 'running'
         claim['launcher_pid'] = os.getpid()
         claim['launcher_started'] = pid_identity(os.getpid())
-        resource_intent(claim, 'worker-process', 'process', 'implementation',
-                        [sys.executable, 'local-dispatcher.py', 'worker', '--claim-id', claim_id])
         write_json(state_path, state)
     worktree = claim['worktree']
     profile = claim['worker_profile']
@@ -1168,9 +1141,6 @@ def _worker(config, state_path, lock_path, claim_id):
             state['active']['pid_started'] = pid_identity(child.pid)
             state['active']['worker_pgid'] = os.getpgrp()
             state['active']['started_at'] = utc()
-            if state['active']['pid_started']:
-                resource_acquired(state['active'], 'worker-process', {'pid': child.pid,
-                    'started': state['active']['pid_started'], 'pgid': os.getpgrp()}, time.time())
             write_json(state_path, state)
         code, timed_out, cancelled, remaining_group = wait_worker(
             child, config.get('worker_timeout_seconds', 90 * 60))
@@ -1188,11 +1158,6 @@ def _worker(config, state_path, lock_path, claim_id):
                 state['active']['failure'] = f"worker exceeded {config.get('worker_timeout_seconds', 90 * 60)}s wall-clock budget"
             if remaining_group:
                 state['active']['stage'] = 'ownership-uncertain'
-            record = state['active'].get('resources', {}).get('worker-process')
-            if record and not remaining_group and record.get('state') == 'acquired':
-                record.update(state='released', released_at=time.time())
-                record['observations'].append({'event': 'stopped', 'at': record['released_at'],
-                                               'exit_code': code, 'timed_out': timed_out, 'cancelled': cancelled})
             write_json(state_path, state)
 
 

@@ -18,8 +18,8 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 EVID="$REPO_ROOT/.evidence/sim"; mkdir -p "$EVID"
 CMD="${1:-status}"; shift || true
 
-# Hold the same lock as completed-task retirement for the whole simulator
-# command. In particular, claim check/write and simctl delete cannot race.
+# Hold the same lock as manual cleanup for the whole simulator command.
+# Claim check/write and exact-device deletion cannot race.
 if [ "${FITSY_SIM_LOCKED:-}" != 1 ]; then
   python3 - "$HOME/.fitsy-sim-claim.lock" "$0" "$CMD" "$@" <<'PY'
 import fcntl, os, subprocess, sys
@@ -42,21 +42,46 @@ booted_udid() { xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | he
 # dead agent never wedges the sim. Claim acquisition uses checked, durable
 # atomic replacement under the shared simulator lock held for the full command.
 CLAIM_FILE="$HOME/.fitsy-sim-claim.json"
-claim_owner() { # prints active owner, or nothing
-  [ -f "$CLAIM_FILE" ] || return 0
-  python3 - "$CLAIM_FILE" "$REPO_ROOT/scripts/sim" <<'PY'
-import sys, time
-sys.dont_write_bytecode = True
-sys.path.insert(0, sys.argv[2])
-from sim_resource_uses import read_claim
+claim_state() {
+  python3 - "$CLAIM_FILE" "$@" <<'PYTHON'
+import json, math, os, sys, tempfile, time
+from pathlib import Path
+path, action, *args = sys.argv[1:]
+path = Path(path)
 try:
-    d = read_claim(sys.argv[1])
-except ValueError as error:
-    raise SystemExit(str(error))
-if d.get("expires", 0) > time.time():
-    print(d.get("owner", ""))
-PY
+    exists = path.exists()
+    claim = json.loads(path.read_text()) if exists else None
+    if exists and (not isinstance(claim, dict) or not isinstance(claim.get('owner'), str)
+            or not claim['owner'] or type(claim.get('expires')) not in (int, float)
+            or not math.isfinite(claim['expires'])):
+        raise ValueError('invalid claim identity')
+except (ValueError, UnicodeError) as error:
+    raise SystemExit(f'Malformed simulator claim preserved at {path}; reconcile its owner before using the device.') from error
+owner = claim['owner'] if claim and claim['expires'] > time.time() else ''
+if action == 'owner':
+    if owner:
+        print(owner)
+elif owner and owner != args[0]:
+    raise SystemExit('simulator is claimed by ' + owner)
+elif action == 'release':
+    path.unlink(missing_ok=True)
+else:
+    minutes = int(args[1])
+    if minutes <= 0:
+        raise SystemExit('--minutes must be a positive integer')
+    value = {'owner': args[0], 'expires': time.time() + minutes * 60,
+             'claimed_at': time.strftime('%FT%TZ', time.gmtime())}
+    with tempfile.NamedTemporaryFile('w', dir=path.parent, delete=False) as out:
+        json.dump(value, out); out.flush(); os.fsync(out.fileno()); temporary = Path(out.name)
+    temporary.chmod(0o600); os.replace(temporary, path)
+    directory = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+PYTHON
 }
+claim_owner() { claim_state owner; }
 require_claim_or_free() { # identity from FITSY_SIM_OWNER (defaults to "anonymous", which any claim blocks)
   local me="${FITSY_SIM_OWNER:-anonymous}"
   local owner; owner="$(claim_owner)"
@@ -67,10 +92,7 @@ require_claim_or_free() { # identity from FITSY_SIM_OWNER (defaults to "anonymou
   fi
 }
 
-record_device_event() {
-  python3 "$REPO_ROOT/scripts/sim/sim_resource_uses.py" "$1" "$CLAIM_FILE" "${FITSY_SIM_OWNER:-anonymous}" "${2:-}"
-}
-# Reject incomplete arguments before recording an uncertain device action.
+# Reject incomplete arguments before invoking a device command.
 validate_device_arguments() {
   case "$CMD" in
     install) : "${1:?path to .app}" ;;
@@ -88,18 +110,12 @@ validate_device_arguments() {
   esac
 }
 validate_device_arguments "$@"
-# Intent protects uncertain interrupted actions; only completed commands renew use.
-case "$CMD" in install|launch|screenshot|logs|reset) require_claim_or_free ;; esac
-case "$CMD" in install|launch|screenshot|logs|reset)
-  UDID="$(booted_udid)"
-  [ -z "$UDID" ] || record_device_event intent "$UDID"
-  ;; esac
-
+case "$CMD" in screenshot|logs) require_claim_or_free ;; esac
 case "$CMD" in
   claim)
     ME="${FITSY_SIM_OWNER:?export FITSY_SIM_OWNER=<agent-name> first}"
     MIN=30; [ "${1:-}" = "--minutes" ] && MIN="${2:-30}"
-    case "$MIN" in ''|*[!0-9]*)
+    case "$MIN" in ''|0|*[!0-9]*)
       printf '{"name":"sim-claim","status":"fail","summary":"--minutes must be a positive integer","fix":"sim claim --minutes 30"}
 '; exit 1;; esac
     OWNER="$(claim_owner)"
@@ -108,20 +124,7 @@ case "$CMD" in
 ' "$OWNER"
       exit 1
     fi
-    python3 - "$CLAIM_FILE" "$ME" "$MIN" "$REPO_ROOT/scripts/sim" <<'PY'
-import json, sys, time
-from pathlib import Path
-sys.dont_write_bytecode = True
-sys.path.insert(0, sys.argv[4])
-from sim_resource_uses import read_claim, save
-path = Path(sys.argv[1])
-previous = read_claim(path)
-claim = {"owner": sys.argv[2], "expires": time.time() + int(sys.argv[3]) * 60,
-         "claimed_at": time.strftime("%FT%TZ", time.gmtime())}
-if previous.get('owner') == sys.argv[2] and previous.get('expires', 0) > time.time():
-    claim['device_uses'] = previous.get('device_uses', [])
-save(path, claim)
-PY
+    claim_state claim "$ME" "$MIN"
     printf '{"name":"sim-claim","status":"pass","owner":"%s","minutes":%s}
 ' "$ME" "$MIN"
     ;;
@@ -133,27 +136,9 @@ PY
 ' "$OWNER"
       exit 1
     fi
-    record_device_event release
-    rm -f "$CLAIM_FILE"
+    claim_state release "$ME"
     printf '{"name":"sim-release","status":"pass","owner":"%s"}
 ' "$ME"
-    ;;
-  use-intent|use-complete)
-    ME="${FITSY_SIM_OWNER:?export FITSY_SIM_OWNER=<agent-name> first}"
-    OWNER="$(claim_owner)"
-    [ "$ME" != anonymous ] && [ "$OWNER" = "$ME" ] || { echo "device event requires your active claim" >&2; exit 1; }
-    UDID="${1:?exact device UDID}"
-    if [ "$CMD" = use-intent ]; then
-      record_device_event intent "$UDID"
-    else
-      python3 - "$CLAIM_FILE" "$UDID" <<'PYTHON'
-import json, sys
-if sys.argv[2] not in json.load(open(sys.argv[1])).get('device_uses', []):
-    raise SystemExit('completed use requires an exact device intent under this claim')
-PYTHON
-      record_device_event use "$UDID"
-    fi
-    printf '{"name":"sim-%s","status":"pass","udid":"%s"}\n' "$CMD" "$UDID"
     ;;
   boot)
     require_claim_or_free
@@ -163,11 +148,8 @@ PYTHON
     if [ -z "$UDID" ]; then
       UDID="$(xcrun simctl list devices available | grep -F "$DEVICE (" | grep -oE '[0-9A-F-]{36}' | head -1)"
       [ -n "$UDID" ] || { echo "no available simulator named '$DEVICE'" >&2; exit 1; }
-      record_device_event intent "$UDID"
       xcrun simctl boot "$UDID"
       open -a Simulator --background || true
-    else
-      record_device_event intent "$UDID"
     fi
     printf '{"name":"sim-boot","status":"pass","udid":"%s"}\n' "$UDID"
     ;;
@@ -220,7 +202,3 @@ PYTHON
     ;;
   *) echo "unknown subcommand: $CMD" >&2; exit 1 ;;
 esac
-
-case "$CMD" in boot|install|launch|screenshot|logs|reset)
-  [ -z "${UDID:-}" ] || record_device_event use "$UDID"
-  ;; esac
