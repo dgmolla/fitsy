@@ -158,7 +158,7 @@ Do not remove self-review prevention, disable admin enforcement, impersonate ano
 Stop new admissions during rollback; preserve independent issuer checks, credential isolation, raw receipts and pending claims.
 Restore only separately approved compatible controls; do not restore shared administrator tokens or unprotected production secrets as a shortcut.
 Do not disable superseded session/socket/admission until installed negative/valid probes pass and active operations are reconciled.
-Existing product verification commands, exclusive lifecycle helper and sole routine publisher remain.
+Existing product verification commands and exclusive lifecycle helper remain.
 
 Frozen443 stays `fe24cebe2bbfbdaad995561d1f2b14384e3e7a2e` against base257, with genuine252.81189254205674-second correctness/danger-zone review and unchanged approved UI.
 No further443 product reviewer or concurrent443 implementation is authorized.
