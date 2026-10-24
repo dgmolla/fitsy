@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 const root = resolve(__dirname, "../..");
 let directory: string;
 beforeEach(() => {
-  directory = mkdtempSync(join(tmpdir(), "fitsy-verify-output-"));
+  directory = realpathSync(mkdtempSync(join(tmpdir(), "fitsy-verify-output-")));
   mkdirSync(join(directory, "scripts/verify"), { recursive: true });
   copyFileSync(join(root, "scripts/verify/run.mjs"), join(directory, "scripts/verify/run.mjs"));
   copyFileSync(join(root, "scripts/verify/impact-plan.mjs"), join(directory, "scripts/verify/impact-plan.mjs"));

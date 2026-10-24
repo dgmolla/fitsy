@@ -3,7 +3,8 @@
 # whole API run: shared-schema suites can exhaust each other's SERIALIZABLE retry
 # budget. Explicit concurrency inside a test remains unchanged.
 set -uo pipefail
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO_ROOT"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$REPO_ROOT" || exit 1
 SCOPE=all
 PLAN_ARGS=(--test-groups)
 for ARG in "$@"; do
@@ -45,7 +46,6 @@ if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   node --test scripts/review/simple-review.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }simple-review"
   node --test scripts/github/*.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }github"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/sim/retire_task_device.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }retire-task-device"
-  PYTHONDONTWRITEBYTECODE=1 python3 scripts/review/advisory-finding.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }advisory-finding"
 fi
 if [[ " $TEST_GROUPS " == *" api "* ]]; then
   if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then

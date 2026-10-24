@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The local real-media lane produces the same source-bound receipt shape used
-// by review dispositions. The product-flow publisher checks it on PR heads.
+// by local verification. The product-flow publisher checks it on PR heads.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';

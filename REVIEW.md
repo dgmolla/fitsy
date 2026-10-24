@@ -2,7 +2,7 @@
 
 Shared, provider-neutral rules for every review lens in `.claude/lenses/`.
 The directory name is retained for compatibility; these rules apply to every supported review adapter.
-Runner: `scripts/review/run-review.sh`.
+Runner: `scripts/review/simple-review.mjs`; usage: `scripts/review/simple-review.md`.
 Design: `docs/engineering/devops/autonomous-shipping.md` §L5.
 
 ## Severity

@@ -112,10 +112,9 @@ Focused unprivileged checks:
 
 ```sh
 python3 -B scripts/delivery/resource-controls.test.py
-python3 -B scripts/review/external-approval.test.py ProfileCustodyTests
 ```
 
-The retired dispatcher process and cold-retention fixture suites are no longer part of repository verification.
+The retired dispatcher process, cold-retention and external-approval fixture suites are no longer part of repository verification.
 
 Run applicable canonical cheap checks against the frozen commit before any
 independent review. No additional reviewer allocation is authorized by the worker

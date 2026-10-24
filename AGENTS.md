@@ -117,7 +117,9 @@ vercel env add KEY prod    # Add/update a secret
 - **Error responses**: `{ "error": "message" }` with appropriate HTTP status codes
 - **Tests**: Write tests for new endpoints. Mock only external services, never your own code.
 - **API calls**: All external API calls go through service wrappers in `apps/api/services/`
-- **Docs structure**: `docs/` children are domains (product, engineering, design, gtm); subdirs are grandchildren. Superseded/historical docs live in each domain's `archive/`. Index + conventions: `docs/README.md`.
+- **Docs structure**: `docs/` children are domains (product, engineering, design, gtm, release); subdirs are grandchildren.
+  Superseded/historical docs live in each domain's `archive/`.
+  Index + conventions: `docs/README.md`.
 - **Diagrams**: Every spec and design doc must include at least one Mermaid diagram (```mermaid block) of the primary flow/architecture. GitHub and Obsidian render it natively.
 - **Outcome ownership**: One execution owner coordinates each coherent issue and PR, including API and mobile changes when their contract evolves together.
   Assign clear file ownership to collaborating agents, and involve the relevant domain owner or reviewer for changed behavior.
@@ -131,7 +133,7 @@ vercel env add KEY prod    # Add/update a secret
 The human-selected standalone Pstack orchestrate-delivery, ship-branch and verify-fitsy skills supplied by the coordinator control orchestration and shipping.
 Repository documents retain product, supported command, security/data and release contracts.
 Follow [model routing and delegation](docs/engineering/devops/agent-model-routing.md) for configured model and independent review protections.
-The local AI review poller owns the two-attempt limit per head SHA; individual executions are bounded by workflow and provider timeouts.
+The installed local AI reviewer owns the two-attempt limit per head SHA; individual executions are bounded by workflow and provider timeouts.
 Preserve historical review records needed by unfinished tasks.
 
 ## Session Discipline
@@ -142,7 +144,7 @@ Preserve historical review records needed by unfinished tasks.
 
 ## Pre-PR Gate
 
-Follow `docs/engineering/devops/shipping.md` for supported commands, acceptance, release protections and review dispositions under the selected skills.
+Follow `docs/engineering/devops/shipping.md` for supported commands, acceptance, release protections and finding priorities under the selected skills.
 
 Publish after meaningful cheap checks, focused regressions and a matching independent review of the frozen candidate.
 The trusted existing public Verify workflow supplies heavy validation before protected merge.
@@ -194,11 +196,10 @@ You are done when CI and deploy are green, not when you push. After pushing, pol
 
 ## Shipyard Settings
 
-The pipeline's knobs (merge gate, lens routing, shadow checks, ratchets) live
-with their enforcement mechanisms: `docs/engineering/tuning-guide.md` is the
-reference, `scripts/verify/registry.yml` + `scripts/verify/risk-tiers.yml`
-are the machine-read settings. `merge-gate` is currently **advisory** by
-owner decision - flip it per the tuning guide when ready.
+Verification settings live in `scripts/verify/registry.yml` alongside their checks.
+Review routing uses `scripts/route-reviewers.sh`, with severity and evidence rules in `REVIEW.md`.
+See `docs/engineering/tuning-guide.md` for the maintained settings reference.
+Existing GitHub merge requirements remain authoritative; local tooling cleanup does not change them.
 
 ## Deployment
 

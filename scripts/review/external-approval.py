@@ -558,6 +558,8 @@ def acceptance(body):
 
 def review_validator(name, expected, uid):
     """Execute only verified installed bytes, never a candidate-selected import."""
+    # These validators live beside INSTALL in operator custody; they are not
+    # imports of the retired helpers removed from this repository.
     require(name in ('review-round', 'review-gate'), 'unknown review validator')
     path = INSTALL.with_name(name + '.py')
     raw = protected_bytes(path, uid)
