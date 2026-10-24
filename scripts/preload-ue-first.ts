@@ -1,3 +1,4 @@
+import { computeMenuHash } from '../apps/api/services/menuSources/menuItemIdentity';
 import { validateHexInTx } from "./preload-invariants";
 import { loadChainServing, chainMenuResolver, type ChainServing } from "../apps/api/services/chainServing";
 /**
@@ -42,7 +43,6 @@ import { loadChainServing, chainMenuResolver, type ChainServing } from "../apps/
 
 import { PrismaClient } from "@prisma/client";
 import Anthropic from "@anthropic-ai/sdk";
-import { createHash } from "node:crypto";
 import {
   cellToLatLng,
   gridDisk,
@@ -390,11 +390,6 @@ interface Phase2Restaurant {
   photoSource: string | null;
   lastScrapedAt: Date | null;
   menuHash: string | null;
-}
-
-function computeMenuHash(itemNames: string[]): string {
-  const sorted = [...itemNames].sort();
-  return createHash("sha256").update(sorted.join("\n")).digest("hex").slice(0, 16);
 }
 
 /**
@@ -766,7 +761,7 @@ async function processRestaurant(
 
   // Post-fetch skip gate: we now have items, so compute hash and compare.
   // Matches preload.ts shouldSkipIncremental semantics (menuHash + age).
-  const menuHash = computeMenuHash(resolverResult.items.map((i) => i.name));
+  const menuHash = computeMenuHash(resolverResult.items);
   if (!CONFIG.force && r.lastScrapedAt && r.menuHash === menuHash) {
     const ageDays = (Date.now() - r.lastScrapedAt.getTime()) / (1000 * 60 * 60 * 24);
     if (ageDays <= CONFIG.skipDays) {

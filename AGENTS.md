@@ -114,6 +114,7 @@ vercel env add KEY prod    # Add/update a secret
 - **Mobile client**: React Native (Expo), Expo Router for navigation
 - **API backend**: Next.js API routes (server-only, no pages)
 - **Database**: Prisma, always use transactions for multi-record mutations
+- **Menu identity**: Preserve provider-qualified source IDs and stable Fitsy dish IDs; follow the [persistence and cutover contract](docs/engineering/backend/idempotent-preload-spec.md).
 - **Error responses**: `{ "error": "message" }` with appropriate HTTP status codes
 - **Tests**: Write tests for new endpoints. Mock only external services, never your own code.
 - **API calls**: All external API calls go through service wrappers in `apps/api/services/`

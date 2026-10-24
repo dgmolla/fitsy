@@ -127,7 +127,7 @@ suite("official PDF pilot correction against captured April data", () => {
       const macros = await resolveChainMacros(items, brandId, runtime.match, async () => { throw new Error("Reviewed configurations must not call estimation"); });
       await persistHex(scope, brand.slug, [{ restaurantId: restaurant.id, brandId: brand.id, items: items.map((item, i) => ({ item, macro: macros[i]! })), menuHash: "captured-seven-dish-pilot" }], p, { validateInTx: validateHexInTx });
       for (const [index, observation] of observations.entries()) {
-        const item = await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: restaurant.id, name: items[index]!.name } }, include: { macroEstimates: true } });
+        const item = await p.menuItem.findFirstOrThrow({ where: { restaurantId: restaurant.id, name: items[index]!.name }, include: { macroEstimates: true } });
         const { servingSize: _serving, ...facts } = chainPilot.changes.find(c => c.canonicalKey === observation.key)!.facts;
         expect(item).toMatchObject(facts);
         expect(item.macroEstimates).toEqual([expect.objectContaining({ ...facts, source: "official", confidence: "HIGH" })]); count++;

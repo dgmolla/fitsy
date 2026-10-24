@@ -144,7 +144,7 @@ async function main(): Promise<void> {
       log(`\n========== ${restaurant.name} ==========`);
 
       const beforeCount = await prisma.$queryRaw<{ count: bigint }[]>`
-        SELECT COUNT(*)::bigint as count FROM "MenuItem" WHERE "restaurantId" = ${restaurant.id}
+        SELECT COUNT(*)::bigint as count FROM "MenuItem" WHERE "restaurantId" = ${restaurant.id} AND "retiredAt" IS NULL
       `;
       const itemsBefore = Number(beforeCount[0]?.count ?? 0);
       log(`  Current items: ${itemsBefore}`);

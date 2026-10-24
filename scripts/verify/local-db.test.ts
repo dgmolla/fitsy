@@ -1,5 +1,4 @@
-import { fixtureProcess, signalFixtureProcess } from './lock-fixture-process';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -220,16 +219,74 @@ test('explicit stop can retire an owned stopped container without an active port
   expect(result.containerExists).toBe(false);
 });
 
-test('lock fixture refuses unacquired and zero process cleanup without signaling its caller', () => {
-  const kill = jest.spyOn(process, 'kill');
+test('concurrent CLI attempts cannot reset DB after its coordinator and worker die', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'fitsy-db-flock-'));
+  const lockScript = resolve(__dirname, 'db-lock.py');
+  const marker = resolve(root, 'ready');
+  const childReady = resolve(root, 'child-ready');
+  const orphaned = resolve(root, 'orphaned');
+  const stopWorker = resolve(root, 'stop-worker');
+  const stopChild = resolve(root, 'stop-child');
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+    !key.startsWith('FITSY_VERIFY_') && key !== 'FITSY_LOCAL_DB'));
+  // Each fixture process terminates itself through task-owned files. This
+  // exercises the real lock supervisor without requiring process inspection
+  // or signaling a PID that might have been reused after an assertion fails.
+  const childCode = `import os,pathlib,time
+parent=os.getppid()
+pathlib.Path(${JSON.stringify(childReady)}).touch()
+deadline=time.monotonic()+20
+while not pathlib.Path(${JSON.stringify(stopChild)}).exists() and time.monotonic()<deadline:
+ if os.getppid()!=parent: pathlib.Path(${JSON.stringify(orphaned)}).touch()
+ time.sleep(0.02)
+`;
+  const workerCode = `import json,os,pathlib,signal,subprocess,sys,time
+child=subprocess.Popen([sys.executable,'-c',${JSON.stringify(childCode)}],
+ stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+# Wait until the descendant has started before exposing the worker's identity.
+while not pathlib.Path(${JSON.stringify(childReady)}).exists():
+ if child.poll() is not None: sys.exit(1)
+ time.sleep(0.02)
+pathlib.Path(${JSON.stringify(marker)}).write_text(json.dumps({'pid':os.getpid(),'pgid':os.getpgrp(),'parent':os.getppid()}))
+deadline=time.monotonic()+20
+while not pathlib.Path(${JSON.stringify(stopWorker)}).exists() and time.monotonic()<deadline: time.sleep(0.02)
+os.kill(os.getpid(),signal.SIGKILL)
+`;
+  const holder = spawn('python3', [lockScript, root, 'python3', '-c', workerCode], { stdio: 'ignore', env });
+  const contender = () => spawnSync('python3', [lockScript, root, 'python3', '-c', 'print("acquired")'], { encoding: 'utf8', env });
+  const waitFor = async (path: string) => {
+    for (let i = 0; i < 80 && !existsSync(path); i++) await new Promise(resolve => setTimeout(resolve, 25));
+    expect(existsSync(path)).toBe(true);
+  };
   try {
-    expect(fixtureProcess(0)).toBeUndefined();
-    expect(signalFixtureProcess(undefined, 'SIGKILL', true)).toBe(false);
-    for (const pid of [0, 1, -1, NaN]) {
-      expect(signalFixtureProcess({ pid, pgid: pid, started: '' }, 'SIGKILL', true)).toBe(false);
+    await waitFor(marker);
+    const worker = JSON.parse(readFileSync(marker, 'utf8'));
+    expect(worker.pid).toBeGreaterThan(1);
+    expect(worker.pgid).toBe(worker.pid);
+    expect(worker.parent).toBe(holder.pid);
+    expect(contender().status).toBe(75);
+    const exited = new Promise(resolve => holder.once('exit', resolve));
+    expect(holder.kill('SIGKILL')).toBe(true);
+    await exited;
+    expect(contender().status).toBe(75);
+    writeFileSync(stopWorker, 'stop');
+    await waitFor(orphaned);
+    expect(contender().status).toBe(75);
+    writeFileSync(stopChild, 'stop');
+    let result = contender();
+    for (let i = 0; i < 80 && result.status === 75; i++) {
+      await new Promise(resolve => setTimeout(resolve, 25));
+      result = contender();
     }
-    expect(kill).not.toHaveBeenCalled();
-  } finally { kill.mockRestore(); }
+    expect(result.status).toBe(0);
+  } finally {
+    writeFileSync(stopWorker, 'stop');
+    writeFileSync(stopChild, 'stop');
+    holder.kill('SIGTERM');
+    // Preserve the stop files until the descendants have released the lock.
+    for (let i = 0; i < 80 && contender().status === 75; i++) await new Promise(resolve => setTimeout(resolve, 25));
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('bound database stop rejects replacement, image drift, incomplete pins and forged unowned metadata', () => {

@@ -14,6 +14,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { MacroData, StructuredMenuItem } from "./menuSources/types";
+import { menuItemIdentity, sourceItemId } from './menuSources/menuItemIdentity';
 
 // ─── Internal types ────────────────────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ interface HaikuEstimate {
    * Optional so that a response from an older prompt still parses.
    */
   name?: string;
+  sourceItemId?: string;
   cal: number;
   p: number;
   c: number;
@@ -44,6 +46,7 @@ const SYSTEM_PROMPT = `You are a nutrition expert. You will receive a JSON array
 
 Return ONLY valid JSON (no markdown fences, no explanation) as an array of objects in the SAME ORDER as the input, with these exact fields:
 - name: the item name, copied EXACTLY from the input
+- sourceItemId: copy EXACTLY from the input when present; omit when absent. Same-name products with different IDs are separate servings.
 - cal: calories (integer)
 - p: protein in grams (number)
 - c: carbohydrates in grams (number)
@@ -78,8 +81,8 @@ export function stripControlChars(text: string): string {
 /**
  * Maps model output back onto the input items.
  *
- * The model is asked to echo each item's name. When it does, we match on that
- * name rather than array position, because position is not a reliable contract:
+ * The model echoes a source item ID when available and the item's name.
+ * Source identity is preferred because position is not a reliable contract:
  * on 50-item batches the model returns the wrong number of objects ~15% of the
  * time (measured on claude-haiku-4-5 over 2,708 items; other models are worse).
  * Under positional matching a single dropped or duplicated entry silently
@@ -87,16 +90,31 @@ export function stripControlChars(text: string): string {
  * to detect it. Nutrition data is a documented Danger Zone — a null is
  * recoverable, macros attached to the wrong food are not.
  *
- * Falls back to positional matching when the response carries no names at all,
- * so an older prompt or a model that ignores the field still works as before.
+ * Legacy name/position fallback remains available for unambiguous names only.
+ * Distinct same-name products require an echoed source ID; missing identity yields null.
  *
  * @returns entries aligned to `items`, plus how the alignment was achieved.
  */
 export function reconcile(
   items: StructuredMenuItem[],
   parsed: unknown[],
-): { aligned: (unknown | null)[]; strategy: "name" | "position"; unmatched: number } {
+): { aligned: (unknown | null)[]; strategy: "source" | "name" | "position"; unmatched: number } {
   const norm = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, " ");
+  const identitiesByName = new Map<string, Set<string>>();
+  for (const item of items) {
+    const key = norm(item.name), identities = identitiesByName.get(key) ?? new Set<string>();
+    identities.add(menuItemIdentity(item));
+    identitiesByName.set(key, identities);
+  }
+  const ambiguous = (item: StructuredMenuItem) => identitiesByName.get(norm(item.name))!.size > 1;
+  const bySource = new Map<string, Record<string, unknown> | null>();
+  for (const value of parsed) {
+    if (value === null || typeof value !== 'object') continue;
+    const row = value as Record<string, unknown>;
+    if (typeof row['sourceItemId'] !== 'string' || !row['sourceItemId'].trim()) continue;
+    const id = row['sourceItemId'].trim();
+    bySource.set(id, bySource.has(id) ? null : row);
+  }
 
   const named = parsed.filter(
     (p): p is Record<string, unknown> =>
@@ -105,16 +123,19 @@ export function reconcile(
 
   // Require most of the response to carry names before trusting name matching;
   // a handful of stray name fields is not a reliable index.
-  if (named.length < parsed.length * 0.8 || named.length === 0) {
+  if (!bySource.size && (named.length < parsed.length * 0.8 || named.length === 0)) {
+    const aligned = items.map((item, i) => ambiguous(item) ? null : parsed[i] ?? null);
     return {
-      aligned: Array.from({ length: items.length }, (_, i) => parsed[i] ?? null),
+      aligned,
       strategy: "position",
-      unmatched: 0,
+      unmatched: aligned.filter(value => value === null).length,
     };
   }
 
   const byName = new Map<string, unknown>();
   for (const p of named) {
+    // A response claiming a different product ID cannot be reused through a name fallback.
+    if (typeof p['sourceItemId'] === 'string' && p['sourceItemId'].trim()) continue;
     const key = norm(String(p["name"]));
     // First write wins: if the model duplicated a name, prefer its first answer
     // rather than letting a later duplicate overwrite a correct earlier one.
@@ -123,15 +144,18 @@ export function reconcile(
 
   let unmatched = 0;
   const aligned = items.map((item) => {
-    const hit = byName.get(norm(item.name));
-    if (hit === undefined) {
+    const id = sourceItemId(item);
+    const sourceHit = id ? bySource.get(id) : undefined;
+    const hit = id && bySource.has(id) ? sourceHit
+      : ambiguous(item) ? null : byName.get(norm(item.name));
+    if (hit === undefined || hit === null || (sourceHit && typeof sourceHit['name'] === 'string' && norm(sourceHit['name']) !== norm(item.name))) {
       unmatched++;
       return null;
     }
     return hit;
   });
 
-  return { aligned, strategy: "name", unmatched };
+  return { aligned, strategy: bySource.size ? "source" : "name", unmatched };
 }
 
 // ─── Singleton client ──────────────────────────────────────────────────────────
@@ -188,6 +212,7 @@ export async function estimateMacros(
   // Build a compact JSON payload — include only fields Haiku needs for estimation
   const payload = items.map((item) => ({
     name: item.name,
+    ...(sourceItemId(item) ? { sourceItemId: sourceItemId(item) } : {}),
     ...(item.description !== undefined ? { description: item.description } : {}),
     ...(item.price !== undefined ? { price: item.price } : {}),
     ...(item.section !== undefined ? { section: item.section } : {}),

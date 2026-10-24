@@ -1,7 +1,6 @@
 import { appendFileSync, chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { appleGitHookPrologue } from './apple-git-hook-env';
 
 const protectedPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
 export function fixtureNodeUnderProtectedPath(env: NodeJS.ProcessEnv) {
@@ -14,13 +13,11 @@ export function fixtureNodeUnderProtectedPath(env: NodeJS.ProcessEnv) {
     { env: routed, encoding: 'utf8' }).trim();
 }
 
-// Isolated administrator installation retains executable modes and uses only
-// the fixture GitHub boundary, including inside the protected hook PATH.
-export function installedFixtureHook(root: string, directory: string, apple = false) {
+// Exercise the real hook with task-owned executable fixtures.
+export function installedFixtureHook(root: string, directory: string) {
   return readFileSync(join(root, '.githooks/pre-push'), 'utf8')
     .replace('export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-      `export PATH=${join(directory, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`)
-    .replace('hook_path="$PATH"', (apple ? appleGitHookPrologue : '') + 'hook_path="$PATH"');
+      `export PATH=${join(directory, 'bin')}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`);
 }
 export function installFixtureTools(directory: string) {
   // Retain the parent suite's admitted Git and system Bash when the hook
@@ -70,7 +67,7 @@ export function hookEnvironment(root: string, directory: string, env: NodeJS.Pro
 
 
 export function installVerificationFixture(root: string, directory: string) {
-  for (const file of ['impact-plan.mjs', 'local-db.mjs', 'local-db-control.mjs', 'docker-runtime.mjs', 'db-lock.py', 'receipt-cache.mjs', 'run.mjs', 'run.sh', 'secrets.sh', 'migration-safety.sh']) {
+  for (const file of ['impact-plan.mjs', 'local-db.mjs', 'local-db-control.mjs', 'docker-runtime.mjs', 'db-lock.py', 'test-results.mjs', 'node-focused-reporter.mjs', 'python-focused.py', 'run.mjs', 'run.sh', 'secrets.sh', 'migration-safety.sh']) {
     mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
     copyFileSync(join(root, 'scripts/verify', file), join(directory, 'scripts/verify', file));
   }
