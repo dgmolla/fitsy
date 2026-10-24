@@ -14,7 +14,32 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
+test("a directory symlink cannot skip blocking verification checks", () => {
+  const verify = join(directory, "scripts/verify");
+  writeFileSync(join(verify, "registry.yml"), `checks:
+  - name: fixture
+    script: fail.sh
+    layer: 0
+    blocking: true
+    runs: [ci]
+`);
+  writeFileSync(join(verify, "fail.sh"), 'echo \'{"summary":"intentional failure"}\'\nexit 1\n');
+  const alias = join(directory, "linked-scripts");
+  symlinkSync(join(directory, "scripts"), alias, "dir");
+  const result = spawnSync(process.execPath, [join(alias, "verify/run.mjs"), "--scope=all", "--runs=ci"], {
+    cwd: directory, encoding: "utf8", timeout: 10000,
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout.trim())).toMatchObject({ name: "fixture", status: "fail", blocking: true });
+});
+
 test("scopes an optional build heap to the production build command", () => {
+  // Keep the real build guard independent of the caller's staged merge files.
+  const build = join(directory, "scripts/verify/build.sh");
+  copyFileSync(join(root, "scripts/verify/build.sh"), build);
+  const git = spawnSync("git", ["init", "-q"], { cwd: directory, encoding: "utf8" });
+  expect(git.status).toBe(0);
   const bin = join(directory, "bin");
   mkdirSync(bin);
   const npm = join(bin, "npm");
@@ -29,8 +54,8 @@ exit "\${FITSY_NPM_STUB_EXIT:-0}"
       FITSY_NPM_STUB_OUTPUT: output, FITSY_NPM_STUB_EXIT: String(exit) };
     delete env.FITSY_BUILD_HEAP_MIB;
     if (heap !== undefined) env.FITSY_BUILD_HEAP_MIB = heap;
-    const result = spawnSync("/bin/bash", [join(root, "scripts/verify/build.sh")],
-      { cwd: root, env, encoding: "utf8", timeout: 10000 });
+    const result = spawnSync("/bin/bash", [build],
+      { cwd: directory, env, encoding: "utf8", timeout: 10000 });
     return { output, result };
   };
   const ordinary = run("ordinary");

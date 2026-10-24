@@ -28,10 +28,10 @@ The graph illustrates consistency over time, not measured efficacy or a promised
 ## Nutrition policy
 
 The shared macro policy supplies both mobile recommendations and server profile recalculation.
-General adult defaults use protein/carbohydrate/fat energy ratios of 25/45/30 for muscle and weight-loss goals, 20/55/25 for performance, and 20/50/30 for maintenance.
+The current #443 defaults use protein/carbohydrate/fat energy ratios of 15/55/30 for muscle, 14/56/30 for weight loss, 13/62/25 for performance, and 12/58/30 for maintenance.
 These are product defaults within adult reference ranges, not clinically established optimal ratios for each goal.
 Reference ranges are from [Health Canada](https://www.canada.ca/en/health-canada/services/food-nutrition/healthy-eating/dietary-reference-intakes/tables/reference-values-macronutrients.html) and [NIH sports nutrition guidance](https://ods.od.nih.gov/factsheets/ExerciseAndAthleticPerformance-HealthProfessional/).
-Daily estimates remain divided by 3.5, with rounding at the meal boundary.
+Daily targets settle to whole grams before division by 3.5 and rounding to whole per-meal grams; displayed calories are recalculated from the settled grams at each boundary.
 Explicit user targets are not replaced by new defaults.
 New clients request profile goal schema 2; legacy clients receive a supported maintenance value for performance goals.
 

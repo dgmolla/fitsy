@@ -112,11 +112,9 @@ Focused unprivileged checks:
 
 ```sh
 python3 -B scripts/delivery/resource-controls.test.py
-python3 -B scripts/delivery/local-dispatcher.test.py
 ```
 
-Retired retention and process-bookkeeping fixtures are no longer part of Verify.
-The retained dispatcher suite covers worker isolation, queue reads, issue ownership and failed-release dependency refusal.
+The retired dispatcher process, cold-retention and external-approval fixture suites are no longer part of repository verification.
 
 Run applicable canonical cheap checks against the frozen commit before any
 independent review. No additional reviewer allocation is authorized by the worker

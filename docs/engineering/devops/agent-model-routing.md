@@ -32,7 +32,8 @@ node --test scripts/review/simple-review.test.mjs
 ```
 
 The installed review caller must use immutable trusted-base controls for the exact PR head.
-Confirm the actual provider/model and published status before declaring rollout complete.
+The repository no longer installs or schedules local review, dispatch or reporting daemons.
+The existing external reviewer owns the `AI review` status; confirm its actual provider/model and commit-bound result before declaring review complete.
 Record any supported model substitution or escalation in the issue handoff.
 Choose reasoning effort to match the problem and preserve canonical review-adapter settings.
 Do not lower a required review's settings merely to reduce cost.

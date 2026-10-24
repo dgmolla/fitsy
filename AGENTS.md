@@ -117,7 +117,9 @@ vercel env add KEY prod    # Add/update a secret
 - **Error responses**: `{ "error": "message" }` with appropriate HTTP status codes
 - **Tests**: Write tests for new endpoints. Mock only external services, never your own code.
 - **API calls**: All external API calls go through service wrappers in `apps/api/services/`
-- **Docs structure**: `docs/` children are domains (product, engineering, design, gtm); subdirs are grandchildren. Superseded/historical docs live in each domain's `archive/`. Index + conventions: `docs/README.md`.
+- **Docs structure**: `docs/` children are domains (product, engineering, design, gtm, release); subdirs are grandchildren.
+  Superseded/historical docs live in each domain's `archive/`.
+  Index + conventions: `docs/README.md`.
 - **Diagrams**: Every spec and design doc must include at least one Mermaid diagram (```mermaid block) of the primary flow/architecture. GitHub and Obsidian render it natively.
 - **Outcome ownership**: One execution owner coordinates each coherent issue and PR, including API and mobile changes when their contract evolves together.
   Assign clear file ownership to collaborating agents, and involve the relevant domain owner or reviewer for changed behavior.
