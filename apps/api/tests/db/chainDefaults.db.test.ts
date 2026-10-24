@@ -77,12 +77,14 @@ suite('manufacturer products and documented default through both real writers', 
         const r = await p.restaurant.create({ data: { storeUuid: scope + 'ue' + index, name: brand.displayName + ' (New Location)', address: 'UE capture', lat: 34, lng: -118, cuisineTags: [], source: 'ue_feed' } });
         let estimated = 0;
         const macros = await resolveChainMacros(items, runtime.brandId(r), runtime.match, async unresolved => { estimated = unresolved.length; return unresolved.map(() => ({ calories: 400, proteinG: 20, carbsG: 50, fatG: 13, source: 'haiku', confidence: 'MEDIUM', dietaryTags: [] })); });
-        expect([macros.filter(m => m?.source === 'official').length, estimated]).toEqual(index === 0 ? [29, 50] : [33, 39]);
+        // Same-name source variants remain separate; their unreviewed contexts use estimation.
+        expect([macros.filter(m => m?.source === 'official').length, estimated]).toEqual(index === 0 ? [29, 53] : [33, 47]);
         await persistHex(scope, slug, [{ restaurantId: r.id, brandId: brand.id, menuHash: 'full-captured-menu', items: items.map((item, i) => ({ item, macro: macros[i]! })) }], p, { validateInTx: validateHexInTx });
         const persisted = await p.menuItem.findMany({ where: { restaurantId: r.id }, include: { macroEstimates: true } });
         expect(persisted).toHaveLength(items.length);
         for (const [i, item] of items.entries()) {
-          const out = persisted.find(o => o.name === item.name)!;
+          const out = persisted.find(o => o.sourceItemId === item.sourceItemId)!;
+          expect(out).toBeDefined();
           expect(facts(out)).toEqual(facts(macros[i]!));
           const expected = truth.get(slug + ':' + item.name);
           if (expected) { expect(facts(out)).toEqual(expected); expect(out.macroEstimates[0]!.source).toBe('official'); }

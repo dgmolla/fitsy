@@ -31,7 +31,7 @@ const getCounts = unstable_cache(
   async () => {
     const [restaurantCount, menuItemCount] = await Promise.all([
       prisma.restaurant.count(),
-      prisma.menuItem.count(),
+      prisma.menuItem.count({ where: { retiredAt: null } }),
     ]);
     return { restaurantCount, menuItemCount };
   },

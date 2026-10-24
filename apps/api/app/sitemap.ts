@@ -27,6 +27,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         name: true,
         updatedAt: true,
         menuItems: {
+          where: { retiredAt: null },
           select: { id: true, name: true, updatedAt: true },
           take: MAX_ITEMS_PER_RESTAURANT,
         },

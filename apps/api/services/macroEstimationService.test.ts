@@ -321,6 +321,54 @@ const NAMED_ESTIMATES = [
   { name: "Caesar Salad", cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: ["vegetarian"] },
 ];
 
+test('same-name source variants keep their own estimates even when the model reverses them', async () => {
+  mockCreate.mockReset();
+  mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify([
+    { name: 'Alfredo', sourceItemId: 'ubereats:family', cal: 1600, p: 80, c: 200, f: 40, conf: 'LOW' },
+    { name: 'Alfredo', sourceItemId: 'ubereats:individual', cal: 400, p: 20, c: 50, f: 10, conf: 'LOW' },
+  ])));
+  const result = await estimateMacros([
+    { name: 'Alfredo', sourceItemId: 'ubereats:individual', section: 'Entrees' },
+    { name: 'Alfredo', sourceItemId: 'ubereats:family', section: 'Family' },
+  ], makeAnthropicClient());
+  expect(result.map(m => m?.proteinG)).toEqual([20, 80]);
+  const call = mockCreate.mock.calls[0]![0];
+  expect(call.system).toContain('sourceItemId');
+  expect(call.messages[0].content).toContain('ubereats:individual');
+});
+
+test.each([
+  [{ name: 'Alfredo', cal: 400, p: 20, c: 50, f: 10, conf: 'LOW' }],
+  [{ cal: 400, p: 20, c: 50, f: 10, conf: 'LOW' }, { cal: 1600, p: 80, c: 200, f: 40, conf: 'LOW' }],
+])('ambiguous same-name estimates without product IDs are rejected: %j', async (...response) => {
+  mockCreate.mockReset();
+  mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(response)));
+  const result = await estimateMacros([
+    { name: 'Alfredo', sourceItemId: 'ubereats:individual' },
+    { name: 'Alfredo', sourceItemId: 'ubereats:family' },
+  ], makeAnthropicClient());
+  expect(result).toEqual([null, null]);
+});
+
+test('missing, duplicate, unknown and mismatched echoed product identities cannot supply another variant', async () => {
+  for (const output of [
+    [{ sourceItemId: 'ubereats:family', name: 'Alfredo' }],
+    [{ sourceItemId: 'ubereats:family', name: 'Alfredo' }, { sourceItemId: 'ubereats:family', name: 'Alfredo' }],
+    [{ sourceItemId: 'ubereats:unknown', name: 'Alfredo' }],
+    [{ sourceItemId: 'ubereats:family', name: 'Different dish' }],
+  ]) {
+    mockCreate.mockReset();
+    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(output.map(row => ({ ...row, cal: 1600, p: 80, c: 200, f: 40, conf: 'LOW' })))));
+    const result = await estimateMacros([
+      { name: 'Alfredo', sourceItemId: 'ubereats:individual' },
+      { name: 'Alfredo', sourceItemId: 'ubereats:family' },
+    ], makeAnthropicClient());
+    expect(result[0]).toBeNull();
+    if (output.length > 1 || output[0]!.name !== 'Alfredo' || output[0]!.sourceItemId !== 'ubereats:family') expect(result[1]).toBeNull();
+    else expect(result[1]?.proteinG).toBe(80);
+  }
+});
+
 describe("estimateMacros — malformed response hardening", () => {
   let client: Anthropic;
 

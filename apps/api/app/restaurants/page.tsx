@@ -23,7 +23,7 @@ async function loadRestaurants(page: number) {
   const [rows, total] = await Promise.all([
     prisma.restaurant.findMany({
       orderBy: [{ rating: "desc" }, { name: "asc" }],
-      include: { _count: { select: { menuItems: true } } },
+      include: { _count: { select: { menuItems: { where: { retiredAt: null } } } } },
       take: PAGE_SIZE,
       skip: (page - 1) * PAGE_SIZE,
     }),

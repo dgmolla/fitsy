@@ -6,6 +6,20 @@
 
 **Primary script:** `scripts/preload-ue-first.ts`
 
+## Source identity cutover and collision audit
+
+For issue #501, stop old ingestion and backfill processes before the source identity migration, then resume only with compatible readers and writers.
+Follow the [identity and rollback contract](../backend/idempotent-preload-spec.md) for a bounded forced canary and saved-ID comparison.
+A schema migration preserves existing rows but cannot recover already discarded source products without a refresh.
+Audit raw timestamped LA captures before parser deduplication with the read-only command below.
+Use a new output path on each run; the command refuses overwrite and does not connect to a database.
+
+```bash
+npm run audit:menu-identity -- /path/to/retained/ue-captures /tmp/menu-source-collisions.json
+```
+
+The [2026-10-24 report](menu-source-collisions-2026-10-24.md) distinguishes measured retained captures from an unmeasured live LA census.
+
 ---
 
 ## Phase flow

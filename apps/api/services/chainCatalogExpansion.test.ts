@@ -36,6 +36,16 @@ const match = buildChainMatcher(batch.changes.map(c => {
   const evidence = { version: 1 as const, sourceHash: c.source.sha256, locator: c.locator, reviewedBy: batch.reviewedBy, aliases: c.aliases };
   return { ...row, review: { ...evidence, dataHash: chainReviewHash(row, evidence) } };
 }));
+test.each([
+  ['waba-grill', wabaUE, [82, 20, 62]],
+  ['yoshinoya', yoshiUE, [80, 32, 48]],
+] as const)('%s captured products retain source identity through reviewed and estimated routing', (slug, raw, expected) => {
+  const items = parseStoreV1Response(raw)!.items;
+  const official = items.filter(item => match(slug, item).status === 'matched').length;
+  expect([items.length, official, items.length - official]).toEqual(expected);
+  expect(new Set(items.map(item => item.sourceItemId)).size).toBe(items.length);
+  expect(new Set(items.map(item => item.name)).size).toBeLessThan(items.length);
+});
 test.each(chainBindingTruth)('%s %s keeps its reviewed menu identity', (slug, key, item) => {
   const [, , calories, proteinG, carbsG, fatG] = chainBatchTruth.find(r => r[0] === slug && r[1] === key)!;
   expect(match(slug, item)).toMatchObject({ status: 'matched', row: { canonicalKey: key, calories, proteinG, carbsG, fatG } });

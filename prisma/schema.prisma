@@ -216,6 +216,8 @@ model MenuItem {
   id             String          @id @default(cuid())
   restaurantId   String
   name           String
+  sourceItemId   String?         // Provider-qualified ID; scoped to this restaurant, independent of macro provenance.
+  retiredAt      DateTime?       // Missing/ambiguous legacy products remain addressable by saved/logged dish ID.
   description    String?
   photoUrl       String?
   category       String?
@@ -237,7 +239,9 @@ model MenuItem {
   macroEstimates MacroEstimate[]
   savedItems     SavedItem[]
 
-  @@unique([restaurantId, name])
+  @@unique([restaurantId, sourceItemId])
+  // Name fallback uniqueness applies only to active rows without a source ID.
+  // The partial index is maintained in the source_item_identity migration.
   @@index([restaurantId])
 }
 

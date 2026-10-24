@@ -4,7 +4,6 @@
  * Extracted to avoid duplication across pipeline scripts (S-130).
  */
 
-import { randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type {
   MacroData,
@@ -15,6 +14,8 @@ import { aggregateDietaryOptions, DIETARY_TAG_THRESHOLD } from "./constants.js";
 import { macroWinnerSqlOrder } from "../packages/shared/src/utils/macroProvenance";
 import { validateReviewedChainWrites } from '../apps/api/services/chainWriteGuard';
 import { chainTransaction } from '../apps/api/services/chainTransaction';
+import { decodeMenuText, menuItemIdentity, sourceItemId } from '../apps/api/services/menuSources/menuItemIdentity';
+import { resolveMenuItemIds, retireMissingMenuItems } from './menu-item-identity';
 
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
@@ -155,29 +156,15 @@ export function namesMatch(expected: string, found: string): boolean {
 
 // ─── HTML entity decode ─────────────────────────────────────────────────────
 
-export function decodeHtml(s: string | null | undefined): string | null {
-  if (!s) return s ?? null;
-  return s
-    .replace(/&amp;/g, "&")
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, "/");
-}
+export const decodeHtml = decodeMenuText;
 
 // ─── Dedup (S-133) ─────────────────────────────────────────────────────────
 
-/**
- * Deduplicate validated pairs by normalized item name (case-insensitive).
- * Keeps the first occurrence when duplicates exist. Source data (esp. FatSecret)
- * can have duplicate names which violate the @@unique([restaurantId, name]) constraint.
- */
-export function dedupByName(pairs: ValidatedPair[]): ValidatedPair[] {
+/** Keep one occurrence per source product, falling back to decoded, case-insensitive names. */
+export function dedupByIdentity(pairs: ValidatedPair[]): ValidatedPair[] {
   const seen = new Set<string>();
-  return pairs.filter((p) => {
-    const key = p.item.name.toLowerCase();
+  return pairs.filter(p => {
+    const key = menuItemIdentity(p.item);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -192,12 +179,11 @@ export type TxClient = any;
 
 /**
  * Persist a restaurant's items inside an existing transaction context.
- * This is the shared core — both `persistItems` (single-restaurant wrapper)
- * and `persistHex` (hex-level wrapper in hex-persist.ts) delegate here.
+ * Single-restaurant writer; the bulk hex writer uses the same identity resolver.
  *
- * Change 1 (stable IDs): upsert MenuItem by (restaurantId, name) so existing
- * rows keep their id (SavedItem.menuItemId never orphaned). Stale items absent
- * from the incoming set are deleted afterward.
+ * Resolve source product identity (or name fallback) to a stable Fitsy ID.
+ * Unique exact legacy serving contexts are adopted in place; ambiguity is retired,
+ * preserving saved/logged references without guessing a source binding.
  * Change 2 (provenance): upsert MacroEstimate by (menuItemId, source) so each
  * source keeps its own row. After upserting, recompute MenuItem macro columns
  * from the winning estimate so a lower-trust run never clobbers a higher-trust
@@ -210,12 +196,11 @@ export async function persistItemsInTx(
 ): Promise<number> {
   if (inputPairs.length === 0) return 0;
 
-  // S-133: Dedup by item name — source data (esp. FatSecret) can have
-  // duplicate names which violate the @@unique([restaurantId, name]) constraint.
-  const validPairs = dedupByName(inputPairs);
+  // Repeated placements of one source product share a row; distinct products do not.
+  const validPairs = dedupByIdentity(inputPairs);
   await validateReviewedChainWrites(tx, [{ restaurantId, items: validPairs }]);
   if (validPairs.length < inputPairs.length) {
-    console.log(`[persist] Deduped ${inputPairs.length - validPairs.length} duplicate item names for restaurant ${restaurantId}`); // eslint-disable-line no-console
+    console.log(`[persist] Deduped ${inputPairs.length - validPairs.length} duplicate product identities for restaurant ${restaurantId}`); // eslint-disable-line no-console
   }
 
   // Build all input arrays upfront.
@@ -234,27 +219,29 @@ export async function persistItemsInTx(
   const sources = validPairs.map((p) => p.macro.source ?? "llm");
   const reasonings = validPairs.map(p => p.macro.reasoning ?? null);
   // Candidate IDs for new rows — on conflict the existing id is preserved.
-  const candidateIds = validPairs.map(() => randomUUID());
+  const candidateIds = await resolveMenuItemIds(validPairs.map(p => ({ restaurantId, item: p.item })), tx);
+  const sourceItemIds = validPairs.map(p => sourceItemId(p.item));
+  // Retire unclaimed fallback names before an adopted row can take that display name.
+  // The caller's transaction rolls this back together with a failed item write.
+  await retireMissingMenuItems([restaurantId], candidateIds, tx);
 
-  // Official macro facts make no dietary claim; incoming candidate IDs select tag preservation.
-  // Query 1: UPSERT MenuItem by (restaurantId, name). New rows get a fresh
-  // UUID; existing rows keep their id (stable for SavedItem FK). Macro columns
-  // are written here for brand-new rows; the winner-recompute step (Query 3)
-  // will correct them for existing rows regardless of trust order.
-  const menuItemRows = await tx.$queryRaw<{ id: string; name: string }[]>`
+  // Established source products and safely adopted legacy rows retain their Fitsy IDs.
+  // Official facts preserve dietary tags; winner recomputation follows every upsert.
+  const menuItemRows = await tx.$queryRaw<{ id: string }[]>`
     INSERT INTO "MenuItem" (
-      "id", "restaurantId", "name", "description", "category", "section",
+      "id", "restaurantId", "sourceItemId", "name", "description", "category", "section",
       "price", "dietaryTags", "calories", "proteinG", "carbsG", "fatG",
       "createdAt", "updatedAt"
     )
     SELECT
-      id, ${restaurantId},
+      id, ${restaurantId}, "sourceItemId",
       name, description, category, section, price,
       ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
       calories, "proteinG", "carbsG", "fatG",
       now(), now()
     FROM UNNEST(
       ${candidateIds}::text[],
+      ${sourceItemIds}::text[],
       ${names}::text[],
       ${descriptions}::text[],
       ${categories}::text[],
@@ -265,8 +252,11 @@ export async function persistItemsInTx(
       ${proteins}::float[],
       ${carbs}::float[],
       ${fats}::float[]
-    ) AS t(id, name, description, category, section, price, tags, calories, "proteinG", "carbsG", "fatG")
-    ON CONFLICT ("restaurantId", "name") DO UPDATE SET
+    ) AS t(id, "sourceItemId", name, description, category, section, price, tags, calories, "proteinG", "carbsG", "fatG")
+    ON CONFLICT ("id") DO UPDATE SET
+      "sourceItemId" = EXCLUDED."sourceItemId",
+      "name"        = EXCLUDED."name",
+      "retiredAt"   = NULL,
       "description" = EXCLUDED."description",
       "category"    = EXCLUDED."category",
       "section"     = EXCLUDED."section",
@@ -278,29 +268,11 @@ export async function persistItemsInTx(
       "carbsG"      = EXCLUDED."carbsG",
       "fatG"        = EXCLUDED."fatG",
       "updatedAt"   = now()
-    RETURNING "id", "name"
+    RETURNING "id"
   `;
 
-  // Build (restaurantId,name) → stable persisted id map.
-  // RETURNING order is NOT guaranteed to match input order, so map by name.
-  const idByName = new Map<string, string>(
-    (menuItemRows as { id: string; name: string }[]).map((r) => [r.name, r.id]),
-  );
-
-  // Resolve the stable persisted id for each pair (fall back to a fresh UUID
-  // if somehow the row is missing — should never happen but is safe).
-  const menuItemIds = validPairs.map((p) => {
-    const decodedName = decodeHtml(p.item.name)!;
-    return idByName.get(decodedName) ?? randomUUID();
-  });
-
-  // Query 2: Delete stale items for this restaurant — those whose name is NOT
-  // in the incoming set. Cascades drop their MacroEstimates via FK.
-  await tx.$executeRaw`
-    DELETE FROM "MenuItem"
-    WHERE "restaurantId" = ${restaurantId}
-      AND "name" <> ALL(${names}::text[])
-  `;
+  if (menuItemRows.length !== candidateIds.length) throw new Error('Menu product write count mismatch');
+  const menuItemIds = candidateIds;
 
   // A changed/unmatched serving must not keep an older official binding as its winner.
   await tx.$executeRaw`DELETE FROM "MacroEstimate" e USING UNNEST(${menuItemIds}::text[], ${sources}::text[]) incoming(id, source)
@@ -379,7 +351,7 @@ export async function computeAndStoreDietaryOptionsInTx(
   tx: TxClient,
 ): Promise<void> {
   const items = await tx.$queryRaw<{ dietaryTags: string[] }[]>`
-    SELECT "dietaryTags" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId}
+    SELECT "dietaryTags" FROM "MenuItem" WHERE "restaurantId" = ${restaurantId} AND "retiredAt" IS NULL
   `;
   const dietaryOptions = aggregateDietaryOptions(items.map((i: { dietaryTags: string[] }) => i.dietaryTags));
 
@@ -410,10 +382,8 @@ export interface BulkRestaurantPersist {
  * Persist ALL restaurants in a hex with a fixed number of SQL statements,
  * regardless of restaurant count.
  *
- * Change 1 (stable IDs): UPSERT MenuItem by (restaurantId, name) so existing
- * rows keep their id (SavedItem.menuItemId never orphaned). Delete stale items
- * (absent from incoming set) at the end. RETURNING is mapped by (restaurantId,
- * name) — NOT by array position — to build a stable id lookup.
+ * Both writers use the same source identity resolver and ordered restaurant locks.
+ * Missing products are retired so saved/logged references and estimate history survive.
  * Change 2 (provenance): UPSERT MacroEstimate by (menuItemId, source). After
  * upserting estimates, recompute MenuItem macro columns from the winning
  * estimate so a lower-trust run never clobbers a higher-trust one.
@@ -426,16 +396,16 @@ export async function persistHexBulkInTx(
   tx: TxClient,
 ): Promise<number> {
   if (restaurants.length === 0) return 0;
-  await validateReviewedChainWrites(tx, restaurants.map(r => ({ ...r, items: dedupByName(r.items) })));
+  await validateReviewedChainWrites(tx, restaurants.map(r => ({ ...r, items: dedupByIdentity(r.items) })));
 
   const restaurantIds = restaurants.map((r) => r.restaurantId);
   const menuHashes = restaurants.map((r) => r.menuHash);
   const restaurantIdsWithItems: string[] = [];
 
-  // Flatten items across restaurants. Dedup by name within each restaurant
-  // (source data can have duplicate names — violates @@unique constraint).
+  // Flatten items across restaurants. Dedup by source identity within each restaurant
   // candidateIds are used for new rows; on conflict the existing id is kept.
-  const flatCandidateIds: string[] = [];
+  const flatItems: { restaurantId: string; item: StructuredMenuItem }[] = [];
+  const flatSourceItemIds: (string | null)[] = [];
   const flatRestaurantIds: string[] = [];
   const flatNames: string[] = [];
   const flatDescriptions: (string | null)[] = [];
@@ -451,21 +421,18 @@ export async function persistHexBulkInTx(
   const flatSources: string[] = [];
   const flatReasonings: (string | null)[] = [];
 
-  // Keep track of per-restaurant incoming names for stale-item deletion.
-  const incomingNamesByRestaurant = new Map<string, string[]>();
-
   for (const { restaurantId, items } of restaurants) {
     if (items.length === 0) continue;
-    const deduped = dedupByName(items);
+    const deduped = dedupByIdentity(items);
     if (deduped.length < items.length) {
-      console.log(`[persist] Deduped ${items.length - deduped.length} duplicate item names for restaurant ${restaurantId}`); // eslint-disable-line no-console
+      console.log(`[persist] Deduped ${items.length - deduped.length} duplicate product identities for restaurant ${restaurantId}`); // eslint-disable-line no-console
     }
     if (deduped.length === 0) continue;
     restaurantIdsWithItems.push(restaurantId);
-    const namesForRestaurant: string[] = [];
     for (const pair of deduped) {
       const name = decodeHtml(pair.item.name)!;
-      flatCandidateIds.push(randomUUID());
+      flatItems.push({ restaurantId, item: pair.item });
+      flatSourceItemIds.push(sourceItemId(pair.item));
       flatRestaurantIds.push(restaurantId);
       flatNames.push(name);
       flatDescriptions.push(decodeHtml(pair.item.description) ?? null);
@@ -481,33 +448,30 @@ export async function persistHexBulkInTx(
       // COALESCE source to 'llm' defensively for any legacy NULL values.
       flatSources.push(pair.macro.source ?? "llm");
       flatReasonings.push(pair.macro.reasoning ?? null);
-      namesForRestaurant.push(name);
     }
-    incomingNamesByRestaurant.set(restaurantId, namesForRestaurant);
   }
 
-  // Candidate IDs distinguish incoming official rows even across restaurants with identical names.
-  // Q1: UPSERT MenuItem by (restaurantId, name). New rows get a fresh UUID
-  // (candidateId); existing rows keep their id. Macro columns are written for
-  // brand-new rows; the winner-recompute step (Q4) corrects existing rows.
-  // RETURNING includes restaurantId + name so we can map to stable ids.
-  let flatMenuItemIds: string[] = [];
+  // Source identities resolve before writing; no name-based RETURNING map can mix variant macros.
+  const flatCandidateIds = await resolveMenuItemIds(flatItems, tx);
+  const flatMenuItemIds = flatCandidateIds;
 
   if (flatCandidateIds.length > 0) {
-    const menuItemRows = await tx.$queryRaw<{ id: string; restaurantId: string; name: string }[]>`
+    await retireMissingMenuItems(restaurantIdsWithItems, flatMenuItemIds, tx);
+    const menuItemRows = await tx.$queryRaw<{ id: string }[]>`
       INSERT INTO "MenuItem" (
-        "id", "restaurantId", "name", "description", "category", "section",
+        "id", "restaurantId", "sourceItemId", "name", "description", "category", "section",
         "price", "dietaryTags", "calories", "proteinG", "carbsG", "fatG",
         "createdAt", "updatedAt"
       )
       SELECT
-        id, "restaurantId", name, description, category, section, price,
+        id, "restaurantId", "sourceItemId", name, description, category, section, price,
         ARRAY(SELECT jsonb_array_elements_text(tags::jsonb)),
         calories, "proteinG", "carbsG", "fatG",
         now(), now()
       FROM UNNEST(
         ${flatCandidateIds}::text[],
         ${flatRestaurantIds}::text[],
+        ${flatSourceItemIds}::text[],
         ${flatNames}::text[],
         ${flatDescriptions}::text[],
         ${flatCategories}::text[],
@@ -518,8 +482,11 @@ export async function persistHexBulkInTx(
         ${flatProteins}::float[],
         ${flatCarbs}::float[],
         ${flatFats}::float[]
-      ) AS t(id, "restaurantId", name, description, category, section, price, tags, calories, "proteinG", "carbsG", "fatG")
-      ON CONFLICT ("restaurantId", "name") DO UPDATE SET
+      ) AS t(id, "restaurantId", "sourceItemId", name, description, category, section, price, tags, calories, "proteinG", "carbsG", "fatG")
+      ON CONFLICT ("id") DO UPDATE SET
+        "sourceItemId" = EXCLUDED."sourceItemId",
+        "name"        = EXCLUDED."name",
+        "retiredAt"   = NULL,
         "description" = EXCLUDED."description",
         "category"    = EXCLUDED."category",
         "section"     = EXCLUDED."section",
@@ -531,38 +498,10 @@ export async function persistHexBulkInTx(
         "carbsG"      = EXCLUDED."carbsG",
         "fatG"        = EXCLUDED."fatG",
         "updatedAt"   = now()
-      RETURNING "id", "restaurantId", "name"
+      RETURNING "id"
     `;
 
-    // Build (restaurantId, name) → stable persisted id map.
-    // RETURNING order is NOT guaranteed to match input order.
-    const idByRestaurantAndName = new Map<string, string>(
-      (menuItemRows as { id: string; restaurantId: string; name: string }[]).map(
-        (r) => [`${r.restaurantId}\0${r.name}`, r.id],
-      ),
-    );
-
-    // Resolve stable persisted ids for each flat item, in input order.
-    flatMenuItemIds = flatRestaurantIds.map((rid, i) => {
-      const key = `${rid}\0${flatNames[i]}`;
-      return idByRestaurantAndName.get(key) ?? randomUUID();
-    });
-  }
-
-  // Q2: Delete stale items — MenuItems for touched restaurants whose name is
-  // NOT in the incoming set. Uses NOT EXISTS against (restaurantId, name) pairs.
-  // Cascades drop their MacroEstimates via FK.
-  if (restaurantIdsWithItems.length > 0 && flatCandidateIds.length > 0) {
-    await tx.$executeRaw`
-      DELETE FROM "MenuItem" mi
-      WHERE mi."restaurantId" = ANY(${restaurantIdsWithItems}::text[])
-        AND NOT EXISTS (
-          SELECT 1
-          FROM UNNEST(${flatRestaurantIds}::text[], ${flatNames}::text[]) AS incoming(rid, nm)
-          WHERE incoming.rid = mi."restaurantId"
-            AND incoming.nm  = mi.name
-        )
-    `;
+    if (menuItemRows.length !== flatCandidateIds.length) throw new Error('Menu product write count mismatch');
   }
 
   // Q3: UPSERT MacroEstimate by (menuItemId, source). Each source gets its own
@@ -636,7 +575,7 @@ export async function persistHexBulkInTx(
         SELECT mi."restaurantId", t.tag, COUNT(DISTINCT mi."id") AS cnt
         FROM "MenuItem" mi
         CROSS JOIN LATERAL UNNEST(mi."dietaryTags") AS t(tag)
-        WHERE mi."restaurantId" = ANY(${restaurantIds}::text[])
+        WHERE mi."restaurantId" = ANY(${restaurantIds}::text[]) AND mi."retiredAt" IS NULL
         GROUP BY mi."restaurantId", t.tag
       ) c
       WHERE cnt >= ${DIETARY_TAG_THRESHOLD}
@@ -662,7 +601,7 @@ export async function persistHexBulkInTx(
       SET "chainFlag" = (r."brandId" IS NOT NULL AND r."chainFlag") OR EXISTS (
         SELECT 1 FROM "MenuItem" mi
         JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
-        WHERE mi."restaurantId" = r.id AND me.source = 'fatsecret'
+        WHERE mi."restaurantId" = r.id AND mi."retiredAt" IS NULL AND me.source = 'fatsecret'
       ),
       "updatedAt" = now()
       WHERE r.id = ANY(${restaurantIdsWithItems}::text[])

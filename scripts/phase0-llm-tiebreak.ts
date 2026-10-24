@@ -87,7 +87,7 @@ async function main() {
     const ids = (idsBySlug.get(row.slug) ?? []).slice(0, SAMPLE_LOCS);
     const menus: string[][] = [];
     for (const id of ids) {
-      const items = await p.menuItem.findMany({ where: { restaurantId: id }, select: { name: true }, take: SAMPLE_ITEMS });
+      const items = await p.menuItem.findMany({ where: { restaurantId: id, retiredAt: null }, select: { name: true }, take: SAMPLE_ITEMS });
       menus.push(items.map((i) => i.name));
     }
     try {

@@ -53,7 +53,7 @@ async function main() {
   for (const b of brands) {
     const keyByAlias = new Map<string, string>();
     for (const [k, al] of Object.entries(aliases[b.slug] ?? {})) for (const a of al) keyByAlias.set(a, k);
-    const items = await p.menuItem.findMany({ where: { restaurant: { brandId: b.id } }, select: { name: true, calories: true } });
+    const items = await p.menuItem.findMany({ where: { retiredAt: null, restaurant: { brandId: b.id } }, select: { name: true, calories: true } });
     const seen = new Set<string>();
     for (const it of items) { const s = slug(it.name); if (seen.has(s)) continue; seen.add(s);
       const k = keyByAlias.get(s); if (!k) continue; const oi = offInfo.get(b.slug + "|" + k); if (!oi) continue;
