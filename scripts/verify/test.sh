@@ -45,6 +45,7 @@ if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   node --test scripts/review/simple-review.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }simple-review"
   node --test scripts/delivery/*.test.mjs scripts/github/*.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }delivery/github"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-report.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-report"
+  # Keep input isolation and complete queue reads; legacy bookkeeping fixtures are retired.
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-dispatcher.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-dispatcher"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/cleanup.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }cleanup"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/install-local-dispatcher.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }install-local-dispatcher"
