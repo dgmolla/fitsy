@@ -35,7 +35,8 @@ const config = {
             tsconfig: {
               module: 'CommonJS',
               moduleResolution: 'node',
-              paths: {},
+              // Keep the app's workspace aliases when dependencies are linked
+              // from another checkout, matching moduleNameMapper above.
               strict: true,
             },
           },

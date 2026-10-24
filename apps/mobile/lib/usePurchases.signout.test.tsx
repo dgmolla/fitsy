@@ -26,7 +26,7 @@ setupPurchasesMocks();
 type SyncResult = { active: boolean; synced: boolean; verdict: 'active' | 'expired' | 'never_subscribed'; lastRcVerifiedAt: string };
 
 describe('sign-out', () => {
-  it('clears account-bound checkout and meal markers when account A signs out', async () => {
+  it('retains account-bound checkout markers through automatic session expiry for reauthentication', async () => {
     mockAuth.session = { user: { id: 'account-a' } };
     mockStore['@fitsy/paymentSignInContinuation'] = 'user:account-a';
     mockStore['@fitsy/pendingMealClaim'] = '1';
@@ -35,9 +35,10 @@ describe('sign-out', () => {
     mockAuth.session = null;
     await act(async () => { mockAuth.listener?.('SIGNED_OUT', null); });
     await waitFor(() => {
-      expect(mockStore['@fitsy/paymentSignInContinuation']).toBeUndefined();
-      expect(mockStore['@fitsy/pendingMealClaim']).toBeUndefined();
+      expect(screen.result.current.entitled).toBe(false);
     });
+    expect(mockStore['@fitsy/paymentSignInContinuation']).toBe('user:account-a');
+    expect(mockStore['@fitsy/pendingMealClaim']).toBe('1');
     screen.unmount();
   });
 

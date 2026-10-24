@@ -194,17 +194,15 @@ export default function SignInScreen() {
   useEffect(() => {
     if (response?.type === 'success') {
       const idToken = response.params['id_token'];
-      if (idToken) {
-        const isCurrent = googleContinuation.current;
-        if (isCurrent()) setGoogleLoading(true);
-        completeGoogleSignIn(idToken)
-          .then(r => finishAuth(r, 'google', isCurrent))
-          .catch((err: Error) => {
-            trackAuthFailure({ provider: 'google', error_message: err.message });
-            if (isCurrent()) Alert.alert('Sign In Failed', err.message);
-          })
-          .finally(() => { if (isCurrent()) setGoogleLoading(false); });
-      }
+      const isCurrent = googleContinuation.current;
+      if (isCurrent()) setGoogleLoading(true);
+      completeGoogleSignIn(idToken)
+        .then(r => finishAuth(r, 'google', isCurrent))
+        .catch((err: Error) => {
+          trackAuthFailure({ provider: 'google', error_message: err.message });
+          if (isCurrent()) Alert.alert('Sign In Failed', err.message);
+        })
+        .finally(() => { if (isCurrent()) setGoogleLoading(false); });
     } else if (response?.type === 'error') {
       trackAuthFailure({ provider: 'google', error_message: response.error?.message });
       if (googleContinuation.current()) Alert.alert('Google Sign In Error', response.error?.message ?? 'Unknown error');

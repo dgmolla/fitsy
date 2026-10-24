@@ -14,9 +14,6 @@ import type { CustomerInfo } from 'react-native-purchases';
 import { supabase } from './supabase';
 import type { EntitlementVerdict } from './useEntitlementVerdict';
 import { identifyPurchasesUser, logoutPurchasesUser } from './purchases';
-import { clearPaywallIntent } from './paywallIntent';
-import { clearPaymentSignInContinuation } from './paymentSignInContinuation';
-import { clearPendingMealClaim } from './pendingMealClaim';
 import { withinMs } from './async';
 import { BOOT_VERDICT_CAP_MS } from './useEntitlementVerdict';
 
@@ -80,9 +77,9 @@ export function useAuthLifecycle({
         if (session.user.id === bootUserIdRef.current) return;
         signIn(session.user.id);
       } else if (event === 'SIGNED_OUT') {
-        void Promise.allSettled([
-          clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(),
-        ]);
+        // Refresh failure can emit SIGNED_OUT during sign-in or checkout.
+        // Keep the pending selection account-bound for retry; explicit logout
+        // clears it in clearToken before notifying this listener.
         bootInvalidatedRef.current = true;
         bootUserIdRef.current = null;
         pendingSignInUserIdRef.current = null;

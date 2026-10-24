@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { supabase } from './supabase';
 import { clearToken } from './authClient';
+import { hasPaymentSignInContinuation } from './paymentSignInContinuation';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -21,8 +22,9 @@ async function getAccessToken(): Promise<string | null> {
 async function handleUnauthorized(): Promise<never> {
   // Sign out clears the Supabase session blob in SecureStore. clearToken also
   // wipes the legacy fitsy_authToken key for users mid-upgrade.
-  await clearToken();
-  router.replace('/welcome/problem');
+  await clearToken({ reason: 'session-expired' });
+  const checkout = await hasPaymentSignInContinuation();
+  router.replace(checkout ? '/welcome/signin?returnTo=payment' : '/welcome/problem');
   throw new ApiRequestError(401, 'Session expired');
 }
 
