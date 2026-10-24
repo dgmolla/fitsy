@@ -2,8 +2,15 @@
 # One-command rollback (T9). Rollback first, diagnosis second.
 #   scripts/deploy/rollback.sh api      # promote the previous READY production deployment
 #   scripts/deploy/rollback.sh mobile   # roll the production update branch back one group
+# Add --dry-run anywhere to resolve and print the target without mutations.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+DRY_RUN=false
+POSITIONAL=()
+for ARG in "$@"; do
+  if [ "$ARG" = --dry-run ]; then DRY_RUN=true; else POSITIONAL+=("$ARG"); fi
+done
+set -- "${POSITIONAL[@]}"
 SURFACE="${1:?api|mobile}"
 case "$SURFACE" in
   api)
@@ -24,6 +31,7 @@ case "$SURFACE" in
         | python3 -c 'import sys,json;d=json.load(sys.stdin)["deployments"];print("https://"+d[1]["url"] if len(d)>1 else "")')"
     fi
     : "${PREV:?could not find a previous READY production deployment}"
+    if "$DRY_RUN"; then echo "dry-run: would promote production deployment: $PREV"; exit 0; fi
     echo "promoting previous production deployment: $PREV"
     vercel promote "$PREV" --yes --scope dawits-projects-74b6e00f
     curl -s -o /dev/null -w 'fitsy.org/api/health -> %{http_code}\n' https://fitsy.org/api/health
@@ -36,8 +44,13 @@ case "$SURFACE" in
     # explicitly for anything beyond the first rollback:
     #   rollback.sh mobile [group-id]
     EXPLICIT="${2:-}"
+    if "$DRY_RUN"; then
+      UPDATE_LIST="$(mktemp)"
+      trap 'rm -f "$UPDATE_LIST"' EXIT
+    else
     mkdir -p ../../.evidence/ota
     UPDATE_LIST="$(mktemp ../../.evidence/ota/rollback-list.XXXXXX)"
+    fi
     env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:list --branch production --limit 20 --json --non-interactive > "$UPDATE_LIST"
     python3 -c 'import json,sys
 u=json.load(open(sys.argv[1]))
@@ -45,10 +58,12 @@ u=u.get("currentPage") or u.get("updates") or u
 for i,x in enumerate(u):
     print("  [%d] %s %s" % (i, x["group"], x.get("message","")[:60]))' "$UPDATE_LIST"
     PREV_GROUP="$EXPLICIT"
+    if ! "$DRY_RUN"; then
     # Establish the hold before waiting; selection occurs under the shared lease.
     bash ../../scripts/deploy/ota-hold.sh open "${PREV_GROUP:-automatic distinct iOS bundle selection}"
     source ../../scripts/deploy/ota-lock.sh
     acquire_ota_lock
+    fi
     if [ -z "$PREV_GROUP" ]; then
       env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:list --branch production --limit 20 --json --non-interactive > "$UPDATE_LIST"
       IOS_GROUP_IDS="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));u=d.get("currentPage") or d.get("updates") or d
@@ -64,6 +79,7 @@ for x in u:
       done <<< "$IOS_GROUP_IDS"
       [ -n "$PREV_GROUP" ] || { echo 'no verified distinct prior iOS bundle; keep hold open and supply an explicit known-good group' >&2; exit 1; }
     fi
+    if "$DRY_RUN"; then echo "dry-run: would republish iOS group $PREV_GROUP on production (selection may change before execution)"; exit 0; fi
     OTA_MUTATION_IN_PROGRESS=1
     RESULT="$(mktemp ../../.evidence/ota/rollback-result.XXXXXX)"
     # Match the verified production release surface; no Android binary is

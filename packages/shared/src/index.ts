@@ -7,5 +7,6 @@ export * from "./env";
 export * from "./utils/macroScoring";
 export * from "./contracts/menu";
 export * from "./contracts/goalMatch";
+export * from "./contracts/flags";
 export * from "./contracts/trialPolicy";
 export * from "./utils/macroTargets";
