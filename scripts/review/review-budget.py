@@ -698,7 +698,7 @@ def admit_completed(handle, ledger, args, events):
         raise ValueError("completed review candidate head mismatch")
     # Runtime may overlay only immutable current-main controls, as the existing
     # authenticated poller does. All product files remain the frozen commit.
-    controls = ["scripts/review", "scripts/delivery/phase-events.mjs",
+    controls = ["scripts/review",
                 "scripts/verify/risk-tiers.yml", "REVIEW.md", ".claude/lenses"]
     control_directories = ("scripts/review", ".claude/lenses")
     git("merge-base", "--is-ancestor", args.base_sha, args.source_sha)
@@ -707,9 +707,9 @@ def admit_completed(handle, ledger, args, events):
     # A control-only trusted-main advance cannot expand the product comparison.
     allowed = controls + ["scripts/verify/shipping-session.mjs", "scripts/verify/review-admission.sh",
                           "scripts/verify/product-flow.mjs", "scripts/sim/publish-product-flow.mjs",
-                          "scripts/sim/product-flow.mjs", "scripts/sim/runner-controls.test.mjs",
+                          "scripts/sim/product-flow.mjs",
                           "scripts/verify/run.mjs", "scripts/verify/run-output.test.ts",
-                          "scripts/verify/test.sh", "scripts/delivery/phase-events.test.mjs",
+                          "scripts/verify/test.sh",
                           "scripts/verify/receipt-cache.mjs", "scripts/verify/README.md",
                           ".githooks/pre-push",
                           "scripts/delivery/local-dispatcher.py", "scripts/delivery/local-dispatcher.test.py",

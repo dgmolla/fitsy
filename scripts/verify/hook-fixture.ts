@@ -1,6 +1,6 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { appleGitHookPrologue } from './apple-git-hook-env';
 
 const protectedPath = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
@@ -45,13 +45,12 @@ exec ${quoted} "$@"
 
 }
 
-export function timingHook(root: string, directory: string, env: NodeJS.ProcessEnv) {
+export function verificationHook(directory: string, env: NodeJS.ProcessEnv) {
   const write = (file: string, value: string) => {
     mkdirSync(join(directory, file, '..'), { recursive: true });
     writeFileSync(join(directory, file), value);
   };
   installFixtureTools(directory);
-  write('scripts/delivery/phase-events.mjs', readFileSync(join(root, 'scripts/delivery/phase-events.mjs'), 'utf8'));
   write('package.json', JSON.stringify({ private: true, scripts: { verify: 'node scripts/verify/run.mjs --layer=0-2 --scope=changed' } }));
   // Auth is exercised by the real shipping-session fixtures; these hook/cache fixtures model a reviewed live owner.
   write('scripts/verify/shipping-session.mjs', `#!/usr/bin/env node
@@ -63,11 +62,6 @@ const command=check==='cheap'?[process.execPath,['scripts/verify/run.mjs','--sta
 process.exit(spawnSync(command[0],command[1],{stdio:'inherit',env:process.env}).status??1);
 `);
   chmodSync(join(directory, 'scripts/verify/shipping-session.mjs'), 0o755);
-  const bound = spawnSync(process.execPath, ['scripts/delivery/phase-events.mjs', 'bind', '--issue', '355'],
-    { cwd: directory, env, encoding: 'utf8' });
-  expect(bound.status).toBe(0);
-  write('bin/gh', '#!/bin/sh\necho "$3 $4" >> .evidence/gh-calls\ncase "$4" in user) echo \'{"login":"fixture"}\' ;; *"/comments?"*) echo \'[]\' ;; */comments) cat >/dev/null; echo \'{"id":1}\' ;; *) exit 1 ;; esac\n');
-  chmodSync(join(directory, 'bin/gh'), 0o755);
   return { ...env, PATH: `${join(directory, 'bin')}:${protectedPath}`,
     NODE: fixtureNodeUnderProtectedPath(env) };
 }

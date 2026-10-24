@@ -213,7 +213,7 @@ Exercise valid independent provider evidence through the real App-bound checks a
 Fixtures and local test counts remain a separate evidence category.
 
 Only after those checks pass may the coordinator retire obsolete local admission/session/socket and automatic review entrypoints through separately reviewed exact-source changes.
-Retain public product verification commands, original ledgers, the deterministic exclusive claim/lifecycle helper and the sole routine publisher.
+Retain public product verification commands, original ledgers and the deterministic exclusive claim/lifecycle helper.
 Do not switch off a live worker, acceptance process or simulator to simplify cutover.
 Do not retain two active shipping authorities.
 

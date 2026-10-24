@@ -2,21 +2,6 @@
   "version": 1,
   "cases": [
     {
-      "id": "alt_reviewer",
-      "raw": {
-        "verdict": "fail",
-        "priority": "P2",
-        "head": "f65de5df62679efe4028388d06574f7d2d29716c",
-        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859441737",
-        "finding": "**CONFIRMED / P2** `scripts/delivery/install-local-dispatcher.sh:87`: Reinstall accepts a Claude worker configuration with an unavailable Codex reviewer.\n  - impact: A Claude worker installation can claim an issue but cannot complete its required independent review when Codex is absent. On reinstall, the Codex availability check is skipped for any existing config (scripts/delivery/install-local-dispatcher.sh:87), while the default reviewer remains Codex (scripts/delivery/install-local-dispatcher.sh:114). The review adapter requires that CLI (scripts/review/execute-review.py:95). Delivery stalls after a recoverable configuration error, violating the dispatcher's required review gate.\n  - scenario: Existing config selects Claude workers and the default Codex reviewer; Codex is removed; --install succeeds -> the next claim cannot complete required review.\n  - fix: Validate availability of the configured reviewer during install, or require the operator to select an available reviewer before accepting the install; follow the CLI availability check in scripts/review/execute-review.py.",
-        "severity": "CONFIRMED"
-      },
-      "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/install-local-dispatcher.sh:87`: Reinstall accepts a Claude worker configuration with an unavailable Codex reviewer.",
-      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859441737; scenario and impact are described in the raw finding.",
-      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
-      "acceptance_criteria": []
-    },
-    {
       "id": "invalid_terminal",
       "raw": {
         "verdict": "fail",
@@ -27,21 +12,6 @@
         "severity": "CONFIRMED"
       },
       "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/local-dispatcher.py:254`: A later malformed terminal comment masks a valid delivery receipt.",
-      "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115; scenario and impact are described in the raw finding.",
-      "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
-      "acceptance_criteria": []
-    },
-    {
-      "id": "stale_alert",
-      "raw": {
-        "verdict": "fail",
-        "priority": "P2",
-        "head": "f65de5df62679efe4028388d06574f7d2d29716c",
-        "source": "https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115",
-        "finding": "**CONFIRMED / P2** `scripts/delivery/install-local-dispatcher.sh:104`: Installation can succeed without the Slack bridge needed for blocker alerts.\n  - impact: An installation whose two Slack configurations name the same missing bridge directory passes the installer checks at scripts/delivery/install-local-dispatcher.sh:102-109. On a blocker, the import at scripts/delivery/local-dispatcher.py:51 fails and tick suppresses the error at line 584-587, so no actionable alert is delivered. The issue remains parked, but the promised notification is absent until an operator notices. The existing publisher checks for bridge.py in scripts/delivery/install-local-report.sh:59.\n  - scenario: Both Slack configuration files contain the same nonexistent bridge_path -> install succeeds, then every blocker alert attempt fails silently.\n  - fix: Validate that bridge.py exists at the configured path during installation, following scripts/delivery/install-local-report.sh:59, and surface persistent delivery failures.",
-        "severity": "CONFIRMED"
-      },
-      "context": "PR #389 dispatcher or installer diff at reviewed head f65de5df62679efe4028388d06574f7d2d29716c. **CONFIRMED / P2** `scripts/delivery/install-local-dispatcher.sh:104`: Installation can succeed without the Slack bridge needed for blocker alerts.",
       "evidence": "Independent canonical lens finding at https://github.com/dgmolla/fitsy/pull/389#issuecomment-5859443115; scenario and impact are described in the raw finding.",
       "urgency_rubric": "P0/P1 material impact blocks; confirmed P2 can be deferred only with owner, acceptance and current required tests; P3 is advisory. Essential acceptance and required checks remain independent gates.",
       "acceptance_criteria": []

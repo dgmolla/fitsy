@@ -33,19 +33,8 @@ The runner selects every required domain in one independent invocation.
 Use additive `--add-domain workflow-security` for sensitive controls outside path routing.
 The trusted issue/candidate-bound domain registry retains added coverage across local and PR replacements; automatic routing can only add to it.
 Round reuse requires the same immutable head and base commits, normalized patch, acceptance, required domains and reviewer policy.
-The poller revalidates live disposition and required-test receipts through `--cached-only`; it cannot execute another provider when the complete cache is absent.
-For automated reviews, the installer or rollout owner must set the same three variables in the scheduler's persistent environment before enabling it; interactive shell exports do not reach launchd.
-For the local review poller, include these entries in its LaunchAgent `EnvironmentVariables` dictionary:
-
-```xml
-<key>FITSY_REVIEW_PROVIDER</key><string>codex</string>
-<key>FITSY_REVIEW_MODEL</key><string>gpt-6-sol</string>
-<key>FITSY_REVIEW_REASONING_EFFORT</key><string>high</string>
-```
-
-Read back the loaded service configuration and confirm the actual provider/model in its next reviewer receipt before declaring rollout complete.
-Use `install-poller.sh --refresh-runtime` to refresh the trusted executable and migrate a legacy launcher while preserving the service environment and loaded state.
-A merge alone does not prove the installed dispatcher or poller adopted the new runner; retain installer and runtime receipts.
+The repository no longer installs or schedules local review, dispatch or reporting daemons.
+The existing external reviewer owns the `AI review` status; confirm its actual provider/model and commit-bound result before declaring review complete.
 Record any supported model substitution or escalation in the issue handoff.
 Choose reasoning effort to match the problem and preserve canonical review-adapter settings.
 Do not lower a required review's settings merely to reduce cost.

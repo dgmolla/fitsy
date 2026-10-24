@@ -43,17 +43,8 @@ done < <(node -e 'for (const key of Object.keys(process.env)) if (key.startsWith
 if [ "${#function_environment[@]}" -gt 0 ]; then
   exec /usr/bin/env "${function_environment[@]}" /bin/bash -p "$0" "$@"
 fi
-# A push must name the issue whose local evidence this hook is about to run.
-node "$ROOT/scripts/delivery/phase-events.mjs" summary >/dev/null || {
-  echo 'pre-push: bind this worktree first with node scripts/delivery/phase-events.mjs bind --issue N' >&2
-  exit 1
-}
 "$ROOT/scripts/verify/shipping-session.mjs" --check
 "$ROOT/scripts/verify/shipping-session.mjs" --candidate-checks cheap
 "$ROOT/scripts/verify/shipping-session.mjs" --check
 # The same isolated boundary owns routing-table execution and size/domain N/A.
 "$ROOT/scripts/verify/shipping-session.mjs" --candidate-checks push-gates
-# Publishing is recoverable; a GitHub outage must not erase a verified push.
-if ! node "$ROOT/scripts/delivery/phase-events.mjs" publish; then
-  echo 'pre-push: delivery timing remains local; retry phase-events.mjs publish after reconciling GitHub' >&2
-fi

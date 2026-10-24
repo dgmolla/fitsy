@@ -185,7 +185,6 @@ git -C "$ATTEMPT/candidate" fetch --quiet "$REPO_ROOT" "$HEAD_SHA" >&2 || fail
 git -C "$ATTEMPT/candidate" checkout --quiet -B "$BRANCH" "$HEAD_SHA" >&2 || fail
 git -C "$ATTEMPT/candidate" update-ref refs/remotes/origin/main "$BASE_SHA"
 CONTROLS=(scripts/review scripts/verify/risk-tiers.yml REVIEW.md .claude/lenses)
-if git cat-file -e "$BASE_SHA:scripts/delivery/phase-events.mjs" 2>/dev/null; then CONTROLS+=(scripts/delivery/phase-events.mjs); fi
 git -C "$ATTEMPT/candidate" restore --source="$BASE_SHA" --staged --worktree --no-overlay -- "${CONTROLS[@]}" >&2 || fail
 git -C "$ATTEMPT/candidate" clean -qfdx -- scripts/review .claude/lenses
 mkdir -p "$ATTEMPT/candidate/.evidence/delivery"

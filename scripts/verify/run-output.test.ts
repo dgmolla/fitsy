@@ -14,6 +14,26 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
+test("a directory symlink cannot skip blocking verification checks", () => {
+  const verify = join(directory, "scripts/verify");
+  writeFileSync(join(verify, "registry.yml"), `checks:
+  - name: fixture
+    script: fail.sh
+    layer: 0
+    blocking: true
+    runs: [ci]
+`);
+  writeFileSync(join(verify, "fail.sh"), 'echo \'{"summary":"intentional failure"}\'\nexit 1\n');
+  const alias = join(directory, "linked-scripts");
+  symlinkSync(join(directory, "scripts"), alias, "dir");
+  const result = spawnSync(process.execPath, [join(alias, "verify/run.mjs"), "--scope=all", "--runs=ci"], {
+    cwd: directory, encoding: "utf8", timeout: 10000,
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout.trim())).toMatchObject({ name: "fixture", status: "fail", blocking: true });
+});
+
 test("scopes an optional build heap to the production build command", () => {
   const bin = join(directory, "bin");
   mkdirSync(bin);

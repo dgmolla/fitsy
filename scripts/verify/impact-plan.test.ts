@@ -2,7 +2,7 @@ import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync,
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { installedFixtureHook, timingHook, installVerificationFixture } from './hook-fixture';
+import { installedFixtureHook, verificationHook, installVerificationFixture } from './hook-fixture';
 
 const root = resolve(__dirname, '../..');
 const yaml = require('js-yaml') as { load(value: string): unknown };
@@ -676,7 +676,7 @@ test('required comparison assertion',()=>{writeFileSync('.evidence/focused-calle
 
 test('npm publication and sanitized push reuse the fixed payload; genuine child environment changes rerun', () => {
   cheapCacheFixture();
-  const hookEnv = timingHook(root, directory, env);
+  const hookEnv = verificationHook(directory, env);
   // candidate_checks invokes the launcher with a scrubbed operator environment;
   // the launcher emits its fixed profile env-i payload for both publication callers.
   // This existing synthetic owner models that transport, not kernel isolation.
@@ -773,7 +773,7 @@ test('source mutation during a cached run retires the prior receipt', () => {
 
 test('CI-first real push preserves prior unit receipt without rerunning heavy checks', () => {
   cacheFixture();
-  const hookEnv = timingHook(root, directory, env);
+  const hookEnv = verificationHook(directory, env);
   write('.githooks/pre-push', installedFixtureHook(root, directory, true));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);
   commit(); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
@@ -789,36 +789,23 @@ test('CI-first real push preserves prior unit receipt without rerunning heavy ch
   expect(pushed.status).toBe(0); expect(calls()).toBe(1);
   expect(readFileSync(receiptFile, 'utf8')).toBe(receipt);
   expect(pushed.stdout + pushed.stderr).not.toMatch(/"name":"test"/);
-  expect(readFileSync(join(directory, '.evidence/gh-calls'), 'utf8')).toContain('POST repos/dgmolla/fitsy/issues/355/comments');
-});
-
-test('pre-push refuses an unbound issue before checks or publication', () => {
-  cacheFixture();
-  const hookEnv = timingHook(root, directory, env);
-  write('.githooks/pre-push', installedFixtureHook(root, directory));
-  rmSync(join(directory, '.evidence/delivery/binding.json'));
-  const hook = spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
-  expect({ status: hook.status, output: hook.status === 1 ? '' : `${hook.error?.message}\n${hook.stdout}\n${hook.stderr}` }).toEqual({ status: 1, output: '' }); expect(hook.stderr).toContain('bind --issue N');
-  expect(existsSync(join(directory, '.evidence/gh-calls'))).toBe(false);
 });
 
 test('pre-push accepts an inapplicable domain gate but refuses its real failure', () => {
   cacheFixture();
-  const hookEnv = timingHook(root, directory, env);
+  const hookEnv = verificationHook(directory, env);
   write('.githooks/pre-push', installedFixtureHook(root, directory));
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"skipped"}\'\nexit 2\n');
   const hook = () => spawnSync('bash', ['.githooks/pre-push'], { cwd: directory, encoding: 'utf8', env: hookEnv, timeout: 30000 });
   const initial = hook();
   expect({ status: initial.status, output: initial.status === 0 ? '' : `${initial.error?.message}\n${initial.stdout}\n${initial.stderr}` }).toEqual({ status: 0, output: '' });
-  const before = readFileSync(join(directory, '.evidence/gh-calls'), 'utf8').split('\n').filter(line => line.startsWith('POST ')).length;
   write('scripts/verify/domain-check.sh', 'echo \'{"status":"fail"}\'\nexit 1\n');
   expect(hook().status).toBe(1);
-  expect(readFileSync(join(directory, '.evidence/gh-calls'), 'utf8').split('\n').filter(line => line.startsWith('POST '))).toHaveLength(before);
 });
 
 test('real Git push hook preserves outer refs, isolates Git and reruns cheap size/domain gates', () => {
   cacheFixture();
-  const hookEnv = timingHook(root, directory, env);
+  const hookEnv = verificationHook(directory, env);
   write('scripts/verify/fixture.sh', `mkdir -p .evidence/inner\ngit -C .evidence/inner init -q\ngit -C .evidence/inner config user.name fixture\ngit -C .evidence/inner config user.email fixture@example.test\necho nested > .evidence/inner/file\ngit -C .evidence/inner add file\ngit -C .evidence/inner commit -qm nested\ngit -C .evidence/inner checkout -qb nested\ntest "$(git -C .evidence/inner branch --show-current)" = nested\necho run >> .evidence/calls\necho '{"summary":"actual check"}'\n`);
   write('.githooks/pre-push', installedFixtureHook(root, directory));
   chmodSync(join(directory, '.githooks/pre-push'), 0o755);

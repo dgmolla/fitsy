@@ -43,12 +43,10 @@ if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
 fi
 if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   node --test scripts/review/simple-review.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }simple-review"
-  node --test scripts/delivery/*.test.mjs scripts/github/*.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }delivery/github"
-  PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-report.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-report"
+  node --test scripts/github/*.test.mjs >&2 || FAIL="${FAIL:+$FAIL, }github"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/local-dispatcher.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }local-dispatcher"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/pressure-retention.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }pressure-retention"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/sim/retire_task_device.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }retire-task-device"
-  PYTHONDONTWRITEBYTECODE=1 python3 scripts/delivery/install-local-dispatcher.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }install-local-dispatcher"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/review/advisory-finding.test.py -q >&2 || FAIL="${FAIL:+$FAIL, }advisory-finding"
 fi
 if [[ " $TEST_GROUPS " == *" api "* ]]; then

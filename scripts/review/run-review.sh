@@ -60,7 +60,7 @@ PYSOURCE
 if [ "$FRESH_EXECUTION" = 1 ]; then
   python3 -I - "$(git rev-parse origin/main)" <<'PYOVERLAY'
 import subprocess,sys
-paths=['scripts/review','scripts/delivery/phase-events.mjs','scripts/verify/risk-tiers.yml','REVIEW.md','.claude/lenses']
+paths=['scripts/review','scripts/verify/risk-tiers.yml','REVIEW.md','.claude/lenses']
 def git(*args): return subprocess.check_output(['git',*args])
 if git('ls-files','--others','--exclude-standard','-z'): sys.exit('trusted overlay requires frozen candidate source without untracked inputs')
 changed=git('diff','--name-only','HEAD','-z').split(b'\0')
@@ -168,23 +168,6 @@ if ! python3 -I scripts/review/review-budget.py status "${BUDGET_ARGS[@]}" >&2; 
   exit 1
 fi
 
-# The issue binding lives in ignored local evidence. A missing binding is
-# visible, but timing collection never changes the independent review gate.
-TELEMETRY_FILE="$REPO_ROOT/scripts/delivery/phase-events.mjs"
-TELEMETRY_ROOT="$REPO_ROOT"
-# A persistent PR reviewer must never inherit another task's issue binding.
-if [ "$TARGET" != "--local" ]; then
-  ISSUE="$(printf '%s\n' "$BODY" | sed -nE 's/^Delivery-Issue: #([1-9][0-9]*)[[:space:]]*$/\1/p')"
-  if [[ "$TARGET" =~ ^[1-9][0-9]*$ && "$ISSUE" =~ ^[1-9][0-9]*$ ]] && [ -f "$TELEMETRY_FILE" ]; then
-    TELEMETRY_ROOT="$REPO_ROOT/.evidence/review-delivery/$TARGET"
-    mkdir -p "$TELEMETRY_ROOT"
-    if ! (cd "$TELEMETRY_ROOT" && node "$TELEMETRY_FILE" bind --issue "$ISSUE") >/dev/null; then TELEMETRY_ROOT=""; fi
-  else TELEMETRY_ROOT=""; fi
-  [ -n "$TELEMETRY_ROOT" ] || echo '[run-review] timing gap: require one Delivery-Issue: #N field and a valid PR binding' >&2
-fi
-TELEMETRY_ATTEMPT=""
-TELEMETRY_RESULT="interrupted"
-TELEMETRY_CACHE_HIT=0
 PROMPT_FILE=""
 RAW_FILE=""
 REVIEW_PID=""
@@ -203,27 +186,12 @@ review_exit() {
       --lens "$LENS" --source-sha "$HEAD_SHA" --attempt-id "$ATTEMPT_ID" --outcome "$BUDGET_OUTCOME" --verdict "$BUDGET_VERDICT" >&2 || code=1
   fi
   if [ -n "$PROMPT_FILE" ]; then rm -f "$PROMPT_FILE" "$RAW_FILE"; fi
-  if [ -n "$TELEMETRY_ATTEMPT" ]; then
-    local status="$TELEMETRY_RESULT"
-    if [ "$status" = "interrupted" ] && [ "$code" != 130 ] && [ "$code" != 143 ]; then status=fail; fi
-    if ! (cd "$TELEMETRY_ROOT" && node "$TELEMETRY_FILE" auto-end --attempt-id "$TELEMETRY_ATTEMPT" --status "$status" --source-sha "$HEAD_SHA") >/dev/null; then
-      echo '[run-review] delivery telemetry closeout failed' >&2
-    fi
-    if [ "$TARGET" != "--local" ]; then
-      (cd "$TELEMETRY_ROOT" && node "$TELEMETRY_FILE" publish) >/dev/null || echo '[run-review] timing publication pending; local evidence retained' >&2
-    fi
-  fi
   trap - EXIT
   exit "$code"
 }
 trap review_exit EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
-if [ "$PROBE" = 0 ] && [ "$CACHED_ONLY" = 0 ] && [ -f "$TELEMETRY_FILE" ] && [ -n "$TELEMETRY_ROOT" ]; then
-  TELEMETRY_ATTEMPT="$(cd "$TELEMETRY_ROOT" && node "$TELEMETRY_FILE" auto-begin --phase review --producer review-round \
-    --round-id "$HEAD_SHA" --lens "$LENS" --source-sha "$HEAD_SHA")" || TELEMETRY_ATTEMPT=""
-fi
-
 # Classify both sides, including deleted and renamed sensitive files.
 CHANGED="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")"
 DOMAINS="$(printf '%s\n' "$CHANGED" | python3 -I scripts/review/review-domains.py --state-file "$BUDGET_HOME/domains/issue-$ISSUE.json" --candidate "$CANDIDATE" --issue "$ISSUE" ${DOMAIN_ARGS[@]+"${DOMAIN_ARGS[@]}"})"
@@ -246,10 +214,6 @@ preflight_error() { echo '[run-review] reviewer configuration failed; diagnose b
 MODEL="${FITSY_REVIEW_MODEL:-}"
 if [ -z "$MODEL" ]; then
   case "$PROVIDER" in codex) MODEL=gpt-6-sol ;; claude) if [ "$TIER" = high ]; then MODEL=opus; else MODEL=sonnet; fi ;; *) preflight_error ;; esac
-fi
-if [ "$TARGET" != "--local" ] && [ -f "$TELEMETRY_FILE" ] && [ -z "$TELEMETRY_ROOT" ]; then
-  echo '[run-review] review candidate conflicts with its retained PR issue binding' >&2
-  exit 1
 fi
 if ! IDENTITY="$(python3 -I scripts/review/execute-review.py --identity "$PROVIDER" "$MODEL")"; then preflight_error; fi
 # A completed verdict remains reusable as remaining budget shrinks. Runtime
@@ -290,7 +254,6 @@ if [ -f "$COMPLETED_AUTH" ]; then
   # Project only the validated original result through the existing domain gates.
   # No provider, new cache or persisted admission is created on this path.
 elif { [ "$FRESH_EXECUTION" != 1 ] || [ "$CACHED_ONLY" = 1 ]; } && [ -f "$CACHE_FILE" ]; then
-  TELEMETRY_CACHE_HIT=1
   echo "[run-review] cache hit ($KEY)" >&2
   CACHE_ARGS=(--result-file "$CACHE_FILE" --cache-key "$KEY" --base-sha "$BASE_SHA" --source-sha "$HEAD_SHA")
   for DOMAIN in $DOMAINS; do CACHE_ARGS+=(--required-domain "$DOMAIN"); done
@@ -430,7 +393,4 @@ if [ "$TARGET" != --local ] && [ "$CACHED_ONLY" = 0 ] && { [ "$N_FINDINGS" -gt 0
   COMMENT="$(printf '%s' "$RESULT_JSON" | python3 -I scripts/review/format-comment.py)"
   github pr comment "$TARGET" --body "$COMMENT" >/dev/null
 fi
-if [ "$TELEMETRY_CACHE_HIT" = 1 ]; then TELEMETRY_RESULT=cached
-elif [ "$ROUND_GATE" = pass ]; then TELEMETRY_RESULT=pass
-else TELEMETRY_RESULT=fail; fi
 [ "$ROUND_GATE" = pass ]
