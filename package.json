@@ -24,6 +24,7 @@
     "dev:env": "bash scripts/dev/write-local-env.sh",
     "dev:reset": "tsx scripts/dev/reset.ts",
     "dev:snapshot": "tsx scripts/dev/snapshot.ts",
+    "audit:menu-identity": "node --import tsx scripts/menu-source-collisions.ts",
     "verify": "node scripts/verify/run.mjs --layer=0-2 --scope=changed",
     "verify:all": "node scripts/verify/run.mjs --layer=all --scope=all",
     "verify:dev-drift": "bash scripts/verify/dev-drift.sh",

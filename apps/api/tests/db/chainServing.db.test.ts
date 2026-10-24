@@ -32,8 +32,8 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     for (let round = 0; round < 2; round++) {
       if (bulk) await persistHex(scope, `tags-${round}`, inputs, p, { validateInTx: validateHexInTx });
       else for (const input of inputs) { await persistItems(input.restaurantId, input.items, p); await computeAndStoreDietaryOptions(input.restaurantId, p); }
-      expect((await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: ids[0]!, name: "Chicken Plate" } } })).dietaryTags).toEqual(["gluten-free"]);
-      expect((await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: ids[1]!, name: "Chicken Plate" } } })).dietaryTags).toEqual([]);
+      expect((await p.menuItem.findFirstOrThrow({ where: { restaurantId: ids[0]!, name: "Chicken Plate" } })).dietaryTags).toEqual(["gluten-free"]);
+      expect((await p.menuItem.findFirstOrThrow({ where: { restaurantId: ids[1]!, name: "Chicken Plate" } })).dietaryTags).toEqual([]);
       expect((await p.restaurant.findUniqueOrThrow({ where: { id: ids[0]! } })).dietaryOptions).toContain("has_gluten-free");
       expect((await p.restaurant.findUniqueOrThrow({ where: { id: ids[1]! } })).dietaryOptions).not.toContain("has_gluten-free");
       expect((await p.restaurant.findUniqueOrThrow({ where: { id: ids[0]! } })).chainFlag).toBe(false);
@@ -129,7 +129,7 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     expect(requested).toEqual([unseen.name]);
     const pairs: ValidatedPair[] = [ue, unseen].map((item, i) => ({ item, macro: macros[i]! }));
     await persistHex(scope, fixture.slug, [{ restaurantId: newRestaurant.id, brandId: detected!, items: pairs, menuHash: "pilot" }], p, { validateInTx: validateHexInTx });
-    const added = await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: newRestaurant.id, name: ue.name } } });
+    const added = await p.menuItem.findFirstOrThrow({ where: { restaurantId: newRestaurant.id, name: ue.name } });
     expect(added).toMatchObject({ ...facts, dietaryTags: [] });
     const persisted = await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: added.id, source: "official" } } });
     expect(JSON.parse(persisted.reasoning!)).toMatchObject({ chainItemId: row.id, reviewHash: approved.review.dataHash });
@@ -151,7 +151,7 @@ suite("reviewed chains through April and real new-hex persistence", () => {
       expect((await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: added.id, source: "official" } } })).ingredientBreakdown).toBeNull();
       expect((await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: added.id, source: "official" } } })).reasoning).toBe(persisted.reasoning);
       expect((await p.restaurant.findUniqueOrThrow({ where: { id: newRestaurant.id } })).chainFlag).toBe(true);
-      const legacy = await p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: newRestaurant.id, name: unseen.name } } });
+      const legacy = await p.menuItem.findFirstOrThrow({ where: { restaurantId: newRestaurant.id, name: unseen.name } });
       await p.macroEstimate.upsert({ where: { menuItemId_source: { menuItemId: legacy.id, source: "official" } },
         create: { menuItemId: legacy.id, source: "official", reasoning: "Other official source", calories: 450, proteinG: 20, carbsG: 50, fatG: 19, confidence: "HIGH" }, update: {} });
       const changedPairs = [{ item: changed, macro: macros[1]! }, { item: unseen, macro: macros[1]! }];
