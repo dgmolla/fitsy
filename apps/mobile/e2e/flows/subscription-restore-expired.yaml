@@ -1,0 +1,36 @@
+# Precondition: a recreated signed-in Fitsy account is on the ordinary paywall
+# with a real expired Apple purchase on the device's store account.
+# Retain the native receipt and authentication; never synthesize entitlement.
+appId: com.fitsy.mobile
+tags: [billing, onboarding, changed-journey]
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: paywall-restore
+    timeout: 30000
+- assertVisible:
+    id: paywall-logo
+- tapOn:
+    id: paywall-restore
+- extendedWaitUntil:
+    visible: "Welcome back."
+    timeout: 30000
+- assertVisible:
+    id: resubscribe-restore
+- assertNotVisible:
+    id: paywall-logo
+- takeScreenshot: subscription-restore-expired
+# The next launch must consume the persisted backend verdict as well.
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Welcome back."
+    timeout: 30000
+- assertVisible:
+    id: resubscribe-restore
+- assertNotVisible:
+    id: paywall-logo
+- takeScreenshot: subscription-expired-cold-launch

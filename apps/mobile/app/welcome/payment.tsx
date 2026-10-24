@@ -232,10 +232,12 @@ export default function PaymentScreen() {
     setRestoring(true);
     try {
       if (!(await ensureSessionForPurchase())) return;
-      const isPro = await restore();
-      if (isPro) {
+      const outcome = await restore();
+      if (outcome === 'active') {
         await completeOnboarding();
-      } else if (isPro === false) {
+      } else if (outcome === 'expired') {
+        router.replace('/welcome/resubscribe');
+      } else if (outcome === 'none') {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
       }
     } finally {
