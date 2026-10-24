@@ -2,7 +2,10 @@
  * @jest-environment node
  */
 jest.mock('@react-native-async-storage/async-storage', () => ({
-  __esModule: true, default: { getItem: jest.fn().mockResolvedValue(null) },
+  __esModule: true, default: {
+    getItem: jest.fn().mockResolvedValue(null),
+    removeItem: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -86,7 +89,7 @@ describe('fetchMenu', () => {
   });
 
   it('keeps the selected dish and meal targets on every page of a full menu', async () => {
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ calories: '600', protein: '40', carbs: '60', fat: '20' }));
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify({ calories: '580', protein: '40', carbs: '60', fat: '20' }));
     global.fetch = jest.fn()
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { ...sampleMenuResponse, menuItems: [sampleMenuResponse.menuItems[0]], nextCursor: 'next-page', totalItemCount: 2 } }) })
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { ...sampleMenuResponse, menuItems: [sampleMenuResponse.menuItems[1]], nextCursor: null, totalItemCount: 2 } }) });
@@ -96,10 +99,23 @@ describe('fetchMenu', () => {
     expect(urls).toHaveLength(2);
     for (const url of urls) {
       expect(url.searchParams.get('selectedItemId')).toBe('mi1');
-      expect(url.searchParams.get('calories')).toBe('600');
+      expect(url.searchParams.get('calories')).toBe('580');
       expect(url.searchParams.get('protein')).toBe('40');
     }
     expect(urls[1]!.searchParams.get('cursor')).toBe('next-page');
+  });
+
+  it('uses the active discovery filter for menu matching', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockImplementation((key: string) => Promise.resolve(JSON.stringify(
+      key === '@fitsy/search_macro_targets'
+        ? { calories: '600', protein: '40', carbs: '60', fat: '20', _mode: 'search' }
+        : { calories: '687', protein: '43', carbs: '77', fat: '23', _mode: 'complete' },
+    )));
+    global.fetch = makeMockFetch({ ok: true, body: { data: sampleMenuResponse } });
+    await fetchMenu('r1');
+    const url = new URL((global.fetch as jest.Mock).mock.calls[0][0]);
+    expect(url.searchParams.get('calories')).toBe('600');
+    expect(url.searchParams.get('protein')).toBe('40');
   });
 
   it('does not paginate a locked menu even if a cursor is present', async () => {
@@ -195,4 +211,3 @@ describe('fetchMenu', () => {
     expect(result).toBeNull();
   });
 });
-

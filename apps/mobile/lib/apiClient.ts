@@ -1,6 +1,6 @@
 import { FeedbackBoardPost, FeedbackBoardResponse, FeedbackVoteResponse, MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
 import { api, ApiRequestError } from './api';
-import { getMacroTargets } from './macroStorage';
+import { getDiscoveryMacroTargets } from './macroStorage';
 
 export interface FetchRestaurantsParams {
   protein?: number;
@@ -112,7 +112,7 @@ export async function fetchMenu(restaurantId: string, options: { selectedItemId?
 export type MenuLoadOutcome = { menu: MenuResponse; error: null } | { menu: null; error: 'transient' | 'unavailable' };
 export async function fetchMenuOutcome(restaurantId: string, options: { selectedItemId?: string } = {}): Promise<MenuLoadOutcome> {
   try {
-    const targets = await getMacroTargets();
+    const targets = await getDiscoveryMacroTargets();
     const params = new URLSearchParams();
     if (targets) for (const [key, value] of Object.entries(targets)) if (value) params.set(key, value);
     if (options.selectedItemId) params.set('selectedItemId', options.selectedItemId);

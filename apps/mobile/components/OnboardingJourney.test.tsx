@@ -32,7 +32,7 @@ jest.mock('@supabase/supabase-js', () => {
   return { createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }) } }) };
 });
 jest.mock('@fitsy/shared', () => ({ calculateAge: () => 28 }));
-jest.mock('../lib/profileSync', () => ({ pushProfileToServer: jest.fn() }));
+jest.mock('../lib/profileSync', () => ({ syncSavedProfileToServer: jest.fn(), queueSavedProfileToServer: jest.fn(), deliverQueuedProfile: jest.fn(), replayPendingProfileSync: jest.fn() }));
 jest.mock('posthog-react-native', () => {
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY = 'unit-test-analytics';
   return jest.fn().mockImplementation(() => ({ capture: jest.fn() }));
@@ -116,7 +116,7 @@ it('keeps own meal targets through trust, Back, and the saved-target shortcut wi
   expect(screen.getPathname()).toBe('/welcome/target-setup');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/tuning'));
-  const values = { calories: '650', protein: '42', carbs: '68', fat: '23' };
+  const values = { calories: '647', protein: '42', carbs: '68', fat: '23' };
   await act(async () => { for (const [key, value] of Object.entries(values)) fireEvent.changeText(screen.getByTestId(`meal-target-${key}`), value); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
@@ -126,7 +126,7 @@ it('keeps own meal targets through trust, Back, and the saved-target shortcut wi
   expect((await getOnboardingData()).targetChoiceInProgress).toBe(false);
   expect((await getOnboardingData()).heightCm).toBeUndefined();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
-  expect(await screen.findByDisplayValue('650')).toBeTruthy();
+  expect(await screen.findByDisplayValue('647')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   expect((await screen.findByTestId('target-mode-saved')).props.accessibilityState.checked).toBe(true);
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
@@ -280,7 +280,7 @@ it('requires a goal before signed-in legacy macro recommendations', async () => 
   expect((await getOnboardingData()).goal).toBe('build_muscle');
   await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-save')); });
   await waitFor(() => expect(screen.getByText('Search for meals')).toBeTruthy());
-  expect(await getMacroTargets()).toEqual({ protein: '44', carbs: '80', fat: '23', calories: '708' });
+  expect(await getMacroTargets()).toEqual({ protein: '27', carbs: '97', fat: '23', calories: '703' });
   expect(await getOnboardingResume()).toBeNull();
 });
 
@@ -296,5 +296,5 @@ it('requires a fresh goal choice before showing macros for a legacy maintenance 
   expect(await screen.findByTestId('macro-setup-save')).toBeTruthy();
   expect((await getOnboardingData()).goal).toBe('performance');
   await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-save')); });
-  expect(await getMacroTargets()).toEqual({ protein: '31', carbs: '87', fat: '18', calories: '634' });
+  expect(await getMacroTargets()).toEqual({ protein: '20', carbs: '99', fat: '18', calories: '638' });
 });

@@ -9,6 +9,7 @@ import {
 import type { MacroValues } from '@/lib/macroPresets';
 import { useTheme } from '@/lib/theme';
 import { FONTS } from '@/lib/brand';
+import { macroCalories, normalizeCompleteTarget, parseTarget } from '@/lib/macroEnergy';
 
 export interface MacroTargetsSectionProps {
   targets: MacroValues | null;
@@ -22,11 +23,11 @@ const FIELDS: { key: keyof MacroValues; label: string }[] = [
   { key: 'fat', label: 'Fat' },
 ];
 
-function computeCalories(vals: MacroValues): number {
-  const p = parseFloat(vals.protein) || 0;
-  const c = parseFloat(vals.carbs) || 0;
-  const f = parseFloat(vals.fat) || 0;
-  return p * 4 + c * 4 + f * 9;
+function computeCalories(vals: MacroValues): number | null {
+  const p = parseTarget(vals.protein);
+  const c = parseTarget(vals.carbs);
+  const f = parseTarget(vals.fat);
+  return p === null || c === null || f === null ? null : macroCalories({ protein: Math.round(p), carbs: Math.round(c), fat: Math.round(f) });
 }
 
 export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTargetsSectionProps) {
@@ -59,7 +60,12 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
 
   async function handleSave() {
     try {
-      await onSave(draft);
+      const calories = computeCalories(draft);
+      if (calories === null || calories === 0) {
+        setSaveError('Enter protein, carbs and fat before saving.');
+        return;
+      }
+      await onSave(normalizeCompleteTarget({ ...draft, calories: String(calories) }));
       setEditing(false);
       setSaveError(null);
     } catch {
@@ -83,13 +89,14 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
               placeholder="--"
               placeholderTextColor={colors.inputPlaceholder}
               accessibilityLabel={`${label} target`}
+              testID={`daily-macro-${key}`}
               maxLength={5}
             />
           </View>
         ))}
         <View style={styles.calorieRow}>
           <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Calories</Text>
-          <Text style={[styles.calorieValue, { color: colors.accent }]}>{computeCalories(draft)} kcal</Text>
+          <Text style={[styles.calorieValue, { color: colors.accent }]}>{computeCalories(draft) ?? '--'} kcal</Text>
         </View>
         {saveError !== null && (
           <Text style={[styles.errorText, { color: colors.error }]} accessibilityLiveRegion="polite">{saveError}</Text>
@@ -100,6 +107,7 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
             onPress={handleSave}
             accessibilityRole="button"
             accessibilityLabel="Save daily macros"
+            testID="daily-macro-save"
           >
             <Text style={[styles.saveButtonText, { color: colors.accentOnAccent }]}>Save</Text>
           </Pressable>
@@ -108,6 +116,7 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
             onPress={handleCancel}
             accessibilityRole="button"
             accessibilityLabel="Cancel editing daily macros"
+            testID="daily-macro-cancel"
           >
             <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
           </Pressable>
@@ -126,6 +135,7 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
           onPress={onSetupPress}
           accessibilityRole="button"
           accessibilityLabel="Set up daily macros"
+          testID="daily-macro-setup"
         >
           <Text style={[styles.ctaButtonText, { color: colors.accentOnAccent }]}>Set up daily macros</Text>
         </Pressable>
@@ -141,6 +151,7 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
           onPress={handleEditPress}
           accessibilityRole="button"
           accessibilityLabel="Edit daily macros"
+          testID="daily-macro-edit"
           hitSlop={8}
         >
           <Text style={[styles.editLink, { color: colors.accent }]}>Edit</Text>
@@ -157,7 +168,7 @@ export function MacroTargetsSection({ targets, onSave, onSetupPress }: MacroTarg
       {targets && (
         <View style={styles.calorieRow}>
           <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Calories</Text>
-          <Text style={[styles.calorieValue, { color: colors.accent }]}>{computeCalories(targets)} kcal</Text>
+          <Text style={[styles.calorieValue, { color: colors.accent }]}>{computeCalories(targets) ?? '--'} kcal</Text>
         </View>
       )}
     </View>

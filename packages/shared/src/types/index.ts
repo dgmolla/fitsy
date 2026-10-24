@@ -326,7 +326,11 @@ export interface ProfileUpdateRequest {
     proteinG: number;
     carbsG: number;
     fatG: number;
+    /** Missing provenance from older clients means a user-owned allocation. */
+    source?: 'automatic' | 'manual';
   };
+  /** Keep an existing complete target when this request only edits profile fields. */
+  preserveMacroTarget?: boolean;
 }
 
 export interface ProfileResponse<Goal extends UserGoalV2 = UserGoal> {
@@ -348,6 +352,7 @@ export interface ProfileResponse<Goal extends UserGoalV2 = UserGoal> {
     proteinG: number;
     carbsG: number;
     fatG: number;
+    source?: 'automatic' | 'manual';
   } | null;
 }
 
@@ -413,4 +418,3 @@ export interface FeedbackVoteResponse {
 }
 
 export type FeedbackVoteApiResponse = { data: FeedbackVoteResponse } | ApiError;
-
