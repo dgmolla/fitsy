@@ -78,7 +78,7 @@ const containment = (a: Set<string>, b: Set<string>): number => {
 async function main() {
   const rests = await p.restaurant.findMany({ select: { id: true, name: true, chainFlag: true } });
   const itemRows = await p.$queryRaw<{ restaurantId: string; names: string[] }[]>`
-    SELECT "restaurantId", array_agg(name) AS names FROM "MenuItem" GROUP BY "restaurantId"`;
+    SELECT "restaurantId", array_agg(name) AS names FROM "MenuItem" WHERE "retiredAt" IS NULL GROUP BY "restaurantId"`;
   const keysByRest = new Map<string, Set<string>>();
   const kindByRest = new Map<string, string>();
   for (const r of itemRows) {

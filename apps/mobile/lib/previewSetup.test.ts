@@ -11,7 +11,7 @@ jest.mock('expo-secure-store', () => ({
   getItemAsync: async (key: string) => secure[key] ?? null,
   setItemAsync: async (key: string, value: string) => { secure[key] = value; },
 }));
-const targets = { calories: '600', protein: '40', carbs: '60', fat: '20' };
+const targets = { calories: '580', protein: '40', carbs: '60', fat: '20' };
 function setup() {
   let module!: typeof import('./previewSetup');
   jest.isolateModules(() => { module = require('./previewSetup'); });
@@ -22,13 +22,15 @@ beforeEach(() => {
   for (const key of Object.keys(secure)) delete secure[key];
 });
 
-it('upgrades an older install using its saved coordinates and preserves editable targets', async () => {
+it('upgrades saved coordinates and editable targets while retaining an ambiguous older goal separately', async () => {
   store['@fitsy/onboarding'] = JSON.stringify({ goal: 'build_muscle' });
   store['@fitsy/macro_targets'] = JSON.stringify(targets);
   secure.fitsy_last_known_coords = JSON.stringify({ lat: 34.0522, lng: -118.2437 });
   const result = await setup();
   expect(result.targets).toEqual(targets);
-  expect(result.data).toMatchObject({ goal: 'build_muscle', targetMode: 'known', area: { lat: 34.0522, lng: -118.2437, source: 'saved' } });
+  expect(result.data).toMatchObject({ targetMode: 'known', area: { lat: 34.0522, lng: -118.2437, source: 'saved' } });
+  expect(result.data.goal).toBeUndefined();
+  expect(JSON.parse(store['@fitsy/onboarding_unowned']!)).toEqual({ goal: 'build_muscle' });
   expect(JSON.parse(store['@fitsy/onboarding']!)).toMatchObject(result.data);
 });
 
@@ -46,4 +48,15 @@ it.each([null, { lat: 100, lng: 0 }, { lat: 0, lng: -200 }])('does not fabricate
   expect(result.data.area).toBeUndefined();
   expect(result.targets).toBeNull();
   expect(store['@fitsy/onboarding']).toBeUndefined();
+});
+
+
+it('does not offer an independent legacy search filter as saved meal targets', async () => {
+  const filter = { calories: '600', protein: '40', carbs: '60', fat: '20' };
+  store['@fitsy/onboarding'] = JSON.stringify({ goal: 'build_muscle' });
+  store['@fitsy/macro_targets'] = JSON.stringify(filter);
+  const result = await setup();
+  expect(result.targets).toBeNull();
+  expect(result.data.targetMode).toBeUndefined();
+  expect(JSON.parse(store['@fitsy/macro_targets']!)).toEqual(filter);
 });

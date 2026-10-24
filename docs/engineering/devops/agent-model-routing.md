@@ -3,10 +3,12 @@
 Apply this policy to every Fitsy coordinator, implementation worker and review adapter.
 The human-selected standalone Pstack skills control orchestration and evidence planning.
 The [shipping contracts](shipping.md) retain supported commands, product acceptance, dispositions and release protections.
+GitHub's current-head `Verify` and `AI review` results control merge eligibility.
+The retained local review adapters support local validation without an approval App installation.
 Current human issue-bound review limits govern execution; historical dispatcher defaults do not override them.
 Model selection never waives those gates or grants permission to start extra work.
 The local dispatcher snapshots a configured implementation provider, model and effort and an independent reviewer provider, model and effort for each claim.
-Its current default is Codex with Sol; a trusted operator can configure the supported Claude worker adapter for a later claim without changing queue ownership, review budgets or release gates.
+Its current default is Codex with Sol; a trusted operator can configure the supported Claude worker adapter for a later claim without changing queue ownership, review attempt limits or release gates.
 Jev provides advisory task planning and cannot choose an executable, provider, reviewer or required lens.
 An active claim retains its original profiles when the configuration changes.
 
@@ -19,33 +21,21 @@ An active claim retains its original profiles when the configuration changes.
 | Unresolved ambiguity, difficult architecture or consequential security/data decisions | Stronger capable model | Record the concrete uncertainty, why the default is insufficient, and the bounded decision or task. |
 | Review-comment triage experiment | Jev, advisory only | Follow #372; no dismissal, priority rewrite, required verdict or merge authority. |
 
-Before invoking the reviewer, explicitly select the policy default through the supported adapter settings.
-The canonical runner defaults to Codex, `gpt-6-sol`, high reasoning effort; explicit supported substitutions remain recorded.
+The supported review interface is [simple review](../../../scripts/review/simple-review.md).
+It uses `scripts/route-reviewers.sh` to select required lenses for one independent read-only invocation.
+The runner supports Codex and defaults to `gpt-6-sol` with high reasoning effort; an explicit `FITSY_REVIEW_MODEL` selects another supported model.
+Only CONFIRMED P0/P1 findings block; all findings and the raw verdict remain visible.
+Incomplete output, missing domains, timeouts and provider failures never establish approval.
+The `AI review` status remains the required review gate, alongside `Verify`.
+The repository's review workflow runs the dependency-free behavior suite:
 
 ```sh
-export FITSY_REVIEW_PROVIDER=codex
-export FITSY_REVIEW_MODEL=gpt-6-sol
-export FITSY_REVIEW_REASONING_EFFORT=high
-bash scripts/review/run-review.sh --local
+node --test scripts/review/simple-review.test.mjs
 ```
 
-The runner selects every required domain in one independent invocation.
-Use additive `--add-domain workflow-security` for sensitive controls outside path routing.
-The trusted issue/candidate-bound domain registry retains added coverage across local and PR replacements; automatic routing can only add to it.
-Round reuse requires the same immutable head and base commits, normalized patch, acceptance, required domains and reviewer policy.
-The poller revalidates live disposition and required-test receipts through `--cached-only`; it cannot execute another provider when the complete cache is absent.
-For automated reviews, the installer or rollout owner must set the same three variables in the scheduler's persistent environment before enabling it; interactive shell exports do not reach launchd.
-For the local review poller, include these entries in its LaunchAgent `EnvironmentVariables` dictionary:
-
-```xml
-<key>FITSY_REVIEW_PROVIDER</key><string>codex</string>
-<key>FITSY_REVIEW_MODEL</key><string>gpt-6-sol</string>
-<key>FITSY_REVIEW_REASONING_EFFORT</key><string>high</string>
-```
-
-Read back the loaded service configuration and confirm the actual provider/model in its next reviewer receipt before declaring rollout complete.
-Use `install-poller.sh --refresh-runtime` to refresh the trusted executable and migrate a legacy launcher while preserving the service environment and loaded state.
-A merge alone does not prove the installed dispatcher or poller adopted the new runner; retain installer and runtime receipts.
+The installed review caller must use immutable trusted-base controls for the exact PR head.
+The repository no longer installs or schedules local review, dispatch or reporting daemons.
+The existing external reviewer owns the `AI review` status; confirm its actual provider/model and commit-bound result before declaring review complete.
 Record any supported model substitution or escalation in the issue handoff.
 Choose reasoning effort to match the problem and preserve canonical review-adapter settings.
 Do not lower a required review's settings merely to reduce cost.
@@ -77,9 +67,9 @@ Use a fresh read-only review process with the relevant diff, requirements and re
 The reviewer may use the same model as the implementer; separate context does not eliminate correlated model errors.
 Keep deterministic checks and deliberate negative controls as complementary evidence.
 
-Run one canonical round covering every required domain, with advisory domains handled by the shipping policy.
+Run one canonical round covering every required domain, with finding priorities handled by the shipping policy.
 Do not add parallel generic reviewers or repeat a valid review solely to gain confidence.
-Reuse verdicts only when the canonical identity and context checks allow it.
-Charge every executed round and retry against the shared cumulative review-time budget across repaired versions; preserve all prior history.
+A changed head or base requires current review; the runner rejects stale publication.
+The installed local AI reviewer allows two attempts per head SHA; preserve historical review records needed by unfinished tasks.
 A fresh verdict must cover changed review inputs before it can satisfy the final candidate's gates.
 Record escalation reason and outcome so model changes can be evaluated against actual retries, quality and delivery time.

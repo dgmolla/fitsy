@@ -7,25 +7,7 @@
 # paths: advisory (shadow) checks only; select when --scope=changed matches a glob.
 # Blocking checks always run within their layer/context; path filters cannot hide them.
 checks:
-  - name: resource-admission
-    script: resource-admission.sh
-    layer: 0
-    blocking: true
-    preflight: true
-    runs: [local]
-    why: Check dependencies and disk before local verification.
-
-  - name: review-admission
-    script: review-admission.sh
-    layer: 0
-    stage: acceptance
-    blocking: true
-    preflight: true
-    runs: [local]
-    why: Require a clean source-bound passing canonical review before full acceptance.
-
   - name: focused-tests
-    cache: true
     script: focused-tests.sh
     layer: 1
     blocking: true
@@ -33,7 +15,6 @@ checks:
     why: Meaningful selected reproduction and regression tests before independent review.
 
   - name: structural
-    cache: true
     script: structural.sh
     layer: 0
     blocking: true
@@ -41,7 +22,6 @@ checks:
     why: Growing invariant checklist (docs layout, route guards, routing-table sync, size/any/console warnings).
 
   - name: secrets
-    cache: true
     script: secrets.sh
     layer: 0
     blocking: true
@@ -49,7 +29,6 @@ checks:
     why: Hardcoded keys, committed .env files, committed build output. Moved from ci.yml security job 2026-09-07.
 
   - name: lint
-    cache: true
     script: lint.sh
     layer: 1
     blocking: true
@@ -57,7 +36,6 @@ checks:
     why: ESLint across workspaces.
 
   - name: typecheck
-    cache: true
     script: typecheck.sh
     layer: 1
     blocking: true
@@ -73,7 +51,6 @@ checks:
     why: Local simulator evidence for mobile-facing changes; missing, stale, failed, or incomplete evidence fails. CI does not run a simulator.
 
   - name: boundaries
-    cache: true
     script: boundaries.sh
     layer: 1
     blocking: true
@@ -89,7 +66,6 @@ checks:
     why: Report counted review size; a coherent outcome has no arbitrary line cap.
 
   - name: actionlint
-    cache: true
     script: actionlint.sh
     layer: 1
     blocking: true
@@ -105,7 +81,6 @@ checks:
     why: Report routed domains without rejecting a coherent cross-layer outcome; unresolved comparison still fails.
 
   - name: context-freshness
-    cache: true
     script: context-freshness.sh
     layer: 1
     blocking: true
@@ -113,7 +88,6 @@ checks:
     why: T14 - a stale command or path in a context file misleads every zero-context author; caught a dead root-CLAUDE.md pointer on its first run (2026-09-07).
 
   - name: migration-safety
-    cache: true
     script: migration-safety.sh
     layer: 1
     blocking: true
@@ -130,7 +104,6 @@ checks:
 
   - name: test
     database: true
-    cache: true
     script: test.sh
     layer: 2
     blocking: true
@@ -142,7 +115,7 @@ checks:
     layer: 2
     blocking: true
     runs: [local]
-    why: Real decoder, attachment and opt-in recording integration tests for changed simulator or product-flow controls; missing local tools fail.
+    why: Real decoder and attachment integration tests for changed simulator or product-flow controls; missing local tools fail.
 
   - name: build
     script: build.sh

@@ -111,4 +111,44 @@ describe("neverDowngrade (purchase / restore)", () => {
         expect.objectContaining({ data: expect.objectContaining({ status: "expired" }) }),
       );
     });
+
+    it("waits for transferred expired history and writes an expired row for the authenticated account", async () => {
+      mockFetchProEntitlement
+        .mockResolvedValueOnce({ ...inactive, hadProEntitlement: false })
+        .mockResolvedValueOnce({ ...inactive, hadProEntitlement: true, plan: "yearly", expiresAt: new Date("2026-09-01T12:00:00Z") });
+      mockFindUnique.mockResolvedValue(null);
+      const pending = syncSubscriptionFromRevenueCat("u1", { awaitHistory: true });
+      await jest.advanceTimersByTimeAsync(1_000);
+      expect(await pending).toBe(false);
+      expect(mockCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: "u1", status: "expired", plan: "yearly" }) });
+    });
+
+    it("does not classify an untransferred historical receipt as never subscribed", async () => {
+      mockFetchProEntitlement.mockResolvedValue({ ...inactive, hadProEntitlement: false });
+      mockFindUnique.mockResolvedValue(null);
+      const pending = syncSubscriptionFromRevenueCat("u1", { awaitHistory: true });
+      await jest.advanceTimersByTimeAsync(10_000);
+      expect(await pending).toBeNull();
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it("leaves existing history untouched if the restored-history lookup fails during reconciliation", async () => {
+      mockFetchProEntitlement.mockResolvedValueOnce({ ...inactive, hadProEntitlement: false }).mockResolvedValueOnce(null);
+      mockFindUnique.mockResolvedValue({ status: "expired" });
+      const pending = syncSubscriptionFromRevenueCat("u1", { awaitHistory: true });
+      await jest.advanceTimersByTimeAsync(1_000);
+      expect(await pending).toBeNull();
+      expect(mockUpdateMany).not.toHaveBeenCalled();
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it("preserves active access if restored history resolves to an unexpired entitlement", async () => {
+      mockFetchProEntitlement.mockResolvedValueOnce({ ...inactive, hadProEntitlement: false }).mockResolvedValueOnce(active);
+      mockFindUnique.mockResolvedValue(null);
+      const pending = syncSubscriptionFromRevenueCat("u1", { awaitHistory: true });
+      await jest.advanceTimersByTimeAsync(1_000);
+      expect(await pending).toBe(true);
+      expect(mockCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: "u1", status: "active" }) });
+    });
   });

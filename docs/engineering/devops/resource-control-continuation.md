@@ -64,42 +64,16 @@ Its [record format and safeguards](local-dispatcher.md#admission-and-manual-clea
 Dry-run is the default, and uncertain, dirty, unmerged, shared or active resources are retained.
 The dispatcher no longer archives or deletes resources on an idle tick.
 
-## Prepared profile custody
-
-`external-approval.py` still rejects shared UID when `candidate_boundary` is absent.
-The optional prepared profile contract requires an independently controlled config
-pinning private receipt bytes, source/base/issue/claim, launcher/profile paths and
-digests, and the original private `claim_state_path`. The receipt records matching
-digests, the exact worker PID/start and observed denials for operator files,
-approval credentials, claim writes, other branch writes, workspace secrets,
-command networking and operator execution. A boolean in an unpinned candidate
-file cannot establish approval.
-
-The adapter checks the original active running claim, real PID start/group and a
-different operator process group. It rechecks custody before publication writes,
-and binds review consumption to the configured candidate issue/source/base.
-Profile changes, incomplete denials, stale/reused process identity or a released
-claim refuse. App provenance, exact-source acceptance, frozen product composition,
-issuer-bound merge checks and independent protected environment review are retained.
-
-The independent installation owner must validate the exact controls and real
-command boundary before enabling this option. These fixtures cannot establish OS
-isolation, live GitHub issuer/protection configuration or an independent verdict.
-This worker has no installation, credential, protected publication or release
-authority. No account switch or new #443 product review is part of this contract.
-
 ## Verification and next owner
 
 Focused unprivileged checks:
 
 ```sh
 python3 -B scripts/delivery/cleanup.test.py
-python3 -B scripts/review/external-approval.test.py ProfileCustodyTests
-python3 -B scripts/delivery/local-dispatcher.test.py
 ```
 
-The dispatcher suite retains input isolation and complete queue-read checks.
-Legacy claim, receipt and simulator bookkeeping fixtures are retired; cleanup safety is covered by the cleanup CLI regression suite above.
+The retired dispatcher process, review accounting and simulator bookkeeping fixture suites are no longer part of repository verification.
+The cleanup CLI regression suite covers deletion safeguards.
 
 Run applicable canonical cheap checks against the frozen commit before any
 independent review. No additional reviewer allocation is authorized by the worker

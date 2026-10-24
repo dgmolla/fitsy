@@ -1,7 +1,6 @@
 #!/bin/bash -p
-# Publish only a frozen, independently reviewed candidate after cheap/focused checks.
-# Trusted existing Verify owns heavy pre-merge acceptance; local media/native proof remains separate.
-# Size and domain checks still run on every push.
+# Run size/domain checks, cheap static checks and focused tests before every push.
+# GitHub owns merge requirements and heavy validation.
 set -euo pipefail
 unset NODE_OPTIONS NODE_PATH BASH_ENV ENV
 hook_path="$PATH"
@@ -43,17 +42,5 @@ done < <(node -e 'for (const key of Object.keys(process.env)) if (key.startsWith
 if [ "${#function_environment[@]}" -gt 0 ]; then
   exec /usr/bin/env "${function_environment[@]}" /bin/bash -p "$0" "$@"
 fi
-# A push must name the issue whose local evidence this hook is about to run.
-node "$ROOT/scripts/delivery/phase-events.mjs" summary >/dev/null || {
-  echo 'pre-push: bind this worktree first with node scripts/delivery/phase-events.mjs bind --issue N' >&2
-  exit 1
-}
-"$ROOT/scripts/verify/shipping-session.mjs" --check
-"$ROOT/scripts/verify/shipping-session.mjs" --candidate-checks cheap
-"$ROOT/scripts/verify/shipping-session.mjs" --check
-# The same isolated boundary owns routing-table execution and size/domain N/A.
-"$ROOT/scripts/verify/shipping-session.mjs" --candidate-checks push-gates
-# Publishing is recoverable; a GitHub outage must not erase a verified push.
-if ! node "$ROOT/scripts/delivery/phase-events.mjs" publish; then
-  echo 'pre-push: delivery timing remains local; retry phase-events.mjs publish after reconciling GitHub' >&2
-fi
+node "$ROOT/scripts/verify/run.mjs" --only=size-check,domain-check --scope=changed --runs=local
+node "$ROOT/scripts/verify/run.mjs" --layer=0-1 --stage=cheap --scope=changed --runs=local

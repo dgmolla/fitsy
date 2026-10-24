@@ -18,10 +18,14 @@ Low-confidence answers remain unknown, and deterministic risk floors cannot be l
 Provider errors fall back deterministically; neither Jev nor issue text can choose executable commands or alter review gates.
 The current default implementation profile is Codex with Sol; a trusted configuration can select the supported Claude adapter for a future claim.
 
-The installer starts paused from a clean, current main revision.
-Enabling requires that revision's main Verify and Deploy success and no active claim.
+The dispatcher runs on demand from the repository; no recurring service is installed.
+Enabling requires the selected revision's main Verify and Deploy success and no active claim.
 The dispatcher posts actionable blocker incidents through the shared Slack limiter with a stable key, history reconciliation and confirmed receipt.
-It does not publish the periodic digest.
+
+Simulator claim updates use atomic fsync and replacement under the existing shared lock.
+A malformed claim remains unchanged and blocks device commands until its owner reconciles it.
+The product-flow runner keeps a native lease covering the configured worker wall-clock budget plus five minutes for completion and release.
+Tick admission rereads the current configuration inside `dispatcher.lock`, so a completed pause wins over an earlier enabled snapshot.
 
 ## Admission and manual cleanup
 
@@ -29,7 +33,6 @@ Admission preserves `min_free_bytes` plus `scratch_reserve_bytes`, defaulting to
 Configured execution budgets still require fresh private coordinator observations and sufficient host/Docker capacity.
 The dispatcher performs no automatic resource deletion or archival.
 Checkout creation persists its exact path and branch intent before Git runs, and crash recovery preserves unfinished source for an authorized successor.
-The installer copies only the dispatcher runtime, verifies its digest under `dispatcher.lock`, and leaves it paused.
 
 Run cleanup on demand from this checkout:
 
@@ -83,16 +86,12 @@ flowchart LR
 ### Complete queue reads and quota cooldown
 
 The canonical `snapshot` mode reads the same complete live GitHub queue as dispatch admission.
-Use `python3 ~/.fitsy-dispatcher/runtime/local-dispatcher.py snapshot --config ~/.fitsy-dispatcher/config.json` for coordination instead of a separate broad project CLI query.
+Use `python3 scripts/delivery/local-dispatcher.py snapshot --config ~/.fitsy-dispatcher/config.json` for coordination instead of a separate broad project CLI query.
 The transport pages at 100 cards and requests only delivery fields and issue labels; total counts, unique IDs and advancing cursors must agree before dispatch.
 A truncated label connection fails closed so a hold cannot disappear through truncation.
 The private `github-queue-quota.json` stores observed cost and quota reset timing, never board content or launch permission.
 Rate exhaustion defers subsequent reads until the server reset, or a bounded 30-minute fallback when GitHub supplies no timing.
 A reset requires a fresh complete read; partial GraphQL results never authorize a claim.
-The existing timer retries after cooldown without an additional dispatcher or schedule.
+Retry the on-demand command after cooldown without adding a dispatcher or schedule.
 
-The sole local publisher invokes this installed `snapshot` command before collecting its REST report details.
-It consumes the complete fresh snapshot instead of running another nested GraphQL project query.
-A dispatcher lock conflict or shared quota cooldown defers the report without a Slack send and preserves the existing slot intent, deduplication, rate limiting and uncertain-send receipts.
-The publisher retains its source-bound editorial freshness and board-binding checks.
 Final worker launch confirmation requires a fresh complete board read under the existing ownership lock.

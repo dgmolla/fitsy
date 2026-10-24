@@ -4,7 +4,8 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 ## Conventions
 
-- **Domains** are the children of `docs/`: `product/`, `engineering/`, `design/`, `gtm/`. Subdirs are grandchildren.
+- **Domains** are the children of `docs/`: `product/`, `engineering/`, `design/`, `gtm/`, `release/`.
+  Subdirs are grandchildren.
 - **Status header** — living docs carry `> **Status:** living · **Last verified:** YYYY-MM-DD` near the top. Specs use `active-spec` / `proposed`; shipped surfaces use `shipped`.
 - **`archive/`** — every domain has one. Superseded or completed-one-off docs move there with an `ARCHIVED` banner pointing at their replacement. **Read for history; never update.**
 - **Diagrams** — every spec/design doc includes at least one Mermaid diagram (GitHub + Obsidian render natively).
@@ -17,8 +18,8 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 | [vision.md](product/vision.md) | Product vision: problem, target user, value prop, what's shipped |
 | [roadmap.md](product/roadmap.md) | Phased roadmap (Phase 1 shipped → Phase 2/3 features) |
 | [business-model.md](product/business-model.md) | RevenueCat + Apple IAP monetization + **Pricing Decision Record** |
-| [app-store-listing.md](product/app-store-listing.md) | App Store Connect metadata/copy (live) |
-| [pre-launch-action-items.md](product/pre-launch-action-items.md) | **Canonical** pre-launch blocker tracker |
+| [app-store-listing.md](product/app-store-listing.md) | Proposed listing copy; not a submitted Apple metadata baseline |
+| [pre-launch-action-items.md](product/pre-launch-action-items.md) | Historical launch audit; current delivery stays in Fitsy Delivery |
 | [competitors.md](product/competitors.md) · [feedback-triage.md](product/feedback-triage.md) | Market analysis · feedback ops |
 | `specs/` | [check-in-local-legend](product/specs/check-in-local-legend.md) · [merchant-dashboard](product/specs/merchant-dashboard.md) · [meal-tweak-suggestions](product/specs/meal-tweak-suggestions.md) · [community-feedback-forum](product/specs/community-feedback-forum.md) · [landing-page](product/specs/landing-page.md) · [llc-formation](product/specs/llc-formation.md) · [TEMPLATE](product/specs/TEMPLATE.md) |
 
@@ -47,6 +48,11 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 **`archive/`** — historical ticket specs, spikes, and superseded specs.
 
 [tuning-guide.md](engineering/tuning-guide.md) — Shipyard Settings knobs (referenced by `CLAUDE.md`)
+
+## Release - `release/`
+
+[Next submission](release/next-submission.md) is the #444 review packet, including baseline uncertainties, version/build proposal, scope, artwork, reviewer notes and the human gate.
+It does not authorize builds, uploads, metadata publication or App Review submission.
 
 ## Design — `design/`
 

@@ -344,9 +344,13 @@ Replaced the old stubbed `/api/subscriptions/verify` receipt endpoint: clients n
 **Env:** `REVENUECAT_PUBLIC_API_KEY` (the app's public SDK key; RevenueCat's v1 subscriber read accepts it)
 
 Pull path for entitlement state: asks RevenueCat for the caller's `pro` entitlement (`services/revenuecatService.ts`) and upserts the `Subscription` row.
-Optional JSON body `{ reason }` with one of `boot` | `purchase` | `restore` | `sign_in` | `mismatch` (unknown values are ignored).
+Optional JSON body `{ reason }` with one of `boot` | `purchase` | `restore` | `restore_history` | `sign_in` | `mismatch` (unknown values are ignored).
 For `purchase` and `restore` the server never persists a downgrade: an inactive RevenueCat read is re-read every 1 s for up to 6 s, and if still inactive nothing is written and a `[subscription]` warning is logged, because RevenueCat's REST view can lag StoreKit by seconds right after a purchase.
-Returns the same status fields plus `synced`; `synced: false` means RevenueCat could not be consulted or a purchase/restore downgrade was withheld, so the existing proof remains in effect.
+For `restore_history`, an inactive restored receipt triggers the same bounded re-read until RevenueCat confirms prior Pro history for the authenticated Fitsy user ID.
+Confirmed inactive history persists `expired`; missing history or a failed lookup leaves existing proof untouched and returns `synced: false`.
+The phone's restored products trigger reconciliation but never establish expired status or introductory eligibility themselves.
+An unresolved historical Restore holds the mobile route for retry and invalidates an older never-subscribed cache while preserving known expired history and newer verified access.
+Returns the same status fields plus `synced`; `synced: false` means RevenueCat could not be consulted, restored history remains unconfirmed, or a purchase/restore downgrade was withheld, so the existing proof remains in effect.
 An RC-confirmed empty account is recorded as `never_subscribed`; an expired `pro` entitlement is recorded as `expired` even when its webhook was missed.
 A successful sync stamps the row's `lastEventAt` with RevenueCat's `request_date_ms` (falling back to a time captured before the read), so a webhook event generated earlier but delivered later is ignored while one emitted after the read is still applied (see the webhook below).
 The mobile client calls it right after a purchase or restore, on every sign-in, and when the device says Pro while the API serves locked responses.

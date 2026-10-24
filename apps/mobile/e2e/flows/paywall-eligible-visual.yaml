@@ -25,6 +25,9 @@ tags: [billing, onboarding, changed-journey]
     timeout: 30000
 - assertVisible: "Try Fitsy"
 - assertVisible: "No payment due now"
+- assertNotVisible: "Meet Fitsy Pro"
+- assertNotVisible:
+    id: trial-offer-note
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:
@@ -46,6 +49,9 @@ tags: [billing, onboarding, changed-journey]
     id: paywall-step-reminder
 - assertVisible:
     id: paywall-step-charge
+- assertVisible: "In 14 days"
+# Morning quiet hours can move the reminder onto the preceding calendar day.
+- assertVisible: "In 1[12] days"
 - assertNotVisible:
     id: paywall-hero
 - assertVisible: "Start free trial"
@@ -60,6 +66,32 @@ tags: [billing, onboarding, changed-journey]
     id: paywall-plan-monthly
 - assertVisible:
     id: paywall-price-monthly
+- copyTextFrom:
+    id: paywall-price-monthly
+- evalScript: ${output.monthlyPrice = maestro.copiedText}
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes('14 days free') && maestro.copiedText.includes(output.monthlyPrice) && maestro.copiedText.includes('Renews automatically')}
+- scrollUntilVisible:
+    element:
+      id: paywall-plan-yearly
+    direction: UP
+- tapOn:
+    id: paywall-plan-yearly
+- copyTextFrom:
+    id: paywall-price-yearly
+- evalScript: ${output.annualPrice = maestro.copiedText}
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes('14 days free') && maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically')}
 - tapOn:
     id: welcome-back
 - assertVisible:

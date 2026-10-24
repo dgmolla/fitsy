@@ -1,11 +1,11 @@
-import { mkdtempSync, writeFileSync, symlinkSync, rmSync, readFileSync, mkdirSync, copyFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, writeFileSync, symlinkSync, rmSync, readFileSync, mkdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 const root = resolve(__dirname, "../..");
 let directory: string;
 beforeEach(() => {
-  directory = mkdtempSync(join(tmpdir(), "fitsy-actionlint-"));
+  directory = realpathSync(mkdtempSync(join(tmpdir(), "fitsy-actionlint-")));
   symlinkSync(execFileSync("which", ["dirname"], { encoding: "utf8" }).trim(), join(directory, "dirname"));
 });
 afterEach(() => { rmSync(directory, { recursive: true, force: true }); });
@@ -32,8 +32,6 @@ function select(entry: string, layers = "0-1", runs = "ci") {
   const verify = join(directory, "scripts/verify"); mkdirSync(verify, { recursive: true });
   copyFileSync(join(root, "scripts/verify/run.mjs"), join(verify, "run.mjs"));
   copyFileSync(join(root, "scripts/verify/impact-plan.mjs"), join(verify, "impact-plan.mjs"));
-  // Local cacheable entries dynamically import the real cache implementation.
-  copyFileSync(join(root, "scripts/verify/receipt-cache.mjs"), join(verify, "receipt-cache.mjs"));
   writeFileSync(join(verify, "registry.yml"), "checks:\n" + entry);
   const script = entry.match(/script: (\S+)/)![1]!;
   writeFileSync(join(verify, script), '#!/bin/sh\nprintf \'{"status":"pass"}\\n\'\n');
@@ -43,8 +41,9 @@ function select(entry: string, layers = "0-1", runs = "ci") {
   symlinkSync("/bin/bash", join(directory, "bash"));
   symlinkSync(join(root, "node_modules"), join(directory, "node_modules"));
   const result = spawnSync(process.execPath, [join(verify, "run.mjs"), "--layer=" + layers, "--runs=" + runs, "--scope=changed"], { env: { PATH: directory, CI: "" }, encoding: "utf8" });
-  expect(result.status).toBe(0);
-  return JSON.parse(result.stdout.trim());
+  expect(result.status).toBe(entry.includes('blocking: shadow') ? 1 : 0);
+  const name = entry.match(/name: (\S+)/)![1]!;
+  return result.stdout.trim().split('\n').map(line => JSON.parse(line)).find(result => result.name === name);
 }
 test.each(["ci", "local"])("workflow lint cannot be scoped away for an API-only change (%s)", runs => {
   expect(select(registryEntry("actionlint"), "0-1", runs)).toMatchObject({ name: "actionlint", status: "pass", blocking: true });

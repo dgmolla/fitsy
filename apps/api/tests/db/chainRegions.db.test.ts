@@ -79,7 +79,7 @@ suite('regional official nutrition through the real writer and served menu', () 
         expect(served).toMatchObject({ calories: location === 'California' ? 300 : 400, confidence: location === 'California' ? 'HIGH' : 'MEDIUM' });
         if (location === 'California') {
           const include = { macroEstimates: { orderBy: { id: 'asc' as const } } };
-          const snapshot = () => p.menuItem.findUniqueOrThrow({ where: { restaurantId_name: { restaurantId: restaurant.id, name: item.name } }, include });
+          const snapshot = () => p.menuItem.findFirstOrThrow({ where: { restaurantId: restaurant.id, name: item.name }, include });
           const original = await snapshot(), pairs = [{ item, macro: macros[0]! }];
           await expect(persistItems(restaurant.id, [{ item, macro: { ...macros[0]!, calories: 301 } }], p)).rejects.toThrow('facts changed');
           await expect(persistItems(restaurant.id, [{ item, macro: { ...macros[0]!, reasoning: '{"kind":"reviewed-chain-v1"}' } }], p)).rejects.toThrow('proof is incomplete');

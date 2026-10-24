@@ -1,5 +1,5 @@
 # Path -> risk tier. Deterministic; a classifier may RAISE a tier, never lower.
-# Consumed by scripts/review/run-lens.sh (lens + model selection) and CI labels.
+# Historical risk reference; live review routing uses scripts/route-reviewers.sh.
 # docs: autonomous-shipping.md §3 Risk tiers.
 tiers:
   high:

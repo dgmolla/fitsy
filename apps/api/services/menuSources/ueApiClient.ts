@@ -15,6 +15,7 @@
  */
 
 import { ueNutritionLabel } from "./ueNutritionLabel";
+import { menuItemIdentity } from "./menuItemIdentity";
 import type { StructuredMenuItem } from "./types";
 
 const UE_BASE = "https://www.ubereats.com";
@@ -381,7 +382,7 @@ export type UeStoreParseOutcome =
  * intentionally-empty menu apart from a schema-drift parse failure.
  *
  * UE duplicates items across sections (e.g. "Most Popular" repeats items
- * from the main sections), so we dedupe by lowercased title, preferring
+ * from the main sections), so we dedupe by product UUID (name if absent), preferring
  * the first occurrence with a non-empty section.
  */
 export function classifyStoreV1Response(json: UeStoreResponse): UeStoreParseOutcome {
@@ -393,7 +394,7 @@ export function classifyStoreV1Response(json: UeStoreResponse): UeStoreParseOutc
   if (allSections.length === 0) return { ok: false, reason: "no_sections" };
 
   const items: StructuredMenuItem[] = [];
-  const seen = new Map<string, number>(); // lowered title → items[] index
+  const seen = new Map<string, number>(); // source product identity -> items[] index
   let sawStandardItemsPayload = false;
 
   for (const section of allSections) {
@@ -406,7 +407,8 @@ export function classifyStoreV1Response(json: UeStoreResponse): UeStoreParseOutc
       const title = raw.title?.trim();
       if (!title) continue;
 
-      const key = title.toLowerCase();
+      const sourceItemId = raw.uuid?.trim() ? `ubereats:${raw.uuid.trim()}` : undefined;
+      const key = menuItemIdentity({ name: title, sourceItemId });
       const existingIdx = seen.get(key);
       if (existingIdx !== undefined) {
         if (sectionName && !items[existingIdx]!.section) {
@@ -416,6 +418,7 @@ export function classifyStoreV1Response(json: UeStoreResponse): UeStoreParseOutc
       }
 
       const item: StructuredMenuItem = { name: title, ...ueNutritionLabel(raw.priceTagline?.text, raw.hasCustomizations) };
+      if (sourceItemId) item.sourceItemId = sourceItemId;
       if (raw.itemDescription) item.description = raw.itemDescription;
       if (typeof raw.price === "number" && raw.price > 0) item.price = raw.price / 100;
       if (sectionName) item.section = sectionName;

@@ -1,0 +1,27 @@
+# Precondition: a signed-in never-subscribed Fitsy account is on the ordinary
+# paywall and the device's store account has no Fitsy purchase to restore.
+appId: com.fitsy.mobile
+tags: [billing, onboarding, changed-journey]
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: paywall-restore
+    timeout: 30000
+- assertVisible:
+    id: paywall-logo
+- tapOn:
+    id: paywall-restore
+- extendedWaitUntil:
+    visible: "Nothing to restore"
+    timeout: 30000
+- assertNotVisible: "Welcome back."
+- tapOn: "OK"
+- assertVisible:
+    id: paywall-logo
+- assertVisible:
+    id: paywall-restore
+- assertNotVisible:
+    id: resubscribe-restore
+- takeScreenshot: subscription-restore-empty

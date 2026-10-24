@@ -84,12 +84,14 @@ suite('full two-chain catalog replay', () => {
         const officialCount = macros.filter(m => m?.source === 'official').length;
         const mains = items.filter(i => { const r = runtime.match(brand.id, i); return r.status === 'matched' && /bowl|plate|salad/.test(r.row.canonicalKey); });
         expect(mains).toHaveLength(index === 0 ? 17 : 2);
-        expect([items.length, officialCount, fallbackCount]).toEqual(index === 0 ? [79, 20, 59] : [72, 32, 40]);
+        // Source IDs retain 3 WaBa and 8 Yoshinoya same-name products; all still require estimation.
+        expect([items.length, officialCount, fallbackCount]).toEqual(index === 0 ? [82, 20, 62] : [80, 32, 48]);
         await persistHex(scope, slug, [{ restaurantId: r.id, brandId: brand.id, menuHash: 'full-captured-menu', items: items.map((item, i) => ({ item, macro: macros[i]! })) }], p, { validateInTx: validateHexInTx });
         const menu = await p.menuItem.findMany({ where: { restaurantId: r.id }, include: { macroEstimates: true } });
         expect(menu).toHaveLength(items.length);
         for (const input of items) {
-          const output = menu.find(m => m.name === input.name)!, result = runtime.match(brand.id, input);
+          const output = menu.find(m => m.sourceItemId === input.sourceItemId)!, result = runtime.match(brand.id, input);
+          expect(output).toBeDefined();
           if (result.status === 'matched') {
             const expected = truth.get(slug + ':' + bindings.get(slug + ':' + chainMenuFingerprint(input)))!;
             expect(facts(output)).toEqual(expected);

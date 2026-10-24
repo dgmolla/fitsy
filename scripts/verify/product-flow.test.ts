@@ -272,6 +272,7 @@ deterministicTest.each([
   ...['apps/mobile/app/auth/reviewer.tsx', 'apps/mobile/lib/authClient.ts'].map(path => [[path], ['auth', 'billing']]),
   [['apps/mobile/app/auth/signin.tsx'], ['auth']],
   [['apps/api/app/api/push-token/route.ts'], ['notifications']],
+  [['packages/shared/src/contracts/trialPolicy.ts'], ['billing', 'discovery', 'notifications', 'onboarding']],
   [['packages/shared/src/search.ts'], ['discovery']],
   [['apps/mobile/components/UnknownButton.tsx'], ['changed-journey']],
   [['apps/api/next.config.ts'], ['changed-journey']],

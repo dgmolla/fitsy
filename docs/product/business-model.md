@@ -111,7 +111,7 @@ model Subscription {
 | Cancel | Access until period end, then `EXPIRED` |
 | Reactivate after cancel | Store eligibility controls any introductory offer; restarting a subscription does not promise another trial |
 | Payment failure | Apple retries (Smart Retries); RevenueCat sets `GRACE_PERIOD`, then `PAST_DUE`; after ~16 days `EXPIRED` |
-| Restore purchases | `restore()` via RC SDK; re-checks entitlements; completes onboarding if `pro` active |
+| Restore purchases | `restore()` via RC SDK; active restores complete onboarding; inactive history requires the account-bound backend verdict before resubscribe; unresolved history holds for retry |
 
 ---
 

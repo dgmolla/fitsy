@@ -22,7 +22,7 @@ async function main(): Promise<void> {
       FROM "Restaurant" r
       JOIN "MenuItem" mi ON mi."restaurantId" = r.id
       JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
-      WHERE me.source = 'fatsecret' AND r."chainFlag" = false
+      WHERE mi."retiredAt" IS NULL AND me.source = 'fatsecret' AND r."chainFlag" = false
     `);
     const toFlip = preview[0]?.cnt ?? 0;
 
@@ -48,7 +48,7 @@ async function main(): Promise<void> {
         AND EXISTS (
           SELECT 1 FROM "MenuItem" mi
           JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
-          WHERE mi."restaurantId" = r.id AND me.source = 'fatsecret'
+          WHERE mi."restaurantId" = r.id AND mi."retiredAt" IS NULL AND me.source = 'fatsecret'
         )
     `);
     console.log(`Updated ${updated} restaurants to chainFlag=true.`);
