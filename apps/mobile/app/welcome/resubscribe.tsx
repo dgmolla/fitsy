@@ -30,7 +30,8 @@ import { useOwnedHardwareBack } from '@/lib/useOwnedHardwareBack';
  * entitlement has LAPSED (RevenueCat has a past record of it, but it isn't
  * active now) - as opposed to a user who never subscribed, who sees the
  * regular inline paywall card on the search tab instead. See app/index.tsx
- * for the routing decision and lib/purchases.ts `hasLapsedEntitlement`.
+ * for the routing decision and lib/useEntitlementVerdict.ts for the shared
+ * account-bound backend classification.
  *
  * A lapsed Fitsy account does not establish the current store account's
  * introductory eligibility. Only the live store result can promise a trial.
@@ -142,11 +143,13 @@ export default function ResubscribeScreen() {
     if (!(await ensureSessionForPurchase('resubscribe'))) return;
     setRestoring(true);
     try {
-      const isPro = await restore();
-      if (isPro) {
+      const outcome = await restore();
+      if (outcome === 'active') {
         claim();
         await openPurchasedDestination(navigation, { requireTargets: true });
-      } else if (isPro === false) {
+      } else if (outcome === 'expired') {
+        Alert.alert('Subscription ended', 'Your previous subscription is no longer active. Choose a plan to subscribe again.');
+      } else if (outcome === 'none') {
         Alert.alert('Nothing to restore', "We couldn't find an active subscription for this account.");
       }
     } finally {

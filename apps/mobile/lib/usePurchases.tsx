@@ -219,7 +219,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   });
 
   const { purchase, presentPaywall, restore } = usePurchaseActions({
-    setCustomerInfo, markStoreConfirmed, syncEntitlement,
+    setCustomerInfo, markStoreConfirmed, syncEntitlement, syncRestoredHistory: verdict.syncRestoredHistory,
   });
 
   // Time-based, so read on every render and let the memo key on the result.
