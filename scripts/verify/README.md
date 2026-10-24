@@ -28,7 +28,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `structural.sh` | 0 | the growing invariant checklist (`scripts/structural-tests.sh`) |
 | `secrets.sh` | 0 | no hardcoded keys, committed .env, or build output in the diff |
 | `lint.sh` | 1 | eslint clean across workspaces |
-| `typecheck.sh` | 1 | tsc clean per workspace |
+| `typecheck.sh` | 1 | workspace type-check scripts pass; API generates the current Prisma client before tsc |
 | `product-flow.sh` | 1 (local, blocking) | fresh candidate-bound simulator and affected-journey evidence; see `docs/engineering/devops/shipping.md` |
 | `boundaries.sh` | 1 | imports respect the layer graph in `.dependency-cruiser.cjs` (T3) |
 | `size-check.sh` | 1 | reports counted review size above or below the 600-line signal without imposing a hard cap |
@@ -41,15 +41,54 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `own-code-mocks.sh` | 2 (shadow) | api tests mock only external services |
 | `build.sh` | 3 | production API build, no stray compiled output |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |
-| `mobile-e2e.sh` | 7 (shadow) | Retired unscoped native smoke; use required source-bound product-flow with an exact owned UDID |
 | `api-e2e.sh` | 6 | a deployed API serves health + teaser-lock invariants (read-only by default; `--write` adds the register probe) |
 
 Callers: `.githooks/pre-push` (size/domain checks plus cheap layers 0-1, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
 
+`npm run verify:sim-plan` prints the simulator scope, reason and exact existing Maestro flow names.
+Use `npm run verify:sim-plan -- --release-candidate` for explicit release planning; release events and tag refs also require the full flow set.
+`impact-plan.mjs` consumes the retained `route-reviewers.sh` ownership routing and `risk-tiers.yml` path policy, then maps mobile paths to flows.
+The retired review tier executable is not required; `REVIEW.md` severity rules and independent review remain separate.
+Docs, tests, scripts and ordinary non-mobile changes select `none`; mapped mobile behavior selects `flow`; navigation, auth, billing, native configuration, release and unknown mobile impact select `full`.
+Manifest edits confined to verification scripts are verification tooling, so they do not request a simulator.
+Dependency, lifecycle/build script and other manifest changes retain their normal risk; unreadable manifest comparisons cannot narrow coverage.
+Every mobile or web UI source change requires simulator/E2E coverage.
+Proven literal copy or StyleSheet value edits on mapped screens select `scope: smoke` and `mode: render`, using the maintained journey's setup through the screen's render assertion and a screenshot.
+Changed navigation, state, forms, new/deleted screens and uncertain syntax retain affected E2E flows.
+Shared components, theme/assets, app shells and unmapped UI require the full suite.
+Mixed changes keep the broader coverage; render smoke never narrows high risk.
+The exact `needs-sim` PR label forces execution, using the affected selection when available and the full set otherwise.
+Unavailable history or classification expands to full coverage.
+Adding or removing that label reruns Verify.
+
+The existing Build job runs only L3 checks on Ubuntu.
+CI computes `none|smoke|flow|full`, exports flow names and render checkpoints, and uploads the full plan as `selection.json` in the `sim-scope` artifact.
+The classifier and its baseline scripts have read-only credentials, with checkout credential persistence disabled.
+The separate `sim-scope.yml` completion workflow loads its publisher from the protected workflow revision, validates the source run, artifact and current PR head, and posts `Sim scope` with `scope=<scope> flows=<count>`.
+Only that trusted publisher has `statuses: write`; it never executes candidate code.
+The local poller reads exact flow names and render checkpoints from the linked Verify run's `selection.json`, rather than parsing names from the bounded status description.
+A docs-only `needs-sim` label requests local flows while static, tests and Build remain skipped.
+The final Verify aggregator is unchanged.
+Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
+Run the local scripted gate with `node scripts/sim/ci.mjs --scope=<scope> --flows=<comma-list> --udid=<UDID>` after loading the Mac's dev environment and preparing its candidate build.
+Use `--plan` to inspect explicit scope and flows without launching native tools; `--scope=changed` consumes the shared impact plan.
+Keep render checkpoints and the comparison range aligned with the selected PR head.
+Account-dependent journeys declare `fixture:` and `store:` tags in their maintained YAML.
+Load `FITSY_E2E_FIXTURES` with local, untracked preparation commands and per-fixture public environments as described in [the native README](../../apps/mobile/e2e/README.md#local-journey-fixtures).
+The runner resolves every required fixture before native execution, prepares it before each journey, validates the installed build/store and restarts owned Metro for that fixture's configuration.
+It preserves the full flow set and fails when genuine purchase history or the required store build is unavailable.
+CI execution is refused by the local runner, and the registry contains no native execution check.
+Replay scope regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/simulator-scope.test.ts sim/ci.test.ts`.
+Replay trusted publication and fixture isolation with `node --test scripts/verify/sim-scope-status.test.mjs scripts/sim/journey-fixtures.test.mjs`.
+See [shipping.md](../../docs/engineering/devops/shipping.md) for native setup, billing starting states and separate source-bound product acceptance.
+
 The local pre-push hook runs size/domain checks, then cheap static checks and focused tests.
+UI smoke executes locally on the Mac, with no simulator step added to this hook.
 A fresh checkout needs installed dependencies but no issue binding, review daemon or home-directory review state.
 Keep dependencies local to this checkout so workspace links resolve its own packages.
-After merging schema changes, regenerate its Prisma client with `npx prisma generate --schema=prisma/schema.prisma` before verification.
+Type checking calls each workspace's `npm run type-check`, including Prisma generation from the repository schema before compiling the API.
+This refreshes stale generated types after schema updates without requiring a database connection or migration.
+To refresh the client separately after merging schema changes, run `npx prisma generate --schema=prisma/schema.prisma`.
 GitHub requires `Verify` and `AI review` on the current PR head and owns heavy validation.
 Every selected check executes on each invocation and reports its actual exit status.
 An empty check selection or a missing registry script fails verification.
