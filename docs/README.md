@@ -34,6 +34,7 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 **`pipeline/`** — UE-first preload pipeline
 - [reviewed-chain-matcher.md](engineering/pipeline/reviewed-chain-matcher.md) — reviewed official facts, serving identity, and source priority
+- [chain-rollout-proposals.md](engineering/pipeline/chain-rollout-proposals.md) - LA chain coverage projections, source-ID bindings, allulose and manual-source holds
 - [ue-first-pipeline.md](engineering/pipeline/ue-first-pipeline.md) — primary design (Uber Eats discovery)
 - [runbook.md](engineering/pipeline/runbook.md) — operations (`scripts/preload-ue-first.ts --phase …`)
 - [macro-accuracy-recommendations-2026-08-16.md](engineering/pipeline/macro-accuracy-recommendations-2026-08-16.md) — accuracy/model decisions (latest)

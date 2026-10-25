@@ -7,14 +7,15 @@
  *   - Resolves Brand.id by slug (read-only DB).
  *   - Requires the verifier's aliases-high.json for both dry runs and DB landing.
  *   - Writes the consolidated set to scripts/phase1-out/chainitems.json after validation.
- *   - With --apply: upserts ChainItem on (brandId, canonicalKey). 🔴 GATED — needs human go
- *     AND the ChainItem model present in prisma/schema.prisma (+ `prisma generate`). Until then
- *     --apply is a no-op-with-warning; the dry run (default) just builds the local artifact.
+ *   - With --apply: upserts unreviewed ChainItem candidates on (brandId, canonicalKey).
+ *     This is a real database write and is outside issue #498's proposal-only scope.
+ *     Reviewed catalog bindings use preload-chain-product-batch.ts and the guarded catalog planner.
  *
  * Run (dry, safe):  npx tsx --env-file=.env.local scripts/phase1-land.ts
  * Run (apply, GATED): npx tsx --env-file=.env.local scripts/phase1-land.ts --apply
  *
- * Runbook: docs/engineering/pipeline/phase1-extraction-execution.md → M6
+ * Historical M6 runbook: docs/engineering/archive/phase1-extraction-execution.md
+ * Current proposal scope: docs/engineering/pipeline/chain-rollout-proposals.md
  */
 import { PrismaClient } from "@prisma/client";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -29,8 +30,8 @@ const RUN_DIR = "scripts/phase1-out/run";
 const APPLY = process.argv.includes("--apply");
 const p = new PrismaClient();
 
-interface Row { name: string; servingSize: string | null; calories: number | null; proteinG: number | null; carbsG: number | null; fatG: number | null; canonicalKey: string; valid: boolean }
-interface ChainItemOut { brandSlug: string; brandId: string | null; canonicalKey: string; aliases: string[]; name: string; servingSize: string | null; calories: number; proteinG: number; carbsG: number; fatG: number; source: "official"; confidence: "HIGH"; officialUrl: string | null }
+interface Row { name: string; servingSize: string | null; calories: number | null; proteinG: number | null; carbsG: number | null; fatG: number | null; alluloseG?: number | null; canonicalKey: string; valid: boolean }
+interface ChainItemOut { brandSlug: string; brandId: string | null; canonicalKey: string; aliases: string[]; name: string; servingSize: string | null; calories: number; proteinG: number; carbsG: number; fatG: number; alluloseG?: number; source: "official"; confidence: "HIGH"; officialUrl: string | null }
 
 async function main() {
   const cov = JSON.parse(readFileSync(join(RUN_DIR, "_coverage.json"), "utf8"));
@@ -51,6 +52,7 @@ async function main() {
       if (!r.valid || r.calories == null || r.proteinG == null || r.carbsG == null || r.fatG == null) continue;
       const aliases = ALIASES[b.slug]?.[r.canonicalKey] ?? [];
       out.push({ brandSlug: b.slug, brandId, canonicalKey: r.canonicalKey, aliases, name: r.name, servingSize: r.servingSize,
+        ...(r.alluloseG != null ? { alluloseG: r.alluloseG } : {}),
         calories: r.calories, proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, source: "official", confidence: "HIGH", officialUrl: b.official });
     }
   }

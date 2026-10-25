@@ -163,6 +163,20 @@ describe("checkMacroMismatch", () => {
     const macro = makeMacro({ calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
     expect(checkMacroMismatch(macro)).toBeNull();
   });
+
+  it('uses reviewed allulose provenance through actual ingestion validation without suppressing ordinary mismatches', () => {
+    const macro = makeMacro({ calories: 12, proteinG: 0, carbsG: 30, fatG: 0, source: 'official', confidence: 'HIGH',
+      reasoning: JSON.stringify({ kind: 'reviewed-chain-v1', allulose: { grams: 30, locator: 'Synthetic label line' } }) });
+    expect(validateItems([makeItem('Synthetic allulose serving')], [macro])).toMatchObject({
+      valid: [{ macro: { calories: 12, carbsG: 30 } }], rejected: [], macroMismatches: [] });
+    for (const patch of [{ source: 'haiku' }, { confidence: 'LOW' as const }, { reasoning: 'invalid' },
+      { reasoning: JSON.stringify({ kind: 'other', allulose: { grams: 30, locator: 'label' } }) },
+      { reasoning: JSON.stringify({ kind: 'reviewed-chain-v1', allulose: { grams: 31, locator: 'label' } }) },
+      { reasoning: JSON.stringify({ kind: 'reviewed-chain-v1', allulose: { grams: -1, locator: 'label' } }) },
+      { reasoning: JSON.stringify({ kind: 'reviewed-chain-v1', allulose: { grams: 30, locator: '' } }) }]) {
+      expect(checkMacroMismatch({ ...macro, ...patch })).not.toBeNull();
+    }
+  });
 });
 
 describe("dedupByIdentity (S-133)", () => {

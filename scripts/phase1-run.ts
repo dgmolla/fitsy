@@ -8,15 +8,15 @@
  *
  * Routing:
  *   pdf            → download → extractPdf (render→vision, chunked)
- *   nutrition-page → extractStaticHtml; if it yields < MIN_ROWS valid → mark SPA/empty (defer)
+ *   nutrition-page → extractStaticHtml; if it yields < MIN_ROWS valid → require manual source review
  *   site / other   → same static attempt, else defer
  * SPA + static-empty + no-official → deferred to the FatSecret/Haiku fallback tier (still
- *   "enriched", just not via official). The headless SPA route (M4) lands later.
+ *   "enriched", just not via official). Every unresolved chain is listed in _manual-sources.json.
  *
  * Run:  npx tsx --env-file=.env.local scripts/phase1-run.ts [discoverFile] [maxBrands]
  *   defaults: scripts/phase1-discover-sample.json , 20
  *
- * Runbook: docs/engineering/pipeline/phase1-extraction-execution.md
+ * Runbook: docs/engineering/pipeline/chain-rollout-proposals.md
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,7 +25,8 @@ import { cost, extractPdf, extractStaticHtml, reconcileKey, curlBytes, type Chai
 
 const DISCOVER = process.argv[2] ?? "scripts/phase1-discover-sample.json";
 const MAX_BRANDS = Number(process.argv[3] ?? 20);
-const MIN_ROWS = 5; // fewer valid official rows than this → treat artifact as SPA/empty, defer
+if (!Number.isSafeInteger(MAX_BRANDS) || MAX_BRANDS < 1) throw new Error('maxBrands must be a positive integer');
+const MIN_ROWS = 5; // Sparse extraction needs manual review; this threshold does not establish a SPA.
 const RUN_DIR = "scripts/phase1-out/run";
 mkdirSync(RUN_DIR, { recursive: true });
 
@@ -43,7 +44,8 @@ async function downloadPdf(url: string): Promise<string> {
 
 async function runBrand(b: DiscoverRow): Promise<BrandResult> {
   const base = { slug: b.slug, display: b.display, official: b.official };
-  if (!b.official) return { ...base, status: "deferred-no-official", route: "none", rows: 0, valid: 0 };
+  if (!b.official || !b.outcome?.startsWith('official')) return { ...base, status: "deferred-no-official", route: "none", rows: 0, valid: 0,
+    note: 'Manual source required: retain an official US nutrition PDF or rendered table, including serving sizes and source hash.' };
   let rows: ChainItemRow[] = [];
   let route = b.artifactType ?? "site";
   try {
@@ -59,20 +61,27 @@ async function runBrand(b: DiscoverRow): Promise<BrandResult> {
   const valid = rows.filter((r) => r.valid);
   writeFileSync(join(RUN_DIR, `${b.slug}.json`), JSON.stringify({ ...base, route, rows }, null, 2));
   if (valid.length >= MIN_ROWS) return { ...base, status: "official", route, rows: rows.length, valid: valid.length };
-  // static route came back near-empty → almost certainly a JS-SPA (or a thin page): defer
-  return { ...base, status: b.artifactType === "pdf" ? "deferred-empty" : "deferred-spa", route, rows: rows.length, valid: valid.length };
+  // Sparse static output may be a SPA, a small table or an extraction failure; retain the source hold.
+  return { ...base, status: b.artifactType === "pdf" ? "deferred-empty" : "deferred-spa", route, rows: rows.length, valid: valid.length,
+    note: 'Manual source required: static extraction is insufficient. Retain the official US PDF or rendered nutrition table and exact serving choices; do not approve fallback estimates.' };
 }
 
 async function main() {
   const disc = JSON.parse(readFileSync(DISCOVER, "utf8")).results as DiscoverRow[];
-  const gated = disc.filter((d) => d.outcome?.startsWith("official")).slice(0, MAX_BRANDS);
-  console.log(`routing ${gated.length} brands with official artifacts (of ${disc.length} discovered)\n`);
+  const gated = disc.slice(0, MAX_BRANDS);
+  if (!gated.length) throw new Error('No discovered brands; refusing an empty coverage report');
+  console.log(`routing ${gated.length} discovered brands (of ${disc.length})\n`);
   const results: BrandResult[] = [];
   for (const b of gated) {
     const ckpt = join(RUN_DIR, `${b.slug}.result.json`);
-    if (existsSync(ckpt)) { results.push(JSON.parse(readFileSync(ckpt, "utf8"))); console.log(`  ✓ ${b.display} (cached)`); continue; }
+    if (existsSync(ckpt)) {
+      const cached = JSON.parse(readFileSync(ckpt, "utf8")) as BrandResult & { checkpointVersion?: number };
+      if (cached.checkpointVersion === 2 && cached.official === b.official && cached.route === (b.official && b.outcome?.startsWith('official') ? b.artifactType ?? 'site' : 'none')) {
+        results.push(cached); console.log(`  ✓ ${b.display} (cached)`); continue;
+      }
+    }
     const r = await runBrand(b);
-    writeFileSync(ckpt, JSON.stringify(r, null, 2));
+    writeFileSync(ckpt, JSON.stringify({ ...r, checkpointVersion: 2 }, null, 2));
     results.push(r);
     const tag = r.status === "official" ? `✓ official ${r.valid}/${r.rows}` : r.status;
     console.log(`  ${tag.padEnd(22)} ${r.display.slice(0, 26).padEnd(26)} [${r.route}]  $${cost.usd.toFixed(2)}`);
@@ -82,12 +91,15 @@ async function main() {
   const officialN = by("official"); const totalItems = officialN.reduce((a, r) => a + r.valid, 0);
   console.log(`\n=== coverage over ${results.length} brands ===`);
   console.log(`  official-extracted : ${officialN.length}  (${totalItems} validated items)`);
-  console.log(`  deferred → SPA      : ${by("deferred-spa").length}  (need M4 headless or fallback tier)`);
+  console.log(`  deferred → SPA      : ${by("deferred-spa").length}  (manual official US source required)`);
   console.log(`  deferred → empty    : ${by("deferred-empty").length}`);
   console.log(`  deferred → no-official: ${by("deferred-no-official").length}`);
   console.log(`  errors              : ${by("error").length}`);
   console.log(`  spend               : $${cost.usd.toFixed(2)} / cap`);
   writeFileSync(join(RUN_DIR, "_coverage.json"), JSON.stringify({ generated: DISCOVER, results, spendUsd: cost.usd }, null, 2));
+  writeFileSync(join(RUN_DIR, "_manual-sources.json"), JSON.stringify({ generated: DISCOVER, proposalsOnly: true,
+    chains: results.filter(r => r.status !== 'official').map(r => ({ ...r,
+      action: 'Capture official US nutrition with serving context, hash the retained source, then use reviewed catalog batches. No production application is authorized by this report.' })) }, null, 2));
   console.log(`\n  → ${RUN_DIR}/_coverage.json`);
 }
 main().catch((e) => { console.error("RUN ERROR:", e.message); process.exit(1); });

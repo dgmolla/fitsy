@@ -6,7 +6,7 @@ import { chainPilot } from "../apps/api/services/chainPilotData";
 import { chainCatalogBatchSchema } from "../apps/api/services/chainCatalogBatch";
 import { planChainPilot, applyCatalogPlan, rollbackCatalogPlan, stateHash, type CatalogPlan } from "../apps/api/services/chainPilotPlan";
 import { applyAprilChainMatch, aprilMenuIdentity, officialMacro, AprilPlanChangedError, verifiedBrand } from "../apps/api/services/chainServing";
-import { buildChainMatcher, chainMenuFingerprint, type ApprovedChainRow } from "../apps/api/services/chainCatalog";
+import { buildChainMatcher, chainBindingFingerprint, type ApprovedChainRow } from "../apps/api/services/chainCatalog";
 import { rollbackAprilBatch, type AprilSnapshot } from "../apps/api/services/chainPilotRollback";
 import { applyAprilChainBatch, MAX_APRIL_CHUNK } from "../apps/api/services/chainAprilBatch";
 import { readAprilJournals } from "./preload-chain-april-journal";
@@ -49,11 +49,11 @@ async function main() {
   if (command === "menu-inventory") {
     const { brands } = await inventory();
     const items = await p.menuItem.findMany({ where: { retiredAt: null, restaurant: { brandId: { in: brands.map(b => b.id) } } },
-      select: { id: true, name: true, section: true, description: true, restaurant: { select: { brandId: true } } }, orderBy: { id: "asc" } });
-    const variants = new Map<string, { slug: string; name: string; section: string; description: string; itemIds: string[] }>();
+      select: { id: true, name: true, sourceItemId: true, section: true, description: true, restaurant: { select: { brandId: true } } }, orderBy: { id: "asc" } });
+    const variants = new Map<string, { slug: string; name: string; sourceItemId?: string; section: string; description: string; itemIds: string[] }>();
     for (const item of items) {
-      const identity = { name: item.name, section: item.section ?? "", description: item.description ?? "" };
-      const slug = brands.find(b => b.id === item.restaurant.brandId)!.slug, key = slug + ":" + chainMenuFingerprint(identity);
+      const identity = { name: item.name, section: item.section ?? "", description: item.description ?? "", ...(item.sourceItemId ? { sourceItemId: item.sourceItemId } : {}) };
+      const slug = brands.find(b => b.id === item.restaurant.brandId)!.slug, key = slug + ":" + chainBindingFingerprint(identity);
       const group = variants.get(key) ?? { slug, ...identity, itemIds: [] };
       group.itemIds.push(item.id); variants.set(key, group);
     }
