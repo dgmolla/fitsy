@@ -1,6 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { chainTransaction } from "./chainTransaction";
-import { approvedChainRow, buildChainMatcher, chainMenuFingerprint, type ApprovedChainRow } from "./chainCatalog";
+import { approvedChainRow, buildChainMatcher, chainBindingFingerprint, type ApprovedChainRow } from "./chainCatalog";
 import { AprilPlanChangedError, aprilMenuIdentity, buildBrandIdentityMatcher, officialMacro } from "./chainServing";
 import { stateHash } from "./chainPilotPlan";
 import type { AprilSnapshot, AprilJournal } from "./chainAprilTypes";
@@ -35,7 +35,7 @@ export async function applyAprilChainBatch(prisma: PrismaClient, entries: AprilB
       if (!row || approvedChainRow(row)?.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("Chain review changed; rebuild the plan");
       if (!restaurant || identity(restaurant) !== approved.brandId) throw new AprilPlanChangedError("Restaurant brand identity changed");
       if (!actual || actual.restaurantId !== before.restaurantId || actual.updatedAt.getTime() !== new Date(before.updatedAt).getTime()
-        || chainMenuFingerprint(aprilMenuIdentity(actual)) !== chainMenuFingerprint(aprilMenuIdentity(before))) throw new AprilPlanChangedError("April item changed; rebuild the plan");
+        || chainBindingFingerprint(aprilMenuIdentity(actual)) !== chainBindingFingerprint(aprilMenuIdentity(before))) throw new AprilPlanChangedError("April item changed; rebuild the plan");
       if (stateHash(actual.macroEstimates) !== stateHash(before.macroEstimates)) throw new AprilPlanChangedError("April estimates changed; rebuild the plan");
       const item = aprilMenuIdentity(actual), result = match(approved.brandId, item, restaurant);
       if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("April item has no current reviewed binding");

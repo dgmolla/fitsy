@@ -10,7 +10,7 @@
  *
  * PDF route: pdftoppm render → PNG (downscaled via sharp) → extractFromImages.
  *
- * Runbook + guardrails: docs/engineering/pipeline/phase1-extraction-execution.md
+ * Runbook + source review: docs/engineering/pipeline/chain-rollout-proposals.md
  * Model is a single constant (Haiku to start; swap if dense grids fail).
  *
  * Run:
@@ -18,11 +18,12 @@
  *   npx tsx --env-file=.env.local scripts/phase1-extract.ts <pdf-path> "<Brand Name>"
  */
 import Anthropic from "@anthropic-ai/sdk";
+import { nutritionEnergy } from "../apps/api/services/nutritionEnergy";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import sharp from "sharp";
+import sharp = require("sharp");
 
 // ---- config / guardrails ----
 const MODEL = "claude-haiku-4-5" as const; // single swap point
@@ -52,6 +53,7 @@ export interface NutritionRow {
   proteinG: number | null;
   carbsG: number | null;
   fatG: number | null;
+  alluloseG?: number | null;
 }
 export interface ChainItemRow extends NutritionRow {
   canonicalKey: string;
@@ -63,9 +65,10 @@ export interface ChainItemRow extends NutritionRow {
 export function validateRow(r: NutritionRow): { valid: boolean; note: string } {
   const { calories: cal, proteinG: p, carbsG: c, fatG: f } = r;
   if (cal == null || p == null || c == null || f == null) return { valid: false, note: "missing-macro" };
-  if (cal < 0 || cal > 3000) return { valid: false, note: "cal-out-of-range" };
+  if (!Number.isFinite(cal) || cal < 0 || cal > 3000) return { valid: false, note: "cal-out-of-range" };
   if ([p, c, f].some((g) => g < 0 || g > 400)) return { valid: false, note: "gram-out-of-range" };
-  const atwater = 4 * p + 4 * c + 9 * f;
+  const atwater = nutritionEnergy(p, c, f, r.alluloseG ?? 0);
+  if (atwater === null) return { valid: false, note: "invalid-macro-or-allulose" };
   // tolerance: labels round + fiber/alcohol/sugar-alcohol slack → max(60 cal, 20%)
   const tol = Math.max(60, 0.2 * cal);
   const delta = Math.abs(atwater - cal);
@@ -98,6 +101,7 @@ const TOOL = {
             protein_g: { type: "number" },
             carbs_g: { type: "number" },
             fat_g: { type: "number" },
+            allulose_g: { type: "number", description: "Explicitly published allulose grams per serving only; omit if absent. Total carbohydrate includes allulose." },
           },
           required: ["name", "calories", "protein_g", "carbs_g", "fat_g"],
         },
@@ -121,7 +125,8 @@ export async function extractFromImages(brand: string, pngs: Buffer[]): Promise<
       `These are the official nutrition page(s) for "${brand}". Extract EVERY menu item with its ` +
       `nutrition facts and call record_nutrition. One row per item. Use the standard listed ` +
       `serving. Report calories and grams of protein/carbs/fat exactly as printed. If an item is ` +
-      `missing any of calories/protein/carbs/fat, omit that item. Do not invent values.`,
+      `missing any of calories/protein/carbs/fat, omit that item. Copy allulose grams only when explicitly ` +
+      `published for that serving; never infer it from ingredients or calorie differences. Do not invent values.`,
   });
 
   const msg = await client().messages.create({
@@ -143,6 +148,7 @@ export async function extractFromImages(brand: string, pngs: Buffer[]): Promise<
     name: String(it.name ?? "").trim(),
     servingSize: it.serving_size ? String(it.serving_size) : null,
     calories: num(it.calories), proteinG: num(it.protein_g), carbsG: num(it.carbs_g), fatG: num(it.fat_g),
+    alluloseG: num(it.allulose_g),
   })).filter((r) => r.name.length > 0);
 }
 const num = (v: unknown): number | null => (typeof v === "number" && isFinite(v) ? v : null);
@@ -157,7 +163,8 @@ export async function extractFromText(brand: string, text: string): Promise<Nutr
     messages: [{ role: "user", content:
       `The following is text scraped from the official nutrition page for "${brand}". Extract EVERY ` +
       `menu item with complete nutrition facts and call record_nutrition. One row per item; calories ` +
-      `and grams of protein/carbs/fat as printed. Omit items missing any of those four. Do not invent.\n\n` +
+      `and grams of protein/carbs/fat as printed. Omit items missing any of those four. Copy allulose grams ` +
+      `only when published for that serving; never infer it from ingredients or calorie differences. Do not invent.\n\n` +
       text.slice(0, 120_000) }],
   });
   track(msg.usage.input_tokens, msg.usage.output_tokens);
@@ -168,6 +175,7 @@ export async function extractFromText(brand: string, text: string): Promise<Nutr
   return raw.map((it) => ({
     name: String(it.name ?? "").trim(), servingSize: it.serving_size ? String(it.serving_size) : null,
     calories: num(it.calories), proteinG: num(it.protein_g), carbsG: num(it.carbs_g), fatG: num(it.fat_g),
+    alluloseG: num(it.allulose_g),
   })).filter((r) => r.name.length > 0);
 }
 

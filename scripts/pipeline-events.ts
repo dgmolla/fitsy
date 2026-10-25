@@ -1,14 +1,16 @@
 /**
  * Pipeline event types and Axiom emitter (S-120).
  *
- * Emits 4 event types to the `fitsy-pipeline` Axiom dataset:
+ * Emits events to the `fitsy-pipeline` Axiom dataset:
  *   - restaurant: per restaurant, batched per hex
  *   - error:      real-time on failure
  *   - cost_checkpoint: per hex
  *   - run:        end of pipeline
+ *   - ai_usage:   measured usage and item allocations for each paid response
  */
 
 import { Axiom } from "@axiomhq/js";
+import type { AiUsageEvent, AiUsageTotals } from './preload-cost';
 
 const DATASET = "fitsy-pipeline";
 
@@ -38,6 +40,7 @@ export interface RestaurantEvent {
   nameMismatch: boolean;
   durationMs: number;
   _time: string;
+  aiUsage?: AiUsageTotals;
 }
 
 export interface PipelineError {
@@ -61,6 +64,10 @@ export interface CostCheckpoint {
   hexesCompleted: number;
   hexesTotal: number;
   cumulativeCost: number;
+  hexCost?: number;
+  hexUsage?: AiUsageTotals;
+  cumulativeUsage?: AiUsageTotals;
+  status?: 'completed' | 'spend_cap' | 'failed';
   cumulativeCostBreakdown: {
     braveSearch: number;
     firecrawl: number;
@@ -80,6 +87,9 @@ export interface RunEvent {
   restaurantsFailed: number;
   itemsTotal: number;
   costTotal: number;
+  aiUsage?: AiUsageTotals;
+  costPer1kItems?: number;
+  status?: 'completed' | 'spend_cap' | 'failed';
   _time: string;
 }
 
@@ -102,7 +112,7 @@ export interface SubstepEvent {
   _time: string;
 }
 
-export type PipelineEvent = RestaurantEvent | PipelineError | CostCheckpoint | RunEvent | SubstepEvent;
+export type PipelineEvent = RestaurantEvent | PipelineError | CostCheckpoint | RunEvent | SubstepEvent | AiUsageEvent;
 
 // ─── Emitter ────────────────────────────────────────────────────────────────
 
@@ -123,6 +133,11 @@ export class PipelineEmitter {
     if (this.axiom) {
       this.axiom.ingest(DATASET, [event]);
     }
+  }
+
+  /** Billable responses are emitted before parsing or menu persistence can fail. */
+  emitUsage(event: AiUsageEvent): void {
+    if (this.axiom) this.axiom.ingest(DATASET, [event]);
   }
 
   /**

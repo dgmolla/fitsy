@@ -8,6 +8,10 @@
 
 ## Source identity cutover and collision audit
 
+Issue #498 is currently proposals only.
+Use the [LA chain coverage and manual-source runbook](chain-rollout-proposals.md) for a production read-only census and offline before/after projections.
+The `audit:chain-coverage` command never applies catalog, menu or nutrition changes.
+
 For issue #501, stop old ingestion and backfill processes before the source identity migration, then resume only with compatible readers and writers.
 Follow the [identity and rollback contract](../backend/idempotent-preload-spec.md) for a bounded forced canary and saved-ID comparison.
 A schema migration preserves existing rows but cannot recover already discarded source products without a refresh.
@@ -119,6 +123,8 @@ npx tsx scripts/preload-ue-first.ts [flags]
 | `--days N` | integer (default: 7) | Skip restaurants scraped within N days (pre-fetch gate) |
 | `--run-id ID` | string | Use this explicit run ID; otherwise auto-resumes or generates `run-ue-first-YYYY-MM-DD` |
 | `--skip-preflight` | flag | Skip UE + Anthropic preflight (useful for offline/unit testing) |
+| `--cost-cap-usd USD` | non-negative dollars (default: `15`) | Cumulative AI cap for this run, including prior attempts; overrides `PRELOAD_COST_CAP_USD` |
+| `--cost-log PATH` | default: `scripts/cache/preload-costs/<encoded-run-id>.jsonl` | Append-only usage ledger; reuse the same file when resuming |
 
 ---
 
@@ -129,10 +135,11 @@ npx tsx scripts/preload-ue-first.ts [flags]
 ```bash
 vercel env pull .env.local
 export $(grep -v '^#' .env.local | xargs)
-npx tsx scripts/preload-ue-first.ts --phase=both
+npx tsx scripts/preload-ue-first.ts --phase=both --cost-cap-usd=200
 ```
 
 Expected: ~40 res-5 probes, ~94+ restaurants per hex, ~100 hexes total, 4–5 hours, ~$125–179 first run.
+The example explicitly budgets $200; the default $15 cap stops a larger run early.
 
 ### Discover-only (populate Restaurant rows, no menu enrichment)
 
@@ -196,6 +203,52 @@ On startup (Phase 2, no `--run-id` flag):
 
 **Hex-level atomicity:** each hex's Restaurant rows, MenuItem rows, MacroEstimate rows, and `PipelineCompletedHex` checkpoint are written in a single `$transaction`. On crash mid-hex, the DB has no partial data for that hex. On resume, `filterPendingHexes` returns the hex again and it is reprocessed from scratch.
 
+### AI spend accounting and resumable cap
+
+Each Haiku response records its actual input/output and cache token counts before JSON parsing or nutrition validation.
+The ledger and Axiom `ai_usage` events retain failed responses and retries, including spend from an aborted hex.
+The credential preflight uses the unbilled Models API instead of an untracked message.
+Usage is priced at [Haiku 4.5 standard rates](https://platform.claude.com/docs/en/about-claude/pricing): $1 per million input tokens and $5 per million output tokens, with $1.25 for default five-minute cache writes and $0.10 for cache reads.
+The pipeline currently sends ordinary synchronous requests without explicit prompt caching.
+
+Each request records its run, hex, restaurant, provider-qualified item identities, and per-item token/cost allocations.
+Anthropic reports tokens for a whole request, so `allocation: equal_batch_share` divides each token category evenly among submitted items, assigning integer remainders in input order.
+These allocations sum to the actual request charge; they are not provider-measured individual-item token counts.
+Run, hex, and restaurant totals include all billable attempts, even rejected or malformed estimates.
+The summary prints `total_cost` and `cost_per_1k_items`, using submitted AI item attempts as the denominator and zero for an empty run.
+Official and FatSecret results bypassing Haiku add no AI usage.
+
+The cap is checked before every paid chunk and retry, and before scheduling another restaurant or hex.
+Already active requests drain and are charged, so final spend can exceed the cap by those responses.
+An incomplete hex receives no menu writes or completion checkpoint and remains pending for resume.
+The run exits cleanly with status `spend_cap`, prints the resume command details, and flushes telemetry.
+
+```mermaid
+flowchart LR
+    A[Restore run ledger] --> B{Below cap?}
+    B -->|Yes| C[Request Haiku chunk]
+    C --> D[Append measured usage and item shares]
+    D --> E[Parse and validate]
+    E --> B
+    B -->|No| F[Drain active calls and print summary]
+    F --> G[Keep incomplete hex pending]
+```
+
+Keep the ledger when restarting or moving the run to another machine, and use one process per run/ledger.
+Resuming restores cumulative spend; raising the cap increases the total run budget rather than resetting prior charges.
+Use the explicit run ID printed by the summary, especially if the first hex stopped before any DB checkpoint or the run crosses midnight.
+For example:
+
+```bash
+npx tsx scripts/preload-ue-first.ts --phase=enrich --run-id run-ue-first-2026-10-24 --cost-cap-usd=30
+```
+
+Reuse `--cost-log PATH` as well if the original run used a custom path.
+Dry runs still call Haiku and record real spend, although they skip menu and completion writes.
+Missing or malformed usage, incomplete ledger records, and ledger write failures stop further estimation instead of silently reporting zero or resetting the cap.
+Preserve those records for reconciliation before resuming.
+Runs predating this accounting have no recoverable historical token totals; their ledger starts with newly observed usage.
+
 To force a completely fresh run (ignores all checkpoints):
 
 ```bash
@@ -211,9 +264,15 @@ All events are emitted to **Axiom dataset `fitsy-pipeline`** via `PipelineEmitte
 | Event type | When emitted | Volume (full LA run) |
 |---|---|---|
 | `restaurant` | Per restaurant, batched per hex | ~6,000–10,000 |
+| `ai_usage` | After each Haiku response, before parsing; also saved in the local ledger | One per billable response |
 | `error` | Immediately on failure | Varies — typically 50–500 |
-| `cost_checkpoint` | After each hex completes | ~100 |
-| `run` | Once, after run completes | 1 |
+| `cost_checkpoint` | After each completed hex or an interrupted hex with drained workers | ~100 |
+| `run` | Once per invocation, including a spend-cap stop | 1 |
+
+`restaurant.aiUsage` contains restaurant totals.
+Cost checkpoints include `hexUsage`, `hexCost`, `cumulativeUsage`, and the measured `cumulativeCost`/`cumulativeCostBreakdown.haiku`.
+Run events contain `aiUsage`, `costTotal`, `costPer1kItems`, the actual completed hex count, and `status` (`completed`, `spend_cap`, or `failed`).
+The usage ledger remains available without `AXIOM_TOKEN`.
 
 Events are distinguishable by `phase: 'ue-first'` field for Axiom dashboard filtering.
 
@@ -234,7 +293,7 @@ npx tsx scripts/pipeline-report.ts --latest
 | Error spike | > 50 errors in 5-minute window |
 | Run failed | `restaurantsFailed > restaurantsPersisted` on run event |
 | Cost overrun | `costTotal > 200` on run event |
-| Cost checkpoint spike | `cumulativeCost > 5` on a single hex checkpoint |
+| Cost checkpoint spike | `hexCost > 5` on a single hex checkpoint |
 | Zero output | `restaurantsPersisted == 0` on run event |
 
 Monitor definitions are provisioned by `scripts/axiom-setup.ts` (source of truth for the exact queries).

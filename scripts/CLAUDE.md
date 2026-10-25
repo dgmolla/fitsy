@@ -9,6 +9,9 @@
 - `dev/`: dev-environment provisioning + reset (refuses prod URLs).
 - `gen/`: scaffolds routes/screens in the guarded, tested shape (T1).
 - `sim/`: simulator CLI for the L7 verifier.
+- `eval/`: offline model evaluations; `npm run eval:chain-match` compares frozen
+  LA item/fact decisions with the real alias matcher (baseline is the default).
+  Protocol and results: `docs/engineering/pipeline/jev-chain-match-eval.md`.
 
 ## Non-negotiables
 - Imports: `packages/shared` + `apps/api/services` only; never api lib/app or

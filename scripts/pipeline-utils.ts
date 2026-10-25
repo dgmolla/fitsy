@@ -16,6 +16,8 @@ import { validateReviewedChainWrites } from '../apps/api/services/chainWriteGuar
 import { chainTransaction } from '../apps/api/services/chainTransaction';
 import { decodeMenuText, menuItemIdentity, sourceItemId } from '../apps/api/services/menuSources/menuItemIdentity';
 import { resolveMenuItemIds, retireMissingMenuItems } from './menu-item-identity';
+import { nutritionEnergy } from '../apps/api/services/nutritionEnergy';
+import { chainReviewSchema } from '../apps/api/services/chainCatalog';
 
 // ─── Item validation (S-111, S-112) ─────────────────────────────────────────
 
@@ -53,11 +55,20 @@ export interface MacroMismatchItem {
 
 /**
  * Check if a macro estimate has a significant calorie mismatch (S-121).
- * |calories - (p*4 + c*4 + f*9)| > 20% of calories.
+ * |calories - energy| > 20% of calories, retaining reviewed allulose's energy factor.
  */
 export function checkMacroMismatch(macro: MacroData): MacroMismatchItem | null {
   if (macro.calories === 0) return null;
-  const calculated = macro.proteinG * 4 + macro.carbsG * 4 + macro.fatG * 9;
+  let alluloseG = 0;
+  if (macro.source === 'official' && macro.confidence === 'HIGH' && macro.reasoning) {
+    try {
+      const proof = JSON.parse(macro.reasoning) as { kind?: unknown; allulose?: unknown } | null;
+      const allulose = chainReviewSchema.shape.allulose.safeParse(proof?.allulose);
+      if (proof?.kind === 'reviewed-chain-v1' && allulose.success) alluloseG = allulose.data?.grams ?? 0;
+    } catch { /* Malformed or missing evidence retains the ordinary mismatch check. */ }
+  }
+  const calculated = nutritionEnergy(macro.proteinG, macro.carbsG, macro.fatG, alluloseG)
+    ?? macro.proteinG * 4 + macro.carbsG * 4 + macro.fatG * 9;
   const delta = Math.abs(macro.calories - calculated);
   const percentDelta = (delta / macro.calories) * 100;
   if (percentDelta > 20) {

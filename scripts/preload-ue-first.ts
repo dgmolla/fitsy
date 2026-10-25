@@ -31,6 +31,8 @@ import { loadChainServing, chainMenuResolver, type ChainServing } from "../apps/
  *   --days N                       Skip restaurants scraped within N days (default 7).
  *   --run-id ID                    Explicit run id; otherwise resumed or date-based.
  *   --skip-preflight               Skip UE + Anthropic preflight (offline testing).
+ *   --cost-cap-usd USD             Cumulative AI spend cap per run (default $15).
+ *   --cost-log PATH                Durable usage JSONL (default scripts/cache/preload-costs/<run-id>.jsonl).
  *
  * Environment:
  *   POSTGRES_PRISMA_URL         required
@@ -39,10 +41,12 @@ import { loadChainServing, chainMenuResolver, type ChainServing } from "../apps/
  *   UE_LOC_COOKIE               required (URL-encoded uev2.loc cookie)
  *   GOOGLE_PLACES_API_KEY       optional (tier-3 photo fallback)
  *   AXIOM_TOKEN                 optional (pipeline telemetry)
+ *   PRELOAD_COST_CAP_USD         optional (overridden by --cost-cap-usd)
  */
 
 import { PrismaClient } from "@prisma/client";
 import Anthropic from "@anthropic-ai/sdk";
+import { join } from 'node:path';
 import {
   cellToLatLng,
   gridDisk,
@@ -57,7 +61,7 @@ import {
   paginateFeedV1,
   type UeFeedStoreCard,
 } from "../apps/api/services/menuSources/ueApiClient.js";
-import { estimateMacros } from "../apps/api/services/macroEstimationService.js";
+import { estimateMacros, HAIKU_MODEL } from "../apps/api/services/macroEstimationService.js";
 import { fetchGooglePlacesPhoto } from "../apps/api/services/googlePlacesPhoto.js";
 import type {
   MacroData,
@@ -69,6 +73,7 @@ import { persistHex, type HexRestaurantData } from "./hex-persist.js";
 import { validateItems, type ValidatedPair } from "./pipeline-utils.js";
 import { API_SEMAPHORES } from "./semaphore.js";
 import { withRetry } from "./retry.js";
+import { PreloadCostTracker, SpendCapReached, CostAccountingError, parseCostCap } from './preload-cost.js';
 import {
   PipelineEmitter,
   type RestaurantEvent,
@@ -120,6 +125,8 @@ const CONFIG = {
   probeResolution: 7,
   hexResolution: 7,
   concurrency: 20,
+  costCapUsd: parseCostCap(parseStringArg('--cost-cap-usd') ?? process.env['PRELOAD_COST_CAP_USD'] ?? '15'),
+  costLog: parseStringArg('--cost-log'),
 };
 
 const REQUIRED_ENV_VARS = [
@@ -174,20 +181,14 @@ async function validateApiCredentials(): Promise<void> {
   }
 
   // Anthropic preflight
-  const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
+  // Check credentials without a billable message outside the run's spend ledger.
+  const anthropicRes = await fetch(`https://api.anthropic.com/v1/models/${HAIKU_MODEL}`, {
     headers: {
       "x-api-key": process.env["ANTHROPIC_API_KEY"]!,
       "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5",
-      max_tokens: 1,
-      messages: [{ role: "user", content: "ping" }],
-    }),
   });
-  if ([401, 403, 422].includes(anthropicRes.status)) {
+  if (!anthropicRes.ok) {
     const body = await anthropicRes.text().catch(() => "<unreadable>");
     console.error(`[ue-first] Anthropic preflight failed: HTTP ${anthropicRes.status} — ${body.slice(0, 160)}`);
     process.exit(1);
@@ -361,6 +362,9 @@ async function runPhase1Invariants(prisma: PrismaClient): Promise<void> {
 // ─── Phase 2: Enrich ─────────────────────────────────────────────────────────
 
 interface EnrichmentStats {
+  status: 'completed' | 'spend_cap' | 'failed';
+  hexesCompleted: number;
+  failure?: unknown;
   processed: number;
   persistedRestaurants: number;
   persistedItems: number;
@@ -519,6 +523,7 @@ async function runPhase2(
   anthropic: Anthropic,
   emitter: PipelineEmitter,
   runId: string,
+  costs: PreloadCostTracker,
 ): Promise<EnrichmentStats> {
   log(`Phase 2 (enrich): loading ue_feed restaurants grouped by homeHex`);
   const byHex = await loadRestaurantsForEnrichment(prisma);
@@ -533,6 +538,7 @@ async function runPhase2(
   } else {
     pendingHexIds = await filterPendingHexes(allHexIds, runId, prisma);
   }
+  let hexesCompleted = CONFIG.dryRun ? 0 : allHexIds.length - pendingHexIds.length;
 
   if (CONFIG.hexId) {
     if (!byHex.has(CONFIG.hexId)) {
@@ -545,7 +551,7 @@ async function runPhase2(
     const sorted = [...pendingHexIds].sort(
       (a, b) => (byHex.get(a)?.length ?? 0) - (byHex.get(b)?.length ?? 0),
     );
-    const step = (sorted.length - 1) / (CONFIG.maxHexes - 1);
+    const step = CONFIG.maxHexes === 1 ? 0 : (sorted.length - 1) / (CONFIG.maxHexes - 1);
     pendingHexIds = Array.from(
       { length: CONFIG.maxHexes },
       (_, i) => sorted[Math.round(i * step)]!,
@@ -554,6 +560,8 @@ async function runPhase2(
   }
 
   const stats: EnrichmentStats = {
+    status: 'completed',
+    hexesCompleted,
     processed: 0,
     persistedRestaurants: 0,
     persistedItems: 0,
@@ -571,9 +579,12 @@ async function runPhase2(
   };
 
   const hexesTotal = allHexIds.length;
-  let hexesCompleted = hexesTotal - pendingHexIds.length;
 
   for (const hexId of pendingHexIds) {
+    if (costs.capReached) {
+      stats.status = 'spend_cap';
+      break;
+    }
     const restaurants = byHex.get(hexId)!;
     log(`\n===== Hex ${hexId} (${restaurants.length} restaurants) =====`);
     const hexStart = Date.now();
@@ -581,10 +592,9 @@ async function runPhase2(
     // Guard 1: reprobe the cookie before burning Haiku $ on this hex.
     if (!CONFIG.dryRun) await assertCookieAliveForHex(hexId);
 
-    // Guard 2: strict hex-level atomicity. Any systemic failure inside
-    // processRestaurant throws; the pool rejects fast; we log + exit(2)
-    // without writing persist or checkpoint so the hex stays pending for a
-    // future resume.
+    // Guard 2: strict hex-level atomicity. Stop scheduling on failure or cap,
+    // drain active requests for complete usage accounting, and leave an
+    // incomplete hex without a data write or completion checkpoint.
     //
     // Rolling worker pool instead of fixed-size batches with Promise.all:
     // `CONFIG.concurrency` workers each pull the next restaurant off a shared
@@ -593,32 +603,51 @@ async function runPhase2(
     // concurrency is identical, so the UE + Haiku semaphores still cap the
     // outbound request rate — no change in bot-defense exposure.
     const hexResults: HexRestaurantData[] = [];
+    let failure: unknown;
     try {
       let cursor = 0;
       const workerCount = Math.min(CONFIG.concurrency, restaurants.length);
       const workers = Array.from({ length: workerCount }, async () => {
-        while (true) {
+        while (cursor < restaurants.length && !failure) {
+          if (costs.capReached) {
+            failure = new SpendCapReached('AI spend cap reached before starting the next restaurant');
+            return;
+          }
           const idx = cursor++;
           if (idx >= restaurants.length) return;
           const r = restaurants[idx]!;
-          const result = await processRestaurant(
-            r, idx + 1, restaurants.length,
-            prisma, anthropic, emitter, runId, hexId, stats, chainServing,
-          );
-          if (result != null) hexResults.push(result);
+          try {
+            const result = await processRestaurant(
+              r, idx + 1, restaurants.length,
+              prisma, anthropic, emitter, runId, hexId, stats, chainServing, costs,
+              () => { if (failure) throw failure; },
+            );
+            if (result != null) hexResults.push(result);
+          } catch (err) {
+            // Drain other workers so every response is charged before summary/exit.
+            // A real failure takes precedence over a simultaneous cap stop.
+            if (!failure || failure instanceof SpendCapReached) failure = err;
+          }
         }
       });
       await Promise.all(workers);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[ue-first] hex ${hexId} aborted (strict): ${msg}. No persist, no checkpoint — hex remains pending for resume.`,
-      );
-      await notifySlack(
-        `hex ${hexId} aborted (strict) — resume from checkpoint after fixing`,
-        msg,
-      );
-      process.exit(2);
+      failure = err;
+    }
+
+    if (failure) {
+      stats.status = failure instanceof SpendCapReached ? 'spend_cap' : 'failed';
+      if (stats.status === 'failed') stats.failure = failure;
+      log(`  hex ${hexId} stopped (${stats.status}); no persist or checkpoint; pending for resume`);
+      await emitter.flushHex({
+        type: 'cost_checkpoint', runId, hexId, hexesCompleted, hexesTotal,
+        status: stats.status, hexCost: costs.forHex(hexId).costUsd,
+        hexUsage: costs.forHex(hexId), cumulativeUsage: { ...costs.total },
+        cumulativeCost: costs.total.costUsd,
+        cumulativeCostBreakdown: { braveSearch: 0, firecrawl: 0, haiku: costs.total.costUsd },
+        _time: new Date().toISOString(),
+      });
+      break;
     }
 
     if (CONFIG.dryRun) {
@@ -639,14 +668,19 @@ async function runPhase2(
     }
 
     hexesCompleted++;
+    stats.hexesCompleted = hexesCompleted;
     await emitter.flushHex({
       type: "cost_checkpoint",
       runId,
       hexId,
       hexesCompleted,
       hexesTotal,
-      cumulativeCost: 0,
-      cumulativeCostBreakdown: { braveSearch: 0, firecrawl: 0, haiku: 0 },
+      status: 'completed',
+      hexCost: costs.forHex(hexId).costUsd,
+      hexUsage: costs.forHex(hexId),
+      cumulativeUsage: { ...costs.total },
+      cumulativeCost: costs.total.costUsd,
+      cumulativeCostBreakdown: { braveSearch: 0, firecrawl: 0, haiku: costs.total.costUsd },
       _time: new Date().toISOString(),
     });
 
@@ -668,6 +702,8 @@ async function processRestaurant(
   hexId: string,
   stats: EnrichmentStats,
   chainServing: ChainServing,
+  costs: PreloadCostTracker,
+  assertActive: () => void,
 ): Promise<HexRestaurantData | null> {
   const restaurantStart = Date.now();
   stats.processed++;
@@ -703,6 +739,7 @@ async function processRestaurant(
       }),
       nameMismatch: false,
       durationMs: Date.now() - restaurantStart,
+      aiUsage: costs.forRestaurant({ hexId, restaurantId: r.id, placeId: r.storeUuid }),
       _time: new Date().toISOString(),
     };
     emitter.bufferRestaurant(event);
@@ -797,10 +834,19 @@ async function processRestaurant(
       macros = await resolveMacros(resolverResult.items, async unresolved => {
         stats.anthropicCalls++;
         const { result } = await withRetry(
-          () => API_SEMAPHORES.haiku.run(() => estimateMacros(unresolved, anthropic)),
+          () => API_SEMAPHORES.haiku.run(() => estimateMacros(unresolved, anthropic, undefined, {
+            beforeRequest: () => { assertActive(); costs.assertCanSpend(); },
+            onUsage: (items, usage) => costs.record({ hexId, restaurantId: r.id, placeId: r.storeUuid }, items, usage),
+          })),
           {
             label: `${r.name}/haiku`,
             maxRetries: 5,
+            shouldRetry: err => {
+              if (err instanceof SpendCapReached || err instanceof CostAccountingError) return false;
+              assertActive();
+              costs.assertCanSpend();
+              return true;
+            },
             backoffMs: [1000, 3000, 8000, 15000, 30000],
             computeDelayMs: (err) => {
               if (!(err instanceof Anthropic.APIError) || err.status !== 429) return null;
@@ -816,6 +862,10 @@ async function processRestaurant(
         return result;
       });
     } catch (err) {
+      if (err instanceof SpendCapReached || err instanceof CostAccountingError) {
+        emitEvent(err instanceof SpendCapReached ? 'spend_cap' : 'cost_accounting_failed', resolverResult.sourceId, 0, 0, resolverResult.attempts);
+        throw err;
+      }
       // Strict: Haiku retries have already been exhausted by withRetry. A
       // macro estimation failure produces bad data, so abort the hex rather
       // than persist items without macros.
@@ -870,7 +920,8 @@ async function main(): Promise<void> {
   const startTime = Date.now();
   const directUrl = process.env["POSTGRES_URL_NON_POOLING"]!;
   const prisma = new PrismaClient({ datasources: { db: { url: directUrl } } });
-  const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
+  // Every retry must pass the chunk spend guard, rather than retry inside the SDK.
+  const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"], maxRetries: 0 });
   const emitter = new PipelineEmitter();
 
   try {
@@ -885,10 +936,10 @@ async function main(): Promise<void> {
       const byHex = await loadRestaurantsForEnrichment(prisma);
       const allHexIds = Array.from(byHex.keys());
 
-      const runIdIdx = process.argv.indexOf("--run-id");
+      const explicitRunId = parseStringArg('--run-id');
       let runId: string;
-      if (runIdIdx !== -1 && process.argv[runIdIdx + 1]) {
-        runId = process.argv[runIdIdx + 1]!;
+      if (explicitRunId) {
+        runId = explicitRunId;
         log(`Using explicit run ID: ${runId}`);
       } else {
         const incompleteRunId = await findIncompleteRunId(allHexIds.length, prisma);
@@ -901,7 +952,11 @@ async function main(): Promise<void> {
         }
       }
 
-      const enrichStats = await runPhase2(prisma, anthropic, emitter, runId);
+      const costs = new PreloadCostTracker(runId, CONFIG.costCapUsd,
+        CONFIG.costLog ?? join('scripts/cache/preload-costs', `${encodeURIComponent(runId)}.jsonl`),
+        event => emitter.emitUsage(event));
+      log(`  AI spend cap=$${costs.capUsd}, prior cost=$${costs.total.costUsd.toFixed(6)}, ledger=${costs.path}`);
+      const enrichStats = await runPhase2(prisma, anthropic, emitter, runId, costs);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       log(`\nPhase 2 done — ${elapsed}s`);
       log(
@@ -918,20 +973,29 @@ async function main(): Promise<void> {
           `validation=${enrichStats.skippedValidationEmpty}`,
       );
       log(`  photoSource: ${JSON.stringify(enrichStats.photoSourceBreakdown)}`);
+      log(`  AI input_tokens=${costs.total.inputTokens} output_tokens=${costs.total.outputTokens} ` +
+        `total_cost=$${costs.total.costUsd.toFixed(6)} cost_per_1k_items=$${costs.costPer1kItems.toFixed(6)}`);
+      if (enrichStats.status === 'spend_cap') {
+        log(`  Spend cap reached; run ${runId} is resumable. Reuse --run-id ${runId} and --cost-log ${costs.path} with a higher --cost-cap-usd.`);
+      }
 
       await emitter.emitRun({
         type: "run",
         runId,
         durationTotal: `${elapsed}s`,
         hexesTotal: allHexIds.length,
-        hexesCompleted: allHexIds.length,
+        hexesCompleted: enrichStats.hexesCompleted,
         restaurantsDiscovered: discoveryStats?.uniqueCards ?? 0,
         restaurantsPersisted: enrichStats.persistedRestaurants,
         restaurantsFailed: enrichStats.skippedNoSource + enrichStats.skippedHaikuFailed,
         itemsTotal: enrichStats.persistedItems,
-        costTotal: 0,
+        costTotal: costs.total.costUsd,
+        aiUsage: { ...costs.total },
+        costPer1kItems: costs.costPer1kItems,
+        status: enrichStats.status,
         _time: new Date().toISOString(),
       });
+      if (enrichStats.failure) throw enrichStats.failure;
     }
 
     if (discoveryStats && CONFIG.phase === "discover") {
@@ -941,9 +1005,9 @@ async function main(): Promise<void> {
       );
     }
 
-    await emitter.flush();
   } finally {
-    await prisma.$disconnect();
+    try { await emitter.flush(); }
+    finally { await prisma.$disconnect(); }
   }
 }
 
