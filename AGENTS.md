@@ -162,11 +162,14 @@ npm run verify:all     # everything, including the production build
 
 The check list lives in `scripts/verify/registry.yml`; CI (`verify.yml`), the
 pre-push hook, and agents all run the same scripts.
+All verifier callers retain complete check logs; see [diagnostic recovery](scripts/verify/README.md#diagnostic-logs) for local paths and CI artifacts.
 Inspect dynamic simulator scope with `npm run verify:sim-plan`; selection and render checkpoints live in `scripts/verify/impact-plan.mjs`.
 CI posts the `Sim scope` selection on the PR head and uploads `selection.json`; it never runs simulators or needs simulator credentials.
 The classifier is read-only; the protected `sim-scope.yml` publisher records a bounded scope/count description, with exact flows retained in the artifact.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
 Every mobile/web UI edit triggers local coverage: screen-local style/copy uses render smoke, behavior uses affected E2E, and shared UI/app shells use the full suite.
+Local execution and final product acceptance share the affected-flow plan; omitted flows have explicit reasons, and explicit lists can only expand required coverage.
+Inspect `npm run verify:product-plan` for mandatory journeys and MCP categories before acceptance; use a compatible existing binary or a supported build without requiring a shared cache.
 Run `node scripts/sim/ci.mjs --scope=<none|smoke|flow|full> --flows=<comma-list> --udid=<UDID>` with configuration from the local machine.
 Account-dependent journeys require local fixture preparation and compatible store builds as documented in `apps/mobile/e2e/README.md`.
 Keep simulator smoke out of the pre-push hook.

@@ -6,7 +6,8 @@ import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { isDeepStrictEqual, parseEnv } from 'node:util';
+import { parseEnv } from 'node:util';
+import { comparison, mappedCategories, simulatorContext, simulatorSelection, verificationScriptsOnly } from './impact-plan.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 
 export const root = resolve(process.env.FITSY_PRODUCT_ROOT || fileURLToPath(new URL('../..', import.meta.url)));
@@ -69,13 +70,26 @@ export function requiredPublicConfigKeys(report, build, current) {
   ])].sort();
 }
 
-export function impact(paths, configKeys = []) {
+export function impact(paths, configKeys = [], options = {}) {
+  const cwd = options.cwd || root, env = options.env || process.env;
+  const simulator = simulatorSelection(paths, { ...options, cwd, env, configKeys });
   const source = paths.filter(p => !/\.md$/.test(p) &&
-    p !== 'apps/mobile/eas.json' &&
+    !verificationScriptsOnly(p, options.comparison, cwd, env) &&
     !/(?:\.test\.|\.spec\.|__tests__\/|__mocks__\/)/.test(p));
   const affected = source.filter(p => /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(p) && !serviceHealthPath(p));
   const categories = new Set();
   for (const path of affected) {
+    const mapped = mappedCategories(path);
+    if (mapped && simulator.scope !== 'full') { for (const category of mapped) categories.add(category); continue; }
+    const direct = /^apps\/mobile\/e2e\/flows\/([a-z0-9-]+)\.yaml$/.exec(path);
+    if (direct) {
+      try {
+        const config = yaml.load(readFileSync(resolve(cwd, path), 'utf8').split(/^---\s*$/m)[0]);
+        const tags = (config.tags || []).filter(tag => ['billing', 'notifications', 'auth', 'onboarding', 'discovery', 'changed-journey'].includes(tag));
+        for (const category of tags.length ? tags : ['changed-journey']) categories.add(category);
+      } catch { categories.add('changed-journey'); } // Deleted/malformed flows retain conservative coverage.
+      continue;
+    }
     // Shared trial timing changes affect offer presentation and native jobs,
     // even when no mobile caller changes in the same diff.
     if (path === 'packages/shared/src/contracts/trialPolicy.ts')
@@ -93,8 +107,44 @@ export function impact(paths, configKeys = []) {
     else if (/PUSH|NOTIFICATION/i.test(key)) categories.add('notifications');
     else categories.add('changed-journey');
   }
-  return { required: affected.length > 0 || configKeys.length > 0,
-    paths: [...affected, ...configKeys.map(key => `public-env:${key}`)], categories: [...categories].sort(), baseline };
+  return { required: simulator.required,
+    paths: [...affected, ...configKeys.map(key => `public-env:${key}`)], categories: [...categories].sort(),
+    baseline: simulator.flows.filter(name => baseline.includes(name)), flows: simulator.flows, simulator };
+}
+
+export function candidatePlan(configKeys = [], base = (process.env.CI || ['local', 'ci'].includes(process.env.FITSY_RUNS))
+  ? process.env.FITSY_DIFF_BASE : undefined, cwd = root) {
+  return impact(changedPaths(base, cwd), configKeys, { cwd, ...simulatorContext(process.env),
+    comparison: comparison({ cwd, base }) });
+}
+
+// Explicit additions may broaden acceptance, but cannot omit planned journeys.
+export function selectedFlows(plan, additional = []) {
+  insist(Array.isArray(plan.flows), 'Missing affected-flow acceptance plan');
+  insist(plan.flows?.length || !plan.required, 'Required simulator scope has no maintained flows');
+  insist(additional.every(name => /^[a-z0-9-]+$/.test(name)), 'Invalid flow name');
+  return [...new Set([...(plan.flows || []), ...additional])].sort();
+}
+
+export function assertFlowCommands(source, commands, name) {
+  const [config, steps] = yaml.loadAll(source.toString());
+  insist(config?.appId === 'com.fitsy.mobile' && Array.isArray(steps), `invalid maintained flow: ${name}`);
+  const minimum = list => list.reduce((count, step) => {
+    if (!step || typeof step !== 'object') return count;
+    const assertion = step.assertVisible ?? step.assertNotVisible ?? step.assertTrue ?? step.extendedWaitUntil;
+    if (assertion !== undefined && assertion?.optional !== true) count++;
+    if (step.retry?.commands) count += minimum(step.retry.commands);
+    if (step.runFlow?.commands && !step.runFlow.when) count += minimum(step.runFlow.commands);
+    return count;
+  }, 0);
+  insist(Array.isArray(commands) && commands.length > 0, 'empty command report');
+  const applied = commands.find(c => c.command?.applyConfigurationCommand)?.command.applyConfigurationCommand.config;
+  insist(applied?.appId === 'com.fitsy.mobile' && (!applied.name || applied.name === name), 'wrong app/flow in command report');
+  const assertions = commands.filter(c => c.command?.assertConditionCommand && !c.command.assertConditionCommand.optional);
+  insist(assertions.length >= Math.max(1, minimum(steps)) && assertions.every(c => c.metadata?.status === 'COMPLETED'), `missing/skipped/failed assertions: ${name}`);
+  insist(!commands.some(c => c.metadata?.status === 'FAILED'), `failed command: ${name}`);
+  insist(commands.every(c => c.metadata?.status === 'COMPLETED' || Object.values(c.command || {}).some(v => v?.optional === true)), `incomplete required command: ${name}`);
+  return assertions;
 }
 
 export function changedPaths(base, cwd = root) {
@@ -105,30 +155,6 @@ export function changedPaths(base, cwd = root) {
     ...git(['diff', '--name-only', 'HEAD'], cwd).split('\n'),
     ...git(['ls-files', '--others', '--exclude-standard'], cwd).split('\n'),
   ].filter(Boolean))];
-  // The API test runner's GC script cannot change a user journey. Compare the
-  // entire parsed manifest, so runtime, lifecycle and dependency edits still apply.
-  if (paths.includes('apps/api/package.json')) {
-    try {
-      const previousText = git(['show', `${revision}:apps/api/package.json`], cwd);
-      const currentText = readFileSync(resolve(cwd, 'apps/api/package.json'), 'utf8');
-      // JSON.parse silently collapses duplicate keys; ambiguous manifests cannot receive this exemption.
-      yaml.load(previousText, { schema: yaml.JSON_SCHEMA });
-      yaml.load(currentText, { schema: yaml.JSON_SCHEMA });
-      const previous = JSON.parse(previousText);
-      const current = JSON.parse(currentText);
-      const scripts = current?.scripts;
-      if (previous?.scripts && !Object.hasOwn(previous.scripts, 'test:coverage:gc') &&
-        scripts && !Array.isArray(scripts) &&
-        scripts['test:coverage:gc'] === 'node --expose-gc ../../node_modules/jest/bin/jest.js --coverage') {
-        const withoutGc = { ...current, scripts: { ...scripts } };
-        delete withoutGc.scripts['test:coverage:gc'];
-        if (isDeepStrictEqual(previous, withoutGc))
-          return paths.filter(path => path !== 'apps/api/package.json');
-      }
-    } catch {
-      // Missing or malformed manifests remain product-impacting.
-    }
-  }
   return paths;
 }
 
@@ -217,13 +243,7 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     const data = artifact(flow.commands, directory);
     insist(digest(data) === flow.sha256, `changed command artifact: ${flow.name}`);
     const commands = JSON.parse(data.toString());
-    insist(Array.isArray(commands) && commands.length > 0, 'empty command report');
-    const applied = commands.find(c => c.command?.applyConfigurationCommand)?.command.applyConfigurationCommand.config;
-    insist(applied?.appId === 'com.fitsy.mobile' && (!applied.name || applied.name === flow.name), 'wrong app/flow in command report');
-    const assertions = commands.filter(c => c.command?.assertConditionCommand && !c.command.assertConditionCommand.optional);
-    insist(assertions.length > 0 && assertions.every(c => c.metadata?.status === 'COMPLETED'), `missing/skipped/failed assertions: ${flow.name}`);
-    insist(!commands.some(c => c.metadata?.status === 'FAILED'), `failed command: ${flow.name}`);
-    insist(commands.every(c => c.metadata?.status === 'COMPLETED' || Object.values(c.command || {}).some(v => v?.optional === true)), `incomplete required command: ${flow.name}`);
+    const assertions = assertFlowCommands(source, commands, flow.name);
     const screen = artifact(flow.screenshot, directory);
     insist(digest(screen) === flow.screenshotHash && screen.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')), `missing/changed/non-PNG screenshot: ${flow.name}`);
     const capture = artifact(flow.captureReceipt, directory);
@@ -250,11 +270,15 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
       insist(video.length > 0 && digest(video) === flow.videoHash, `missing/changed/empty video: ${flow.name}`);
       insist(isPlayableVideo(artifactPath(flow.video, directory)), `unplayable video: ${flow.name}`);
     }
-    if (!baseline.includes(flow.name) && assertions.length >= 2) {
-      for (const tag of config.tags || []) covered.add(tag);
+    if (assertions.length >= 2) {
+      // Startup/navigation assertions cannot establish purchase or notification
+      // behavior, even if an edited baseline acquires a broad category tag.
+      const baselineTags = flow.name === 'cold-start-welcome' ? ['onboarding', 'changed-journey']
+        : flow.name === 'signin-options' ? ['auth', 'changed-journey'] : null;
+      for (const tag of config.tags || []) if (!baselineTags || baselineTags.includes(tag)) covered.add(tag);
     }
   }
-  for (const name of baseline) insist(names.has(name), `missing baseline flow: ${name}`);
+  for (const name of selectedFlows(plan)) insist(names.has(name), `missing affected flow: ${name}`);
   // A completed configuration acceptance remains part of the retained proof
   // even when that configuration no longer requires a new run.
   const acceptedCategories = typeof report.publicConfigAcceptance?.verifiedConfigHash === 'string' &&
@@ -287,7 +311,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const previous = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null;
     const build = existsSync(buildFile) ? JSON.parse(readFileSync(buildFile, 'utf8')) : null;
     const configKeys = requiredPublicConfigKeys(previous, build, publicConfigIdentity());
-    const plan = impact(changedPaths(process.env.CI ? process.env.FITSY_DIFF_BASE : undefined), configKeys);
+    const plan = candidatePlan(configKeys, process.env.CI ? process.env.FITSY_DIFF_BASE : undefined);
     if (process.argv.includes('--plan')) {
       console.log(JSON.stringify({ ...plan, inputHash: inputHash() }));
     } else if (!plan.required) {

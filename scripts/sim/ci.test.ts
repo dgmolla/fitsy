@@ -1,12 +1,27 @@
-import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { copyProductFlowControls } from '../verify/product-flow-fixture';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
 const modulePath = resolve(__dirname, 'ci.mjs');
 const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
   !/^(GIT_|GITHUB_|FITSY_|EXPO_PUBLIC_|CI$|RUNNER_ENVIRONMENT$)/.test(key)));
+let directory: string, cliPath: string;
+beforeAll(() => {
+  directory = mkdtempSync(join(tmpdir(), 'fitsy-local-scope-'));
+  copyProductFlowControls(directory);
+  mkdirSync(join(directory, 'scripts/sim'), { recursive: true });
+  for (const file of ['ci.mjs', 'journey-fixtures.mjs']) copyFileSync(join(__dirname, file), join(directory, 'scripts/sim', file));
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env: cleanEnv });
+  git('init', '-q'); git('config', 'user.name', 'Local scope fixture'); git('config', 'user.email', 'fixture@example.test');
+  git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'baseline');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  cliPath = join(directory, 'scripts/sim/ci.mjs');
+});
+afterAll(() => { rmSync(directory, { recursive: true, force: true }); });
 
 test.each(['chain-menu-serving', 'onboarding-target-ranked-search', 'onboarding-returning-preview'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, {
@@ -72,7 +87,7 @@ test.each([
   { args: ['--scope=full'], scope: 'full' },
   { args: ['--scope=all'], scope: 'full' },
 ])('local scripted gate accepts explicit scope and flow list: $args', ({ args, scope, flows }) => {
-  const result = spawnSync(process.execPath, [modulePath, ...args, '--plan'], { env: cleanEnv, encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [cliPath, ...args, '--plan'], { env: cleanEnv, encoding: 'utf8' });
   expect(result.status).toBe(0);
   const selection = JSON.parse(result.stdout);
   expect(selection.scope).toBe(scope);
@@ -86,13 +101,13 @@ test.each([
   ['--scope=flow', '--flows='], ['--scope=smoke', '--flows=signin-options'],
   ['--scope=flow', '--scope=none'], ['--preflight'], ['--flows=../../private'],
 ].map(args => ({ args })))('invalid local scope cannot launch native resources: $args', ({ args }) => {
-  const result = spawnSync(process.execPath, [modulePath, ...args, '--plan'], { env: cleanEnv, encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [cliPath, ...args, '--plan'], { env: cleanEnv, encoding: 'utf8' });
   expect(result.status).toBe(1);
   expect(JSON.parse(result.stdout).status).toBe('fail');
 });
 
 test.each([{ GITHUB_ACTIONS: 'true' }, { CI: 'true' }, { FITSY_RUNS: 'ci' }])('local runner rejects CI execution: %j', extra => {
-  const result = spawnSync(process.execPath, [modulePath, '--scope=flow', '--flows=signin-options'], {
+  const result = spawnSync(process.execPath, [cliPath, '--scope=flow', '--flows=signin-options'], {
     env: { ...cleanEnv, ...extra }, encoding: 'utf8',
   });
   expect(result.status).toBe(1);
@@ -100,7 +115,7 @@ test.each([{ GITHUB_ACTIONS: 'true' }, { CI: 'true' }, { FITSY_RUNS: 'ci' }])('l
 });
 
 test('none scope completes without native tools or local configuration', () => {
-  const result = spawnSync(process.execPath, [modulePath, '--scope=none', '--flows=-'], { env: cleanEnv, encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [cliPath, '--scope=none', '--flows=-'], { env: cleanEnv, encoding: 'utf8' });
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ status: 'skipped', required: false, scope: 'none' });
 });
@@ -118,4 +133,16 @@ test.each([
   });
   expect(result.status).toBe(1);
   expect(result.stderr).toContain(error);
+});
+
+test.each([
+  ['--scope=none'], ['--scope=flow', '--flows=signin-options'],
+  ['--scope=smoke', '--flows=reminders'],
+])('explicit local scope cannot remove mandatory affected coverage: %j', (...args) => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {localSelection} from ${JSON.stringify(modulePath)};
+     localSelection(${JSON.stringify(args)}, {simulator:{scope:'flow', flows:['reminders'], smoke:[]}});`],
+  { env: cleanEnv, encoding: 'utf8' });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('cannot omit affected journeys');
 });

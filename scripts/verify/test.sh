@@ -2,6 +2,7 @@
 # Complete affected API, scripts and mobile groups. With a DB, serialize the
 # whole API run: shared-schema suites can exhaust each other's SERIALIZABLE retry
 # budget. Explicit concurrency inside a test remains unchanged.
+# Keep workspace output complete for run.mjs's retained stdout/stderr logs.
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT" || exit 1
@@ -65,7 +66,7 @@ if [[ " $TEST_GROUPS " == *" mobile "* ]]; then
   run_jest mobile /usr/bin/env NODE_OPTIONS=--max-old-space-size=768 npm test --workspace=@fitsy/mobile -- --maxWorkers=1 --workerIdleMemoryLimit=256MB
 fi
 if [ -n "$FAIL" ]; then
-  printf '{"name":"test","status":"fail","summary":"tests failed in: %s","fix":"run the failing workspace suite locally (npm run test:coverage -w apps/api or npm test -w @fitsy/scripts) and fix"}\n' "$FAIL"
+  printf '{"name":"test","status":"fail","summary":"tests failed in: %s","fix":"inspect the test logs listed by Verify; rerun the failing suite (npm run test:coverage -w apps/api, npm test -w @fitsy/scripts, or npm test -w @fitsy/mobile) and fix"}\n' "$FAIL"
   exit 1
 fi
 printf '{"name":"test","status":"pass","summary":"whole test groups passed: %s","fix":""}\n' "$TEST_GROUPS"

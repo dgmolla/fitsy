@@ -36,6 +36,7 @@ lens edits).
      Consolidate repeated examples when a shared rule preserves their failure scenarios.
    - Behavioral/user-facing -> also consider a Maestro flow or DB test.
      Inspect `npm run verify:sim-plan` and update `scripts/verify/impact-plan.mjs` plus its table-driven tests when adding affected-screen coverage.
+     Inspect `npm run verify:product-plan` too; shipping must consume the same mandatory journeys, assertion coverage and omission reasons without adding unrelated baselines.
      Keep the retained ownership router and simulator risk policy as inputs; do not restore deleted review executables.
      UI changes require local render smoke for proven screen-local style/copy, affected E2E for behavior, or full coverage for shared UI/app shells.
      Extend render checkpoints together with their maintained YAML assertions, and keep simulator execution out of pre-push.
@@ -50,6 +51,8 @@ lens edits).
      Test state isolation across sign-out and billing flows; a simulated adapter test does not establish a successful real-store full run.
      Use saved Maestro YAML and Maestro MCP for new walkthroughs; validate actual interactions plus hierarchy observations through the product-flow evidence consumer when changing tool routing.
      If the canonical local media preflight cannot inspect process ownership, retain the failed result and route that check to the existing authorized host owner; do not weaken the preflight or move native execution into CI.
+     Apply the same recovery to denied simulator claim access; assess installed skills and tools without substituting an unleased device or claiming fixture execution as native acceptance.
+     Reuse a compatible binary without requiring a shared cache, retain comparable repeated measurements before claiming speed, and retire owned Metro, drivers and simulators after the phase.
 4. **Eval cases**: for the sharpest escapes, capture
    `scripts/verify/evals/incidents/<pr-number>/` (diff.patch via
    `gh pr diff <n> --patch` of the ORIGINAL breaking change when identifiable,

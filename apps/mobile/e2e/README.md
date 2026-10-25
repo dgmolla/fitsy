@@ -3,7 +3,9 @@
 The canonical scenario, ownership, evidence and publication procedure is in `docs/engineering/devops/shipping.md`.
 Inspect the dynamic selection with `npm run verify:sim-plan` from the repository root.
 The maintained path-to-flow mapping lives in `scripts/verify/impact-plan.mjs`; extend it and its table-driven tests when adding screen coverage.
-Unmapped mobile paths expand to the full flow set, and `needs-sim` forces flows for otherwise non-mobile changes.
+Mapped mobile and API contracts select their affected journeys together.
+Shared behavior, native inputs and unmapped mobile-facing paths expand to the full flow set, and `needs-sim` forces flows for otherwise non-mobile changes.
+The plan explains every omitted journey; explicit local scopes and flow lists cannot omit required coverage.
 Every UI edit triggers local coverage: proven screen-local style/copy reuses a maintained flow through its mapped render assertion and saves a screenshot, behavior changes run affected E2E flows, and shared UI/app shells run the full suite.
 Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the maintained YAML flows.
 `onboarding-assisted-targets` submits a calorie edit directly through Continue with the decimal keyboard open, then checks Back preserves the saved allocation.
@@ -26,6 +28,13 @@ If `log-meal` reaches `Welcome back.` with `Your Fitsy Pro subscription ended`, 
 Prepare an active disposable account through the local fixture adapter before rerunning; retain the Search assertion and paid-access routing.
 Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
 A local scope pass does not replace the source-bound final-candidate product-flow gate.
+Inspect `npm run verify:product-plan` for the same affected journeys and their required MCP categories.
+The final runner includes every selected journey automatically, adds explicitly requested diagnostic flows, and does not append unrelated cold-start or sign-in baselines.
+Required YAML assertions remain mandatory; only explicit optional commands and conditional branches may be optional.
+Final acceptance runs complete selected YAML journeys even when a development render smoke was sufficient for a local style check.
+Reuse a compatible installed binary or a supported build; the shared binary cache is optional.
+After acceptance or failure, stop owned Metro with `product-flow.mjs stop-metro`, release the device lease, and shut down only the owned idle simulator through the lifecycle procedure.
+If sandbox access prevents the canonical simulator lease or media process inspection, retain the failure and resume through the existing authorized host owner; a plan or fixture pass is not native acceptance.
 
 ## Local journey fixtures
 

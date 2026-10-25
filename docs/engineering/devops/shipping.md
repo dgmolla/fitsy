@@ -68,6 +68,7 @@ Keep review and acceptance evidence tied to the tested source.
 After source changes, rerun affected checks and obtain matching review before merge.
 Every selected verification check executes afresh, and full affected test groups include focused test files.
 Empty selections, missing scripts and zero passing test cases fail verification.
+Every verifier invocation retains complete stdout/stderr logs with paths in its JSON results; use the [diagnostic recovery contract](../../../scripts/verify/README.md#diagnostic-logs) after local or CI failures.
 UI signoff and development walkthroughs precede final UI acceptance.
 The final-candidate simulator runner and publisher retain source, app, backend and evidence validation without a local session wrapper.
 Apple account, legal and submission approvals, product-flow status, PR checks, main Verify, Deploy and actual release acceptance remain required.
@@ -92,8 +93,10 @@ The `product-flow/local` publisher checks that receipt before setting its exact-
 **Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes.
 CI runs static checks, unit tests and builds on Linux, without simulator execution or simulator secrets.
 Run `npm run verify:sim-plan` to inspect `none`, `smoke`, `flow` or `full` scope and its reason.
-The planner uses the retained reviewer ownership router and simulator path tiers, mapping changed mobile screens to the existing Maestro flows.
-Navigation, auth, billing, native configuration, release and unmapped mobile paths require all flows; ordinary non-mobile changes require no simulator.
+The planner uses the retained reviewer ownership router and simulator path tiers, mapping changed mobile screens and API contracts to the existing Maestro flows.
+Navigation, auth, billing, native configuration, release and unmapped mobile-facing paths require all flows; changes without mobile consumers require no simulator.
+The artifact explains each omitted flow; local execution and final acceptance consume the same selection, and explicit lists can only expand mandatory coverage.
+Inspect `npm run verify:product-plan` for the selected final journeys and applicable MCP categories.
 Verification-only package script edits do not require a simulator; native dependencies, build profiles and release changes retain full coverage.
 Every mobile or web UI edit triggers local coverage: proven screen-local copy/style edits use launch-and-render smoke, navigation/state/forms use affected E2E flows, and shared UI or app shells use the full suite.
 Render smoke reuses maintained flow setup through a mapped render assertion, then saves a screenshot; uncertain changes retain E2E coverage.
@@ -108,9 +111,12 @@ Simulator runs locally on the maintainer Mac via the sim-review poller, which po
 The poller uses the saved YAML flows in `apps/mobile/e2e/flows/` through Maestro, with Maestro MCP available for interactive diagnosis.
 The pre-push hook stays a cheap static and focused-test gate.
 
-Load the dev environment on the Mac and build/install the current candidate through the native procedure below.
+Load the dev environment on the Mac and activate a compatible existing binary or use a supported build with measured capacity through the native procedure below.
+The shared binary cache is optional, and compatibility still requires matching native inputs, configuration and the served candidate source.
 The local scripted gate requires an explicitly owned, booted simulator and validates its native receipt, installed artifact, source and dev backend before driving it.
 It uses `FITSY_SIM_OWNER` for the existing exclusive device lease and releases its own Maestro processes and Metro after execution.
+Retire only the task's idle simulator through the resource lifecycle after the native phase; preserve active or shared devices and required evidence.
+When sandbox access prevents that lease or the media ownership preflight, retain the failure and resume through the existing authorized host owner without substituting an unleased run.
 It reads configuration only from the local process environment; it never fetches repository variables or secrets.
 Use the matching `FITSY_DIFF_BASE` and `FITSY_DIFF_HEAD` when reproducing CI's selection and render checkpoints.
 
@@ -150,22 +156,26 @@ Test Store evidence does not establish Apple sandbox billing behavior.
 Both configurations use local simulator signing with Xcode's application entitlement so SecureStore can read and persist sessions.
 Use a disposable simulator: iOS app reinstalls preserve keychain sessions.
 For a fresh-account run, explicitly set `FITSY_SIM_RESET_KEYCHAIN` to that simulator's UDID.
-This clears its entire keychain before the baseline and records the reset.
+This clears its entire keychain before the selected journeys and records the reset.
 Never set it for a simulator containing accounts you need to keep.
 
 ```sh
-node scripts/verify/product-flow.mjs --plan
+npm run verify:product-plan
 export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
 # Run final acceptance against the current candidate:
-node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> <affected-flow-name> --mode=final-candidate
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> --mode=final-candidate
 # Capture affected primary and recovery paths through Maestro MCP, then:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
 ```
 
-Cold-start and sign-in always run.
-Add/select flows in `apps/mobile/e2e/flows/` tagged for every category in `--plan`, with at least two non-optional outcome assertions per changed journey.
-Baseline flows cannot cover a paywall change.
+The final runner automatically includes every affected journey, including cold-start and sign-in only when selected.
+Explicit names add diagnostic journeys; they cannot replace mandatory flows.
+Final acceptance executes the complete selected YAML even when local development used render smoke.
+Maintain flow tags for every category in `--plan`, with at least two non-optional outcome assertions per changed journey.
+Every selected flow and its mandatory source assertions must be present in the receipt; another tagged journey cannot substitute for an omitted flow.
+Primary/recovery MCP observations, media/UI approval, source and binary identity, backend and store compatibility remain required where applicable.
+Report speed improvements only from comparable repeated runs; a smaller plan or one simulator trial alone is not a speed measurement.
 Promote discovered regressions into deterministic scenarios.
 Final candidate runs retain required assertions, raw Maestro commands, screenshots, XCTest capture receipts, timing and changed-journey walkthroughs without recording video by default.
 When a reviewer explicitly requests video, add `--record-video` to the final candidate run; the runner retains complete untrimmed video and the validator checks each recording before publication.
