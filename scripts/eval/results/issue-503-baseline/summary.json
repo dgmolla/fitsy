@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "timestamp": "2026-10-25T01:39:20.919Z",
+  "mode": "baseline",
+  "digest": "90c2ac7d65055231f6367274c2bde0ed036a0ae258475f05674b422db27e3259",
+  "frozenCommit": null,
+  "thresholds": {
+    "accuracy": 0.95,
+    "falsePositiveRate": 0.01,
+    "falseDiscoveryRate": 0.01,
+    "recall": 0.95,
+    "recallGain": 0.02,
+    "costUsdPer1000": 0.1,
+    "p95LatencyMs": 1000,
+    "matchProbability": 0.95,
+    "noMatchProbability": 0.05,
+    "confidence": 0.9
+  },
+  "pricing": {
+    "inputUsdPerMillion": 0.042,
+    "outputUsdPerMillion": 0,
+    "source": "https://docs.typesafe.ai/models",
+    "checkedAt": "2026-10-24"
+  },
+  "indexBuildMs": 18.72354200000001,
+  "baseline": {
+    "total": 200,
+    "attempted": 200,
+    "positive": 96,
+    "negative": 104,
+    "tp": 94,
+    "tn": 104,
+    "fp": 0,
+    "fn": 2,
+    "abstained": 0,
+    "accuracy": 0.99,
+    "falsePositiveRate": 0,
+    "falseDiscoveryRate": 0,
+    "recall": 0.9791666666666666,
+    "coverage": 1,
+    "totalCostUsd": 0,
+    "costUsdPer1000": 0,
+    "medianLatencyMs": 0.0035419999999817264,
+    "p95LatencyMs": 0.00887500000004593
+  },
+  "jev": null,
+  "groups": {
+    "waba-grill": {
+      "baseline": {
+        "total": 100,
+        "attempted": 100,
+        "positive": 48,
+        "negative": 52,
+        "tp": 46,
+        "tn": 52,
+        "fp": 0,
+        "fn": 2,
+        "abstained": 0,
+        "accuracy": 0.98,
+        "falsePositiveRate": 0,
+        "falseDiscoveryRate": 0,
+        "recall": 0.9583333333333334,
+        "coverage": 1,
+        "totalCostUsd": 0,
+        "costUsdPer1000": 0,
+        "medianLatencyMs": 0.0037704999999732536,
+        "p95LatencyMs": 0.011000000000024102
+      },
+      "jev": null
+    },
+    "yoshinoya": {
+      "baseline": {
+        "total": 100,
+        "attempted": 100,
+        "positive": 48,
+        "negative": 52,
+        "tp": 48,
+        "tn": 52,
+        "fp": 0,
+        "fn": 0,
+        "abstained": 0,
+        "accuracy": 1,
+        "falsePositiveRate": 0,
+        "falseDiscoveryRate": 0,
+        "recall": 1,
+        "coverage": 1,
+        "totalCostUsd": 0,
+        "costUsdPer1000": 0,
+        "medianLatencyMs": 0.0033334999999965476,
+        "p95LatencyMs": 0.005625000000009095
+      },
+      "jev": null
+    },
+    "unaliased-positives": {
+      "baseline": {
+        "total": 2,
+        "attempted": 2,
+        "positive": 2,
+        "negative": 0,
+        "tp": 0,
+        "tn": 0,
+        "fp": 0,
+        "fn": 2,
+        "abstained": 0,
+        "accuracy": 0,
+        "falsePositiveRate": null,
+        "falseDiscoveryRate": null,
+        "recall": 0,
+        "coverage": 1,
+        "totalCostUsd": 0,
+        "costUsdPer1000": 0,
+        "medianLatencyMs": 0.0037919999999758147,
+        "p95LatencyMs": 0.004666999999983545
+      },
+      "jev": null
+    }
+  },
+  "modelsReturned": [],
+  "recommendation": {
+    "decision": "NO-GO",
+    "reasons": [
+      "Jev has not been evaluated; no production adoption evidence"
+    ]
+  },
+  "stopReason": "Baseline only: the labeled set and thresholds must be committed before model calls"
+}

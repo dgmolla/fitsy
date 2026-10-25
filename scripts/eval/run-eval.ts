@@ -205,6 +205,13 @@ async function runCase(
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  const decision = process.argv.slice(2).filter(arg => arg.startsWith('--decision'));
+  if (decision.length) {
+    if (decision.length !== 1 || decision[0] !== '--decision=chain-match') throw new Error('Unknown decision evaluation');
+    const { runChainMatchEvaluation } = await import('./chain-match/run.js');
+    await runChainMatchEvaluation(process.argv.slice(2).filter(arg => arg !== '--decision=chain-match'));
+    return;
+  }
   const cli = parseArgs();
 
   // --permutations: print full matrix and exit
