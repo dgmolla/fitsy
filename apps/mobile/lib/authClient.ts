@@ -149,29 +149,36 @@ export async function registerAndStore(
 
 // ─── Dev login ──────────────────────────────────────────────────────────────
 // Dev-only throwaway account so onboarding/auth can be exercised without
-// Apple/Google OAuth (which need real config + a signed build). Logs in, or
-// registers on first run, then adopts the session and stores its token. Shared by
-// app/auth/login.tsx and app/welcome/signin.tsx — callers handle nav/analytics.
+// Apple/Google OAuth (which need real config + a signed build). Only the default
+// local account registers on first run; configured journey fixtures must exist.
+// Both app/auth/login.tsx and app/welcome/signin.tsx own navigation/analytics.
 export async function devLogin(): Promise<AuthResponse> {
   if (!__DEV__) throw new Error('Dev login is only available in development.');
   // An isolated Test Store run can use a disposable development account
   // without changing the shared Dev login account or its billing eligibility.
-  const creds = {
-    email: process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL || 'dev@fitsy.local',
-    password: process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD || 'dev12345',
-  };
+  const email = process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL;
+  const password = process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD;
+  const configured = !!(email || password);
+  if (configured && (!email || !password)) {
+    throw new Error('Set both EXPO_PUBLIC_DEV_LOGIN_EMAIL and EXPO_PUBLIC_DEV_LOGIN_PASSWORD for Dev login.');
+  }
+  const creds = { email: email || 'dev@fitsy.local', password: password || 'dev12345' };
   const attempt = async (path: string) => {
     const res = await fetch(`${BASE_URL}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(creds),
     });
-    return res.json() as Promise<Partial<AuthResponse> & { error?: string }>;
+    const data = await res.json().catch(() => ({})) as Partial<AuthResponse> & { error?: string };
+    return { res, data };
   };
-  let data = await attempt('/api/auth/login');
-  if (!data.token) data = await attempt('/api/auth/register');
-  if (!data.token || !data.refreshToken || !data.user) {
-    throw new Error(data.error ?? 'Dev login failed');
+  let result = await attempt('/api/auth/login');
+  // Do not turn bad fixture credentials or a service failure into registration.
+  // That masked the returning-preview failure as "Email already registered".
+  if (!configured && result.res.status === 401 && !result.data.token) result = await attempt('/api/auth/register');
+  const { res, data } = result;
+  if (!res.ok || !data.token || !data.refreshToken || !data.user) {
+    throw new Error(data.error ?? `Dev login failed (HTTP ${res.status})`);
   }
   await adoptSession(data.token, data.refreshToken);
   return data as AuthResponse;

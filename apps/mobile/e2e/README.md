@@ -63,6 +63,8 @@ The runner validates all required entries before acquiring a device or clearing 
 
 Environment files may override only `EXPO_PUBLIC_` values and stay on the local machine.
 The two dev-login fixtures require their own `${EXPO_PUBLIC_DEV_LOGIN_EMAIL}` and `${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}` values.
+Configured Dev Login accounts must already exist with the documented billing state; failed fixture logins preserve the login error and never attempt registration.
+Set both credentials together in the runner and its owned Metro environment.
 The adapter receives its configured arguments followed by the flow name and owned simulator UDID, with the fixture's environment loaded.
 It selects and installs a compatible candidate artifact through the canonical native commands and signs into the documented real account/store state.
 Pre-provision actual purchases, expiry and account recreation through the product; the bounded selection/sign-in step has 60 seconds and must not fabricate receipts or database entitlement.
@@ -93,6 +95,13 @@ Keep checkout controls absent until authentication succeeds.
 `components/ChainMenuServing.test.tsx` checks the saved flow's final selectors against the real menu and sign-in screens, while `scripts/sim/ci.test.ts` covers its launch contract and render-smoke consumer.
 The Mac's advisory exclusions live outside this repository in `~/fitsy-refactor/sim-review/poller.mjs`; remove `chain-menu-serving.yaml` from `KNOWN_FAILING` after a passing native run of the repaired flow.
 Remove `onboarding-target-ranked-search.yaml` (#525) from that same list after its repaired flow passes on the Debug dev build.
+
+`onboarding-returning-preview` reconnects a cleared Debug client to local Metro before checking `welcome-start`.
+Both Dev Login checkpoints wait for checkout or a completed authentication failure, reject `Dev Login Failed`, and require the real paywall before continuing.
+Its original missing-logo capture contains `Dev Login Failed` with `Email already registered`: check the fixture credentials and the values bundled by owned Metro before investigating plan rendering.
+The flow records a real decline, clears only the disposable keychain, and retains the anonymous preview, locked-meal, cancellation and cold-resume checks without purchasing.
+`components/OnboardingReturningPreview.test.tsx` exercises the real sign-in, paywall and decline with a rejected fixture login followed by a corrected retry.
+Run `node scripts/sim/ci.mjs --scope=flow --flows=onboarding-returning-preview --udid=<UDID>` with `unsubscribed-dev`, then remove `onboarding-returning-preview.yaml` (#527) from the Mac's `KNOWN_FAILING` list after a passing native run.
 
 `reminders` uses `unsubscribed-dev` to check guest access, leaving without opt-in, native denial, grant and permission persistence after relaunch without purchasing.
 After Dev Login completes, it opens notification settings and uses `reminders-enable`; it does not assume a paywall destination or an eligible trial offer.
