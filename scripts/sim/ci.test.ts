@@ -8,7 +8,7 @@ const modulePath = resolve(__dirname, 'ci.mjs');
 const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
   !/^(GIT_|GITHUB_|FITSY_|EXPO_PUBLIC_|CI$|RUNNER_ENVIRONMENT$)/.test(key)));
 
-test.each(['chain-menu-serving', 'onboarding-target-ranked-search'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
+test.each(['chain-menu-serving', 'onboarding-target-ranked-search', 'onboarding-search-highlight'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, {
     launchApp?: object;
     retry?: { maxRetries: number; commands: {
@@ -19,7 +19,8 @@ test.each(['chain-menu-serving', 'onboarding-target-ranked-search'])('%s reconne
     tapOn?: { id: string };
   }[]];
   const launch = commands.findIndex(step => step.launchApp);
-  expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true });
+  expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true,
+    ...(flow === 'onboarding-search-highlight' ? { permissions: { notifications: 'deny' } } : {}) });
   const startup = commands[launch + 1]?.retry;
   expect(startup).toBeDefined();
   expect(startup!.maxRetries).toBeLessThanOrEqual(2);
