@@ -68,6 +68,7 @@ Keep review and acceptance evidence tied to the tested source.
 After source changes, rerun affected checks and obtain matching review before merge.
 Every selected verification check executes afresh, and full affected test groups include focused test files.
 Empty selections, missing scripts and zero passing test cases fail verification.
+Every verifier invocation retains complete stdout/stderr logs with paths in its JSON results; use the [diagnostic recovery contract](../../../scripts/verify/README.md#diagnostic-logs) after local or CI failures.
 UI signoff and development walkthroughs precede final UI acceptance.
 The final-candidate simulator runner and publisher retain source, app, backend and evidence validation without a local session wrapper.
 Apple account, legal and submission approvals, product-flow status, PR checks, main Verify, Deploy and actual release acceptance remain required.
