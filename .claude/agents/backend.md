@@ -74,6 +74,8 @@ Run every required full gate before push; fix all failures in your session.
 4. `npm run build`
 5. **Mobile E2E**: Use saved Maestro YAML flows and Maestro MCP locally to run smoke
    development reproduction and UI signoff before review, then final candidate acceptance after a passing review.
+   Inspect `npm run verify:sim-plan` and `npm run verify:product-plan` for API consumers too; run selected journeys and required assertions with applicable MCP evidence and preserve omission reasons.
+   Reuse a compatible binary or a supported build without requiring a shared cache, and retire owned Metro, drivers and idle simulators after the phase.
 
 ## After Pushing a PR
 

@@ -5,9 +5,10 @@ import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createRead
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { root, inputHash, impact, changedPaths, validate, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
+import { root, inputHash, impact, changedPaths, validate, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts } from './publication-artifacts.mjs';
+import { comparison, simulatorContext } from '../verify/impact-plan.mjs';
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 16 * 1024 * 1024, ...opts })?.trim() || '';
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 async function fileDigest(file) {
@@ -27,11 +28,14 @@ async function archivedDigest(archive, file) {
   });
 }
 const repo = 'dgmolla/fitsy', context = 'product-flow/local';
-export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = changedPaths('origin/main'), current = publicConfigIdentity()) {
+export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = changedPaths('origin/main'), current = publicConfigIdentity(), options = {}) {
   const readReceipt = file => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
   const previous = readReceipt(resolve(evidenceDirectory, 'report.json'));
   const build = readReceipt(buildReceiptFile);
-  return impact(paths, requiredPublicConfigKeys(previous, build, current));
+  return impact(paths, requiredPublicConfigKeys(previous, build, current), {
+    ...simulatorContext(process.env), ...options,
+    comparison: comparison({ cwd: root, base: 'origin/main' }),
+  });
 }
 export async function createPublicationArchive(report, categories, dir, archive, execute = run) {
   const artifacts = publicationArtifacts(report, categories);
@@ -59,7 +63,7 @@ export async function publishProductFlow(prNumber, {
   evidenceDirectory = resolve(root, '.evidence/product-flow'),
   buildReceiptFile = resolve(root, '.evidence/product-build/receipt.json'),
   publicationDirectory = resolve(root, '.evidence/publication'),
-  resolvePlan = () => publicationPlan(evidenceDirectory, buildReceiptFile),
+  resolvePlan = options => publicationPlan(evidenceDirectory, buildReceiptFile, undefined, undefined, options),
   sourceHash = inputHash,
   validateEvidence = validate,
   validateMediaEvidence = candidate => validateMediaReceipt(changedPaths('origin/main'), candidate, sourceHash()),
@@ -71,7 +75,7 @@ export async function publishProductFlow(prNumber, {
   }
   try {
   assert(/^\d+$/.test(prNumber || ''), 'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER');
-  const pr = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid,baseRefName,headRepositoryOwner,state,url']));
+  const pr = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid,baseRefName,headRepositoryOwner,state,url,labels']));
   assert(pr.state === 'OPEN' && pr.baseRefName === 'main' && pr.headRepositoryOwner.login === 'dgmolla', 'Expected an open same-repository PR to main');
   const candidate = execute('git', ['rev-parse', 'HEAD']);
   assert(pr.headRefOid === candidate, 'Local HEAD does not match the remote PR');
@@ -91,8 +95,9 @@ export async function publishProductFlow(prNumber, {
     execute('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
   }
   const media = validateMediaEvidence(candidate);
-  const plan = resolvePlan();
-  const evidenceRequired = plan.required || process.argv.includes('--include-baseline');
+  const resolved = resolvePlan({ labels: (pr.labels || []).map(label => label.name) }), includeBaseline = process.argv.includes('--include-baseline');
+  const plan = includeBaseline ? { ...resolved, flows: [...new Set([...(resolved.flows || []), ...baseline])].sort(), baseline } : resolved;
+  const evidenceRequired = plan.required || includeBaseline;
   let target = pr.url;
   if (evidenceRequired) {
     const dir = evidenceDirectory, reportFile = resolve(dir, 'report.json');

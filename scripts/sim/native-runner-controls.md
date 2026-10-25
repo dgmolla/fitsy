@@ -7,6 +7,8 @@ The [native binary reuse cookbook](../../docs/engineering/devops/native-binary-r
 Development and review `run` invocations default to `--mode=development`, which executes the same Maestro assertions and screenshots without starting the explicit recorder.
 Use `--mode=final-candidate` once the PR candidate is stable for publication evidence.
 Run final acceptance directly against the current source and retain its app/backend/evidence identities.
+Inspect `npm run verify:product-plan`; `run UDID` executes the affected journeys automatically and explicit names only add diagnostics.
+The plan records omitted journeys and requires the selected YAML assertions without unrelated baseline runs.
 Add `--record-video` when a complete video is specifically requested; final candidate runs otherwise retain command receipts and screenshots without starting the explicit recorder.
 The flow helper requires an explicit boolean recording choice and fails before starting children if the CLI omits it.
 The product-flow CLI passes its selected mode through `runSelectedRecordedFlow`, which supplies that boolean to the helper; a child-process fixture exercises both CLI choices through this production bridge.
@@ -16,6 +18,7 @@ Use `--mode=requested-video` only for an explicit video request; that report is 
 Install `ffprobe` and `ffmpeg` before a video run; the runner checks for them before Maestro and rejects a zero-duration video or one whose first video frame cannot decode, with a failure receipt after recording.
 The validation decodes at most one frame with a 15-second limit and retains the complete original video.
 It refuses a busy Metro port and never stops another worker's server.
+Retire owned Metro, drivers and idle simulator resources through the existing lifecycle after the phase; keep acceptance evidence and another task's resources intact.
 The build and run phases enforce an 8 GiB free-space floor.
 If the free-space check fails, clear only proven task-owned disposable data at an idle boundary and retry.
 

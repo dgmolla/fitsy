@@ -71,34 +71,43 @@ const documentationPath = path => /^[^/]+\.md$/.test(path) ||
 
 // Flow names are the existing Maestro sources, not another scenario registry.
 const screenFlows = [
-  [/^apps\/mobile\/(app\/\(tabs\)\/saved\.|lib\/menuBookmarks\.)/, /^log-meal$/],
+  [/^apps\/mobile\/(app\/\(tabs\)\/saved\.|lib\/menuBookmarks\.)/, /^log-meal$/, ['discovery']],
   [/^apps\/mobile\/(app\/restaurant\/|components\/MenuItemCard\.|lib\/(menuFilters|menuLoadState)\.)/,
-    /^(chain-menu-serving|log-meal|menu-load-recovery|menu-macro-serving)$/],
+    /^(chain-menu-serving|log-meal|menu-load-recovery|menu-macro-serving)$/, ['billing', 'discovery', 'changed-journey']],
   [/^apps\/mobile\/(app\/notification-settings\.|lib\/(notification|pushToken|useNotifications|useReminders))/,
-    /^reminders$/],
-  [/^apps\/mobile\/app\/macro-setup\./, /^onboarding-assisted-targets$/],
+    /^reminders$/, ['notifications']],
+  [/^apps\/mobile\/app\/macro-setup\./, /^onboarding-assisted-targets$/, ['onboarding']],
   [/^apps\/mobile\/(components\/ScrollPicker\.|lib\/(macroCalculator|macroPresets|macroSuggestions)\.)/,
-    /^onboarding-(assisted-targets|target-ranked-search)$/],
+    /^(meal-target-energy-sync|onboarding-(assisted-targets|target-ranked-search))$/, ['onboarding', 'discovery']],
   [/^apps\/mobile\/(app\/\(tabs\)\/search\.|components\/(Discovery|Restaurant|Location|FilterPopup|SearchHeader)|lib\/(discovery|searchLoading|locations|locationCache|useLocation|useDiscovery))/,
-    /^(onboarding-(assisted-targets|guided-preview|target-ranked-search)|menu-load-recovery)$/],
+    /^(meal-target-energy-sync|onboarding-(assisted-targets|guided-preview|out-of-area|search-highlight|target-ranked-search)|menu-load-recovery)$/, ['onboarding', 'discovery']],
   [/^apps\/mobile\/(components\/Preview|lib\/(preview|guidedPreview|usePreview))/,
-    /^onboarding-(guided-preview|returning-preview|target-ranked-search)$/],
+    /^onboarding-(guided-preview|returning-preview|search-highlight|target-ranked-search)$/, ['billing', 'auth', 'onboarding', 'discovery']],
   [/^apps\/mobile\/(app\/(welcome\/|onboarding\.)|components\/(Welcome|Onboarding|ContinueButton|ProgressDots|ScrollPicker|SelectionCard)|lib\/onboarding)/,
-    /^(cold-start-welcome|onboarding-.*)$/],
+    /^(cold-start-welcome|meal-target-energy-sync|onboarding-.*)$/, ['onboarding']],
+  [/^apps\/api\/app\/api\/search\//,
+    /^(meal-target-energy-sync|onboarding-(assisted-targets|guided-preview|out-of-area|search-highlight|target-ranked-search)|menu-load-recovery)$/, ['discovery']],
+  [/^apps\/api\/app\/api\/restaurants\//,
+    /^(chain-menu-serving|log-meal|menu-load-recovery|menu-macro-serving|paywall-access)$/, ['billing', 'discovery']],
 ];
+// Product acceptance consumes the same path map as local and hosted selection.
+export function mappedCategories(path) {
+  const matches = screenFlows.filter(([pattern]) => pattern.test(path));
+  return matches.length ? [...new Set(matches.flatMap(([, , categories]) => categories))].sort() : null;
+}
 const simulatorSource = path => !documentationPath(path) && !/\.(md|rst|txt)$/.test(path) &&
   !/(?:\.test\.|\.spec\.|\.d\.ts$|__tests__\/|__mocks__\/|(?:^|\/)(?:__fixtures__|test-fixtures)\/)/.test(path);
 const uiPath = path => /\.(?:[jt]sx?|mdx|css|scss|sass|less|svg|png|jpe?g|webp|gif|avif|ico|ttf|otf|woff2?)$/.test(path) &&
   /^(?:apps\/mobile\/(?:app|components|assets|styles|theme|tokens)\/|apps\/(?:web|landing|api)\/(?:src\/)?(?:app\/(?!api\/)|pages\/(?!api\/)|components\/|styles\/|public\/|assets\/)|(?:(?:web|src)\/)?(?:app\/(?!api\/)|pages\/(?!api\/)|components\/|styles\/|public\/|assets\/))/.test(path);
 const sharedUIPath = path => /^apps\/mobile\/(?:components\/|assets\/|(?:styles|theme|tokens)\/|lib\/(?:theme|colors|typography)\.)/.test(path) ||
   (uiPath(path) && /(?:^|\/)(?:components|styles|theme)\/|(?:^|\/)(?:layout|_app|global)\./.test(path));
-const mobileContract = path => /^(apps\/mobile\/|packages\/shared\/|prisma\/|package(?:-lock)?\.json$|apps\/api\/(app\/api\/|lib\/|services\/))/.test(path);
+const mobileContract = path => /^(apps\/mobile\/|packages\/shared\/|prisma\/|package(?:-lock)?\.json$|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$))/.test(path);
 const highSimulatorPath = path =>
   /^package(?:-lock)?\.json$/.test(path) ||
   /^apps\/mobile\/(?:ios\/|android\/|plugins\/|(?:app\.config\.[^/]+|app\.json|eas\.json|package\.json|(?:metro|babel)\.config\.[^/]+)$|app\/(?:.*\/)?(?:_layout|index|\+native-intent)\.)/.test(path) ||
   /^apps\/mobile\/(?:lib\/(?:onboardingEntry|onboardingResume|onboardingPreviewEntry|onboardingCompletion|requireWelcomeGoal|pendingMealClaim|macroStorage)|components\/(?:OnboardingAccountSummary|PreviewRestaurantCard))\./.test(path) ||
   /^(?:scripts\/deploy\/|\.eas\/|\.github\/workflows\/(?:deploy|release|eas-build)[^/]*\.ya?ml$)/.test(path) ||
-  (mobileContract(path) && /auth|signin|session|supabase|jwt|payment|paywall|purchase|entitlement|subscription|revenuecat|resubscribe|trial|teaserGate|LockedUnlock|reviewAccess|navigation|nativeIntent|hardwareBack|OwnedHardwareBack|RouteContinuation/i.test(path));
+  (mobileContract(path) && !path.startsWith('apps/mobile/e2e/') && /auth|signin|session|supabase|jwt|payment|paywall|purchase|entitlement|subscription|revenuecat|resubscribe|trial|teaserGate|LockedUnlock|reviewAccess|navigation|nativeIntent|hardwareBack|OwnedHardwareBack|RouteContinuation/i.test(path));
 
 export function simulatorFlows(cwd = repository) {
   try {
@@ -181,10 +190,24 @@ function sourceVersions(path, range, cwd, env) {
       : readFileSync(resolve(cwd, path), 'utf8').trimEnd()];
 }
 
-function verificationScriptsOnly(path, range, cwd, env) {
+export function verificationScriptsOnly(path, range, cwd, env) {
   if (!/^(?:package\.json|apps\/(?:api|mobile)\/package\.json)$/.test(path) || !range || range.unknown) return false;
   try {
     const manifests = sourceVersions(path, range, cwd, env).map(text => {
+      // JSON.parse collapses duplicate keys. Never exempt an ambiguous runtime
+      // edit, including duplicate keys in a nested dependencies/scripts object.
+      const tokens = text.match(/"(?:[^"\\]|\\.)*"|[{}\[\]:]/g) || [];
+      const objects = [];
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        if (token === '{' || token === '[') objects.push(token === '{' ? new Set() : null);
+        else if (token === '}' || token === ']') objects.pop();
+        else if (tokens[i + 1] === ':' && token.startsWith('"')) {
+          const keys = objects.at(-1), key = JSON.parse(token);
+          if (keys?.has(key)) throw new Error('Duplicate manifest key');
+          keys?.add(key);
+        }
+      }
       const { scripts = {}, ...runtime } = JSON.parse(text);
       // Compare every dependency, lifecycle/build script and other manifest
       // field. Only known verification commands are irrelevant to native work.
@@ -229,20 +252,23 @@ export const renderCheckpoints = [
   [/^apps\/mobile\/app\/welcome\/preview\./, 'onboarding-guided-preview', { id: 'discovery-hero' }],
 ];
 
-export function simulatorSelection(files, { cwd = repository, env = process.env, labels = [], release = false, unknownContext = false, comparison: range } = {}) {
+export function simulatorSelection(files, { cwd = repository, env = process.env, labels = [], release = false, unknownContext = false, configKeys = [], comparison: range } = {}) {
   const all = simulatorFlows(cwd);
   const result = (risk, scope, flows, reason, reviewTier = null) =>
-    ({ risk, scope, required: scope !== 'none', mode: scope === 'none' ? 'none' : 'e2e', smoke: [], flows, reason, reviewTier });
+    ({ risk, scope, required: scope !== 'none', mode: scope === 'none' ? 'none' : 'e2e', smoke: [], flows, reason, reviewTier,
+      omitted: all.filter(flow => !flows.includes(flow)).map(flow => ({ flow, reason: 'Unaffected by the mapped change; no shared or ambiguous impact' })) });
   const full = reason => result('high', 'full', all, reason);
   if (files === null) return full('Comparison history unavailable; all journeys may be affected');
   if (unknownContext) return full('Event context unavailable; simulator overrides cannot be ruled out');
   if (release) return full('Release candidate requires the full simulator flow set');
+  if (configKeys.length) return full(`Public native configuration changed: ${configKeys.join(', ')}`);
   const source = files.filter(path => simulatorSource(path) && !verificationScriptsOnly(path, range, cwd, env));
   const highPath = source.find(highSimulatorPath);
   if (highPath) return full(`Navigation, auth, billing, native configuration or release path: ${highPath}`);
   const sharedUI = source.find(sharedUIPath);
   if (sharedUI) return full(`Shared UI or app shell requires the full smoke suite: ${sharedUI}`);
-  const mobile = source.filter(path => path.startsWith('apps/mobile/'));
+  const contracts = source.filter(path => mobileContract(path) && !serviceHealthPath(path));
+  const mobile = contracts.filter(path => path.startsWith('apps/mobile/'));
   let selection = result('low', 'none', [], 'Verification tooling or non-mobile change; unit and focused tests only');
   if (mobile.length || source.some(path => uiPath(path) || (mobileContract(path) && !serviceHealthPath(path)))) {
     let reviewTier;
@@ -253,22 +279,22 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
     const webUI = source.find(path => uiPath(path) && !path.startsWith('apps/mobile/'));
     if (webUI) return { ...full(`Unmapped web UI requires the full smoke suite: ${webUI}`), reviewTier };
     const flows = new Set();
-    for (const path of mobile) {
+    for (const path of contracts) {
       const direct = /^apps\/mobile\/e2e\/flows\/([a-z0-9-]+)\.yaml$/.exec(path);
       const mapped = direct ? all.filter(name => name === direct[1])
         : all.filter(name => screenFlows.some(([pattern, flow]) => pattern.test(path) && flow.test(name)));
-      if (!mapped.length) return { ...full(`Unmapped mobile path: ${path}; full coverage required`), reviewTier };
+      if (!mapped.length) return { ...full(`Unmapped mobile-facing path: ${path}; full coverage required`), reviewTier };
       for (const name of mapped) flows.add(name);
     }
     if (flows.size) selection = result('medium', 'flow', [...flows].sort(),
-      `Mapped affected screens from: ${mobile.join(', ')}`, reviewTier);
+      `Mapped affected journeys from: ${contracts.join(', ')}`, reviewTier);
     if (mobile.length && source.every(path => uiPath(path) && renderOnly(path, range, cwd, env))) {
       const smoke = mobile.map(path => {
         const checkpoint = renderCheckpoints.find(([pattern]) => pattern.test(path));
         return checkpoint ? { screen: path, flow: checkpoint[1], selector: checkpoint[2] } : null;
       });
-      if (smoke.every(Boolean)) selection = { ...selection, scope: 'smoke', mode: 'render', smoke,
-        flows: [...new Set(smoke.map(item => item.flow))].sort(),
+      if (smoke.every(Boolean)) selection = { ...result('medium', 'smoke', [...new Set(smoke.map(item => item.flow))].sort(),
+        `Style/copy-only UI change; launch and render affected screens: ${mobile.join(', ')}`, reviewTier), mode: 'render', smoke,
         reason: `Style/copy-only UI change; launch and render affected screens: ${mobile.join(', ')}` };
     }
   }
@@ -279,7 +305,7 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   return selection;
 }
 
-function simulatorContext(env) {
+export function simulatorContext(env) {
   const context = { labels: [], release: env.GITHUB_EVENT_NAME === 'release' || env.GITHUB_REF_TYPE === 'tag' };
   if (env.GITHUB_EVENT_PATH) {
     try {
@@ -313,12 +339,8 @@ export function impactPlan(options = {}) {
   const selection = changedFiles(options);
   const documentationOnly = selection.files !== null && selection.files.every(documentationPath);
   const code = !documentationOnly;
-  // Product-flow remains the authority for exact categories and native proof.
-  const native = code && (selection.files === null || selection.files.some(path =>
-    /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(path) &&
-    !/\.md$/.test(path) && !serviceHealthPath(path)));
   const simulator = simulatorSelection(selection.files, { ...simulatorContext(options.env || process.env), ...options, comparison: selection.comparison });
-  return { version: 1, ...selection, documentationOnly, code, tests: code, build: code, native, simulator,
+  return { version: 1, ...selection, documentationOnly, code, tests: code, build: code, native: simulator.required, simulator,
     testGroups: wholeTestGroups(selection.files) };
 }
 
