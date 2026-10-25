@@ -48,7 +48,7 @@ checks:
     layer: 1
     blocking: true
     runs: [local]
-    why: Local simulator evidence for mobile-facing changes; missing, stale, failed, or incomplete evidence fails.
+    why: Source-bound evidence for impact-selected journeys and MCP categories; every selected flow and its required assertions must pass.
 
   - name: boundaries
     script: boundaries.sh

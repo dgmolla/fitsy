@@ -17,11 +17,20 @@ tags:
 - assertTrue: ${output.menu.totalItemCount === 8 && output.menu.locked && output.menu.menuItems.length === 3}
 - evalScript: ${output.chicken = output.menu.menuItems.filter(function (i) { return i.name === 'Grilled Chicken Bowl'; })[0]}
 - assertTrue: ${!!output.chicken && output.chicken.macros.calories === 520 && output.chicken.macros.proteinG === 42 && output.chicken.macros.carbsG === 48 && output.chicken.macros.fatG === 14 && output.chicken.macros.confidence === 'HIGH'}
+# This public-menu scenario must start anonymous after any preceding fixture.
 - launchApp:
     clearState: true
-- extendedWaitUntil:
-    visible: "Find meals that fit"
-    timeout: 15000
+    clearKeychain: true
+# The first XCTest observation can race the native cold-launch transition.
+# Retry readiness before any interaction; missing UI or a crash still fails.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible: "Find meals that fit"
+          timeout: 15000
 - openLink: ${'fitsy://restaurant/' + output.seed.id}
 - tapOn:
     text: Open

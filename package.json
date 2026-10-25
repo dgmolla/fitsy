@@ -31,6 +31,7 @@
     "verify:all": "node scripts/verify/run.mjs --layer=all --scope=all",
     "verify:dev-drift": "bash scripts/verify/dev-drift.sh",
     "verify:sim-plan": "node scripts/verify/impact-plan.mjs --simulator",
+    "verify:product-plan": "node scripts/verify/product-flow.mjs --plan",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },
