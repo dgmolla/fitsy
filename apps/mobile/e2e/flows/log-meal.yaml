@@ -1,6 +1,8 @@
 # This checkout records saved meals, not a dietary meal log.
 # Requires a disposable entitled dev account with a completed profile.
 # The native Dev Login reads the same EXPO_PUBLIC_* values from owned Metro.
+# "Your Fitsy Pro subscription ended" means login succeeded but this fixture
+# expired; prepare an entitled account before rerunning the Search assertion.
 appId: com.fitsy.mobile
 tags: [auth, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
 env:

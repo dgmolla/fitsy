@@ -22,6 +22,8 @@ Full scope includes every saved flow, including `signin-options`, `paywall-acces
 It requires a disposable entitled dev account with a completed profile and reads `${EXPO_PUBLIC_DEV_LOGIN_EMAIL}` and `${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}` through the local runner.
 Use the Debug build with owned Metro so native Dev Login consumes those same environment values.
 It resets only the synthetic Grilled Chicken Bowl bookmark, saves the meal through the UI and verifies it in Saved after relaunch.
+If `log-meal` reaches `Welcome back.` with `Your Fitsy Pro subscription ended`, authentication succeeded but the required `entitled-dev` fixture has expired.
+Prepare an active disposable account through the local fixture adapter before rerunning; retain the Search assertion and paid-access routing.
 Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
 A local scope pass does not replace the source-bound final-candidate product-flow gate.
 
