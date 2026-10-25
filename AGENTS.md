@@ -162,6 +162,7 @@ npm run verify:all     # everything, including the production build
 
 The check list lives in `scripts/verify/registry.yml`; CI (`verify.yml`), the
 pre-push hook, and agents all run the same scripts.
+All verifier callers retain complete check logs; see [diagnostic recovery](scripts/verify/README.md#diagnostic-logs) for local paths and CI artifacts.
 Inspect dynamic simulator scope with `npm run verify:sim-plan`; selection and render checkpoints live in `scripts/verify/impact-plan.mjs`.
 CI posts the `Sim scope` selection on the PR head and uploads `selection.json`; it never runs simulators or needs simulator credentials.
 The classifier is read-only; the protected `sim-scope.yml` publisher records a bounded scope/count description, with exact flows retained in the artifact.

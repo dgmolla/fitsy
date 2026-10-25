@@ -45,6 +45,30 @@ A check without a registry entry, or an entry without a script, is itself a fail
 
 Callers: `.githooks/pre-push` (size/domain checks plus cheap layers 0-1, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
 
+## Diagnostic logs
+
+Every `run.mjs` invocation writes complete per-check stdout and stderr to a fresh `.evidence/verify/logs/run-*/` directory.
+Each executed check's JSON result includes `logs.stdout` and `logs.stderr` paths relative to the checkout.
+Child processes write directly to these files without an output buffer limit.
+Passing, failing, shadow-failing and skipped checks all retain their output, and rerunning Verify preserves prior logs.
+Failed checks print the last 10,000 bytes of each stream and the full log paths, followed by the concise failure summary.
+The `test` check names every failing workspace or test engine even when later suites pass.
+Use the retained stderr log to recover an early API assertion hidden by later mobile output.
+
+Verify's Static, Tests and Build jobs upload only `.evidence/verify/logs/` with `always()`, including hidden directories, even after a check fails.
+Artifacts are named `verify-l0-l1-logs-attempt-N`, `verify-l2-logs-attempt-N` and `verify-l3-logs-attempt-N`, with seven-day retention and separate names for retries.
+An earlier setup failure may leave no logs; the upload warns without changing the check's failure.
+The final Verify job keeps its existing success and legitimate-skip requirements.
+Engine reports used to count passing test cases remain temporary.
+
+Replay the real failing-API-then-passing-mobile regression and output retention checks with:
+
+```sh
+npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/focused-tests.test.ts verify/run-output.test.ts
+```
+
+## Simulator coverage
+
 `npm run verify:sim-plan` prints the simulator scope, reason and exact existing Maestro flow names.
 Use `npm run verify:sim-plan -- --release-candidate` for explicit release planning; release events and tag refs also require the full flow set.
 `impact-plan.mjs` consumes the retained `route-reviewers.sh` ownership routing and `risk-tiers.yml` path policy, then maps mobile paths to flows.
