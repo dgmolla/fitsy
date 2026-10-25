@@ -9,7 +9,7 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:coverage:gc": "node --expose-gc ../../node_modules/jest/bin/jest.js --coverage",
-    "type-check": "tsc --noEmit",
+    "type-check": "prisma generate --schema ../../prisma/schema.prisma && tsc --noEmit",
     "lint": "eslint --no-warn-ignored ."
   },
   "dependencies": {

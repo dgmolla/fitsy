@@ -2,7 +2,7 @@
 # with a real expired Apple purchase on the device's store account.
 # Retain the native receipt and authentication; never synthesize entitlement.
 appId: com.fitsy.mobile
-tags: [billing, onboarding, changed-journey]
+tags: [billing, onboarding, changed-journey, 'fixture:apple-history', 'store:apple-simulator']
 ---
 - launchApp:
     clearState: false

@@ -1,7 +1,7 @@
 # Precondition: a signed-in never-subscribed Fitsy account is on the ordinary
 # paywall and the device's store account has no Fitsy purchase to restore.
 appId: com.fitsy.mobile
-tags: [billing, onboarding, changed-journey]
+tags: [billing, onboarding, changed-journey, 'fixture:empty-store', 'store:test-store', 'store:apple-simulator']
 ---
 - launchApp:
     clearState: false

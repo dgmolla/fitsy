@@ -58,9 +58,10 @@ export function MenuItemCard({
   const badgeColor = hasMatch ? matchColor(pct) : undefined;
 
   return (
+    <View style={[s.card, dim && s.cardDim]}>
     <Pressable
       onPress={onPress}
-      style={[s.card, dim && s.cardDim]}
+      style={s.cardBody}
       accessibilityRole="button"
       testID={`menu-item-${item.id}`}
       // The blur hides the name visually; without an explicit label VoiceOver
@@ -150,10 +151,11 @@ export function MenuItemCard({
           ) : null}
         </View>
       </View>
+    </Pressable>
       <View style={s.bookmarkSlot}>
         <BookmarkButton isSaved={isSaved} onPress={onToggleSave} />
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -165,6 +167,8 @@ const s = StyleSheet.create({
     flexDirection: 'row', gap: 14, alignItems: 'flex-start',
   },
   cardDim: { opacity: 0.85 },
+  // Bookmark is a sibling of the card's pressable so it stays its own accessible control.
+  cardBody: { flex: 1, flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
   pct: {
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: EDITORIAL.creamCard,

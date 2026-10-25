@@ -17,6 +17,7 @@ lens edits).
 1. **Collect**: `gh pr list --state merged --limit 100 --json number,title,body,mergedAt`
    filtered to `fix(`/`revert(` titles or the `incident` label, with
    `number > last-harvest`.
+   If CLI access fails, use connected tools or an authenticated browser to read the exact CI run before requesting logs from the human.
 2. **Classify each PR** (read title/body; `gh pr diff <n>` when unclear).
    Answer three questions:
    - *What class of bug was this?* (one sentence, generalized past the specific file)
@@ -34,6 +35,21 @@ lens edits).
      Keep each lens focused on its concern and retain actionable evidence.
      Consolidate repeated examples when a shared rule preserves their failure scenarios.
    - Behavioral/user-facing -> also consider a Maestro flow or DB test.
+     Inspect `npm run verify:sim-plan` and update `scripts/verify/impact-plan.mjs` plus its table-driven tests when adding affected-screen coverage.
+     Keep the retained ownership router and simulator risk policy as inputs; do not restore deleted review executables.
+     UI changes require local render smoke for proven screen-local style/copy, affected E2E for behavior, or full coverage for shared UI/app shells.
+     Extend render checkpoints together with their maintained YAML assertions, and keep simulator execution out of pre-push.
+     Keep verification-only manifest scripts and E2E orchestration out of native scope; test that dependency/build changes and `needs-sim` still force coverage.
+     When changing verification caller routing, set each subprocess fixture's `FITSY_RUNS` explicitly and replay it under the L2 parent's `FITSY_RUNS=ci CI=true` environment.
+     Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
+     CI only posts `Sim scope` and uploads `selection.json`; never restore hosted simulator execution, preflight or simulator secrets.
+     Keep status credentials in the protected completion publisher, never the candidate classifier or baseline scripts.
+     Bound descriptions to scope/count, validate the source run and current head, and make exact-flow consumers read `selection.json`.
+     Diagnose local setup through `node scripts/sim/ci.mjs --scope=changed --plan` and the shipping contract, preserving required flows and genuine billing starting states.
+     Declare account/store requirements in maintained YAML tags and require untracked local fixture preparation before each affected journey.
+     Test state isolation across sign-out and billing flows; a simulated adapter test does not establish a successful real-store full run.
+     Use saved Maestro YAML and Maestro MCP for new walkthroughs; validate actual interactions plus hierarchy observations through the product-flow evidence consumer when changing tool routing.
+     If the canonical local media preflight cannot inspect process ownership, retain the failed result and route that check to the existing authorized host owner; do not weaken the preflight or move native execution into CI.
 4. **Eval cases**: for the sharpest escapes, capture
    `scripts/verify/evals/incidents/<pr-number>/` (diff.patch via
    `gh pr diff <n> --patch` of the ORIGINAL breaking change when identifiable,

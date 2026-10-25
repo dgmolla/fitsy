@@ -178,7 +178,7 @@ printf '%s:%s\\n' '${command}' "\${NODE_OPTIONS-}" >> "$FITSY_CHILD_STUB_LOG"
     { name: "typecheck", status: "pass" }, { name: "build", status: "pass" },
   ]);
   expect(readFileSync(log, "utf8").trim().split("\n")).toEqual([
-    "npx:", "npm:--max-old-space-size=384",
+    "npm:", "npm:--max-old-space-size=384",
   ]);
 });
 

@@ -1,0 +1,49 @@
+# Consume Verify's selection as data, without executing any PR-controlled code.
+name: Sim scope
+on:
+  workflow_run:
+    workflows: [Verify]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  publish:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Validate source run and current PR head
+        id: source
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { scopeSource } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/verify/sim-scope-status.mjs`);
+            const source = await scopeSource(github, context);
+            core.setOutput('artifact-id', source?.artifactId || '');
+      - name: Download selection data only
+        if: steps.source.outputs.artifact-id != ''
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.source.outputs.artifact-id }}
+          merge-multiple: true
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/sim-scope
+      - name: Record Sim scope on PR head
+        if: steps.source.outputs.artifact-id != ''
+        uses: actions/github-script@v7
+        env:
+          SIM_SCOPE_ARTIFACT_ID: ${{ steps.source.outputs.artifact-id }}
+        with:
+          script: |
+            const { publishScope } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/verify/sim-scope-status.mjs`);
+            await publishScope(github, context, `${process.env.RUNNER_TEMP}/sim-scope/selection.json`, Number(process.env.SIM_SCOPE_ARTIFACT_ID));
