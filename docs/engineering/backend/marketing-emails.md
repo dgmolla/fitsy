@@ -18,7 +18,7 @@ sequenceDiagram
     participant Route as /api/internal/marketing/weekly
     participant EditionFn as editionForDate()
     participant DB as PostgreSQL
-    participant Send as sendMarketingEmail()
+    participant Send as sendMarketingEmailResult()
     participant Resend as Resend API
 
     Vercel->>Route: GET (Bearer CRON_SECRET)
@@ -31,11 +31,11 @@ sequenceDiagram
         alt already sent / paced
             Route-->>Route: skipped++ / paced++
         else due
-            Route->>Send: sendMarketingEmail({ userId | waitlistId, to, subject, html })
+            Route->>Send: sendMarketingEmailResult({ userId | waitlistId, to, subject, html })
             Send->>DB: isEmailOptedOut(to): opt-out on User OR LaunchWaitlist for this address?
             Send->>Resend: POST /emails (with List-Unsubscribe headers)
             Resend-->>Send: 200 OK
-            Send-->>Route: true
+            Send-->>Route: { ok: true }
             Route->>DB: recordSend(email, weekly, edition)
         end
     end
@@ -131,7 +131,7 @@ The recipient kind (`userId` or `waitlistId`) decides which unsubscribe link is 
 
 `MarketingSend` (Prisma model, `apps/api/lib/marketingLedger.ts`) records every marketing send by normalized address, campaign, and step.
 The weekly cron uses campaign `weekly` with `<edition slug>:w<week index>` as the step, so an edition recurs on the next eight-week rotation but a retry within the same week is a no-op.
-A row is written only after `sendMarketingEmail` returns `true`; a failed send is never recorded, so the next run retries it.
+A row is written only after `sendMarketingEmailResult` returns `{ ok: true }`; a failed send is never recorded, so the next run retries it.
 Before sending, the cron also skips any address that heard from any campaign within the last 48 hours (`paced`), so a lifecycle email and an edition never land back to back.
 Addresses already recorded for this edition's step are excluded from the audience query itself.
 The migration that introduced the ledger copied the old `_marketing_send` history into it, week-stamping each row from its `sent_at` so it matches the new key; the old table is dropped in a later contraction migration.
@@ -176,6 +176,37 @@ Callers do not need to handle any of the following:
 - **CAN-SPAM footer:** "You're receiving this because you have a Fitsy account and joined our launch list." appended to every send.
 
 `sendMarketingEmail` is fail-closed: if any compliance env var is missing or the suppression check fails, it returns `false` without sending.
+
+### Failure diagnostics and safe recovery
+
+`sendMarketingEmailResult` applies the same compliance and suppression gates and returns either `{ ok: true }` or `{ ok: false, reason, status? }`.
+The existing `sendMarketingEmail` boolean interface remains available for launch and confirmation callers.
+Resend requests go through `apps/api/services/resendService.ts`, retaining the existing eight-second attempt timeout and one capped `Retry-After` retry for HTTP 429 with the same idempotency key and body.
+
+The weekly route aggregates fixed reason categories and HTTP status counts into its existing Slack alert.
+It never includes recipients, record IDs, unsubscribe URLs, idempotency keys, API keys, raw provider bodies or exception messages.
+No per-recipient alert or additional Slack publisher is added.
+The HTTP 200 response means the cron executed; operators must inspect `failed` and `unsent` to determine whether delivery completed.
+
+| Reason | Meaning and next action |
+|--------|-------------------------|
+| `domain_unverified` with HTTP 403 | Resend returned its documented unverified-domain rejection; the authorized configuration operator must reconcile the sender and verified domain. |
+| `provider_rejected` with HTTP status | Another provider rejection, including unknown or malformed error bodies; inspect the provider through existing authorized access without inferring a domain problem from HTTP 403 alone. |
+| `rate_limited` | Both bounded attempts returned HTTP 429; plan any later replay using the existing ledger and delivery window. |
+| `network_error` or `timeout` | Provider acceptance is unknown; retain idempotency safeguards and do not treat this as successful delivery. |
+| `missing_api_key`, `missing_unsubscribe_secret`, `missing_postal_address` | A required configuration value is absent; no provider send was attempted. |
+| `undeliverable_address` or `suppressed` | Recipient safety gate prevented sending, including opt-out after audience selection. |
+| `suppression_unavailable` | The opt-out lookup failed; fail closed without sending or exposing database error details. |
+
+[Issue #445](https://github.com/dgmolla/fitsy/issues/445#issuecomment-6040216734) retains the original alert evidence, provider rejection and configuration handoff.
+Production DNS/domain changes and live marketing cron replays are separate operator actions, not diagnostic probes.
+After an authorized domain repair, validate provider acceptance using only a labeled `delivered@resend.dev` synthetic recipient as described in [Resend's test-email documentation](https://resend.com/docs/dashboard/emails/send-test-emails).
+Successful synthetic provider acceptance does not establish real-recipient delivery.
+Do not invoke the production cron as a diagnostic probe; any deliberate replay needs its delivery window and existing suppression, frequency cap and idempotency safeguards checked.
+
+The route transport regression runs real application modules with only the database SDK and external HTTP replaced.
+`apps/api/tests/db/marketingWeekly.db.test.ts` additionally exercises real audience queries, opt-out, failure/recovery, cross-campaign pacing and ledger replay with the worktree-owned disposable database.
+It verifies actual container ownership before fixture mutations and each route invocation, and replaces Resend and Slack HTTP so no real recipient or channel is contacted.
 
 ---
 

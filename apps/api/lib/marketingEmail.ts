@@ -10,10 +10,8 @@
 import { prisma } from "@/lib/restaurantService";
 import { Prisma } from "@prisma/client";
 import { unsubscribeUrl, type UnsubscribeSubject } from "@/lib/unsubscribe";
+import { sendResendEmail, type ResendFailureReason } from "@/services/resendService";
 export { launchEmailContent } from "@/lib/emailTemplates";
-
-const RESEND_ENDPOINT = "https://api.resend.com/emails";
-const TIMEOUT_MS = 8000;
 
 // RFC 2606 and RFC 6762 reserve these TLDs; no address under them can receive
 // mail. Seeded test accounts use them, and every send would hard-bounce —
@@ -74,36 +72,61 @@ export async function optedOutAddresses(emails: string[]): Promise<Set<string>> 
   return new Set(rows.map((r) => r.email));
 }
 
-export async function sendMarketingEmail(
-  opts: MarketingRecipient & {
-    to: string;
-    subject: string;
-    html: string;
-    /**
-     * Provider-side dedup for retries (Resend honours it for 24h). Callers
-     * derive it from the ledger key (campaign, step, address) so a retry of
-     * a send whose response was lost cannot deliver twice.
-     */
-    idempotencyKey?: string | undefined;
-  },
-): Promise<boolean> {
+type MarketingEmailOptions = MarketingRecipient & {
+  to: string;
+  subject: string;
+  html: string;
+  /**
+   * Provider-side dedup for retries (Resend honours it for 24h). Callers
+   * derive it from the ledger key (campaign, step, address) so a retry of
+   * a send whose response was lost cannot deliver twice.
+   */
+  idempotencyKey?: string | undefined;
+};
+
+export type MarketingEmailResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | ResendFailureReason
+        | "missing_api_key"
+        | "undeliverable_address"
+        | "missing_unsubscribe_secret"
+        | "missing_postal_address"
+        | "suppressed"
+        | "suppression_unavailable";
+      status?: number;
+    };
+
+/** Boolean compatibility for launch and confirmation callers. */
+export async function sendMarketingEmail(opts: MarketingEmailOptions): Promise<boolean> {
+  return (await sendMarketingEmailResult(opts)).ok;
+}
+
+/** Safe diagnostics for batch reporting, with the same compliance gates. */
+export async function sendMarketingEmailResult(opts: MarketingEmailOptions): Promise<MarketingEmailResult> {
   const { to, subject, html } = opts;
 
   // --- Compliance gates (fail-closed) ---
 
   const apiKey = process.env["RESEND_API_KEY"];
-  if (!apiKey) return false;
+  if (!apiKey) return { ok: false, reason: "missing_api_key" };
 
-  if (isUndeliverableAddress(to)) return false;
+  if (isUndeliverableAddress(to)) return { ok: false, reason: "undeliverable_address" };
 
   const unsubSecret = process.env["UNSUBSCRIBE_SECRET"];
-  if (!unsubSecret) return false;
+  if (!unsubSecret) return { ok: false, reason: "missing_unsubscribe_secret" };
 
   const postalAddress = process.env["FITSY_POSTAL_ADDRESS"];
-  if (!postalAddress) return false;
+  if (!postalAddress) return { ok: false, reason: "missing_postal_address" };
 
   // Suppression is keyed on the address so no record-level gap can bypass it.
-  if (await isEmailOptedOut(to)) return false;
+  try {
+    if (await isEmailOptedOut(to)) return { ok: false, reason: "suppressed" };
+  } catch {
+    return { ok: false, reason: "suppression_unavailable" };
+  }
 
   // --- Build unsubscribe URL (guaranteed non-null — secret is set above) ---
   const recipient: UnsubscribeSubject =
@@ -142,49 +165,6 @@ export async function sendMarketingEmail(
     },
   });
 
-  // Sequential cron loops can trip the provider's per-second limit; honour
-  // one 429 with its Retry-After (capped) before giving up on this address.
-  // A false here is retried by the caller on its next run, never dropped.
-  const first = await postResend(apiKey, body, opts.idempotencyKey);
-  if (first.status !== 429) return first.ok;
-  await sleep(Math.min(first.retryAfterMs ?? 1000, MAX_RETRY_AFTER_MS));
-  return (await postResend(apiKey, body, opts.idempotencyKey)).ok;
-}
-
-const MAX_RETRY_AFTER_MS = 5000;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function postResend(
-  apiKey: string,
-  body: string,
-  idempotencyKey?: string,
-): Promise<{ ok: boolean; status: number; retryAfterMs?: number }> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(RESEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-        ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
-      },
-      signal: ctrl.signal,
-      body,
-    });
-    const retryAfter = Number(res.headers?.get?.("retry-after"));
-    return {
-      ok: res.ok,
-      status: res.status,
-      ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterMs: retryAfter * 1000 } : {}),
-    };
-  } catch {
-    return { ok: false, status: 0 };
-  } finally {
-    clearTimeout(timer);
-  }
+  return sendResendEmail(apiKey, body, opts.idempotencyKey);
 }
 
