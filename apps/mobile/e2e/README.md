@@ -25,6 +25,7 @@ It requires a disposable entitled dev account with a completed profile and reads
 Use the Debug build with owned Metro so native Dev Login consumes those same environment values.
 It resets only the synthetic Grilled Chicken Bowl bookmark, saves the meal through the UI and verifies it in Saved after relaunch.
 If `log-meal` reaches `Welcome back.` with `Your Fitsy Pro subscription ended`, authentication succeeded but the required `entitled-dev` fixture has expired.
+A `Dev Login Failed` alert requires correcting the fixture credentials bundled by owned Metro; an ordinary paywall after login requires an active `entitled-dev` account.
 Prepare an active disposable account through the local fixture adapter before rerunning; retain the Search assertion and paid-access routing.
 Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
 A local scope pass does not replace the source-bound final-candidate product-flow gate.
@@ -97,6 +98,7 @@ Check saved flow syntax with `maestro check-syntax apps/mobile/e2e/flows/<flow>.
 If Maestro cannot initialize its normal cache in a restricted workspace, set `JAVA_OPTS=-Duser.home=<owned-writable-temporary-directory>` for syntax checks.
 This uses a separate Java cache without modifying the normal installation or changing the shell's home directory.
 The canonical media check also requires host process-ownership inspection; a sandbox denial must be resolved through the existing host owner without disabling that preflight.
+If XCTest setup reports `No space left on device`, recover eligible host resources before rerunning; `scripts/sim/ci.mjs` checks disk admission before driving any journey.
 
 `chain-menu-serving` clears app and keychain state to prove anonymous menu access.
 On a Debug dev-client build, clearing state can return to Expo's Development Build launcher; the flow selects local Metro before waiting for `welcome-start`.
