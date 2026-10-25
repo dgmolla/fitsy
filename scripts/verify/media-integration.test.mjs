@@ -40,7 +40,8 @@ test('canonical media caller fails unavailable process inspection or decoders be
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_|CI$)/.test(key)));
   const git = (...args) => execFileSync('git', args, { cwd: dir, env, encoding: 'utf8' });
   try {
-    for (const name of ['media-integration.sh', 'media-integration.mjs', 'product-flow.mjs']) {
+    // Applicability imports product-flow and its shared impact planner before the preflight.
+    for (const name of ['media-integration.sh', 'media-integration.mjs', 'product-flow.mjs', 'impact-plan.mjs']) {
       const path = join(dir, 'scripts/verify', name); mkdirSync(dirname(path), { recursive: true });
       copyFileSync(join(root, 'scripts/verify', name), path);
     }
