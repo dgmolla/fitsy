@@ -127,7 +127,9 @@ The L2 test check runs complete affected API, scripts and mobile groups, includi
 Unknown comparison history expands full-suite selection to every group.
 An empty group selection or an engine reporting zero passing tests fails the test check.
 Temporary engine reports count the current execution and are removed afterward.
-The owned PostGIS target checks and migration steps still run before local database tests.
+Local and hosted L2 checks use the same worktree-owned PostGIS launcher, including its OS lock, inspected container identity, loopback target checks, migrations and data-only seed.
+The canonical runner creates that disposable database before database-dependent checks; the hosted job does not provision a separate service container.
+An unowned target or caller-supplied ownership markers cannot replace the inspected database assertion.
 
 ## Candidate validation order
 
@@ -144,7 +146,7 @@ The registry marks product-flow as `stage: acceptance`; layers 2 and above also 
 The cheap stage excludes these checks.
 The runner completes cheap static checks before focused tests.
 API and pipeline database selections, plus selections with caller database URLs, use the owned disposable database with its target and ownership assertions.
-Full local builds remain database-free and run before database acquisition.
+Full builds remain database-free and run before database acquisition.
 CI runs its own required checks independently of local review state.
 
 The saved focused recipe contains test paths and an optional Jest pattern, never a passing result.
