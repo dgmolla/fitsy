@@ -81,6 +81,14 @@ If Maestro cannot initialize its normal cache in a restricted workspace, set `JA
 This uses a separate Java cache without modifying the normal installation or changing the shell's home directory.
 The canonical media check also requires host process-ownership inspection; a sandbox denial must be resolved through the existing host owner without disabling that preflight.
 
+`chain-menu-serving` clears app and keychain state to prove anonymous menu access.
+On a Debug dev-client build, clearing state can return to Expo's Development Build launcher; the flow selects local Metro before waiting for `welcome-start`.
+Embedded builds skip that conditional launcher step, and startup retries never repeat menu or authentication actions.
+After tapping a locked dish, assert the selected restaurant and `signup-apple`/`signup-google` controls because this entry uses contextual signup copy.
+Keep checkout controls absent until authentication succeeds.
+`components/ChainMenuServing.test.tsx` checks the saved flow's final selectors against the real menu and sign-in screens, while `scripts/sim/ci.test.ts` covers its launch contract and render-smoke consumer.
+The Mac's advisory exclusions live outside this repository in `~/fitsy-refactor/sim-review/poller.mjs`; remove `chain-menu-serving.yaml` from `KNOWN_FAILING` after a passing native run of the repaired flow.
+
 The assisted-targets journey also opens `/macro-setup`, asserts its daily editor and exercises Save and Skip; macro-setup render smoke stops at `macro-setup-save` on that screen.
 Run the native accessibility helper regression tests from the repository root with `node --test apps/mobile/e2e/helpers/native-ax.test.mjs` when changing these helpers.
 
