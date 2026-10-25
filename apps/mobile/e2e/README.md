@@ -6,6 +6,8 @@ The maintained path-to-flow mapping lives in `scripts/verify/impact-plan.mjs`; e
 Unmapped mobile paths expand to the full flow set, and `needs-sim` forces flows for otherwise non-mobile changes.
 Every UI edit triggers local coverage: proven screen-local style/copy reuses a maintained flow through its mapped render assertion and saves a screenshot, behavior changes run affected E2E flows, and shared UI/app shells run the full suite.
 Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the maintained YAML flows.
+`onboarding-assisted-targets` submits a calorie edit directly through Continue with the decimal keyboard open, then checks Back preserves the saved allocation.
+Its preview comparisons use those saved calories and grams, including whole-gram rounding, for the real dev API request.
 CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
 The read-only classifier supplies data to the protected `sim-scope.yml` publisher; the bounded status description contains scope and flow count, and the poller reads exact names from the artifact.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.

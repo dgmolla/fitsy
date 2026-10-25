@@ -11,7 +11,7 @@ import Goal from '../app/welcome/goal';
 import Targets from '../app/welcome/target-setup';
 import MacroSetup from '../app/macro-setup';
 import { saveOnboardingField } from '../lib/onboardingStorage';
-import { getMacroTargets, saveMacroTargets } from '../lib/macroStorage';
+import { getMacroTargets, getMacroTargetSource, saveMacroTargets } from '../lib/macroStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -28,6 +28,50 @@ const routes = { 'welcome/tuning': Tuning, 'welcome/how-it-works': Trust,
 beforeEach(async () => {
   jest.mocked(AsyncStorage.setItem).mockImplementation((key, value) => AsyncStorage.multiSet([[key, value]]));
   await AsyncStorage.clear();
+});
+
+it.each((['known', 'estimate'] as const).flatMap(targetMode =>
+  (['calories', 'protein', 'carbs', 'fat'] as const).map(field => ({ targetMode, field })),
+))('saves $targetMode targets after a $field edit through Continue without blurring first', async ({ targetMode, field }) => {
+  await saveOnboardingField('goal', 'build_muscle');
+  await saveOnboardingField('targetMode', targetMode);
+  if (targetMode === 'known') await saveMacroTargets({ calories: '836', protein: '31', carbs: '115', fat: '28' });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
+  await waitFor(() => expect(screen.getByTestId('meal-target-calories').props.editable).toBe(true));
+  const value = { calories: '700', protein: '40', carbs: '100', fat: '20' }[field];
+  // Native decimal keyboards have no Done key. Continue must settle the draft itself.
+  await act(async () => { fireEvent.changeText(screen.getByTestId(`meal-target-${field}`), value); });
+  expect(screen.getByTestId(`meal-target-${field}`).props.value).toBe(value);
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).not.toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
+  const saved = (await getMacroTargets())!;
+  expect(Number(saved.calories)).toBe(4 * Number(saved.protein) + 4 * Number(saved.carbs) + 9 * Number(saved.fat));
+  if (field === 'calories') expect(Math.abs(Number(saved.calories) - 700)).toBeLessThanOrEqual(9);
+  else expect(saved[field]).toBe(value);
+  expect(await getMacroTargetSource()).toBe('manual');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await waitFor(() => {
+    for (const [key, target] of Object.entries(saved))
+      expect(screen.getByTestId(`meal-target-${key}`).props.value).toBe(target);
+  });
+});
+
+it.each([
+  ['calories', ''], ['calories', '0'], ['calories', '5000'], ['calories', '1.2.3'],
+  ['protein', ''], ['protein', '501'], ['carbs', ''], ['fat', ''],
+])('keeps an invalid %s draft "%s" disabled without blurring', async (field, value) => {
+  await saveOnboardingField('goal', 'build_muscle');
+  await saveOnboardingField('targetMode', 'known');
+  const saved = { calories: '836', protein: '31', carbs: '115', fat: '28' };
+  await saveMacroTargets(saved);
+  const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
+  await waitFor(() => expect(screen.getByTestId('meal-target-calories').props.editable).toBe(true));
+  await act(async () => { fireEvent.changeText(screen.getByTestId(`meal-target-${field}`), value); });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(screen.getPathname()).toBe('/welcome/tuning');
+  expect(await getMacroTargets()).toEqual(saved);
 });
 
 it('settles both tuning edit directions before save and restores one energy total', async () => {
