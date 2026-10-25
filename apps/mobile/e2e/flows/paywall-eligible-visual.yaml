@@ -1,6 +1,6 @@
 # Synthetic eligibility on live Test Store prices. Visual proof only, never a purchase receipt.
 appId: com.fitsy.mobile
-tags: [billing, onboarding, changed-journey]
+tags: [billing, onboarding, changed-journey, 'store:test-store']
 ---
 - launchApp:
     clearState: true

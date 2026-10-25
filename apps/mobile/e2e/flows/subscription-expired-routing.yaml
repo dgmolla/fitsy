@@ -1,7 +1,7 @@
 # Precondition: this signed-in Fitsy account has a real subscription that has
 # expired in the configured store. Test Store supports this same-account case.
 appId: com.fitsy.mobile
-tags: [billing, onboarding, changed-journey]
+tags: [billing, onboarding, changed-journey, 'fixture:expired-subscription', 'store:test-store', 'store:apple-simulator']
 ---
 - launchApp:
     clearState: false

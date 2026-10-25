@@ -156,7 +156,10 @@ export async function devLogin(): Promise<AuthResponse> {
   if (!__DEV__) throw new Error('Dev login is only available in development.');
   // An isolated Test Store run can use a disposable development account
   // without changing the shared Dev login account or its billing eligibility.
-  const creds = { email: process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL || 'dev@fitsy.local', password: 'dev12345' };
+  const creds = {
+    email: process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL || 'dev@fitsy.local',
+    password: process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD || 'dev12345',
+  };
   const attempt = async (path: string) => {
     const res = await fetch(`${BASE_URL}${path}`, {
       method: 'POST',

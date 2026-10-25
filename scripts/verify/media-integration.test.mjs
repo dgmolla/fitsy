@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { mediaIntegrationRequired, validateMediaReceipt, writeMediaReceipt } from './media-integration.mjs';
 
 test('media lane selects changed native controls without selecting unrelated application paths', () => {
@@ -29,5 +31,42 @@ test('receipt binds the completed media lane to source and test contents', () =>
     writeFileSync(file, JSON.stringify(receipt));
     assert.throws(() => validateMediaReceipt(['scripts/sim/runner-controls.mjs'], 'head', 'hash', file), /Stale or failed/);
     assert.equal(JSON.parse(readFileSync(file, 'utf8')).result, 'fail');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('canonical media caller fails unavailable process inspection or decoders before starting fixtures', () => {
+  const root = fileURLToPath(new URL('../..', import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-media-preflight-'));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_|CI$)/.test(key)));
+  const git = (...args) => execFileSync('git', args, { cwd: dir, env, encoding: 'utf8' });
+  try {
+    for (const name of ['media-integration.sh', 'media-integration.mjs', 'product-flow.mjs']) {
+      const path = join(dir, 'scripts/verify', name); mkdirSync(dirname(path), { recursive: true });
+      copyFileSync(join(root, 'scripts/verify', name), path);
+    }
+    symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'));
+    writeFileSync(join(dir, '.gitignore'), 'node_modules\n');
+    git('init', '-q'); git('config', 'user.name', 'Media fixture'); git('config', 'user.email', 'media@example.test');
+    git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'baseline');
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    mkdirSync(join(dir, 'scripts/sim')); writeFileSync(join(dir, 'scripts/sim/changed.mjs'), 'export {};\n');
+    const bin = join(dir, 'bin'); mkdirSync(bin);
+    symlinkSync(process.execPath, join(bin, 'node'));
+    writeFileSync(join(bin, 'npm'), '#!/bin/sh\ntouch fixtures-started\nexit 99\n', { mode: 0o755 });
+    for (const entry of [
+      { ps: 126, ffprobe: 0, ffmpeg: 0, summary: /process ownership inspection/ },
+      { ps: 0, ffprobe: 1, ffmpeg: 0, summary: /ffprobe/ },
+      { ps: 0, ffprobe: 0, ffmpeg: 1, summary: /ffmpeg/ },
+    ]) {
+      for (const name of ['ps', 'ffprobe', 'ffmpeg']) {
+        writeFileSync(join(bin, name), `#!/bin/sh\nexit ${entry[name]}\n`); chmodSync(join(bin, name), 0o755);
+      }
+      const result = spawnSync('/bin/bash', ['scripts/verify/media-integration.sh'], {
+        cwd: dir, env: { ...env, PATH: `${bin}:/usr/bin:/bin`, FITSY_PRODUCT_ROOT: dir }, encoding: 'utf8',
+      });
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(JSON.parse(result.stdout).summary, entry.summary);
+      assert.equal(existsSync(join(dir, 'fixtures-started')), false);
+    }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

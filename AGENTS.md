@@ -157,11 +157,19 @@ npm run verify -- --stage=cheap   # structural, safety, lint, types and selected
 # Optional local full diagnostics retain their normal contracts:
 npm run verify         # layers 0-2 on your changes (structural, secrets, lint, types, tests)
 npm run verify:all     # everything, including the production build
-# E2E: use mobile MCP tools to verify critical flows in the simulator
+# E2E: use saved Maestro YAML flows and Maestro MCP on the local simulator
 ```
 
 The check list lives in `scripts/verify/registry.yml`; CI (`verify.yml`), the
 pre-push hook, and agents all run the same scripts.
+Inspect dynamic simulator scope with `npm run verify:sim-plan`; selection and render checkpoints live in `scripts/verify/impact-plan.mjs`.
+CI posts the `Sim scope` selection on the PR head and uploads `selection.json`; it never runs simulators or needs simulator credentials.
+The classifier is read-only; the protected `sim-scope.yml` publisher records a bounded scope/count description, with exact flows retained in the artifact.
+Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
+Every mobile/web UI edit triggers local coverage: screen-local style/copy uses render smoke, behavior uses affected E2E, and shared UI/app shells use the full suite.
+Run `node scripts/sim/ci.mjs --scope=<none|smoke|flow|full> --flows=<comma-list> --udid=<UDID>` with configuration from the local machine.
+Account-dependent journeys require local fixture preparation and compatible store builds as documented in `apps/mobile/e2e/README.md`.
+Keep simulator smoke out of the pre-push hook.
 
 Protected merge requires current trusted CI plus applicable local media/native evidence; old-head CI and candidate-controlled workflow changes cannot substitute.
 GitHub requires `Verify` and `AI review` on the current PR head.

@@ -102,7 +102,7 @@ function writeAttachmentCloseout({ before, after, udid, dir, timeline, flow }) {
     return { receipt: null, file, error: error.message };
   }
 }
-async function stopMetro() {
+export async function stopMetro() {
   if (!existsSync(metroFile)) return;
   const m = read(metroFile);
   let current;
@@ -126,7 +126,7 @@ async function metroBundle(m) {
   assert(response.ok, `Metro bundle failed: HTTP ${response.status}`);
   return digest(Buffer.from(await response.arrayBuffer()));
 }
-async function startMetro(r) {
+export async function startMetro(r) {
   await stopMetro();
   // Refuse a busy port; never attach to or terminate another task's server.
   await new Promise((resolvePort, reject) => {
@@ -179,6 +179,14 @@ function installedApp(udid, appHash) {
   const installed = run('xcrun', ['simctl', 'get_app_container', udid, 'com.fitsy.mobile', 'app']);
   assert(installed && existsSync(installed) && treeHash(installed) === appHash,
     'Installed simulator app differs from the verified native artifact; reinstall the intact artifact');
+}
+// The local scope runner shares native, backend and installed-artifact checks.
+export function simulatorSession(udid) {
+  const config = environment(), built = receipt(udid), identity = device(udid), server = backend();
+  const embedded = embeddedBundleCompatibility(built, inputHash(root, 'js'), config.configHash);
+  assert(embedded.compatible, `${embedded.reason}; build the current candidate before running simulator scope`);
+  installedApp(udid, built.appHash);
+  return { built, ...identity, ...server, configHash: config.configHash, inputHash: inputHash() };
 }
 function existingReceipt() {
   try { return read(join(buildDir, 'receipt.json')); }
@@ -270,7 +278,7 @@ function receipt(udid) {
   assert(r === checkedActive, 'A retained compatible artifact must be activated through build before product flows');
   return checkedActive;
 }
-function prepareNative(profile, testStore) {
+export function prepareNative(profile, testStore) {
   // Keyless Release is useful for baseline navigation, but cannot verify billing.
   const env = { ...repoEnv(), EXPO_NO_DOTENV: '1', NODE_ENV: testStore ? 'development' : 'production',
     FITSY_ALLOW_MISSING_PUBLIC_ENV: '1', CI: '1', FORCE_BUNDLING: '1', SKIP_BUNDLING: '' };
@@ -296,7 +304,7 @@ function prepareNative(profile, testStore) {
   run('pod', ['install'], { cwd: join(mobile, 'ios'), env, stdio: 'inherit' });
   return env;
 }
-function compileNative(profile, udid, env) {
+export function compileNative(profile, udid, env) {
   const log = join(buildDir, 'build.log');
   const fd = openSync(log, 'w');
   try {
@@ -597,7 +605,7 @@ async function execute(udid, names, mode) {
     assert(server.backendDeployment === backend().backendDeployment, 'Dev deployment changed during tests');
     await checkBundle(report);
     completeMaestroRun(join(out, 'report.json'), timeline, report);
-    console.log('Maestro complete. Capture affected primary/recovery flows through Mobile MCP, then finish <walkthrough.json>.');
+    console.log('Maestro complete. Capture affected primary/recovery flows through Maestro MCP, then finish <walkthrough.json>.');
   } catch (error) {
     const evidenceErrors = recordRunFailure(join(out, 'report.json'), join(out, 'runner-timeline.jsonl'), error);
     if (evidenceErrors.length) console.error(`Failure receipt write errors: ${evidenceErrors.join('; ')}`);

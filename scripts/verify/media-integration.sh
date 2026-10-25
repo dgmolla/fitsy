@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -uo pipefail
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)" || exit 1
 cd "$REPO_ROOT" || exit 1
 node scripts/verify/media-integration.mjs --required >/dev/null
 applicability=$?
@@ -10,6 +10,12 @@ if [ "$applicability" -eq 2 ]; then
 fi
 if [ "$applicability" -ne 0 ]; then
   printf '{"name":"media-integration","status":"fail","summary":"cannot determine media test applicability","fix":"repair Git diff identity and rerun npm run verify"}\n'
+  exit 1
+fi
+# Native process-group fixtures need real ownership observations. Fail before
+# launching children when a worker sandbox cannot supply those observations.
+if ! ps -axo pid=,ppid=,pgid=,lstart=,command= >/dev/null 2>&1; then
+  printf '{"name":"media-integration","status":"fail","summary":"required local process ownership inspection is unavailable","fix":"run the canonical media lane in an authorized host environment with ps access; keep this result failed until then"}\n'
   exit 1
 fi
 for tool in ffprobe ffmpeg; do
