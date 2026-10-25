@@ -1,0 +1,55 @@
+# Preserve the prepared upgraded account and its untagged legacy data.
+# See ../README.md for both historical origins and the required native evidence.
+appId: com.fitsy.mobile
+tags: [discovery, changed-journey]
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Recover older targets"
+    timeout: 30000
+- assertVisible: "Complete meal targets"
+- assertVisible: "Independent search filters"
+- takeScreenshot: legacy-target-complete-choice
+- tapOn: "Complete meal targets"
+- extendedWaitUntil:
+    visible:
+      id: preview-edit-targets
+    timeout: 30000
+- tapOn:
+    id: preview-edit-targets
+- copyTextFrom: "Protein grams"
+- assertTrue: ${Number(maestro.copiedText) === 50}
+- copyTextFrom: "Carbs grams"
+- assertTrue: ${Number(maestro.copiedText) === 65}
+- copyTextFrom: "Fat grams"
+- assertTrue: ${Number(maestro.copiedText) === 20}
+- copyTextFrom: "Calories per meal"
+- assertTrue: ${Number(maestro.copiedText) === 640}
+- assertNotVisible:
+    id: meal-filter-link
+- takeScreenshot: legacy-target-complete-restored
+- tapOn:
+    id: meal-filter-apply
+- tapOn: "PROFILE"
+- tapOn:
+    id: profile-edit-meal-targets
+- copyTextFrom: "Calories per meal"
+- assertTrue: ${Number(maestro.copiedText) === 640}
+- tapOn:
+    id: meal-filter-apply
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: preview-edit-targets
+    timeout: 30000
+- assertNotVisible: "Recover older targets"
+- tapOn:
+    id: preview-edit-targets
+- copyTextFrom: "Protein grams"
+- assertTrue: ${Number(maestro.copiedText) === 50}
+- copyTextFrom: "Calories per meal"
+- assertTrue: ${Number(maestro.copiedText) === 640}
+- takeScreenshot: legacy-target-complete-reopened
+- tapOn:
+    id: meal-filter-close

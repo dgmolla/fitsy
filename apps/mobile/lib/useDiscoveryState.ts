@@ -14,6 +14,7 @@ import { useEntitlementMismatch } from './useEntitlementMismatch';
 import { usePurchases } from './usePurchases';
 import { routeToPaywall } from './teaserGate';
 import { getDiscoveryMacroTargetSnapshot, saveDiscoveryMacroTargets, type MacroTargetMode } from './macroStorage';
+import { offerLegacyMacroRecovery } from './macroRecoveryPrompt';
 import { queueSavedProfileToServer, deliverQueuedProfile } from './profileSync';
 import { getPreviewSetup } from './previewSetup';
 import { saveOnboardingField } from './onboardingStorage';
@@ -77,7 +78,12 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
       let live = true;
       setTargetsLoaded(false);
       getDiscoveryMacroTargetSnapshot()
-        .then((snapshot) => {
+        .then(async (snapshot) => {
+          if (!live) return;
+          if (snapshot?.needsModeChoice) {
+            await offerLegacyMacroRecovery(true);
+            snapshot = await getDiscoveryMacroTargetSnapshot();
+          }
           if (!live) return;
           const saved = snapshot?.targets;
           if (snapshot) setFilterMode(snapshot.mode);

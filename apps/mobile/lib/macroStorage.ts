@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import { mutateTargets } from './macroStorageQueue';
-import { isLegacyGeneratedShape, legacyIndependentFilter } from './legacyMacroTarget';
+import { isLegacyGeneratedShape, needsLegacyModeChoice } from './legacyMacroTarget';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { forgetLegacyMacroRecords, quarantineLegacyMacroRecord } from './macroLegacyStorage';
 import { macroCalories, normalizeCompleteTarget, parseTarget } from './macroEnergy';
@@ -25,9 +25,14 @@ export interface StoredMacroTargets {
 }
 export type MacroTargetMode = 'complete' | 'search';
 export type MacroTargetSource = 'automatic' | 'manual';
-export interface MacroTargetSnapshot { targets: StoredMacroTargets; mode: MacroTargetMode }
-async function readSnapshot(key: string): Promise<MacroTargetSnapshot | null> {
-  const raw = await AsyncStorage.getItem(key);
+export interface MacroTargetSnapshot {
+  targets: StoredMacroTargets;
+  mode: MacroTargetMode;
+  /** Search semantics are provisional until the person identifies this legacy record. */
+  needsModeChoice?: true;
+}
+async function readSnapshot(key: string, suppliedRaw?: string | null): Promise<MacroTargetSnapshot | null> {
+  const raw = suppliedRaw === undefined ? await AsyncStorage.getItem(key) : suppliedRaw;
   if (!raw) return null;
   try {
     const record = JSON.parse(raw) as StoredMacroTargets & { _mode?: MacroTargetMode; _owner?: string | null;
@@ -48,11 +53,15 @@ async function readSnapshot(key: string): Promise<MacroTargetSnapshot | null> {
       && parseTarget(targets.calories) === macroCalories({ protein: parsed[0]!, carbs: parsed[1]!, fat: parsed[2]! });
     const legacyPartial = _mode === undefined && (parseTarget(targets.calories) === null
       || (!completeZero && parsed.some(value => value === null || value === 0)));
-    const mode = _mode === 'search' || legacyPartial ||
-      (_mode === undefined && legacyIndependentFilter(targets, generated)) ? 'search' : 'complete';
+    const needsModeChoice = _mode === undefined && !legacyPartial
+      && (key === MACRO_TARGETS_KEY || key === LEGACY_UNOWNED_KEY)
+      && needsLegacyModeChoice(targets, generated);
+    const mode = key.startsWith(SEARCH_MACRO_TARGETS_KEY) || _mode === 'search' || legacyPartial
+      || needsModeChoice ? 'search' : 'complete';
     // Legacy values have no provenance. A manual target can exactly match an
     // old generated result, so preserve its grams and only repair energy.
-    return { targets: mode === 'complete' ? normalizeCompleteTarget(targets) : targets, mode };
+    return { targets: mode === 'complete' ? normalizeCompleteTarget(targets) : targets, mode,
+      ...(needsModeChoice ? { needsModeChoice: true } : {}) };
   } catch {
     return null;
   }
@@ -130,15 +139,37 @@ export async function getQuarantinedLegacyTarget(): Promise<MacroTargetSnapshot 
   return readSnapshot(LEGACY_UNOWNED_KEY);
 }
 
-export async function restoreQuarantinedLegacyTarget(expectedUserId?: string): Promise<MacroTargetSnapshot | null> {
-  const userId = await currentUserId();
-  if (!userId || (expectedUserId !== undefined && userId !== expectedUserId)) return null;
-  const snapshot = await getQuarantinedLegacyTarget();
-  if (!snapshot || await currentUserId() !== userId) return null;
-  if (!await saveMacroTargets(snapshot.targets, snapshot.mode, 'manual', userId)) return null;
-  if (await currentUserId() !== userId) return null;
-  await AsyncStorage.removeItem(LEGACY_UNOWNED_KEY);
-  return snapshot;
+export interface LegacyMacroRecovery {
+  snapshot: MacroTargetSnapshot;
+  owner: string | null;
+  key: typeof MACRO_TARGETS_KEY | typeof LEGACY_UNOWNED_KEY;
+  raw: string;
+  activeRecord: string | null;
+}
+
+/** Bind the choice to both the displayed data and the account that opened it. */
+export async function getLegacyMacroRecovery(): Promise<LegacyMacroRecovery | null> {
+  const owner = await currentUserId();
+  if (owner) await getQuarantinedLegacyTarget();
+  const activeRecord = await AsyncStorage.getItem(MACRO_TARGETS_KEY);
+  const active = await readSnapshot(MACRO_TARGETS_KEY, activeRecord);
+  const key = active?.needsModeChoice ? MACRO_TARGETS_KEY : LEGACY_UNOWNED_KEY;
+  const raw = key === MACRO_TARGETS_KEY ? activeRecord : await AsyncStorage.getItem(key);
+  const snapshot = key === MACRO_TARGETS_KEY ? active : await readSnapshot(key, raw);
+  if (!raw || !snapshot || (!owner && !snapshot.needsModeChoice)
+    || await currentUserId() !== owner) return null;
+  return { snapshot, owner, key, raw, activeRecord };
+}
+
+export async function restoreLegacyMacroTarget(recovery: LegacyMacroRecovery,
+  mode: MacroTargetMode): Promise<MacroTargetSnapshot | null> {
+  if (!recovery.snapshot.needsModeChoice && mode !== recovery.snapshot.mode) return null;
+  const targets = mode === 'complete' ? normalizeCompleteTarget(recovery.snapshot.targets)
+    : recovery.snapshot.targets;
+  if (!await saveMacroTargets(targets, mode, 'manual', recovery.owner, true, recovery.activeRecord,
+    { key: recovery.key, raw: recovery.raw })) return null;
+  if (await currentUserId() !== recovery.owner) return null;
+  return { targets, mode };
 }
 
 export async function getMacroTargetSource(): Promise<MacroTargetSource> {
@@ -170,18 +201,26 @@ export async function getDiscoveryMacroTargets(): Promise<StoredMacroTargets | n
 
 /** Capture ownership at invocation, including ordinary UI saves. */
 export function saveMacroTargets(targets: StoredMacroTargets, mode: MacroTargetMode = 'complete',
-  source: MacroTargetSource = 'manual', expectedUserId?: string | null, pendingSync = true, expectedRecord?: string | null): Promise<boolean> {
+  source: MacroTargetSource = 'manual', expectedUserId?: string | null, pendingSync = true, expectedRecord?: string | null,
+  expectedLegacyRecord?: { key: string; raw: string }): Promise<boolean> {
   const requestedOwner = currentUserId();
   const settled = mode === 'complete' ? normalizeCompleteTarget(targets) : { ...targets };
   return mutateTargets(async () => {
     const owner = await requestedOwner;
     if ((expectedUserId !== undefined && owner !== expectedUserId) || await currentUserId() !== owner) return false;
     if (expectedRecord !== undefined && await AsyncStorage.getItem(MACRO_TARGETS_KEY) !== expectedRecord) return false;
+    if (expectedLegacyRecord && await AsyncStorage.getItem(expectedLegacyRecord.key) !== expectedLegacyRecord.raw) return false;
     const key = owner ? `${SEARCH_MACRO_TARGETS_KEY}:${owner}` : SEARCH_MACRO_TARGETS_KEY;
-    if (mode === 'complete' && !(await AsyncStorage.getItem(key))) {
+    if (mode === 'complete') {
       const legacySearch = await readSnapshot(MACRO_TARGETS_KEY);
       if (await currentUserId() !== owner) return false;
-      if (legacySearch?.mode === 'search') {
+      if (legacySearch?.needsModeChoice && !expectedLegacyRecord) {
+        // A new allocation does not identify the old record's intent. Keep it
+        // available for explicit recovery instead of freezing stale calories.
+        const raw = await AsyncStorage.getItem(MACRO_TARGETS_KEY);
+        if (raw) await AsyncStorage.setItem(LEGACY_UNOWNED_KEY, raw);
+      } else if (legacySearch?.mode === 'search' && !legacySearch.needsModeChoice
+        && !(await AsyncStorage.getItem(key))) {
         await AsyncStorage.setItem(key,
           JSON.stringify({ ...legacySearch.targets, _mode: 'search' }));
       }
@@ -193,10 +232,15 @@ export function saveMacroTargets(targets: StoredMacroTargets, mode: MacroTargetM
     // Account cleanup and later saves wait for this write. If auth changes
     // during native IO, remove only this obsolete shared active record.
     if (await currentUserId() !== owner) {
-      if (mode === 'complete' && await AsyncStorage.getItem(MACRO_TARGETS_KEY) === record)
-        await AsyncStorage.removeItem(MACRO_TARGETS_KEY);
+      if (mode === 'complete' && await AsyncStorage.getItem(MACRO_TARGETS_KEY) === record) {
+        if (expectedLegacyRecord?.key === MACRO_TARGETS_KEY)
+          await AsyncStorage.setItem(MACRO_TARGETS_KEY, expectedLegacyRecord.raw);
+        else await AsyncStorage.removeItem(MACRO_TARGETS_KEY);
+      }
       return false;
     }
+    if (expectedLegacyRecord && await AsyncStorage.getItem(expectedLegacyRecord.key) === expectedLegacyRecord.raw)
+      await AsyncStorage.removeItem(expectedLegacyRecord.key);
     return true;
   });
 }

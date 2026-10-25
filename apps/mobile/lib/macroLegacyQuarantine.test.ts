@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDiscoveryMacroTargetSnapshot, getMacroTargets, getQuarantinedLegacyTarget,
   hasSavedMealTargets,
-  restoreQuarantinedLegacyTarget } from './macroStorage';
+  getLegacyMacroRecovery, restoreLegacyMacroTarget } from './macroStorage';
 import { onboardingEntry } from './onboardingEntry';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
@@ -30,7 +30,7 @@ it('quarantines an ownerless legacy target across accounts until explicit restor
   })).toBe('/macro-setup');
   mockUserId = 'account-a';
   expect(await getMacroTargets()).toBeNull();
-  const restored = await restoreQuarantinedLegacyTarget();
+  const restored = await restoreLegacyMacroTarget((await getLegacyMacroRecovery())!, 'search');
   expect(restored?.mode).toBe('search');
   expect((await getDiscoveryMacroTargetSnapshot())?.targets).toEqual(old);
   mockUserId = 'account-b';

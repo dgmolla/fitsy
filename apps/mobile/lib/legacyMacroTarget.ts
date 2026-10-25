@@ -50,13 +50,13 @@ export function isLegacyGeneratedShape(targets: MacroTextValues): boolean {
   }
   return false;
 }
-export function legacyIndependentFilter(targets: MacroTextValues, generated: boolean): boolean {
+export function needsLegacyModeChoice(targets: MacroTextValues, generated: boolean): boolean {
   const calories = parseTarget(targets.calories);
   const protein = parseTarget(targets.protein);
   const carbs = parseTarget(targets.carbs);
   const fat = parseTarget(targets.fat);
   if (calories === null || protein === null || carbs === null || fat === null) return false;
-  // Legacy discovery stored independently entered constraints in this key.
-  // Without an explicit mode, even a small mismatch may be intentional.
+  // Both retired profile edits with stale calories and intentional discovery
+  // constraints used this key. A mismatch needs a choice, not inferred intent.
   return !generated && calories !== macroCalories({ protein, carbs, fat });
 }

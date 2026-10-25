@@ -250,7 +250,7 @@ export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
     const localSnapshot = await getMacroTargetSnapshot();
     const discoverySnapshot = await getDiscoveryMacroTargetSnapshot();
     if (!(await stillCurrent())) return 'account-changed';
-    if (!localSnapshot && discoverySnapshot?.mode === 'search')
+    if (!localSnapshot && discoverySnapshot?.mode === 'search' && !discoverySnapshot.needsModeChoice)
       await saveMacroTargets(discoverySnapshot.targets, 'search', 'manual', expectedUserId);
     if (profile.macroTarget) {
       const grams = {

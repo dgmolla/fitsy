@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { recoverStartupMealTargets } from './startupMacroRecovery';
 import { getDiscoveryMacroTargetSnapshot, getMacroTargets, getQuarantinedLegacyTarget,
-  restoreQuarantinedLegacyTarget, saveMacroTargets } from './macroStorage';
+  getLegacyMacroRecovery, restoreLegacyMacroTarget, saveMacroTargets } from './macroStorage';
 import { replayPendingProfileSync, requireProfileFromServer } from './profileSync';
 import { onboardingEntry } from './onboardingEntry';
 
@@ -28,10 +28,10 @@ beforeEach(async () => {
 afterEach(() => { global.fetch = originalFetch; mockSession = null; });
 
 it('restores an upgraded independent filter before the existing startup routing decision', async () => {
-  const confirm = jest.fn().mockResolvedValue(true);
+  const confirm = jest.fn().mockResolvedValue('search');
   const recovery = await recoverStartupMealTargets(confirm);
   const hasTargets = recovery === 'restored';
-  expect(confirm).toHaveBeenCalledWith('search');
+  expect(confirm).toHaveBeenCalledWith({ targets: legacy, mode: 'search', needsModeChoice: true });
   expect(hasTargets).toBe(true);
   expect(await getMacroTargets()).toBeNull();
   expect((await getDiscoveryMacroTargetSnapshot())?.targets).toEqual(legacy);
@@ -53,7 +53,7 @@ it('hydrates the current server allocation without offering ownerless device dat
 });
 
 it('retains a declined legacy filter for later explicit recovery', async () => {
-  expect(await recoverStartupMealTargets(async () => false)).toBe('absent');
+  expect(await recoverStartupMealTargets(async () => null)).toBe('absent');
   expect(await getDiscoveryMacroTargetSnapshot()).toBeNull();
   expect((await getQuarantinedLegacyTarget())?.targets).toEqual(legacy);
 });
@@ -61,24 +61,33 @@ it('retains a declined legacy filter for later explicit recovery', async () => {
 it('does not transfer the confirmed filter when the account changes during the choice', async () => {
   expect(await recoverStartupMealTargets(async () => {
     mockSession = { access_token: 'other-token', user: { id: 'other' } };
-    return true;
+    return 'search' as const;
   })).toBe('account-changed');
   expect(await getDiscoveryMacroTargetSnapshot()).toBeNull();
   expect((await getQuarantinedLegacyTarget())?.targets).toEqual(legacy);
-  expect(await restoreQuarantinedLegacyTarget('buyer')).toBeNull();
+  expect(await restoreLegacyMacroTarget({ ...(await getLegacyMacroRecovery())!, owner: 'buyer' }, 'search')).toBeNull();
 });
 
 it('restores complete legacy grams with their settled energy and queues the daily API target', async () => {
-  await AsyncStorage.setItem('@fitsy/macro_targets', JSON.stringify({ calories: '640', protein: '50', carbs: '65', fat: '20' }));
-  const confirm = jest.fn().mockResolvedValue(true);
+  const confirm = jest.fn().mockResolvedValue('complete');
   expect(await recoverStartupMealTargets(confirm)).toBe('restored');
-  expect(confirm).toHaveBeenCalledWith('complete');
+  expect(confirm).toHaveBeenCalledWith({ targets: legacy, mode: 'search', needsModeChoice: true });
   expect(await getMacroTargets()).toEqual({ calories: '640', protein: '50', carbs: '65', fat: '20' });
   await replayPendingProfileSync();
   expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/user/profile'),
     expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ macroTarget: {
       proteinG: 175, carbsG: 228, fatG: 70, source: 'manual', calories: 2242,
     } }) }));
+});
+
+it.each(['complete', 'search'] as const)('keeps owned but untyped legacy data ambiguous through profile reconciliation (%s)', async mode => {
+  await AsyncStorage.setItem('@fitsy/macro_targets', JSON.stringify({ ...legacy, _owner: 'buyer' }));
+  const confirm = jest.fn().mockResolvedValue(mode);
+  expect(await recoverStartupMealTargets(confirm)).toBe('restored');
+  expect(confirm).toHaveBeenCalledWith({ targets: legacy, mode: 'search', needsModeChoice: true });
+  expect(await getDiscoveryMacroTargetSnapshot()).toEqual({
+    targets: { ...legacy, calories: mode === 'complete' ? '640' : '600' }, mode,
+  });
 });
 
 it('does not refetch or prompt for a current account target', async () => {

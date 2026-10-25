@@ -16,11 +16,12 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { ScreenBackground } from '@/components/ScreenBackground';
 import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
-import { getMacroTargets, getQuarantinedLegacyTarget, restoreQuarantinedLegacyTarget,
-  saveMacroTargets, type MacroTargetMode } from '@/lib/macroStorage';
+import { getMacroTargets, getLegacyMacroRecovery,
+  saveMacroTargets, type MacroTargetSnapshot } from '@/lib/macroStorage';
+import { offerLegacyMacroRecovery } from '@/lib/macroRecoveryPrompt';
 import { getOnboardingData, getLegacyOnboardingData, restoreLegacyOnboardingData, retireLegacyOnboardingData,
   type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
-import { calculateAge } from '@fitsy/shared';
+import { calculateAge } from '../../../../packages/shared/src/utils/dateUtils';
 import { syncSavedProfileToServer, queueSavedProfileToServer, deliverQueuedProfile } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
@@ -74,7 +75,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
-  const [legacyTargetMode, setLegacyTargetMode] = useState<MacroTargetMode | null>(null);
+  const [legacyTarget, setLegacyTarget] = useState<MacroTargetSnapshot | null>(null);
   const [hasLegacyProfile, setHasLegacyProfile] = useState(false);
   const [filterVisible, setFilterVisible] = useState(false);
   const [profile, setProfile] = useState<OnboardingData>({});
@@ -91,8 +92,8 @@ export default function ProfileScreen() {
             getOnboardingData(),
           ]);
           if (token) setEmail(decodeEmailFromToken(token));
-          if (stored) setMacroTargets(stored as unknown as MacroValues);
-          setLegacyTargetMode((await getQuarantinedLegacyTarget())?.mode ?? null);
+          setMacroTargets(stored);
+          setLegacyTarget((await getLegacyMacroRecovery())?.snapshot ?? null);
           setHasLegacyProfile(Boolean(await getLegacyOnboardingData()));
           setProfile(onboarding);
           const snapshot = JSON.stringify(onboarding);
@@ -166,22 +167,11 @@ export default function ProfileScreen() {
   }
 
   function offerLegacyRestore() {
-    const kind = legacyTargetMode === 'search' ? 'search filter' : 'meal target';
-    Alert.alert(`Restore older ${kind}?`,
-      `This device has an older ${kind} without an account label. Restore it to this account?`, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Restore', onPress: () => {
-          void restoreQuarantinedLegacyTarget().then(async snapshot => {
-            if (!snapshot) return;
-            setLegacyTargetMode(null);
-            if (snapshot.mode === 'complete') {
-              await queueSavedProfileToServer();
-              deliverQueuedProfile();
-              setMacroTargets(snapshot.targets);
-            }
-          }).catch(() => Alert.alert("Save failed", "Please try restoring again."));
-        } },
-      ]);
+    void offerLegacyMacroRecovery().then(snapshot => {
+      if (!snapshot) return;
+      setLegacyTarget(null);
+      if (snapshot.mode === 'complete') setMacroTargets(snapshot.targets);
+    }).catch(() => Alert.alert('Save failed', 'Please try restoring again.'));
   }
 
   function offerLegacyProfileRestore() {
@@ -358,10 +348,11 @@ export default function ProfileScreen() {
             </View>
           </Pressable>
         )}
-        {legacyTargetMode && (
+        {legacyTarget && (
           <Pressable testID="profile-restore-older-target" style={s.feedbackBanner}
             accessibilityRole="button" onPress={offerLegacyRestore}>
-            <Text style={s.feedbackValue}>Restore older {legacyTargetMode === 'search' ? 'search filter' : 'meal target'}</Text>
+            <Text style={[s.feedbackValue, { flex: 1 }]}>{legacyTarget.needsModeChoice ? 'Recover older targets'
+              : `Restore older ${legacyTarget.mode === 'search' ? 'search filter' : 'meal target'}`}</Text>
             <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
           </Pressable>
         )}

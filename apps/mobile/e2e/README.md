@@ -35,3 +35,24 @@ Expired acceptance requires `synced: true`, `verdict: expired`, `active: false`,
 Also retain an active Restore or rebuy returning to its selected destination, foreground expiry, delayed synchronization and retry, and account-switch controls in the walkthrough.
 RevenueCat Test Store cannot transfer history between app user IDs, so an empty Test Store Restore after recreation does not prove Apple receipt acceptance.
 Use the compatible Apple TestFlight build and candidate OTA for that remaining store journey, and preserve its observed evidence separately from synthetic component tests.
+
+## Ambiguous legacy target recovery
+
+`legacy-target-recovery-complete` and `legacy-target-recovery-filter` preserve their starting state.
+Run each on a separately prepared, owned normal-size iPhone with an authenticated completed dev account, active access, no server allocation, and untagged per-meal protein 50, carbs 65, fat 20, calories 600 in the old macro-target key.
+Use the historical client to prepare both origins before editing product code: edit a complete profile target from protein 40 to 50 while its old calorie field stays 600, and independently enter all four discovery constraints as 50/65/20/600.
+Retain the historical build/source identity, visible save and cold reopen, raw storage, account identity, backend identity and screenshots separately for each origin.
+Identical manually seeded values establish a fixture, not proof of the historical origin.
+Do not clear app state or reuse an account whose server allocation would correctly take precedence over ownerless device data.
+
+The complete choice must show 50/65/20/640 in discovery, Profile, and after another save and cold launch.
+Capture the authenticated dev profile response after synchronization: daily protein 175, carbs 228, fat 70, calories 2242, source manual.
+Daily calories derive from the rounded daily grams rather than multiplying 640 by 3.5.
+The filter choice must keep 50/65/20/600 through save and cold launch, with no complete profile target or target PATCH.
+Also capture the Profile recovery banner when a server allocation already exists, cancellation followed by recovery, and anonymous discovery recovery before sign-in.
+Verify account switching separately: the restored target or filter belongs only to the account that made the choice, and a choice left open across an account switch must not save.
+Retain screenshots of the choice and both recovered states for required UI review; simulator fixtures and component tests do not supply human UI approval or close #443 acceptance.
+
+Preflight dependencies with the existing worktree setup procedure and acquire the simulator through `scripts/sim/sim claim` before driving either flow.
+A mobile MCP device listing alone does not grant ownership or prove that the sandbox can run the canonical simulator caller.
+If CoreSimulator or the ownership lock is denied, retain that failure and the missing native acceptance in the task handoff, run the available component/storage regressions, and resume native proof through the existing simulator owner when access is available.

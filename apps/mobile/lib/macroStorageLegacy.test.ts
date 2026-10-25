@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDiscoveryMacroTargetSnapshot, getMacroTargetSnapshot, getMacroTargets,
-  saveMacroTargets, saveDiscoveryMacroTargets, MACRO_TARGETS_KEY, SEARCH_MACRO_TARGETS_KEY } from './macroStorage';
+  getLegacyMacroRecovery, restoreLegacyMacroTarget, saveMacroTargets, saveDiscoveryMacroTargets, MACRO_TARGETS_KEY, SEARCH_MACRO_TARGETS_KEY } from './macroStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('@supabase/supabase-js', () => ({
@@ -49,12 +49,13 @@ it('preserves ambiguous legacy high protein grams without provenance', async () 
   expect((await getMacroTargets())?.protein).toBe('63');
 });
 
-it('retains legacy independent calories for discovery when profile targets settle', async () => {
+it('retains explicitly recovered independent calories when profile targets settle', async () => {
   const filter = { protein: '40', carbs: '60', fat: '20', calories: '600' };
   await AsyncStorage.setItem(MACRO_TARGETS_KEY, JSON.stringify(filter));
   expect(await getMacroTargets()).toBeNull();
   expect(await getMacroTargetSnapshot()).toBeNull();
-  expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: filter, mode: 'search' });
+  expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: filter, mode: 'search', needsModeChoice: true });
+  await restoreLegacyMacroTarget((await getLegacyMacroRecovery())!, 'search');
 
   await saveMacroTargets(SAMPLE);
   expect(await getMacroTargets()).toEqual(SAMPLE);
@@ -62,20 +63,21 @@ it('retains legacy independent calories for discovery when profile targets settl
   expect(JSON.parse((await AsyncStorage.getItem(SEARCH_MACRO_TARGETS_KEY))!)).toEqual({ ...filter, _mode: 'search' });
 });
 
-it('preserves a legacy independent calorie constraint even four kcal from macro energy', async () => {
+it('preserves an explicitly recovered independent calorie constraint even four kcal from macro energy', async () => {
   const filter = { protein: '40', carbs: '64', fat: '20', calories: '600' };
   await AsyncStorage.setItem(MACRO_TARGETS_KEY, JSON.stringify(filter));
   expect(await getMacroTargets()).toBeNull();
-  expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: filter, mode: 'search' });
+  expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: filter, mode: 'search', needsModeChoice: true });
+  await restoreLegacyMacroTarget((await getLegacyMacroRecovery())!, 'search');
   await saveMacroTargets(SAMPLE);
   expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: filter, mode: 'search' });
 });
 
-it('keeps unlinked legacy grams with independent calories out of complete targets', async () => {
+it('requires a choice for identical stale-profile and independent-filter legacy records', async () => {
   const legacy = { protein: '50', carbs: '65', fat: '20', calories: '600' };
   await AsyncStorage.setItem(MACRO_TARGETS_KEY, JSON.stringify(legacy));
   expect(await getMacroTargets()).toBeNull();
-  expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: legacy, mode: 'search' });
+  expect(await getDiscoveryMacroTargetSnapshot()).toEqual({ targets: legacy, mode: 'search', needsModeChoice: true });
 });
 
 
