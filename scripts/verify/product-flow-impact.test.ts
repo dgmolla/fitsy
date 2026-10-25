@@ -2,10 +2,11 @@ import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { copyProductFlowControls } from './product-flow-fixture';
 
 const modulePath = resolve(__dirname, 'product-flow.mjs');
 const env = () => ({ ...Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-  !key.startsWith('GIT_') && !['FITSY_DIFF_BASE', 'FITSY_DIFF_HEAD'].includes(key))), CI: '' });
+  !/^(GIT_|GITHUB_|FITSY_|EXPO_PUBLIC_|CI$)/.test(key))), CI: '' });
 const evaluate = (paths: readonly string[]) => spawnSync(process.execPath, ['--input-type=module', '-e',
   `import * as gate from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(gate.impact(${JSON.stringify(paths)})));`],
 { encoding: 'utf8', env: env() });
@@ -26,9 +27,42 @@ test.each([
   expect(JSON.parse(result.stdout)).toMatchObject({ required, categories });
 });
 
+test.each([
+  ['apps/mobile/app/notification-settings.tsx', ['reminders'], ['notifications']],
+  ['apps/mobile/app/(tabs)/saved.tsx', ['log-meal'], ['discovery']],
+  ['apps/api/app/api/restaurants/[id]/menu/route.ts', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'paywall-access'], ['billing', 'discovery']],
+])('local, final-run and publication callers share affected journeys for %s', (path, flows, categories) => {
+  copyProductFlowControls(directory);
+  symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
+  writeFileSync(join(directory, '.gitignore'), 'node_modules\n.evidence/\n');
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env: env() });
+  git('init', '-q'); git('config', 'user.name', 'Affected caller fixture'); git('config', 'user.email', 'fixture@example.test');
+  git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'base');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  mkdirSync(dirname(join(directory, path as string)), { recursive: true });
+  writeFileSync(join(directory, path as string), 'export const changed = true;\n');
+  const local = spawnSync(process.execPath, ['scripts/verify/impact-plan.mjs', '--simulator'],
+    { cwd: directory, env: env(), encoding: 'utf8' });
+  const final = spawnSync(process.execPath, ['scripts/verify/product-flow.mjs', '--plan'],
+    { cwd: directory, env: env(), encoding: 'utf8' });
+  expect({ local: local.status, final: final.status }).toEqual({ local: 0, final: 0 });
+  const plan = JSON.parse(final.stdout);
+  expect(plan).toMatchObject({ required: true, flows, categories, baseline: [] });
+  expect(plan.simulator).toEqual(JSON.parse(local.stdout));
+  const publisher = resolve(__dirname, '../sim/publish-product-flow.mjs');
+  const published = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {publicationPlan} from ${JSON.stringify(publisher)};
+     import {selectedFlows} from ${JSON.stringify(modulePath)};
+     const plan=publicationPlan(${JSON.stringify(join(directory, '.evidence/product-flow'))}, ${JSON.stringify(join(directory, '.evidence/product-build/receipt.json'))}, ${JSON.stringify([path])}, {configHash:'unchanged'});
+     process.stdout.write(JSON.stringify({plan,run:selectedFlows(plan)}));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect({ status: published.status, stderr: published.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(JSON.parse(published.stdout)).toMatchObject({ plan: { flows, categories, baseline: [] }, run: flows });
+});
+
 test('the canonical CLI selects billing, reminder and onboarding acceptance for a shared trial policy change', () => {
   mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
-  copyFileSync(modulePath, join(directory, 'scripts/verify/product-flow.mjs'));
+  copyProductFlowControls(directory);
   symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
   writeFileSync(join(directory, '.gitignore'), 'node_modules\n');
   const policy = 'packages/shared/src/contracts/trialPolicy.ts';
@@ -52,7 +86,7 @@ test('the canonical CLI selects billing, reminder and onboarding acceptance for 
 
 test('actual product-flow CLI returns N/A for health-only diff and requires proof for mixed API diff', () => {
   mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
-  copyFileSync(modulePath, join(directory, 'scripts/verify/product-flow.mjs'));
+  copyProductFlowControls(directory);
   symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
   writeFileSync(join(directory, '.gitignore'), 'node_modules\n');
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env: env(), encoding: 'utf8' }).trim();
@@ -95,10 +129,10 @@ test('actual product-flow CLI returns N/A for health-only diff and requires proo
   expect(JSON.parse(hosted.stdout)).toMatchObject({ required: true, categories: ['discovery'] });
 });
 
-test('the canonical product-flow check excludes only the parsed API GC test script addition', () => {
+test('the canonical product-flow check excludes verification scripts while preserving runtime and ambiguous manifest impact', () => {
   mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
   mkdirSync(join(directory, 'apps/api'), { recursive: true });
-  copyFileSync(modulePath, join(directory, 'scripts/verify/product-flow.mjs'));
+  copyProductFlowControls(directory);
   copyFileSync(join(__dirname, 'product-flow.sh'), join(directory, 'scripts/verify/product-flow.sh'));
   symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
   writeFileSync(join(directory, '.gitignore'), 'node_modules\n.evidence/\n');
@@ -148,12 +182,14 @@ test('the canonical product-flow check excludes only the parsed API GC test scri
     { ...gcOnly, scripts: { ...gcOnly.scripts, start: 'node server.js' } },
     { ...gcOnly, scripts: { ...gcOnly.scripts, prestart: 'node setup.js' } },
     { ...gcOnly, dependencies: { next: '^16.0.0' } },
-    { ...baseline, scripts: { ...baseline.scripts, 'test:coverage:gc': 'node other.js' } },
   ]) {
     write(changed);
     expect(JSON.parse(plan().stdout)).toMatchObject({ required: true, paths: ['apps/api/package.json'] });
     expect(JSON.parse(check().stdout)).toMatchObject({ status: 'fail' });
   }
+  write({ ...baseline, scripts: { ...baseline.scripts, 'test:coverage:gc': 'node other.js' } });
+  expect(JSON.parse(plan().stdout)).toMatchObject({ required: false, paths: [] });
+  expect(JSON.parse(check().stdout)).toMatchObject({ status: 'pass', applicability: 'not_applicable' });
   writeFileSync(manifest, '{malformed');
   expect(JSON.parse(plan().stdout)).toMatchObject({ required: true, paths: ['apps/api/package.json'] });
   expect(JSON.parse(check().stdout)).toMatchObject({ status: 'fail' });

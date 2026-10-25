@@ -468,6 +468,12 @@ test('pre-push works from a fresh home without an issue binding or review instal
   expect(calls('domain-calls')).toBe(1);
   expect(existsSync(join(hookEnv.HOME, '.fitsy-review'))).toBe(false);
   expect(existsSync(join(directory, '.evidence/delivery/binding.json'))).toBe(false);
+  const checks = hook.stdout.trim().split('\n').map(line => JSON.parse(line));
+  expect(checks.map(check => check.name)).toEqual(['size-check', 'domain-check', 'focused-tests']);
+  for (const check of checks) {
+    expect(existsSync(join(directory, check.logs.stdout))).toBe(true);
+    expect(existsSync(join(directory, check.logs.stderr))).toBe(true);
+  }
 });
 
 test.each(['size-check', 'domain-check', 'static', 'focused-tests'])('pre-push blocks a failed %s without review state', failing => {

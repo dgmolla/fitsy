@@ -284,6 +284,8 @@ See [simple review](../../../scripts/review/simple-review.md) for the maintained
 
 The current CI selection is maintained by `scripts/verify/impact-plan.mjs`; inspect it with `npm run verify:sim-plan`.
 It combines the retained reviewer ownership router and simulator path tiers with changed-screen mappings: low selects no simulator, medium selects affected flows, and high selects the full flow set.
+The same mapping includes mobile-facing API contracts and feeds final product acceptance through `npm run verify:product-plan`.
+Omitted flows retain reasons, and explicit diagnostic lists cannot replace required journeys or assertions.
 Navigation, auth, billing, native configuration, release candidates and unknown mobile impact select full coverage.
 All mobile/web UI changes trigger coverage: proven screen-local style/copy edits use render assertions and screenshots, behavior changes use affected E2E flows, and shared components or app shells use the full suite.
 Render smoke reuses maintained journey setup through its mapped screen checkpoint, and mixed or uncertain edits keep broader E2E coverage.

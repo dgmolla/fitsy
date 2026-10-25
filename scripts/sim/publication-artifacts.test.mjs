@@ -8,10 +8,22 @@ import { createHash } from 'node:crypto';
 import { createPublicationArchive, publicationPlan, publishProductFlow as publishWithMediaEvidence } from './publish-product-flow.mjs';
 import { artifactPath, baseline, inputHash, root, publicConfigIdentity } from '../verify/product-flow.mjs';
 import { validateMediaReceipt, writeMediaReceipt } from '../verify/media-integration.mjs';
+import { simulatorFlows } from '../verify/impact-plan.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 const publishProductFlow = (number, options) => publishWithMediaEvidence(number,
   { ...options, validateMediaEvidence: () => ({ required: false }) });
+
+test('publication preserves needs-sim and release overrides alongside affected selection', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-publication-selection-'));
+  try {
+    for (const options of [{ labels: ['needs-sim'] }, { release: true }]) {
+      const plan = publicationPlan(dir, join(dir, 'missing-build.json'), ['docs/guide.md'], { configHash: 'same' }, options);
+      assert.equal(plan.required, true);
+      assert.deepEqual(plan.flows, simulatorFlows());
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('publisher requires acceptance for an ignored public key change', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-public-key-publication-'));
@@ -288,7 +300,8 @@ test('publisher default validator accepts complete non-video proof and rejects c
       const attachmentCloseout = `${name}/xctest-attachment-closeout.json`;
       const raw = JSON.stringify([
         { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name } } }, metadata: { status: 'COMPLETED' } },
-        { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Welcome' } } } }, metadata: { status: 'COMPLETED' } },
+        // Match every required assertion in the actual baseline YAML, including startup waits.
+        ...Array.from({ length: 8 }, () => ({ command: { assertConditionCommand: { condition: { visible: { textRegex: 'Welcome' } } } }, metadata: { status: 'COMPLETED' } })),
       ]);
       const capture = JSON.stringify({ udid: simulator, preferredScreenCaptureFormat: 'screenshots' }) + '\n';
       const closeout = JSON.stringify({ udid: simulator, generated: { videos: 0 }, deleted: [] }) + '\n';
@@ -328,7 +341,7 @@ test('publisher default validator accepts complete non-video proof and rejects c
       return '';
     };
     const options = { execute, evidenceDirectory, publicationDirectory,
-      resolvePlan: () => ({ required: true, categories: [] }), sourceHash: () => source };
+      resolvePlan: () => ({ required: true, categories: [], flows: baseline }), sourceHash: () => source };
     const published = await publishProductFlow('9', options);
     assert.equal(published.status, 'pass');
     assert.equal(uploads, 1);
@@ -346,15 +359,13 @@ test('publisher default validator accepts complete non-video proof and rejects c
     report.flows[0].attachmentCloseout = closeoutPath;
     report.flows[0].attachmentCloseoutHash = closeoutHash;
     writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
+    const originalCommands = readFileSync(join(evidenceDirectory, flows[0].commands));
     writeFileSync(join(evidenceDirectory, flows[0].commands), '[]');
     await assert.rejects(publishProductFlow('9', options), /changed command artifact/);
     assert.equal(uploads, 1, 'invalid proof must stop before another upload');
     writeFileSync(join(evidenceDirectory, flows[0].attachmentCloseout), JSON.stringify({ udid: simulator, generated: { videos: 1 }, deleted: [] }));
     report.flows[0].attachmentCloseoutHash = sha(readFileSync(join(evidenceDirectory, flows[0].attachmentCloseout)));
-    writeFileSync(join(evidenceDirectory, flows[0].commands), JSON.stringify([
-      { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: flows[0].name } } }, metadata: { status: 'COMPLETED' } },
-      { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Welcome' } } } }, metadata: { status: 'COMPLETED' } },
-    ]));
+    writeFileSync(join(evidenceDirectory, flows[0].commands), originalCommands);
     report.flows[0].sha256 = sha(readFileSync(join(evidenceDirectory, flows[0].commands)));
     writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
     await assert.rejects(publishProductFlow('9', options), /unexpected XCTest recording/);

@@ -63,11 +63,30 @@ test('repeated verification executes again and reports the fresh failure', () =>
   writeFileSync(join(verify, 'fixture.sh'), 'echo run >> calls\necho \'{"status":"pass"}\'\nexit "${FAIL_CHECK:-0}"\n');
   const run = (fail: string) => spawnSync(process.execPath, ['scripts/verify/run.mjs', '--runs=ci'],
     { cwd: directory, encoding: 'utf8', env: { ...process.env, FAIL_CHECK: fail } });
-  expect(run('0').status).toBe(0);
+  const passed = run('0');
+  expect(passed.status).toBe(0);
+  const originalLog = JSON.parse(passed.stdout).logs.stdout;
+  const originalOutput = readFileSync(join(directory, originalLog), 'utf8');
   const failed = run('1');
   expect(failed.status).toBe(1);
   expect(JSON.parse(failed.stdout).status).toBe('fail');
+  expect(JSON.parse(failed.stdout).logs.stdout).not.toBe(originalLog);
+  expect(readFileSync(join(directory, originalLog), 'utf8')).toBe(originalOutput);
   expect(readFileSync(join(directory, 'calls'), 'utf8')).toBe('run\nrun\n');
+});
+
+test.each(['verify', 'verify:all'])('the public npm %s alias retains check logs', alias => {
+  const scripts = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts;
+  writeFileSync(join(directory, 'package.json'), JSON.stringify({ private: true, scripts: { [alias]: scripts[alias] } }));
+  writeFileSync(join(directory, 'scripts/verify/registry.yml'), 'checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 1\n    blocking: true\n');
+  writeFileSync(join(directory, 'scripts/verify/fixture.sh'), 'echo \'{"summary":"npm alias ran"}\'\n');
+  const result = spawnSync('npm', ['run', '--silent', alias, '--', '--runs=ci'],
+    { cwd: directory, encoding: 'utf8', timeout: 10000 });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(0);
+  const check = JSON.parse(result.stdout);
+  expect(check).toMatchObject({ name: 'fixture', status: 'pass' });
+  expect(readFileSync(join(directory, check.logs.stdout), 'utf8')).toContain('npm alias ran');
 });
 
 test('a reported failure cannot pass even when the check exits zero', () => {
@@ -78,6 +97,18 @@ test('a reported failure cannot pass even when the check exits zero', () => {
     { cwd: directory, encoding: 'utf8' });
   expect(result.status).toBe(1);
   expect(JSON.parse(result.stdout)).toMatchObject({ name: 'fixture', status: 'fail', summary: 'engine failed' });
+});
+
+test('a JSON failure longer than the console excerpt cannot become a pass', () => {
+  const verify = join(directory, 'scripts/verify');
+  writeFileSync(join(verify, 'registry.yml'), 'checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 1\n    blocking: true\n');
+  const summary = 'long failure detail '.repeat(1024);
+  writeFileSync(join(directory, 'result.json'), JSON.stringify({ status: 'fail', summary }) + '\n');
+  writeFileSync(join(verify, 'fixture.sh'), 'echo earlier-output\ncat result.json\n');
+  const result = spawnSync(process.execPath, [join(verify, 'run.mjs'), '--runs=ci'],
+    { cwd: directory, encoding: 'utf8', timeout: 10000 });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: 'fixture', status: 'fail', summary });
 });
 
 test("a directory symlink cannot skip blocking verification checks", () => {
@@ -182,24 +213,60 @@ printf '%s:%s\\n' '${command}' "\${NODE_OPTIONS-}" >> "$FITSY_CHILD_STUB_LOG"
   ]);
 });
 
-test.each([true, "shadow"])("drains a failed check's full piped diagnostics with blocking=%s", blocking => {
-  const payload = "diagnostic detail\n".repeat(65536) + "FINAL_DIAGNOSTIC_SENTINEL\n";
+test.each([true, "shadow"])("retains diagnostics beyond the old buffer limit with blocking=%s", blocking => {
+  const payload = "FIRST_DIAGNOSTIC_SENTINEL\n" + "diagnostic detail\n".repeat(1048576) + "FINAL_DIAGNOSTIC_SENTINEL\n";
   const verify = join(directory, "scripts/verify");
   writeFileSync(join(verify, "registry.yml"), `checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 2\n    blocking: ${blocking}\n    runs: [ci]\n`);
   writeFileSync(join(directory, "diagnostics.txt"), payload);
   writeFileSync(join(verify, "fixture.sh"), `#!/bin/bash\ncat diagnostics.txt >&2\nprintf '%s\\n' '{"summary":"fixture failure","fix":"fixture remedy"}'\nexit 1\n`);
 
-  // Pipes reproduce the CI transport, where a forced Node exit can truncate writes.
+  // Pipes reproduce the CI console transport; the full payload belongs in the artifact.
   const result = spawnSync(process.execPath, [join(verify, "run.mjs"), "--scope=all", "--runs=ci"], {
     encoding: "utf8", maxBuffer: 4 * 1024 * 1024, timeout: 10000,
   });
   expect(result.error).toBeUndefined();
   expect(result.status).toBe(blocking === true ? 1 : 0);
-  expect(JSON.parse(result.stdout.trim())).toMatchObject({ name: "fixture", status: "fail", blocking: blocking === true });
-  expect(result.stderr.startsWith(`\n--- fixture output ---\n${payload}\n`)).toBe(true);
+  const check = JSON.parse(result.stdout.trim());
+  expect(check).toMatchObject({ name: "fixture", status: "fail", blocking: blocking === true });
+  expect(readFileSync(join(directory, check.logs.stderr), 'utf8')).toBe(payload);
+  expect(readFileSync(join(directory, check.logs.stdout), 'utf8')).toContain('fixture failure');
+  expect(result.stderr.length).toBeLessThan(12000);
+  expect(result.stderr).not.toContain('FIRST_DIAGNOSTIC_SENTINEL');
+  expect(result.stderr).toContain(`Full logs: ${check.logs.stdout}, ${check.logs.stderr}`);
   expect(result.stderr).toContain("FINAL_DIAGNOSTIC_SENTINEL\n");
   expect(result.stderr).toContain(blocking === true ? "verify: 0 pass, 1 fail" : "verify: 0 pass, 0 fail, 1 shadow-fail (fixture)");
   if (blocking === true) expect(result.stderr).toContain("FAIL fixture: fixture failure\n  fix: fixture remedy\n");
+});
+
+test.each([0, 2, 7])('retains both streams and the actual exit status for exit %s', code => {
+  const verify = join(directory, 'scripts/verify');
+  writeFileSync(join(verify, 'registry.yml'), 'checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 1\n    blocking: true\n');
+  writeFileSync(join(verify, 'fixture.sh'), `echo stdout-detail\necho stderr-detail >&2\nexit ${code}\n`);
+  const result = spawnSync(process.execPath, [join(verify, 'run.mjs'), '--runs=ci'],
+    { cwd: directory, encoding: 'utf8', timeout: 10000 });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(code === 7 ? 1 : 0);
+  const check = JSON.parse(result.stdout);
+  expect(check.status).toBe(code === 7 ? 'fail' : code === 2 ? 'skipped' : 'pass');
+  expect(readFileSync(join(directory, check.logs.stdout), 'utf8')).toBe('stdout-detail\n');
+  expect(readFileSync(join(directory, check.logs.stderr), 'utf8')).toBe('stderr-detail\n');
+  if (code === 7) expect(result.stderr).toContain('stdout-detail');
+});
+
+test.each(['static', 'test', 'build'])('Verify uploads %s logs after failed checks and retains previous attempts', jobName => {
+  const yaml = require('js-yaml') as { load(text: string): unknown };
+  const workflow = yaml.load(readFileSync(join(root, '.github/workflows/verify.yml'), 'utf8')) as {
+    jobs: Record<string, { steps: { run?: string; if?: string; uses?: string; with?: Record<string, unknown> }[] }>;
+  };
+  const steps = workflow.jobs[jobName]!.steps;
+  const runIndex = steps.findIndex(step => step.run?.includes('node scripts/verify/run.mjs'));
+  const uploadIndex = steps.findIndex(step => step.uses === 'actions/upload-artifact@v4');
+  expect(runIndex).toBeGreaterThanOrEqual(0);
+  expect(uploadIndex).toBeGreaterThan(runIndex);
+  const upload = steps[uploadIndex]!;
+  expect(upload.if).toBe('${{ always() }}');
+  expect(upload.with).toMatchObject({ path: '.evidence/verify/logs/', 'include-hidden-files': true,
+    'retention-days': 7, 'if-no-files-found': 'warn', name: expect.stringContaining('${{ github.run_attempt }}') });
 });
 
 test.each([["ci", "cheap"], ["local", "cheap"], ["local", "full"]])("serializes %s %s-stage checks without resource overlap", (runs, stage) => {
