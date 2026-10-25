@@ -9,15 +9,16 @@
  * Reads scripts/verify/registry.yml, filters checks by layer, run context and
  * (for advisory checks with --scope=changed) path globs against origin/main, runs cheap
  * checks sequentially within the local resource envelope, and prints one JSON result
- * line per check plus a summary.
+ * line per check plus a summary. Complete stdout/stderr logs are retained under
+ * .evidence/verify/logs in a fresh directory for every invocation.
  * Exit 1 if any BLOCKING check fails; shadow failures are reported only.
  *
  * Check contract (scripts/verify/README.md): exit 0 pass / 1 fail / 2 skipped;
  * last stdout line is JSON {name, status, summary, fix}.
  */
-import { execFile } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { spawn } from "node:child_process";
+import { closeSync, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { impactPlan, focusedDatabaseRequired, isMain } from "./impact-plan.mjs";
@@ -152,6 +153,25 @@ export async function verify(argv, prepareDatabase) {
       return { env: checkEnv, args: ['-p', join(VERIFY_DIR, c.script), ...checkArgs] };
   }
 
+  const logsRoot = join(REPO_ROOT, '.evidence/verify/logs');
+  mkdirSync(logsRoot, { recursive: true });
+  const logsDir = mkdtempSync(join(logsRoot, 'run-'));
+  // Read only the tail, expanding when the final JSON line itself is longer.
+  function logTail(file, completeLine = false) {
+    const fd = openSync(file, 'r');
+    try {
+      const size = fstatSync(fd).size;
+      let length = Math.min(size, 10000);
+      while (true) {
+        const buffer = Buffer.alloc(length);
+        readSync(fd, buffer, 0, length, size - length);
+        const text = buffer.toString('utf8');
+        if (!completeLine || length === size || text.trimEnd().includes('\n')) return text;
+        length = Math.min(size, length * 2);
+      }
+    } finally { closeSync(fd); }
+  }
+
   function runCheck(c, options) {
     if (c.missing) {
       return Promise.resolve({ name: c.name, status: "fail", summary: `registry entry has no script ${c.script}`, fix: "add the script or remove the entry", blocking: true });
@@ -159,14 +179,30 @@ export async function verify(argv, prepareDatabase) {
     return new Promise((resolve) => {
       const t0 = Date.now();
       const input = checkInputs(c, options);
-      execFile("/bin/bash", input.args, { cwd: REPO_ROOT, maxBuffer: 16 * 1024 * 1024,
-        env: input.env }, (err, stdout, stderr) => {
-        const code = err ? (err.code ?? 1) : 0;
+      const logs = Object.fromEntries(['stdout', 'stderr'].map(stream =>
+        [stream, relative(REPO_ROOT, join(logsDir, `${c.name}.${stream}.log`))]));
+      // Direct child writes keep full logs available even if the parent exits,
+      // without execFile's output buffer limit killing a verbose test suite.
+      const descriptors = [];
+      let child;
+      try {
+        for (const file of Object.values(logs)) descriptors.push(openSync(join(REPO_ROOT, file), 'wx', 0o600));
+        child = spawn('/bin/bash', input.args, { cwd: REPO_ROOT, env: input.env,
+          stdio: ['ignore', ...descriptors] });
+      } finally {
+        for (const fd of descriptors) closeSync(fd);
+      }
+      let spawnError;
+      child.on('error', error => { spawnError = error; });
+      child.on('close', (code, signal) => {
+        const stdout = logTail(join(REPO_ROOT, logs.stdout), true);
+        const stderr = logTail(join(REPO_ROOT, logs.stderr));
         let parsed;
         try {
           parsed = JSON.parse(stdout.trim().split("\n").at(-1));
         } catch {
-          parsed = { name: c.name, summary: (stderr || stdout).trim().split("\n").at(-1)?.slice(0, 200) ?? "" };
+          parsed = { name: c.name, summary: spawnError?.message ?? (signal ? `terminated by ${signal}` :
+            (stderr || stdout).trim().split("\n").at(-1)?.slice(0, 200) ?? "") };
         }
         const status = code === 0 && parsed.status !== "fail" ? "pass" : code === 2 ? "skipped" : "fail";
         resolve({
@@ -175,9 +211,9 @@ export async function verify(argv, prepareDatabase) {
           status,
           duration_ms: Date.now() - t0,
           blocking: c.blocking !== "shadow",
-          // Keep the original failing workspace, even when later suites print a long passing log.
-          // execFile's maxBuffer above bounds output; CI applies its normal log secret masking.
-          stderr: status === "fail" ? stderr : undefined,
+          logs,
+          output: status === 'fail' ? [stdout && `stdout (last 10000 bytes):\n${stdout.slice(-10000)}`,
+            stderr && `stderr (last 10000 bytes):\n${stderr}`].filter(Boolean).join('\n') : undefined,
         });
       });
     });
@@ -249,11 +285,11 @@ export async function verify(argv, prepareDatabase) {
     }
   }
   for (const r of [...results, ...skipped]) {
-    const { stderr, ...line } = r;
+    const { output, ...line } = r;
     console.log(JSON.stringify(line));
   }
   for (const r of results) {
-    if (r.status === "fail" && r.stderr) console.error(`\n--- ${r.name} output ---\n${r.stderr}`);
+    if (r.status === 'fail' && r.logs) console.error(`\n--- ${r.name} output ---\n${r.output}\nFull logs: ${r.logs.stdout}, ${r.logs.stderr}`);
   }
 
   const failed = results.filter((r) => r.status === "fail");

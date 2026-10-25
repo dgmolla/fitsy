@@ -3,6 +3,9 @@ jest.unmock('expo-router');
 import React from 'react';
 import { dailyMacroTarget } from '../lib/profileTargetBody';
 import { Text } from 'react-native';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import Tuning from '../app/welcome/tuning';
@@ -11,7 +14,7 @@ import Goal from '../app/welcome/goal';
 import Targets from '../app/welcome/target-setup';
 import MacroSetup from '../app/macro-setup';
 import { saveOnboardingField } from '../lib/onboardingStorage';
-import { getMacroTargets, saveMacroTargets } from '../lib/macroStorage';
+import { getMacroTargets, getMacroTargetSource, saveMacroTargets } from '../lib/macroStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -28,6 +31,101 @@ const routes = { 'welcome/tuning': Tuning, 'welcome/how-it-works': Trust,
 beforeEach(async () => {
   jest.mocked(AsyncStorage.setItem).mockImplementation((key, value) => AsyncStorage.multiSet([[key, value]]));
   await AsyncStorage.clear();
+});
+
+it('the saved ranked-search journey replaces generated grams and queries with its persisted targets', async () => {
+  const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
+  type Step = { tapOn?: { id?: string; text?: string }; inputText?: string; eraseText?: number;
+    copyTextFrom?: { id: string }; evalScript?: string; assertTrue?: string; assertVisible?: string };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/onboarding-target-ranked-search.yaml'), 'utf8')) as [unknown, Step[]];
+  const start = commands.findIndex(step => step.assertVisible === 'What works.*for one meal.*');
+  const request = commands.findIndex(step => /\bhttp\./.test(step.evalScript ?? ''));
+  expect(start).toBeGreaterThan(-1);
+  expect(request).toBeGreaterThan(start);
+  await saveOnboardingField('goal', 'lose_fat');
+  await saveOnboardingField('targetMode', 'known');
+  const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
+  await waitFor(() => expect(screen.getByTestId('meal-target-calories').props.editable).toBe(true));
+  const context = { maestro: { copiedText: '' }, output: {} as Record<string, unknown> };
+  const evaluate = (script: string) => runInNewContext(script.slice(2, -1), context);
+  let focused: string | undefined;
+  for (const step of commands.slice(start + 1, request)) {
+    if (step.tapOn) {
+      const { id, text } = step.tapOn;
+      if (id?.startsWith('meal-target-') || text) {
+        await act(async () => { if (focused) fireEvent(screen.getByTestId(focused), 'blur'); });
+        focused = id;
+        if (id) await act(async () => { fireEvent(screen.getByTestId(id), 'focus'); });
+        else expect(screen.getByText(text!)).toBeTruthy();
+      } else if (id) {
+        await act(async () => { fireEvent.press(screen.getByTestId(id)); });
+        focused = undefined;
+        if (id === 'welcome-back') await waitFor(() => expect(screen.getByTestId('meal-target-calories').props.editable).toBe(true));
+      }
+    }
+    if (step.eraseText !== undefined || step.inputText !== undefined) {
+      const input = screen.getByTestId(focused!);
+      // Native calorie rebalancing can invalidate selectTextOnFocus. Replay
+      // the observed append behavior, rather than assuming a selection survives.
+      const value = step.eraseText === undefined ? input.props.value + step.inputText
+        : input.props.value.slice(0, Math.max(0, input.props.value.length - step.eraseText));
+      await act(async () => { fireEvent.changeText(input, value); });
+    }
+    if (step.copyTextFrom) context.maestro.copiedText = screen.getByTestId(step.copyTextFrom.id).props.value;
+    if (step.evalScript) evaluate(step.evalScript);
+    if (step.assertTrue) expect({ expression: step.assertTrue, value: evaluate(step.assertTrue), copied: context.maestro.copiedText })
+      .toEqual({ expression: step.assertTrue, value: true, copied: context.maestro.copiedText });
+  }
+  const saved = await getMacroTargets();
+  expect(saved).toEqual({ calories: '502', protein: '50', carbs: '44', fat: '14' });
+  expect(await getMacroTargetSource()).toBe('manual');
+  const url = new URL(String(context.output.rankedUrl));
+  expect(url.origin + url.pathname).toBe('https://dev.fitsy.org/api/restaurants/preview');
+  expect(Object.fromEntries(url.searchParams)).toEqual({ guided: '1', lat: '34.0407', lng: '-118.2468', ...saved });
+});
+
+it.each((['known', 'estimate'] as const).flatMap(targetMode =>
+  (['calories', 'protein', 'carbs', 'fat'] as const).map(field => ({ targetMode, field })),
+))('saves $targetMode targets after a $field edit through Continue without blurring first', async ({ targetMode, field }) => {
+  await saveOnboardingField('goal', 'build_muscle');
+  await saveOnboardingField('targetMode', targetMode);
+  if (targetMode === 'known') await saveMacroTargets({ calories: '836', protein: '31', carbs: '115', fat: '28' });
+  const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
+  await waitFor(() => expect(screen.getByTestId('meal-target-calories').props.editable).toBe(true));
+  const value = { calories: '700', protein: '40', carbs: '100', fat: '20' }[field];
+  // Native decimal keyboards have no Done key. Continue must settle the draft itself.
+  await act(async () => { fireEvent.changeText(screen.getByTestId(`meal-target-${field}`), value); });
+  expect(screen.getByTestId(`meal-target-${field}`).props.value).toBe(value);
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).not.toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
+  const saved = (await getMacroTargets())!;
+  expect(Number(saved.calories)).toBe(4 * Number(saved.protein) + 4 * Number(saved.carbs) + 9 * Number(saved.fat));
+  if (field === 'calories') expect(Math.abs(Number(saved.calories) - 700)).toBeLessThanOrEqual(9);
+  else expect(saved[field]).toBe(value);
+  expect(await getMacroTargetSource()).toBe('manual');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await waitFor(() => {
+    for (const [key, target] of Object.entries(saved))
+      expect(screen.getByTestId(`meal-target-${key}`).props.value).toBe(target);
+  });
+});
+
+it.each([
+  ['calories', ''], ['calories', '0'], ['calories', '5000'], ['calories', '1.2.3'],
+  ['protein', ''], ['protein', '501'], ['carbs', ''], ['fat', ''],
+])('keeps an invalid %s draft "%s" disabled without blurring', async (field, value) => {
+  await saveOnboardingField('goal', 'build_muscle');
+  await saveOnboardingField('targetMode', 'known');
+  const saved = { calories: '836', protein: '31', carbs: '115', fat: '28' };
+  await saveMacroTargets(saved);
+  const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
+  await waitFor(() => expect(screen.getByTestId('meal-target-calories').props.editable).toBe(true));
+  await act(async () => { fireEvent.changeText(screen.getByTestId(`meal-target-${field}`), value); });
+  expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).toBe(true);
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(screen.getPathname()).toBe('/welcome/tuning');
+  expect(await getMacroTargets()).toEqual(saved);
 });
 
 it('settles both tuning edit directions before save and restores one energy total', async () => {

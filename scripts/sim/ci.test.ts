@@ -1,9 +1,36 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
 const modulePath = resolve(__dirname, 'ci.mjs');
 const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
   !/^(GIT_|GITHUB_|FITSY_|EXPO_PUBLIC_|CI$|RUNNER_ENVIRONMENT$)/.test(key)));
+
+test.each(['chain-menu-serving', 'onboarding-target-ranked-search'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, {
+    launchApp?: object;
+    retry?: { maxRetries: number; commands: {
+      runFlow?: { when: { visible: string }; commands: { tapOn: string }[] };
+      extendedWaitUntil?: { visible: { id: string }; timeout: number };
+    }[] };
+    openLink?: string;
+    tapOn?: { id: string };
+  }[]];
+  const launch = commands.findIndex(step => step.launchApp);
+  expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true });
+  const startup = commands[launch + 1]?.retry;
+  expect(startup).toBeDefined();
+  expect(startup!.maxRetries).toBeLessThanOrEqual(2);
+  const launcher = startup!.commands.find(step => step.runFlow)!.runFlow!;
+  expect(launcher.when).toEqual({ visible: 'Development Build' });
+  const server = new RegExp(launcher.commands[0]!.tapOn);
+  for (const url of ['http://localhost:8081', 'http://localhost:8099', 'http://127.0.0.1:8099']) expect(server.test(url)).toBe(true); // loopback test fixture
+  for (const url of ['http://example.com:8081', 'http://localhost.evil:8081', 'http://127x0x0x1:8081']) expect(server.test(url)).toBe(false);
+  expect(startup!.commands.find(step => step.extendedWaitUntil)?.extendedWaitUntil).toEqual({ visible: { id: 'welcome-start' }, timeout: 30000 });
+  expect(commands.findIndex(step => step.openLink || step.tapOn?.id === 'welcome-start')).toBeGreaterThan(launch + 1);
+});
 
 test('every render smoke uses real journey setup, asserts its affected screen and saves a screenshot', () => {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', `

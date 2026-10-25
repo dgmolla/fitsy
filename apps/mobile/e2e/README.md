@@ -6,6 +6,10 @@ The maintained path-to-flow mapping lives in `scripts/verify/impact-plan.mjs`; e
 Unmapped mobile paths expand to the full flow set, and `needs-sim` forces flows for otherwise non-mobile changes.
 Every UI edit triggers local coverage: proven screen-local style/copy reuses a maintained flow through its mapped render assertion and saves a screenshot, behavior changes run affected E2E flows, and shared UI/app shells run the full suite.
 Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the maintained YAML flows.
+`onboarding-assisted-targets` submits a calorie edit directly through Continue with the decimal keyboard open, then checks Back preserves the saved allocation.
+Its preview comparisons use those saved calories and grams, including whole-gram rounding, for the real dev API request.
+`onboarding-target-ranked-search` settles each previous field and clears generated values before typing, then saves with the decimal keyboard open and checks Back restores all four targets.
+Its live ranked queries and preview assertions use that persisted allocation: 50 g protein, 44 g carbs and 14 g fat settle to 502 kcal.
 CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
 The read-only classifier supplies data to the protected `sim-scope.yml` publisher; the bounded status description contains scope and flow count, and the poller reads exact names from the artifact.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
@@ -80,6 +84,23 @@ Check saved flow syntax with `maestro check-syntax apps/mobile/e2e/flows/<flow>.
 If Maestro cannot initialize its normal cache in a restricted workspace, set `JAVA_OPTS=-Duser.home=<owned-writable-temporary-directory>` for syntax checks.
 This uses a separate Java cache without modifying the normal installation or changing the shell's home directory.
 The canonical media check also requires host process-ownership inspection; a sandbox denial must be resolved through the existing host owner without disabling that preflight.
+
+`chain-menu-serving` clears app and keychain state to prove anonymous menu access.
+On a Debug dev-client build, clearing state can return to Expo's Development Build launcher; the flow selects local Metro before waiting for `welcome-start`.
+Embedded builds skip that conditional launcher step, and startup retries never repeat menu or authentication actions.
+After tapping a locked dish, assert the selected restaurant and `signup-apple`/`signup-google` controls because this entry uses contextual signup copy.
+Keep checkout controls absent until authentication succeeds.
+`components/ChainMenuServing.test.tsx` checks the saved flow's final selectors against the real menu and sign-in screens, while `scripts/sim/ci.test.ts` covers its launch contract and render-smoke consumer.
+The Mac's advisory exclusions live outside this repository in `~/fitsy-refactor/sim-review/poller.mjs`; remove `chain-menu-serving.yaml` from `KNOWN_FAILING` after a passing native run of the repaired flow.
+Remove `onboarding-target-ranked-search.yaml` (#525) from that same list after its repaired flow passes on the Debug dev build.
+
+`reminders` uses `unsubscribed-dev` to check guest access, leaving without opt-in, native denial, grant and permission persistence after relaunch without purchasing.
+After Dev Login completes, it opens notification settings and uses `reminders-enable`; it does not assume a paywall destination or an eligible trial offer.
+The `/welcome/notification-permission` screen requires an active purchase and cannot supply this inactive account's permission coverage.
+Keep the fixture's credentials in owned Metro as well as the runner environment; a `Dev Login Failed` alert indicates an authentication/setup failure, not a missing paywall plan.
+Both permission resets reconnect a cleared Debug client to local Metro before checking the welcome screen.
+`components/RemindersJourney.test.tsx` checks those startup steps and exercises the saved flow's sign-in continuation and opt-in control against real settings, preferences and scheduling for a never-subscribed account.
+Run `node scripts/sim/ci.mjs --scope=flow --flows=reminders --udid=<UDID>` with the local fixture configuration, then remove `reminders.yaml` (#528) from the Mac's `KNOWN_FAILING` list after the repaired flow passes natively.
 
 The assisted-targets journey also opens `/macro-setup`, asserts its daily editor and exercises Save and Skip; macro-setup render smoke stops at `macro-setup-save` on that screen.
 Run the native accessibility helper regression tests from the repository root with `node --test apps/mobile/e2e/helpers/native-ax.test.mjs` when changing these helpers.
