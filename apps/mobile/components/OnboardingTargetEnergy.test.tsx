@@ -3,6 +3,9 @@ jest.unmock('expo-router');
 import React from 'react';
 import { dailyMacroTarget } from '../lib/profileTargetBody';
 import { Text } from 'react-native';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import Tuning from '../app/welcome/tuning';
@@ -28,6 +31,57 @@ const routes = { 'welcome/tuning': Tuning, 'welcome/how-it-works': Trust,
 beforeEach(async () => {
   jest.mocked(AsyncStorage.setItem).mockImplementation((key, value) => AsyncStorage.multiSet([[key, value]]));
   await AsyncStorage.clear();
+});
+
+it('the saved ranked-search journey replaces generated grams and queries with its persisted targets', async () => {
+  const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
+  type Step = { tapOn?: { id?: string; text?: string }; inputText?: string; eraseText?: number;
+    copyTextFrom?: { id: string }; evalScript?: string; assertTrue?: string; assertVisible?: string };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/onboarding-target-ranked-search.yaml'), 'utf8')) as [unknown, Step[]];
+  const start = commands.findIndex(step => step.assertVisible === 'What works.*for one meal.*');
+  const request = commands.findIndex(step => /\bhttp\./.test(step.evalScript ?? ''));
+  expect(start).toBeGreaterThan(-1);
+  expect(request).toBeGreaterThan(start);
+  await saveOnboardingField('goal', 'lose_fat');
+  await saveOnboardingField('targetMode', 'known');
+  const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
+  await waitFor(() => expect(screen.getByTestId('meal-target-calories').props.editable).toBe(true));
+  const context = { maestro: { copiedText: '' }, output: {} as Record<string, unknown> };
+  const evaluate = (script: string) => runInNewContext(script.slice(2, -1), context);
+  let focused: string | undefined;
+  for (const step of commands.slice(start + 1, request)) {
+    if (step.tapOn) {
+      const { id, text } = step.tapOn;
+      if (id?.startsWith('meal-target-') || text) {
+        await act(async () => { if (focused) fireEvent(screen.getByTestId(focused), 'blur'); });
+        focused = id;
+        if (id) await act(async () => { fireEvent(screen.getByTestId(id), 'focus'); });
+        else expect(screen.getByText(text!)).toBeTruthy();
+      } else if (id) {
+        await act(async () => { fireEvent.press(screen.getByTestId(id)); });
+        focused = undefined;
+        if (id === 'welcome-back') await waitFor(() => expect(screen.getByTestId('meal-target-calories').props.editable).toBe(true));
+      }
+    }
+    if (step.eraseText !== undefined || step.inputText !== undefined) {
+      const input = screen.getByTestId(focused!);
+      // Native calorie rebalancing can invalidate selectTextOnFocus. Replay
+      // the observed append behavior, rather than assuming a selection survives.
+      const value = step.eraseText === undefined ? input.props.value + step.inputText
+        : input.props.value.slice(0, Math.max(0, input.props.value.length - step.eraseText));
+      await act(async () => { fireEvent.changeText(input, value); });
+    }
+    if (step.copyTextFrom) context.maestro.copiedText = screen.getByTestId(step.copyTextFrom.id).props.value;
+    if (step.evalScript) evaluate(step.evalScript);
+    if (step.assertTrue) expect({ expression: step.assertTrue, value: evaluate(step.assertTrue), copied: context.maestro.copiedText })
+      .toEqual({ expression: step.assertTrue, value: true, copied: context.maestro.copiedText });
+  }
+  const saved = await getMacroTargets();
+  expect(saved).toEqual({ calories: '502', protein: '50', carbs: '44', fat: '14' });
+  expect(await getMacroTargetSource()).toBe('manual');
+  const url = new URL(String(context.output.rankedUrl));
+  expect(url.origin + url.pathname).toBe('https://dev.fitsy.org/api/restaurants/preview');
+  expect(Object.fromEntries(url.searchParams)).toEqual({ guided: '1', lat: '34.0407', lng: '-118.2468', ...saved });
 });
 
 it.each((['known', 'estimate'] as const).flatMap(targetMode =>

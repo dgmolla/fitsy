@@ -8,6 +8,8 @@ Every UI edit triggers local coverage: proven screen-local style/copy reuses a m
 Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the maintained YAML flows.
 `onboarding-assisted-targets` submits a calorie edit directly through Continue with the decimal keyboard open, then checks Back preserves the saved allocation.
 Its preview comparisons use those saved calories and grams, including whole-gram rounding, for the real dev API request.
+`onboarding-target-ranked-search` settles each previous field and clears generated values before typing, then saves with the decimal keyboard open and checks Back restores all four targets.
+Its live ranked queries and preview assertions use that persisted allocation: 50 g protein, 44 g carbs and 14 g fat settle to 502 kcal.
 CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
 The read-only classifier supplies data to the protected `sim-scope.yml` publisher; the bounded status description contains scope and flow count, and the poller reads exact names from the artifact.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
@@ -90,6 +92,7 @@ After tapping a locked dish, assert the selected restaurant and `signup-apple`/`
 Keep checkout controls absent until authentication succeeds.
 `components/ChainMenuServing.test.tsx` checks the saved flow's final selectors against the real menu and sign-in screens, while `scripts/sim/ci.test.ts` covers its launch contract and render-smoke consumer.
 The Mac's advisory exclusions live outside this repository in `~/fitsy-refactor/sim-review/poller.mjs`; remove `chain-menu-serving.yaml` from `KNOWN_FAILING` after a passing native run of the repaired flow.
+Remove `onboarding-target-ranked-search.yaml` (#525) from that same list after its repaired flow passes on the Debug dev build.
 
 The assisted-targets journey also opens `/macro-setup`, asserts its daily editor and exercises Save and Skip; macro-setup render smoke stops at `macro-setup-save` on that screen.
 Run the native accessibility helper regression tests from the repository root with `node --test apps/mobile/e2e/helpers/native-ax.test.mjs` when changing these helpers.
