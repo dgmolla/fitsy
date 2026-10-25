@@ -69,6 +69,7 @@ export async function verify(argv, prepareDatabase) {
     if (unknown.length) throw new Error(`unknown --only checks: ${unknown.join(',')}`);
   }
   const plan = impactPlan({ base: args.base, head: args.head });
+  if (runsCtx === 'local') console.error(`Simulator scope: ${plan.simulator.scope}; ${plan.simulator.reason}; flows: ${plan.simulator.flows.join(', ') || 'none'}`);
   const files = scope === "changed" ? plan.files : null;
 
   const focusedSelection = () => existsSync(join(REPO_ROOT, '.evidence/verify/focused-tests.json')) ? readFileSync(join(REPO_ROOT, '.evidence/verify/focused-tests.json'), 'utf8') : null;

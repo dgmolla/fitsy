@@ -7,7 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { root, inputHash, changedPaths, impact, digest, validate, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance } from '../verify/product-flow.mjs';
+import { root, inputHash, candidatePlan, selectedFlows, digest, validate, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance } from '../verify/product-flow.mjs';
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
@@ -436,17 +436,18 @@ async function execute(udid, names, mode) {
   const priorFile = join(out, 'report.json');
   const prior = existsSync(priorFile) ? readPreviousReportForReuse(priorFile).report : r;
   const publicConfigKeys = requiredPublicConfigKeys(prior, r, environment());
-  const hash = inputHash(), plan = impact(changedPaths(process.env.FITSY_DIFF_BASE), publicConfigKeys);
+  const hash = inputHash(), plan = candidatePlan(publicConfigKeys);
   const currentStoreMode = buildProfile(r.buildMode === 'owned-metro-test-store', process.env).storeMode;
   assert(!plan.categories.includes('billing') || currentStoreMode !== 'unconfigured', 'Billing evidence requires a configured store');
-  const selected = [...new Set([...baseline, ...names])];
+  const selected = selectedFlows(plan, names);
+  assert(selected.length > 0, 'No affected journeys; select explicit diagnostic flows for a non-product change');
   const flowSources = selected.map(name => {
     assert(/^[a-z0-9-]+$/.test(name), 'Invalid flow name');
     const source = `apps/mobile/e2e/flows/${name}.yaml`;
     const bytes = readFileSync(join(root, source));
     return { name, source, sourceHash: digest(bytes), tags: yaml.load(bytes.toString().split(/^---\s*$/m)[0]).tags || [] };
   });
-  for (const c of plan.categories) assert(flowSources.some(f => !baseline.includes(f.name) && f.tags.includes(c)), `Add/select a deterministic scenario tagged ${c}`);
+  for (const c of plan.categories) assert(flowSources.some(f => f.tags.includes(c)), `Add/select a deterministic scenario tagged ${c}`);
   const existingReport = join(out, 'report.json');
   if (mode.publishable && !process.env.FITSY_SIM_RESET_KEYCHAIN && existsSync(existingReport)) {
     const { report: previous, error: priorError } = readPreviousReportForReuse(existingReport);
@@ -493,6 +494,7 @@ async function execute(udid, names, mode) {
     const { app, ...buildIdentity } = r;
     const report = { version: 1, ...buildIdentity, storeMode: currentStoreMode,
       ...identity, ...server, inputHash: hash,
+      selection: plan.simulator,
       jsHash: inputHash(root, 'js'), configHash: environment().configHash,
       publicConfig: environment().publicConfig,
       publicConfigAcceptance: { keys: publicConfigKeys },
@@ -627,8 +629,7 @@ async function finish(walkthrough) {
     o.sha256 = digest(readFileSync(join(out, o.trace)));
   }
   report.result = 'pass'; report.finishedAt = new Date().toISOString();
-  const result = validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE),
-    requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
+  const result = validate(report, candidatePlan(requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
   if (report.evidenceMode === 'final-candidate')
     report.publicConfigAcceptance.verifiedConfigHash = report.configHash;
@@ -645,8 +646,7 @@ async function check() {
   assert(report.backendDeployment === backend().backendDeployment, 'Dev deployment changed after tests');
   installedApp(report.simulator, r.appHash);
   await checkBundle(report);
-  validate(report, impact(changedPaths(process.env.FITSY_DIFF_BASE),
-    requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
+  validate(report, candidatePlan(requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

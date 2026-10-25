@@ -73,7 +73,11 @@ npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/focused-tests.
 Use `npm run verify:sim-plan -- --release-candidate` for explicit release planning; release events and tag refs also require the full flow set.
 `impact-plan.mjs` consumes the retained `route-reviewers.sh` ownership routing and `risk-tiers.yml` path policy, then maps mobile paths to flows.
 The retired review tier executable is not required; `REVIEW.md` severity rules and independent review remain separate.
-Docs, tests, scripts and ordinary non-mobile changes select `none`; mapped mobile behavior selects `flow`; navigation, auth, billing, native configuration, release and unknown mobile impact select `full`.
+Docs, tests, scripts and changes without mobile consumers select `none`; mapped mobile and API behavior selects `flow`; navigation, auth, billing, native configuration, release and unknown mobile-facing impact select `full`.
+Each omitted flow has a reason in the plan, including the hosted `selection.json` artifact.
+`npm run verify:product-plan` uses the same mapping for mandatory final journeys and MCP categories.
+The final runner executes the selected complete YAML journeys and adds explicit diagnostics without appending unrelated baselines.
+Acceptance rejects an omitted selected flow or a truncated command report, as well as failed or skipped required assertions.
 Manifest edits confined to verification scripts are verification tooling, so they do not request a simulator.
 Dependency, lifecycle/build script and other manifest changes retain their normal risk; unreadable manifest comparisons cannot narrow coverage.
 Every mobile or web UI source change requires simulator/E2E coverage.
@@ -100,7 +104,10 @@ Keep render checkpoints and the comparison range aligned with the selected PR he
 Account-dependent journeys declare `fixture:` and `store:` tags in their maintained YAML.
 Load `FITSY_E2E_FIXTURES` with local, untracked preparation commands and per-fixture public environments as described in [the native README](../../apps/mobile/e2e/README.md#local-journey-fixtures).
 The runner resolves every required fixture before native execution, prepares it before each journey, validates the installed build/store and restarts owned Metro for that fixture's configuration.
-It preserves the full flow set and fails when genuine purchase history or the required store build is unavailable.
+It preserves the entire selected flow set and fails when genuine purchase history or the required store build is unavailable.
+Explicit scopes may expand the plan, but cannot omit its journeys or replace behavior coverage with render smoke.
+Use an existing compatible binary or a supported build with measured capacity; a shared binary cache is optional.
+Retire owned Metro, drivers and simulator resources at the end of the phase through the existing lifecycle controls.
 CI execution is refused by the local runner, and the registry contains no native execution check.
 Replay scope regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/simulator-scope.test.ts sim/ci.test.ts`.
 Replay trusted publication and fixture isolation with `node --test scripts/verify/sim-scope-status.test.mjs scripts/sim/journey-fixtures.test.mjs`.

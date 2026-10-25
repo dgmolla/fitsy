@@ -9,5 +9,6 @@
 ## Local product-flow evidence
 
 <!-- Follow docs/engineering/devops/shipping.md to collect local evidence, then:
+     Inspect npm run verify:product-plan for mandatory journeys, MCP categories and omission reasons.
      node scripts/sim/publish-product-flow.mjs <this-pr-number>
      Link product-flow/local below. Only selector-computed N/A is valid. -->

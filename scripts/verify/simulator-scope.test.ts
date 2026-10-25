@@ -20,7 +20,7 @@ function select(files: string[] | null, options: object = {}) {
 
 test.each([
   ['docs/guide.md'], ['AGENTS.md'], ['apps/mobile/README.md'],
-  ['scripts/verify/run.mjs'], ['apps/api/app/api/search/route.ts'],
+  ['scripts/verify/run.mjs'],
   ['apps/api/app/api/health/route.ts'], ['apps/mobile/lib/menuFilters.test.ts'],
   ['.github/workflows/verify.yml'],
   ['apps/web/lib/cache.ts'], ['apps/web/app/api/health/route.ts'],
@@ -35,10 +35,12 @@ test.each([
   ['apps/mobile/app/notification-settings.tsx', ['reminders']],
   ['apps/mobile/lib/notificationSchedule.ts', ['reminders']],
   ['apps/mobile/app/macro-setup.tsx', ['onboarding-assisted-targets']],
-  ['apps/mobile/lib/macroCalculator.ts', ['onboarding-assisted-targets', 'onboarding-target-ranked-search']],
+  ['apps/mobile/lib/macroCalculator.ts', ['meal-target-energy-sync', 'onboarding-assisted-targets', 'onboarding-target-ranked-search']],
   ['apps/mobile/app/(tabs)/saved.tsx', ['log-meal']],
   ['apps/mobile/lib/menuBookmarks.ts', ['log-meal']],
   ['apps/mobile/e2e/flows/menu-load-recovery.yaml', ['menu-load-recovery']],
+  ['apps/mobile/e2e/flows/signin-options.yaml', ['signin-options']],
+  ['apps/api/app/api/search/route.ts', ['meal-target-energy-sync', 'menu-load-recovery', 'onboarding-assisted-targets', 'onboarding-guided-preview', 'onboarding-out-of-area', 'onboarding-search-highlight', 'onboarding-target-ranked-search']],
 ] as [string, string[]][])('medium change %s selects only mapped flows', (path, flows) => {
   expect(select([path])).toMatchObject({ risk: 'medium', scope: 'flow', required: true, flows });
 });
@@ -73,6 +75,18 @@ test('multiple affected areas union and deduplicate flows independently of path 
   const expected = ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'reminders'];
   expect(select(paths).flows).toEqual(expected);
   expect(select(paths.reverse()).flows).toEqual(expected);
+});
+
+test('an unmapped backend contract cannot disappear from a mixed mapped selection', () => {
+  expect(select(['apps/mobile/lib/menuFilters.ts', 'apps/api/lib/newContract.ts'])).toMatchObject({ scope: 'full', flows: allFlows });
+});
+
+test('affected selections explain each omitted journey without adding unrelated baselines', () => {
+  const result = select(['apps/mobile/app/notification-settings.tsx']);
+  expect(result.flows).toEqual(['reminders']);
+  expect(result.omitted).toEqual(allFlows.filter(name => name !== 'reminders').map(flow => ({
+    flow, reason: expect.stringMatching(/unaffected/i),
+  })));
 });
 
 test.each([{ labels: [] }, { labels: ['needs-simulator'] }, { labels: ['Needs-Sim'] }])('only the exact needs-sim label overrides low risk: %j', ({ labels }) => {

@@ -1,7 +1,8 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { copyProductFlowControls } from './product-flow-fixture';
 
 const modulePath = resolve(__dirname, 'product-flow.mjs');
 const cleanEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) =>
@@ -13,14 +14,14 @@ test('the real CLI plan requires billing after an ignored public store-key chang
     mkdirSync(join(dir, 'scripts/verify'), { recursive: true });
     mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
     mkdirSync(join(dir, '.evidence/product-flow'), { recursive: true });
-    copyFileSync(modulePath, join(dir, 'scripts/verify/product-flow.mjs'));
+    copyProductFlowControls(dir);
     symlinkSync(resolve(__dirname, '../../node_modules'), join(dir, 'node_modules'));
     writeFileSync(join(dir, '.gitignore'), 'apps/mobile/.env.development.local\n.evidence/\nnode_modules\n');
     writeFileSync(join(dir, 'apps/mobile/app.tsx'), 'export default null');
     writeFileSync(join(dir, 'apps/mobile/.env.development.local'), 'EXPO_PUBLIC_REVENUECAT_TEST_KEY=before\n');
     const git = (args: string[]) => execFileSync('git', ['-C', dir, ...args], { env: cleanEnv() });
     git(['init', '-q']);
-    git(['add', '.gitignore', 'apps/mobile/app.tsx', 'scripts/verify/product-flow.mjs']);
+    git(['add', '.']);
     git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'fixture']);
     const base = git(['rev-parse', 'HEAD']).toString().trim();
     git(['update-ref', 'refs/remotes/origin/main', base]);
