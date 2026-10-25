@@ -25,7 +25,7 @@ env:
 - extendedWaitUntil:
     visible: "Welcome back"
     timeout: 15000
-- tapOn: "Dev Login.*"
+- tapOn: ".*Dev Login.*"
 - extendedWaitUntil:
     visible: "Search restaurants or dishes"
     timeout: 30000
@@ -62,7 +62,7 @@ env:
 - extendedWaitUntil:
     visible: "Grilled Chicken Bowl"
     timeout: 20000
-- assertVisible: "Seed Bowl Co #01"
+- assertVisible: ".*Seed Bowl Co #01.*"
 - assertVisible: "Remove bookmark"
 - takeScreenshot: saved-meal
 - launchApp
@@ -73,4 +73,4 @@ env:
 - extendedWaitUntil:
     visible: "Grilled Chicken Bowl"
     timeout: 20000
-- assertVisible: "Seed Bowl Co #01"
+- assertVisible: ".*Seed Bowl Co #01.*"
