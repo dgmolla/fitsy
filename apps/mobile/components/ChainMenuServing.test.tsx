@@ -29,7 +29,7 @@ it('the saved chain journey reaches contextual signup with the selected restaura
     if (new URL(String(input)).pathname === '/api/restaurants/seed-bowl/menu') return response({ data: menu });
     throw new Error(`Unexpected request: ${String(input)}`);
   });
-  const screen = renderJourney('/restaurant/seed-bowl', { ...routes, 'restaurant/[id]': Restaurant });
+  const screen = renderJourney('/restaurant/seed-bowl', { ...routes, 'restaurant/[id]': () => <Restaurant /> });
   await screen.findByTestId('menu-search');
   expect(screen.getByText('8 items')).toBeTruthy();
   expect(screen.getAllByLabelText('dish name hidden, view plans to find this meal')).toHaveLength(3);

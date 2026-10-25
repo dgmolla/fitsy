@@ -41,6 +41,23 @@ test("a cohesive source module passes the canonical structural caller regardless
   expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: "pass", blocking: true });
 });
 
+test.each([
+  { path: "scripts/local.test.ts", octets: [127, 0, 0, 1], note: " // loopback test fixture", status: 0 },
+  { path: "apps/mobile/local.test.tsx", octets: [127, 0, 0, 1], note: " // loopback test fixture", status: 0 },
+  { path: "scripts/local.test.ts", octets: [127, 0, 0, 1], note: "", status: 1 },
+  { path: "apps/api/lib/local.ts", octets: [127, 0, 0, 1], note: " // loopback test fixture", status: 1 },
+  ...[[192, 168, 1, 1], [10, 0, 0, 1], [172, 16, 0, 1], [172, 31, 0, 1]].map(octets => ({
+    path: "scripts/local.test.ts", octets, note: " // loopback test fixture", status: 1,
+  })),
+])("only an explained loopback test fixture is allowed: $path $octets $note", ({ path, octets, note, status }) => {
+  writeFileSync(join(directory, path), `export const url = 'http://${octets.join(".")}:8099';${note}\n`);
+  const result = verify();
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(status);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: status === 0 ? "pass" : "fail", blocking: true });
+  if (status !== 0) expect(result.stderr).toContain("Hardcoded private IPs found");
+});
+
 test("the same canonical caller still refuses unguarded subscriber data", () => {
   const route = join(directory, "apps/api/app/api/restaurants"); mkdirSync(route, { recursive: true });
   writeFileSync(join(route, "route.ts"), "export const GET = () => Response.json([]);\n");

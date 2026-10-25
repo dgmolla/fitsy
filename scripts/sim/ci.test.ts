@@ -25,7 +25,7 @@ test('chain-menu-serving reconnects a cleared dev client only to local Metro bef
   const launcher = startup!.commands.find(step => step.runFlow)!.runFlow!;
   expect(launcher.when).toEqual({ visible: 'Development Build' });
   const server = new RegExp(launcher.commands[0]!.tapOn);
-  for (const url of ['http://localhost:8081', 'http://localhost:8099', 'http://127.0.0.1:8099']) expect(server.test(url)).toBe(true);
+  for (const url of ['http://localhost:8081', 'http://localhost:8099', 'http://127.0.0.1:8099']) expect(server.test(url)).toBe(true); // loopback test fixture
   for (const url of ['http://example.com:8081', 'http://localhost.evil:8081', 'http://127x0x0x1:8081']) expect(server.test(url)).toBe(false);
   expect(startup!.commands.find(step => step.extendedWaitUntil)?.extendedWaitUntil).toEqual({ visible: { id: 'welcome-start' }, timeout: 30000 });
   expect(commands.findIndex(step => step.openLink)).toBeGreaterThan(launch + 1);
