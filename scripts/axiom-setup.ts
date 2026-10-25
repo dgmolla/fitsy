@@ -200,8 +200,8 @@ async function setupMonitors() {
     },
     {
       name: "Pipeline: Cost checkpoint spike",
-      description: "Single hex exceeded $5 cumulative cost — investigate before it scales",
-      aplQuery: `['${DATASET}'] | where type == "cost_checkpoint" and cumulativeCost > 5`,
+      description: "Single hex exceeded $5 AI cost - investigate before it scales",
+      aplQuery: `['${DATASET}'] | where type == "cost_checkpoint" and hexCost > 5`,
       intervalMinutes: 15,
       operator: "MatchEvent",
       threshold: 1,
@@ -252,7 +252,7 @@ function logManualMonitorInstructions() {
   log(`     Query: ['${DATASET}'] | where type == "run" and restaurantsPersisted == 0`);
   log("     Trigger: MatchEvent, threshold 1 in 5 hours\n");
   log("  5. Cost checkpoint spike (MatchEvent):");
-  log(`     Query: ['${DATASET}'] | where type == "cost_checkpoint" and cumulativeCost > 5`);
+  log(`     Query: ['${DATASET}'] | where type == "cost_checkpoint" and hexCost > 5`);
   log("     Trigger: MatchEvent, threshold 1 in 1 hour\n");
 }
 

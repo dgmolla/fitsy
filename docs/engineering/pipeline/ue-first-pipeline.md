@@ -164,7 +164,9 @@ flowchart TD
    ]);
    ```
    - FatSecret hit → official macros, skip Haiku (existing Path 1 behavior).
-   - UE hit → structured items → `estimateMacros(items, anthropic)` under `API_SEMAPHORES.haiku` (existing Path 2 behavior).
+   - UE hit → structured items → `estimateMacros(items, anthropic, undefined, observer)` under `API_SEMAPHORES.haiku`.
+     The observer checks the cumulative spend cap before every chunk and records actual usage before parsing, including failed/retried attempts.
+     See the [runbook's accounting and resume contract](runbook.md#ai-spend-accounting-and-resumable-cap).
 4. Photo resolution — three tiers, write `photoSource` on every tier so Google Places spend is projectable:
    - Tier 1: `restaurant.photoUrl` already populated by Phase 1 → `photoSource='ue_feed_hero'`. No call.
    - Tier 2: UE photo-only lookup via `UberEatsSource.lookupPhoto` if tier 1 missing → `photoSource='ue_photo_lookup'`. No call cost.

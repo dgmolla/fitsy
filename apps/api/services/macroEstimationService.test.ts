@@ -38,6 +38,45 @@ const HAIKU_ESTIMATES = [
   { cal: 380, p: 8, c: 30, f: 24, conf: "MEDIUM", tags: ["vegetarian"] },
 ];
 
+describe('billable chunk observers', () => {
+  beforeEach(() => mockCreate.mockReset());
+
+  it('guards and reports each chunk with its exact input items and measured usage', async () => {
+    const items = Array.from({ length: 51 }, (_, i) => ({ name: `Dish ${i}` }));
+    mockCreate.mockResolvedValueOnce(makeTextResponse(JSON.stringify(items.slice(0, 50).map(item => ({ ...HAIKU_ESTIMATES[0], name: item.name })))))
+      .mockResolvedValueOnce(makeTextResponse(JSON.stringify([{ ...HAIKU_ESTIMATES[0], name: items[50]!.name }])));
+    const observer = { beforeRequest: jest.fn(), onUsage: jest.fn() };
+    const result = await estimateMacros(items, makeAnthropicClient(), undefined, observer);
+    expect(result).toHaveLength(51);
+    expect(observer.beforeRequest).toHaveBeenCalledTimes(2);
+    expect(observer.onUsage).toHaveBeenNthCalledWith(1, items.slice(0, 50), { input_tokens: 100, output_tokens: 50 });
+    expect(observer.onUsage).toHaveBeenNthCalledWith(2, items.slice(50), { input_tokens: 100, output_tokens: 50 });
+  });
+
+  it('reports usage before a malformed response fails parsing', async () => {
+    mockCreate.mockResolvedValue(makeTextResponse('{not json'));
+    const observer = { beforeRequest: jest.fn(), onUsage: jest.fn() };
+    await expect(estimateMacros(ITEMS, makeAnthropicClient(), undefined, observer)).rejects.toThrow('failed to parse');
+    expect(observer.onUsage).toHaveBeenCalledWith(ITEMS, { input_tokens: 100, output_tokens: 50 });
+  });
+
+  it('never starts a request rejected by its spend guard', async () => {
+    const observer = { beforeRequest: () => { throw new Error('spend cap'); }, onUsage: jest.fn() };
+    await expect(estimateMacros(ITEMS, makeAnthropicClient(), undefined, observer)).rejects.toThrow('spend cap');
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(observer.onUsage).not.toHaveBeenCalled();
+  });
+
+  it('does not report usage for empty input or an API failure without a response', async () => {
+    const observer = { beforeRequest: jest.fn(), onUsage: jest.fn() };
+    await estimateMacros([], makeAnthropicClient(), undefined, observer);
+    expect(observer.beforeRequest).not.toHaveBeenCalled();
+    mockCreate.mockRejectedValue(new Error('API unavailable'));
+    await expect(estimateMacros(ITEMS, makeAnthropicClient(), undefined, observer)).rejects.toThrow('API unavailable');
+    expect(observer.onUsage).not.toHaveBeenCalled();
+  });
+});
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("estimateMacros", () => {

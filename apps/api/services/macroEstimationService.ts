@@ -37,7 +37,7 @@ interface HaikuEstimate {
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const HAIKU_MODEL = "claude-haiku-4-5" as const;
+export const HAIKU_MODEL = "claude-haiku-4-5" as const;
 const MAX_TOKENS = 8192;
 
 const VALID_TAGS = new Set(["vegan", "vegetarian", "gluten-free", "keto", "dairy-free"]);
@@ -187,10 +187,17 @@ function getClient(): Anthropic {
 // Maximum items per Haiku call — prevents output truncation on large menus
 const CHUNK_SIZE = 50;
 
+/** Observes every billable chunk, including responses that fail parsing. */
+export interface EstimationObserver {
+  beforeRequest(): void;
+  onUsage(items: StructuredMenuItem[], usage: Anthropic.Usage): void;
+}
+
 export async function estimateMacros(
   items: StructuredMenuItem[],
   client?: Anthropic,
   systemPrompt?: string,
+  observer?: EstimationObserver,
 ): Promise<(MacroData | null)[]> {
   if (items.length === 0) {
     return [];
@@ -201,7 +208,7 @@ export async function estimateMacros(
     const results: (MacroData | null)[] = [];
     for (let i = 0; i < items.length; i += CHUNK_SIZE) {
       const chunk = items.slice(i, i + CHUNK_SIZE);
-      const chunkResults = await estimateMacros(chunk, client, systemPrompt);
+      const chunkResults = await estimateMacros(chunk, client, systemPrompt, observer);
       results.push(...chunkResults);
     }
     return results;
@@ -220,12 +227,14 @@ export async function estimateMacros(
 
   const userMessage = `Estimate macros for these ${items.length} menu item(s):\n${JSON.stringify(payload, null, 2)}`;
 
+  observer?.beforeRequest();
   const message = await anthropic.messages.create({
     model: HAIKU_MODEL,
     max_tokens: MAX_TOKENS,
     system: systemPrompt ?? SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],
   });
+  observer?.onUsage(items, message.usage);
 
   const contentBlock = message.content[0];
   if (!contentBlock || contentBlock.type !== "text") {

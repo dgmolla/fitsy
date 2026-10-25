@@ -237,11 +237,19 @@ async function generateReport(runId: string, hex: string | null): Promise<void> 
 
   // Cost
   console.log("\n  COST");
+  const costTypes = hex ? 'type == "cost_checkpoint"' : '(type == "cost_checkpoint" or type == "run")';
+  const costField = hex ? 'hexCost' : 'coalesce(costTotal, cumulativeCost)';
+  const usageField = hex ? 'hexUsage' : 'coalesce(aiUsage, cumulativeUsage)';
   const costResult = await queryApl(
-    `['${DATASET}'] | where type == "cost_checkpoint" and runId == "${runId}"${hexClause} | summarize maxCost=max(cumulativeCost)`,
+    `['${DATASET}'] | where ${costTypes} and runId == "${runId}"${hexClause} | extend measuredCost=${costField}, measuredUsage=${usageField} | summarize maxCost=max(measuredCost), inputTokens=max(tolong(measuredUsage.inputTokens)), outputTokens=max(tolong(measuredUsage.outputTokens)), itemAttempts=max(tolong(measuredUsage.itemAttempts))`,
   );
   const cost = extractRows(costResult)[0];
-  console.log(`    Cumulative: $${cost?.["maxCost"] ?? 0}`);
+  console.log(`    ${hex ? 'Hex total' : 'Cumulative'}: $${cost?.["maxCost"] ?? 0}`);
+  if (cost?.['inputTokens'] != null) {
+    console.log(`    Input/output tokens: ${cost['inputTokens']}/${cost['outputTokens']}`);
+    const attempts = Number(cost['itemAttempts'] ?? 0);
+    console.log(`    Cost per 1k AI item attempts: $${(attempts ? Number(cost['maxCost']) * 1000 / attempts : 0).toFixed(6)}`);
+  }
 
   // Low item count
   console.log("\n  DATA QUALITY");
@@ -254,7 +262,7 @@ async function generateReport(runId: string, hex: string | null): Promise<void> 
   // Run event (not hex-filtered — single event per run)
   if (!hex) {
     const runResult = await queryApl(
-      `['${DATASET}'] | where type == "run" and runId == "${runId}" | project durationTotal, restaurantsDiscovered, restaurantsPersisted, restaurantsFailed`,
+      `['${DATASET}'] | where type == "run" and runId == "${runId}" | sort by _time desc | take 1 | project durationTotal, restaurantsDiscovered, restaurantsPersisted, restaurantsFailed, status`,
     );
     const runRow = extractRows(runResult)[0];
     if (runRow) {
@@ -263,6 +271,7 @@ async function generateReport(runId: string, hex: string | null): Promise<void> 
       console.log(`    Discovered: ${runRow["restaurantsDiscovered"]}`);
       console.log(`    Persisted:  ${runRow["restaurantsPersisted"]}`);
       console.log(`    Failed:     ${runRow["restaurantsFailed"]}`);
+      if (runRow['status']) console.log(`    Status:     ${runRow['status']}`);
     }
   }
 
