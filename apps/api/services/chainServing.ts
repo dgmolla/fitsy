@@ -1,6 +1,6 @@
 import { chainTransaction } from "./chainTransaction";
 import { Prisma, type PrismaClient, type MacroEstimate } from "@prisma/client";
-import { approvedChainRow, buildChainMatcher, chainMenuFingerprint, type ApprovedChainRow, type ChainMatch } from "./chainCatalog";
+import { approvedChainRow, buildChainMatcher, chainBindingFingerprint, type ApprovedChainRow, type ChainMatch } from "./chainCatalog";
 // Offline adapters need the pure ordering utility without the shared barrel's environment initialization.
 import { macroWinnerSqlOrder } from "../../../packages/shared/src/utils/macroProvenance";
 import { MenuSourceResolver } from "./menuSources/resolver";
@@ -33,7 +33,8 @@ export function verifiedBrand(restaurant: RestaurantBrandIdentity, brands: Chain
 export function officialMacro(row: ApprovedChainRow, item: StructuredMenuItem): MacroData & { reasoning: string } {
   return { calories: row.calories, proteinG: row.proteinG, carbsG: row.carbsG, fatG: row.fatG, confidence: "HIGH", source: "official", dietaryTags: [],
     reasoning: JSON.stringify({ kind: "reviewed-chain-v1", chainItemId: row.id, reviewHash: row.review.dataHash,
-      sourceHash: row.review.sourceHash, sourceUrl: row.officialUrl, servingSize: row.servingSize, menuFingerprint: chainMenuFingerprint(item) }) };
+      sourceHash: row.review.sourceHash, sourceUrl: row.officialUrl, servingSize: row.servingSize, menuFingerprint: chainBindingFingerprint(item),
+      ...(row.review.allulose ? { allulose: row.review.allulose } : {}) }) };
 }
 export async function loadChainServing(prisma: Pick<PrismaClient, "brand" | "chainItem">) {
   const brands = await prisma.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
@@ -66,9 +67,11 @@ export async function resolveChainMacros(items: StructuredMenuItem[], brandId: s
 }
 export interface AprilItem {
   id: string; restaurantId: string; name: string; section: string | null; description: string | null; updatedAt: Date;
+  sourceItemId?: string | null;
 }
 /** Deliberately excludes denormalized estimated calories: they are not UE source labels. */
 export const aprilMenuIdentity = (item: AprilItem): StructuredMenuItem => ({ name: item.name,
+  ...(item.sourceItemId ? { sourceItemId: item.sourceItemId } : {}),
   ...(item.section !== null ? { section: item.section } : {}), ...(item.description !== null ? { description: item.description } : {}) });
 /** Nutrition-only update. No menu upsert/deletion, tags, photos, prices, or saved-item mutations. */
 // Only pre-write validation failures use this type; callers may journal a safely stopped batch.
@@ -86,10 +89,10 @@ export async function applyAprilChainMatch(prisma: PrismaClient, expected: April
     const item = aprilMenuIdentity(expected), result = buildChainMatcher(catalog)(approved.brandId, item, restaurant);
     if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("April item has no current reviewed binding");
     // Lock and compare the row before adding an estimate. A concurrent edit fails closed.
-    const locked = await tx.$queryRaw<{ updatedAt: Date; name: string; section: string | null; description: string | null }[]>`
-      SELECT "updatedAt", name, section, description FROM "MenuItem" WHERE id = ${expected.id} AND "restaurantId" = ${expected.restaurantId} FOR UPDATE`;
+    const locked = await tx.$queryRaw<{ updatedAt: Date; name: string; sourceItemId: string | null; section: string | null; description: string | null }[]>`
+      SELECT "updatedAt", name, "sourceItemId", section, description FROM "MenuItem" WHERE id = ${expected.id} AND "restaurantId" = ${expected.restaurantId} FOR UPDATE`;
     const actual = locked[0];
-    if (!actual || actual.updatedAt.getTime() !== expected.updatedAt.getTime() || chainMenuFingerprint(aprilMenuIdentity({ ...expected, ...actual })) !== chainMenuFingerprint(item)) throw new AprilPlanChangedError("April item changed; rebuild the plan");
+    if (!actual || actual.updatedAt.getTime() !== expected.updatedAt.getTime() || chainBindingFingerprint(aprilMenuIdentity({ ...expected, ...actual })) !== chainBindingFingerprint(item)) throw new AprilPlanChangedError("April item changed; rebuild the plan");
     const macro = officialMacro(result.row, item);
     const estimate = { calories: macro.calories, proteinG: macro.proteinG, carbsG: macro.carbsG, fatG: macro.fatG,
       confidence: macro.confidence, source: macro.source, reasoning: macro.reasoning, hadPhoto: false, ingredientBreakdown: Prisma.DbNull };

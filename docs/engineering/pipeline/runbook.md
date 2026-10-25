@@ -8,6 +8,10 @@
 
 ## Source identity cutover and collision audit
 
+Issue #498 is currently proposals only.
+Use the [LA chain coverage and manual-source runbook](chain-rollout-proposals.md) for a production read-only census and offline before/after projections.
+The `audit:chain-coverage` command never applies catalog, menu or nutrition changes.
+
 For issue #501, stop old ingestion and backfill processes before the source identity migration, then resume only with compatible readers and writers.
 Follow the [identity and rollback contract](../backend/idempotent-preload-spec.md) for a bounded forced canary and saved-ID comparison.
 A schema migration preserves existing rows but cannot recover already discarded source products without a refresh.

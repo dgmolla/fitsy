@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { StructuredMenuItem } from "./menuSources/types";
 import { chainStoreScopeSchema, canonicalStoreScope, buildStoreScopeMatcher, storeScopesOverlap } from './chainStoreScope';
 import { chainUsState, usStatesSchema, type ChainLocation } from './chainGeography';
+import { nutritionEnergy } from './nutritionEnergy';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const text = z.string().trim().min(1);
@@ -12,9 +13,12 @@ const defaultServing = z.object({
   selections: z.array(text).min(1),
 }).strict().refine(d => d.calorieRange[0] < d.calorieRange[1], "Default range must increase");
 const alias = z.object({ name: text, section: z.string().optional(), description: z.string().optional(),
+  sourceItemId: text.regex(/^[a-z][a-z0-9-]*:\S+$/).optional(),
   defaultServing: defaultServing.optional() }).strict();
 export const chainReviewSchema = z.object({ version: z.literal(1), sourceHash: hash, locator: z.string().trim().min(1),
-  reviewedBy: z.string().trim().min(1), dataHash: hash, aliases: z.array(alias), usStates: usStatesSchema.optional(), storeScope: chainStoreScopeSchema.optional() }).strict();
+  reviewedBy: z.string().trim().min(1), dataHash: hash, aliases: z.array(alias),
+  allulose: z.object({ grams: z.number().finite().nonnegative(), locator: text }).strict().optional(),
+  usStates: usStatesSchema.optional(), storeScope: chainStoreScopeSchema.optional() }).strict();
 export type ChainReview = z.infer<typeof chainReviewSchema>;
 export interface ChainCatalogRow {
   id: string; brandId: string; canonicalKey: string; servingSize: string | null;
@@ -28,13 +32,18 @@ const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(va
 export function chainMenuFingerprint(item: ChainReview["aliases"][number]): string {
   return digest([item.name, item.section ?? "", item.description ?? ""].map(normalize));
 }
+/** Provider IDs are case-sensitive. Legacy context-only fingerprints stay byte-for-byte stable. */
+export function chainBindingFingerprint(item: ChainReview["aliases"][number]): string {
+  return item.sourceItemId ? digest([chainMenuFingerprint(item), item.sourceItemId.trim()]) : chainMenuFingerprint(item);
+}
 /** Binds the approval to the complete facts AND aliases, not merely a mutable row ID. */
 export function chainReviewHash(row: ChainCatalogRow, review: Omit<ChainReview, "dataHash">): string {
   return digest([row.brandId, row.canonicalKey, row.servingSize, row.calories, row.proteinG, row.carbsG, row.fatG,
     row.source, row.confidence, row.officialUrl, review.version, review.sourceHash, review.locator.trim(), review.reviewedBy.trim(),
     // Keep existing version-1 hashes stable; new option approvals bind every evidence field.
-    review.aliases.map(a => a.defaultServing ? digest([chainMenuFingerprint(a), a.defaultServing.calorieRange,
-      a.defaultServing.sourceUrl, a.defaultServing.sourceHash, a.defaultServing.locator.trim(), a.defaultServing.selections.map(s => s.trim())]) : chainMenuFingerprint(a)).sort(),
+    review.aliases.map(a => a.defaultServing ? digest([chainBindingFingerprint(a), a.defaultServing.calorieRange,
+      a.defaultServing.sourceUrl, a.defaultServing.sourceHash, a.defaultServing.locator.trim(), a.defaultServing.selections.map(s => s.trim())]) : chainBindingFingerprint(a)).sort(),
+    ...(review.allulose ? [['allulose', review.allulose.grams, review.allulose.locator.trim()]] : []),
     // Absent scope adds no bytes to existing approval hashes.
     ...(review.usStates ? [['usStates', [...review.usStates].sort()]] : []),
     ...(review.storeScope ? [['storeScope', canonicalStoreScope(review.storeScope)]] : [])]);
@@ -45,12 +54,12 @@ export function approvedChainRow(row: ChainCatalogRow): ApprovedChainRow | null 
   if (!z.string().url().startsWith("https://").safeParse(row.officialUrl).success) return null;
   const macros = [row.calories, row.proteinG, row.carbsG, row.fatG];
   if (macros.some(n => n === null || !Number.isFinite(n) || n < 0) || !Number.isInteger(row.calories)) return null;
-  const calories = row.calories!, energy = 4 * row.proteinG! + 4 * row.carbsG! + 9 * row.fatG!;
-  if (Math.abs(calories - energy) > Math.max(60, .2 * calories)) return null;
+  const calories = row.calories!, energy = nutritionEnergy(row.proteinG!, row.carbsG!, row.fatG!, parsed.data.allulose?.grams);
+  if (energy === null || Math.abs(calories - energy) > Math.max(60, .2 * calories)) return null;
   const aliases = parsed.data.aliases;
   const defaults = new Map<string, string>();
   for (const a of aliases) {
-    const key = chainMenuFingerprint(a), evidence = digest(a.defaultServing ?? null);
+    const key = chainBindingFingerprint(a), evidence = digest(a.defaultServing ?? null);
     // Historical reviews may repeat identical aliases; only contradictory approvals are unsafe.
     if (defaults.has(key) && defaults.get(key) !== evidence) return null;
     defaults.set(key, evidence);
@@ -60,28 +69,33 @@ export function approvedChainRow(row: ChainCatalogRow): ApprovedChainRow | null 
   return { ...row, calories, proteinG: row.proteinG!, carbsG: row.carbsG!, fatG: row.fatG!, review: parsed.data };
 }
 export type ChainMatch = { status: "matched"; row: ApprovedChainRow } | { status: "unmatched" | "ambiguous" };
+type IndexedChainRow = { row: ApprovedChainRow; aliases: ChainReview['aliases'] };
 function indexApprovedRows(rows: ChainCatalogRow[]) {
-  const index = new Map<string, Map<string, ApprovedChainRow>>();
+  const index = new Map<string, Map<string, IndexedChainRow>>();
   for (const input of rows) {
     const row = approvedChainRow(input);
     if (!row) continue;
     for (const inputAlias of row.review.aliases) {
       const key = row.brandId + ":" + chainMenuFingerprint(inputAlias);
-      const candidates = index.get(key) ?? new Map<string, ApprovedChainRow>();
-      candidates.set(row.id, row); index.set(key, candidates);
+      const candidates = index.get(key) ?? new Map<string, IndexedChainRow>();
+      const candidate: IndexedChainRow = candidates.get(row.id) ?? { row, aliases: [] };
+      candidate.aliases.push(inputAlias);
+      candidates.set(row.id, candidate); index.set(key, candidates);
     }
   }
   return index;
 }
 /** Catalog validation compares scopes directly, without inventing representative store coordinates. */
 export function assertUnambiguousChainAliases(rows: ChainCatalogRow[]): void {
-  for (const [key, candidates] of indexApprovedRows(rows)) {
-    const entries = [...candidates.values()];
+  for (const candidates of indexApprovedRows(rows).values()) {
+    const entries = [...candidates.values()].map(c => c.row);
     for (let i = 0; i < entries.length; i++) for (const other of entries.slice(i + 1)) {
       const a = entries[i]!.review.usStates, b = other.review.usStates;
       const x = entries[i]!.review.storeScope, y = other.review.storeScope;
-      if ((!a || !b || a.some(code => b.includes(code))) && (!x || !y || storeScopesOverlap(x, y))) {
-        const first = entries[i]!, name = first.review.aliases.find(alias => first.brandId + ':' + chainMenuFingerprint(alias) === key)!.name;
+      const bindingsOverlap = candidates.get(entries[i]!.id)!.aliases.some(first => candidates.get(other.id)!.aliases
+        .some(second => !first.sourceItemId || !second.sourceItemId || first.sourceItemId === second.sourceItemId));
+      if (bindingsOverlap && (!a || !b || a.some(code => b.includes(code))) && (!x || !y || storeScopesOverlap(x, y))) {
+        const first = entries[i]!, name = candidates.get(first.id)!.aliases[0]!.name;
         throw new Error(`Ambiguous reviewed alias: ${name}; brand ${first.brandId}; ${first.canonicalKey} overlaps ${other.canonicalKey}`);
       }
     }
@@ -92,7 +106,7 @@ export function buildChainMatcher(rows: ChainCatalogRow[]): (brandId: string | u
   const index = indexApprovedRows(rows);
   const scopes = new Map<string, ReturnType<typeof buildStoreScopeMatcher>>();
   const eligible = new Map<string, ReturnType<typeof buildStoreScopeMatcher>>();
-  for (const candidates of index.values()) for (const row of candidates.values()) {
+  for (const candidates of index.values()) for (const { row } of candidates.values()) {
     if (!row.review.storeScope || eligible.has(row.id)) continue;
     const key = digest(canonicalStoreScope(row.review.storeScope));
     if (!scopes.has(key)) scopes.set(key, buildStoreScopeMatcher(row.review.storeScope));
@@ -101,18 +115,20 @@ export function buildChainMatcher(rows: ChainCatalogRow[]): (brandId: string | u
   return (brandId, item, location) => {
     const indexed = index.get(brandId + ":" + chainMenuFingerprint(item));
     if (!indexed?.size) return { status: "unmatched" };
-    const candidates = [...indexed.values()].filter(row => (!row.review.usStates || row.review.usStates.includes(chainUsState(location) ?? ''))
+    const candidates = [...indexed.values()].map(candidate => ({ ...candidate,
+      aliases: candidate.aliases.filter(a => !a.sourceItemId || a.sourceItemId === item.sourceItemId?.trim()) }))
+      .filter(({ row, aliases }) => aliases.length && (!row.review.usStates || row.review.usStates.includes(chainUsState(location) ?? ''))
       && (!row.review.storeScope || eligible.get(row.id)!(location)));
     if (!candidates.length) return { status: "unmatched" };
     if (candidates.length !== 1) return { status: "ambiguous" };
-    const row = candidates[0]!;
+    const { row, aliases } = candidates[0]!;
     // Source calorie labels corroborate a serving; estimated DB columns must
     // not be passed as source labels by the April adapter.
     if (item.calorieRange) {
-      const approvedDefault = row.review.aliases.find(a => chainMenuFingerprint(a) === chainMenuFingerprint(item))?.defaultServing;
+      const approvedDefaults = aliases.map(a => a.defaultServing);
       // A range alone never establishes a default. Approve the exact observed range offline.
-      if (!approvedDefault || item.calories !== undefined || item.calorieRange.length !== 2
-        || !item.calorieRange.every((n, i) => n === approvedDefault.calorieRange[i])) return { status: "unmatched" };
+      if (item.calories !== undefined || item.calorieRange.length !== 2 || !approvedDefaults.length
+        || !approvedDefaults.every(d => d && item.calorieRange!.every((n, i) => n === d.calorieRange[i]))) return { status: "unmatched" };
     } else if ((item.calorieLabel && item.calories === undefined) || (item.calories !== undefined && (!Number.isFinite(item.calories)
       || item.calories < 0 || Math.abs(item.calories - row.calories) > Math.max(30, .05 * row.calories)))) return { status: "unmatched" };
     return { status: "matched", row };

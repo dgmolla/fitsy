@@ -48,6 +48,7 @@ export function planChainPilot(brands: Brand[], catalog: ChainItem[], input: Cha
     const row: ChainCatalogRow = { id: before?.id ?? `${id}:${definition.canonicalKey}`, brandId: id, canonicalKey: definition.canonicalKey,
       ...definition.facts, source: "official", confidence: "HIGH", officialUrl: definition.source.url, review: null };
     const evidence = { version: 1 as const, sourceHash: definition.source.sha256, locator: definition.locator, reviewedBy: pilot.reviewedBy, aliases: definition.aliases,
+      ...(definition.allulose ? { allulose: definition.allulose } : {}),
       ...(definition.usStates ? { usStates: definition.usStates } : {}),
       ...(definition.storeScope ? { storeScope: definition.storeScope } : {}) };
     const review = { ...evidence, dataHash: chainReviewHash(row, evidence) };

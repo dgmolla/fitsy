@@ -1,4 +1,4 @@
-import { approvedChainRow, buildChainMatcher, chainMenuFingerprint, chainReviewHash, type ChainCatalogRow, type ChainReview } from "./chainCatalog";
+import { approvedChainRow, assertUnambiguousChainAliases, buildChainMatcher, chainMenuFingerprint, chainReviewHash, type ChainCatalogRow, type ChainReview } from "./chainCatalog";
 const item = { name: "Chicken Plate", section: "Plates", description: "Grilled chicken with rice." };
 function fixture(overrides: Partial<ChainCatalogRow> = {}, aliases: ChainReview["aliases"] = [item]): ChainCatalogRow {
   const row: ChainCatalogRow = { id: "waba-plate", brandId: "waba", canonicalKey: "plates/chicken", servingSize: "1 plate", // gitleaks:allow — fixture dish identity, not a credential
@@ -7,6 +7,41 @@ function fixture(overrides: Partial<ChainCatalogRow> = {}, aliases: ChainReview[
   const review = { version: 1 as const, sourceHash: "a".repeat(64), locator: "PDF page 1, Plates, Chicken", reviewedBy: "fixture", aliases };
   return { ...row, review: { ...review, dataHash: chainReviewHash(row, review) } };
 }
+
+test('provider IDs distinguish same-context servings without granting an ID-only match', () => {
+  const individual = fixture({}, [{ ...item, sourceItemId: 'ubereats:individual' }]);
+  const family = fixture({ id: 'family', canonicalKey: 'family', calories: 1640, proteinG: 108, carbsG: 220, fatG: 30 },
+    [{ ...item, sourceItemId: 'ubereats:family' }]);
+  expect(() => assertUnambiguousChainAliases([individual, family])).not.toThrow();
+  const match = buildChainMatcher([individual, family]);
+  expect(match('waba', { ...item, sourceItemId: 'ubereats:individual' })).toMatchObject({ row: { calories: 820 } });
+  expect(match('waba', { ...item, sourceItemId: 'ubereats:family' })).toMatchObject({ row: { calories: 1640 } });
+  for (const alias of [item, { ...item, sourceItemId: 'ubereats:Family' }, { ...item, sourceItemId: 'fatsecret:family' },
+    { ...item, sourceItemId: 'ubereats:unknown' }, { name: 'Changed recipe', sourceItemId: 'ubereats:family' }]) {
+    expect(match('waba', alias)).toEqual({ status: 'unmatched' });
+  }
+  expect(() => assertUnambiguousChainAliases([individual, fixture({ id: 'generic' })])).toThrow('Ambiguous');
+  expect(buildChainMatcher([individual, fixture({ id: 'generic' })])('waba', { ...item, sourceItemId: 'ubereats:individual' }))
+    .toEqual({ status: 'ambiguous' });
+  const review = individual.review as ChainReview;
+  expect(approvedChainRow({ ...individual, review: { ...review, aliases: [{ ...item, sourceItemId: 'ubereats:family' }] } })).toBeNull();
+});
+
+test('only source-bound reviewed allulose changes the energy check, retaining total carbohydrate', () => {
+  const row = fixture({ calories: 12, proteinG: 0, carbsG: 30, fatG: 0 });
+  expect(approvedChainRow(row)).toBeNull();
+  const original = row.review as ChainReview;
+  const review = { ...original, allulose: { grams: 30, locator: 'Nutrition table, allulose grams per serving' } };
+  const approved = { ...row, review: { ...review, dataHash: chainReviewHash(row, review) } };
+  expect(approvedChainRow(approved)).toMatchObject({ calories: 12, carbsG: 30 });
+  for (const allulose of [{ grams: 29, locator: review.allulose.locator }, { grams: 30, locator: 'different label' }]) {
+    expect(approvedChainRow({ ...approved, review: { ...approved.review, allulose } })).toBeNull();
+  }
+  for (const grams of [-1, 31, NaN, Infinity]) {
+    const invalid = { ...review, allulose: { ...review.allulose, grams } };
+    expect(approvedChainRow({ ...row, review: { ...invalid, dataHash: chainReviewHash(row, invalid) } })).toBeNull();
+  }
+});
 test("same reviewed item at existing and new locations has the same chain identity and macros", () => {
   // Persisted version-1 review identities must survive future releases.
   expect(chainMenuFingerprint(item)).toBe("80ff24f82e8dc69eb88c5e394d780dfb5dc1f6ff574612ba7f0f3b148da9d8f2");

@@ -7,7 +7,7 @@ const text = z.string().trim().min(1);
 export const chainProductInputSchema = z.object({
   version: z.literal(1), reviewedBy: text,
   products: z.array(z.object({ key: text, market: z.literal("US"), name: text,
-    facts: change.shape.facts, source: change.shape.source, locator: text }).strict()),
+    facts: change.shape.facts, source: change.shape.source, locator: text, allulose: change.shape.allulose }).strict()),
   bindings: z.array(z.object({ productKey: text, slug: text, canonicalKey: text,
     expected: change.shape.expected, aliases: change.shape.aliases.min(1) }).strict()),
   changes: chainCatalogBatchSchema.shape.changes,
@@ -19,7 +19,7 @@ export function compileChainProductBatch(input: unknown): ChainCatalogBatch {
   const additions = parsed.bindings.map(({ productKey, ...binding }) => {
     const product = products.get(productKey);
     if (!product) throw new Error(`Unknown manufacturer product: ${productKey}`);
-    return { ...binding, facts: product.facts, source: product.source,
+    return { ...binding, facts: product.facts, source: product.source, ...(product.allulose ? { allulose: product.allulose } : {}),
       locator: `${product.market} product ${product.key} (${product.name}); ${product.locator}` };
   });
   return chainCatalogBatchSchema.parse({ version: parsed.version, reviewedBy: parsed.reviewedBy,
