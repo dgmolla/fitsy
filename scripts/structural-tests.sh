@@ -36,12 +36,18 @@ echo -n "2. No hardcoded private IP ranges... "
 # a valid dev fallback (EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').
 HARDCODED=$(grep -rn --include="*.ts" --include="*.tsx" \
   --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next \
-  -E '(192\.168\.[0-9]+\.[0-9]+|10\.[0-9]+\.[0-9]+\.[0-9]+|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+\.[0-9]+|127\.0\.0\.1)' \
+  -E '(192\.168\.[0-9]+\.[0-9]+|10\.[0-9]+\.[0-9]+\.[0-9]+|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+\.[0-9]+)' \
   "${SOURCE_DIRS[@]}" 2>/dev/null || true)
-if [ -n "$HARDCODED" ]; then
+# Loopback matcher fixtures are not infrastructure targets. Require an explicit
+# explanation in a test; private-network addresses above never get this exception.
+LOOPBACK=$(grep -rn --include="*.ts" --include="*.tsx" \
+  --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next \
+  -F '127.0.0.1' "${SOURCE_DIRS[@]}" 2>/dev/null \
+  | grep -v -E '\.test\.tsx?:[0-9]+:.*// loopback test fixture[[:space:]]*$' || true)
+if [ -n "$HARDCODED" ] || [ -n "$LOOPBACK" ]; then
   echo "FAIL"
   echo "  Hardcoded private IPs found. Use environment variables instead."
-  echo "$HARDCODED" | sed 's/^/  /'
+  printf '%s\n' "$HARDCODED" "$LOOPBACK" | sed '/^$/d; s/^/  /'
   ERRORS=$((ERRORS + 1))
 else
   echo "PASS"

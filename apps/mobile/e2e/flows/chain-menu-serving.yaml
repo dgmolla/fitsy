@@ -21,12 +21,26 @@ tags:
 - launchApp:
     clearState: true
     clearKeychain: true
-- extendedWaitUntil:
-    visible: "Find meals that fit"
-    timeout: 15000
+# clearState also clears a dev client's selected server. Open owned local
+# Metro when its launcher is present; embedded builds skip this branch.
+# Retry startup only, never the menu or authentication assertions.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
 - openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
 - tapOn:
-    text: Open
+    text: "^Open$"
     optional: true
 - extendedWaitUntil:
     visible: "Seed Bowl Co #01"
@@ -49,4 +63,19 @@ tags:
 - assertVisible: "3 dishes match"
 - tapOn:
     id: ${"menu-item-" + output.chicken.id}
-- assertVisible: "Create an account"
+# A locked meal keeps its restaurant selection through the sign-in gate.
+- extendedWaitUntil:
+    visible:
+      id: signup-selected-restaurant-name
+    timeout: 15000
+- assertVisible:
+    id: signup-selected-restaurant-name
+    text: "Seed Bowl Co #01"
+- assertVisible:
+    id: signup-apple
+- assertVisible:
+    id: signup-google
+- assertNotVisible:
+    id: paywall-plan-yearly
+- assertNotVisible:
+    id: paywall-price-yearly
