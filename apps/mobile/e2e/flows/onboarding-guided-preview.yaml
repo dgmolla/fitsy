@@ -1,6 +1,6 @@
 # Real dev coverage and live offering terms. No purchase on the shared dev account.
 appId: com.fitsy.mobile
-tags: [billing, discovery, onboarding, auth, notifications, changed-journey]
+tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fixture:unsubscribed-dev', 'store:test-store']
 ---
 - launchApp:
     clearState: true

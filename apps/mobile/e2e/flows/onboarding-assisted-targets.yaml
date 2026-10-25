@@ -226,3 +226,33 @@ tags: [onboarding, discovery, changed-journey]
       id: discovery-hero
     timeout: 30000
 - assertVisible: "700"
+# Exercise the standalone daily target editor using the goal/profile prepared above.
+- openLink: com.fitsy.mobile://macro-setup?fromOnboarding=1
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: macro-setup-save
+    timeout: 15000
+- assertVisible: "Daily total"
+- assertVisible: "Protein"
+- assertVisible: "Carbs"
+- assertVisible: "Fat"
+- assertVisible:
+    id: macro-setup-skip
+- takeScreenshot: macro-setup-daily-targets
+- tapOn:
+    id: macro-setup-save
+- assertVisible: "A little context.*A better choice.*"
+- openLink: com.fitsy.mobile://macro-setup?fromOnboarding=1
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: macro-setup-skip
+    timeout: 15000
+- tapOn:
+    id: macro-setup-skip
+- assertVisible: "A little context.*A better choice.*"

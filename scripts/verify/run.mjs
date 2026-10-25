@@ -16,11 +16,11 @@
  * last stdout line is JSON {name, status, summary, fix}.
  */
 import { execFile } from "node:child_process";
-import { readFileSync, existsSync, realpathSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { impactPlan, focusedDatabaseRequired } from "./impact-plan.mjs";
+import { impactPlan, focusedDatabaseRequired, isMain } from "./impact-plan.mjs";
 
 export async function verify(argv, prepareDatabase) {
   // Clear shell startup selectors before checks launch nested npm or Bash shells.
@@ -270,8 +270,7 @@ export async function verify(argv, prepareDatabase) {
   return status;
 }
 
-if (process.argv[1] && existsSync(process.argv[1]) &&
-    realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
+if (isMain(import.meta.url)) {
   verify(process.argv.slice(2)).then(status => { process.exitCode = status; })
     .catch(error => { console.error(error); process.exitCode = 1; });
 }
