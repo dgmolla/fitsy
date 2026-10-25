@@ -26,6 +26,7 @@
     "dev:snapshot": "tsx scripts/dev/snapshot.ts",
     "audit:menu-identity": "node --import tsx scripts/menu-source-collisions.ts",
     "audit:chain-coverage": "node --import tsx scripts/chain-coverage-audit.ts",
+    "eval:chain-match": "node --import tsx scripts/eval/run-eval.ts --decision=chain-match",
     "verify": "node scripts/verify/run.mjs --layer=0-2 --scope=changed",
     "verify:all": "node scripts/verify/run.mjs --layer=all --scope=all",
     "verify:dev-drift": "bash scripts/verify/dev-drift.sh",
