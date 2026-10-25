@@ -112,6 +112,8 @@ A fresh checkout needs installed dependencies but no issue binding, review daemo
 Keep dependencies local to this checkout so workspace links resolve its own packages.
 Type checking calls each workspace's `npm run type-check`, including Prisma generation from the repository schema before compiling the API.
 This refreshes stale generated types after schema updates without requiring a database connection or migration.
+The scripts TypeScript project maps `@fitsy/shared` imports to this checkout's source even when a workspace package link is unavailable.
+The scripts Jest configuration maps the same shared package and subpaths to local source so tests use the current checkout too.
 To refresh the client separately after merging schema changes, run `npx prisma generate --schema=prisma/schema.prisma`.
 GitHub requires `Verify` and `AI review` on the current PR head and owns heavy validation.
 Every selected check executes on each invocation and reports its actual exit status.

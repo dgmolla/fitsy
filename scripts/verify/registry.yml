@@ -40,7 +40,7 @@ checks:
     layer: 1
     blocking: true
     runs: [local, ci]
-    why: Workspace type-check scripts (api, mobile, shared, scripts); API regenerates Prisma from the current schema before tsc.
+    why: Workspace type-check scripts (api, mobile, shared, scripts); API regenerates Prisma from the current schema and scripts resolves shared imports to checkout-owned source.
 
   - name: product-flow
     stage: acceptance
