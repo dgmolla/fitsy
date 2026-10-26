@@ -1,7 +1,8 @@
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildSuite, writeSuite } from './build';
+import * as fs from 'node:fs';
+import { buildSuite, servingGroups, writeSuite } from './build';
 import { durableAppend, loadCases, sha256, stratifiedSample, verifyChecksums } from './fixtures';
 import { exactMatcher, estimatorState, jevMethod, matchingRequest, method } from './adapters';
 import { JevClient, RESERVATION_USD, STOP_USD, spendState } from './budget';
@@ -66,6 +67,24 @@ test('tampered holdout/reference checksum fails without scoring any held-out cas
   expect(verifyChecksums(dir)).toEqual(verifyChecksums());
   writeFileSync(join(dir, 'data/curated.holdout.jsonl'), '{}\n');
   expect(() => loadCases('dev', 'both', dir)).toThrow('checksum mismatch');
+});
+
+test('equivalent named component servings share a split across combo headings and side contexts', () => {
+  const built = buildSuite(), rows = JSON.parse(built.outputs.get('data/rows.json')!) as Row[], groups = servingGroups(rows);
+  const splitByRow = new Map(built.cases.filter(c => c.tier === 'bulk' && c.task === 'macro')
+    .map(c => [c.id.slice('bulk:macro:'.length), c.split]));
+  const identity = new Map<string, string>();
+  for (const row of rows) {
+    const group = groups.get(row.id)!;
+    expect(splitByRow.get(row.id)).toBe(splitByRow.get(group));
+    const mass = /^(\d+(?:\.\d+)?) g\b/.exec(row.serving)?.[1];
+    if (!mass) continue;
+    const key = JSON.stringify([row.chain, row.name, mass, row.macros]);
+    expect(identity.get(key) ?? group).toBe(group); identity.set(key, group);
+  }
+  const modifiedComponent = built.cases.find(c => c.id === 'curated:match:094')!;
+  expect(modifiedComponent.input.name).toContain('add avocado');
+  expect(modifiedComponent.input.name).not.toContain('no rice');
 });
 
 test('exact matcher keeps brand, portion, modifier and regional distinctions; ambiguity abstains', async () => {
@@ -138,6 +157,47 @@ test('exclusive ledger, cross-run cumulative cap and interrupted reservations re
   expect(existsSync(join(directory, '.jev.lock'))).toBe(false);
 });
 
+test.each(['response-append', 'settle-append', 'response-fsync', 'settle-fsync'])('journal %s failure latches collector stop and retains known billed usage', async fault => {
+  const { client: c, fetcher } = client();
+  const append = fs.appendFileSync, sync = fs.fsyncSync;
+  let failSync = false, injected = false;
+  jest.spyOn(fs, 'appendFileSync').mockImplementation((...args: Parameters<typeof fs.appendFileSync>) => {
+    const selected = typeof args[1] === 'string' && args[1].includes(`"event":"${fault.startsWith('response') ? 'response' : 'settle'}"`);
+    if (selected && !injected) {
+      injected = true;
+      if (fault.endsWith('append')) throw new Error('Simulated external I/O failure');
+      failSync = true;
+    }
+    append(...args);
+  });
+  jest.spyOn(fs, 'fsyncSync').mockImplementation(fd => {
+    if (failSync) { failSync = false; throw new Error('Simulated external fsync failure'); }
+    sync(fd);
+  });
+  try {
+    await expect(c.send(request)).rejects.toThrow('Journal write failed');
+    await expect(c.send(request)).rejects.toThrow('stopped');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(c.knownUsd).toBe(100 * .042 / 1e6);
+    expect(c.unknown).toBe(true);
+    expect(injected).toBe(true);
+  } finally { c.close(); }
+});
+
+test('a failed second estimator request preserves the known first-stage subtotal', async () => {
+  const fetcher = mockTransport(r => response(r, { calories: 'b1' }));
+  fetcher.mockImplementationOnce(async (_url, init) => new Response(JSON.stringify(response(JSON.parse(String(init?.body)), { calories: 'b1' }))));
+  fetcher.mockRejectedValueOnce(new Error('Simulated timeout'));
+  const { client: c } = client(fetcher);
+  try {
+    const measured = await evaluateCase(macroCase, jevMethod(c), [row], c);
+    expect(measured.costUsd).toBeNull();
+    expect(measured.knownCostUsd).toBe(100 * .042 / 1e6);
+    expect(score([macroCase], [measured]).knownCostUsd).toBe(measured.knownCostUsd);
+    expect(c.stopped).toBeTruthy();
+  } finally { c.close(); }
+});
+
 test('budget-driven bulk sampling is deterministic, stratified, bounded and shared by compared methods', () => {
   const cases = loadCases('dev', 'both').cases;
   const available = cases.filter(c => c.tier === 'curated').reduce((sum,c) => sum + (c.task === 'macro' ? 2 : 1), 0) + 200;
@@ -192,4 +252,18 @@ test('actual runner is offline by default and logs toy holdout success and check
   expect(readFileSync(file,'utf8').trim().split('\n')).toHaveLength(4);
   expect(fakeFetch).not.toHaveBeenCalled(); expect(logging).toHaveBeenCalled();
   // Only synthetic Toy Chain cases execute here; the locked repository holdout is never evaluated.
+});
+
+test('missing live credentials yield an actionable secret-safe receipt before any transport', async () => {
+  const prior = process.env['TYPESAFE_API_KEY'];
+  delete process.env['TYPESAFE_API_KEY'];
+  const fetcher = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden'));
+  const dir = toyFixture('dev');
+  try {
+    await expect(run(['--methods=jev-v3','--split=dev','--tier=curated','--live'],dir)).rejects.toThrow('TYPESAFE_API_KEY is missing');
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(existsSync(join(dir,'results/spend.jsonl'))).toBe(false);
+  } finally {
+    if (prior === undefined) delete process.env['TYPESAFE_API_KEY']; else process.env['TYPESAFE_API_KEY'] = prior;
+  }
 });

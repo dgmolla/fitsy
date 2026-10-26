@@ -59,14 +59,18 @@ export class JevClient {
   }
   get remainingUsd() { return Math.max(0, STOP_USD - this.knownUsd); }
   private stop(message: string): never { this.stopped = message; throw new Error(message); }
+  private record(file: string, value: unknown) {
+    try { durableAppend(file, value); }
+    catch { this.unknown = true; this.stop('Journal write failed; stop and reconcile the reserved request before further collection'); }
+  }
   async send(request: JevRequest): Promise<{ raw: unknown; costUsd: number; latencyMs: number }> {
     if (this.closed || this.stopped) throw new Error('Jev client stopped');
     if (Buffer.byteLength(JSON.stringify(request)) > JEV_LIMITS.maxRequestBytes) return this.stop('Request exceeds reserved 12KB envelope');
     if (this.knownUsd + RESERVATION_USD > STOP_USD) return this.stop('Cumulative Jev stop threshold reached');
     const requestId = randomUUID();
     const receipt = { requestId, runId: this.runId, at: new Date().toISOString() };
-    durableAppend(this.ledger, { ...receipt, event: 'reserve', reserveUsd: RESERVATION_USD });
-    durableAppend(this.rawFile, { ...receipt, event: 'request', context: this.context, request });
+    this.record(this.ledger, { ...receipt, event: 'reserve', reserveUsd: RESERVATION_USD });
+    this.record(this.rawFile, { ...receipt, event: 'request', context: this.context, request });
     const start = performance.now();
     this.requests++;
     let status = 0, body = '', failure: string | null = null, costUsd: number | null = null, raw: unknown;
@@ -89,10 +93,10 @@ export class JevClient {
       try { parseChoiceAnswers(request, raw); } catch { failure ??= 'Invalid typed answer/probability distribution'; }
     } catch { failure = 'Transport failure; unknown usage'; }
     const latencyMs = performance.now() - start;
-    durableAppend(this.rawFile, { ...receipt, event: 'response', context: this.context, status, body, failure, latencyMs, costUsd });
-    durableAppend(this.ledger, { ...receipt, event: 'settle', costUsd, failure });
     this.knownUsd += costUsd ?? 0;
     this.unknown ||= costUsd === null;
+    this.record(this.rawFile, { ...receipt, event: 'response', context: this.context, status, body, failure, latencyMs, costUsd });
+    this.record(this.ledger, { ...receipt, event: 'settle', costUsd, failure });
     if (this.knownUsd >= STOP_USD) failure ??= 'Cumulative Jev stop threshold reached';
     if (failure) return this.stop(failure);
     return { raw, costUsd: costUsd!, latencyMs };

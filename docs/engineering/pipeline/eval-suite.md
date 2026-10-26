@@ -1,4 +1,4 @@
-**TL;DR:** Suite v1 freezes 320 curated and 3,652 bulk cases from 227 official servings, with dev-only baselines.
+**TL;DR:** Suite v1 freezes 320 curated and 3,642 bulk cases from 227 official servings, with dev-only baselines.
 
 # Restaurant matching and macro evaluation suite
 
@@ -103,7 +103,7 @@ Unresolved or multiply bound observations are excluded.
 Equal macro-vector same-chain rows are not used as negative pairs because they may represent equivalent published components under different headings.
 Cross-chain identical or near-identical names and same-chain size/recipe variants are explicit negative categories.
 Published-row and synthetic inputs are clearly tagged and must not be reported as captured UE traffic.
-The bulk tier has 3,425 matching cases and 227 macro cases, including two additional cross-chain identical-published-name negatives.
+The bulk tier has 3,415 matching cases and 227 macro cases, including two additional cross-chain identical-published-name negatives.
 
 Repeated candidate pairs share inputs and source servings, so thousands of cases do not constitute thousands of independent dishes.
 Use per-category and per-chain results and retain case counts and sampling identity when comparing methods.
@@ -113,12 +113,13 @@ An overall matching pass rate is sensitive to the many negative pairs; recall an
 
 | Tier / task | Dev | Locked holdout | Holdout share |
 | --- | ---: | ---: | ---: |
-| Curated matching | 103 | 57 | 35.6% |
-| Curated macro | 103 | 57 | 35.6% |
-| Bulk matching | 2,360 | 1,065 | 31.1% |
-| Bulk macro | 144 | 83 | 36.6% |
+| Curated matching | 102 | 58 | 36.3% |
+| Curated macro | 102 | 58 | 36.3% |
+| Bulk matching | 2,363 | 1,052 | 30.8% |
+| Bulk macro | 145 | 82 | 36.1% |
 
 Split assignment groups all cases of a canonical serving across both tiers and all captured aliases.
+Seven explicit reviewed equivalence groups in `sources/serving-groups.json` also bind identical named, sized components across combo and side headings, without equating unrelated dishes by macro values alone.
 It stratifies by chain, primary published-serving category, and whether an independently reviewed captured binding exists.
 The fixed `suite-v1` hash seed selects 35% in captured strata and 21% in published-only strata, with the entire 36-row Claim Jumper chain assigned to holdout.
 Those weights balance repeated UE pairs and macro rows; they were chosen from case counts before any provider result.
@@ -135,6 +136,7 @@ Keep that log additive and retain interrupted starts as evidence.
 Never add case-specific rules, prompt demonstrations, or examples derived from holdout.
 Expected-output changes, exclusions that change the frozen test population, or checksum updates need human review in a versioned PR.
 The generator's `--initialize` refuses any existing frozen outputs; normal `--check` is read-only.
+Before the first release, independent review corrected equivalent-serving membership and one explicit modifier scenario; canonical reference IDs and every numerical macro expectation remained unchanged, and original candidate history is retained in Git.
 Add fresh official cases periodically, especially independent chains and real observed failures, and version the split rather than silently refreshing the old holdout.
 This repository-visible holdout is protected by process and checksums, not a claim of cryptographic secrecy from developers.
 

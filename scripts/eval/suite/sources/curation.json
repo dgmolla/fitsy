@@ -886,7 +886,8 @@
       "row": "waba-grill:mini-bowls/organic-tofu-veggies",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Explicit no-rice changes the standard published recipe; no matching modified row is supplied."
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
     },
     {
       "row": "waba-grill:sauce-dressing/waba-hot-sauce-packet",
@@ -1066,7 +1067,8 @@
       "row": "waba-grill:mini-bowls/wm-chicken-veggies",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Explicit no-rice changes the standard published recipe; no matching modified row is supplied."
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
     },
     {
       "row": "waba-grill:family-a-la-carte/sweet-spicy-chicken",
@@ -1126,7 +1128,8 @@
       "row": "waba-grill:chicken-plate",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Adding avocado changes the published recipe; no derived nutrition is accepted."
+      "why": "Adding avocado changes this published recipe/component; no modified row or derived nutrition is supplied.",
+      "modifier": "add avocado"
     },
     {
       "row": "waba-grill:sides/loaded-miso-soup-w-wm-chicken",
@@ -1186,7 +1189,8 @@
       "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Explicit no-rice changes the standard published recipe; no matching modified row is supplied."
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
     },
     {
       "row": "yoshinoya:combo-xl-bowls-select-one-base/japanese-udon-noodles",
@@ -1366,7 +1370,8 @@
       "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-teriyaki-chicken",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Explicit no-rice changes the standard published recipe; no matching modified row is supplied."
+      "why": "Adding avocado changes this published recipe/component; no modified row or derived nutrition is supplied.",
+      "modifier": "add avocado"
     },
     {
       "row": "yoshinoya:desserts/junior-s-original-cheesecake",
@@ -1426,7 +1431,8 @@
       "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-ribeye-steak",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Explicit no-rice changes the standard published recipe; no matching modified row is supplied."
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
     },
     {
       "row": "yoshinoya:sides/teriyaki-chicken",
@@ -1486,7 +1492,8 @@
       "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carne-asada-white-rice-white-beans",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Explicit no-rice changes the standard published recipe; no matching modified row is supplied."
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
     },
     {
       "row": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-black-beans",
@@ -1546,7 +1553,8 @@
       "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-black-beans",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Explicit no-rice changes the standard published recipe; no matching modified row is supplied."
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
     },
     {
       "row": "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-white-beans",
@@ -1606,7 +1614,8 @@
       "row": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-white-beans",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Explicit no-rice changes the standard published recipe; no matching modified row is supplied."
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
     },
     {
       "row": "claim-jumper:appetizers/bonanza-platter",
@@ -1666,7 +1675,8 @@
       "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-black-olives",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Adding avocado changes the published recipe; no derived nutrition is accepted."
+      "why": "Adding avocado changes this published recipe/component; no modified row or derived nutrition is supplied.",
+      "modifier": "add avocado"
     },
     {
       "row": "claim-jumper:appetizers/pub-pretzels-share-size-with-cheese-sauce",
@@ -1726,7 +1736,8 @@
       "row": "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings",
       "category": "modifier",
       "challenge": "modifier",
-      "why": "Adding avocado changes the published recipe; no derived nutrition is accepted."
+      "why": "Adding avocado changes this published recipe/component; no modified row or derived nutrition is supplied.",
+      "modifier": "add avocado"
     },
     {
       "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-marinara-sauce",

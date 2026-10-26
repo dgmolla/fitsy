@@ -10,6 +10,8 @@ import { durableAppend, loadCases, root, sha256, stratifiedSample, suite } from 
 import { score, table, type Metrics } from './metrics';
 import { candidate, macrosSchema, type Case, type Method, type Result, type Tier } from './types';
 
+export class PreflightError extends Error {}
+
 export function options(argv: string[]) {
   const flags = new Map<string, string>();
   for (const arg of argv) {
@@ -68,6 +70,7 @@ export async function run(argv: string[], directory = suite) {
   try {
     const fixture = loadCases(config.split, config.tier, directory);
     if (config.live) {
+      if (!process.env['TYPESAFE_API_KEY']?.trim()) throw new PreflightError('TYPESAFE_API_KEY is missing from the invoking environment; no Jev requests were sent.');
       // Freeze all executing source and data before spending. Result artifacts may be untracked.
       execFileSync('git', ['diff', '--exit-code', 'HEAD', '--', 'scripts/eval/suite', ':(exclude)scripts/eval/suite/results',
         'scripts/eval/lib/jev-experiment.ts', 'scripts/eval/jev-macro'],
@@ -121,11 +124,14 @@ export async function run(argv: string[], directory = suite) {
     process.stdout.write(markdown + '\n');
     process.stdout.write(`Results: ${out}\n`);
     return report;
-  } catch {
+  } catch (error) {
+    const failure = error instanceof PreflightError ? error.message
+      : 'Evaluation failed; inspect fixtures, explicit live credentials, budget ledger and source cleanliness. No automatic retry.';
+    writeFileSync(join(out, 'failure.json'), JSON.stringify({ runId, head, config, failure, at: new Date().toISOString() }, null, 2) + '\n', { flag: 'wx' });
     if (config.split === 'holdout') durableAppend(holdoutLog, { event: 'end', at: new Date().toISOString(), runId, head, status: 'failed-preflight-or-execution' });
-    throw new Error('Evaluation failed; inspect fixtures, explicit live credentials, budget ledger and source cleanliness. No automatic retry.');
+    throw new PreflightError(failure);
   } finally { client?.close(); }
 }
 if (require.main === module) run(process.argv.slice(2)).then(report => {
   if (report.stopReason) process.exitCode = 1;
-}).catch(() => { console.error('Evaluation failed; no retry. Check the documented preflight and durable logs.'); process.exitCode = 1; });
+}).catch(error => { console.error(error instanceof PreflightError ? error.message : 'Invalid evaluation options; no execution started.'); process.exitCode = 1; });
