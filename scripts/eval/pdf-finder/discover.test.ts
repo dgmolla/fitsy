@@ -28,7 +28,7 @@ test('domain boundaries and explicit official links control source preference', 
   expect(scoreCandidate(current, 'chain.example.org', 'Chain').score).toBeGreaterThan(official.score);
 });
 
-test.each(['file:///etc/passwd', 'https://user:password@example.org/', 'http://127.0.0.1/', 'http://[::1]/',
+test.each(['file:///etc/passwd', 'https://user:password@example.org/', 'http://127.0.0.1/', 'http://[::1]/', // loopback test fixture
   'http://localhost/', 'http://service.local/', 'https://example.org:8443/'])('rejects unsupported website URL %s', url => {
   expect(() => publicUrl(url)).toThrow('public HTTP(S)');
 });
