@@ -108,13 +108,22 @@ describe('CoachMarks', () => {
     expect(queryByText('Step A')).toBeNull();
   });
 
+  it('exposes the highlight beside its tooltip within the modal accessibility boundary', () => {
+    const screen = renderTour(<CoachMarks visible steps={steps} onDone={jest.fn()} />);
+    act(() => { jest.advanceTimersByTime(100); });
+    expect(screen.getByTestId('coachmark-overlay').props.accessibilityViewIsModal).toBe(true);
+    expect(screen.getByText('Step A')).toBeTruthy();
+    expect(screen.getByLabelText('Next tip')).toBeTruthy();
+    expect(screen.getByTestId('coachmark-ring')).toBeTruthy();
+  });
+
   it('places a measured target in the overlay coordinate space', () => {
     expect(relativeToOverlay({ x: 16, y: 243, width: 361, height: 44 }, { x: 0, y: -30, width: 393, height: 852 }))
       .toEqual({ x: 16, y: 273, width: 361, height: 44 });
     const screen = renderTour(<CoachMarks visible steps={steps} onDone={jest.fn()} />, -30);
     act(() => jest.advanceTimersByTime(100));
-    const ring = screen.UNSAFE_getAllByType(View).find(node => node.props.testID === 'coachmark-ring');
-    expect(StyleSheet.flatten(ring?.props.style)).toMatchObject({ top: 124 });
+    const ring = screen.getByTestId('coachmark-ring');
+    expect(StyleSheet.flatten(ring.props.style)).toMatchObject({ top: 124 });
   });
 
   it('remeasures a target moved by results without restarting its lesson', async () => {
@@ -125,7 +134,7 @@ describe('CoachMarks', () => {
       onStepShown, onBeforeStep, layoutVersion: 0 };
     const screen = renderTour(<CoachMarks visible {...props} />, -30);
     await act(async () => { jest.advanceTimersByTime(100); });
-    const ringBounds = () => StyleSheet.flatten(screen.getByTestId('coachmark-ring', { includeHiddenElements: true }).props.style);
+    const ringBounds = () => StyleSheet.flatten(screen.getByTestId('coachmark-ring').props.style);
     expect(ringBounds().top).toBe(124);
     expect(ringBounds().left + ringBounds().width / 2).toBe(35);
     expect(ringBounds().top + ringBounds().height / 2).toBe(140);
@@ -159,7 +168,7 @@ describe('CoachMarks', () => {
     root.measureInWindow = cb => cb(...overlay);
     fireEvent(screen.getByTestId('coachmark-overlay'), 'layout', { nativeEvent: { layout: { width, height } } });
     await act(async () => { jest.advanceTimersByTime(100); });
-    const ringBounds = () => StyleSheet.flatten(screen.getByTestId('coachmark-ring', { includeHiddenElements: true }).props.style);
+    const ringBounds = () => StyleSheet.flatten(screen.getByTestId('coachmark-ring').props.style);
     const assertGeometry = () => {
       expect(ringBounds()).toMatchObject({ left: bounds[0] - overlay[0] - 6, top: bounds[1] - overlay[1] - 6,
         width: bounds[2] + 12, height: bounds[3] + 12 });
@@ -199,7 +208,7 @@ describe('CoachMarks', () => {
     act(() => { jest.advanceTimersByTime(100); });
     act(() => { callbacks[0](10, 900, 50, 20); });
     expect(screen.getByText('Step C')).toBeTruthy();
-    const ring = screen.getByTestId('coachmark-ring', { includeHiddenElements: true });
+    const ring = screen.getByTestId('coachmark-ring');
     expect(StyleSheet.flatten(ring.props.style)).toMatchObject({ top: 294, height: 212 });
   });
 
@@ -209,12 +218,12 @@ describe('CoachMarks', () => {
     const props = { steps: [{ ...steps[0], target }], onDone: jest.fn(), onStepShown };
     const screen = renderTour(<CoachMarks visible {...props} />);
     act(() => { jest.advanceTimersByTime(100); });
-    expect(screen.queryByTestId('coachmark-ring', { includeHiddenElements: true })).toBeNull();
+    expect(screen.queryByTestId('coachmark-ring')).toBeNull();
     expect(screen.getByText('Step A')).toBeTruthy();
     target.current = fakeTarget([16, 240, 343, 46]).current;
     screen.rerender(<CoachMarks visible {...props} layoutVersion={1} />);
     act(() => { jest.advanceTimersByTime(32); });
-    const ring = screen.getByTestId('coachmark-ring', { includeHiddenElements: true });
+    const ring = screen.getByTestId('coachmark-ring');
     expect(StyleSheet.flatten(ring.props.style)).toMatchObject({ left: 10, top: 234, width: 355, height: 58 });
     expect(onStepShown).toHaveBeenCalledTimes(1);
   });

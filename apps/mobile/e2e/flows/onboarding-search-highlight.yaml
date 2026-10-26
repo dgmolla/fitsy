@@ -1,4 +1,4 @@
-# Issue #433: actual onboarding with Search as the first preview tip.
+# Issues #433 and #524: actual onboarding with Search as the first preview tip.
 # Run on an owned small and normal iPhone against the real dev backend.
 appId: com.fitsy.mobile
 tags: [discovery, onboarding, changed-journey]
@@ -9,10 +9,16 @@ tags: [discovery, onboarding, changed-journey]
     permissions:
       notifications: deny
 # XCTest can reject the first AX snapshot after reinstall (HTTP 500).
+# A cleared Debug client can also return to the Development Build launcher.
 # Retry only the initial observation, before any product interaction.
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
       - waitForAnimationToEnd:
           timeout: 10000
       - extendedWaitUntil:
@@ -171,6 +177,10 @@ tags: [discovery, onboarding, changed-journey]
       enabled: true
     timeout: 30000
 - assertVisible: "1 OF 5"
+- assertVisible:
+    id: coachmark-ring
+    height: 58
+    tolerance: 1
 - takeScreenshot: search-highlight-back-results
 - tapOn:
     id: coachmark-next
@@ -188,6 +198,8 @@ tags: [discovery, onboarding, changed-journey]
     id: coachmark-next
 - assertNotVisible:
     id: coachmark-next
+- assertNotVisible:
+    id: coachmark-ring
 - copyTextFrom:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
@@ -200,10 +212,16 @@ tags: [discovery, onboarding, changed-journey]
     id: preview-show-tour
 - assertVisible: "1 OF 5"
 - assertVisible: "Follow your craving"
+- assertVisible:
+    id: coachmark-ring
+    height: 58
+    tolerance: 1
 - tapOn:
     id: coachmark-skip
 - assertNotVisible:
     id: coachmark-next
+- assertNotVisible:
+    id: coachmark-ring
 - assertVisible:
     id: discovery-search
 - assertVisible:

@@ -133,7 +133,13 @@ When an actual eligible mixed catalog is available, separately verify both defau
 
 `onboarding-search-highlight` follows real onboarding with meal prep selected so Search is the first preview tip.
 It captures entry, settled pizza results and Back to Search, then verifies all five tips, completion, replay and Skip.
+It asserts the 58-point highlight at entry, after results, on Back and on replay, and checks dismissal after completion and Skip.
+The coachmark overlay owns the modal accessibility boundary; marking its tooltip modal also hides the sibling ring from iOS accessibility and Maestro.
+`components/CoachMarks.test.tsx` queries the ring without hidden-element overrides through measurement and result relayout.
+Clearing a Debug client's state can return to the Development Build launcher; the startup-only retry reconnects to local Metro before observing `welcome-start`.
+`scripts/sim/ci.test.ts` checks that startup contract alongside the existing guest journeys.
 Run it on both a small and normal supported iPhone through the canonical simulator runner.
+After passing native runs, remove `onboarding-search-highlight.yaml` (#524) from `KNOWN_FAILING` in the Mac's external `~/fitsy-refactor/sim-review/poller.mjs`.
 The entry screenshot records the first observed state; a fast response can finish before that capture, so it alone does not prove the loading transition.
 Retain source-bound loading, transition and results captures with viewport and safe-area provenance when reproducing layout timing, and inspect equal clearance around the Search field and the tooltip position in each image.
 Preserve original screenshots, approvals and raw failed evidence; obtain explicit UI approval for changed candidate states before final acceptance.
