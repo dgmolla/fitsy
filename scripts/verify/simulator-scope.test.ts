@@ -30,8 +30,11 @@ test.each([
 });
 
 test.each([
-  ['apps/mobile/app/restaurant/[id].tsx', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving']],
-  ['apps/mobile/lib/menuFilters.ts', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving']],
+  ['apps/mobile/app/restaurant/[id].tsx', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'shuffle']],
+  ['apps/mobile/lib/menuFilters.ts', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'shuffle']],
+  ['apps/mobile/lib/shuffle.ts', ['shuffle']],
+  ['apps/mobile/lib/useShuffleFlag.ts', ['shuffle']],
+  ['apps/mobile/e2e/flows/shuffle.yaml', ['shuffle']],
   ['apps/mobile/app/notification-settings.tsx', ['reminders']],
   ['apps/mobile/lib/notificationSchedule.ts', ['reminders']],
   ['apps/mobile/app/macro-setup.tsx', ['onboarding-assisted-targets']],
@@ -72,7 +75,7 @@ test.each([
 test('multiple affected areas union and deduplicate flows independently of path order', () => {
   const paths = ['apps/mobile/lib/menuFilters.ts', 'apps/mobile/app/notification-settings.tsx',
     'apps/mobile/app/restaurant/[id].tsx', 'docs/guide.md'];
-  const expected = ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'reminders'];
+  const expected = ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'reminders', 'shuffle'];
   expect(select(paths).flows).toEqual(expected);
   expect(select(paths.reverse()).flows).toEqual(expected);
 });

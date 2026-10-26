@@ -97,6 +97,14 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
+`shuffle` requires the standard synthetic dev seed, `entitled-dev`, a Debug Test Store build and the PostHog boolean flag `shuffle` enabled for that account.
+It chooses DTLA and independent targets of 280 kcal, 28 g protein, 34 g carbs and 5 g fat, which select the seeded Protein Smoothie.
+The Debug-only `shuffleSeed=maestro-shuffle` search parameter makes the lottery replayable without overriding entitlement or the feature flag.
+The flow verifies restaurant, dish, all macros, distance, Shuffle again, the selected restaurant's menu, and the empty-state recovery after setting fat to zero.
+`components/ShuffleSection.test.tsx` also checks locked teasers, flag changes, HTTP failures, request cancellation and account transitions against the real client and routing.
+Run it through `node scripts/sim/ci.mjs --scope=flow --flows=shuffle --udid=<UDID>` with the local fixture configuration.
+The planner expands this request when the candidate also affects shared UI or other journeys.
+
 `onboarding-guided-preview` checks payment Back after fresh sign-in and after a second, already signed-in checkout, preserving the craving and all four meal targets without purchasing.
 Its payment and return screenshots distinguish an exit offer from a successful preview return.
 `components/OnboardingPaymentBack.test.tsx` exercises the real preview, sign-in, trial, reminder and payment screens with intact and deliberately removed native history, including both visible and hardware Back.
