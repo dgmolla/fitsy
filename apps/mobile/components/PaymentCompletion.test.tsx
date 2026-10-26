@@ -17,7 +17,7 @@ import { installHardwareBackFixture } from './hardwareBackHarness';
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
-jest.mock('expo-notifications', () => ({ ...jest.requireActual('expo-notifications'), getPermissionsAsync: jest.fn() }));
+jest.mock('expo-notifications', () => ({ getPermissionsAsync: jest.fn(), requestPermissionsAsync: jest.fn(), scheduleNotificationAsync: jest.fn() }));
 const mockCapture = jest.fn();
 let mockAuthSession: { access_token: string; user: { id: string } } | null = null;
 let mockSessionRead: (() => Promise<{ data: { session: typeof mockAuthSession } }>) | null = null;
@@ -59,6 +59,8 @@ const originalFetch = global.fetch;
 beforeEach(async () => {
   jest.useRealTimers();
   jest.mocked(Notifications.getPermissionsAsync).mockReset().mockResolvedValue({ status: 'undetermined' } as Notifications.NotificationPermissionsStatus);
+  jest.mocked(Notifications.requestPermissionsAsync).mockClear();
+  jest.mocked(Notifications.scheduleNotificationAsync).mockClear();
   mockAuthSession = { access_token: 'test-token', user: { id: 'buyer' } };
   mockSessionRead = null;
   mockAuthListeners.clear(); await AsyncStorage.clear();
@@ -111,11 +113,12 @@ test('authenticated payment retains checkout through the purchase, then clears i
   await waitFor(async () => expect(await hasPaymentSignInContinuation()).toBe(false));
 });
 
-test.each(['visible', 'hardware'])('Paywall %s Back keeps a completed checkout off its spent preview', async kind => {
+test.each(['visible', 'hardware'].flatMap(kind => [false, true].map(previewReturn => ({ kind, previewReturn }))))(
+  'Paywall $kind Back keeps a completed checkout off its spent preview (preview return: $previewReturn)', async ({ kind, previewReturn }) => {
   const back = kind === 'hardware' ? installHardwareBackFixture() : null;
   await rememberPaymentSignInContinuation();
   const screen = renderRouter({ ...routes, 'welcome/preview': () => null }, { initialUrl: '/welcome/preview' });
-  await act(async () => { router.push('/welcome/payment'); });
+  await act(async () => { router.push(previewReturn ? '/welcome/payment?previewReturn=1' : '/welcome/payment'); });
   await waitFor(() => expect(screen.getByTestId('paywall-price-yearly')).toBeTruthy());
   await act(async () => { if (back) back(); else fireEvent.press(screen.getByTestId('welcome-back')); });
   expect(screen.getPathname()).toBe('/welcome/payment');
@@ -176,11 +179,27 @@ test('an authenticated payment view is exposed once across plan changes', async 
   expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(1);
 });
 
-test('development visual trial uses live price but never enters checkout or restore', async () => {
+const visualScenarios = [
+  { scenario: '1', days: 14, plan: 'yearly' },
+  { scenario: '7', days: 7, plan: 'yearly' },
+  { scenario: '14', days: 14, plan: 'yearly' },
+  { scenario: 'annual-short', days: 7, plan: 'monthly' },
+  { scenario: 'monthly-short', days: 7, plan: 'yearly' },
+];
+function offerBothPlans() {
+  const both = { ...offering, monthly, availablePackages: [annual, monthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+}
+test.each(visualScenarios)('development visual $scenario uses live prices but never enters checkout or restore', async ({ scenario, days, plan }) => {
+  offerBothPlans();
   const alert = jest.spyOn(Alert, 'alert');
-  const screen = renderRouter(routes, { initialUrl: '/welcome/payment?devTrialVisual=1' });
+  const screen = renderRouter(routes, { initialUrl: `/welcome/payment?devTrialVisual=${scenario}` });
+  jest.setSystemTime(new Date(2026, 8, 7, 12));
   await waitFor(() => expect(screen.getByTestId('dev-trial-visual-note')).toBeTruthy());
   expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99');
+  expect(screen.getByTestId('paywall-price-monthly').props.children).toBe('$9.99');
+  expect(screen.getByTestId(`paywall-plan-${plan}`).props.accessibilityState.checked).toBe(true);
+  expect(screen.getByTestId('paywall-terms').props.children).toContain(`${days} days free`);
   expect(screen.getByTestId('paywall-logo')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-restore')); });
@@ -190,20 +209,30 @@ test('development visual trial uses live price but never enters checkout or rest
   expect(await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)).toBeNull();
 });
 
-test('development visual flag stays on the three real welcome screens', async () => {
-  const screen = renderRouter(routes, { initialUrl: '/welcome/trial?devTrialVisual=1' });
-  await waitFor(() => expect(screen.getByText('Try Fitsy')).toBeTruthy());
-  expect(screen.getByTestId('trial-no-payment')).toBeTruthy();
-  expect(screen.getByTestId('trial-visual-note').props.children).toContain('Synthetic trial eligibility');
-  expect(screen.queryByTestId('trial-offer-note')).toBeNull();
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
-  expect(screen.getByTestId('trial-reminder-note').props.children).toContain('Synthetic trial eligibility');
-  await act(async () => { fireEvent.press(screen.getByTestId('trial-reminder-allow')); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
-  expect(screen.getByTestId('dev-trial-visual-note')).toBeTruthy();
-  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
-});
+test.each(visualScenarios.flatMap(visual => ['allow', 'skip'].map(action => ({ ...visual, action }))))(
+  'development visual $scenario stays on all three welcome screens after $action', async ({ scenario, days, plan, action }) => {
+    offerBothPlans();
+    const screen = renderRouter(routes, { initialUrl: `/welcome/trial?devTrialVisual=${scenario}` });
+    jest.setSystemTime(new Date(2026, 8, 7, 12));
+    await waitFor(() => expect(screen.getByText('Try Fitsy')).toBeTruthy());
+    expect(screen.getByTestId('trial-no-payment')).toBeTruthy();
+    expect(screen.getByTestId('trial-visual-note').props.children).toContain('Synthetic trial eligibility');
+    expect(screen.queryByTestId('trial-offer-note')).toBeNull();
+    await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial-reminder'));
+    expect(screen.getByTestId('trial-reminder-note').props.children).toContain('Synthetic trial eligibility');
+    expect(screen.getByText(new RegExp(`free trial of ${days} days ends`))).toBeTruthy();
+    await act(async () => { fireEvent.press(screen.getByTestId(`trial-reminder-${action}`)); });
+    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+    expect(screen.getByTestId('dev-trial-visual-note')).toBeTruthy();
+    expect(screen.getByTestId(`paywall-plan-${plan}`).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByTestId('paywall-terms').props.children).toContain(`${days} days free`);
+    expect(mockCapture.mock.calls.filter(([name]) => name === 'paywall_experiment_exposed')).toHaveLength(0);
+    expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+    expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+  },
+);
 
 test.each(['cancelled', 'no active entitlement'])('%s stays on the real paywall without recording completion', async outcome => {
   if (outcome === 'cancelled') (Purchases.purchasePackage as jest.Mock).mockRejectedValue({ userCancelled: true });

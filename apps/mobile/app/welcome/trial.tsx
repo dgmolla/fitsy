@@ -9,7 +9,7 @@ import { useOnboardingStep } from '@/lib/onboardingResume';
 import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
 import { defaultTrialPlan, trialPresentation } from '@/lib/trialPresentation';
-import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
+import { devTrialVisualOffer, devTrialVisualScenario } from '@/lib/devTrialVisualOffer';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 import { withinMs } from '@/lib/async';
@@ -18,12 +18,13 @@ import { useRouteContinuation } from '@/lib/useRouteContinuation';
 const OFFERING_RETRY_CAP_MS = 5000;
 
 export default function TrialScreen() {
-  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
-  const visualRequested = __DEV__ && devTrialVisual === '1';
+  const { devTrialVisual, previewReturn } = useLocalSearchParams<{ devTrialVisual?: string; previewReturn?: string }>();
+  const visualScenario = devTrialVisualScenario(devTrialVisual);
+  const visualRequested = visualScenario !== null;
   const focused = useIsFocused();
   useOnboardingStep('trial');
   const { ready, offering, introEligibility, introEligibilityReady, refreshOffering, entitled } = usePurchases();
-  const visual = devTrialVisualOffer(offering, visualRequested);
+  const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, visualScenario ?? undefined);
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
   const eligibilityReady = !!visual || introEligibilityReady;
@@ -59,9 +60,9 @@ export default function TrialScreen() {
       return;
     }
     navigating.current = true;
-    router.push(visualRequested ? '/welcome/trial-reminder?devTrialVisual=1' : '/welcome/trial-reminder');
+    router.push({ pathname: '/welcome/trial-reminder', params: { devTrialVisual: visualRequested ? devTrialVisual : undefined, previewReturn } });
   }
-  if (entitled === true || (shownOffering && eligibilityReady && !trial)) return <Redirect href="/welcome/payment" />;
+  if (entitled === true || (shownOffering && eligibilityReady && !trial)) return <Redirect href={{ pathname: '/welcome/payment', params: { previewReturn } }} />;
   return <WelcomeScreen progress={1} title={trial ? 'Try Fitsy' : 'Checking your plans'}
     subtitle={trial ? 'We want you to try Fitsy for free' : 'Your available plans will appear next.'}
     continueLabel={checkingPlans ? 'Checking plans…' : shownOffering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}

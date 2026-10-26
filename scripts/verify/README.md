@@ -107,6 +107,7 @@ The runner resolves every required fixture before native execution, prepares it 
 It preserves the entire selected flow set and fails when genuine purchase history or the required store build is unavailable.
 Explicit scopes may expand the plan, but cannot omit its journeys or replace behavior coverage with render smoke.
 Use an existing compatible binary or a supported build with measured capacity; a shared binary cache is optional.
+The ordinary native build command checks the [shared immutable cache](../../docs/engineering/devops/native-binary-reuse.md#shared-native-cache) after local receipts; its regression suite runs through the scripts workspace's Node bridge in the existing test check.
 Retire owned Metro, drivers and simulator resources at the end of the phase through the existing lifecycle controls.
 CI execution is refused by the local runner, and the registry contains no native execution check.
 Replay scope regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/simulator-scope.test.ts sim/ci.test.ts`.
@@ -119,6 +120,8 @@ A fresh checkout needs installed dependencies but no issue binding, review daemo
 Keep dependencies local to this checkout so workspace links resolve its own packages.
 Type checking calls each workspace's `npm run type-check`, including Prisma generation from the repository schema before compiling the API.
 This refreshes stale generated types after schema updates without requiring a database connection or migration.
+The scripts TypeScript project maps `@fitsy/shared` imports to this checkout's source even when a workspace package link is unavailable.
+The scripts Jest configuration maps the same shared package and subpaths to local source so tests use the current checkout too.
 To refresh the client separately after merging schema changes, run `npx prisma generate --schema=prisma/schema.prisma`.
 GitHub requires `Verify` and `AI review` on the current PR head and owns heavy validation.
 Every selected check executes on each invocation and reports its actual exit status.

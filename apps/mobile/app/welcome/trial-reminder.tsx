@@ -10,7 +10,7 @@ import { usePurchases } from '@/lib/usePurchases';
 import { purchaseTerms } from '@/lib/purchaseTerms';
 import { defaultTrialPlan, trialPresentation } from '@/lib/trialPresentation';
 import { trialReminderLeadLabel } from '../../../../packages/shared/src/contracts/trialPolicy';
-import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
+import { devTrialVisualOffer, devTrialVisualScenario } from '@/lib/devTrialVisualOffer';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { supabase } from '@/lib/supabase';
 import { readReminderPreferences, saveReminderPreferences } from '@/lib/notificationSchedule';
@@ -21,14 +21,15 @@ import { trackOnboardingScreenView, trackReminderAction, trackNotificationPermis
   trackNotificationPrimingAllowTapped, trackNotificationPrimingShown, trackNotificationPrimingSkipTapped } from '@/lib/analytics';
 
 export default function TrialReminderScreen() {
-  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
-  const visualRequested = __DEV__ && devTrialVisual === '1';
+  const { devTrialVisual, previewReturn } = useLocalSearchParams<{ devTrialVisual?: string; previewReturn?: string }>();
+  const visualScenario = devTrialVisualScenario(devTrialVisual);
+  const visualRequested = visualScenario !== null;
   const focused = useIsFocused();
   useOnboardingStep('trial-reminder');
   const [busy, setBusy] = useState(false);
   const [permission, setPermission] = useState<NotificationPermissionStatus | null>(null);
   const { ready, offering, introEligibility, introEligibilityReady, entitled } = usePurchases();
-  const visual = devTrialVisualOffer(offering, visualRequested);
+  const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, visualScenario ?? undefined);
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
   const eligibilityReady = !!visual || introEligibilityReady;
@@ -59,7 +60,7 @@ export default function TrialReminderScreen() {
     if (!trial || pending.current || navigating.current) return;
     if (visualRequested) {
       navigating.current = true;
-      router.push('/welcome/payment?devTrialVisual=1');
+      router.push({ pathname: '/welcome/payment', params: { devTrialVisual, previewReturn } });
       return;
     }
     pending.current = true;
@@ -91,7 +92,8 @@ export default function TrialReminderScreen() {
       setBusy(false);
       if (isCurrent()) {
         navigating.current = true;
-        router.push(returnToSignIn ? '/welcome/signin?returnTo=trial-reminder' : '/welcome/payment');
+        router.push(returnToSignIn ? { pathname: '/welcome/signin', params: { returnTo: 'trial-reminder', previewReturn } }
+          : { pathname: '/welcome/payment', params: { previewReturn } });
       }
     }
   }
@@ -99,29 +101,30 @@ export default function TrialReminderScreen() {
     if (pending.current || navigating.current) return;
     navigating.current = true;
     if (!visualRequested) trackNotificationPrimingSkipTapped();
-    router.push(visualRequested ? '/welcome/payment?devTrialVisual=1' : '/welcome/payment');
+    router.push({ pathname: '/welcome/payment', params: { devTrialVisual: visualRequested ? devTrialVisual : undefined, previewReturn } });
   }
   if (!ready) return null;
-  if (!shownOffering) return <Redirect href="/welcome/trial" />;
+  if (!shownOffering) return <Redirect href={{ pathname: '/welcome/trial', params: { previewReturn } }} />;
   if (!eligibilityReady) return null;
-  if (!trial) return <Redirect href="/welcome/payment" />;
+  if (!trial) return <Redirect href={{ pathname: '/welcome/payment', params: { previewReturn } }} />;
   if (permission === null) return null;
   // Calendar-month trials have no fixed day count, but their confirmed end
   // date still allows the existing one-off scheduler to choose a safe time.
   const inBrowser = Platform.OS === 'web';
   const canSchedule = !inBrowser && presentation.reminderAvailable;
   const canOptIn = canSchedule && permission !== 'denied';
+  const planName = selectedPlan === 'yearly' ? 'Annual' : 'Monthly';
   const title = inBrowser ? 'Reminders need the mobile app' : !canSchedule ? 'Review your trial' : permission === 'denied' ? 'Reminders are off' : 'Get a trial reminder';
   const subtitle = inBrowser ? 'You can still review your plan and renewal terms.'
     : !canSchedule ? 'This offer is too short for a reminder before the cancellation deadline.'
     : permission === 'denied' ? 'Turn on notifications in device settings if you want a reminder.'
-      : `With notifications allowed, we can remind you about ${trialReminderLeadLabel()} before your store-confirmed free trial of ${trial} ends. Quiet hours may move it earlier.`;
+      : `If you choose the ${planName} plan with notifications allowed, we can remind you about ${trialReminderLeadLabel()} before your store-confirmed free trial of ${trial} ends. Quiet hours may move it earlier.`;
   return <WelcomeScreen progress={1} title={title} subtitle={subtitle}
     canContinue={!busy} showBack={!busy} onContinue={() => { if (canOptIn) void allow(); else skip(); }}
     footerContent={<WelcomeActions label={busy ? 'Asking…' : canOptIn ? 'Remind me' : 'Continue to plans'} onPress={canOptIn ? () => { void allow(); } : skip} disabled={busy}
       testID="trial-reminder-allow" secondaryLabel={canOptIn ? 'Not now' : undefined} onSecondary={canOptIn ? skip : undefined} secondaryTestID="trial-reminder-skip" />}>
     <TrialArtwork reminder />
-    <Text style={s.note} testID="trial-reminder-note">{visual ? 'Synthetic trial eligibility for visual testing. Device permission is real; this preview schedules nothing.' : canOptIn ? 'We schedule it after purchase, once the store confirms your trial end date. Check settings for its exact time.' : 'Review the exact trial and renewal terms on the next screen.'}</Text>
+    <Text style={s.note} testID="trial-reminder-note">{visual ? 'Synthetic trial eligibility for visual testing. This preview requests no permission and schedules nothing.' : canOptIn ? 'We schedule it after purchase, once the store confirms your trial end date. Check settings for its exact time.' : 'Review the exact trial and renewal terms on the next screen.'}</Text>
   </WelcomeScreen>;
 }
 const s = StyleSheet.create({

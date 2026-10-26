@@ -17,6 +17,8 @@ const config = {
   testMatch: ["**/*.test.ts"],
   moduleNameMapper: {
     "^(\\.\\.?/.*)\\.js$": "$1",
+    "^@fitsy/shared$": "<rootDir>/../packages/shared/src/index.ts",
+    "^@fitsy/shared/(.*)$": "<rootDir>/../packages/shared/src/$1",
   },
 };
 

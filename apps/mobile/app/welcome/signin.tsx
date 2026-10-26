@@ -64,7 +64,7 @@ export default function SignInScreen() {
 
   // New accounts see live trial terms and optional reminders before plans.
   // Skip onboarding review; existing in-app prompts use lib/ratingPrompt.ts.
-  const { outOfArea, returnTo } = useLocalSearchParams<{ outOfArea?: string; returnTo?: string }>();
+  const { outOfArea, returnTo, previewReturn } = useLocalSearchParams<{ outOfArea?: string; returnTo?: string; previewReturn?: string }>();
   useEffect(() => {
     if (returnTo === 'payment') void preparePaymentSignInContinuation();
   }, [returnTo]);
@@ -79,6 +79,8 @@ export default function SignInScreen() {
 
   const navigateAfterAuth = useCallback(async (isNewUser: boolean, userId: string, ownedCheckout: boolean | null, isCurrent: () => boolean) => {
     if (!isCurrent()) return;
+    const trialDestination = previewReturn === '1'
+      ? { pathname: '/welcome/trial' as const, params: { previewReturn } } : '/welcome/trial';
     if (outOfArea === '1') {
       await clearPaymentSignInContinuation();
       await clearPendingMealClaim();
@@ -131,7 +133,7 @@ export default function SignInScreen() {
     if (returnTo === 'trial-reminder') {
       await clearPaymentSignInContinuation();
       await clearPendingMealClaim();
-      if (isCurrent()) router.dismissTo(`/welcome/${returnTo}`);
+      if (isCurrent()) router.dismissTo({ pathname: '/welcome/trial-reminder', params: { previewReturn } });
       return;
     }
     const intent = await getPaywallIntent();
@@ -153,10 +155,10 @@ export default function SignInScreen() {
         return;
       }
     }
-    const destination = isNewUser || intent ? '/welcome/trial' : '/(tabs)/search';
+    const destination = isNewUser || intent ? trialDestination : '/(tabs)/search';
     if (isCurrent()) router.replace(destination);
     await clearPendingMealClaim();
-  }, [navigation, outOfArea, returnTo]);
+  }, [navigation, outOfArea, returnTo, previewReturn]);
 
   const finishAuth = useCallback(async (r: Awaited<ReturnType<typeof appleSignIn>>, provider: 'apple' | 'google' | 'dev', isCurrent: () => boolean) => {
     trackAuthSuccess({ provider, is_new_user: provider === 'dev' ? false : r.isNewUser });

@@ -92,6 +92,7 @@ test.each([
   ['apps/api/lib/example.ts', ['api']],
   ['apps/mobile/lib/example.ts', ['mobile']],
   ['scripts/deploy/example.mjs', ['scripts']],
+  ['scripts/sim/shared-native-cache.mjs', ['api', 'scripts', 'mobile']],
   ['packages/shared/src/example.ts', ['api', 'scripts', 'mobile']],
   ['prisma/schema.prisma', ['api', 'scripts', 'mobile']],
   ['package-lock.json', ['api', 'scripts', 'mobile']],

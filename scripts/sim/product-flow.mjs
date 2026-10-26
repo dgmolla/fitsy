@@ -3,7 +3,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync, realpathSync, copyFileSync, cpSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,7 @@ import { root, inputHash, candidatePlan, selectedFlows, digest, validate, repoEn
 import { backendRevision } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
+import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
@@ -20,7 +21,7 @@ const buildDir = resolve(root, '.evidence/product-build');
 const mobile = resolve(root, 'apps/mobile');
 const resumeDir = resolve(root, '.evidence/resume');
 const failuresFile = join(resumeDir, 'native-failures.json');
-const recipeIdentity = () => {
+export const recipeIdentity = () => {
   const inputs = { prepareNative: digest(prepareNative.toString()), compileNative: digest(compileNative.toString()),
     bundleDelegate: digest(bundleDelegate.toString()), metroRoute };
   return { hash: identityHash(inputs), inputs };
@@ -39,11 +40,6 @@ const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encod
 
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]).sort();
-}
-function treeHash(dir) {
-  const hash = createHash('sha256');
-  for (const f of files(dir)) hash.update(relative(dir, f) + '\0').update(readFileSync(f));
-  return hash.digest('hex');
 }
 export function environment() {
   assert(process.env.EXPO_PUBLIC_API_URL === 'https://dev.fitsy.org', 'Load the mobile dev environment; this runner refuses production');
@@ -254,7 +250,7 @@ export function preserveRetainedArtifacts(overwritingApp, buildDirectory = build
 }
 function intact(r, buildDirectory = buildDir) {
   try { return r?.app && realpathSync(r.app).startsWith(realpathSync(buildDirectory) + '/') &&
-    r.appHash === treeHash(r.app); }
+    r.appHash === treeHash(r.app) && (!r.sharedNativeArtifact || importedArtifactIntact(r, buildDirectory)); }
   catch { return false; }
 }
 function buildDecision(udid, profile) {
@@ -346,7 +342,27 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
     }
     console.log(JSON.stringify({ action: 'reuse', app: reusable.app, appHash: reusable.appHash,
       nativeIdentity: native.hash, profileIdentity: compatibility.hash, reason: 'verified compatible native artifact' }));
+    cacheBuiltArtifact();
     return true;
+  }
+  if (!forceReason && !refreshEmbedded) {
+    let imported;
+    try {
+      imported = importNativeArtifact(sharedNativeCacheDirectory(root), buildDir, native, compatibility,
+        buildRecipe, [active, ...retainedReceipts()], intact, () => admitDisk(root, 'Native cache import'));
+    } catch (error) {
+      if (!['EACCES', 'EPERM', 'EROFS', 'ENOENT'].includes(error.code)) throw error;
+      console.error(`Native cache lookup skipped: ${error.message}`);
+    }
+    if (imported) {
+      mkdirSync(resumeDir, { recursive: true });
+      archiveActiveReceipt();
+      save(join(buildDir, 'receipt.json'), sealReceipt({ ...imported,
+        publicConfigAcceptance: buildPublicConfigAcceptance(active, config, imported) }));
+      console.log(JSON.stringify({ action: 'reuse', app: imported.app, appHash: imported.appHash,
+        nativeIdentity: native.hash, profileIdentity: compatibility.hash, reason: 'verified shared native artifact' }));
+      return true;
+    }
   }
   const reasons = refreshEmbedded ? [embeddedPlan.reason, ...decision.reasons]
     : forceReason ? [`operator forced diagnostic rebuild: ${forceReason}`, ...decision.reasons] : decision.reasons;
@@ -385,9 +401,19 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
       recipeIdentity: buildRecipe, buildRecipeHash: buildRecipe.hash,
       simulatorApplicationIdentifier: entitlements['application-identifier'],
       buildReasons: reasons, builtAt: new Date().toISOString() }));
+    cacheBuiltArtifact();
     console.log('Built identified simulator app. Next: run <UDID> [flow names].');
     return false;
   } finally { releaseDevice(); }
+}
+function cacheBuiltArtifact() {
+  const receiptFile = join(buildDir, 'receipt.json');
+  if (read(receiptFile).sharedNativeArtifact) return;
+  try { publishNativeArtifact(sharedNativeCacheDirectory(root), receiptFile); }
+  catch (error) {
+    // Optional cache storage cannot invalidate an otherwise verified build.
+    console.error(`Native cache publication skipped: ${error.message}`);
+  }
 }
 async function execute(udid, names, mode) {
   const runFlow = options => runSelectedRecordedFlow(mode, options);

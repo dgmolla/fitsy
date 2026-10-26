@@ -170,6 +170,7 @@ Simulator runs locally on the maintainer Mac via the sim-review poller, which po
 Every mobile/web UI edit triggers local coverage: screen-local style/copy uses render smoke, behavior uses affected E2E, and shared UI/app shells use the full suite.
 Local execution and final product acceptance share the affected-flow plan; omitted flows have explicit reasons, and explicit lists can only expand required coverage.
 Inspect `npm run verify:product-plan` for mandatory journeys and MCP categories before acceptance; use a compatible existing binary or a supported build without requiring a shared cache.
+The ordinary native build entrypoint also checks the optional [shared immutable cache](docs/engineering/devops/native-binary-reuse.md#shared-native-cache); imported build receipts never substitute for current-source Metro or acceptance.
 Run `node scripts/sim/ci.mjs --scope=<none|smoke|flow|full> --flows=<comma-list> --udid=<UDID>` with configuration from the local machine.
 Account-dependent journeys require local fixture preparation and compatible store builds as documented in `apps/mobile/e2e/README.md`.
 Keep simulator smoke out of the pre-push hook.

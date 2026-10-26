@@ -3,6 +3,9 @@ import { defaultTrialPlan, trialPresentation } from './trialPresentation';
 import { planReminders, trialReminderDate } from './notificationPlan';
 
 const start = new Date(2026, 8, 7, 12);
+beforeEach(() => { jest.useFakeTimers().setSystemTime(start); });
+afterEach(() => { jest.useRealTimers(); });
+
 const product = { priceString: '$39.99', subscriptionPeriod: 'P1Y',
   introPrice: { price: 0, priceString: '$0', period: 'P1W', periodUnit: 'WEEK' as const, periodNumberOfUnits: 1, cycles: 1 } };
 
