@@ -23,7 +23,7 @@ beforeAll(() => {
 });
 afterAll(() => { rmSync(directory, { recursive: true, force: true }); });
 
-test.each(['chain-menu-serving', 'onboarding-target-ranked-search', 'onboarding-search-highlight'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
+test.each(['chain-menu-serving', 'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, {
     launchApp?: object;
     retry?: { maxRetries: number; commands: {
