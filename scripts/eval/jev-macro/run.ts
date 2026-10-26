@@ -1,49 +1,13 @@
 import { appendFileSync, closeSync, fsyncSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { isDeepStrictEqual } from 'node:util';
-import { z } from 'zod';
-import { BINNING, decodeMacroAnswers, macroAnswersSchema, macroQuestions } from './bins';
-import { formatReport, historicalStats, score, type ItemResult } from './score';
-import { loadTruth, nutritionQuantity, sha256, type TruthRow } from './truth';
+import { parseJournal, replayJournal, type JournalEvent } from './journal';
+import { buildMacroRequest, canAffordRequest, parseResponse, PROTOCOL, protocolSha256 } from './protocol';
+import { formatReport, historicalStats, score } from './score';
+import { loadTruth } from './truth';
 
-// Endpoint, model, auth, timeout and usage conventions mirror jevDecisionService.ts.
-// Kept here because macro estimation needs four distributions with a frozen binning protocol.
-export const PROTOCOL = {
-  version: 2, endpoint: 'https://api.typesafe.ai/v1/systemone', model: 'jev-latest' as const,
-  timeoutMs: 5_000, retries: 0, maxSpendUsd: 1.00, maxRequestBytes: 12_000, reservedInputTokens: 16_384,
-  pricing: { inputUsdPerMillion: 0.042, outputUsdPerMillion: 0,
-    source: 'docs/engineering/pipeline/jev-chain-match-eval.md', checkedAt: '2026-10-24' },
-  binning: BINNING,
-  questions: macroQuestions,
-  catastrophicDefinition: 'calorie absolute percentage error > 50; failures and omissions are misses',
-  failureMedian: 'positive infinity; non-finite median serialized as null',
-  percentile: 'nearest rank',
-};
-export const protocolSha256 = sha256(JSON.stringify(PROTOCOL));
-const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const usageSchema = z.object({ input_tokens: count.positive(), output_tokens: count });
-const responseSchema = z.object({ model: z.string().regex(/^jev-/),
-  answers: macroAnswersSchema });
-
-/** This explicit projection is the ONLY item-dependent input to the provider. */
-export function buildMacroRequest(item: TruthRow) {
-  const itemText = [item.itemName, item.section, item.description, item.serving].join('\n');
-  if (nutritionQuantity.test(itemText)) {
-    throw new Error('Item text contains nutrition targets; exclude it before evaluation');
-  }
-  const request = { model: PROTOCOL.model, questions: PROTOCOL.questions, state: {
-    chain: item.chain, itemName: item.itemName,
-    description: [item.section ? `Section: ${item.section}` : '', item.description].filter(Boolean).join('\n'), serving: item.serving,
-  } };
-  if (Buffer.byteLength(JSON.stringify(request)) > PROTOCOL.maxRequestBytes) throw new Error('Jev macro request exceeds 12KB');
-  return request;
-}
-
-export function canAffordRequest(spentUsd: number) {
-  const reservation = PROTOCOL.reservedInputTokens * PROTOCOL.pricing.inputUsdPerMillion / 1_000_000;
-  return Number.isFinite(spentUsd) && spentUsd >= 0 && spentUsd + reservation <= PROTOCOL.maxSpendUsd;
-}
+export { parseJournal, replayJournal, type JournalEvent } from './journal';
+export { buildMacroRequest, canAffordRequest, PROTOCOL, protocolSha256 } from './protocol';
 
 /** Exactly one POST, no redirects/retries; the caller journals the request before this boundary. */
 export async function requestJevMacros(request: ReturnType<typeof buildMacroRequest>, apiKey: string) {
@@ -55,83 +19,6 @@ export async function requestJevMacros(request: ReturnType<typeof buildMacroRequ
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body,
   });
   return { status: response.status, body: await response.text() };
-}
-
-function parseResponse(id: string, status: number, body: string, latencyMs: number): ItemResult {
-  let raw: unknown;
-  try { raw = JSON.parse(body); } catch { return { id, estimate: null, argmaxBins: null, failure: 'Malformed JSON; unknown usage', costUsd: null, latencyMs, model: null }; }
-  const usage = z.object({ usage: usageSchema }).safeParse(raw);
-  const costUsd = usage.success ? usage.data.usage.input_tokens * PROTOCOL.pricing.inputUsdPerMillion / 1_000_000 : null;
-  const parsed = responseSchema.safeParse(raw);
-  let failure = costUsd === null ? 'Missing or invalid usage'
-    : usage.success && usage.data.usage.input_tokens > PROTOCOL.reservedInputTokens ? 'Reported usage exceeds reserved input envelope'
-      : status !== 200 ? `HTTP ${status}` : !parsed.success ? 'Invalid typed macro response' : null;
-  if (!Number.isFinite(costUsd ?? 0)) failure = 'Non-finite reported cost';
-  const decoded = failure || !parsed.success ? { estimate: null, argmaxBins: null } : decodeMacroAnswers(parsed.data.answers);
-  return { id, ...decoded, failure, costUsd, latencyMs, model: parsed.success ? parsed.data.model : null };
-}
-
-export interface JournalEvent { event: string; [key: string]: unknown }
-type Fixture = ReturnType<typeof loadTruth>;
-export function parseJournal(contents: string): JournalEvent[] {
-  const lines = contents.split('\n');
-  const events: JournalEvent[] = [];
-  for (const [index, line] of lines.entries()) {
-    if (!line.trim()) continue;
-    let event: unknown;
-    try {
-      event = JSON.parse(line);
-    } catch {
-      // A crash can tear the final write. Only an unterminated last line may be discarded.
-      if (index !== lines.length - 1) throw new Error('Malformed complete journal line');
-      if (events.some(previous => previous.event === 'end')) throw new Error('Torn journal content after end');
-      break;
-    }
-    if (!event || typeof event !== 'object' || Array.isArray(event) || !('event' in event)) throw new Error('Invalid journal event');
-    events.push(event as JournalEvent);
-  }
-  return events;
-}
-export function replayJournal(fixture: Fixture, events: JournalEvent[]) {
-  const start = events[0];
-  if (start?.event !== 'start' || start['truthSha256'] !== fixture.digest || start['protocolSha256'] !== protocolSha256
-    || !isDeepStrictEqual(start['protocol'], PROTOCOL)) throw new Error('Journal truth/protocol identity mismatch');
-  const results: ItemResult[] = [], models = new Set<string>();
-  let pending: string | null = null, ended = false, stopReason: string | null = null, spent = 0;
-  for (const event of events.slice(1)) {
-    if (ended) throw new Error('Journal event after end');
-    if (event.event === 'request') {
-      const item = fixture.truth.rows[results.length];
-      if (pending || stopReason || !item || event['id'] !== item.id || !canAffordRequest(spent)
-        || !isDeepStrictEqual(event['request'], buildMacroRequest(item))) throw new Error('Journal request mismatch or budget exceeded');
-      pending = item.id;
-    } else if (event.event === 'response' || event.event === 'error') {
-      if (!pending || event['id'] !== pending || typeof event['latencyMs'] !== 'number'
-        || !Number.isFinite(event['latencyMs']) || event['latencyMs'] < 0) throw new Error('Journal response mismatch');
-      let result: ItemResult;
-      if (event.event === 'error') result = { id: pending, estimate: null, argmaxBins: null, failure: 'Transport failure; unknown usage', costUsd: null,
-        latencyMs: event['latencyMs'], model: null };
-      else {
-        if (typeof event['body'] !== 'string' || typeof event['status'] !== 'number' || !Number.isInteger(event['status'])) throw new Error('Malformed response event');
-        result = parseResponse(pending, event['status'], event['body'], event['latencyMs']);
-        if (event['redacted'] === true) { result.estimate = null; result.argmaxBins = null; result.failure = 'Provider echoed credential; response redacted'; }
-      }
-      results.push(result); pending = null;
-      spent += result.costUsd ?? 0;
-      if (result.model) models.add(result.model);
-      if (result.costUsd === null) stopReason = 'Unknown usage; stopped without retry';
-      else if (result.failure === 'Reported usage exceeds reserved input envelope') stopReason = result.failure;
-      else if (spent > PROTOCOL.maxSpendUsd) stopReason = 'Reported spend exceeds $1.00; stopped';
-      else if (event['redacted'] === true) stopReason = result.failure;
-      else if (models.size > 1) stopReason = 'jev-latest resolved to multiple model versions';
-    } else if (event.event === 'end') {
-      if (event['stopReason'] !== null && typeof event['stopReason'] !== 'string') throw new Error('Invalid end event');
-      stopReason ??= event['stopReason']; ended = true;
-    } else throw new Error('Unknown journal event');
-  }
-  if (pending) results.push({ id: pending, estimate: null, argmaxBins: null, failure: 'Interrupted request; unknown usage', costUsd: null, latencyMs: null, model: null });
-  if (!ended || results.length !== fixture.truth.rows.length) stopReason ??= 'Incomplete evaluation';
-  return { results, stopReason, modelsReturned: [...models] };
 }
 
 function parseArgs(argv: string[]) {
@@ -149,6 +36,13 @@ function parseArgs(argv: string[]) {
 }
 
 export async function runEvaluation(argv: string[]) {
+  const protocols = argv.filter(arg => arg.startsWith('--protocol='));
+  if (protocols.length > 1 || protocols.some(arg => !['--protocol=v2', '--protocol=v3'].includes(arg))) throw new Error('Select --protocol=v2|v3 once');
+  if (protocols[0] === '--protocol=v3') {
+    const { runHierarchicalEvaluation } = await import('./hierarchical.js');
+    return runHierarchicalEvaluation(argv.filter(arg => !arg.startsWith('--protocol=')));
+  }
+  argv = argv.filter(arg => !arg.startsWith('--protocol='));
   const options = parseArgs(argv), fixture = loadTruth(), historical = historicalStats();
   const requests = fixture.truth.rows.map(buildMacroRequest); // Validate EVERY prompt before any live request.
   const apiKey = options.mode === 'live' ? process.env['TYPESAFE_API_KEY'] : undefined;
