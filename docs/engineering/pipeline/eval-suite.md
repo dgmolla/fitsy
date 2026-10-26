@@ -217,3 +217,35 @@ Source currency, regional recipe availability, correlated menus, manufacturer ro
 Only dev is evaluated for v1.
 Recorded result paths, measured scores, spend, local validation, independent review, and CI state are attached to the PR and the committed result reports.
 Reading or checksumming holdout for integrity and rendering the requested human case list does not execute or score holdout.
+
+The repaired-suite deterministic baseline ran from committed source `7883c7a3fb2a`; its [report](../../../scripts/eval/suite/results/2026-10-26T23-51-57-875Z-c535259f/report.md) retains category results and all predictions.
+
+| Dev tier / method | Matching pass | Wrong matches | Positive recall | p95 latency | Cost/1k |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Curated / exact | 92/102 (90.2%) | 0 | 80.0% | 0.068 ms | $0 |
+| Bulk / exact | 2,311/2,363 (97.8%) | 0 | 73.9% | 0.067 ms | $0 |
+| Both / Jev v3 | Pending credential | Pending | Pending | Pending | Pending |
+
+The exact adapter has no macro estimator.
+Live Jev preflight sent no requests because the authorized secrets file did not populate `TYPESAFE_API_KEY`; actual Jev spend remains $0.
+The implementation and synthetic-provider tests establish harness behavior, not measured Jev accuracy.
+
+## Case counts by category
+
+| Category | Curated matching | Curated macro | Bulk matching | Bulk macro |
+| --- | ---: | ---: | ---: | ---: |
+| catering_family | 7 | 15 | 20 | 20 |
+| combo_build_your_own | 27 | 19 | 34 | 34 |
+| cross_chain_name | 0 | 0 | 1300 | 0 |
+| drink_oz | 4 | 8 | 8 | 8 |
+| high_calorie | 3 | 4 | 4 | 4 |
+| low_calorie | 9 | 16 | 16 | 16 |
+| modifier | 13 | 4 | 4 | 4 |
+| near_miss_name | 29 | 27 | 48 | 48 |
+| non_chain_lookalike | 16 | 0 | 0 | 0 |
+| regional_variant | 3 | 8 | 12 | 12 |
+| same_chain_variant | 0 | 0 | 1807 | 0 |
+| section_dependent | 12 | 27 | 38 | 38 |
+| size_variant | 34 | 26 | 34 | 34 |
+| ue_positive | 0 | 0 | 81 | 0 |
+| zero_macro | 3 | 6 | 9 | 9 |
