@@ -14,20 +14,20 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
-test("builds before acquiring the modeled owned database and reports the full selection", () => {
+test.each(["local", "ci"])("%s builds before acquiring the modeled owned database and reports the full selection", context => {
   const verify = join(directory, "scripts/verify");
   writeFileSync(join(verify, "registry.yml"), `checks:
   - name: build
     script: build.sh
     layer: 3
     blocking: true
-    runs: [local]
+    runs: [local, ci]
   - name: test
     script: test.sh
     layer: 2
     blocking: true
     database: true
-    runs: [local]
+    runs: [local, ci]
 `);
   writeFileSync(join(verify, "build.sh"), `#!/bin/bash
 test -z "$FITSY_VERIFY_DB_LOCKED$FITSY_VERIFY_OWNED_DB$POSTGRES_PRISMA_URL$POSTGRES_URL_NON_POOLING" || exit 1
@@ -64,7 +64,7 @@ export async function runWithLocalDatabase(args) {
     const git = spawnSync("git", args, { cwd: directory, encoding: "utf8" });
     expect(git.status).toBe(0);
   }
-  const command = [join(verify, "run.mjs"), "--layer=all", "--scope=all", "--runs=local"];
+  const command = [join(verify, "run.mjs"), "--layer=all", "--scope=all", `--runs=${context}`];
   // This copied target owns its Git comparison and acquisition, independently of the caller.
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
     !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$)/.test(key) &&
@@ -111,4 +111,20 @@ export async function runWithLocalDatabase(args) {
   expect(forged.stdout).toContain("modeled database owner mismatch");
 
   expect(run({}, ["--only=unknown"]).status).toBe(1);
+
+  if (context === "ci") {
+    // Execute the actual hosted L2 entrypoint as well as the combined pipeline.
+    const yaml = require("js-yaml") as { load(text: string): unknown };
+    const workflow = yaml.load(readFileSync(join(root, ".github/workflows/verify.yml"), "utf8")) as {
+      jobs: { test: { steps: { name?: string; run?: string }[] } };
+    };
+    writeFileSync(join(directory, "order.log"), "");
+    const hosted = spawnSync("/bin/bash", ["-e", "-c",
+      workflow.jobs.test.steps.find(step => step.name === "Run L2 checks")!.run!],
+    { cwd: directory, encoding: "utf8", timeout: 10000, env: environment });
+    expect({ status: hosted.status, output: hosted.status === 0 ? "" : hosted.stdout + hosted.stderr })
+      .toEqual({ status: 0, output: "" });
+    expect(readFileSync(join(directory, "order.log"), "utf8").trim().split("\n"))
+      .toEqual(["db-acquire", "db-assert", "test"]);
+  }
 });

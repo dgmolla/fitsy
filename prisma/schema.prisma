@@ -149,6 +149,8 @@ model Restaurant {
   userRatingCount Int?
   priceLevel      String?
   dietaryOptions  String[]    @default([])
+  // Normalized weekly hours with an IANA timeZone; NULL means availability is unknown.
+  openingHours    Json?
   lastScrapedAt   DateTime?
   menuHash        String?
   brandId         String?

@@ -24,6 +24,11 @@ Full scope includes every saved flow, including `signin-options`, `paywall-acces
 It requires a disposable entitled dev account with a completed profile and reads `${EXPO_PUBLIC_DEV_LOGIN_EMAIL}` and `${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}` through the local runner.
 Use the Debug build with owned Metro so native Dev Login consumes those same environment values.
 It resets only the synthetic Grilled Chicken Bowl bookmark, saves the meal through the UI and verifies it in Saved after relaunch.
+If `log-meal` reaches `Welcome back.` with `Your Fitsy Pro subscription ended`, authentication succeeded but the required `entitled-dev` fixture has expired.
+A `Dev Login Failed` alert requires correcting the fixture credentials bundled by owned Metro; an ordinary paywall after login requires an active `entitled-dev` account.
+Prepare an active disposable account through the local fixture adapter before rerunning; retain the Search assertion and paid-access routing.
+If XCTest reports `kAXErrorInvalidUIElement` while waiting for `welcome-login`, hierarchy inspection failed before Dev Login ran.
+Preserve the command trace and startup screenshot, then recover through the existing simulator owner before rerunning the unchanged journey.
 Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
 A local scope pass does not replace the source-bound final-candidate product-flow gate.
 Inspect `npm run verify:product-plan` for the same affected journeys and their required MCP categories.
@@ -31,6 +36,7 @@ The final runner includes every selected journey automatically, adds explicitly 
 Required YAML assertions remain mandatory; only explicit optional commands and conditional branches may be optional.
 Final acceptance runs complete selected YAML journeys even when a development render smoke was sufficient for a local style check.
 Reuse a compatible installed binary or a supported build; the shared binary cache is optional.
+The normal `product-flow.mjs build <UDID> --test-store` command can import a verified [shared native artifact](../../../docs/engineering/devops/native-binary-reuse.md#shared-native-cache), while each run starts fresh owned Metro for this checkout.
 After acceptance or failure, stop owned Metro with `product-flow.mjs stop-metro`, release the device lease, and shut down only the owned idle simulator through the lifecycle procedure.
 If sandbox access prevents the canonical simulator lease or media process inspection, retain the failure and resume through the existing authorized host owner; a plan or fixture pass is not native acceptance.
 
@@ -72,6 +78,8 @@ The runner validates all required entries before acquiring a device or clearing 
 
 Environment files may override only `EXPO_PUBLIC_` values and stay on the local machine.
 The two dev-login fixtures require their own `${EXPO_PUBLIC_DEV_LOGIN_EMAIL}` and `${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}` values.
+Configured Dev Login accounts must already exist with the documented billing state; failed fixture logins preserve the login error and never attempt registration.
+Set both credentials together in the runner and its owned Metro environment.
 The adapter receives its configured arguments followed by the flow name and owned simulator UDID, with the fixture's environment loaded.
 It selects and installs a compatible candidate artifact through the canonical native commands and signs into the documented real account/store state.
 Pre-provision actual purchases, expiry and account recreation through the product; the bounded selection/sign-in step has 60 seconds and must not fabricate receipts or database entitlement.
@@ -89,10 +97,23 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
+`onboarding-guided-preview` checks payment Back after fresh sign-in and after a second, already signed-in checkout, preserving the craving and all four meal targets without purchasing.
+Its payment and return screenshots distinguish an exit offer from a successful preview return.
+`components/OnboardingPaymentBack.test.tsx` exercises the real preview, sign-in, trial, reminder and payment screens with intact and deliberately removed native history, including both visible and hardware Back.
+Owned continuations and cold payment entry retain their exit checks in `PaymentCompletion.test.tsx` and `PaymentPlanSelection.test.tsx`.
+Run the complete candidate selection with `node scripts/sim/ci.mjs --scope=full --udid=<UDID>` using the configured journey fixtures; guided preview uses `unsubscribed-dev`.
+The existing durable sim-stability owner runs the final clean three-run MAIN batch through `~/fitsy-refactor/sim-review/stability.sh 3` after protected integration; a branch replay does not establish MAIN stability.
+
 Check saved flow syntax with `maestro check-syntax apps/mobile/e2e/flows/<flow>.yaml` before acquiring a simulator.
 If Maestro cannot initialize its normal cache in a restricted workspace, set `JAVA_OPTS=-Duser.home=<owned-writable-temporary-directory>` for syntax checks.
 This uses a separate Java cache without modifying the normal installation or changing the shell's home directory.
 The canonical media check also requires host process-ownership inspection; a sandbox denial must be resolved through the existing host owner without disabling that preflight.
+If XCTest setup reports `No space left on device`, recover eligible host resources before rerunning; `scripts/sim/ci.mjs` checks disk admission before driving any journey.
+
+`menu-macro-serving` clears app data and keychain to preserve its anonymous starting state.
+Its bounded startup retry waits for the launch animation and the original `Find meals that fit` screen before opening the restaurant.
+Missing welcome UI or a genuine crash still fails; product interactions and the full flow are never retried.
+`scripts/sim/ci.test.ts` protects that startup boundary, including the mandatory screen, timeouts and retry limit.
 
 `chain-menu-serving` clears app and keychain state to prove anonymous menu access.
 On a Debug dev-client build, clearing state can return to Expo's Development Build launcher; the flow selects local Metro before waiting for `welcome-start`.
@@ -102,6 +123,13 @@ Keep checkout controls absent until authentication succeeds.
 `components/ChainMenuServing.test.tsx` checks the saved flow's final selectors against the real menu and sign-in screens, while `scripts/sim/ci.test.ts` covers its launch contract and render-smoke consumer.
 The Mac's advisory exclusions live outside this repository in `~/fitsy-refactor/sim-review/poller.mjs`; remove `chain-menu-serving.yaml` from `KNOWN_FAILING` after a passing native run of the repaired flow.
 Remove `onboarding-target-ranked-search.yaml` (#525) from that same list after its repaired flow passes on the Debug dev build.
+
+`onboarding-returning-preview` reconnects a cleared Debug client to local Metro before checking `welcome-start`.
+Both Dev Login checkpoints wait for checkout or a completed authentication failure, reject `Dev Login Failed`, and require the real paywall before continuing.
+Its original missing-logo capture contains `Dev Login Failed` with `Email already registered`: check the fixture credentials and the values bundled by owned Metro before investigating plan rendering.
+The flow records a real decline, clears only the disposable keychain, and retains the anonymous preview, locked-meal, cancellation and cold-resume checks without purchasing.
+`components/OnboardingReturningPreview.test.tsx` exercises the real sign-in, paywall and decline with a rejected fixture login followed by a corrected retry.
+Run `node scripts/sim/ci.mjs --scope=flow --flows=onboarding-returning-preview --udid=<UDID>` with `unsubscribed-dev`, then remove `onboarding-returning-preview.yaml` (#527) from the Mac's `KNOWN_FAILING` list after a passing native run.
 
 `reminders` uses `unsubscribed-dev` to check guest access, leaving without opt-in, native denial, grant and permission persistence after relaunch without purchasing.
 After Dev Login completes, it opens notification settings and uses `reminders-enable`; it does not assume a paywall destination or an eligible trial offer.
@@ -133,7 +161,13 @@ When an actual eligible mixed catalog is available, separately verify both defau
 
 `onboarding-search-highlight` follows real onboarding with meal prep selected so Search is the first preview tip.
 It captures entry, settled pizza results and Back to Search, then verifies all five tips, completion, replay and Skip.
+It asserts the 58-point highlight at entry, after results, on Back and on replay, and checks dismissal after completion and Skip.
+The coachmark overlay owns the modal accessibility boundary; marking its tooltip modal also hides the sibling ring from iOS accessibility and Maestro.
+`components/CoachMarks.test.tsx` queries the ring without hidden-element overrides through measurement and result relayout.
+Clearing a Debug client's state can return to the Development Build launcher; the startup-only retry reconnects to local Metro before observing `welcome-start`.
+`scripts/sim/ci.test.ts` checks that startup contract alongside the existing guest journeys.
 Run it on both a small and normal supported iPhone through the canonical simulator runner.
+After passing native runs, remove `onboarding-search-highlight.yaml` (#524) from `KNOWN_FAILING` in the Mac's external `~/fitsy-refactor/sim-review/poller.mjs`.
 The entry screenshot records the first observed state; a fast response can finish before that capture, so it alone does not prove the loading transition.
 Retain source-bound loading, transition and results captures with viewport and safe-area provenance when reproducing layout timing, and inspect equal clearance around the Search field and the tooltip position in each image.
 Preserve original screenshots, approvals and raw failed evidence; obtain explicit UI approval for changed candidate states before final acceptance.

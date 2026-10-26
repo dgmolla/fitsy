@@ -28,7 +28,7 @@ signed in without targets -> `/macro-setup`.
 | `/welcome/preview` | nutrition trust | `preview-pick-1`, `preview-guide` | Real search, restaurant photos, three visible picks and guided tour; locked menus and extra results open plans |
 | `/welcome/trial` | account creation with selected preview | `trial-offer-note` | Free trial introduction only with live eligibility; other offers route directly to payment |
 | `/welcome/trial-reminder` | trial introduction | `trial-reminder-allow`, `trial-reminder-skip` | Name the schedulable default plan; optional OS permission; schedule only after verified trial purchase |
-| `/welcome/payment` | reminder screen or locked action | `paywall-plan-yearly` | Live plans; root launch has no fabricated Back; explicit decline resets the stack |
+| `/welcome/payment` | reminder screen or locked action | `paywall-plan-yearly` | Live plans; fresh preview Back retains search and targets; cold/owned/spent checkout exits; explicit decline resets the stack |
 | `/welcome/notification-permission` | legacy links | `notification-allow`, `notification-skip` | Remind me directly asks OS permission; no choices; then selected meal |
 | `/auth/login` | "Have an account? Log in" link on the problem screen (router.push, no intermediate screen) | "Welcome back", "Continue with Apple" | Apple/Google/email in one screen |
 | `/welcome/signin` | locked preview action | `signup-selected-restaurant`, `signup-apple`, `signup-google` | Selected restaurant/search/targets remain visible; authenticated onboarding continues to trial introduction |

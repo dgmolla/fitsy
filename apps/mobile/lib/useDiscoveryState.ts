@@ -126,7 +126,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     try {
       await saveOnboardingField('previewArea', `${location.lat}:${location.lng}`);
       await saveOnboardingField('previewCraving', query.trim());
-      await routeToPaywall({ intent: {
+      await routeToPaywall({ previewReturn: true, intent: {
         action: restaurant ? 'menu' : 'discovery', restaurantId: restaurant?.id,
         menuItemId: restaurant?.bestMatch?.menuItemId, mealName: restaurant?.bestMatch?.name,
         restaurantName: restaurant?.name, photoUrl: restaurant?.photoUrl,

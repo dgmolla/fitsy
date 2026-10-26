@@ -92,6 +92,7 @@ The `product-flow/local` publisher checks that receipt before setting its exact-
 
 **Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes.
 CI runs static checks, unit tests and builds on Linux, without simulator execution or simulator secrets.
+Hosted L2 uses the same owned PostGIS launcher, target assertions, migrations and data-only seed as local database verification.
 Run `npm run verify:sim-plan` to inspect `none`, `smoke`, `flow` or `full` scope and its reason.
 The planner uses the retained reviewer ownership router and simulator path tiers, mapping changed mobile screens and API contracts to the existing Maestro flows.
 Navigation, auth, billing, native configuration, release and unmapped mobile-facing paths require all flows; changes without mobile consumers require no simulator.
@@ -113,6 +114,7 @@ The pre-push hook stays a cheap static and focused-test gate.
 
 Load the dev environment on the Mac and activate a compatible existing binary or use a supported build with measured capacity through the native procedure below.
 The shared binary cache is optional, and compatibility still requires matching native inputs, configuration and the served candidate source.
+The ordinary `product-flow.mjs build` entrypoint selects local receipts, then verified [shared native artifacts](native-binary-reuse.md#shared-native-cache), before compiling; `FITSY_NATIVE_CACHE_DIR=off` retains the uncached path.
 The local scripted gate requires an explicitly owned, booted simulator and validates its native receipt, installed artifact, source and dev backend before driving it.
 It uses `FITSY_SIM_OWNER` for the existing exclusive device lease and releases its own Maestro processes and Metro after execution.
 Retire only the task's idle simulator through the resource lifecycle after the native phase; preserve active or shared devices and required evidence.

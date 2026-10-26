@@ -23,7 +23,31 @@ beforeAll(() => {
 });
 afterAll(() => { rmSync(directory, { recursive: true, force: true }); });
 
-test.each(['chain-menu-serving', 'onboarding-target-ranked-search'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
+test('anonymous menu startup retries only bounded observations before opening the restaurant', () => {
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/menu-macro-serving.yaml'), 'utf8')) as [unknown, {
+    launchApp?: object;
+    retry?: object;
+    runFlow?: object;
+    openLink?: string;
+  }[]];
+  const launch = commands.findIndex(step => step.launchApp);
+  expect(commands.filter(step => step.launchApp)).toHaveLength(1);
+  expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true });
+  // This whole block must remain observations: no launch, links or product actions.
+  expect(commands[launch + 1]).toEqual({
+    retry: {
+      maxRetries: 2,
+      commands: [
+        { waitForAnimationToEnd: { timeout: 10000 } },
+        { extendedWaitUntil: { visible: 'Find meals that fit', timeout: 15000 } },
+      ],
+    },
+  });
+  expect(commands.filter(step => step.retry || step.runFlow)).toHaveLength(1);
+  expect(commands[launch + 2]).toEqual({ openLink: "${'fitsy://restaurant/' + output.seed.id}" });
+});
+
+test.each(['chain-menu-serving', 'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, {
     launchApp?: object;
     retry?: { maxRetries: number; commands: {
@@ -34,7 +58,8 @@ test.each(['chain-menu-serving', 'onboarding-target-ranked-search'])('%s reconne
     tapOn?: { id: string };
   }[]];
   const launch = commands.findIndex(step => step.launchApp);
-  expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true });
+  expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true,
+    ...(flow === 'onboarding-search-highlight' ? { permissions: { notifications: 'deny' } } : {}) });
   const startup = commands[launch + 1]?.retry;
   expect(startup).toBeDefined();
   expect(startup!.maxRetries).toBeLessThanOrEqual(2);

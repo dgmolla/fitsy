@@ -107,6 +107,7 @@ The runner resolves every required fixture before native execution, prepares it 
 It preserves the entire selected flow set and fails when genuine purchase history or the required store build is unavailable.
 Explicit scopes may expand the plan, but cannot omit its journeys or replace behavior coverage with render smoke.
 Use an existing compatible binary or a supported build with measured capacity; a shared binary cache is optional.
+The ordinary native build command checks the [shared immutable cache](../../docs/engineering/devops/native-binary-reuse.md#shared-native-cache) after local receipts; its regression suite runs through the scripts workspace's Node bridge in the existing test check.
 Retire owned Metro, drivers and simulator resources at the end of the phase through the existing lifecycle controls.
 CI execution is refused by the local runner, and the registry contains no native execution check.
 Replay scope regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/simulator-scope.test.ts sim/ci.test.ts`.
@@ -117,6 +118,11 @@ The local pre-push hook runs size/domain checks, then cheap static checks and fo
 UI smoke executes locally on the Mac, with no simulator step added to this hook.
 A fresh checkout needs installed dependencies but no issue binding, review daemon or home-directory review state.
 Keep dependencies local to this checkout so workspace links resolve its own packages.
+When the dependency preflight reports `verification dependencies are missing`, run `npm ci` in that checkout before rerunning the unchanged verifier or hook.
+If network access is unavailable but an existing npm cache contains the lockfile's packages, copy that cache to a writable task-owned directory and run `npm ci --offline --cache <task-cache>`.
+Keep the lockfile and hook unchanged; a cache miss still requires restoring the missing package through supported access.
+In a sandbox where Prisma cannot update its home cache, copy the existing Prisma cache into `<task-cache>/prisma` and set `XDG_CACHE_HOME=<task-cache>` for the normal verification command.
+Prisma consumes this supported cache location while retaining its normal generation and engine checks.
 Type checking calls each workspace's `npm run type-check`, including Prisma generation from the repository schema before compiling the API.
 This refreshes stale generated types after schema updates without requiring a database connection or migration.
 The scripts TypeScript project maps `@fitsy/shared` imports to this checkout's source even when a workspace package link is unavailable.
@@ -129,7 +135,9 @@ The L2 test check runs complete affected API, scripts and mobile groups, includi
 Unknown comparison history expands full-suite selection to every group.
 An empty group selection or an engine reporting zero passing tests fails the test check.
 Temporary engine reports count the current execution and are removed afterward.
-The owned PostGIS target checks and migration steps still run before local database tests.
+Local and hosted L2 checks use the same worktree-owned PostGIS launcher, including its OS lock, inspected container identity, loopback target checks, migrations and data-only seed.
+The canonical runner creates that disposable database before database-dependent checks; the hosted job does not provision a separate service container.
+An unowned target or caller-supplied ownership markers cannot replace the inspected database assertion.
 
 ## Candidate validation order
 
@@ -146,7 +154,7 @@ The registry marks product-flow as `stage: acceptance`; layers 2 and above also 
 The cheap stage excludes these checks.
 The runner completes cheap static checks before focused tests.
 API and pipeline database selections, plus selections with caller database URLs, use the owned disposable database with its target and ownership assertions.
-Full local builds remain database-free and run before database acquisition.
+Full builds remain database-free and run before database acquisition.
 CI runs its own required checks independently of local review state.
 
 The saved focused recipe contains test paths and an optional Jest pattern, never a passing result.

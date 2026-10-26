@@ -5,7 +5,8 @@ This release replaces the repeated opening pitch with one welcome, coverage sele
 The guided preview keeps dish names and macros visible and offers one craving search.
 Full menus, continued discovery and saving lead to live subscription terms with the selected meal preserved.
 
-Back follows actual navigation history.
+Back from a fresh preview checkout returns to its selected search and targets, including when native navigation history is unavailable.
+The return destination travels only with the current checkout routes; cold payment entry and owned or spent checkout continuations retain the exit offer.
 Explicit decline resets the hard paywall, and successful purchase or restore continues through optional reminders to the selected dish.
 Restarting resumes unfinished setup rather than silently replacing the selected area or targets.
 Prices, introductory eligibility and trial duration come from the store; nearby dish totals come from the API.

@@ -32,7 +32,9 @@ function select(entry: string, layers = "0-1", runs = "ci") {
   const verify = join(directory, "scripts/verify"); mkdirSync(verify, { recursive: true });
   copyFileSync(join(root, "scripts/verify/run.mjs"), join(verify, "run.mjs"));
   copyFileSync(join(root, "scripts/verify/impact-plan.mjs"), join(verify, "impact-plan.mjs"));
-  writeFileSync(join(verify, "registry.yml"), "checks:\n" + entry);
+  // This fixture tests selection, not database acquisition for its no-op check.
+  // run-db-order.test.ts and local-db.test.ts cover the owned database lifecycle.
+  writeFileSync(join(verify, "registry.yml"), "checks:\n" + entry.replace(/^    database: true\n/m, ''));
   const script = entry.match(/script: (\S+)/)![1]!;
   writeFileSync(join(verify, script), '#!/bin/sh\nprintf \'{"status":"pass"}\\n\'\n');
   // The real selector sees an API-only diff and constant-pass fixture checks.
@@ -41,7 +43,9 @@ function select(entry: string, layers = "0-1", runs = "ci") {
   symlinkSync("/bin/bash", join(directory, "bash"));
   symlinkSync(join(root, "node_modules"), join(directory, "node_modules"));
   const result = spawnSync(process.execPath, [join(verify, "run.mjs"), "--layer=" + layers, "--runs=" + runs, "--scope=changed"], { env: { PATH: directory, CI: "" }, encoding: "utf8" });
-  expect(result.status).toBe(entry.includes('blocking: shadow') ? 1 : 0);
+  const expectedStatus = entry.includes('blocking: shadow') ? 1 : 0;
+  expect({ status: result.status, output: result.status === expectedStatus ? '' : result.stdout + result.stderr })
+    .toEqual({ status: expectedStatus, output: '' });
   const name = entry.match(/name: (\S+)/)![1]!;
   return result.stdout.trim().split('\n').map(line => JSON.parse(line)).find(result => result.name === name);
 }

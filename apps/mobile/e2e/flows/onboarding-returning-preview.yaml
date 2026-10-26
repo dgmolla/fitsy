@@ -9,10 +9,17 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
       - waitForAnimationToEnd:
           timeout: 10000
-      - assertVisible:
-          id: welcome-start
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
 - tapOn:
     point: "92%,93%"
 - openLink: com.fitsy.mobile://welcome/location-permission
@@ -42,11 +49,18 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
     id: paywall-logo
 # Authenticate through the configured disposable dev account and decline the
 # real paywall. This does not purchase or synthesize entitlement.
-- tapOn: "Dev login"
+- tapOn:
+    id: signup-dev
+# Wait for either checkout or an enabled sign-in control after failure.
+# Diagnose the authentication alert before asserting the checkout destination.
 - extendedWaitUntil:
     visible:
-      id: paywall-logo
+      id: '^(paywall-logo|signup-dev)$'
+      enabled: true
     timeout: 30000
+- assertNotVisible: "Dev Login Failed"
+- assertVisible:
+    id: paywall-logo
 - scrollUntilVisible:
     element:
       id: welcome-skip
@@ -73,6 +87,13 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
 - launchApp:
     clearState: false
     clearKeychain: true
+- runFlow:
+    when:
+      visible: "Development Build"
+    commands:
+      - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
+- waitForAnimationToEnd:
+    timeout: 10000
 - openLink: com.fitsy.mobile://welcome/preview
 - tapOn:
     text: "^Open$"
@@ -234,7 +255,16 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
     id: paywall-logo
 # Real dev authentication completes the owned no-trial continuation once.
 # No purchase is made on this shared dev account.
-- tapOn: "Dev login"
+- tapOn:
+    id: signup-dev
+- extendedWaitUntil:
+    visible:
+      id: '^(paywall-logo|signup-dev)$'
+      enabled: true
+    timeout: 30000
+- assertNotVisible: "Dev Login Failed"
+- assertVisible:
+    id: paywall-logo
 - extendedWaitUntil:
     visible:
       id: paywall-offer-paid

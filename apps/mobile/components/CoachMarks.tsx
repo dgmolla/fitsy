@@ -185,7 +185,8 @@ export function CoachMarks({ visible, steps, onDone, onStepShown, onStepLeaving,
         {bubbleStyle && arrowStyle && (
           <>
             {rect && rect.width > 0 && <View pointerEvents="none" style={[s.arrow, arrowStyle]} />}
-            <ScrollView style={[s.bubble, bubbleStyle, { maxHeight: winH - insets.top - insets.bottom - 28 }]} contentContainerStyle={s.bubbleContent} onContentSizeChange={(_width, h) => setBubbleHeight(Math.min(h, winH - insets.top - insets.bottom - 28))} accessibilityViewIsModal>
+            {/* The overlay owns the modal boundary; a modal bubble hides its sibling highlight from iOS accessibility. */}
+            <ScrollView style={[s.bubble, bubbleStyle, { maxHeight: winH - insets.top - insets.bottom - 28 }]} contentContainerStyle={s.bubbleContent} onContentSizeChange={(_width, h) => setBubbleHeight(Math.min(h, winH - insets.top - insets.bottom - 28))}>
               <View style={s.heading}>
                 <Text style={s.counter}>{index + 1} of {steps.length}</Text>
                 <Pressable testID="coachmark-skip" onPress={onDone} style={s.textButton} accessibilityRole="button" accessibilityLabel="Skip tour"><Text style={s.skip}>Skip</Text></Pressable>

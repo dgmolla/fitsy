@@ -4,6 +4,8 @@ Use the build, run and finish sequence in [shipping.md](../../docs/engineering/d
 Set `FITSY_SIM_OWNER` and pass the owned simulator UDID.
 The runner checks resolved native/profile identity, app and installed-app hashes, separate JavaScript and public configuration hashes, simulator state, disk headroom and the owned Metro process before starting each Maestro flow.
 The [native binary reuse cookbook](../../docs/engineering/devops/native-binary-reuse.md) lists the exact compile cases and example decisions.
+The normal build path checks optional shared immutable Debug artifacts after local receipts; imports preserve original receipt bytes and require current-source Metro and acceptance.
+Use an absolute `FITSY_NATIVE_CACHE_DIR` for alternate local storage or `off` to retain the uncached path.
 Development and review `run` invocations default to `--mode=development`, which executes the same Maestro assertions and screenshots without starting the explicit recorder.
 Use `--mode=final-candidate` once the PR candidate is stable for publication evidence.
 Run final acceptance directly against the current source and retain its app/backend/evidence identities.

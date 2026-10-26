@@ -1,5 +1,5 @@
 jest.mock("@/lib/marketingEmail", () => ({
-  sendMarketingEmail: jest.fn(),
+  sendMarketingEmailResult: jest.fn(),
 }));
 
 jest.mock("@/lib/emailTemplates", () => ({
@@ -25,7 +25,7 @@ jest.mock("@fitsy/shared", () => ({
 
 import { GET } from "./route";
 import { NextRequest } from "next/server";
-import { sendMarketingEmail } from "@/lib/marketingEmail";
+import { sendMarketingEmailResult } from "@/lib/marketingEmail";
 import { marketingAudience } from "@/lib/marketingAudience";
 import { MAX_SENDS_PER_RUN, recordSend, sentWithin } from "@/lib/marketingLedger";
 
@@ -47,7 +47,7 @@ beforeEach(() => {
   (marketingAudience as jest.Mock).mockResolvedValue([ACCOUNT, WAITLIST_ONLY]);
   (sentWithin as jest.Mock).mockResolvedValue(false);
   (recordSend as jest.Mock).mockResolvedValue(undefined);
-  (sendMarketingEmail as jest.Mock).mockResolvedValue(true);
+  (sendMarketingEmailResult as jest.Mock).mockResolvedValue({ ok: true });
 });
 
 afterEach(() => {
@@ -73,7 +73,7 @@ describe("GET /api/internal/marketing/weekly", () => {
   it("dry run reports the unsent audience without sending", async () => {
     const res = await GET(makeRequest("?dryRun=1"));
     expect(await res.json()).toEqual({ ok: true, dryRun: true, edition: "ed-1", eligible: 2 });
-    expect(sendMarketingEmail).not.toHaveBeenCalled();
+    expect(sendMarketingEmailResult).not.toHaveBeenCalled();
   });
 
   it("sends with the matching recipient kind and week-stamped key, then records the ledger", async () => {
@@ -87,14 +87,14 @@ describe("GET /api/internal/marketing/weekly", () => {
       failed: 0,
       unsent: 0,
     });
-    expect(sendMarketingEmail).toHaveBeenNthCalledWith(1, {
+    expect(sendMarketingEmailResult).toHaveBeenNthCalledWith(1, {
       userId: "u1",
       to: "alice@example.org",
       subject: "S",
       html: "<p>h</p>",
       idempotencyKey: "weekly:ed-1:w35:alice@example.org",
     });
-    expect(sendMarketingEmail).toHaveBeenNthCalledWith(2, {
+    expect(sendMarketingEmailResult).toHaveBeenNthCalledWith(2, {
       waitlistId: "wl1",
       to: "web@example.org",
       subject: "S",
@@ -111,7 +111,7 @@ describe("GET /api/internal/marketing/weekly", () => {
     (sentWithin as jest.Mock).mockImplementation(async (email: string) => email === "web@example.org");
     const res = await GET(makeRequest());
     expect(await res.json()).toEqual(expect.objectContaining({ sent: 1, paced: 1, unsent: 0 }));
-    expect(sendMarketingEmail).not.toHaveBeenCalledWith(expect.objectContaining({ to: "web@example.org" }));
+    expect(sendMarketingEmailResult).not.toHaveBeenCalledWith(expect.objectContaining({ to: "web@example.org" }));
     expect(recordSend).not.toHaveBeenCalledWith("web@example.org", "weekly", "ed-1:w35");
   });
 
@@ -138,9 +138,9 @@ describe("GET /api/internal/marketing/weekly", () => {
     const many = Array.from({ length: 5 }, (_, i) => ({ email: `u${i}@example.org`, userId: `u${i}` }));
     (marketingAudience as jest.Mock).mockResolvedValue(many);
     // Each send "takes" 100s: after three the 240s budget is spent.
-    (sendMarketingEmail as jest.Mock).mockImplementation(async () => {
+    (sendMarketingEmailResult as jest.Mock).mockImplementation(async () => {
       jest.advanceTimersByTime(100_000);
-      return true;
+      return { ok: true };
     });
     const res = await GET(makeRequest());
     expect(await res.json()).toEqual(expect.objectContaining({ sent: 3, unsent: 2 }));
@@ -152,7 +152,7 @@ describe("GET /api/internal/marketing/weekly", () => {
   });
 
   it("does not record a failed send, and a run with failures is reported to Slack so it is re-run", async () => {
-    (sendMarketingEmail as jest.Mock).mockResolvedValue(false);
+    (sendMarketingEmailResult as jest.Mock).mockResolvedValue({ ok: false, reason: "provider_rejected", status: 500 });
     const res = await GET(makeRequest());
     expect(await res.json()).toEqual(expect.objectContaining({ sent: 0, failed: 2, unsent: 0 }));
     expect(recordSend).not.toHaveBeenCalled();

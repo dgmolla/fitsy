@@ -122,20 +122,55 @@ describe('confirmed session adoption', () => {
     expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])('forwards disposable credentials on login and registration (register=%s)', async register => {
+  it('signs into the pre-provisioned disposable account with its configured credentials', async () => {
     process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL = 'hosted-fixture@example.test';
     process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD = 'non-default-fixture-password';
-    if (register) jest.mocked(global.fetch).mockResolvedValueOnce({
+    await devLogin();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = jest.mocked(global.fetch).mock.calls[0];
+    expect(url).toMatch(/\/api\/auth\/login$/);
+    expect(JSON.parse(init!.body as string)).toEqual({
+      email: 'hosted-fixture@example.test', password: 'non-default-fixture-password',
+    });
+  });
+
+  it.each([401, 429, 503])('preserves a configured fixture login error (HTTP %s) without registration or session adoption', async status => {
+    process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL = 'hosted-fixture@example.test';
+    process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD = 'incorrect-fixture-password';
+    global.fetch = makeMockFetch({ ok: false, status, body: { error: 'Fixture login rejected' } });
+    await expect(devLogin()).rejects.toThrow('Fixture login rejected');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(jest.mocked(global.fetch).mock.calls[0][0]).toMatch(/\/api\/auth\/login$/);
+    expect(SupabaseMock.supabase.auth.setSession).not.toHaveBeenCalled();
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it.each(['email', 'password'] as const)('rejects a fixture with only its %s configured before sending credentials', async configured => {
+    delete process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL;
+    delete process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD;
+    process.env[configured === 'email' ? 'EXPO_PUBLIC_DEV_LOGIN_EMAIL' : 'EXPO_PUBLIC_DEV_LOGIN_PASSWORD'] = 'fixture-only';
+    await expect(devLogin()).rejects.toThrow('Set both EXPO_PUBLIC_DEV_LOGIN_EMAIL and EXPO_PUBLIC_DEV_LOGIN_PASSWORD');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('still creates the default throwaway account on its first local login', async () => {
+    delete process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL;
+    delete process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD;
+    jest.mocked(global.fetch).mockResolvedValueOnce({ ok: false, status: 401,
       json: async () => ({ error: 'Invalid credentials' }),
     } as Response);
     await devLogin();
-    expect(global.fetch).toHaveBeenCalledTimes(register ? 2 : 1);
-    for (const [url, init] of jest.mocked(global.fetch).mock.calls) {
-      expect(url).toMatch(/\/api\/auth\/(login|register)$/);
-      expect(JSON.parse(init!.body as string)).toEqual({
-        email: 'hosted-fixture@example.test', password: 'non-default-fixture-password',
-      });
-    }
+    expect(jest.mocked(global.fetch).mock.calls.map(([url]) => String(url).split('/').at(-1))).toEqual(['login', 'register']);
+    expect(SupabaseMock.supabase.auth.setSession).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([429, 503])('does not register the default account after HTTP %s', async status => {
+    delete process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL;
+    delete process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD;
+    global.fetch = makeMockFetch({ ok: false, status, body: {} });
+    await expect(devLogin()).rejects.toThrow(`HTTP ${status}`);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(SupabaseMock.supabase.auth.setSession).not.toHaveBeenCalled();
   });
 
   it('retains the shared local defaults without configured credentials', async () => {

@@ -28,7 +28,7 @@ import { clearPaymentSignInContinuation, navigateBackFromPayment } from '@/lib/p
 import { useOwnedHardwareBack } from '@/lib/useOwnedHardwareBack';
 
 export default function PaymentScreen() {
-  const { devTrialVisual, devPaywallVariant, devReminderEnabled } = useLocalSearchParams<{ devTrialVisual?: string; devPaywallVariant?: string; devReminderEnabled?: string }>();
+  const { devTrialVisual, devPaywallVariant, devReminderEnabled, previewReturn } = useLocalSearchParams<{ devTrialVisual?: string; devPaywallVariant?: string; devReminderEnabled?: string; previewReturn?: string }>();
   const visualScenario = devTrialVisualScenario(devTrialVisual);
   const visualRequested = visualScenario !== null;
   const simulatedReminder = visualRequested && devReminderEnabled === '1';
@@ -124,8 +124,9 @@ export default function PaymentScreen() {
   const discountTerms = purchaseTerms(discountedAnnual?.product, discountedAnnual ? introEligibility[discountedAnnual.product.identifier] : false);
   const discountPercent = savingPercent(offering?.annual?.product, discountedAnnual?.product);
   const onBack = useOwnedHardwareBack(() => {
-    void navigateBackFromPayment(navigation.canGoBack(), userId ?? undefined,
-      () => router.back(), () => setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'));
+    void navigateBackFromPayment(previewReturn === '1' || navigation.canGoBack(), userId ?? undefined,
+      () => { if (previewReturn === '1') router.dismissTo('/welcome/preview'); else router.back(); },
+      () => setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'));
   });
   const paywallVisible = focused && identityReady && !!userId && purchasesReady && !isUnknown && !isLapsed && entitled !== true && !visualRequested;
 

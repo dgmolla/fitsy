@@ -244,6 +244,7 @@ Before any code exists, write tests for:
    - `low` → round to 5g; `medium`/`high` → round to 1g
 
 3. **API contract tests** (once routes exist)
+   - `GET /api/restaurants/shuffle` - seeded weighting, hard filters, tolerance/radius fallback, availability, locked responses, explicit empties, rate limits and cache entitlement changes.
    - `GET /api/restaurants` — shape, pagination, filter params
    - Error responses: 400, 404, 500 shapes
 

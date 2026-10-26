@@ -62,7 +62,9 @@ flowchart TD
     LC --> LED
     LN --> LED
     LED -->|"wasSent? sentWithin 48h?"| WR
-    WR --> SEND[lib/marketingEmail.sendMarketingEmail]
+    WR --> SEND[lib/marketingEmail compliance gates]
+    WR --> DIAG[Fixed failure reason and HTTP status counts]
+    DIAG --> SLACK[Existing weekly Slack alert]
     LC --> SEND
     LN --> SEND
     SEND -->|"isEmailOptedOut(address)"| SUP{opted out?}
@@ -93,6 +95,8 @@ All three require the `CRON_SECRET` bearer.
 ## Constraints
 
 - Opt-out is address-keyed and enforced inside `sendMarketingEmail`; audience queries are a reporting pre-filter, not the gate.
+- Weekly sends use `sendMarketingEmailResult` for sanitized failure counts in the existing Slack alert; launch and confirmation retain the boolean wrapper.
+  See [failure diagnostics and safe recovery](marketing-emails.md#failure-diagnostics-and-safe-recovery).
 - Every marketing email carries the CAN-SPAM footer and RFC 8058 one-click headers (see [marketing-emails.md](marketing-emails.md)).
 - One send per (address, campaign, step), ever; the weekly step carries the week index so editions recur per rotation. The launch blast is additionally idempotent per row via `notifiedAt`.
 - No marketing email to an address within 48 hours of another one, except the launch blast, which is the one email people explicitly asked for.
