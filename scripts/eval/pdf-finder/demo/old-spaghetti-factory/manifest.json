@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "status": "unverified",
+  "chain": "The Old Spaghetti Factory",
+  "mode": "web-discovery",
+  "source": {
+    "requestedUrl": "https://www.osf.com/about/nutrition/",
+    "url": "https://www.osf.com/about/nutrition/",
+    "file": "downloads/01-9411da161c55.html",
+    "sha256": "9411da161c5582c9384078da84b413574f60774d5e93968c07f13d67ccdfc020",
+    "bytes": 524176,
+    "contentType": "text/html; charset=UTF-8"
+  },
+  "extraction": {
+    "method": "parse5; labelled HTML tables/cards",
+    "textFile": "source.txt",
+    "sha256": "35b7981b69fcb75147263904455bb6f62ceb88d1ab43beec202e6d2e4de94891",
+    "itemCount": 175,
+    "diagnosticCount": 5
+  },
+  "reviewFile": "review.json",
+  "selectionReason": "Highest-ranked successfully parsed official candidate (score 165). Matches the supplied official domain. Nutrition/PDF URL or anchor text. Current official-page link outranks search-only documents. Selection does not verify facts or freshness."
+}
