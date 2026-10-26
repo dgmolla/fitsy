@@ -117,6 +117,26 @@ tags: [onboarding, discovery, changed-journey]
 - copyTextFrom:
     id: meal-target-calories
 - assertTrue: ${Number(maestro.copiedText) > 0}
+# Continue must save an edit while the decimal keyboard is still open.
+- tapOn:
+    id: meal-target-calories
+- eraseText: 7
+- inputText: "700"
+- assertVisible: "700"
+- assertVisible:
+    id: welcome-continue
+    enabled: true
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
+- tapOn:
+    id: welcome-back
+# Whole-gram rounding can change calories. Read the saved allocation for every
+# backend and preview assertion, rather than mixing old grams with the new draft.
+- copyTextFrom:
+    id: meal-target-calories
+- evalScript: ${output.assistedCalories = Number(maestro.copiedText)}
+- assertTrue: ${Math.abs(output.assistedCalories - 700) <= 9}
 - copyTextFrom:
     id: meal-target-protein
 - evalScript: ${output.assistedProtein = Number(maestro.copiedText)}
@@ -127,8 +147,9 @@ tags: [onboarding, discovery, changed-journey]
     id: meal-target-fat
 - evalScript: ${output.assistedFat = Number(maestro.copiedText)}
 - assertTrue: ${output.assistedProtein > 0 && output.assistedCarbs > 0 && output.assistedFat > 0}
+- assertTrue: ${output.assistedCalories === 4 * output.assistedProtein + 4 * output.assistedCarbs + 9 * output.assistedFat}
 # Ask the real backend about these exact targets before asserting the UI outcome.
-- evalScript: ${output.assistedUrl = 'https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=700&protein=' + output.assistedProtein + '&carbs=' + output.assistedCarbs + '&fat=' + output.assistedFat}
+- evalScript: ${output.assistedUrl = 'https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=' + output.assistedCalories + '&protein=' + output.assistedProtein + '&carbs=' + output.assistedCarbs + '&fat=' + output.assistedFat}
 - evalScript: ${output.assistedBaseResponse = http.get(output.assistedUrl)}
 - assertTrue: ${output.assistedBaseResponse.status === 200}
 - evalScript: ${output.assistedBase = json(output.assistedBaseResponse.body)}
@@ -138,11 +159,6 @@ tags: [onboarding, discovery, changed-journey]
 - evalScript: ${output.assistedPizza = json(output.assistedPizzaResponse.body)}
 # Targets rank matching meals; they must not filter out a common craving.
 - assertTrue: ${output.assistedPizza.data.length > 0}
-- tapOn:
-    id: meal-target-calories
-- eraseText: 7
-- inputText: "700"
-- assertVisible: "700"
 - tapOn:
     id: welcome-continue
 - assertVisible: "A little context.*A better choice.*"
@@ -181,7 +197,7 @@ tags: [onboarding, discovery, changed-journey]
 - copyTextFrom:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
-- assertVisible: "700"
+- assertVisible: ${String(output.assistedCalories)}
 - copyTextFrom:
     id: discovery-hero
 - assertTrue: ${maestro.copiedText.includes(output.assistedPizza.data[0].name) && maestro.copiedText.includes(output.assistedPizza.data[0].bestMatch.name)}
@@ -196,7 +212,7 @@ tags: [onboarding, discovery, changed-journey]
     visible:
       id: discovery-hero
     timeout: 30000
-- assertVisible: "700"
+- assertVisible: ${String(output.assistedCalories)}
 - copyTextFrom:
     id: discovery-hero
 - assertTrue: ${maestro.copiedText.includes(output.assistedBase.data[0].name) && maestro.copiedText.includes(output.assistedBase.data[0].bestMatch.name)}
@@ -205,7 +221,7 @@ tags: [onboarding, discovery, changed-journey]
 - assertVisible: "A little context.*A better choice.*"
 - tapOn:
     id: welcome-back
-- assertVisible: "700"
+- assertVisible: ${String(output.assistedCalories)}
 - assertVisible:
     id: meal-goal-build_muscle
     selected: true
@@ -215,7 +231,7 @@ tags: [onboarding, discovery, changed-journey]
 - waitForAnimationToEnd
 - tapOn:
     id: welcome-continue
-- assertVisible: "700"
+- assertVisible: ${String(output.assistedCalories)}
 - tapOn:
     id: welcome-continue
 - assertVisible: "A little context.*A better choice.*"
@@ -225,7 +241,7 @@ tags: [onboarding, discovery, changed-journey]
     visible:
       id: discovery-hero
     timeout: 30000
-- assertVisible: "700"
+- assertVisible: ${String(output.assistedCalories)}
 # Exercise the standalone daily target editor using the goal/profile prepared above.
 - openLink: com.fitsy.mobile://macro-setup?fromOnboarding=1
 - tapOn:

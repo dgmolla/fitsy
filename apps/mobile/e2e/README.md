@@ -3,9 +3,15 @@
 The canonical scenario, ownership, evidence and publication procedure is in `docs/engineering/devops/shipping.md`.
 Inspect the dynamic selection with `npm run verify:sim-plan` from the repository root.
 The maintained path-to-flow mapping lives in `scripts/verify/impact-plan.mjs`; extend it and its table-driven tests when adding screen coverage.
-Unmapped mobile paths expand to the full flow set, and `needs-sim` forces flows for otherwise non-mobile changes.
+Mapped mobile and API contracts select their affected journeys together.
+Shared behavior, native inputs and unmapped mobile-facing paths expand to the full flow set, and `needs-sim` forces flows for otherwise non-mobile changes.
+The plan explains every omitted journey; explicit local scopes and flow lists cannot omit required coverage.
 Every UI edit triggers local coverage: proven screen-local style/copy reuses a maintained flow through its mapped render assertion and saves a screenshot, behavior changes run affected E2E flows, and shared UI/app shells run the full suite.
 Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the maintained YAML flows.
+`onboarding-assisted-targets` submits a calorie edit directly through Continue with the decimal keyboard open, then checks Back preserves the saved allocation.
+Its preview comparisons use those saved calories and grams, including whole-gram rounding, for the real dev API request.
+`onboarding-target-ranked-search` settles each previous field and clears generated values before typing, then saves with the decimal keyboard open and checks Back restores all four targets.
+Its live ranked queries and preview assertions use that persisted allocation: 50 g protein, 44 g carbs and 14 g fat settle to 502 kcal.
 CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
 The read-only classifier supplies data to the protected `sim-scope.yml` publisher; the bounded status description contains scope and flow count, and the poller reads exact names from the artifact.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
@@ -20,6 +26,13 @@ Use the Debug build with owned Metro so native Dev Login consumes those same env
 It resets only the synthetic Grilled Chicken Bowl bookmark, saves the meal through the UI and verifies it in Saved after relaunch.
 Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
 A local scope pass does not replace the source-bound final-candidate product-flow gate.
+Inspect `npm run verify:product-plan` for the same affected journeys and their required MCP categories.
+The final runner includes every selected journey automatically, adds explicitly requested diagnostic flows, and does not append unrelated cold-start or sign-in baselines.
+Required YAML assertions remain mandatory; only explicit optional commands and conditional branches may be optional.
+Final acceptance runs complete selected YAML journeys even when a development render smoke was sufficient for a local style check.
+Reuse a compatible installed binary or a supported build; the shared binary cache is optional.
+After acceptance or failure, stop owned Metro with `product-flow.mjs stop-metro`, release the device lease, and shut down only the owned idle simulator through the lifecycle procedure.
+If sandbox access prevents the canonical simulator lease or media process inspection, retain the failure and resume through the existing authorized host owner; a plan or fixture pass is not native acceptance.
 
 ## Local journey fixtures
 
@@ -81,6 +94,23 @@ If Maestro cannot initialize its normal cache in a restricted workspace, set `JA
 This uses a separate Java cache without modifying the normal installation or changing the shell's home directory.
 The canonical media check also requires host process-ownership inspection; a sandbox denial must be resolved through the existing host owner without disabling that preflight.
 
+`chain-menu-serving` clears app and keychain state to prove anonymous menu access.
+On a Debug dev-client build, clearing state can return to Expo's Development Build launcher; the flow selects local Metro before waiting for `welcome-start`.
+Embedded builds skip that conditional launcher step, and startup retries never repeat menu or authentication actions.
+After tapping a locked dish, assert the selected restaurant and `signup-apple`/`signup-google` controls because this entry uses contextual signup copy.
+Keep checkout controls absent until authentication succeeds.
+`components/ChainMenuServing.test.tsx` checks the saved flow's final selectors against the real menu and sign-in screens, while `scripts/sim/ci.test.ts` covers its launch contract and render-smoke consumer.
+The Mac's advisory exclusions live outside this repository in `~/fitsy-refactor/sim-review/poller.mjs`; remove `chain-menu-serving.yaml` from `KNOWN_FAILING` after a passing native run of the repaired flow.
+Remove `onboarding-target-ranked-search.yaml` (#525) from that same list after its repaired flow passes on the Debug dev build.
+
+`reminders` uses `unsubscribed-dev` to check guest access, leaving without opt-in, native denial, grant and permission persistence after relaunch without purchasing.
+After Dev Login completes, it opens notification settings and uses `reminders-enable`; it does not assume a paywall destination or an eligible trial offer.
+The `/welcome/notification-permission` screen requires an active purchase and cannot supply this inactive account's permission coverage.
+Keep the fixture's credentials in owned Metro as well as the runner environment; a `Dev Login Failed` alert indicates an authentication/setup failure, not a missing paywall plan.
+Both permission resets reconnect a cleared Debug client to local Metro before checking the welcome screen.
+`components/RemindersJourney.test.tsx` checks those startup steps and exercises the saved flow's sign-in continuation and opt-in control against real settings, preferences and scheduling for a never-subscribed account.
+Run `node scripts/sim/ci.mjs --scope=flow --flows=reminders --udid=<UDID>` with the local fixture configuration, then remove `reminders.yaml` (#528) from the Mac's `KNOWN_FAILING` list after the repaired flow passes natively.
+
 The assisted-targets journey also opens `/macro-setup`, asserts its daily editor and exercises Save and Skip; macro-setup render smoke stops at `macro-setup-save` on that screen.
 Run the native accessibility helper regression tests from the repository root with `node --test apps/mobile/e2e/helpers/native-ax.test.mjs` when changing these helpers.
 
@@ -88,6 +118,16 @@ Mobile MCP text dumps include state names in their legend.
 Use `isNativeFocused(dump, testID)` on a fresh observation before typing and `assertNativeValue(dump, testID, expected)` afterward.
 These helpers inspect the exact element row and fail closed for missing or duplicate selectors.
 They do not prove search results; assert the returned dish or empty-state recovery separately and retain the complete raw tool trace.
+
+## Mixed-duration trial reminders
+
+`paywall-mixed-trials-visual` covers annual two-day plus monthly seven-day trials and the reverse through the real three-screen onboarding journey.
+Its shared helper checks the named reminder offer, the schedulable purchase default, live prices and renewal copy, plan switching, unavailable reminders for short trials with and without simulated opt-in, and the visual-only checkout guard.
+Run it with `paywall-eligible-visual` through `scripts/sim/product-flow.mjs run <UDID> ... --mode=development` on an owned development build.
+The `annual-short` and `monthly-short` visual parameters propagate unchanged between screens.
+Every screenshot is labeled synthetic, and these flows request no notification permission, schedule nothing and cannot purchase or restore.
+They do not establish eligible Apple or RevenueCat catalog acceptance.
+When an actual eligible mixed catalog is available, separately verify both default purchases, plan switches, permission outcomes and the store-confirmed reminder schedule using that catalog and an eligible account.
 
 ## Preview Search highlight
 

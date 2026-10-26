@@ -50,10 +50,14 @@ function PlanReadyScreen() {
     return () => { cancelled = true; };
   }, []));
 
-  const valid = FIELDS.every(([key]) => parseTarget(targets[key]) !== null
-    && Number.isInteger(Number(targets[key]))
-    && Number(targets[key]) >= (key === 'calories' ? 1 : 0) && Number(targets[key]) <= (key === 'calories' ? 4000 : 500))
-    && Number(targets.calories) === macroCalories({ protein: Number(targets.protein), carbs: Number(targets.carbs), fat: Number(targets.fat) });
+  // Validate the same settled values that Continue saves. A native decimal
+  // keyboard need not blur the last input before the footer can be pressed.
+  const settled = hadAllocation.current && !isCompleteTarget(targets) ? targets
+    : settleTargetEdit(targets, lastEdited.current, data.goal ?? 'maintain', true, !caloriesEdited.current);
+  const valid = FIELDS.every(([key]) => parseTarget(settled[key]) !== null
+    && Number.isInteger(Number(settled[key]))
+    && Number(settled[key]) >= (key === 'calories' ? 1 : 0) && Number(settled[key]) <= (key === 'calories' ? 4000 : 500))
+    && Number(settled.calories) === macroCalories({ protein: Number(settled.protein), carbs: Number(settled.carbs), fat: Number(settled.fat) });
   const entered = { protein: parseTarget(targets.protein), carbs: parseTarget(targets.carbs), fat: parseTarget(targets.fat) };
   const incomplete = Object.values(entered).some(value => value === null);
   const enteredEnergy = macroCalories({ protein: entered.protein ?? 0, carbs: entered.carbs ?? 0, fat: entered.fat ?? 0 });
@@ -68,13 +72,7 @@ function PlanReadyScreen() {
     await saveOnboardingField('goal', goal);
   }
   async function proceed() {
-    if (hadAllocation.current && !isCompleteTarget(targets)) return;
-    const settled = settleTargetEdit(targets, lastEdited.current, data.goal ?? 'maintain', true, !caloriesEdited.current);
-    const complete = FIELDS.every(([key]) => parseTarget(settled[key]) !== null
-      && Number.isInteger(Number(settled[key]))
-      && Number(settled[key]) >= (key === 'calories' ? 1 : 0)
-      && Number(settled[key]) <= (key === 'calories' ? 4000 : 500));
-    if (!complete || busy) return;
+    if (!ready || !valid || busy) return;
     const isCurrent = begin();
     setBusy(true);
     try {

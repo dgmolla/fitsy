@@ -2,6 +2,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSyn
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import * as ts from 'typescript';
 
 const root = resolve(__dirname, '../..');
 const workspaces = ['apps/api', 'apps/mobile', 'packages/shared', 'scripts'];
@@ -74,4 +75,32 @@ test.each(['apps/api', 'apps/mobile packages/shared'])('real compiler failures r
   expect(result.status).toBe(1);
   expect(JSON.parse(result.stdout)).toMatchObject({ status: 'fail', summary: `type-check failed in: ${failures}` });
   expect(result.commands).toHaveLength(workspaces.length + 1);
+});
+
+test.each([
+  ['phase1-notify.ts', ts.ModuleKind.CommonJS],
+  ['preload-ue-first.ts', ts.ModuleKind.ESNext],
+] as const)('scripts resolve shared source without a workspace package link: %s', (caller, mode) => {
+  const configPath = join(root, 'scripts/tsconfig.json');
+  const config = ts.readConfigFile(configPath, ts.sys.readFile);
+  expect(config.error).toBeUndefined();
+  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, join(root, 'scripts'));
+  expect(parsed.errors).toEqual([]);
+  const host: ts.ModuleResolutionHost = {
+    ...ts.sys,
+    fileExists: path => !path.includes('/node_modules/@fitsy/') && ts.sys.fileExists(path),
+    directoryExists: path => !path.includes('/node_modules/@fitsy') && ts.sys.directoryExists(path),
+  };
+
+  const result = ts.resolveModuleName('@fitsy/shared', join(root, 'scripts', caller),
+    parsed.options, host, undefined, undefined, mode);
+
+  expect(result.resolvedModule?.resolvedFileName).toBe(join(root, 'packages/shared/src/index.ts'));
+});
+
+test.each([
+  ['@fitsy/shared', 'index.ts'],
+  ['@fitsy/shared/utils/macroProvenance', 'utils/macroProvenance.ts'],
+])('scripts tests resolve checkout-owned shared source: %s', (specifier, source) => {
+  expect(require.resolve(specifier)).toBe(join(root, 'packages/shared/src', source));
 });

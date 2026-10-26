@@ -6,10 +6,16 @@ tags: [discovery, onboarding, changed-journey]
     clearState: true
     clearKeychain: true
 # XCTest can reject the first AX snapshot after reinstall (HTTP 500).
-# Retry only the initial observation, before any product interaction.
+# A cleared Debug client can also return to the Development Build launcher.
+# Retry startup only, opening local Metro before observing guest readiness.
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
       - waitForAnimationToEnd:
           timeout: 10000
       - extendedWaitUntil:
@@ -75,13 +81,20 @@ tags: [discovery, onboarding, changed-journey]
 - tapOn:
     id: meal-target-calories
 - waitForAnimationToEnd
+- eraseText: 7
 - inputText: "500"
 - copyTextFrom:
     id: meal-target-calories
 - assertTrue: ${maestro.copiedText === '500'}
+# Settle the previous field before focusing the next one. Generated grams can
+# invalidate the native selection, so explicitly replace each field's value.
+- tapOn:
+    text: "Protein / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-protein
 - waitForAnimationToEnd
+- eraseText: 7
 - inputText: "50"
 - copyTextFrom:
     id: meal-target-protein
@@ -91,26 +104,56 @@ tags: [discovery, onboarding, changed-journey]
     end: "50%,25%"
 - waitForAnimationToEnd
 - tapOn:
+    text: "Carbs / meal"
+- waitForAnimationToEnd
+- tapOn:
     id: meal-target-carbs
 - waitForAnimationToEnd
+- eraseText: 7
 - inputText: "44"
 - copyTextFrom:
     id: meal-target-carbs
 - assertTrue: ${maestro.copiedText === '44'}
 - tapOn:
+    text: "Fat / meal"
+- waitForAnimationToEnd
+- tapOn:
     id: meal-target-fat
 - waitForAnimationToEnd
+- eraseText: 7
 - inputText: "14"
 - copyTextFrom:
     id: meal-target-fat
 - assertTrue: ${maestro.copiedText === '14'}
+# Save with the final decimal keyboard open, then read the persisted allocation.
+# Whole grams settle to 502 kcal, rather than the original 500 kcal draft.
+- tapOn:
+    id: welcome-continue
+- assertVisible: "A little context.*A better choice.*"
+- tapOn:
+    id: welcome-back
+- evalScript: ${output.targets = {}}
+- copyTextFrom:
+    id: meal-target-calories
+- evalScript: ${output.targets.calories = Number(maestro.copiedText)}
+- copyTextFrom:
+    id: meal-target-protein
+- evalScript: ${output.targets.protein = Number(maestro.copiedText)}
+- copyTextFrom:
+    id: meal-target-carbs
+- evalScript: ${output.targets.carbs = Number(maestro.copiedText)}
+- copyTextFrom:
+    id: meal-target-fat
+- evalScript: ${output.targets.fat = Number(maestro.copiedText)}
+- assertTrue: ${output.targets.calories === 502 && output.targets.protein === 50 && output.targets.carbs === 44 && output.targets.fat === 14}
+- assertTrue: ${output.targets.calories === 4 * output.targets.protein + 4 * output.targets.carbs + 9 * output.targets.fat}
 # Compare native results with the live ranked query while all four targets remain set.
-- evalScript: ${output.noMatchUrl = 'https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=500&protein=50&carbs=44&fat=14'}
-- evalScript: ${output.baseResponse = http.get(output.noMatchUrl)}
+- evalScript: ${output.rankedUrl = 'https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=' + output.targets.calories + '&protein=' + output.targets.protein + '&carbs=' + output.targets.carbs + '&fat=' + output.targets.fat}
+- evalScript: ${output.baseResponse = http.get(output.rankedUrl)}
 - assertTrue: ${output.baseResponse.status === 200}
 - evalScript: ${output.base = json(output.baseResponse.body)}
 - assertTrue: ${output.base.data.length > 0}
-- evalScript: ${output.pizzaResponse = http.get(output.noMatchUrl + '&q=pizza')}
+- evalScript: ${output.pizzaResponse = http.get(output.rankedUrl + '&q=pizza')}
 - assertTrue: ${output.pizzaResponse.status === 200}
 - evalScript: ${output.pizza = json(output.pizzaResponse.body)}
 - assertTrue: ${output.pizza.data.length > 0}
@@ -168,7 +211,7 @@ tags: [discovery, onboarding, changed-journey]
 - copyTextFrom:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
-- assertVisible: "500"
+- assertVisible: ${String(output.targets.calories)}
 - assertVisible: "50g"
 - assertVisible: "44g"
 - assertVisible: "14g"
@@ -194,7 +237,7 @@ tags: [discovery, onboarding, changed-journey]
     id: discovery-empty-clear
 - assertNotVisible:
     id: discovery-hero
-- assertVisible: "500"
+- assertVisible: ${String(output.targets.calories)}
 - assertVisible: "50g"
 - assertVisible: "44g"
 - assertVisible: "14g"
@@ -207,7 +250,7 @@ tags: [discovery, onboarding, changed-journey]
 - copyTextFrom:
     id: discovery-hero
 - assertTrue: ${maestro.copiedText.includes(output.base.data[0].name) && maestro.copiedText.includes(output.base.data[0].bestMatch.name)}
-- assertVisible: "500"
+- assertVisible: ${String(output.targets.calories)}
 - assertVisible: "50g"
 - assertVisible: "44g"
 - assertVisible: "14g"

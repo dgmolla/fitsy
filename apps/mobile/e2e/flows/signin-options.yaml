@@ -3,6 +3,7 @@
 # Target: the e2e-simulator build (embedded JS bundle). clearState is correct
 # there; against a dev-client install it would drop you in the launcher UI.
 appId: com.fitsy.mobile
+tags: [auth, changed-journey]
 ---
 - launchApp:
     clearState: true

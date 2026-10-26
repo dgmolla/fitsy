@@ -27,7 +27,7 @@ signed in without targets -> `/macro-setup`.
 | `/welcome/tuning` | known-target choice or profile questions | `meal-target-calories` | Editable per-meal targets; goal and edits persist |
 | `/welcome/preview` | nutrition trust | `preview-pick-1`, `preview-guide` | Real search, restaurant photos, three visible picks and guided tour; locked menus and extra results open plans |
 | `/welcome/trial` | account creation with selected preview | `trial-offer-note` | Free trial introduction only with live eligibility; other offers route directly to payment |
-| `/welcome/trial-reminder` | trial introduction | `trial-reminder-allow`, `trial-reminder-skip` | Optional OS permission; schedule only after verified trial purchase |
+| `/welcome/trial-reminder` | trial introduction | `trial-reminder-allow`, `trial-reminder-skip` | Name the schedulable default plan; optional OS permission; schedule only after verified trial purchase |
 | `/welcome/payment` | reminder screen or locked action | `paywall-plan-yearly` | Live plans; root launch has no fabricated Back; explicit decline resets the stack |
 | `/welcome/notification-permission` | legacy links | `notification-allow`, `notification-skip` | Remind me directly asks OS permission; no choices; then selected meal |
 | `/auth/login` | "Have an account? Log in" link on the problem screen (router.push, no intermediate screen) | "Welcome back", "Continue with Apple" | Apple/Google/email in one screen |
@@ -54,5 +54,6 @@ the disposable simulator keychain. See `docs/engineering/devops/shipping.md` for
 the blocking evidence procedure. A normal dev-client launcher is not this build.
 
 Use `npm run verify:sim-plan` to inspect the affected-screen flow selection and its reason.
+Use `npm run verify:product-plan` for the required final journeys and MCP categories; local and shipping callers share the mapping and omission reasons.
 The plan also names render smoke checkpoints for proven screen-local copy/style edits; shared UI and app shell changes require the full suite.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.

@@ -52,6 +52,43 @@ test('whole group outcome', () => { fs.appendFileSync('../../.evidence/cases', '
   expect(full('1').status).toBe(1);
   expect(readFileSync(join(root, '.evidence/cases'), 'utf8')).toBe('AABAB');
 }, 45000);
+test('Verify retains an API assertion followed by more than 10000 characters of mobile output', () => {
+  for (const name of ['run.mjs', 'test.sh']) copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
+  writeFileSync(join(root, 'scripts/verify/registry.yml'), 'checks:\n  - name: test\n    script: test.sh\n    layer: 2\n    blocking: true\n    runs: [ci]\n');
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts', 'apps/api', 'apps/mobile'] }));
+  for (const workspace of ['api', 'mobile']) {
+    const path = join(root, 'apps', workspace);
+    mkdirSync(path, { recursive: true });
+    writeFileSync(join(path, 'package.json'), JSON.stringify({ name: `@fitsy/${workspace}`,
+      scripts: { test: 'jest --config=jest.config.cjs', 'test:coverage': 'jest --config=jest.config.cjs' } }));
+    copyFileSync(join(root, 'scripts/jest.config.cjs'), join(path, 'jest.config.cjs'));
+  }
+  git('add', '.'); git('commit', '-qm', 'workspace fixture'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  writeFileSync(join(root, 'apps/api/fixture.test.ts'), "test('API assertion sentinel', () => expect('actual API value').toBe('expected API value'));\n");
+  writeFileSync(join(root, 'apps/mobile/fixture.test.ts'), "test('later mobile output', () => { process.stderr.write('MOBILE_PASS_DETAIL\\n'.repeat(1024)); expect(true).toBe(true); });\n");
+  git('add', '.'); git('commit', '-qm', 'changed workspace tests');
+  const yaml = require('js-yaml') as { load(text: string): unknown };
+  const workflow = yaml.load(readFileSync(join(source, '.github/workflows/verify.yml'), 'utf8')) as {
+    jobs: { test: { steps: { name?: string; run?: string }[] } };
+  };
+  const command = workflow.jobs.test.steps.find(step => step.name === 'Run L2 checks')!.run!;
+  const result = spawnSync('/bin/bash', ['-e', '-c', command],
+    { cwd: root, env, encoding: 'utf8', timeout: 30000 });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(1);
+  const check = JSON.parse(result.stdout);
+  expect(check).toMatchObject({ name: 'test', status: 'fail', summary: 'tests failed in: api' });
+  expect(result.stderr).toContain('FAIL test: tests failed in: api');
+  expect(check.logs).toEqual({ stdout: expect.any(String), stderr: expect.any(String) });
+  const diagnostics = readFileSync(join(root, check.logs.stderr), 'utf8');
+  expect(diagnostics).toContain('API assertion sentinel');
+  expect(diagnostics).toContain('Expected: "expected API value"');
+  expect(diagnostics).toContain('Received: "actual API value"');
+  expect(diagnostics.indexOf('API assertion sentinel')).toBeLessThan(diagnostics.indexOf('MOBILE_PASS_DETAIL'));
+  expect(diagnostics.slice(-10000)).not.toContain('API assertion sentinel');
+  expect(diagnostics.match(/MOBILE_PASS_DETAIL/g)).toHaveLength(1024);
+  expect(readFileSync(join(root, check.logs.stdout), 'utf8')).toContain('tests failed in: api');
+}, 45000);
 test('missing or skipped focused selections cannot satisfy the cheap gate', () => {
   expect(cli().status).toBe(1);
   expect(cli('--set', 'scripts/fixture.test.ts', '--jest-pattern=absent outcome').status).toBe(0);

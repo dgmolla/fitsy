@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Retained CLI path for the maintainer's local sim-review poller. Never runs in CI.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { delimiter, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { impactPlan, repository, simulatorFlows, gitEnv, isMain } from '../verify/impact-plan.mjs';
@@ -36,12 +36,16 @@ export function localSelection(args, plan = impactPlan()) {
   if (flows.some(name => !/^[a-z0-9-]+$/.test(name) || !all.includes(name))) throw new Error('Unknown simulator flow');
   if ((scope === 'none') !== (flows.length === 0)) throw new Error('Required scope needs flows; none scope cannot run flows');
   if (scope === 'full' && JSON.stringify(flows) !== JSON.stringify(all)) throw new Error('Full scope must include every maintained flow');
+  const rank = { none: 0, smoke: 1, flow: 2, full: 3 };
+  if (rank[scope] < rank[plan.simulator.scope] || plan.simulator.flows.some(flow => !flows.includes(flow)))
+    throw new Error('Explicit scope cannot omit affected journeys or their required assertions');
   const smoke = scope === 'smoke' ? plan.simulator.smoke.filter(item => flows.includes(item.flow)) : [];
   if (scope === 'smoke' && flows.some(flow => !smoke.some(item => item.flow === flow)))
     throw new Error('Smoke scope requires classified render checkpoints; set the matching comparison range');
   return { ...options, selection: { ...plan.simulator, scope, required: scope !== 'none',
     risk: scope === 'full' ? 'high' : scope === 'none' ? 'low' : 'medium',
     mode: scope === 'none' ? 'none' : scope === 'smoke' ? 'render' : 'e2e', flows, smoke,
+    omitted: all.filter(flow => !flows.includes(flow)).map(flow => ({ flow, reason: 'Unaffected by the mapped change; no shared or ambiguous impact' })),
     reason: options.scope && options.scope !== 'changed' ? `Explicit local ${scope} scope` : plan.simulator.reason } };
 }
 
@@ -58,7 +62,7 @@ export async function runLocal(args = process.argv.slice(2)) {
   if (!/^[a-f0-9-]{36}$/i.test(udid || '')) throw new Error('Pass --udid=<owned booted simulator UDID> or set FITSY_XCTEST_SIM_UDID');
   const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro } = await import('./product-flow.mjs');
   const { admitDisk, runOwnedMaestro } = await import('./runner-controls.mjs');
-  const { inputHash } = await import('../verify/product-flow.mjs');
+  const { inputHash, assertFlowCommands } = await import('../verify/product-flow.mjs');
   const maestro = process.env.MAESTRO_BIN || 'maestro';
   const command = (binary, argv) => execFileSync(binary, argv, { cwd: repository, env: gitEnv(), stdio: 'inherit', timeout: 30000 });
   const yaml = createRequire(import.meta.url)('js-yaml');
@@ -109,7 +113,7 @@ export async function runLocal(args = process.argv.slice(2)) {
             return process.env[key] ? ['-e', `${key}=${process.env[key]}`] : [];
           });
           const result = await runOwnedMaestro(maestro, ['--device', udid, 'test', ...loginArgs, '--format', 'junit',
-            '--output', resolve(dir, 'report.xml'), '--test-output-dir', dir, path], {
+            '--output', resolve(dir, 'report.xml'), '--debug-output', dir, '--test-output-dir', dir, path], {
             cwd: repository, dir, timeline: resolve(out, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'),
             signal: controller.signal, env: { ...gitEnv(),
               PATH: `${resolve(repository, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
@@ -117,6 +121,9 @@ export async function runLocal(args = process.argv.slice(2)) {
             diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', resolve(dir, 'failure.png')]),
           });
           if (result.code !== 0 || result.reason) throw new Error(`Maestro flow ${name} failed; inspect ${dir}`);
+          const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file));
+          if (reports.length !== 1) throw new Error(`Expected exactly one command report: ${name}`);
+          assertFlowCommands(readFileSync(path), JSON.parse(readFileSync(resolve(dir, reports[0]), 'utf8')), name);
           if (inputHash() !== sourceHash || environment().configHash !== session.configHash)
             throw new Error('Candidate source or public configuration changed during simulator execution');
         } finally {

@@ -105,6 +105,15 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload L0-L1 diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-l0-l1-logs-attempt-${{ github.run_attempt }}
+          path: .evidence/verify/logs/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn
 
   domain-check:
     name: Single-domain PR check # Preserve the required status context while reporting cross-layer scope.
@@ -170,6 +179,15 @@ jobs:
         run: npx tsx prisma/seed.ts --data-only
       - name: Run L2 checks
         run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed
+      - name: Upload L2 diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-l2-logs-attempt-${{ github.run_attempt }}
+          path: .evidence/verify/logs/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn
 
   build:
     needs: [classify, static]
@@ -194,6 +212,15 @@ jobs:
       - name: Run L3 checks
         if: needs.classify.outputs.code == 'true'
         run: node scripts/verify/run.mjs --layer=3 --runs=ci --scope=changed
+      - name: Upload L3 diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-l3-logs-attempt-${{ github.run_attempt }}
+          path: .evidence/verify/logs/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn
 
   verify:
     name: Verify

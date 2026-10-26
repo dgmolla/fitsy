@@ -54,8 +54,35 @@ function fixture() {
 }
 function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate') {
   writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
-  return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {categories:['billing']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)})`);
+  return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:['cold-start-welcome','signin-options','billing-cancel']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)})`);
 }
+
+deterministicTest('an affected journey passes without unrelated baselines but cannot substitute another tagged journey', () => {
+  const report = fixture();
+  report.videoRequested = false;
+  report.flows = report.flows.filter(flow => flow.name === 'billing-cancel');
+  for (const flow of report.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
+  writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
+  const check = (flows: string[]) => evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:${JSON.stringify(flows)}}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs')`);
+  expect(check(['billing-cancel']).status).toBe(0);
+  const missing = check(['billing-cancel', 'billing-recovery']);
+  expect(missing.status).toBe(1);
+  expect(missing.stderr).toContain('missing affected flow: billing-recovery');
+});
+
+deterministicTest.each(['truncated', 'skipped', 'optional-required'])('mandatory source assertions reject a %s successful receipt', kind => {
+  const report = fixture(), flow = report.flows[2]!;
+  report.videoRequested = false;
+  for (const entry of report.flows) { delete (entry as { video?: string }).video; delete (entry as { videoHash?: string }).videoHash; }
+  const commands = JSON.parse(readFileSync(join(dir, flow.commands), 'utf8'));
+  if (kind === 'truncated') commands.pop();
+  if (kind === 'skipped') commands[2].metadata.status = 'SKIPPED';
+  if (kind === 'optional-required') { commands[2].metadata.status = 'SKIPPED'; commands[2].command.assertConditionCommand.optional = true; }
+  const raw = JSON.stringify(commands); writeFileSync(join(dir, flow.commands), raw); flow.sha256 = sha(raw);
+  const result = validate(report);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('missing/skipped/failed assertions');
+});
 
 mediaTest('accepts identified baseline and billing outcomes with matching artifacts', () => {
   const result = validate(fixture()); expect(result.status).toBe(0); expect(JSON.parse(result.stdout).status).toBe('pass');
@@ -98,7 +125,7 @@ deterministicTest('non-video proof does not invoke video tooling', () => {
     chmodSync(file, 0o755);
   }
   writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
-  const result = evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {categories:['billing']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs')`,
+  const result = evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:['cold-start-welcome','signin-options','billing-cancel']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs')`,
     { ...fixtureEnv(), PATH: `${dir}:${process.env.PATH}` });
   expect(result.status).toBe(0);
   expect(existsSync(marker)).toBe(false);
@@ -148,7 +175,7 @@ mediaTest.each(['failed', 'skipped', 'empty', 'one'])("rejects %s required asser
   const changed = kind === 'one' ? commands.slice(0, 2) : kind === 'empty' ? [commands[0]] : commands.map((c: { metadata: {status: string} }, i: number) => i ? { ...c, metadata: {status: kind.toUpperCase()} } : c);
   const raw = JSON.stringify(changed); writeFileSync(join(dir, flow.commands), raw); flow.sha256 = sha(raw);
   const result = validate(report); expect(result.status).toBe(1);
-  expect(result.stderr).toContain(kind === 'one' ? 'no deterministic coverage for billing' : 'missing/skipped/failed assertions');
+  expect(result.stderr).toContain('missing/skipped/failed assertions');
 });
 mediaTest.each(['source', 'commands', 'screenshot', 'video', 'trace'])('rejects changed %s artifacts', field => {
   const report = fixture();
@@ -222,7 +249,7 @@ mediaTest.each(['stale', 'future', 'expired', 'wrong-native', 'unknown-backend',
   if (condition === 'missing-walkthrough') report.exploration = [];
   if (condition === 'missing-recovery') report.exploration[0]!.branches = ['primary'];
   const result = validate(report); expect(result.status).toBe(1);
-  if (condition === 'missing-flow') expect(result.stderr).toContain('missing baseline flow');
+  if (condition === 'missing-flow') expect(result.stderr).toContain('missing affected flow');
   if (condition === 'expired') expect(result.stderr).toContain('evidence expired');
 });
 mediaTest('baseline flows cannot cover billing even when their YAML tags include billing', () => {
@@ -268,7 +295,9 @@ deterministicTest.each([
   [['apps/api/app/api/subscriptions/status/route.ts'], ['billing']],
   [['apps/api/app/api/subscriptions/sync/route.ts'], ['billing']],
   ...['apps/mobile/app/index.tsx', 'apps/mobile/app/_layout.tsx', 'apps/mobile/lib/reviewAccess.ts', 'apps/mobile/lib/useEntitlement.ts'].map(path => [[path], ['billing']]),
-  ...['apps/mobile/app/(tabs)/_layout.tsx', 'apps/mobile/app/(tabs)/search.tsx', 'apps/mobile/app/(tabs)/profile.tsx', 'apps/mobile/app/restaurant/[id].tsx', 'apps/api/app/api/restaurants/route.ts', 'apps/api/app/api/restaurants/[id]/menu/route.ts'].map(path => [[path], ['billing', 'discovery']]),
+  ...['apps/mobile/app/(tabs)/_layout.tsx', 'apps/mobile/app/(tabs)/profile.tsx', 'apps/api/app/api/restaurants/route.ts', 'apps/api/app/api/restaurants/[id]/menu/route.ts'].map(path => [[path], ['billing', 'discovery']]),
+  [['apps/mobile/app/(tabs)/search.tsx'], ['discovery', 'onboarding']],
+  [['apps/mobile/app/restaurant/[id].tsx'], ['billing', 'changed-journey', 'discovery']],
   ...['apps/mobile/app/auth/reviewer.tsx', 'apps/mobile/lib/authClient.ts'].map(path => [[path], ['auth', 'billing']]),
   [['apps/mobile/app/auth/signin.tsx'], ['auth']],
   [['apps/api/app/api/push-token/route.ts'], ['notifications']],
@@ -278,7 +307,7 @@ deterministicTest.each([
   [['apps/api/next.config.ts'], ['changed-journey']],
   [['apps/api/app/api/health/route.ts', 'apps/api/app/api/health/route.test.ts'], []],
   [['apps/api/app/api/health/route.ts', 'apps/api/app/api/search/route.ts'], ['discovery']],
-  [['apps/mobile/eas.json'], []],
+  [['apps/mobile/eas.json'], ['changed-journey']],
 ])('routes %j through product impact selection', (paths, categories) => {
   const result = evaluate(`gate.impact(${JSON.stringify(paths)})`);
   expect(JSON.parse(result.stdout).categories).toEqual(categories);

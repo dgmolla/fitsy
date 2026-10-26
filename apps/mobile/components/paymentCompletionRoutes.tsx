@@ -21,6 +21,7 @@ export function paymentCompletionRoutes(onNotificationMount: () => void) {
     'welcome/_layout': WelcomeLayout, 'welcome/trial': TrialScreen, 'welcome/trial-reminder': TrialReminderScreen,
     'welcome/payment': PaymentScreen,
     'welcome/signin': () => <Text>Sign in before plans</Text>,
+    'welcome/preview': () => <Text>Browse the preview</Text>,
     'welcome/resubscribe': () => <Text>Resubscribe plans</Text>,
     'welcome/subscription-check': () => <Text>Checking subscription</Text>,
     'welcome/notification-permission': OldNotificationScreen,

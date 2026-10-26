@@ -24,7 +24,7 @@ interface Props {
   loading: boolean;
   restoring: boolean;
   checkingPlans: boolean;
-  visualPreview?: 7 | 14;
+  visualPreview?: string;
   visualReminderSimulated?: boolean;
   onSelect: (plan: PlanId) => void;
   onBack?: () => void;
@@ -106,7 +106,7 @@ export function PaywallView(props: Props) {
         </View>
         <View>
           <View style={[s.cancelRow, compact && s.cancelRowCompact, timelineLayout && s.cancelRowTimeline]}><Ionicons name="checkmark" size={timelineLayout ? 18 : 15} color={EDITORIAL.green} /><Text style={[s.cancel, timelineLayout && s.cancelTimeline]}>No commitment, cancel anytime</Text></View>
-          {props.visualPreview && <Text style={s.visualNote} testID="dev-trial-visual-note">Synthetic {props.visualPreview}-day trial{props.visualReminderSimulated ? ' and reminder-enabled state' : ''} for visual testing. Prices are from the live Test Store; purchase and reminder scheduling are disabled.</Text>}
+          {props.visualPreview && <Text style={s.visualNote} testID="dev-trial-visual-note">Synthetic {props.visualPreview}{props.visualReminderSimulated ? ' and reminder-enabled state' : ''} for visual testing. Prices are from the live Test Store; purchase and reminder scheduling are disabled.</Text>}
           <View style={[s.plans, timelineLayout && s.plansTimeline]}>
             {([{ id: 'yearly', name: 'Annual', terms: annual }, { id: 'monthly', name: 'Monthly', terms: monthly }] as const).map(option => {
               const active = option.id === plan;
