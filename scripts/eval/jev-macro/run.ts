@@ -3,22 +3,19 @@ import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
-import { formatReport, historicalStats, macroNames, score, type ItemResult, type Macros } from './score';
+import { BINNING, decodeMacroAnswers, macroAnswersSchema, macroQuestions } from './bins';
+import { formatReport, historicalStats, score, type ItemResult } from './score';
 import { loadTruth, nutritionQuantity, sha256, type TruthRow } from './truth';
 
 // Endpoint, model, auth, timeout and usage conventions mirror jevDecisionService.ts.
-// Kept here because its decision-only request/response types do not describe numeric estimates.
+// Kept here because macro estimation needs four distributions with a frozen binning protocol.
 export const PROTOCOL = {
-  version: 1, endpoint: 'https://api.typesafe.ai/v1/systemone', model: 'jev-latest' as const,
+  version: 2, endpoint: 'https://api.typesafe.ai/v1/systemone', model: 'jev-latest' as const,
   timeoutMs: 5_000, retries: 0, maxSpendUsd: 1.00, maxRequestBytes: 12_000, reservedInputTokens: 16_384,
   pricing: { inputUsdPerMillion: 0.042, outputUsdPerMillion: 0,
     source: 'docs/engineering/pipeline/jev-chain-match-eval.md', checkedAt: '2026-10-24' },
-  questions: {
-    calories: { type: 'number' as const, instructions: 'Estimate total kilocalories for the specified serving.' },
-    protein: { type: 'number' as const, instructions: 'Estimate grams of protein for the specified serving.' },
-    carbs: { type: 'number' as const, instructions: 'Estimate grams of total carbohydrate for the specified serving.' },
-    fat: { type: 'number' as const, instructions: 'Estimate grams of total fat for the specified serving.' },
-  },
+  binning: BINNING,
+  questions: macroQuestions,
   catastrophicDefinition: 'calorie absolute percentage error > 50; failures and omissions are misses',
   failureMedian: 'positive infinity; non-finite median serialized as null',
   percentile: 'nearest rank',
@@ -26,9 +23,8 @@ export const PROTOCOL = {
 export const protocolSha256 = sha256(JSON.stringify(PROTOCOL));
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const usageSchema = z.object({ input_tokens: count.positive(), output_tokens: count });
-const answer = z.object({ type: z.literal('number'), value: z.number().finite().nonnegative() });
 const responseSchema = z.object({ model: z.string().regex(/^jev-/),
-  answers: z.object({ calories: answer, protein: answer, carbs: answer, fat: answer }).strict() });
+  answers: macroAnswersSchema });
 
 /** This explicit projection is the ONLY item-dependent input to the provider. */
 export function buildMacroRequest(item: TruthRow) {
@@ -63,7 +59,7 @@ export async function requestJevMacros(request: ReturnType<typeof buildMacroRequ
 
 function parseResponse(id: string, status: number, body: string, latencyMs: number): ItemResult {
   let raw: unknown;
-  try { raw = JSON.parse(body); } catch { return { id, estimate: null, failure: 'Malformed JSON; unknown usage', costUsd: null, latencyMs, model: null }; }
+  try { raw = JSON.parse(body); } catch { return { id, estimate: null, argmaxBins: null, failure: 'Malformed JSON; unknown usage', costUsd: null, latencyMs, model: null }; }
   const usage = z.object({ usage: usageSchema }).safeParse(raw);
   const costUsd = usage.success ? usage.data.usage.input_tokens * PROTOCOL.pricing.inputUsdPerMillion / 1_000_000 : null;
   const parsed = responseSchema.safeParse(raw);
@@ -71,9 +67,8 @@ function parseResponse(id: string, status: number, body: string, latencyMs: numb
     : usage.success && usage.data.usage.input_tokens > PROTOCOL.reservedInputTokens ? 'Reported usage exceeds reserved input envelope'
       : status !== 200 ? `HTTP ${status}` : !parsed.success ? 'Invalid typed macro response' : null;
   if (!Number.isFinite(costUsd ?? 0)) failure = 'Non-finite reported cost';
-  const estimate = failure || !parsed.success ? null : Object.fromEntries(macroNames.map(macro =>
-    [macro, parsed.data.answers[macro].value])) as Macros;
-  return { id, estimate, failure, costUsd, latencyMs, model: parsed.success ? parsed.data.model : null };
+  const decoded = failure || !parsed.success ? { estimate: null, argmaxBins: null } : decodeMacroAnswers(parsed.data.answers);
+  return { id, ...decoded, failure, costUsd, latencyMs, model: parsed.success ? parsed.data.model : null };
 }
 
 export interface JournalEvent { event: string; [key: string]: unknown }
@@ -114,12 +109,12 @@ export function replayJournal(fixture: Fixture, events: JournalEvent[]) {
       if (!pending || event['id'] !== pending || typeof event['latencyMs'] !== 'number'
         || !Number.isFinite(event['latencyMs']) || event['latencyMs'] < 0) throw new Error('Journal response mismatch');
       let result: ItemResult;
-      if (event.event === 'error') result = { id: pending, estimate: null, failure: 'Transport failure; unknown usage', costUsd: null,
+      if (event.event === 'error') result = { id: pending, estimate: null, argmaxBins: null, failure: 'Transport failure; unknown usage', costUsd: null,
         latencyMs: event['latencyMs'], model: null };
       else {
         if (typeof event['body'] !== 'string' || typeof event['status'] !== 'number' || !Number.isInteger(event['status'])) throw new Error('Malformed response event');
         result = parseResponse(pending, event['status'], event['body'], event['latencyMs']);
-        if (event['redacted'] === true) { result.estimate = null; result.failure = 'Provider echoed credential; response redacted'; }
+        if (event['redacted'] === true) { result.estimate = null; result.argmaxBins = null; result.failure = 'Provider echoed credential; response redacted'; }
       }
       results.push(result); pending = null;
       spent += result.costUsd ?? 0;
@@ -134,7 +129,7 @@ export function replayJournal(fixture: Fixture, events: JournalEvent[]) {
       stopReason ??= event['stopReason']; ended = true;
     } else throw new Error('Unknown journal event');
   }
-  if (pending) results.push({ id: pending, estimate: null, failure: 'Interrupted request; unknown usage', costUsd: null, latencyMs: null, model: null });
+  if (pending) results.push({ id: pending, estimate: null, argmaxBins: null, failure: 'Interrupted request; unknown usage', costUsd: null, latencyMs: null, model: null });
   if (!ended || results.length !== fixture.truth.rows.length) stopReason ??= 'Incomplete evaluation';
   return { results, stopReason, modelsReturned: [...models] };
 }
@@ -201,7 +196,7 @@ export async function runEvaluation(argv: string[]) {
     }
   } finally { closeSync(fd); }
   const replay = replayJournal(fixture, events);
-  const report = { version: 1, mode: options.mode, timestamp: new Date().toISOString(), truthSha256: fixture.digest, protocolSha256,
+  const report = { version: 2, mode: options.mode, timestamp: new Date().toISOString(), truthSha256: fixture.digest, protocolSha256,
     protocol: PROTOCOL, stopReason: replay.stopReason, modelsReturned: replay.modelsReturned,
     byChain: Object.fromEntries([...new Set(fixture.truth.rows.map(row => row.chain))].map(chain =>
       [chain, fixture.truth.rows.filter(row => row.chain === chain).length])),

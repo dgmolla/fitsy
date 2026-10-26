@@ -9,6 +9,7 @@ export type Macros = Record<typeof macroNames[number], number>;
 export interface ItemResult {
   id: string;
   estimate: Macros | null;
+  argmaxBins: Record<keyof Macros, string> | null;
   failure: string | null;
   costUsd: number | null;
   latencyMs: number | null;
@@ -106,6 +107,15 @@ export function formatReport(report: {
     'Cost per 1k uses attempted items, including failures; unattempted items cannot dilute cost.',
     'The frozen price is $0.042 per million input tokens and $0 for output, from docs/engineering/pipeline/jev-chain-match-eval.md (checked there on 2026-10-24).',
     'Live execution has a $1.00 local budget, reserves a bounded request envelope before each attempt, and never retries.', '',
+    '## Choice-bin caveats', '',
+    'Protocol v2 asks four System One choice questions with 101 named bins each: calories in 25-kcal ranges from 0 to 2500 plus 2500+, and protein/carbs/fat in 2-g ranges from 0 to 200 plus 200+.',
+    'Estimates are probability-weighted means of bounded-bin midpoints; the open-top representatives are 2525 kcal and 202 g.',
+    'Probability sums within 0.01 of one are normalized before averaging; every named probability and a valid confidence are required.',
+    'Each result records argmaxBins separately from the mean, with the provider choice breaking equal-probability ties.',
+    'Binning adds up to +/-12.5 kcal and +/-1 g (half a bin) of quantization error when the correct bounded bin is identified; distribution uncertainty or wrong bins can add further error.',
+    'Open-top bins have no finite quantization-error bound, and their representatives compress all larger quantities into one value.',
+    'Even a one-hot first-bin answer yields 12.5 kcal or 1 g, so exact zero is unrepresentable and positive estimates against zero truth incur 100% error under the retained April convention.',
+    'The original protocol-v1 HTTP 400 journal is preserved at scripts/eval/jev-macro/results/2026-10-26-attempt1-400.jsonl; it stopped on unknown usage without retry and is incompatible with v2 replay.', '',
     '## Historical comparison limits', '',
     'These archived claude-haiku-4-5 runs each used 60 items across six different chains, with different prompts and inputs.',
     'Their older truth was curated from fastfoodnutrition.org and chain websites; it is excluded from the new official-only truth set.',

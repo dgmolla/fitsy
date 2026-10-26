@@ -62,8 +62,42 @@ Replay is the default mode and requires an existing raw journal.
 Live collection requires explicit `--mode=live` and reads the key only from `process.env.TYPESAFE_API_KEY`.
 No dotenv loader or key-file fallback exists.
 The endpoint, model, Bearer authentication, five-second timeout, redirect refusal and reported usage conventions mirror `apps/api/services/jevDecisionService.ts`.
-The numeric adapter requests four typed `number` questions and validates `answers.<macro>.{type: "number", value: <nonnegative finite number>}`, a returned Jev model and integer input/output usage.
-The numeric contract is covered by simulated responses; no live provider/schema compatibility claim is made by this offline implementation.
+
+## Choice-bin protocol v2
+
+The [System One API](https://docs.typesafe.ai/api/system-one) supports `noul`, `choice`, `score` (at most 10 levels), and `box` questions, with no `number` question type.
+Protocol v2 asks four `choice` questions, each with a `criteria` object containing 101 named choices, within the API's 1-255 choice limit.
+
+| Question | Bounded bins, lower inclusive and upper exclusive | Open top bin | Open top representative |
+| --- | --- | --- | --- |
+| Calories | 25 kcal from 0 to 2500: `kcal_0_25`, ..., `kcal_2475_2500` | `kcal_2500_plus`: 2500+ kcal | 2525 kcal |
+| Protein, carbs, fat (separate questions) | 2 g from 0 to 200: `g_0_2`, ..., `g_198_200` | `g_200_plus`: 200+ g | 202 g |
+
+Each bounded bin uses its midpoint; the open top bin uses its lower edge plus 25 kcal or 2 g.
+The estimate for each macro is `sum(probability * bin representative) / sum(probability)` across all 101 bins.
+The decoded `estimate` and the highest-probability label in `argmaxBins` are recorded separately for each result in `summary.json`.
+If bins tie for highest probability, the provider's `choice` breaks the tie.
+Failed results have null estimates and null `argmaxBins`.
+
+Validate `answers.<macro>.{type: "choice", choice, confidence, probabilities}`, a returned Jev model and integer input/output usage.
+Every named bin must have a finite probability from 0 to 1, with no missing or additional bins; confidence must also be finite and from 0 to 1.
+The selected choice must name a highest-probability bin, and probabilities must sum to one within 0.01 to allow rounding.
+Normalize accepted rounded sums before averaging; never substitute confidence or the argmax midpoint for the full distribution.
+The raw response journal retains the provider's original confidence and all probabilities.
+Compact gram labels preserve the existing 12,000-byte request envelope for all frozen servings.
+The choice contract is covered by simulated responses; this offline correction makes no new live compatibility claim.
+
+Binning adds up to +/-half a bin of quantization error: +/-12.5 kcal or +/-1 g when the correct bounded bin is identified.
+Wrong bins and distribution uncertainty can add further error, and the unbounded 2500+/200+ bins have no finite quantization-error bound.
+Their fixed representatives compress the high tail rather than estimating how far beyond the threshold a serving falls.
+The first-bin midpoints are 12.5 kcal and 1 g, so exact zero cannot be predicted; positive estimates against zero truth retain the April metric's 100% error.
+These caveats also appear in generated reports and limit comparison with continuous historical estimates.
+
+The first live attempt on 2026-10-26 used protocol v1's unsupported `number` questions and received HTTP 400 on its first request.
+Its unchanged journal is retained as [failure evidence](results/2026-10-26-attempt1-400.jsonl), including the original protocol, request, raw error and unknown-usage stop without retry.
+Protocol v2 has a new digest and rejects that v1 journal for replay; do not relabel or rewrite the historical evidence.
+
+## Execution safeguards
 
 ```sh
 # Offline: no key, network, database or model required.
@@ -121,4 +155,4 @@ npm test -w scripts -- --runInBand --testPathPattern='eval/(jev-macro|chain-matc
 All provider responses in the new Jest tests are simulated at the external fetch boundary.
 The workspace lint alias is consumed by the existing workspace lint command and checks this evaluator with its local TypeScript rules.
 The actual npm replay entrypoint is exercised with fetch disabled and no provider key in its child environment.
-Tests cover provenance drift, truth leakage, cost reservation, timeout configuration, HTTP/transport/parse failures, unknown usage, interrupted journals, ordering, zero truth, catastrophic boundaries and historical comparison output.
+Tests cover the System One choice contract, weighted means, bounded and open-top representatives, argmax ties, rounded probability sums, malformed distributions, preserved v1 evidence, provenance drift, truth leakage, cost reservation, timeout configuration, HTTP/transport/parse failures, unknown usage, interrupted journals, ordering, zero truth, catastrophic boundaries and historical comparison output.

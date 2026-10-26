@@ -3,7 +3,7 @@ import { loadTruth, type TruthRow } from './truth';
 
 const base = loadTruth().truth.rows[0]!;
 const row = (id: string): TruthRow => ({ ...base, id, calories: 100, protein_g: 10, carbs_g: 20, fat_g: 5 });
-const result = (id: string, estimate: Macros | null): ItemResult => ({ id, estimate,
+const result = (id: string, estimate: Macros | null): ItemResult => ({ id, estimate, argmaxBins: null,
   costUsd: 0.0001, latencyMs: 100, model: 'jev-test', failure: estimate ? null : 'Invalid output' });
 
 test('April catastrophic boundary is calorie-only and strictly greater than 50%', () => {
