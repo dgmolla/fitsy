@@ -3,15 +3,19 @@
 The simulator CLI uses a verified compatible `.app` by default.
 Run `node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID> [--test-store]` before product flows.
 `build` prints `action: reuse` and performs no prebuild, Pod install or Xcode compile when the receipt is compatible.
+It checks local receipts first, then the optional shared immutable cache before requesting a native build.
 `run` installs that verified artifact and starts a fresh owned Metro process for a Debug Test Store binary.
 Every command uses an explicit booted simulator UDID and the existing simulator ownership claim.
 
 ```mermaid
 flowchart TD
   C[Current resolved native inputs and required profile] --> D{Receipt and app tree intact?}
-  D -- no --> B[Build with initial or artifact reason]
+  D -- no --> C2{Verified shared Metro artifact?}
+  C2 -- no --> B[Build with initial or artifact reason]
+  C2 -- yes --> I[Import independent immutable app and original receipt]
+  I --> R
   D -- yes --> M{Native input and profile digests match?}
-  M -- no --> B
+  M -- no --> C2
   M -- yes --> R[Reuse app with zero native compiles]
   R --> J{Current JavaScript and public config compatible?}
   J -- owned Metro Debug --> S[Record fresh served bundle hash]
@@ -20,6 +24,28 @@ flowchart TD
   S --> A[Run affected scenarios and acceptance gate]
   E --> A
 ```
+
+## Shared native cache
+
+The normal `build` command publishes verified Debug Test Store artifacts under the common Git directory's `fitsy-native-binary-cache/`, shared across worktrees on this Mac.
+Set `FITSY_NATIVE_CACHE_DIR` to an absolute directory for another local cache location, or `off` to disable lookup and publication.
+Cache access is an optimization; compatible local receipts and real native builds remain supported without it.
+Release artifacts retain their existing embedded JavaScript checks and do not enter this Metro cache.
+
+The compatibility key covers resolved native configuration, native and codegen/config-plugin package versions and lockfile integrity, local native/plugin resources, build recipe, profile, Metro route/port, Xcode, selected developer directory, CocoaPods, Node, simulator SDK/version/build, OS, architecture and native build environment.
+Runtime JavaScript, JavaScript-only dependency edits and simulator UDIDs do not change that key.
+A fresh managed worktree may reuse the original generated iOS tree attested by the artifact; an existing changed generated tree still requires an intact matching attestation or a real rebuild.
+
+Each append-only artifact stores an independently copied `.app`, the exact original sealed receipt bytes, and a manifest binding their SHA-256 hashes and executable flags.
+Imports copy all three into `.evidence/product-build/shared-native/` and write a separate sealed activation receipt; they never rewrite the original receipt's source or build time.
+Cached and imported files are read-only, retain executable bits, and use independent copies rather than hardlinks or symbolic links.
+Both original receipt bytes and app contents are checked during import and every subsequent local activation; corrupt entries remain untouched and cannot establish compatibility.
+Concurrent publishers stage and verify a complete entry before an atomic rename, then verify the installed entry.
+`run` still starts a fresh owned Metro process for the current checkout and public configuration, and records its served bundle hash.
+Neither a cache hit nor its original build evidence satisfies current-candidate journey acceptance.
+
+Run `node --test scripts/sim/shared-native-cache.test.mjs` for cross-worktree CLI, corruption, drift, concurrent publication and fresh Metro lifecycle regressions.
+The scripts workspace includes the same suite through its Node test bridge, so the existing verifier, hook and main Verify test callers consume it without adding a native CI job.
 
 ## Exact rebuild inputs
 

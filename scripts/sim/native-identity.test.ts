@@ -22,6 +22,8 @@ const runCase = (body: string) => JSON.parse(execFileSync(process.execPath, ['--
      if(args.includes('react-native-config')) return JSON.stringify(fixture().rnGraph);
      if(cmd==='xcodebuild') return fixture().toolchain;
      if(cmd==='xcrun') return '26.0';
+     if(cmd==='xcode-select') return '/Applications/Xcode.app/Contents/Developer';
+     if(cmd==='pod') return '1.16.2';
      throw Error(cmd+' '+args.join(' '));
    };
    ${body}`], { encoding: 'utf8', env: { ...cleanEnv(), FITSY_FIXTURE_ROOT: fixtureRoot } }));
