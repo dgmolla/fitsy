@@ -145,24 +145,6 @@ jobs:
     if: needs.classify.outputs.tests == 'true'
     name: Tests (L2)
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgis/postgis:16-3.4
-        env:
-          POSTGRES_USER: fitsy_test
-          POSTGRES_PASSWORD: fitsy_test
-          POSTGRES_DB: fitsy_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      POSTGRES_PRISMA_URL: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
-      POSTGRES_URL_NON_POOLING: postgresql://fitsy_test:fitsy_test@localhost:5432/fitsy_test
-      # External API keys intentionally absent — tests must mock all external services
     steps:
       - uses: actions/checkout@v4
         with:
@@ -173,10 +155,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: git fetch origin main
-      - name: Apply Prisma migrations (ephemeral DB)
-        run: npx prisma migrate deploy
-      - name: Seed fixture data (deterministic; no auth users in CI)
-        run: npx tsx prisma/seed.ts --data-only
+      # The canonical runner owns PostGIS, target checks, migrations and seed.
+      # External API keys stay absent; tests replace external services.
       - name: Run L2 checks
         run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed
       - name: Upload L2 diagnostics

@@ -9,6 +9,7 @@ import {
   isUndeliverableAddress,
   optedOutAddresses,
   sendMarketingEmail,
+  sendMarketingEmailResult,
 } from "@/lib/marketingEmail";
 import { makeUnsubscribeToken } from "@/lib/unsubscribe";
 import { prisma } from "@/lib/restaurantService";
@@ -71,6 +72,30 @@ describe("sendMarketingEmail", () => {
 
   it("fails closed when a compliance env var is missing", async () => {
     delete process.env["FITSY_POSTAL_ADDRESS"];
+    expect(await sendMarketingEmail({ userId: "u1", ...base })).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["RESEND_API_KEY", "missing_api_key"],
+    ["UNSUBSCRIBE_SECRET", "missing_unsubscribe_secret"],
+    ["FITSY_POSTAL_ADDRESS", "missing_postal_address"],
+  ])("reports %s configuration failures without contacting the provider", async (key, reason) => {
+    delete process.env[key];
+    expect(await sendMarketingEmailResult({ userId: "u1", ...base })).toEqual({ ok: false, reason });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes undeliverable addresses, opt-outs and a failed suppression lookup without sending", async () => {
+    expect(await sendMarketingEmailResult({ userId: "u1", ...base, to: "seed@fitsy.test" }))
+      .toEqual({ ok: false, reason: "undeliverable_address" });
+    (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([{ n: 1 }]);
+    expect(await sendMarketingEmailResult({ userId: "u1", ...base }))
+      .toEqual({ ok: false, reason: "suppressed" });
+    (prisma.$queryRaw as jest.Mock).mockRejectedValueOnce(new Error("private database details"));
+    expect(await sendMarketingEmailResult({ userId: "u1", ...base }))
+      .toEqual({ ok: false, reason: "suppression_unavailable" });
+    (prisma.$queryRaw as jest.Mock).mockRejectedValueOnce(new Error("private database details"));
     expect(await sendMarketingEmail({ userId: "u1", ...base })).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
   });

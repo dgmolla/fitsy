@@ -28,7 +28,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { notifySlack } from "@fitsy/shared";
-import { sendMarketingEmail } from "@/lib/marketingEmail";
+import { sendMarketingEmailResult } from "@/lib/marketingEmail";
 import { editionForDate, weekIndexForDate } from "@/lib/emailTemplates";
 import { marketingAudience } from "@/lib/marketingAudience";
 import { MAX_SENDS_PER_RUN, recordSend, sentWithin } from "@/lib/marketingLedger";
@@ -74,6 +74,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   let paced = 0;
   let failed = 0;
   let processed = 0;
+  const failures = new Map<string, number>();
 
   for (const r of audience) {
     if (sent >= MAX_SENDS_PER_RUN || Date.now() - started > BUDGET_MS) break;
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
 
     const recipient = r.userId !== undefined ? { userId: r.userId } : { waitlistId: r.waitlistId };
-    const ok = await sendMarketingEmail({
+    const result = await sendMarketingEmailResult({
       ...recipient,
       to: r.email,
       subject,
@@ -94,13 +95,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       idempotencyKey: `weekly:${step}:${r.email}`,
     });
 
-    if (ok) {
+    if (result.ok) {
       // Record only after a confirmed send - a failed send must be retried
       // on the next run, never silently dropped.
       await recordSend(r.email, "weekly", step);
       sent++;
     } else {
       failed++;
+      const key = result.reason + (result.status === undefined ? "" : ` (HTTP ${result.status})`);
+      failures.set(key, (failures.get(key) ?? 0) + 1);
     }
   }
 
@@ -112,7 +115,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     await notifySlack(
       failed > 0 ? "weekly editorial had failures" : "weekly editorial incomplete",
       `${slug}: sent ${sent}, paced ${paced}, failed ${failed}, ${unsent} not reached within the run budget. ` +
-        `Re-run GET /api/internal/marketing/weekly to resume; already-sent addresses are excluded.`,
+        (failed > 0 ? `Failure reasons: ${[...failures].map(([reason, count]) => `${reason}: ${count}`).join(", ")}. ` : "") +
+        `Resolve failures before re-running GET /api/internal/marketing/weekly; already-sent addresses are excluded.`,
       { source: "marketing-weekly" },
     );
   }

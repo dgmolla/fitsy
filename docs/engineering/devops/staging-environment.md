@@ -34,7 +34,7 @@ graph LR
 
 | Env | What | Data | Schema | Used by |
 |---|---|---|---|---|
-| **ephemeral** | Postgres/PostGIS container in CI (`ci.yml` service) or locally | `prisma/seed.ts` (`npx prisma db seed`): 50 restaurants in one LA ring, 400 items, 3 users | all migrations applied fresh each run | unit + DB integration tests |
+| **ephemeral** | Worktree-owned PostGIS container launched by `scripts/verify/run.mjs` locally and in hosted L2 | `prisma/seed.ts --data-only`: deterministic restaurant fixtures without auth users | target ownership checked and all migrations applied before tests | unit + DB integration tests |
 | **dev** | Supabase project `fitsy-dev` with its own auth (JWKS), service role, and `DEMO_REVIEW_EMAILS=seed-pro@fitsy.dev` | seed + `scripts/dev/snapshot.ts` (~500 real LA restaurants, no user data); `scripts/dev/reset.ts` restores user tables nightly | `scripts/dev/vercel-build.sh` runs `prisma migrate deploy` on every **preview** build | Vercel previews, the stable dev API, local dev, simulator E2E, bug-repro routines |
 | **prod** | project `zaxkmjqozvmbifiwbxps` | real | migrated by the deploy workflow before Vercel promotes (autonomous-shipping L8; until that lands, by hand: `prisma migrate deploy`) | production, post-deploy smoke only |
 

@@ -92,6 +92,7 @@ The `product-flow/local` publisher checks that receipt before setting its exact-
 
 **Local product-flow gate.** Local iPhone E2E is blocking for mobile-facing changes.
 CI runs static checks, unit tests and builds on Linux, without simulator execution or simulator secrets.
+Hosted L2 uses the same owned PostGIS launcher, target assertions, migrations and data-only seed as local database verification.
 Run `npm run verify:sim-plan` to inspect `none`, `smoke`, `flow` or `full` scope and its reason.
 The planner uses the retained reviewer ownership router and simulator path tiers, mapping changed mobile screens and API contracts to the existing Maestro flows.
 Navigation, auth, billing, native configuration, release and unmapped mobile-facing paths require all flows; changes without mobile consumers require no simulator.

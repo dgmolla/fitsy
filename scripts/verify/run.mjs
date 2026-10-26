@@ -113,7 +113,7 @@ export async function verify(argv, prepareDatabase) {
   const remaining = selected.filter(isAcceptance);
   const needsDatabase = remaining.some(c => c.database) || cheap.some(c => c.name === 'focused-tests' &&
     (c.database || focusedDatabaseRequired([])));
-  if (runsCtx === 'local' && needsDatabase && !prepareDatabase && !process.env.FITSY_VERIFY_OWNED_DB) {
+  if (needsDatabase && !prepareDatabase && !process.env.FITSY_VERIFY_OWNED_DB) {
     // Enter the existing OS-lock supervisor before executing this pipeline.
     // The locked CLI calls verify with an internal preparation callback, not a
     // caller-controlled marker authorizing omitted safety checks.
@@ -237,10 +237,10 @@ export async function verify(argv, prepareDatabase) {
   if (!results.some(r => r.status === 'fail' && r.blocking)) {
     if (!databaseFocused && !fullContextFocused) results.push(...await runChecks(focused));
   } else skipped.push(...focused.map(c => ({ name: c.name, status: 'skipped', summary: 'cheap checks failed' })));
-  // A full local build remains database-free and precedes real acquisition.
+  // A full build remains database-free and precedes real acquisition.
   // The same pipeline then prepares the DB and runs its selected focused/full
   // checks, so neither a second runner nor a skipped-cheap trust marker is needed.
-  const preDatabaseBuild = runsCtx === 'local' && needsDatabase
+  const preDatabaseBuild = needsDatabase
     ? remaining.filter(c => c.name === 'build' && !c.database) : [];
   if (preDatabaseBuild.length && !results.some(result => result.status === 'fail' && result.blocking)) {
     for (const build of preDatabaseBuild) results.push(await runCheck(build, { withoutDatabase: true }));
@@ -263,7 +263,9 @@ export async function verify(argv, prepareDatabase) {
         .map(c => ({ name: c.name, status: 'skipped', summary: 'database prerequisites failed' })));
     }
   } else {
-    if (runsCtx === 'local' && remaining.some(c => c.database)) {
+    // Hosted tests use the same owned target as local route fixtures, rather
+    // than a separate service container that cannot satisfy their assertion.
+    if (remaining.some(c => c.database)) {
       try {
         prepareOwnedDatabase();
         const { assertOwnedDatabase } = await import('./local-db-control.mjs');

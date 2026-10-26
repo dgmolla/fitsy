@@ -107,7 +107,7 @@ The stdout cost summary is still emitted at end-of-run for quick inspection, but
 
 ### 4. Pipeline alerts — Slack channel `C0ASM3865AA`
 
-The preload script calls `notifySlack()` (defined in `scripts/preload-ue-first.ts`) to post run-level notifications to the Fitsy engineering Slack channel `C0ASM3865AA`.
+The preload script delegates to `packages/shared/src/utils/notifySlack.ts` to post run-level notifications to the Fitsy engineering Slack channel `C0ASM3865AA`.
 
 **When alerts fire:**
 - Pipeline run completion (success or partial)
@@ -115,6 +115,14 @@ The preload script calls `notifySlack()` (defined in `scripts/preload-ue-first.t
 - Preflight failures (UE probe or Anthropic connectivity)
 
 **Setup:** Set `SLACK_BOT_TOKEN` in the environment. If absent, Slack notifications are skipped; no error is raised.
+
+The same helper carries API and weekly email application alerts.
+Its default channel is [#fitsy-alerts](https://fitsy-hq.slack.com/archives/C0ASM3865AA); `SLACK_ALERT_CHANNEL` can override it, so confirm the actual channel before investigating.
+Inspect a bounded sample of actual messages and retain timestamps and permalinks on the original issue.
+Classify application/dependency alerts separately from routine feedback digests, coordinator Slack transport failures and delivery `BLOCKED` reminders.
+Trace an application alert to its real handler and reproduce with controlled external boundaries before proposing a repair.
+Recent routine digests prove channel activity, not recovery of an older failed send or dependency.
+Weekly alerts aggregate safe reason/status counts; use [the email recovery guide](../backend/marketing-emails.md#failure-diagnostics-and-safe-recovery) rather than replaying the production cron to investigate.
 
 ### 5. Vercel error alerts
 
@@ -149,7 +157,8 @@ Response 503: { status: "error", db: "unreachable", error: string }
 
 - Health check DB query must complete in <500ms — use `SELECT 1`, not a table count or complex query
 - Axiom and Slack are optional dependencies in the pipeline — missing env vars cause silent skip, not a crash
-- `AXIOM_TOKEN` and `SLACK_BOT_TOKEN` are pipeline-side secrets; they do not need to be in the Vercel API project (they are only used by `scripts/preload-ue-first.ts`, which runs locally or on a CI runner)
+- `AXIOM_TOKEN` supplies pipeline telemetry; `SLACK_BOT_TOKEN` is also consumed by API application alerts and digests.
+  Check configuration presence in the affected Vercel project without printing values or changing production configuration during diagnosis.
 - Analytics requires `@vercel/analytics` ≥2.0 for Next.js App Router compatibility
 - There are **two** Vercel projects: `fitsy` (marketing site, fitsy.org) and `fitsy-api` (real API). Configure alerts and analytics on `fitsy-api`
 
