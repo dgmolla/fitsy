@@ -118,6 +118,11 @@ The local pre-push hook runs size/domain checks, then cheap static checks and fo
 UI smoke executes locally on the Mac, with no simulator step added to this hook.
 A fresh checkout needs installed dependencies but no issue binding, review daemon or home-directory review state.
 Keep dependencies local to this checkout so workspace links resolve its own packages.
+When the dependency preflight reports `verification dependencies are missing`, run `npm ci` in that checkout before rerunning the unchanged verifier or hook.
+If network access is unavailable but an existing npm cache contains the lockfile's packages, copy that cache to a writable task-owned directory and run `npm ci --offline --cache <task-cache>`.
+Keep the lockfile and hook unchanged; a cache miss still requires restoring the missing package through supported access.
+In a sandbox where Prisma cannot update its home cache, copy the existing Prisma cache into `<task-cache>/prisma` and set `XDG_CACHE_HOME=<task-cache>` for the normal verification command.
+Prisma consumes this supported cache location while retaining its normal generation and engine checks.
 Type checking calls each workspace's `npm run type-check`, including Prisma generation from the repository schema before compiling the API.
 This refreshes stale generated types after schema updates without requiring a database connection or migration.
 The scripts TypeScript project maps `@fitsy/shared` imports to this checkout's source even when a workspace package link is unavailable.
