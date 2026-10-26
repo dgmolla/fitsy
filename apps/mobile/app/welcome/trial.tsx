@@ -18,7 +18,7 @@ import { useRouteContinuation } from '@/lib/useRouteContinuation';
 const OFFERING_RETRY_CAP_MS = 5000;
 
 export default function TrialScreen() {
-  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
+  const { devTrialVisual, previewReturn } = useLocalSearchParams<{ devTrialVisual?: string; previewReturn?: string }>();
   const visualScenario = devTrialVisualScenario(devTrialVisual);
   const visualRequested = visualScenario !== null;
   const focused = useIsFocused();
@@ -60,9 +60,9 @@ export default function TrialScreen() {
       return;
     }
     navigating.current = true;
-    router.push(visualRequested ? { pathname: '/welcome/trial-reminder', params: { devTrialVisual } } : '/welcome/trial-reminder');
+    router.push({ pathname: '/welcome/trial-reminder', params: { devTrialVisual: visualRequested ? devTrialVisual : undefined, previewReturn } });
   }
-  if (entitled === true || (shownOffering && eligibilityReady && !trial)) return <Redirect href="/welcome/payment" />;
+  if (entitled === true || (shownOffering && eligibilityReady && !trial)) return <Redirect href={{ pathname: '/welcome/payment', params: { previewReturn } }} />;
   return <WelcomeScreen progress={1} title={trial ? 'Try Fitsy' : 'Checking your plans'}
     subtitle={trial ? 'We want you to try Fitsy for free' : 'Your available plans will appear next.'}
     continueLabel={checkingPlans ? 'Checking plans…' : shownOffering ? 'Continue' : 'Retry plans'} canContinue={!checkingPlans}

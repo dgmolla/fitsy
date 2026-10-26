@@ -45,9 +45,9 @@ export async function clearPaymentSignInContinuation(): Promise<void> {
 
 /** A spent checkout preview must exit through the paywall instead of looping. */
 export async function navigateBackFromPayment(
-  canGoBack: boolean, userId: string | undefined, back: () => void, exit: () => void,
+  hasBackDestination: boolean, userId: string | undefined, back: () => void, exit: () => void,
 ): Promise<void> {
-  if (!canGoBack) { exit(); return; }
+  if (!hasBackDestination) { exit(); return; }
   try {
     if (await hasPaymentSignInContinuation(userId)) exit();
     else back();
