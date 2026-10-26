@@ -26,3 +26,14 @@ Zero false matches in 104 negatives does not establish a population false-match 
 Raw evidence: [per-item baseline decisions](../../../scripts/eval/results/issue-503-baseline/baseline.json), [machine-readable summary](../../../scripts/eval/results/issue-503-baseline/summary.json), and [generated comparison page](../../../scripts/eval/results/issue-503-baseline/report.md).
 The benchmark SHA-256 is `90c2ac7d65055231f6367274c2bde0ed036a0ae258475f05674b422db27e3259`.
 Jev raw outputs do not exist because the live run has not occurred.
+
+## Live Jev result (2026-10-26)
+
+**Verdict: NO-GO.** Frozen commit `8e289c1`, model returned `jev-1.14.0`, raw journal in `scripts/eval/results/jev-chain-match-2026-10-26/`.
+
+| Method | Accuracy | FP rate | Recall | Abstained | USD / 1k pairs | p95 ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| Exact alias | 99.0% | 0% | 97.9% | 0 | $0 | <0.01 |
+| Jev | 51.5% | 0% | 1.0% | 62 | $0.025 | 124 |
+
+Jev made 1 true match, 102 correct rejections, 0 false matches, 35 missed matches and 62 abstentions (below the frozen 0.95/0.90 thresholds). It passes cost, latency and false-match bars but fails accuracy, recall, recall gain and complete coverage. Total run cost $0.005.
