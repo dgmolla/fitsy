@@ -9,6 +9,10 @@
     "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "paths": {
+      "@fitsy/shared": ["../packages/shared/src/index.ts"],
+      "@fitsy/shared/*": ["../packages/shared/src/*"]
+    },
     "outDir": ".tsbuild"
   },
   "include": ["./**/*.ts"],

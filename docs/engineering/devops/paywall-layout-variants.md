@@ -37,12 +37,18 @@ Exclude `paywall_tester_override=true` when evaluating cohorts.
 On a development build, open `/welcome/payment?devPaywallVariant=A` or `...=B` to review both layouts on one phone.
 The tester override changes presentation only; RevenueCat's live eligibility, product and entitlement remain authoritative.
 The existing `devTrialVisual=1` fixture separately marks synthetic trial eligibility and disables purchase.
+The `7` and `14` values select uniform trial lengths throughout the three welcome screens.
+The `annual-short` and `monthly-short` values select a synthetic two-day trial for that plan and a seven-day trial for the other plan, retaining live prices and renewal periods.
+All visual scenarios disable purchase, Restore, notification permission requests and reminder scheduling.
 
 Variant B calculates the projected first-charge day number from the selected eligible store trial period and the current day.
 It projects the reminder day number with the same two-day lead time and quiet-hour adjustment used by the existing notification scheduler.
 The timeline shows a projected calendar date only in the final charge sentence.
 Plan prices and renewal terms remain in the plan controls and billing disclosure.
 The middle step distinguishes opted-in, available opt-in, permission-off and unavailable states, and never claims a notification has been scheduled before the store confirms the trial end.
+Onboarding and checkout share `defaultTrialPlan`: prefer an eligible schedulable trial, then an eligible trial, then annual when available.
+The reminder screen names the plan covered by its conditional offer.
+Switching to an unschedulable trial always shows why the reminder is unavailable, regardless of permission or saved opt-in.
 No-trial offers show only the three supported benefits in the main content area, with immediate paid terms in the purchase disclosure.
 The store confirms the actual purchase and charge date before checkout.
 The timeline consumes `trialPresentation.ts`, which derives reminder timing from the shared `contracts/trialPolicy.ts` used by native scheduling.
