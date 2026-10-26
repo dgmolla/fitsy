@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "status": "unverified",
+  "chain": "Claim Jumper",
+  "mode": "web-discovery",
+  "source": {
+    "requestedUrl": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+    "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+    "file": "downloads/02-e754c6727379.pdf",
+    "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+    "bytes": 566035,
+    "contentType": "application/pdf"
+  },
+  "extraction": {
+    "method": "pdftotext -layout; header-identified columns",
+    "textFile": "source.txt",
+    "sha256": "9ed3ed377fa1db30d2fce2c8cf28c3e443da4149133b7726b0ca171521778034",
+    "itemCount": 1244,
+    "diagnosticCount": 17
+  },
+  "reviewFile": "review.json",
+  "selectionReason": "Highest-ranked successfully parsed official candidate (score 150). Matches the supplied official domain. Nutrition/PDF URL or anchor text. Direct PDF download. Selection does not verify facts or freshness."
+}

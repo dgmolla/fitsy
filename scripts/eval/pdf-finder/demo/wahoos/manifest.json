@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "status": "unverified",
+  "chain": "Wahoo's Fish Taco",
+  "mode": "web-discovery",
+  "source": {
+    "requestedUrl": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+    "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+    "file": "downloads/03-105423afbefb.pdf",
+    "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+    "bytes": 1705525,
+    "contentType": "application/pdf"
+  },
+  "extraction": {
+    "method": "pdftotext -layout; header-identified columns",
+    "textFile": "source.txt",
+    "sha256": "aeb93414746430880ab45c3492255e41f93b7b7b77aee9649a2283ceba2a3db1",
+    "itemCount": 1523,
+    "diagnosticCount": 3
+  },
+  "reviewFile": "review.json",
+  "selectionReason": "Highest-ranked successfully parsed official candidate (score 195). Matches the supplied official domain. Nutrition/PDF URL or anchor text. Direct PDF download. Current official-page link outranks search-only documents. Selection does not verify facts or freshness."
+}
