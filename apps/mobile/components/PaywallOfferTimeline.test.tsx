@@ -3,7 +3,7 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
-import { PAYWALL_BENEFITS, PaywallOfferTimeline, projectedChargeDate } from './PaywallOfferTimeline';
+import { PAYWALL_BENEFITS, PaywallOfferTimeline, projectedChargeDate, type ReminderAvailability } from './PaywallOfferTimeline';
 import { purchaseTerms } from '../lib/purchaseTerms';
 import { planReminders, trialReminderDate } from '../lib/notificationPlan';
 
@@ -84,6 +84,20 @@ test('reminder states do not promise delivery without permission and opt-in', ()
   view.rerender(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability="unavailable" />);
   expect(view.getByText(/Unavailable; check your trial end/)).toBeTruthy();
 });
+
+test.each<ReminderAvailability>(['enabled', 'opt-in', 'permission-off', 'unavailable'])(
+  'a selected two-day trial cannot borrow reminder availability from account state %s', reminderAvailability => {
+    const terms = purchaseTerms(product('P2D', '$79.99'), true);
+    const view = render(<PaywallOfferTimeline terms={terms} now={now} reminderAvailability={reminderAvailability} />);
+    expect(view.getByText('Reminder unavailable')).toBeTruthy();
+    expect(view.getByText(/too short for a reminder/)).toBeTruthy();
+    expect(view.queryByText(/send you a reminder|turn on reminders|Enable them/)).toBeNull();
+    const expiry = projectedChargeDate(terms, now)!;
+    expect(planReminders({ now, userId: 'buyer', entitled: true, preferences: { meals: false, trial: true },
+      subscription: { isActive: true, periodType: 'TRIAL', willRenew: true,
+        latestPurchaseDate: now.toISOString(), expirationDate: expiry.toISOString() } })).toEqual([]);
+  },
+);
 
 test.each([
   [new Date(2026, 0, 31, 12), 'P1M', new Date(2026, 1, 28, 12)],

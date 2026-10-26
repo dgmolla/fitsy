@@ -119,6 +119,16 @@ Use `isNativeFocused(dump, testID)` on a fresh observation before typing and `as
 These helpers inspect the exact element row and fail closed for missing or duplicate selectors.
 They do not prove search results; assert the returned dish or empty-state recovery separately and retain the complete raw tool trace.
 
+## Mixed-duration trial reminders
+
+`paywall-mixed-trials-visual` covers annual two-day plus monthly seven-day trials and the reverse through the real three-screen onboarding journey.
+Its shared helper checks the named reminder offer, the schedulable purchase default, live prices and renewal copy, plan switching, unavailable reminders for short trials with and without simulated opt-in, and the visual-only checkout guard.
+Run it with `paywall-eligible-visual` through `scripts/sim/product-flow.mjs run <UDID> ... --mode=development` on an owned development build.
+The `annual-short` and `monthly-short` visual parameters propagate unchanged between screens.
+Every screenshot is labeled synthetic, and these flows request no notification permission, schedule nothing and cannot purchase or restore.
+They do not establish eligible Apple or RevenueCat catalog acceptance.
+When an actual eligible mixed catalog is available, separately verify both default purchases, plan switches, permission outcomes and the store-confirmed reminder schedule using that catalog and an eligible account.
+
 ## Preview Search highlight
 
 `onboarding-search-highlight` follows real onboarding with meal prep selected so Search is the first preview tip.

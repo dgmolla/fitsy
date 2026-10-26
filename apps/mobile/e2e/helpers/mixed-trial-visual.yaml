@@ -1,0 +1,120 @@
+# Reused by paywall-mixed-trials-visual, with an isolated launch per catalog.
+appId: com.fitsy.mobile
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-start
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: "92%,93%"
+- openLink: com.fitsy.mobile://welcome/trial?devTrialVisual=${SCENARIO}
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible: "We want you to try Fitsy for free"
+    timeout: 30000
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: trial-reminder-note
+    timeout: 15000
+- assertVisible: "If you choose the ${LONG_NAME} plan.*free trial of 7 days ends.*"
+- assertVisible: "Synthetic trial eligibility for visual testing.*"
+- takeScreenshot: synthetic-${SCENARIO}-reminder
+- tapOn:
+    id: trial-reminder-allow
+- extendedWaitUntil:
+    visible:
+      id: paywall-offer-timeline
+    timeout: 15000
+- assertVisible: "In 7 days"
+- assertNotVisible: "Reminder unavailable"
+# Read the selected default before tapping either plan.
+- scrollUntilVisible:
+    element:
+      id: dev-trial-visual-note
+    direction: DOWN
+- assertVisible: "Synthetic .* for visual testing.*"
+- scrollUntilVisible:
+    element:
+      id: paywall-price-${LONG_PLAN}
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-price-${LONG_PLAN}
+- evalScript: ${output.longPrice = maestro.copiedText}
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes('7 days free, then ' + output.longPrice + '/' + LONG_PERIOD) && maestro.copiedText.includes('Renews automatically')}
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Visual preview only"
+- tapOn: "OK"
+# A short selection must remove the opt-in invitation even without prior consent.
+- scrollUntilVisible:
+    element:
+      id: paywall-plan-${SHORT_PLAN}
+    direction: UP
+- tapOn:
+    id: paywall-plan-${SHORT_PLAN}
+- copyTextFrom:
+    id: paywall-price-${SHORT_PLAN}
+- evalScript: ${output.shortPrice = maestro.copiedText}
+- scrollUntilVisible:
+    element:
+      id: paywall-step-reminder
+    direction: UP
+- assertVisible: "Reminder unavailable"
+- assertVisible: "This trial is too short for a reminder before the cancellation deadline."
+- assertNotVisible: "Optional; turn on reminders after purchase."
+- takeScreenshot: synthetic-${SCENARIO}-short-opt-in
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes('2 days free, then ' + output.shortPrice + '/' + SHORT_PERIOD) && maestro.copiedText.includes('Renews automatically')}
+- scrollUntilVisible:
+    element:
+      id: paywall-plan-${LONG_PLAN}
+    direction: UP
+- tapOn:
+    id: paywall-plan-${LONG_PLAN}
+# This explicitly simulated opt-in does not change device permission or preferences.
+- openLink: com.fitsy.mobile://welcome/payment?devTrialVisual=${SCENARIO}&devReminderEnabled=1&devPaywallVariant=B
+- tapOn:
+    text: "^Open$"
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: paywall-step-reminder
+    direction: UP
+- extendedWaitUntil:
+    visible: "We'll send you a reminder.*"
+    timeout: 15000
+- assertVisible: "In 7 days"
+- scrollUntilVisible:
+    element:
+      id: paywall-plan-${SHORT_PLAN}
+    direction: DOWN
+- tapOn:
+    id: paywall-plan-${SHORT_PLAN}
+- scrollUntilVisible:
+    element:
+      id: paywall-step-reminder
+    direction: UP
+- assertVisible: "Reminder unavailable"
+- assertVisible: "This trial is too short for a reminder before the cancellation deadline."
+- assertNotVisible: "We'll send you a reminder.*"
+- takeScreenshot: synthetic-${SCENARIO}-short-enabled

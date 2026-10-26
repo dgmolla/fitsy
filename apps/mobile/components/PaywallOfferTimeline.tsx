@@ -41,19 +41,20 @@ export function PaywallOfferTimeline({ terms, now, reminderAvailability = 'unava
     </View>;
   }
 
-  const reminderDate = presentation.reminderDate;
-  const usefulReminder = !!reminderDate;
+  const usefulReminder = presentation.reminderAvailable;
   const chargeDay = elapsedCalendarDays(now, chargeDate);
   // Quiet hours can move delivery to an earlier calendar day than the
   // nominal 48-hour lead, so label the date the scheduler actually chose.
   const reminderDay = presentation.reminderDay;
-  const reminderCopy = reminderAvailability === 'enabled' && usefulReminder
-    ? "We'll send you a reminder that your trial is ending soon if the store confirms this trial end after purchase."
-    : reminderAvailability === 'permission-off'
-      ? 'Notifications off. Enable them in settings.'
-      : reminderAvailability === 'opt-in'
-        ? 'Optional; turn on reminders after purchase.'
-        : 'Unavailable; check your trial end in settings.';
+  const reminderCopy = !usefulReminder
+    ? 'This trial is too short for a reminder before the cancellation deadline.'
+    : reminderAvailability === 'enabled'
+      ? "We'll send you a reminder that your trial is ending soon if the store confirms this trial end after purchase."
+      : reminderAvailability === 'permission-off'
+        ? 'Notifications off. Enable them in settings.'
+        : reminderAvailability === 'opt-in'
+          ? 'Optional; turn on reminders after purchase.'
+          : 'Unavailable; check your trial end in settings.';
 
   const chargeDateLabel = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(chargeDate);
   return <View style={s.panel} testID="paywall-offer-timeline">
