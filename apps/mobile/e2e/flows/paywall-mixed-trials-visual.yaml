@@ -1,0 +1,22 @@
+# Synthetic mixed-duration eligibility on live prices, never store purchase evidence.
+appId: com.fitsy.mobile
+tags: [billing, notifications, onboarding, changed-journey]
+---
+- runFlow:
+    file: ../helpers/mixed-trial-visual.yaml
+    env:
+      SCENARIO: annual-short
+      LONG_PLAN: monthly
+      LONG_NAME: Monthly
+      LONG_PERIOD: month
+      SHORT_PLAN: yearly
+      SHORT_PERIOD: year
+- runFlow:
+    file: ../helpers/mixed-trial-visual.yaml
+    env:
+      SCENARIO: monthly-short
+      LONG_PLAN: yearly
+      LONG_NAME: Annual
+      LONG_PERIOD: year
+      SHORT_PLAN: monthly
+      SHORT_PERIOD: month

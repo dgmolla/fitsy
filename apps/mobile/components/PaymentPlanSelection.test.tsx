@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-native-purchases';
+import * as Notifications from 'expo-notifications';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import PaymentScreen from '../app/welcome/payment';
@@ -13,6 +14,7 @@ import WelcomeLayout from '../app/welcome/_layout';
 import { PurchasesProvider } from '../lib/usePurchases';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
 import { ONBOARDING_COMPLETE_KEY } from '../lib/onboardingCompletion';
+import { readReminderPreferences } from '../lib/notificationSchedule';
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
@@ -35,6 +37,7 @@ jest.mock('react-native-purchases', () => ({ __esModule: true, ...jest.requireAc
   default: { ...jest.requireActual('../__mocks__/react-native-purchases').default, purchasePackage: jest.fn() } }));
 jest.mock('react-native-purchases-ui', () => jest.requireActual('../__mocks__/react-native-purchases-ui'));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { revenueCat: { ios: 'test-store-key' } } } } }));
+jest.mock('expo-notifications', () => ({ getPermissionsAsync: jest.fn(), requestPermissionsAsync: jest.fn(), scheduleNotificationAsync: jest.fn() }));
 // SDK fixtures represent returned native results, not receipts or a bypass of
 // the app's purchase and entitlement logic. Every application module is real.
 const noSubscription = { entitlements: { active: {}, all: {} } } as CustomerInfo;
@@ -61,6 +64,8 @@ const routes = {
   'welcome/_layout': WelcomeLayout, 'welcome/trial': TrialScreen, 'welcome/trial-reminder': TrialReminderScreen,
   'welcome/payment': PaymentScreen,
   'welcome/signin': () => <Text>Sign in before plans</Text>,
+  'welcome/preview': () => <Text>Browse the preview</Text>,
+  'welcome/resubscribe': () => <Text>Resubscribe plans</Text>,
   'welcome/notification-permission': OldNotificationScreen,
   '(tabs)/_layout': () => <Stack />, '(tabs)/search': () => <Text>Meal search</Text>, 'restaurant/[id]': Restaurant,
 };
@@ -74,6 +79,12 @@ beforeEach(async () => {
   nativeListener = undefined;
   nativeUserId = null;
   mockCapture.mockClear();
+  (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'undetermined' });
+  (Notifications.requestPermissionsAsync as jest.Mock).mockReset().mockImplementation(async () => {
+    (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'granted' });
+    return { status: 'granted' };
+  });
+  (Notifications.scheduleNotificationAsync as jest.Mock).mockClear();
   (Purchases.purchasePackage as jest.Mock).mockReset().mockResolvedValue({ customerInfo: subscribed });
   jest.spyOn(Purchases, 'getCustomerInfo').mockResolvedValue(noSubscription);
   jest.spyOn(Purchases, 'logIn').mockImplementation(async userId => {
@@ -235,6 +246,73 @@ test('a short annual offer defaults to the schedulable monthly trial and plan sw
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(Purchases.purchasePackage).toHaveBeenCalledWith(twoWeekMonthly);
 });
+
+const mixedTrials = [
+  { shortPlan: 'yearly', longPlan: 'monthly', annualPeriod: 'P2D', monthlyPeriod: 'P1W' },
+  { shortPlan: 'monthly', longPlan: 'yearly', annualPeriod: 'P1W', monthlyPeriod: 'P2D' },
+] as const;
+function offerMixedTrials(annualPeriod: string, monthlyPeriod: string) {
+  const mixedAnnual = { ...annualWithTrial, product: { ...annualWithTrial.product,
+    introPrice: { ...annualWithTrial.product.introPrice, period: annualPeriod } } };
+  const mixedMonthly = { ...monthly, product: { ...monthly.product,
+    introPrice: { ...monthly.product.introPrice, period: monthlyPeriod } } };
+  const both = { ...offering, annual: mixedAnnual, monthly: mixedMonthly,
+    availablePackages: [mixedAnnual, mixedMonthly] } as unknown as PurchasesOffering;
+  jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
+  jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+    annual: { status: 2, description: 'Eligible' }, monthly: { status: 2, description: 'Eligible' },
+  });
+  return { yearly: mixedAnnual, monthly: mixedMonthly };
+}
+
+test.each(mixedTrials)('mixed trials purchase the schedulable $longPlan default without a manual plan choice', async ({ longPlan, annualPeriod, monthlyPeriod }) => {
+  const packages = offerMixedTrials(annualPeriod, monthlyPeriod);
+  const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
+  jest.setSystemTime(new Date(2026, 8, 7, 12));
+  await waitFor(() => expect(screen.getByTestId(`paywall-plan-${longPlan}`).props.accessibilityState.checked).toBe(true));
+  await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children).toContain('7 days free'));
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState.disabled).toBe(false));
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).toHaveBeenCalledWith(packages[longPlan]);
+});
+
+test.each(mixedTrials.flatMap(offer => [true, false].map(optIn => ({ ...offer, optIn }))))(
+  'onboarding promises the $longPlan trial and switching to short $shortPlan removes reminder copy (opt-in: $optIn)',
+  async ({ shortPlan, longPlan, annualPeriod, monthlyPeriod, optIn }) => {
+    const packages = offerMixedTrials(annualPeriod, monthlyPeriod);
+    const screen = renderRouter(routes, { initialUrl: '/welcome/trial' });
+    jest.setSystemTime(new Date(2026, 8, 7, 12));
+    await screen.findByText('Try Fitsy');
+    await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+    await screen.findByText('Get a trial reminder');
+    expect(screen.getByText(new RegExp(`If you choose the ${longPlan === 'yearly' ? 'Annual' : 'Monthly'} plan`))).toBeTruthy();
+    expect(screen.getByText(/free trial of 7 days ends/)).toBeTruthy();
+    expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.press(screen.getByTestId(optIn ? 'trial-reminder-allow' : 'trial-reminder-skip')); });
+    await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
+    await waitFor(() => expect(screen.getByTestId(`paywall-plan-${longPlan}`).props.accessibilityState.checked).toBe(true));
+    await waitFor(() => expect(screen.getByTestId(`paywall-plan-${shortPlan}`).props.accessibilityState.disabled).toBe(false));
+    const longCopy = optIn ? /We'll send you a reminder/ : /turn on reminders after purchase/;
+    await screen.findByText(longCopy);
+    expect((await readReminderPreferences('buyer')).trial).toBe(optIn);
+    expect(Notifications.requestPermissionsAsync).toHaveBeenCalledTimes(optIn ? 1 : 0);
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+
+    await act(async () => { fireEvent.press(screen.getByTestId(`paywall-plan-${shortPlan}`)); });
+    expect(screen.getByText('Reminder unavailable')).toBeTruthy();
+    expect(screen.queryByText(/We'll send you a reminder|turn on reminders after purchase/)).toBeNull();
+    expect(screen.getByText(/too short for a reminder/)).toBeTruthy();
+    expect(screen.getByTestId('paywall-terms').props.children).toContain(`2 days free, then ${packages[shortPlan].product.priceString}`);
+    expect(screen.getByTestId('paywall-terms').props.children).toContain('Renews automatically');
+
+    await act(async () => { fireEvent.press(screen.getByTestId(`paywall-plan-${longPlan}`)); });
+    expect(screen.getByText(longCopy)).toBeTruthy();
+    expect(screen.getByTestId('paywall-terms').props.children).toContain('7 days free');
+    await act(async () => { fireEvent.press(screen.getByTestId(`paywall-plan-${shortPlan}`)); });
+    await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+    expect(Purchases.purchasePackage).toHaveBeenCalledWith(packages[shortPlan]);
+  },
+);
 
 test('eligibility changes on the paywall update its selection and purchase target', async () => {
   const both = { ...offering, annual: annualWithTrial, monthly, availablePackages: [annualWithTrial, monthly] } as unknown as PurchasesOffering;

@@ -18,7 +18,7 @@ import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJour
 import { annualSavingPercent, purchaseTerms, savingPercent } from '@/lib/purchaseTerms';
 import { defaultTrialPlan, trialPresentation, type PlanId } from '@/lib/trialPresentation';
 import { TRIAL_CATALOG_POLICY } from '../../../../packages/shared/src/contracts/trialPolicy';
-import { devTrialVisualOffer } from '@/lib/devTrialVisualOffer';
+import { devTrialVisualOffer, devTrialVisualScenario } from '@/lib/devTrialVisualOffer';
 import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
 import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
 import { paywallVariantConfig, resolvePaywallVariant, type PaywallVariant } from '@/lib/paywallVariant';
@@ -29,7 +29,8 @@ import { useOwnedHardwareBack } from '@/lib/useOwnedHardwareBack';
 
 export default function PaymentScreen() {
   const { devTrialVisual, devPaywallVariant, devReminderEnabled } = useLocalSearchParams<{ devTrialVisual?: string; devPaywallVariant?: string; devReminderEnabled?: string }>();
-  const visualRequested = __DEV__ && (devTrialVisual === '1' || devTrialVisual === '7' || devTrialVisual === '14');
+  const visualScenario = devTrialVisualScenario(devTrialVisual);
+  const visualRequested = visualScenario !== null;
   const simulatedReminder = visualRequested && devReminderEnabled === '1';
   useOnboardingStep('payment');
   const navigation = useNavigation();
@@ -88,7 +89,7 @@ export default function PaymentScreen() {
   const variantConfig = paywallVariantConfig(offering?.metadata);
   const paywallVariant = resolvePaywallVariant(variantConfig, userId, testerOverride);
   const discovery = usePaywallDiscovery(focused && identityReady && !!userId && paywallVariant === 'A', userId);
-  const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, devTrialVisual === '7' ? 7 : 14);
+  const visual = devTrialVisualOffer(offering, visualRequested, __DEV__, visualScenario ?? undefined);
   const shownOffering = visual?.offering ?? offering;
   const shownEligibility = visual?.eligibility ?? introEligibility;
   const eligibilityReady = !!visual || introEligibilityReady;
@@ -266,7 +267,7 @@ export default function PaymentScreen() {
         loading={loading}
         restoring={restoring}
         checkingPlans={checkingPlans}
-        visualPreview={visual ? (devTrialVisual === '7' ? 7 : 14) : undefined}
+        visualPreview={visual?.label}
         visualReminderSimulated={simulatedReminder}
         onSelect={setChosenPlan}
         onBack={onBack}
