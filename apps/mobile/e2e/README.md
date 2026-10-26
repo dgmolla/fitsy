@@ -97,11 +97,13 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
-`shuffle` requires the standard synthetic dev seed, `entitled-dev`, a Debug Test Store build and the PostHog boolean flag `shuffle` enabled for that account.
+`shuffle` requires the standard synthetic dev seed, `entitled-dev` and a Debug Test Store build.
 It chooses DTLA and independent targets of 280 kcal, 28 g protein, 34 g carbs and 5 g fat, which select the seeded Protein Smoothie.
-The Debug-only `shuffleSeed=maestro-shuffle` search parameter makes the lottery replayable without overriding entitlement or the feature flag.
+The flow's `shuffleDebug=1` search parameter explicitly enables Shuffle on Debug builds without changing PostHog flags or entitlement.
+The Debug-only `shuffleSeed=maestro-shuffle` search parameter makes the lottery replayable.
+Production builds ignore both parameters and require the PostHog boolean flag `shuffle` to be `true`.
 The flow verifies restaurant, dish, all macros, distance, Shuffle again, the selected restaurant's menu, and the empty-state recovery after setting fat to zero.
-`components/ShuffleSection.test.tsx` also checks locked teasers, flag changes, HTTP failures, request cancellation and account transitions against the real client and routing.
+`components/ShuffleSection.test.tsx` exercises the saved flow's deep link with PostHog disabled, production override rejection, locked teasers, flag changes, HTTP failures, request cancellation and account transitions against the real client and routing.
 Run it through `node scripts/sim/ci.mjs --scope=flow --flows=shuffle --udid=<UDID>` with the local fixture configuration.
 The planner expands this request when the candidate also affects shared UI or other journeys.
 
@@ -117,6 +119,11 @@ If Maestro cannot initialize its normal cache in a restricted workspace, set `JA
 This uses a separate Java cache without modifying the normal installation or changing the shell's home directory.
 The canonical media check also requires host process-ownership inspection; a sandbox denial must be resolved through the existing host owner without disabling that preflight.
 If XCTest setup reports `No space left on device`, recover eligible host resources before rerunning; `scripts/sim/ci.mjs` checks disk admission before driving any journey.
+
+`menu-macro-serving` clears app data and keychain to preserve its anonymous starting state.
+Its bounded startup retry waits for the launch animation and the original `Find meals that fit` screen before opening the restaurant.
+Missing welcome UI or a genuine crash still fails; product interactions and the full flow are never retried.
+`scripts/sim/ci.test.ts` protects that startup boundary, including the mandatory screen, timeouts and retry limit.
 
 `chain-menu-serving` clears app and keychain state to prove anonymous menu access.
 On a Debug dev-client build, clearing state can return to Expo's Development Build launcher; the flow selects local Metro before waiting for `welcome-start`.

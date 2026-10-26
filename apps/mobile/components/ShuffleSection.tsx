@@ -23,9 +23,9 @@ interface Props {
 }
 
 export function ShuffleSection(props: Props) {
-  const enabled = useShuffleFlag();
+  const { shuffleSeed, shuffleDebug } = useLocalSearchParams<{ shuffleSeed?: string; shuffleDebug?: string }>();
+  const enabled = useShuffleFlag(shuffleDebug === '1');
   const { entitled } = usePurchases();
-  const { shuffleSeed } = useLocalSearchParams<{ shuffleSeed?: string }>();
   // Deterministic native walkthroughs use the real endpoint on a Debug build.
   // A production deep link cannot override the lottery or enable the flag.
   const seed = __DEV__ && typeof shuffleSeed === 'string' ? shuffleSeed.slice(0, 80) : undefined;

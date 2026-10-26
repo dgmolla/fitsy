@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { getPostHogClient } from './analytics';
 
-/** Fail closed until PostHog enables this boolean flag, including live changes. */
-export function useShuffleFlag(): boolean {
+/** Production fails closed; Debug walkthroughs can explicitly opt in locally. */
+export function useShuffleFlag(debugOverride = false): boolean {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
     try {
@@ -16,5 +16,5 @@ export function useShuffleFlag(): boolean {
       return unsubscribe;
     } catch { setEnabled(false); }
   }, []);
-  return enabled;
+  return (__DEV__ && debugOverride) || enabled;
 }

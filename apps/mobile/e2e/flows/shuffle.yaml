@@ -1,6 +1,6 @@
-# Standard synthetic dev seed plus an entitled account with PostHog's shuffle
-# boolean flag enabled. Debug-only shuffleSeed makes each lottery replayable.
-# No purchase, entitlement override or flag override occurs in this journey.
+# Standard synthetic dev seed plus an entitled account on a Debug build.
+# Debug-only shuffleDebug opts in locally without changing PostHog flags;
+# shuffleSeed makes each lottery replayable. Entitlement is never overridden.
 appId: com.fitsy.mobile
 tags: [billing, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
 env:
@@ -37,7 +37,7 @@ env:
     visible: "Search restaurants or dishes"
     timeout: 30000
 - assertNotVisible: "Dev Login Failed"
-- openLink: com.fitsy.mobile://search?shuffleSeed=maestro-shuffle
+- openLink: com.fitsy.mobile://search?shuffleDebug=1&shuffleSeed=maestro-shuffle
 - tapOn:
     text: "^Open$"
     optional: true
@@ -123,7 +123,7 @@ env:
     timeout: 20000
 - assertVisible: "Protein Smoothie"
 - takeScreenshot: shuffle-selected-menu
-- openLink: com.fitsy.mobile://search?shuffleSeed=maestro-shuffle
+- openLink: com.fitsy.mobile://search?shuffleDebug=1&shuffleSeed=maestro-shuffle
 - tapOn:
     text: "^Open$"
     optional: true

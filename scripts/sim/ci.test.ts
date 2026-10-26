@@ -23,6 +23,30 @@ beforeAll(() => {
 });
 afterAll(() => { rmSync(directory, { recursive: true, force: true }); });
 
+test('anonymous menu startup retries only bounded observations before opening the restaurant', () => {
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/menu-macro-serving.yaml'), 'utf8')) as [unknown, {
+    launchApp?: object;
+    retry?: object;
+    runFlow?: object;
+    openLink?: string;
+  }[]];
+  const launch = commands.findIndex(step => step.launchApp);
+  expect(commands.filter(step => step.launchApp)).toHaveLength(1);
+  expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true });
+  // This whole block must remain observations: no launch, links or product actions.
+  expect(commands[launch + 1]).toEqual({
+    retry: {
+      maxRetries: 2,
+      commands: [
+        { waitForAnimationToEnd: { timeout: 10000 } },
+        { extendedWaitUntil: { visible: 'Find meals that fit', timeout: 15000 } },
+      ],
+    },
+  });
+  expect(commands.filter(step => step.retry || step.runFlow)).toHaveLength(1);
+  expect(commands[launch + 2]).toEqual({ openLink: "${'fitsy://restaurant/' + output.seed.id}" });
+});
+
 test.each(['chain-menu-serving', 'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight', 'shuffle'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, {
     launchApp?: object;

@@ -1,5 +1,7 @@
 import { act, deferred, fireEvent, getPaywallIntent, installPurchasedAccount, mockState, renderJourney, response, routes, saveOnboardingField, SecureStore, waitFor, withAccountProfile } from './OnboardingNavigationHarness';
 import React, { useState } from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Button, Text } from 'react-native';
 import PostHog from 'posthog-react-native';
 import * as Haptics from 'expo-haptics';
@@ -34,8 +36,17 @@ let requests: { url: URL; init?: RequestInit }[];
 let answer: (url: URL, init?: RequestInit) => Promise<Response>;
 let accountEntitled: boolean;
 const unsubscribe = jest.fn();
+const originalDev = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
+const [, shuffleCommands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/shuffle.yaml'), 'utf8')) as [unknown, { openLink?: string }[]];
+
+afterEach(() => {
+  if (originalDev) Object.defineProperty(globalThis, '__DEV__', originalDev);
+  else Reflect.deleteProperty(globalThis, '__DEV__');
+});
 
 beforeEach(async () => {
+  Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
   await installPurchasedAccount();
   __resetForTesting();
   flag = true;
@@ -87,8 +98,8 @@ function MenuDestination() {
   const params = useLocalSearchParams();
   return <Text testID="destination">{JSON.stringify(params)}</Text>;
 }
-async function setup(props: Parameters<typeof Fixture>[0] = {}) {
-  const screen = renderJourney('/search?shuffleSeed=maestro-shuffle', {
+async function setup(props: Parameters<typeof Fixture>[0] = {}, initialUrl = '/search?shuffleSeed=maestro-shuffle') {
+  const screen = renderJourney(initialUrl, {
     ...routes, '(tabs)/search': () => <Fixture {...props} />, 'restaurant/[id]': MenuDestination,
   });
   await waitFor(() => expect(screen.getByTestId('access').props.children).toBe(String(accountEntitled)));
@@ -104,6 +115,40 @@ it.each([undefined, false, 'control', 'true'])('hides Shuffle and performs no re
   expect(screen.queryByTestId('shuffle-section')).toBeNull();
   expect(requests).toHaveLength(0);
   expect(Haptics.impactAsync).not.toHaveBeenCalled();
+});
+
+it.each([undefined, false, 'control', 'true'])('enables an explicit Debug override when the PostHog flag is %s', async value => {
+  flag = value;
+  const screen = await setup({}, '/search?shuffleDebug=1&shuffleSeed=maestro-shuffle');
+  await press(screen);
+  expect(screen.getByTestId('shuffle-dish').props.children).toBe('Grilled Chicken Bowl');
+  expect(Object.fromEntries(requests[0].url.searchParams).seed).toBe('maestro-shuffle:0');
+});
+
+it.each(['0', 'true', '', '1&shuffleDebug=1'])('requires a single explicit Debug opt-in rather than shuffleDebug=%s', async value => {
+  flag = false;
+  const screen = await setup({}, `/search?shuffleDebug=${value}`);
+  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  expect(requests).toHaveLength(0);
+});
+
+it.each([undefined, false, 'control', 'true'])('ignores the Debug override in production when the PostHog flag is %s', async value => {
+  Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
+  flag = value;
+  const screen = await setup({}, '/search?shuffleDebug=1&shuffleSeed=maestro-shuffle');
+  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  expect(requests).toHaveLength(0);
+  expect(Haptics.impactAsync).not.toHaveBeenCalled();
+});
+
+it('keeps production rollout and live disabling under PostHog control despite Debug parameters', async () => {
+  Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
+  const screen = await setup({}, '/search?shuffleDebug=1&shuffleSeed=maestro-shuffle');
+  await press(screen);
+  expect(screen.getByTestId('shuffle-dish')).toBeTruthy();
+  expect(Object.fromEntries(requests[0].url.searchParams).seed).toBe('nonce');
+  act(() => { flag = false; flagListeners.forEach(listener => listener()); });
+  expect(screen.queryByTestId('shuffle-section')).toBeNull();
 });
 
 it('subscribes to live flag updates, cancels a pending pick when disabled, and unsubscribes', async () => {
@@ -189,11 +234,12 @@ it('keeps the server-locked teaser redacted and carries the restaurant into the 
 });
 
 it.each([true, false])('shows a redacted teaser for a non-subscriber (anonymous=%s)', async anonymous => {
+  flag = false;
   accountEntitled = false;
   if (anonymous) mockState.session = null;
   answer = async () => response({ ...meal, data: { ...meal.data!, item: null, macros: null, fitScore: null },
     meta: { ...meal.meta, locked: true, fallback: null, tolerance: null } });
-  const screen = await setup();
+  const screen = await setup({}, '/search?shuffleDebug=1&shuffleSeed=maestro-shuffle');
   await press(screen);
   expect(screen.getByTestId('shuffle-locked')).toBeTruthy();
   expect(screen.queryByTestId('shuffle-macros')).toBeNull();
@@ -313,9 +359,17 @@ it.each(['tolerance', 'radius'] as const)('discloses %s fallback and published n
 });
 
 it('uses persisted targets and the chosen area on the real search screen, then opens the real menu', async () => {
+  flag = false;
   await saveDiscoveryMacroTargets(values, 'search');
   await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify({ name: 'DTLA', lat: 34.04, lng: -118.24 }));
-  const screen = renderJourney('/search?shuffleSeed=maestro-shuffle', {
+  const links = shuffleCommands.flatMap(step => step.openLink ? [step.openLink] : []);
+  expect(links).toHaveLength(2);
+  expect(new Set(links).size).toBe(1);
+  // renderRouter takes a route location; native links carry the route in the host.
+  const link = new URL(links[0]);
+  expect(link.protocol).toBe('com.fitsy.mobile:');
+  expect(link.hostname).toBe('search');
+  const screen = renderJourney(`/${link.hostname}${link.pathname}${link.search}`, {
     ...routes, '(tabs)/search': () => <Search />, 'restaurant/[id]': () => <Restaurant />,
   });
   await waitFor(() => expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false));
