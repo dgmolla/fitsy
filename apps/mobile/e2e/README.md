@@ -27,6 +27,8 @@ It resets only the synthetic Grilled Chicken Bowl bookmark, saves the meal throu
 If `log-meal` reaches `Welcome back.` with `Your Fitsy Pro subscription ended`, authentication succeeded but the required `entitled-dev` fixture has expired.
 A `Dev Login Failed` alert requires correcting the fixture credentials bundled by owned Metro; an ordinary paywall after login requires an active `entitled-dev` account.
 Prepare an active disposable account through the local fixture adapter before rerunning; retain the Search assertion and paid-access routing.
+If XCTest reports `kAXErrorInvalidUIElement` while waiting for `welcome-login`, hierarchy inspection failed before Dev Login ran.
+Preserve the command trace and startup screenshot, then recover through the existing simulator owner before rerunning the unchanged journey.
 Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
 A local scope pass does not replace the source-bound final-candidate product-flow gate.
 Inspect `npm run verify:product-plan` for the same affected journeys and their required MCP categories.
