@@ -1,0 +1,6 @@
+# Reproducible machine artifacts remain available as ordinary JSON/JSONL files.
+# Review their generator, explicit curation, source checks and human case list.
+data/*.jsonl linguist-generated=true -diff
+data/rows.json linguist-generated=true -diff
+sources/pdf-pages.json linguist-generated=true -diff
+results/** linguist-generated=true -diff
