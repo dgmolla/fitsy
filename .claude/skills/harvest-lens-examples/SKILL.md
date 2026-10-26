@@ -53,6 +53,8 @@ lens edits).
      If the canonical local media preflight cannot inspect process ownership, retain the failed result and route that check to the existing authorized host owner; do not weaken the preflight or move native execution into CI.
      Apply the same recovery to denied simulator claim access; assess installed skills and tools without substituting an unleased device or claiming fixture execution as native acceptance.
      Reuse a compatible binary without requiring a shared cache, retain comparable repeated measurements before claiming speed, and retire owned Metro, drivers and simulators after the phase.
+     Use the ordinary native build entrypoint to check local receipts and optional shared immutable artifacts before compiling; preserve original receipts and require fresh current-checkout Metro even after a cache hit.
+     Follow the [cache contract](../../../docs/engineering/devops/native-binary-reuse.md#shared-native-cache) for storage overrides and corruption recovery, and test the scripts workspace bridge consumed by the existing verifier.
 4. **Eval cases**: for the sharpest escapes, capture
    `scripts/verify/evals/incidents/<pr-number>/` (diff.patch via
    `gh pr diff <n> --patch` of the ORIGINAL breaking change when identifiable,

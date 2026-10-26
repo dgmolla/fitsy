@@ -107,6 +107,7 @@ The runner resolves every required fixture before native execution, prepares it 
 It preserves the entire selected flow set and fails when genuine purchase history or the required store build is unavailable.
 Explicit scopes may expand the plan, but cannot omit its journeys or replace behavior coverage with render smoke.
 Use an existing compatible binary or a supported build with measured capacity; a shared binary cache is optional.
+The ordinary native build command checks the [shared immutable cache](../../docs/engineering/devops/native-binary-reuse.md#shared-native-cache) after local receipts; its regression suite runs through the scripts workspace's Node bridge in the existing test check.
 Retire owned Metro, drivers and simulator resources at the end of the phase through the existing lifecycle controls.
 CI execution is refused by the local runner, and the registry contains no native execution check.
 Replay scope regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/simulator-scope.test.ts sim/ci.test.ts`.

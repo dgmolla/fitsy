@@ -7,9 +7,9 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const stable = value => JSON.stringify(value, (_, item) => item && !Array.isArray(item) && typeof item === 'object'
   ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
 export const identityHash = value => sha(stable(value));
-export const sealReceipt = receipt => ({ ...receipt, receiptHash: identityHash(receipt) });
+export const sealReceipt = ({ receiptHash, ...receipt }) => ({ ...receipt, receiptHash: identityHash(receipt) });
 const nativeFile = path => /^(apps\/mobile\/ios\/|patches\/)/.test(path) ||
-  /^apps\/mobile\/(expo|react-native)\.config\.[cm]?[jt]s$/.test(path);
+  /^apps\/mobile\/(?:(?:expo|react-native)\.config\.[cm]?[jt]s|plugins\/)/.test(path);
 const command = (cmd, args, cwd, env) => execFileSync(cmd, args, { cwd, env, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }).trim();
 const normalize = (value, root) => {
   if (typeof value === 'string') return value.startsWith(root) ? `<checkout>/${relative(root, value)}` : value;
@@ -65,9 +65,16 @@ export function nativeIdentity(root, env = process.env, execute = command) {
     updates: expo.updates, runtimeVersion: expo.runtimeVersion, mods: expo._internal?.modResults?.ios };
   const linked = [...new Set([...expoGraph.modules.map(module => module.packageName), ...Object.keys(rnGraph.dependencies)])].sort();
   const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'));
-  const nativePackages = Object.fromEntries(linked.map(name => [name, lock.packages[`node_modules/${name}`]?.version || null]));
-  nativePackages.expo = lock.packages['node_modules/expo']?.version || null;
-  nativePackages['react-native'] = lock.packages['node_modules/react-native']?.version || null;
+  const buildTools = ['@expo/config', '@expo/config-plugins', '@expo/prebuild-config', 'expo-modules-autolinking',
+    '@react-native/codegen', '@react-native/community-cli-plugin'];
+  const nativePackages = Object.fromEntries([...new Set([...linked, 'expo', 'react-native', ...buildTools])].sort().map(name => {
+    // npm can install native packages in the mobile workspace rather than hoist
+    // them. Bind every locked instance of a linked package, including nested Pods.
+    const entries = Object.entries(lock.packages).filter(([path]) => path === `node_modules/${name}` || path.endsWith(`/node_modules/${name}`));
+    if (!entries.length && !buildTools.includes(name)) throw new Error(`Linked native package is absent from the lockfile: ${name}`);
+    return [name, Object.fromEntries(entries.map(([path, pkg]) => [path, { version: pkg.version || null,
+      integrity: pkg.integrity || null, resolved: pkg.resolved || null, link: pkg.link || false }]))];
+  }));
   const paths = execute('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'apps/mobile', 'patches'], root, cleanEnv)
     .split('\0').filter(nativeFile).sort();
   const files = Object.fromEntries(paths.map(path => [path, existsSync(join(root, path)) ? sha(readFileSync(join(root, path))) : '<deleted>']));
@@ -109,11 +116,18 @@ export function buildInputDrift(before, after, includeGenerated = false) {
 export function profileIdentity(profile, device, env = process.env, execute = command) {
   const xcode = execute('xcodebuild', ['-version'], process.cwd(), env);
   const sdk = execute('xcrun', ['--sdk', 'iphonesimulator', '--show-sdk-version'], process.cwd(), env);
-  const inputs = { target: 'iphonesimulator', os: device.os, architecture: process.arch,
+  const sdkBuild = execute('xcrun', ['--sdk', 'iphonesimulator', '--show-sdk-build-version'], process.cwd(), env);
+  const developerDirectory = env.DEVELOPER_DIR || execute('xcode-select', ['-p'], process.cwd(), env);
+  const cocoapods = execute('pod', ['--version'], process.cwd(), env);
+  const inputs = { target: 'iphonesimulator', os: device.os, architecture: device.architecture || process.arch,
     configuration: profile.configuration,
     storeCapability: profile.storeMode === 'test-store' ? 'test-store' : 'apple-native', buildMode: profile.buildMode,
     metroPort: profile.metroPort || null,
-    flags: ['ONLY_ACTIVE_ARCH=YES', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'FORCE_BUNDLING=1'], xcode, sdk };
+    flags: ['ONLY_ACTIVE_ARCH=YES', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'FORCE_BUNDLING=1'],
+    xcode, sdk, sdkBuild, developerDirectory, cocoapods, node: process.version,
+    buildEnvironment: Object.fromEntries(['RCT_NEW_ARCH_ENABLED', 'USE_FRAMEWORKS', 'EXPO_USE_COMMUNITY_AUTOLINKING',
+      'CC', 'CXX', 'OTHER_CFLAGS', 'OTHER_LDFLAGS', 'SWIFT_VERSION', 'SDKROOT', 'TOOLCHAINS', 'ARCHS']
+      .map(key => [key, env[key] || null])) };
   return { hash: sha(stable(inputs)), inputs };
 }
 
@@ -158,7 +172,12 @@ export function reusableNativeReceipt(receipts, native, profile, recipe, appInta
   for (const receipt of receipts) {
     if (!receipt?.nativeIdentity?.inputs) continue;
     let decision = nativeBuildDecision({ receipt, native, profile, recipe, appIntact: appIntact(receipt) });
-    if (decision.rebuild && currentTreeAttested &&
+    // A fresh managed worktree has no generated iOS project. Only a verified
+    // cache import may supply that original generated tree; a present, edited
+    // tree still needs an intact attestation or a real rebuild.
+    const importedIntoFreshTree = receipt.sharedNativeArtifact &&
+      Object.keys(native.inputs.generatedFiles || {}).length === 0;
+    if (decision.rebuild && (currentTreeAttested || importedIntoFreshTree) &&
         nativeSourceIdentityHash(receipt.nativeIdentity) === nativeSourceIdentityHash(native)) {
       const inputs = { ...native.inputs, generatedFiles: receipt.nativeIdentity.inputs.generatedFiles };
       decision = nativeBuildDecision({ receipt, native: { inputs, hash: identityHash(inputs) },

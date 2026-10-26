@@ -36,6 +36,7 @@ The final runner includes every selected journey automatically, adds explicitly 
 Required YAML assertions remain mandatory; only explicit optional commands and conditional branches may be optional.
 Final acceptance runs complete selected YAML journeys even when a development render smoke was sufficient for a local style check.
 Reuse a compatible installed binary or a supported build; the shared binary cache is optional.
+The normal `product-flow.mjs build <UDID> --test-store` command can import a verified [shared native artifact](../../../docs/engineering/devops/native-binary-reuse.md#shared-native-cache), while each run starts fresh owned Metro for this checkout.
 After acceptance or failure, stop owned Metro with `product-flow.mjs stop-metro`, release the device lease, and shut down only the owned idle simulator through the lifecycle procedure.
 If sandbox access prevents the canonical simulator lease or media process inspection, retain the failure and resume through the existing authorized host owner; a plan or fixture pass is not native acceptance.
 
