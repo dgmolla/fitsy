@@ -4,7 +4,14 @@
   "private": true,
   "scripts": {
     "test": "jest",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "lint": "eslint --config eval/jev-macro/eslint.config.mjs eval/jev-macro eval/chain-match eval/lib/jev-experiment.ts && npm run lint:pdf-finder",
+    "eval:pdf-finder": "node --import tsx eval/pdf-finder/run.ts",
+    "test:pdf-finder": "jest --runInBand eval/pdf-finder",
+    "lint:pdf-finder": "eslint --config eval/jev-macro/eslint.config.mjs eval/pdf-finder",
+    "eval:jev-macro": "node --import tsx eval/jev-macro/run.ts",
+    "eval:jev-macro:truth": "node --import tsx eval/jev-macro/build-truth.ts",
+    "lint:jev-macro": "eslint --config eval/jev-macro/eslint.config.mjs eval/jev-macro"
   },
   "dependencies": {
     "@fitsy/shared": "*"
@@ -12,6 +19,7 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "jest": "^29.7.0",
+    "parse5": "^7.3.0",
     "ts-jest": "^29.4.6",
     "typescript": "^5.0.0"
   }

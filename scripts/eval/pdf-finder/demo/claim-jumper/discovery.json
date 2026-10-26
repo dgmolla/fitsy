@@ -1,0 +1,208 @@
+{
+  "chain": "Claim Jumper",
+  "domainHint": "claimjumper.com",
+  "searches": [
+    {
+      "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+      "file": "search/1.html",
+      "sha256": "d445a28e54ad566d94d78b2a5dd4f6c8d78261cefbc04b4516e041e2932ba32f",
+      "status": 200,
+      "outcome": "10 candidate links."
+    }
+  ],
+  "candidates": [
+    {
+      "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+      "title": "PDF APPETIZERS - Claim Jumper",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Matches the supplied official domain.",
+        "Nutrition/PDF URL or anchor text.",
+        "Direct PDF download."
+      ],
+      "official": true,
+      "score": 150,
+      "outcome": "Chosen: 1244 complete unverified rows; pdftotext -layout; header-identified columns."
+    },
+    {
+      "url": "https://www.claimjumper.com/",
+      "title": "Domain hint homepage",
+      "discoveredFrom": [
+        {
+          "url": "https://claimjumper.com/",
+          "kind": "domain-hint"
+        }
+      ],
+      "reasons": [
+        "Matches the supplied official domain."
+      ],
+      "official": true,
+      "score": 100,
+      "outcome": "HTTP 403: https://www.claimjumper.com/"
+    },
+    {
+      "url": "https://www.claimjumper.com/menu",
+      "title": "Menu - Claim Jumper Steakhouse & Bar | Caterer in NV, CA, WA, OR| Steak ...",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Matches the supplied official domain."
+      ],
+      "official": true,
+      "score": 100,
+      "outcome": "Downloaded for official nutrition links: downloads/01-fb2bef26ca97.html"
+    },
+    {
+      "url": "https://lb.goldennugget.com/globalassets/lake-charles/_pdfs/menus/claim-jumper-menu-31721.pdf",
+      "title": "PDF Ask Your Server About Our Selections of Beer, Wine & Cocktails ...",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Direct PDF download."
+      ],
+      "official": false,
+      "score": 30,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://www.goldennugget.com/globalassets/lake-charles/_pdfs/claim-jumper-menu-7120.pdf",
+      "title": "PDF Ask Your Server About Our Selections of Beer, Wine & Cocktails ...",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Direct PDF download."
+      ],
+      "official": false,
+      "score": 30,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://www.menuswithprice.com/nutrition/claim-jumper/",
+      "title": "Claim Jumper Nutrition and Calories - Menus With Price",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://www.menuwithnutrition.com/claim-jumper-menu-nutrition/",
+      "title": "Calories in Claim Jumper - Menu With Nutrition",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://www.menuwithprice.com/nutrition/claim-jumper/",
+      "title": "Claim Jumper Nutrition Facts - Menu With Price",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://www.nutritionix.com/claim-jumper/menu/premium",
+      "title": "Claim Jumper - Interactive Nutrition Menu",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://www.scribd.com/document/369554786/Claim-Jumper-Pizza-Menu",
+      "title": "Claim Jumper Lunch Menu Options | PDF | Salad | Hamburgers",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only."
+      ],
+      "official": false,
+      "score": 0,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://www.scribd.com/document/500045232/Restaurant-Menu",
+      "title": "Claim Jumper Menu: Appetizers & Entrees | PDF | Salad | Hamburgers",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Claim%20Jumper%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only."
+      ],
+      "official": false,
+      "score": 0,
+      "outcome": "Not downloaded."
+    }
+  ],
+  "selected": {
+    "requestedUrl": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+    "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+    "file": "downloads/02-e754c6727379.pdf",
+    "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+    "bytes": 566035,
+    "contentType": "application/pdf"
+  },
+  "selectionReason": "Highest-ranked successfully parsed official candidate (score 150). Matches the supplied official domain. Nutrition/PDF URL or anchor text. Direct PDF download. Selection does not verify facts or freshness."
+}

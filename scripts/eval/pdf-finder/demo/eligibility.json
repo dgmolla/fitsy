@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-26",
+  "scope": "Local repository snapshots and reviewed catalog/binding inputs only. No database connection or claim about current live DB contents.",
+  "sources": [
+    {
+      "file": "scripts/phase0-chains.json",
+      "sha256": "834181ed9e8441459c2da489d82c1ec6489cc0f4efae4a202d081b6b544f19d1"
+    },
+    {
+      "file": "apps/api/services/chainCatalogs/waba-yoshinoya-2026-09.json",
+      "sha256": "8804dcd034f2945802d1e6f036aa430cad82b265672d2dfacf06bdd2a6d2b633"
+    },
+    {
+      "file": "apps/api/services/chainCatalogs/chain-quality-2026-09-input.json",
+      "sha256": "3afe1ddfbbfdff298316673c98b19035e09eb3ad4a5f1da876ea581990315ae4"
+    },
+    {
+      "file": "apps/api/tests/fixtures/chain-batch-truth.ts",
+      "sha256": "287277e8c6557c0a744b830c764d6fc2ac0b66b9780074e34a6f48fcf2824f24"
+    },
+    {
+      "file": "apps/api/tests/fixtures/chain-quality-truth.ts",
+      "sha256": "7360ad0d1704ff10f8406b12b780a8abbd47bd0c3caffa1e7b2648d401e48089"
+    },
+    {
+      "file": "docs/engineering/pipeline/chain-production-receipts-2026-09-12.json",
+      "sha256": "f2b082d36af5b8debfc5bbce3e3560aaaf61dd6bbe606c134bc89d755c74e328"
+    },
+    {
+      "file": "scripts/eval/jev-macro/truth.json",
+      "sha256": "7fad98db5a79e246a6ae3afc3e4b5953e33c99ee76994701fe010ed35a13c521"
+    }
+  ],
+  "excludedExamples": [
+    "Habit Burger & Grill",
+    "El Pollo Loco",
+    "Panda Express"
+  ],
+  "chains": [
+    {
+      "chain": "Claim Jumper",
+      "matches": [],
+      "eligibleByRepositorySnapshots": true
+    },
+    {
+      "chain": "Wahoo's Fish Taco",
+      "matches": [],
+      "eligibleByRepositorySnapshots": true
+    },
+    {
+      "chain": "The Old Spaghetti Factory",
+      "matches": [],
+      "eligibleByRepositorySnapshots": true
+    }
+  ]
+}

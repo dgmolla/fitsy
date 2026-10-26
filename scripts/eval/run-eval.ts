@@ -209,7 +209,8 @@ async function main(): Promise<void> {
   if (decision.length) {
     if (decision.length !== 1 || decision[0] !== '--decision=chain-match') throw new Error('Unknown decision evaluation');
     const { runChainMatchEvaluation } = await import('./chain-match/run.js');
-    await runChainMatchEvaluation(process.argv.slice(2).filter(arg => arg !== '--decision=chain-match'));
+    const report = await runChainMatchEvaluation(process.argv.slice(2).filter(arg => arg !== '--decision=chain-match'));
+    if ('exploratory' in report && report.stopReason) process.exitCode = 1;
     return;
   }
   const cli = parseArgs();

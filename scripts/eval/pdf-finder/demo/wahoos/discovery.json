@@ -1,0 +1,239 @@
+{
+  "chain": "Wahoo's Fish Taco",
+  "domainHint": "wahoos.com",
+  "searches": [
+    {
+      "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+      "file": "search/1.html",
+      "sha256": "a087a0d4f1b01f4877f9b9d59a373a0b93c6842b7e157e9e71d0422fc1024ca9",
+      "status": 200,
+      "outcome": "10 candidate links."
+    }
+  ],
+  "candidates": [
+    {
+      "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+      "title": "Nutrition Guide (PDF)",
+      "discoveredFrom": [
+        {
+          "url": "https://www.wahoos.com/nutrition-allergens/",
+          "kind": "official-link"
+        }
+      ],
+      "reasons": [
+        "Matches the supplied official domain.",
+        "Nutrition/PDF URL or anchor text.",
+        "Direct PDF download.",
+        "Current official-page link outranks search-only documents."
+      ],
+      "official": true,
+      "score": 195,
+      "outcome": "Chosen: 1523 complete unverified rows; pdftotext -layout; header-identified columns."
+    },
+    {
+      "url": "https://www.wahoos.com/nutrition-allergens/",
+      "title": "Nutrition & Allergens - Wahoo's Fish Taco",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+          "kind": "search"
+        },
+        {
+          "url": "https://www.wahoos.com/nutrition-allergens/",
+          "kind": "official-link"
+        },
+        {
+          "url": "https://www.wahoos.com/",
+          "kind": "official-link"
+        }
+      ],
+      "reasons": [
+        "Matches the supplied official domain.",
+        "Nutrition/PDF URL or anchor text.",
+        "Current official-page link outranks search-only documents."
+      ],
+      "official": true,
+      "score": 165,
+      "outcome": "Downloaded for official nutrition links: downloads/01-f9dba367abac.html"
+    },
+    {
+      "url": "https://www.wahoos.com/wp-content/uploads/2026/01/2026-WAHOOS-NUTRITION-GUIDE-VER-02-26.pdf",
+      "title": "PDF Food Name Calories Calories from Total Fat Saturated Fat Dietary Fiber ...",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Matches the supplied official domain.",
+        "Nutrition/PDF URL or anchor text.",
+        "Direct PDF download."
+      ],
+      "official": true,
+      "score": 150,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://www.wahoos.com/",
+      "title": "Domain hint homepage",
+      "discoveredFrom": [
+        {
+          "url": "https://wahoos.com/",
+          "kind": "domain-hint"
+        }
+      ],
+      "reasons": [
+        "Matches the supplied official domain."
+      ],
+      "official": true,
+      "score": 100,
+      "outcome": "Downloaded for official nutrition links: downloads/02-3fbb8c7245d9.html"
+    },
+    {
+      "url": "https://healthyeatsnearme.com/restaurant-nutrition/wahoos-fish-taco/",
+      "title": "Wahoo's Fish Taco Denver Calories & Nutrition Facts, Full Menu ...",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://macros.menu/wahoos-fish-taco-denver-co",
+      "title": "Wahoo's Fish Taco Menu - Nutrition Facts",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://macros.menu/wahoos-fish-taco-torrance-ca",
+      "title": "Wahoo's Fish Taco Menu in Newport Beach, CA - Calories & Nutrition ...",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://mealnutritionlab.com/wahoos-fish-taco",
+      "title": "Wahoo's Fish Taco Nutrition Facts & Calories (Full 2026 Menu ...",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://thefoodmenus.net/wahoos-fish-taco-l-st-nutrition-and-calories/",
+      "title": "Wahoo's Fish Taco (L St) Nutrition And Calories",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://tools.myfooddata.com/brand-food-data/Wahoo's%20Fish%20Taco",
+      "title": "List of Nutrition Facts for Wahoo's Fish Taco - myfooddata",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://www.nutritionix.com/wahoos-fish-tacos/menu/premium?desktop",
+      "title": "Wahoo's Fish Tacos - Interactive Nutrition Menu",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    },
+    {
+      "url": "https://www.nutritionix.com/wahoos-fish-tacos/portal?desktop",
+      "title": "Wahoo's Fish Tacos - Nutrition Portal",
+      "discoveredFrom": [
+        {
+          "url": "https://html.duckduckgo.com/html/?q=Wahoo's%20Fish%20Taco%20nutrition%20pdf",
+          "kind": "search"
+        }
+      ],
+      "reasons": [
+        "Third-party/unconfirmed domain; retained for audit only.",
+        "Nutrition/PDF URL or anchor text."
+      ],
+      "official": false,
+      "score": 20,
+      "outcome": "Not downloaded."
+    }
+  ],
+  "selected": {
+    "requestedUrl": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+    "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+    "file": "downloads/03-105423afbefb.pdf",
+    "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+    "bytes": 1705525,
+    "contentType": "application/pdf"
+  },
+  "selectionReason": "Highest-ranked successfully parsed official candidate (score 195). Matches the supplied official domain. Nutrition/PDF URL or anchor text. Direct PDF download. Current official-page link outranks search-only documents. Selection does not verify facts or freshness."
+}

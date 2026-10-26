@@ -1,0 +1,654 @@
+{
+  "version": 1,
+  "status": "unverified",
+  "checkedBy": "Codex source-text spot inspection, 2026-10-26; agent review only, no human approval",
+  "sampling": "One random 128-bit seed per chain; take the first 10 canonical keys sorted by SHA-256(seed + newline + canonicalKey). No nutrition-based selection.",
+  "tupleOrder": [
+    "calories",
+    "proteinG",
+    "carbsG",
+    "fatG"
+  ],
+  "scope": "Published values copied faithfully; source accuracy, recency, LA availability, menu aliases and production approval are not established.",
+  "chains": [
+    {
+      "chain": "Wahoo's Fish Taco",
+      "directory": "wahoos",
+      "seed": "cac436a998e09abe6d0eccb9c76679cf",
+      "sourceUrl": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+      "sourceSha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+      "textSha256": "aeb93414746430880ab45c3492255e41f93b7b7b77aee9649a2283ceba2a3db1",
+      "method": "Reread the physical PDF page text at the sampled locators using the visually inspected source column order.",
+      "sampleSize": 10,
+      "matches": 10,
+      "rows": [
+        {
+          "canonicalKey": "enchiladas/combo-1-green-enchilada-banzai-veggie-side-brown-rice-white-beans",
+          "name": "Combo #1 Green Enchilada Banzai Veggie Side Brown Rice White Beans",
+          "locator": "page 20, source.txt lines 19-20, Enchiladas, Combo #1 Green Enchilada Banzai Veggie Side Brown Rice White Beans",
+          "sourceText": "Combo #1 Green Enchilada Banzai Veggie Side\nBrown Rice White Beans                            529.57   114.89   19.53      81.19   12.77    4.51   21.26   0.00   3020.28   15.34   15.71",
+          "status": "unverified",
+          "observed": {
+            "calories": 529.57,
+            "proteinG": 19.53,
+            "carbsG": 81.19,
+            "fatG": 12.77
+          },
+          "extracted": {
+            "calories": 529.57,
+            "proteinG": 19.53,
+            "carbsG": 81.19,
+            "fatG": 12.77
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "wahoo-s-las-vegas/shredder-sandwich-chicken-charbroiled-white-beans-brown-rice",
+          "name": "Shredder Sandwich Chicken Charbroiled White Beans Brown Rice",
+          "locator": "page 77, source.txt lines 17-18, Wahoo's Las Vegas, Shredder Sandwich Chicken Charbroiled White Beans Brown Rice",
+          "sourceText": "Shredder Sandwich Chicken Charbroiled White\nBeans Brown Rice                                  1081.79   327.58   44.49     144.83   36.40   13.81   106.05   0.46   2166.94   14.86   10.69",
+          "status": "unverified",
+          "observed": {
+            "calories": 1081.79,
+            "proteinG": 44.49,
+            "carbsG": 144.83,
+            "fatG": 36.4
+          },
+          "extracted": {
+            "calories": 1081.79,
+            "proteinG": 44.49,
+            "carbsG": 144.83,
+            "fatG": 36.4
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "bowls/wahoo-s-bowl-white-rice-white-beans-fish",
+          "name": "Wahoo's Bowl White Rice White Beans Fish",
+          "locator": "page 61, source.txt lines 19-20, Bowls, Wahoo's Bowl White Rice White Beans Fish",
+          "sourceText": "Wahoo's Bowl White Rice White Beans Fish\n                                                   503.32    88.79   40.12      66.34    9.87    3.24    70.98   0.00   2504.40   12.07    5.78",
+          "status": "unverified",
+          "observed": {
+            "calories": 503.32,
+            "proteinG": 40.12,
+            "carbsG": 66.34,
+            "fatG": 9.87
+          },
+          "extracted": {
+            "calories": 503.32,
+            "proteinG": 40.12,
+            "carbsG": 66.34,
+            "fatG": 9.87
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "plates/combo-2-thru-5-side-brown-rice-white-beans",
+          "name": "Combo #2 thru #5 Side Brown Rice White Beans",
+          "locator": "page 35, source.txt lines 37-38, Plates, Combo #2 thru #5 Side Brown Rice White Beans",
+          "sourceText": "Combo #2 thru #5 Side Brown Rice White Beans\n                                                  388.02    59.31   12.54      72.19    6.59   1.15    0.00   0.00   1300.17   13.03    4.78",
+          "status": "unverified",
+          "observed": {
+            "calories": 388.02,
+            "proteinG": 12.54,
+            "carbsG": 72.19,
+            "fatG": 6.59
+          },
+          "extracted": {
+            "calories": 388.02,
+            "proteinG": 12.54,
+            "carbsG": 72.19,
+            "fatG": 6.59
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "just-for-kids/kid-s-bean-cheese-burrito-white-rice-white-beans-spicy-chicken",
+          "name": "Kid's Bean & Cheese Burrito White Rice White Beans Spicy Chicken",
+          "locator": "page 11, source.txt lines 33-34, Just for Kids, Kid's Bean & Cheese Burrito White Rice White Beans Spicy Chicken",
+          "sourceText": "Kid's Bean & Cheese Burrito White Rice White\nBeans Spicy Chicken                                   786.34   284.45   38.20      86.19   31.61   12.54   100.02   1.51   2308.08    7.69   4.66",
+          "status": "unverified",
+          "observed": {
+            "calories": 786.34,
+            "proteinG": 38.2,
+            "carbsG": 86.19,
+            "fatG": 31.61
+          },
+          "extracted": {
+            "calories": 786.34,
+            "proteinG": 38.2,
+            "carbsG": 86.19,
+            "fatG": 31.61
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "burritos/banzai-burrito-salmon-white-rice-black-beans",
+          "name": "Banzai Burrito Salmon White Rice Black Beans",
+          "locator": "page 38, source.txt lines 29-30, Burritos, Banzai Burrito Salmon White Rice Black Beans",
+          "sourceText": "Banzai Burrito Salmon White Rice Black Beans\n                                                    622.48   171.04   31.78      83.28   19.00   5.46    51.89   1.50   1628.01   7.19   10.23",
+          "status": "unverified",
+          "observed": {
+            "calories": 622.48,
+            "proteinG": 31.78,
+            "carbsG": 83.28,
+            "fatG": 19
+          },
+          "extracted": {
+            "calories": 622.48,
+            "proteinG": 31.78,
+            "carbsG": 83.28,
+            "fatG": 19
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "bowls/protein-bowl-chicken-blackened-shrimp",
+          "name": "Protein Bowl Chicken Blackened & Shrimp",
+          "locator": "page 55, source.txt lines 35-36, Bowls, Protein Bowl Chicken Blackened & Shrimp",
+          "sourceText": "Protein Bowl Chicken Blackened & Shrimp\n                                                  388.81   150.28   35.56      27.46   16.70    2.65   164.09   0.02   1402.31    9.97   10.97",
+          "status": "unverified",
+          "observed": {
+            "calories": 388.81,
+            "proteinG": 35.56,
+            "carbsG": 27.46,
+            "fatG": 16.7
+          },
+          "extracted": {
+            "calories": 388.81,
+            "proteinG": 35.56,
+            "carbsG": 27.46,
+            "fatG": 16.7
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "wahoo-s-fresno/wahoo-salad-skinny-veggie-white-rice-black-beans",
+          "name": "Wahoo Salad Skinny Veggie White Rice Black Beans",
+          "locator": "page 73, source.txt lines 29-30, Wahoo's Fresno, Wahoo Salad Skinny Veggie White Rice Black Beans",
+          "sourceText": "Wahoo Salad Skinny Veggie White Rice Black Beans\n                                                    268.87    29.52   11.21      50.55    3.28   1.04     2.59   0.00    980.38   10.82    4.24",
+          "status": "unverified",
+          "observed": {
+            "calories": 268.87,
+            "proteinG": 11.21,
+            "carbsG": 50.55,
+            "fatG": 3.28
+          },
+          "extracted": {
+            "calories": 268.87,
+            "proteinG": 11.21,
+            "carbsG": 50.55,
+            "fatG": 3.28
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "bowls/protein-bowl-fish-blackened-only",
+          "name": "Protein Bowl Fish Blackened only",
+          "locator": "page 56, source.txt lines 23-24, Bowls, Protein Bowl Fish Blackened only",
+          "sourceText": "Protein Bowl Fish Blackened only\n                                                      299.76    65.83   40.05      23.67    7.31   0.88    70.27   0.00   1168.72    7.99   10.09",
+          "status": "unverified",
+          "observed": {
+            "calories": 299.76,
+            "proteinG": 40.05,
+            "carbsG": 23.67,
+            "fatG": 7.31
+          },
+          "extracted": {
+            "calories": 299.76,
+            "proteinG": 40.05,
+            "carbsG": 23.67,
+            "fatG": 7.31
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "soup/add-avocado-slices",
+          "name": "Add Avocado Slices",
+          "locator": "page 4, source.txt lines 37-37, Soup, Add Avocado Slices",
+          "sourceText": "Add Avocado Slices                       56.00    42.89    0.60      2.67    4.77    1.00     0.00   0.00      2.35    2.00    0.09",
+          "status": "unverified",
+          "observed": {
+            "calories": 56,
+            "proteinG": 0.6,
+            "carbsG": 2.67,
+            "fatG": 4.77
+          },
+          "extracted": {
+            "calories": 56,
+            "proteinG": 0.6,
+            "carbsG": 2.67,
+            "fatG": 4.77
+          },
+          "matches": true
+        }
+      ]
+    },
+    {
+      "chain": "Claim Jumper",
+      "directory": "claim-jumper",
+      "seed": "bd26ad48a3b2a9248b9d33be76c1283d",
+      "sourceUrl": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+      "sourceSha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+      "textSha256": "9ed3ed377fa1db30d2fce2c8cf28c3e443da4149133b7726b0ca171521778034",
+      "method": "Reread the physical PDF page text at the sampled locators using the visually inspected source column order.",
+      "sampleSize": 10,
+      "matches": 10,
+      "rows": [
+        {
+          "canonicalKey": "calzones/chopped-bacon-2-tablespoons-add",
+          "name": "Chopped Bacon (2 tablespoons) (add)",
+          "locator": "page 4, source.txt lines 103-103, CALZONES, Chopped Bacon (2 tablespoons) (add)",
+          "sourceText": "  Chopped Bacon (2 tablespoons) (add)                                    70            50            10             0           0            20        270          0          0        0        0        0      0          0        0",
+          "status": "unverified",
+          "observed": {
+            "calories": 70,
+            "proteinG": 0,
+            "carbsG": 0,
+            "fatG": 10
+          },
+          "extracted": {
+            "calories": 70,
+            "proteinG": 0,
+            "carbsG": 0,
+            "fatG": 10
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "brunch/cheese-pizza-1-slice",
+          "name": "Cheese Pizza (1 slice)",
+          "locator": "page 12, source.txt lines 82-82, BRUNCH, Cheese Pizza (1 slice)",
+          "sourceText": "Cheese Pizza (1 slice)                                                      120            38             4             2           0            10        260         14          1        1        5       154     1          99       1",
+          "status": "unverified",
+          "observed": {
+            "calories": 120,
+            "proteinG": 5,
+            "carbsG": 14,
+            "fatG": 4
+          },
+          "extracted": {
+            "calories": 120,
+            "proteinG": 5,
+            "carbsG": 14,
+            "fatG": 4
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "single-and-share-sides-cont/onion-rings",
+          "name": "Onion Rings",
+          "locator": "page 6, source.txt lines 52-52, SINGLE AND SHARE SIDES CONT., Onion Rings",
+          "sourceText": "Onion Rings                                                   438           102            11             2           0            10        954         74          2       15        8        39       0        103       1",
+          "status": "unverified",
+          "observed": {
+            "calories": 438,
+            "proteinG": 8,
+            "carbsG": 74,
+            "fatG": 11
+          },
+          "extracted": {
+            "calories": 438,
+            "proteinG": 8,
+            "carbsG": 74,
+            "fatG": 11
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "handhelds-platters-cont/ham-sandwich-platter-4-6-6-servings",
+          "name": "Ham Sandwich Platter, 4-6 (6 servings)",
+          "locator": "page 15, source.txt lines 33-33, HANDHELDS PLATTERS, CONT., Ham Sandwich Platter, 4-6 (6 servings)",
+          "sourceText": "Ham Sandwich Platter, 4-6 (6 servings)                                                            2530          1020          110            30           0           280        5390       270         20      100      110       11190    180       1200      20",
+          "status": "unverified",
+          "observed": {
+            "calories": 2530,
+            "proteinG": 110,
+            "carbsG": 270,
+            "fatG": 110
+          },
+          "extracted": {
+            "calories": 2530,
+            "proteinG": 110,
+            "carbsG": 270,
+            "fatG": 110
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "banquet-breakfast/pancakes-2-pancakes",
+          "name": "Pancakes, 2 pancakes",
+          "locator": "page 23, source.txt lines 124-124, BANQUET BREAKFAST, Pancakes, 2 pancakes",
+          "sourceText": "Pancakes, 2 pancakes                                                                      480           222            25            10           0            55        940         52          0       12        6        772     0       118       3",
+          "status": "unverified",
+          "observed": {
+            "calories": 480,
+            "proteinG": 6,
+            "carbsG": 52,
+            "fatG": 25
+          },
+          "extracted": {
+            "calories": 480,
+            "proteinG": 6,
+            "carbsG": 52,
+            "fatG": 25
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "lunch/chives",
+          "name": "Chives",
+          "locator": "page 7, source.txt lines 65-65, LUNCH, Chives",
+          "sourceText": "       Chives                                     0             0             0             0           0            0           0          0          0        0        0         0       0         0       0",
+          "status": "unverified",
+          "observed": {
+            "calories": 0,
+            "proteinG": 0,
+            "carbsG": 0,
+            "fatG": 0
+          },
+          "extracted": {
+            "calories": 0,
+            "proteinG": 0,
+            "carbsG": 0,
+            "fatG": 0
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "entree-platters-cont/beef-ribs-platter-4-6-6-servings-with-salad-dressing-choice-caesar",
+          "name": "Beef Ribs Platter, 4-6 (6 servings) with Salad Dressing Choice Caesar",
+          "locator": "page 18, source.txt lines 83-83, ENTREE PLATTERS, CONT., Beef Ribs Platter, 4-6 (6 servings) with Salad Dressing Choice Caesar",
+          "sourceText": "Beef Ribs Platter, 4-6 (6 servings) with Salad Dressing Choice Caesar                           6490          5190          580           220           0          1090        9330       110          0       80      200        1780    20       350       20",
+          "status": "unverified",
+          "observed": {
+            "calories": 6490,
+            "proteinG": 200,
+            "carbsG": 110,
+            "fatG": 580
+          },
+          "extracted": {
+            "calories": 6490,
+            "proteinG": 200,
+            "carbsG": 110,
+            "fatG": 580
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "entree-platters-cont/grilled-salmon-platter-8-10-10-servings-with-salad-dressing-choice-creamy-italian",
+          "name": "Grilled Salmon Platter, 8-10 (10 servings) with Salad Dressing Choice Creamy Italian",
+          "locator": "page 18, source.txt lines 38-38, ENTREE PLATTERS, CONT., Grilled Salmon Platter, 8-10 (10 servings) with Salad Dressing Choice Creamy Italian",
+          "sourceText": "Grilled Salmon Platter, 8-10 (10 servings) with Salad Dressing Choice Creamy Italian           10110          4570          510           110           0          1020        21220      920         40       70      470       103380   270     2640       60",
+          "status": "unverified",
+          "observed": {
+            "calories": 10110,
+            "proteinG": 470,
+            "carbsG": 920,
+            "fatG": 510
+          },
+          "extracted": {
+            "calories": 10110,
+            "proteinG": 470,
+            "carbsG": 920,
+            "fatG": 510
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "breakfast/breakfast-burrito-1-serving-with-bacon",
+          "name": "Breakfast Burrito (1 serving) with Bacon",
+          "locator": "page 9, source.txt lines 136-136, BREAKFAST, Breakfast Burrito (1 serving) with Bacon",
+          "sourceText": "Breakfast Burrito (1 serving) with Bacon                        870           440           50             20           0          500         2020        70          0       20       30       3070    40        420       0",
+          "status": "unverified",
+          "observed": {
+            "calories": 870,
+            "proteinG": 30,
+            "carbsG": 70,
+            "fatG": 50
+          },
+          "extracted": {
+            "calories": 870,
+            "proteinG": 30,
+            "carbsG": 70,
+            "fatG": 50
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "side-platters/mashed-potatoes-10-servings",
+          "name": "Mashed Potatoes (10 servings)",
+          "locator": "page 15, source.txt lines 76-76, SIDE PLATTERS, Mashed Potatoes (10 servings)",
+          "sourceText": "Mashed Potatoes (10 servings)                                                                     2890          1510          170           110           0           480        2110       300         30       30       40       6140     190        300      10",
+          "status": "unverified",
+          "observed": {
+            "calories": 2890,
+            "proteinG": 40,
+            "carbsG": 300,
+            "fatG": 170
+          },
+          "extracted": {
+            "calories": 2890,
+            "proteinG": 40,
+            "carbsG": 300,
+            "fatG": 170
+          },
+          "matches": true
+        }
+      ]
+    },
+    {
+      "chain": "The Old Spaghetti Factory",
+      "directory": "old-spaghetti-factory",
+      "seed": "383c946bd3ff3aefcadebc69115aa03c",
+      "sourceUrl": "https://www.osf.com/about/nutrition/",
+      "sourceSha256": "9411da161c5582c9384078da84b413574f60774d5e93968c07f13d67ccdfc020",
+      "textSha256": "35b7981b69fcb75147263904455bb6f62ceb88d1ab43beec202e6d2e4de94891",
+      "method": "Independently reread original HTML cards with Python html.parser, including label/value names and serving size.",
+      "sampleSize": 10,
+      "matches": 10,
+      "rows": [
+        {
+          "canonicalKey": "hearty-meals/hearty-guss-sally-s-favorite-italian-sausage-with-meat-sauce",
+          "name": "Hearty - Guss & Sally's Favorite - Italian Sausage with Meat Sauce",
+          "locator": "HTML table/card, source.txt lines 100-100, Hearty Meals, Hearty - Guss & Sally's Favorite - Italian Sausage with Meat Sauce",
+          "sourceText": "Hearty - Guss & Sally's Favorite - Italian Sausage with Meat Sauce\tHearty Meals\t823g\t1410\t63\t181\t46\t50-50",
+          "status": "unverified",
+          "observed": {
+            "calories": 1410,
+            "proteinG": 63,
+            "carbsG": 181,
+            "fatG": 46
+          },
+          "extracted": {
+            "calories": 1410,
+            "proteinG": 63,
+            "carbsG": 181,
+            "fatG": 46
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "guss-sally-s-favorites/baked-lasagna",
+          "name": "Baked Lasagna",
+          "locator": "HTML table/card, source.txt lines 83-83, Guss & Sally's Favorites, Baked Lasagna",
+          "sourceText": "Baked Lasagna\tGuss & Sally's Favorites\t500g\t820\t45\t61\t45\t50-50",
+          "status": "unverified",
+          "observed": {
+            "calories": 820,
+            "proteinG": 45,
+            "carbsG": 61,
+            "fatG": 45
+          },
+          "extracted": {
+            "calories": 820,
+            "proteinG": 45,
+            "carbsG": 61,
+            "fatG": 45
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "house-salad/house-salad-mix-with-croutons",
+          "name": "House Salad Mix (with croutons)",
+          "locator": "HTML table/card, source.txt lines 16-16, House Salad, House Salad Mix (with croutons)",
+          "sourceText": "House Salad Mix (with croutons)\tHouse Salad\t130g\t20\t1\t5\t0\t50-50",
+          "status": "unverified",
+          "observed": {
+            "calories": 20,
+            "proteinG": 1,
+            "carbsG": 5,
+            "fatG": 0
+          },
+          "extracted": {
+            "calories": 20,
+            "proteinG": 1,
+            "carbsG": 5,
+            "fatG": 0
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "ravioli/roasted-wild-mushroom-ravioli",
+          "name": "Roasted Wild Mushroom Ravioli",
+          "locator": "HTML table/card, source.txt lines 82-82, Ravioli, Roasted Wild Mushroom Ravioli",
+          "sourceText": "Roasted Wild Mushroom Ravioli\tRavioli\t405g\t900\t21\t55\t69\t50-50",
+          "status": "unverified",
+          "observed": {
+            "calories": 900,
+            "proteinG": 21,
+            "carbsG": 55,
+            "fatG": 69
+          },
+          "extracted": {
+            "calories": 900,
+            "proteinG": 21,
+            "carbsG": 55,
+            "fatG": 69
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "kids-and-senior-entrees/spinach-meat-tortellini-with-alfredo-sauce",
+          "name": "Spinach & Meat Tortellini with Alfredo Sauce",
+          "locator": "HTML table/card, source.txt lines 144-144, Kids and Senior - Entrees, Spinach & Meat Tortellini with Alfredo Sauce",
+          "sourceText": "Spinach & Meat Tortellini with Alfredo Sauce\tKids and Senior - Entrees\t194g\t530\t16\t48\t31\t50-50",
+          "status": "unverified",
+          "observed": {
+            "calories": 530,
+            "proteinG": 16,
+            "carbsG": 48,
+            "fatG": 31
+          },
+          "extracted": {
+            "calories": 530,
+            "proteinG": 16,
+            "carbsG": 48,
+            "fatG": 31
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "house-salad/house-salad-with-creamy-pesto",
+          "name": "House Salad with Creamy Pesto",
+          "locator": "HTML table/card, source.txt lines 18-18, House Salad, House Salad with Creamy Pesto",
+          "sourceText": "House Salad with Creamy Pesto\tHouse Salad\t170g\t280\t4\t13\t23\t50-50",
+          "status": "unverified",
+          "observed": {
+            "calories": 280,
+            "proteinG": 4,
+            "carbsG": 13,
+            "fatG": 23
+          },
+          "extracted": {
+            "calories": 280,
+            "proteinG": 4,
+            "carbsG": 13,
+            "fatG": 23
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "kids-and-senior-entrees/grilled-cheese-sandwich",
+          "name": "Grilled Cheese Sandwich",
+          "locator": "HTML table/card, source.txt lines 145-145, Kids and Senior - Entrees, Grilled Cheese Sandwich",
+          "sourceText": "Grilled Cheese Sandwich\tKids and Senior - Entrees\t166g\t600\t16\t57\t35\t50-50",
+          "status": "unverified",
+          "observed": {
+            "calories": 600,
+            "proteinG": 16,
+            "carbsG": 57,
+            "fatG": 35
+          },
+          "extracted": {
+            "calories": 600,
+            "proteinG": 16,
+            "carbsG": 57,
+            "fatG": 35
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "salads/blt-salad-with-chicken",
+          "name": "BLT Salad with Chicken",
+          "locator": "HTML table/card, source.txt lines 26-26, Salads, BLT Salad with Chicken",
+          "sourceText": "BLT Salad with Chicken\tSalads\t586g\t1140\t64\t28\t87\t50-50",
+          "status": "unverified",
+          "observed": {
+            "calories": 1140,
+            "proteinG": 64,
+            "carbsG": 28,
+            "fatG": 87
+          },
+          "extracted": {
+            "calories": 1140,
+            "proteinG": 64,
+            "carbsG": 28,
+            "fatG": 87
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "salads/caesar-salad-with-shrimp",
+          "name": "Caesar Salad with Shrimp",
+          "locator": "HTML table/card, source.txt lines 29-29, Salads, Caesar Salad with Shrimp",
+          "sourceText": "Caesar Salad with Shrimp\tSalads\t461g\t740\t14\t24\t66\t50-50",
+          "status": "unverified",
+          "observed": {
+            "calories": 740,
+            "proteinG": 14,
+            "carbsG": 24,
+            "fatG": 66
+          },
+          "extracted": {
+            "calories": 740,
+            "proteinG": 14,
+            "carbsG": 24,
+            "fatG": 66
+          },
+          "matches": true
+        },
+        {
+          "canonicalKey": "salads/caesar-salad-with-chicken",
+          "name": "Caesar Salad with Chicken",
+          "locator": "HTML table/card, source.txt lines 28-28, Salads, Caesar Salad with Chicken",
+          "sourceText": "Caesar Salad with Chicken\tSalads\t525g\t890\t39\t28\t70\t50-50",
+          "status": "unverified",
+          "observed": {
+            "calories": 890,
+            "proteinG": 39,
+            "carbsG": 28,
+            "fatG": 70
+          },
+          "extracted": {
+            "calories": 890,
+            "proteinG": 39,
+            "carbsG": 28,
+            "fatG": 70
+          },
+          "matches": true
+        }
+      ]
+    }
+  ]
+}
