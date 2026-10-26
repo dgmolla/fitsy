@@ -113,11 +113,12 @@ test('authenticated payment retains checkout through the purchase, then clears i
   await waitFor(async () => expect(await hasPaymentSignInContinuation()).toBe(false));
 });
 
-test.each(['visible', 'hardware'])('Paywall %s Back keeps a completed checkout off its spent preview', async kind => {
+test.each(['visible', 'hardware'].flatMap(kind => [false, true].map(previewReturn => ({ kind, previewReturn }))))(
+  'Paywall $kind Back keeps a completed checkout off its spent preview (preview return: $previewReturn)', async ({ kind, previewReturn }) => {
   const back = kind === 'hardware' ? installHardwareBackFixture() : null;
   await rememberPaymentSignInContinuation();
   const screen = renderRouter({ ...routes, 'welcome/preview': () => null }, { initialUrl: '/welcome/preview' });
-  await act(async () => { router.push('/welcome/payment'); });
+  await act(async () => { router.push(previewReturn ? '/welcome/payment?previewReturn=1' : '/welcome/payment'); });
   await waitFor(() => expect(screen.getByTestId('paywall-price-yearly')).toBeTruthy());
   await act(async () => { if (back) back(); else fireEvent.press(screen.getByTestId('welcome-back')); });
   expect(screen.getPathname()).toBe('/welcome/payment');

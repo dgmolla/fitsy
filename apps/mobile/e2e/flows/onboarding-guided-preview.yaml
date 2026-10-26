@@ -451,10 +451,13 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fi
     id: paywall-terms
 - assertTrue: ${maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically') && maestro.copiedText.includes('24 hours')}
 - assertNotVisible: "Leave a review"
+- takeScreenshot: "guided-preview-payment-before-back"
 - tapOn:
     id: welcome-back
-- assertVisible:
-    id: preview-back
+- extendedWaitUntil:
+    visible:
+      id: preview-back
+    timeout: 15000
 # This fresh preview has no prior decline or owned payment continuation.
 # Its Back path returns to preview; the owned checkout exit-modal branch is
 # covered separately in onboarding-returning-preview.yaml.
@@ -467,6 +470,44 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fi
     id: preview-guide
 - assertVisible: "pizza"
 - assertVisible: "654"
+- assertVisible: "0g"
+- assertVisible: "114g"
+- assertVisible: "22g"
+- assertNotVisible:
+    id: paywall-back-to-plans
+- takeScreenshot: "guided-preview-payment-back"
+# Re-enter while signed in, then Back again. Both checkout entries must retain
+# the selected craving and every target without purchasing or opening an offer.
+- scrollUntilVisible:
+    element:
+      id: preview-pick-3
+    direction: DOWN
+- tapOn:
+    id: preview-pick-3
+- extendedWaitUntil:
+    visible:
+      id: paywall-logo
+    timeout: 30000
+- assertVisible:
+    id: paywall-offer-paid
+- tapOn:
+    id: welcome-back
+- extendedWaitUntil:
+    visible:
+      id: preview-back
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: preview-guide
+    direction: UP
+- assertVisible: "pizza"
+- assertVisible: "654"
+- assertVisible: "0g"
+- assertVisible: "114g"
+- assertVisible: "22g"
+- assertNotVisible:
+    id: paywall-back-to-plans
+- takeScreenshot: "guided-preview-repeat-payment-back"
 - scrollUntilVisible:
     element:
       id: locked-value-cta

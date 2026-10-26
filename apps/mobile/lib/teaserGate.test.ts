@@ -108,6 +108,30 @@ describe('preview tour flag', () => {
 });
 
 describe('routeToPaywall', () => {
+  it.each([false, true])('keeps a fresh preview return across checkout entry (signed in: %s)', async signedIn => {
+    const g = await load();
+    g.getSession.mockResolvedValue({ data: { session: signedIn ? { user: { id: 'u1' } } : null } });
+    g.syncPaywallVerdict.mockResolvedValue('never_subscribed');
+    await g.routeToPaywall({ previewReturn: true });
+    expect(g.push).toHaveBeenCalledWith({ pathname: signedIn ? '/welcome/payment' : '/welcome/signin', params: { previewReturn: '1' } });
+  });
+
+  it.each([false, true])('does not give a declined checkout a fresh preview return (signed in: %s)', async signedIn => {
+    const g = await load();
+    store.set('@fitsy/paywallDeclined', '1');
+    g.getSession.mockResolvedValue({ data: { session: signedIn ? { user: { id: 'u1' } } : null } });
+    g.syncPaywallVerdict.mockResolvedValue('never_subscribed');
+    await g.routeToPaywall({ previewReturn: true });
+    expect(g.push).toHaveBeenCalledWith(signedIn ? '/welcome/payment' : '/welcome/signin?returnTo=payment');
+  });
+
+  it('does not give a replaced, spent preview a return destination', async () => {
+    const g = await load();
+    g.syncPaywallVerdict.mockResolvedValue('never_subscribed');
+    await g.routeToPaywall({ replace: true, previewReturn: true });
+    expect(g.replace).toHaveBeenCalledWith('/welcome/payment');
+  });
+
   it('ends a returning preview pass before routing to locked content', async () => {
     const g = await load();
     store.set('@fitsy/onboardingPreviewEntry', '1');

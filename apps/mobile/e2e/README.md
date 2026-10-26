@@ -96,6 +96,13 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
+`onboarding-guided-preview` checks payment Back after fresh sign-in and after a second, already signed-in checkout, preserving the craving and all four meal targets without purchasing.
+Its payment and return screenshots distinguish an exit offer from a successful preview return.
+`components/OnboardingPaymentBack.test.tsx` exercises the real preview, sign-in, trial, reminder and payment screens with intact and deliberately removed native history, including both visible and hardware Back.
+Owned continuations and cold payment entry retain their exit checks in `PaymentCompletion.test.tsx` and `PaymentPlanSelection.test.tsx`.
+Run the complete candidate selection with `node scripts/sim/ci.mjs --scope=full --udid=<UDID>` using the configured journey fixtures; guided preview uses `unsubscribed-dev`.
+The existing durable sim-stability owner runs the final clean three-run MAIN batch through `~/fitsy-refactor/sim-review/stability.sh 3` after protected integration; a branch replay does not establish MAIN stability.
+
 Check saved flow syntax with `maestro check-syntax apps/mobile/e2e/flows/<flow>.yaml` before acquiring a simulator.
 If Maestro cannot initialize its normal cache in a restricted workspace, set `JAVA_OPTS=-Duser.home=<owned-writable-temporary-directory>` for syntax checks.
 This uses a separate Java cache without modifying the normal installation or changing the shell's home directory.

@@ -21,7 +21,7 @@ import { trackOnboardingScreenView, trackReminderAction, trackNotificationPermis
   trackNotificationPrimingAllowTapped, trackNotificationPrimingShown, trackNotificationPrimingSkipTapped } from '@/lib/analytics';
 
 export default function TrialReminderScreen() {
-  const { devTrialVisual } = useLocalSearchParams<{ devTrialVisual?: string }>();
+  const { devTrialVisual, previewReturn } = useLocalSearchParams<{ devTrialVisual?: string; previewReturn?: string }>();
   const visualScenario = devTrialVisualScenario(devTrialVisual);
   const visualRequested = visualScenario !== null;
   const focused = useIsFocused();
@@ -60,7 +60,7 @@ export default function TrialReminderScreen() {
     if (!trial || pending.current || navigating.current) return;
     if (visualRequested) {
       navigating.current = true;
-      router.push({ pathname: '/welcome/payment', params: { devTrialVisual } });
+      router.push({ pathname: '/welcome/payment', params: { devTrialVisual, previewReturn } });
       return;
     }
     pending.current = true;
@@ -92,7 +92,8 @@ export default function TrialReminderScreen() {
       setBusy(false);
       if (isCurrent()) {
         navigating.current = true;
-        router.push(returnToSignIn ? '/welcome/signin?returnTo=trial-reminder' : '/welcome/payment');
+        router.push(returnToSignIn ? { pathname: '/welcome/signin', params: { returnTo: 'trial-reminder', previewReturn } }
+          : { pathname: '/welcome/payment', params: { previewReturn } });
       }
     }
   }
@@ -100,12 +101,12 @@ export default function TrialReminderScreen() {
     if (pending.current || navigating.current) return;
     navigating.current = true;
     if (!visualRequested) trackNotificationPrimingSkipTapped();
-    router.push(visualRequested ? { pathname: '/welcome/payment', params: { devTrialVisual } } : '/welcome/payment');
+    router.push({ pathname: '/welcome/payment', params: { devTrialVisual: visualRequested ? devTrialVisual : undefined, previewReturn } });
   }
   if (!ready) return null;
-  if (!shownOffering) return <Redirect href="/welcome/trial" />;
+  if (!shownOffering) return <Redirect href={{ pathname: '/welcome/trial', params: { previewReturn } }} />;
   if (!eligibilityReady) return null;
-  if (!trial) return <Redirect href="/welcome/payment" />;
+  if (!trial) return <Redirect href={{ pathname: '/welcome/payment', params: { previewReturn } }} />;
   if (permission === null) return null;
   // Calendar-month trials have no fixed day count, but their confirmed end
   // date still allows the existing one-off scheduler to choose a safe time.

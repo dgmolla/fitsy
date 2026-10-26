@@ -111,7 +111,7 @@ export async function syncPaywallVerdictForCheckout(): Promise<SubscriptionVerdi
  * use this when leaving a screen that's "spent" (e.g. the one free detail
  * view) so backing out of the paywall doesn't land the user back on it.
  */
-export async function routeToPaywall(options: { replace?: boolean; intent?: PaywallIntent } = {}): Promise<void> {
+export async function routeToPaywall(options: { replace?: boolean; intent?: PaywallIntent; previewReturn?: true } = {}): Promise<void> {
   if (navigating) return;
   navigating = true;
   const replace = options.replace ?? false;
@@ -121,7 +121,8 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
     // A locked choice ends this onboarding preview pass. Returning to the
     // preview now requires another Continue from the nutrition-source screen.
     await clearOnboardingPreviewEntry();
-    if (await readPaywallDecline()) target = '/welcome/signin?returnTo=payment';
+    const declined = await readPaywallDecline();
+    if (declined) target = '/welcome/signin?returnTo=payment';
     if (options.intent) await rememberPaywallIntent(options.intent);
     try {
       const { data } = await supabase.auth.getSession();
@@ -145,7 +146,11 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
       target = '/welcome/subscription-check';
     }
     if (replace) router.replace(target);
-    else router.push(target);
+    else if (options.previewReturn && !declined && (target === '/welcome/signin' || target === '/welcome/payment')) {
+      // Keep fresh preview Back independent of native history.
+      // This is route-local: cold entry and spent/declined checkouts still exit.
+      router.push({ pathname: target, params: { previewReturn: '1' } });
+    } else router.push(target);
   } finally {
     navigating = false;
   }
