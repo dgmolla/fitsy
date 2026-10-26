@@ -1,4 +1,4 @@
-import { chainSnapshotInput } from "./lib/snapshot-row";
+import { chainSnapshotInput, restaurantSnapshotInput } from "./lib/snapshot-row";
 /**
  * Copy a real-shaped subset of production restaurant data into the dev DB.
  *
@@ -66,7 +66,7 @@ async function main(): Promise<void> {
     };
     await chunk(brands, (b) => dst.brand.createMany({ data: b, skipDuplicates: true }));
     await chunk(chainItems.map(chainSnapshotInput), (b) => dst.chainItem.createMany({ data: b, skipDuplicates: true }));
-    await chunk(restaurants, (b) => dst.restaurant.createMany({ data: b, skipDuplicates: true }));
+    await chunk(restaurants.map(restaurantSnapshotInput), (b) => dst.restaurant.createMany({ data: b, skipDuplicates: true }));
     await chunk(menuItems, (b) => dst.menuItem.createMany({ data: b, skipDuplicates: true }));
     await chunk(
       estimates.map((e) => ({ ...e, ingredientBreakdown: e.ingredientBreakdown === null ? Prisma.JsonNull : (e.ingredientBreakdown as Prisma.InputJsonValue) })),

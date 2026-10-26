@@ -268,6 +268,7 @@ In priority order:
 The Next.js backend is API-only — no server-rendered pages. All endpoints serve JSON and are consumed by the React Native (Expo) mobile client.
 
 ### 3.1 Endpoint Inventory
+- `GET /api/restaurants/shuffle` - fit-weighted random dish within remaining budgets, with a locked teaser for non-subscribers.
 - `GET /api/restaurants` — discover nearby restaurants (lat/lng, radius, filters)
 - `GET /api/restaurants/[id]` — restaurant detail with menu items
 - `GET /api/restaurants/[id]/menu` — menu items with cached macros

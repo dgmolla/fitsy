@@ -16,6 +16,7 @@ Merged reference for all Fitsy API routes. Supersedes the archived `api-endpoint
 | `/api/auth/register` | POST | None | Legacy email/password register (deprecated) |
 | `/api/auth/login` | POST | None | Legacy email/password login (deprecated) |
 | `/api/restaurants` | GET | Bearer JWT | Search nearby restaurants |
+| `/api/restaurants/shuffle` | GET | Optional Bearer JWT | One fit-weighted dish, or a locked restaurant teaser |
 | `/api/restaurants/preview` | GET | None | Onboarding teaser (no auth) |
 | `/api/restaurants/stats` | GET | None | Onboarding aggregate stats |
 | `/api/restaurants/[id]/menu` | GET | Bearer JWT | Restaurant detail + menu |
@@ -190,7 +191,10 @@ Macros are read from denormalized `MenuItem` columns — not from a `MacroEstima
 }
 ```
 
-`bestMatch` is present on entitled responses; its `matchScore` is null when no target is active. Restaurants without a complete macro record are omitted. Missing provenance falls back to LOW confidence. Unentitled responses omit `bestMatch` and set `meta.locked` to true.
+`bestMatch` is present on entitled responses; its `matchScore` is null when no target is active.
+Restaurants without a complete macro record are omitted.
+Missing provenance falls back to LOW confidence.
+Unentitled responses set `bestMatch` to null and `meta.locked` to true.
 
 #### Error Responses
 
@@ -207,6 +211,81 @@ Macros are read from denormalized `MenuItem` columns — not from a `MacroEstima
 | 500 | `{ "error": "Internal server error" }` | Unhandled exception |
 
 ---
+
+### GET /api/restaurants/shuffle
+
+**Auth:** Optional Bearer JWT, using the same server-trusted subscription verdict as search.
+**File:** `apps/api/app/api/restaurants/shuffle/route.ts`
+**Executable contract:** `shuffleResponseSchema` and `ShuffleResponse` in `@fitsy/shared`.
+
+This additive endpoint supports the future search-screen Shuffle and iOS widget consumers.
+It changes no mobile journey or existing search response.
+
+| Parameter | Required | Default | Constraints |
+|---|---|---|---|
+| `lat`, `lng` | Yes | - | Finite coordinates within latitude/longitude bounds |
+| `radius` | No | 3 | Miles, greater than zero and at most 50 |
+| `calories`, `protein`, `carbs`, `fat` | At least one | - | Remaining budgets; same aliases and validation as search |
+| `proteinG`, `carbsG`, `fatG` | No | - | Canonical aliases; duplicate values must agree |
+| `dietary` | No | - | Exact dietary tag on the dish, such as `vegan` |
+| `cuisineType` | No | - | Exact restaurant cuisine tag |
+| `maxCalories` | No | - | Hard calorie cap, zero through 100,000 |
+| `excludeRecent` | No | - | At most 100 comma-separated stable menu-item ids, 128 characters each |
+| `seed` | No | Random | Nonempty string, at most 100 characters, for deterministic selection |
+
+Example: `/api/restaurants/shuffle?lat=34.05&lng=-118.25&calories=600&protein=40&carbs=60&fat=20&dietary=vegan&seed=demo`.
+Unlike search, an explicitly supplied zero is an exhausted remaining budget and never disables that dimension.
+Unspecified dimensions impose no cap.
+Meals below the budgets remain eligible; closer fits receive greater weight.
+
+The first attempt caps each supplied dimension at 110% of its budget within the requested radius.
+If empty, the second attempt raises that tolerance to 125% within the same radius.
+The final attempt doubles the radius, capped at 50 miles, retaining the 125% tolerance.
+Neither `maxCalories`, exclusions, dietary tags, cuisine, nor zero budgets widen during fallback.
+Retired dishes and incomplete, negative or non-finite nutrition are ineligible.
+
+The score is `fitScore = 1 / (1 + sum(normalized squared macro differences))`.
+Higher scores mean better fit, and each dish receives lottery weight `fitScore^4`.
+Every qualifying dish participates, including multiple dishes at the same restaurant.
+Seeded selection is stable for an unchanged candidate pool and availability state, regardless of database row order.
+
+```mermaid
+flowchart LR
+    A[Validate remaining budgets] --> B[Current subscription and user rate limit]
+    B --> C[Private short cache]
+    C --> D[Nearby restaurants and availability]
+    D --> E[Eligible dishes within 10 percent]
+    E -->|Empty| F[25 percent tolerance]
+    F -->|Empty| G[Double radius up to 50 miles]
+    E --> H[Fit-weighted choice]
+    F --> H
+    G --> H
+    H --> I[Paid dish or locked restaurant teaser]
+    G -->|Empty| J[data null and no_matches]
+```
+
+Successful responses contain `data.restaurant`, `data.item`, `data.macros`, `data.fitScore`, `data.distanceMiles`, and `data.availability`.
+Nutrition includes confidence and a published/estimated basis; these values remain estimates where the source is estimated.
+`meta` contains `locked`, `fallback` (`none`, `tolerance`, or `radius`), the applied `radiusMiles`, `tolerance`, and `emptyReason`.
+Empty results return HTTP 200 with `data: null` and `meta.emptyReason: "no_matches"`.
+Invalid input returns 400; unexpected failures return 500 with `{ "error": "Internal server error" }`.
+
+Anonymous, invalid-token, expired, and unsubscribed callers receive restaurant identity with `item`, `macros`, and `fitScore` set to null.
+Their selection ignores macro targets, calorie caps and item exclusions, and hides tolerance/fallback metadata, preventing membership probes from revealing the paid macro match.
+Entitlement is reread before every cache lookup, so an expired subscription cannot reuse a paid response.
+
+Availability uses optional `Restaurant.openingHours` JSON: `{ "timeZone": "America/Los_Angeles", "periods": [{ "day": 1, "opens": 600, "closes": 1200 }] }`.
+Sunday is day zero, times are local minutes after midnight, closing is exclusive, and a closing minute before opening crosses midnight.
+`opens: 0, closes: 1440` represents a full day.
+Known closed or malformed schedules are excluded.
+Existing preload data has no hours, so those restaurants return `availability: "unknown"`; the endpoint does not claim they are open.
+Verified business-hour ingestion is still needed to establish availability for that legacy data; the read-only API makes no external availability calls.
+
+The instance-local limiter allows 30 requests per user per minute, including cache hits, with an IP fallback for anonymous requests.
+429 responses include `Retry-After` in seconds.
+The instance-local cache lasts at most ten seconds, expires at a minute boundary, holds at most 256 responses, and separates user, entitlement and input contexts.
+All responses use `Cache-Control: private, no-store` so shared HTTP caches cannot serve subscription data.
+As with the existing limiter, cold starts and multiple server instances do not share rate-limit state.
 
 ### GET /api/restaurants/preview
 

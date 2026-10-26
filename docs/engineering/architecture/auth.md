@@ -278,6 +278,7 @@ Public routes (no auth required):
 | `POST /api/auth/register` | Legacy email/password |
 | `GET /api/restaurants/preview` | Onboarding teaser (unauthenticated) |
 | `GET /api/restaurants/stats` | Onboarding stats (unauthenticated) |
+| `GET /api/restaurants/shuffle` | Optional JWT; unentitled callers receive a restaurant teaser without dish or macro details |
 | `POST /api/revenuecat/webhook` | RevenueCat webhook (REVENUECAT_WEBHOOK_AUTH header) |
 | `GET /api/internal/audit-macro-drift` | Vercel cron (CRON_SECRET Bearer) |
 | `POST /api/internal/feedback-digest` | Vercel cron (CRON_SECRET Bearer) |
