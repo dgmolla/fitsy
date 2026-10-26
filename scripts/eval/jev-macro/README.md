@@ -156,3 +156,5 @@ All provider responses in the new Jest tests are simulated at the external fetch
 The workspace lint alias is consumed by the existing workspace lint command and checks this evaluator with its local TypeScript rules.
 The actual npm replay entrypoint is exercised with fetch disabled and no provider key in its child environment.
 Tests cover the System One choice contract, weighted means, bounded and open-top representatives, argmax ties, rounded probability sums, malformed distributions, preserved v1 evidence, provenance drift, truth leakage, cost reservation, timeout configuration, HTTP/transport/parse failures, unknown usage, interrupted journals, ordering, zero truth, catastrophic boundaries and historical comparison output.
+
+The raw v2 journal is stored gzipped (`results/2026-10-26-v2/jev-raw.jsonl.gz`) to keep the PR diff reviewable; `gunzip -k` it before `--mode=replay`.
