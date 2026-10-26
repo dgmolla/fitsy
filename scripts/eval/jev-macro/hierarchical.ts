@@ -6,7 +6,7 @@ import { collectExperiment, experimentIdentity, parseChoiceAnswers, parseExperim
 import { macroBins } from './bins';
 import { formatComparison, scoreSlices } from './exploratory-score';
 import { coarseChoices, coarseRequest, decodeHierarchical, fineRequest, HIERARCHICAL_PROTOCOL, selectHierarchicalRows } from './hierarchical-bins';
-import { parseJournal, replayJournal } from './run';
+import { parseJournal, replayJournal } from './journal';
 import { latencyStats, macroNames, type ItemResult, type Macros } from './score';
 import { loadTruth, repository, sha256, type TruthRow } from './truth';
 

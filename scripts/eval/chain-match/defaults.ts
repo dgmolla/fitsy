@@ -8,7 +8,7 @@ import { parseJevDecision } from '../../../apps/api/services/jevDecisionService'
 import { collectExperiment, digest, experimentIdentity, JEV_LIMITS, parseChoiceAnswers, parseExperimentArgs,
   parseJournal, saveExperiment, validateRequest, type Exchange, type Experiment } from '../lib/jev-experiment';
 import { buildDecisionRequest, loadBenchmark, repository, type Fixture } from './fixture';
-import { replayJournal } from './run';
+import { replayJournal } from './journal';
 import { recommend, scoreDecisions, type DecisionMetrics, type DecisionResult } from './score';
 
 export const DEFAULTS_QUESTION = {
