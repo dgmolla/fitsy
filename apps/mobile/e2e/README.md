@@ -110,6 +110,11 @@ This uses a separate Java cache without modifying the normal installation or cha
 The canonical media check also requires host process-ownership inspection; a sandbox denial must be resolved through the existing host owner without disabling that preflight.
 If XCTest setup reports `No space left on device`, recover eligible host resources before rerunning; `scripts/sim/ci.mjs` checks disk admission before driving any journey.
 
+`menu-macro-serving` clears app data and keychain to preserve its anonymous starting state.
+Its bounded startup retry waits for the launch animation and the original `Find meals that fit` screen before opening the restaurant.
+Missing welcome UI or a genuine crash still fails; product interactions and the full flow are never retried.
+`scripts/sim/ci.test.ts` protects that startup boundary, including the mandatory screen, timeouts and retry limit.
+
 `chain-menu-serving` clears app and keychain state to prove anonymous menu access.
 On a Debug dev-client build, clearing state can return to Expo's Development Build launcher; the flow selects local Metro before waiting for `welcome-start`.
 Embedded builds skip that conditional launcher step, and startup retries never repeat menu or authentication actions.
