@@ -5,7 +5,7 @@
   "scripts": {
     "test": "jest",
     "type-check": "tsc --noEmit",
-    "lint": "npm run lint:jev-macro",
+    "lint": "eslint --config eval/jev-macro/eslint.config.mjs eval/jev-macro eval/chain-match eval/lib/jev-experiment.ts",
     "eval:jev-macro": "node --import tsx eval/jev-macro/run.ts",
     "eval:jev-macro:truth": "node --import tsx eval/jev-macro/build-truth.ts",
     "lint:jev-macro": "eslint --config eval/jev-macro/eslint.config.mjs eval/jev-macro"

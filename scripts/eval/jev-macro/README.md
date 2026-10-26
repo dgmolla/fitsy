@@ -158,3 +158,62 @@ The actual npm replay entrypoint is exercised with fetch disabled and no provide
 Tests cover the System One choice contract, weighted means, bounded and open-top representatives, argmax ties, rounded probability sums, malformed distributions, preserved v1 evidence, provenance drift, truth leakage, cost reservation, timeout configuration, HTTP/transport/parse failures, unknown usage, interrupted journals, ordering, zero truth, catastrophic boundaries and historical comparison output.
 
 The raw v2 journal is stored gzipped (`results/2026-10-26-v2/jev-raw.jsonl.gz`) to keep the PR diff reviewable; `gunzip -k` it before `--mode=replay`.
+
+## Exploratory protocol v3: hierarchical
+
+`--protocol=v3` selects the experiment recommended in [the audit](../../../docs/engineering/pipeline/jev-qwen-audit-2026-10-26.md) and [rerun_design.py](../audit/rerun_design.py).
+Omitting the flag retains v2; `--protocol=v2` is also explicit.
+V3 does not change v2, the original truth, or any archived result.
+Its request shape is tested against the Python builders offline; live provider compatibility and accuracy remain unmeasured.
+
+```mermaid
+flowchart LR
+  A[Freeze 168 non-flagged rows] --> B[Four coarse questions: 14 choices each]
+  B --> Z[zero: exactly zero]
+  B --> O[overflow: failed item]
+  B --> C[Bounded positive choices]
+  C --> D[One fine request: r0 through r9 per needed macro]
+  Z --> E[Argmax primary and conditional fine EV secondary]
+  O --> E
+  D --> E
+  E --> F[Paired report against saved v2 on identical IDs]
+```
+
+The selection is pinned by the original truth digest and ordered ID digest: 88 WaBa Grill and 80 Yoshinoya rows.
+It excludes only the 22 Yoshinoya drinks with flagged serving units, retaining the `14-oz-*` drinks.
+Every retained state and truth value is unchanged, and selection does not depend on prediction errors.
+
+Each macro has `zero`, twelve positive bounded choices `b0` through `b11`, and `overflow`.
+Coarse widths are 250 kcal or 20 g, with overflow at 3000 kcal or 240 g.
+The first positive interval excludes zero; all other lower boundaries are inclusive and upper boundaries exclusive.
+Only bounded positive macros enter one second request, each with ten refinements `r0` through `r9` of width 25 kcal or 2 g.
+All-zero or all-overflow coarse responses need no second request.
+An overflow in one macro still permits refinement of the other bounded macros, but fails the complete item.
+
+Primary decoding uses coarse argmax, then fine argmax midpoint, with the provider's choice breaking ties and no confidence cutoff.
+The separately recorded secondary EV averages fine midpoints conditional on the chosen coarse interval, normalizing rounded probability sums.
+It does not average over coarse intervals or recover a wrong coarse selection.
+Exact zero remains zero for both decoders.
+Overflow, invalid, missing, timed-out and incomplete items are catastrophic misses and contribute infinity to every full-set MdAPE and MAE.
+Non-finite aggregates are serialized as null, and successful-only MdAPEs are labeled separately.
+
+The collector allows at most two requests per item, 336 total, no retries, 5-second timeouts and a $1 cap.
+It reserves 16,384 input tokens per attempt, rejects requests above 12,000 bytes, and stops on unknown usage, invalid responses or any returned model other than `jev-1.14.0`, including the first response.
+Requests still target `jev-latest`.
+Raw requests, responses, usage, selected IDs, model identity, failure accounting and conditional decoders are retained in a separate output directory.
+Replay verifies the selection/protocol identities and the exact conditional request sequence and never resumes collection.
+The shared cost journal is not modified.
+
+`report.md` compares v3 argmax and conditional EV against saved v2 EV and argmax on those same 168 rows.
+It includes all four MdAPEs, strict >50% calorie catastrophes, calorie/gram MAE, zero-truth behavior, truth fat >=2 g, all six audit categories, cost per 1,000 attempted items and item latency.
+V3 item latency sums both request latencies; request latency is separately retained.
+Repeated serving IDs and per-chain slices remain visible in `summary.json` without independence-based confidence intervals.
+This exploratory comparison supplies no production adoption verdict or Haiku/Qwen ranking.
+
+```sh
+# Future collection only; use a fresh directory and an already configured process key.
+npm run eval:jev-macro -w scripts -- --mode=live --protocol=v3 --out=/tmp/jev-macro-v3
+
+# Entirely offline; use a different fresh directory.
+npm run eval:jev-macro -w scripts -- --mode=replay --protocol=v3 --journal=/tmp/jev-macro-v3/jev-raw.jsonl --out=/tmp/jev-macro-v3-replay
+```

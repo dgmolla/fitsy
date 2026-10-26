@@ -62,6 +62,13 @@ export function replayJournal(fixture: Fixture, events: JournalEvent[]) {
 }
 
 export async function runChainMatchEvaluation(argv: string[]) {
+  const protocols = argv.filter(arg => arg.startsWith('--protocol='));
+  if (protocols.length > 1 || protocols.some(arg => !['--protocol=v1', '--protocol=defaults'].includes(arg))) throw new Error('Select --protocol=v1|defaults once');
+  if (protocols[0] === '--protocol=defaults') {
+    const { runDefaultsEvaluation } = await import('./defaults.js');
+    return runDefaultsEvaluation(argv.filter(arg => !arg.startsWith('--protocol=')));
+  }
+  argv = argv.filter(arg => !arg.startsWith('--protocol='));
   const options = new Map<string, string>();
   for (const arg of argv) {
     const match = /^--(mode|out|journal)=(.+)$/.exec(arg);

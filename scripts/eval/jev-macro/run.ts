@@ -5,7 +5,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { BINNING, decodeMacroAnswers, macroAnswersSchema, macroQuestions } from './bins';
 import { formatReport, historicalStats, score, type ItemResult } from './score';
-import { loadTruth, nutritionQuantity, sha256, type TruthRow } from './truth';
+import { loadTruth, sha256, type TruthRow } from './truth';
+import { macroState } from './state';
 
 // Endpoint, model, auth, timeout and usage conventions mirror jevDecisionService.ts.
 // Kept here because macro estimation needs four distributions with a frozen binning protocol.
@@ -28,14 +29,7 @@ const responseSchema = z.object({ model: z.string().regex(/^jev-/),
 
 /** This explicit projection is the ONLY item-dependent input to the provider. */
 export function buildMacroRequest(item: TruthRow) {
-  const itemText = [item.itemName, item.section, item.description, item.serving].join('\n');
-  if (nutritionQuantity.test(itemText)) {
-    throw new Error('Item text contains nutrition targets; exclude it before evaluation');
-  }
-  const request = { model: PROTOCOL.model, questions: PROTOCOL.questions, state: {
-    chain: item.chain, itemName: item.itemName,
-    description: [item.section ? `Section: ${item.section}` : '', item.description].filter(Boolean).join('\n'), serving: item.serving,
-  } };
+  const request = { model: PROTOCOL.model, questions: PROTOCOL.questions, state: macroState(item) };
   if (Buffer.byteLength(JSON.stringify(request)) > PROTOCOL.maxRequestBytes) throw new Error('Jev macro request exceeds 12KB');
   return request;
 }
@@ -149,6 +143,13 @@ function parseArgs(argv: string[]) {
 }
 
 export async function runEvaluation(argv: string[]) {
+  const protocols = argv.filter(arg => arg.startsWith('--protocol='));
+  if (protocols.length > 1 || protocols.some(arg => !['--protocol=v2', '--protocol=v3'].includes(arg))) throw new Error('Select --protocol=v2|v3 once');
+  if (protocols[0] === '--protocol=v3') {
+    const { runHierarchicalEvaluation } = await import('./hierarchical.js');
+    return runHierarchicalEvaluation(argv.filter(arg => !arg.startsWith('--protocol=')));
+  }
+  argv = argv.filter(arg => !arg.startsWith('--protocol='));
   const options = parseArgs(argv), fixture = loadTruth(), historical = historicalStats();
   const requests = fixture.truth.rows.map(buildMacroRequest); // Validate EVERY prompt before any live request.
   const apiKey = options.mode === 'live' ? process.env['TYPESAFE_API_KEY'] : undefined;
