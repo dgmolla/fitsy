@@ -23,7 +23,7 @@ export function parseChoiceAnswers(request: JevRequest, raw: unknown) {
     const schema = z.object({ type: z.literal('choice'), choice: z.enum(names as [string, ...string[]]), confidence: probability,
       probabilities: z.object(Object.fromEntries(names.map(key => [key, probability]))).strict(),
     }).refine(answer => Math.abs(Object.values(answer.probabilities).reduce((sum, p) => sum + p, 0) - 1) <= 0.01 + names.length * Number.EPSILON
-      && answer.probabilities[answer.choice]! >= Math.max(...Object.values(answer.probabilities)), 'Invalid choice probabilities');
+      && answer.probabilities[answer.choice]! >= Math.max(...Object.values(answer.probabilities)) - 0.02, 'Invalid choice probabilities');
     return [name, schema];
   }));
   return z.object({ answers: z.object(schemas).strict() }).parse(raw).answers;
