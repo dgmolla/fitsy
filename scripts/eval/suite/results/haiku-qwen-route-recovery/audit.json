@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-27T06:53:51.190Z",
+  "head": "19805640ccee0153f31f6403945cb44298b80fa9",
+  "reconciled": {
+    "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+    "requestId": "943cf3bc-ccde-49c0-87df-ab7209c91893",
+    "provider": "qwen",
+    "costUsd": 0,
+    "usageProof": "openrouter-before-paid-usage.json"
+  },
+  "priorLedgerSha256": "25d8f37dff196f9bb66dc9ad1b4df9703b016ece5f6df3215beca0402e29744a",
+  "originalLedgerPrefixPreserved": true,
+  "haikuCasesReplayed": 129,
+  "haikuFailedCasesPreserved": 33,
+  "newRequests": 0,
+  "newSpendUsd": 0,
+  "selected": 129,
+  "selectionSha256": "3ec69529643a0253f95c4e04f927fe0d157c2d9fef14891af309962015a4fa70",
+  "knownNewSpendUsd": 0.41557199999999994,
+  "remainingUsd": 2.284428,
+  "reservedUpperBoundUsd": 0.8694222899999998
+}

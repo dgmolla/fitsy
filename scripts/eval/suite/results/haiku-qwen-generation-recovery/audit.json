@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-27T08:03:38.617Z",
+  "head": "a2ea9d394e3c76417a00d56d1b7d8e6fd45998f7",
+  "reconciled": {
+    "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+    "requestId": "f35dc8ce-c5aa-4b66-8716-b9d77794ed98",
+    "provider": "qwen",
+    "costUsd": 0.00080546,
+    "basis": "Exact captured-generation metadata; output remains failed"
+  },
+  "priorLedgerSha256": "c376b14a825ec1ca7ba3f068523f1b5ac1d8de25c8c62fe2475b2f41d8161c6b",
+  "originalLedgerPrefixPreserved": true,
+  "replayedCases": {
+    "haiku": 129,
+    "qwen": 120
+  },
+  "newRequests": 0,
+  "newSpendUsd": 0,
+  "selected": 129,
+  "selectionSha256": "3ec69529643a0253f95c4e04f927fe0d157c2d9fef14891af309962015a4fa70",
+  "knownNewSpendUsd": 0.4514384400000001,
+  "remainingUsd": 2.24856156,
+  "reservedUpperBoundUsd": 0.7087125
+}
