@@ -10,11 +10,11 @@
   });
   output.dataApiUnauthStatus = http.get(base + paths[0]).status;
   output.dataApiInvalidStatus = http.get(base + paths[0], { headers: { Authorization: 'Bearer invalid.jwt.signature' } }).status;
-  // The stable dev domain tracks main. A PR preview alone cannot satisfy
-  // these assertions; coordinate the dev backend before rerunning native UI.
+  // Let the caller's required, labelled assertion report these HTTP statuses.
+  // Throwing here makes Maestro serialize a Graal exception graph, truncating
+  // its command JSON before the useful error. Never log in to a stale backend.
   if (output.dataApiUnauthStatus !== 401 || output.dataApiInvalidStatus !== 401) {
-    throw new Error('Data API auth preflight requires the candidate backend to be deployed to dev.fitsy.org: ' +
-      'missing/invalid-token requests must return 401 (got ' + output.dataApiUnauthStatus + '/' + output.dataApiInvalidStatus + ').');
+    return;
   }
   var login = http.post(base + '/api/auth/login', {
     headers: { 'Content-Type': 'application/json' },

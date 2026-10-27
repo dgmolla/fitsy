@@ -387,7 +387,9 @@ env:
 # Its carbs/fat constraints remain active and its calories equal their energy.
 - evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&q=pizza&calories=654&protein=0&carbs=114&fat=22']}
 - runScript: ../helpers/data-api.mjs
-- assertTrue: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
 - evalScript: ${output.contextResponse = output.dataApiResponses[0]}
 - assertTrue: ${output.contextResponse.status === 200}
 - evalScript: ${output.context = json(output.contextResponse.body)}

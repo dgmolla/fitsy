@@ -164,14 +164,18 @@ env:
 - evalScript: ${output.assistedUrl = 'https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=' + output.assistedCalories + '&protein=' + output.assistedProtein + '&carbs=' + output.assistedCarbs + '&fat=' + output.assistedFat}
 - evalScript: ${output.apiPaths = [output.assistedUrl]}
 - runScript: ../helpers/data-api.mjs
-- assertTrue: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
 - evalScript: ${output.assistedBaseResponse = output.dataApiResponses[0]}
 - assertTrue: ${output.assistedBaseResponse.status === 200}
 - evalScript: ${output.assistedBase = json(output.assistedBaseResponse.body)}
 - assertTrue: ${output.assistedBase.data.length > 0}
 - evalScript: ${output.apiPaths = [output.assistedUrl + '&q=pizza']}
 - runScript: ../helpers/data-api.mjs
-- assertTrue: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
 - evalScript: ${output.assistedPizzaResponse = output.dataApiResponses[0]}
 - assertTrue: ${output.assistedPizzaResponse.status === 200}
 - evalScript: ${output.assistedPizza = json(output.assistedPizzaResponse.body)}

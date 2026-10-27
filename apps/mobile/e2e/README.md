@@ -102,12 +102,16 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 Deploy the candidate API to `dev.fitsy.org` through the existing coordinated preview procedure before running journeys that use `helpers/data-api.mjs`.
 The stable dev domain follows `main`; a successful feature-branch Vercel preview does not update that domain.
 The host runner owner must verify the candidate dev deployment before native replay; do not merge early or remove the 401 assertions to satisfy Simulator.
-The helper requires missing-token and invalid-token 401s before login; an anonymous 200 means the deployed backend still lacks the candidate auth behavior.
+The helper probes missing-token and invalid-token requests before login; an anonymous 200 means the deployed backend still lacks the candidate auth behavior.
+Every caller immediately requires 401/401 and successful fixture login through a labelled assertion that reports all three HTTP statuses.
+The helper returns without logging in when either auth probe fails, leaving that assertion to fail normally instead of throwing a Graal exception that Maestro truncates into invalid command JSON and an unknown JUnit error.
 Retain that failure and correct the deployment through the existing host owner before replaying the selected journeys.
 For a pre-merge test window, the existing host owner can use the `fitsy-api` project's Vercel Domains page to edit `dev.fitsy.org`, keep the Preview environment, and temporarily select the candidate branch.
 Record the original `dev` branch mapping and the candidate's ready deployment and exact commit before saving.
 Verify the saved mapping and anonymous/invalid-token 401s before the existing runner replays; the branch preview URL alone does not prove that the app's configured origin changed.
-Keep that deployment assigned for the complete run, then restore the original Preview branch mapping and verify the restoration.
+Keep that deployment assigned for the complete selected run, including automatic retries and source-only follow-ups that still need the candidate API.
+The existing host runner owner closes the test window after terminal native verification or explicit cancellation, then restores the original Preview branch mapping and verifies the restoration.
+Do not restore after an intermediate group or failed attempt while that owner still has a required replay pending; doing so recreates the stale-backend failure on the next head.
 Retain the failed run and the recovered run separately; changing deployment configuration does not require a product-code workaround or establish a passing native journey.
 
 `shuffle` requires a populated dev backend, `entitled-dev` and a Debug Test Store build.
@@ -191,7 +195,8 @@ They do not prove search results; assert the returned dish or empty-state recove
 Onboarding and menu journeys use the real `unsubscribed-dev` fixture before requesting live restaurant data.
 `helpers/discovery-signin.yaml` checks Apple/Google availability and hidden plans, uses Dev login, and waits for the protected destination.
 It does not grant an entitlement or purchase anything.
-`helpers/data-api.mjs` obtains a session inside a local script, asserts missing/invalid-session 401s, and makes the oracle requests with a Bearer token.
+`helpers/data-api.mjs` probes missing/invalid-session requests, obtains a session only after both return 401, and makes the oracle requests with a Bearer token.
+Each saved-flow caller then asserts both 401s and the successful login, reporting the HTTP statuses in its assertion label.
 Only status and JSON bodies reach Maestro output; credentials and tokens remain inside the script.
 Every oracle flow reads the configured `EXPO_PUBLIC_DEV_LOGIN_EMAIL/PASSWORD`; owned Metro must use the same fixture.
 `lib/dataApiFlow.test.ts` executes the saved helper, covers login failure, and rejects new direct restaurant requests in maintained YAML flows.
