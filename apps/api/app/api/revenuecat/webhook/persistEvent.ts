@@ -18,13 +18,13 @@ export async function persistEvent(input: {
       where: { userId, OR: [{ lastEventAt: null }, { lastEventAt: { lte: eventAt } }] },
       data,
     });
-    if (result.count) logStatusChange(userId, priorStatus, status, "webhook");
+    if (result.count) logStatusChange(priorStatus, status, "webhook");
     return result.count > 0;
   };
   if (existing) return update(existing.status);
   try {
     await prisma.subscription.create({ data: { userId, ...data } });
-    logStatusChange(userId, null, status, "webhook");
+    logStatusChange(null, status, "webhook");
     return true;
   } catch (error) {
     if ((error as { code?: string }).code !== "P2002") throw error;

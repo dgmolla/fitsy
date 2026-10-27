@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { authFetch } from '@fitsy/shared/utils/authTransport';
 
 function getSupabaseUrl(): string {
   const url = process.env["SUPABASE_URL"];
@@ -18,6 +19,7 @@ export function getSupabaseAdmin() {
     );
   return createClient(getSupabaseUrl(), key, {
     auth: { autoRefreshToken: false, persistSession: false },
+    global: { fetch: authFetch },
   });
 }
 
@@ -30,5 +32,6 @@ export function getSupabaseClient() {
   if (!key) throw new Error("SUPABASE_ANON_KEY environment variable is not set");
   return createClient(getSupabaseUrl(), key, {
     auth: { autoRefreshToken: false, persistSession: false },
+    global: { fetch: authFetch },
   });
 }

@@ -1,6 +1,8 @@
 jest.unmock('react-native');
 jest.unmock('expo-router');
-import { Alert } from 'react-native';
+import { Alert, type AlertButton } from 'react-native';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-native-purchases';
@@ -76,6 +78,73 @@ async function openPayment() {
   expect(mockCapture).toHaveBeenCalledWith('paywall_experiment_exposed', expect.objectContaining({ image_variant: 'none', layout_variant: 'trial_timeline' }));
   return screen;
 }
+
+test('saved Test Store recovery can cancel a discount purchase, retry and report a failed purchase', async () => {
+  const discount = { ...annual, identifier: 'annual_discount', product: { ...annual.product,
+    identifier: 'annual_discount', price: 29.99, priceString: '$29.99' } };
+  const discounted = { ...offering, availablePackages: [annual, discount] } as unknown as PurchasesOffering;
+  jest.mocked(Purchases.getOfferings).mockResolvedValue({ current: discounted, all: { default: discounted } });
+  const native: { dialog: { title: string; message?: string; buttons?: AlertButton[] } | null } = { dialog: null };
+  jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
+    native.dialog = { title, message, buttons: buttons ?? [{ text: 'OK' }] };
+  });
+  jest.mocked(Purchases.purchasePackage).mockImplementation(() => new Promise((_, reject) => {
+    // The native Test Store presenter is the external boundary. The actual
+    // paywall, SDK error handling and entitlement state remain application code.
+    Alert.alert('Test Store Purchase', '', [
+      { text: 'Cancel', onPress: () => reject({ userCancelled: true }) },
+      { text: 'Test failed purchase', onPress: () => reject(new Error('native purchase failed')) },
+    ]);
+  }));
+  const screen = await openPayment();
+  type Selector = string | { id: string; enabled?: boolean; point?: string };
+  type Step = { tapOn?: Selector; scrollUntilVisible?: { element: Selector };
+    extendedWaitUntil?: { visible: Selector }; assertVisible?: Selector; assertNotVisible?: Selector };
+  const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/paywall-live-terms.yaml'), 'utf8')) as [unknown, Step[]];
+  const cancel = commands.findIndex(step => step.tapOn === 'Cancel');
+  const start = commands.findLastIndex((step, index) => index < cancel && step.scrollUntilVisible !== undefined);
+  expect(start).toBeGreaterThan(-1);
+  expect(cancel).toBeGreaterThan(start);
+  function element(selector: Selector) {
+    const dialog = native.dialog;
+    if (dialog) {
+      if (typeof selector === 'string' && [dialog.title, dialog.message, ...dialog.buttons?.map(button => button.text) ?? []].includes(selector)) return null;
+      throw new Error('Native purchase dialog covers the paywall');
+    }
+    const node = typeof selector === 'string' ? screen.getByText(selector) : screen.getByTestId(selector.id);
+    if (typeof selector === 'object' && selector.enabled) expect(node.props.accessibilityState?.disabled).not.toBe(true);
+    return node;
+  }
+  for (const step of commands.slice(start)) {
+    const dialog = native.dialog;
+    if (step.tapOn) {
+      const selector = step.tapOn;
+      if (typeof selector === 'object' && selector.point) {
+        // In the failed iPhone 15 capture this warning-dismissal coordinate
+        // hits Not now. Reproduce that real action, rather than ignoring it.
+        expect(selector.point).toBe('92%,93%');
+        await act(async () => { fireEvent.press(element({ id: 'welcome-skip' })!); });
+      } else if (dialog) {
+        const button = dialog.buttons?.find(button => button.text === selector);
+        expect(button).toBeDefined();
+        native.dialog = null;
+        await act(async () => { button?.onPress?.(); });
+      } else await act(async () => { fireEvent.press(element(selector)!); });
+    }
+    if (step.scrollUntilVisible) element(step.scrollUntilVisible.element);
+    if (step.extendedWaitUntil) await waitFor(() => element(step.extendedWaitUntil!.visible));
+    if (step.assertVisible) element(step.assertVisible);
+    if (step.assertNotVisible) expect(() => element(step.assertNotVisible!)).toThrow();
+  }
+  expect(Purchases.purchasePackage).toHaveBeenCalledTimes(2);
+  expect(Purchases.purchasePackage).toHaveBeenNthCalledWith(1, discount);
+  expect(Purchases.purchasePackage).toHaveBeenNthCalledWith(2, discount);
+  expect(screen.getPathname()).toBe('/welcome/payment');
+  expect(await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY)).toBeNull();
+  expect(native.dialog).toBeNull();
+  expect(screen.queryByTestId('paywall-discount-buy')).toBeNull();
+});
 
 test('a checkout identity timeout never starts a late purchase and a retry can succeed', async () => {
   const alert = jest.spyOn(Alert, 'alert');

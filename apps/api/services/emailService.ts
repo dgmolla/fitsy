@@ -15,18 +15,21 @@ async function sendEmail(payload: ResendEmailPayload): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return; // silently skip when key is absent
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error(`[emailService] Resend API error ${res.status}: ${body}`);
+    if (!res.ok) {
+      console.error('[emailService] delivery_rejected', { status: res.status });
+    }
+  } catch {
+    console.error('[emailService] delivery_unavailable');
   }
 }
 

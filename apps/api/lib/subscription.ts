@@ -196,8 +196,8 @@ export async function syncSubscriptionFromRevenueCat(
       const elapsed = Date.now() - readStartedAt.getTime();
       if (neverDowngrade || !state.hadProEntitlement) {
         console.warn(
-          `[subscription] ${userId} RevenueCat still ${neverDowngrade ? 'inactive' : 'missing restored history'} ` +
-          `after ${reads} reads over ${elapsed} ms; not persisting an unconfirmed restore`,
+          neverDowngrade ? '[subscription] purchase_unconfirmed' : '[subscription] restore_unconfirmed',
+          { reads, elapsedMs: elapsed },
         );
         return null;
       }
@@ -246,7 +246,7 @@ export async function syncSubscriptionFromRevenueCat(
       const raced = await readRow(userId);
       return raced ? rowEntitled(raced) : null;
     }
-    logStatusChange(userId, observed.status, status, "sync");
+    logStatusChange(observed.status, status, "sync");
     return state.active;
   };
   if (!existing) {
@@ -259,7 +259,7 @@ export async function syncSubscriptionFromRevenueCat(
           appleTransactionId: state.transactionId, lastEventAt,
         },
       });
-      logStatusChange(userId, null, status, "sync");
+      logStatusChange(null, status, "sync");
       return state.active;
     } catch (error) {
       const raced = await readRow(userId);
@@ -280,11 +280,12 @@ export async function syncSubscriptionFromRevenueCat(
  * structural gate (check 6) blocks new plain-log call sites.
  */
 export function logStatusChange(
-  userId: string,
   from: string | null,
   to: string,
   source: "sync" | "webhook",
 ): void {
   if (from === to) return;
-  console.info(`[subscription] ${userId} status ${from ?? "none"} -> ${to} (${source})`); // eslint-disable-line no-console
+  const safeStatus = (status: string | null) => status === null ? 'none' :
+    ['active', 'expired', 'billing_issue', 'never_subscribed'].includes(status) ? status : 'unknown';
+  console.info(`[subscription] status ${safeStatus(from)} -> ${safeStatus(to)} (${source})`); // eslint-disable-line no-console
 }

@@ -11,10 +11,17 @@ tags: [auth, billing, onboarding, changed-journey, 'fixture:unsubscribed-dev', '
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
       - waitForAnimationToEnd:
           timeout: 10000
-      - assertVisible:
-          id: welcome-start
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
 # Fresh welcome has no controls in this corner. Dismiss the Debug warning
 # window here; native LogBox is absent from the app accessibility hierarchy.
 - waitForAnimationToEnd:
@@ -156,8 +163,10 @@ tags: [auth, billing, onboarding, changed-journey, 'fixture:unsubscribed-dev', '
       enabled: true
     timeout: 15000
 - assertNotVisible: "Test Store Purchase"
-- tapOn:
-    point: "92%,93%"
+# On the paywall this coordinate would tap Not now and reopen the discount.
+# Require cancellation to restore the actual controls, then use their IDs.
+- assertNotVisible:
+    id: paywall-discount-buy
 - scrollUntilVisible:
     element:
       id: welcome-skip
@@ -179,3 +188,5 @@ tags: [auth, billing, onboarding, changed-journey, 'fixture:unsubscribed-dev', '
       enabled: true
     timeout: 15000
 - assertNotVisible: "Test Store Purchase"
+- assertNotVisible:
+    id: paywall-discount-buy

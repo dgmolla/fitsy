@@ -36,7 +36,7 @@ export function useStats(): Stats {
         // not acceptable: instrument the failure so we can see it in PostHog
         // and the dev console instead of inferring from stale numbers.
         // eslint-disable-next-line no-console
-        console.warn('[useStats] /api/restaurants/stats failed:', err);
+        console.warn('[useStats] /api/restaurants/stats failed:');
         trackStatsFetchFailed(err);
       });
   }, []);

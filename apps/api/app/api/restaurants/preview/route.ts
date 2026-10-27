@@ -109,8 +109,8 @@ export async function GET(
       .sort((a: PreviewRestaurant, b: PreviewRestaurant) => a.distanceMiles - b.distanceMiles);
 
     return NextResponse.json({ data: preview }, { status: 200 });
-  } catch (err) {
-    console.error("[GET /api/restaurants/preview] Error:", err);
+  } catch {
+    console.error("[GET /api/restaurants/preview] Error:");
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

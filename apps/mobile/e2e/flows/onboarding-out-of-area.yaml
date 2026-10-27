@@ -56,10 +56,17 @@ env:
 # Restart before opting in: neither authentication nor a coverage lookup joins the list.
 - stopApp
 - launchApp
-- extendedWaitUntil:
-    visible:
-      id: waitlist-join
-    timeout: 30000
+# XCTest can read during the launch transition, before the app's AX tree exists.
+# Retry observations only; never relaunch, clear state or bypass persistence.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: waitlist-join
+          timeout: 30000
 - assertNotVisible: "Continue with Apple"
 - tapOn:
     id: waitlist-change-area

@@ -57,7 +57,7 @@ test('menu startup retries only observations and authenticates once before readi
 
 test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-energy-sync', 'menu-load-recovery',
   'menu-macro-serving', 'onboarding-assisted-targets', 'onboarding-guided-preview', 'onboarding-out-of-area',
-  'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight', 'paywall-access', 'shuffle'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
+  'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight', 'paywall-access', 'paywall-live-terms', 'shuffle'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, {
     launchApp?: object;
     retry?: { maxRetries: number; commands: {
@@ -80,6 +80,67 @@ test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-
   for (const url of ['http://example.com:8081', 'http://localhost.evil:8081', 'http://127x0x0x1:8081']) expect(server.test(url)).toBe(false);
   expect(startup!.commands.find(step => step.extendedWaitUntil)?.extendedWaitUntil).toEqual({ visible: { id: 'welcome-start' }, timeout: 30000 });
   expect(commands.findIndex(step => step.openLink || step.tapOn?.id === 'welcome-start')).toBeGreaterThan(launch + 1);
+});
+
+test.each(['waitlist-join', 'goal-performance'])('out-of-area cold resume observes %s despite a transient XCTest read', checkpoint => {
+  type Step = string | {
+    retry?: { maxRetries: number; commands: Step[] };
+    waitForAnimationToEnd?: { timeout: number };
+    extendedWaitUntil?: { visible: { id: string; optional?: boolean }; timeout: number };
+  };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/onboarding-out-of-area.yaml'), 'utf8')) as [unknown, Step[]];
+  const resumes = commands.flatMap((step, index) => step === 'launchApp' ? [commands[index + 1]] : []);
+  expect(resumes).toHaveLength(2);
+  const readiness = resumes[checkpoint === 'waitlist-join' ? 0 : 1];
+  if (!readiness) throw new Error('Missing cold-resume readiness check');
+
+  function run(visible: string, transient: 'animation' | 'hierarchy' | null, unavailable = false) {
+    let reads = 0;
+    let failedOnce = false;
+    const observed: string[] = [];
+    function read(kind: string) {
+      reads++;
+      if (unavailable || (!failedOnce && kind === transient)) {
+        failedOnce = true;
+        throw new Error('XCTest app hierarchy unavailable');
+      }
+    }
+    function replay(steps: Step[]) {
+      for (const step of steps) {
+        if (typeof step === 'string') throw new Error(`Unexpected resume mutation: ${step}`);
+        if (step.retry) {
+          expect(step.retry.maxRetries).toBeLessThanOrEqual(2);
+          for (let attempt = 0; ; attempt++) {
+            try { replay(step.retry.commands); break; }
+            catch (error) { if (attempt >= step.retry.maxRetries) throw error; }
+          }
+        } else if (step.waitForAnimationToEnd) {
+          read('animation');
+        } else if (step.extendedWaitUntil) {
+          read('hierarchy');
+          const { visible: selector, timeout } = step.extendedWaitUntil;
+          expect(selector.optional).not.toBe(true);
+          expect(timeout).toBe(30000);
+          if (selector.id !== visible) throw new Error('Wrong resumed screen');
+          observed.push(selector.id);
+        } else throw new Error('Unexpected resume command');
+      }
+    }
+    return { replay: () => replay([readiness!]), observed, reads: () => reads, failedOnce: () => failedOnce };
+  }
+
+  for (const transient of ['animation', 'hierarchy'] as const) {
+    const device = run(checkpoint, transient);
+    device.replay();
+    expect(device.failedOnce()).toBe(true);
+    expect(device.observed).toEqual([checkpoint]);
+  }
+  const unavailable = run(checkpoint, null, true);
+  expect(unavailable.replay).toThrow('XCTest app hierarchy unavailable');
+  expect(unavailable.reads()).toBeLessThanOrEqual(3);
+  const wrongScreen = run('signup-apple', null);
+  expect(wrongScreen.replay).toThrow('Wrong resumed screen');
+  expect(wrongScreen.observed).toEqual([]);
 });
 
 test('every render smoke uses real journey setup, asserts its affected screen and saves a screenshot', () => {

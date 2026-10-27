@@ -66,7 +66,7 @@ describe("POST /api/auth/google — validation", () => {
     const res = await POST(makeRequest({}));
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/idToken/i);
+    expect(body.error).toBe("Invalid authentication input");
   });
 
   it("returns 400 on invalid JSON", async () => {

@@ -98,7 +98,15 @@ export function configurePurchases(): boolean {
     );
     return false;
   }
-  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR);
+  // Native SDK diagnostics can embed account IDs, receipts and provider bodies.
+  // Keep warnings/errors observable without forwarding the SDK message.
+  Purchases.setLogHandler(level => {
+    if (level === LOG_LEVEL.ERROR) console.warn('[purchases] sdk_error');
+    else if (level === LOG_LEVEL.WARN) console.warn('[purchases] sdk_warning');
+  });
+  void Purchases.setLogLevel(LOG_LEVEL.WARN).catch(() => {
+    console.warn('[purchases] log_configuration_failed');
+  });
   Purchases.configure({ apiKey });
   configured = true;
   return true;
@@ -150,9 +158,9 @@ export async function identifyPurchasesUser(userId: string): Promise<CustomerInf
   try {
     const { customerInfo } = await changeIdentity(() => Purchases.logIn(userId));
     return customerInfo;
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn('[purchases] logIn failed', err);
+    console.warn('[purchases] logIn failed');
     return null;
   }
 }
@@ -165,9 +173,9 @@ export async function ensurePurchasesUser(userId: string): Promise<boolean> {
       if (await Purchases.getAppUserID() !== userId) await Purchases.logIn(userId);
       return await Purchases.getAppUserID() === userId;
     });
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn('[purchases] checkout identity failed', err);
+    console.warn('[purchases] checkout identity failed');
     return false;
   }
 }
@@ -191,9 +199,9 @@ export async function fetchCustomerInfo(): Promise<CustomerInfo | null> {
   if (!configured) return null;
   try {
     return await Purchases.getCustomerInfo();
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn('[purchases] getCustomerInfo failed', err);
+    console.warn('[purchases] getCustomerInfo failed');
     return null;
   }
 }
@@ -212,9 +220,9 @@ export async function fetchOfferings(): Promise<PurchasesOfferings | null> {
   if (!configured) return null;
   try {
     return await Purchases.getOfferings();
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn('[purchases] getOfferings failed', err);
+    console.warn('[purchases] getOfferings failed');
     return null;
   }
 }
@@ -231,9 +239,9 @@ export async function restorePurchases(
       if (await Purchases.getAppUserID() !== userId || !(await isCurrentUser())) return null;
       return Purchases.restorePurchases();
     });
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn('[purchases] restorePurchases failed', err);
+    console.warn('[purchases] restorePurchases failed');
     return null;
   }
 }
@@ -305,7 +313,7 @@ export async function purchasePackage(
     const outcome = interpretPurchaseError(err);
     if (outcome === 'error') {
       // eslint-disable-next-line no-console
-      console.warn('[purchases] purchasePackage failed', err);
+      console.warn('[purchases] purchasePackage failed');
     }
     return { outcome, customerInfo: null };
   }
@@ -352,9 +360,9 @@ export async function presentPaywall(): Promise<PaywallOutcome> {
   try {
     const result = await RevenueCatUI.presentPaywall();
     return mapPaywallResult(result);
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn('[purchases] presentPaywall failed', err);
+    console.warn('[purchases] presentPaywall failed');
     return 'error';
   }
 }
@@ -368,9 +376,9 @@ export async function presentPaywallIfNeeded(
       requiredEntitlementIdentifier: entitlementId,
     });
     return mapPaywallResult(result);
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn('[purchases] presentPaywallIfNeeded failed', err);
+    console.warn('[purchases] presentPaywallIfNeeded failed');
     return 'error';
   }
 }
@@ -394,9 +402,9 @@ export async function showManageSubscriptions(customerInfo: CustomerInfo | null 
   }
   try {
     await Purchases.showManageSubscriptions();
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn('[purchases] showManageSubscriptions failed, opening URL', err);
+    console.warn('[purchases] showManageSubscriptions failed, opening URL');
     await Linking.openURL(MANAGE_SUBSCRIPTIONS_URL);
   }
 }

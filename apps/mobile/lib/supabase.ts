@@ -18,6 +18,7 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
+import { authFetch } from '@fitsy/shared/utils/authTransport';
 
 const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
@@ -57,6 +58,7 @@ export const secureStoreAdapter = {
 };
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  global: { fetch: authFetch },
   auth: {
     storage: secureStoreAdapter,
     persistSession: true,

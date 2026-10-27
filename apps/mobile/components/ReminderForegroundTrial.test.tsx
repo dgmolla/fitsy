@@ -73,7 +73,7 @@ test('a native trial scheduling failure tells the buyer the reminder is unconfir
   const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
   render(<ReminderProvider><SettingsView /></ReminderProvider>);
   await waitFor(() => expect(alert).toHaveBeenCalledWith('Trial reminder unavailable', expect.stringContaining('Check your trial end date')));
-  expect(warn).toHaveBeenCalledWith('[reminders]', 'Native schedule failed');
+  expect(warn).toHaveBeenCalledWith('[reminders] operation_failed');
   mockCustomerInfo.entitlements.all.pro = { isActive: true };
 });
 

@@ -62,8 +62,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       where: { id: auth.sub },
       data: { pushToken: token },
     });
-  } catch (err) {
-    console.error("[POST /api/user/push-token] DB update failed:", err);
+  } catch {
+    console.error("[POST /api/user/push-token] DB update failed:");
     return NextResponse.json(
       { error: "Failed to save push token" },
       { status: 500 },

@@ -9,6 +9,8 @@ import {
 import { persistEvent } from "./persistEvent";
 import { isDevelopmentEnvironment } from "@/services/runtimeEnvironment";
 import { PRO_ENTITLEMENT_ID } from "@/services/revenuecatService";
+import { parseRequestInput } from '@/lib/requestInput';
+import { lifecycleEventSchema, transferEventSchema, webhookEnvelopeSchema, WEBHOOK_BODY_MAX_BYTES, type RevenueCatEvent } from './input';
 
 function activePeriodRecorded(row: SubscriptionRow, expiresAt: Date | null): boolean {
   return row?.status === "active" &&
@@ -74,24 +76,6 @@ const HANDLED_EVENT_TYPES = new Set([
   "EXPIRATION",
   "BILLING_ISSUE",
 ]);
-
-interface RevenueCatEvent {
-  type?: string;
-  environment?: string;
-  entitlement_ids?: string[] | null;
-  app_user_id?: string;
-  /** Every app user id RevenueCat has merged into this customer. */
-  aliases?: string[];
-  product_id?: string;
-  expiration_at_ms?: number | null;
-  transaction_id?: string | null;
-  original_transaction_id?: string | null;
-  /** When RevenueCat generated the event (epoch ms). Orders deliveries. */
-  event_timestamp_ms?: number | null;
-  /** TRANSFER only: the customers the store subscription moved between. */
-  transferred_from?: string[];
-  transferred_to?: string[];
-}
 
 const ANONYMOUS_PREFIX = "$RCAnonymousID:";
 
@@ -159,10 +143,6 @@ function sameInstant(a: Date | null, b: Date | null): boolean {
   return (a?.getTime() ?? null) === (b?.getTime() ?? null);
 }
 
-function isoOrNull(d: Date | null): string {
-  return d ? d.toISOString() : "null";
-}
-
 // TRANSFER fans out to RevenueCat (8s timeout each, in parallel) plus DB
 // writes - give it headroom over Vercel's 10s default.
 export const maxDuration = 30;
@@ -183,17 +163,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   // ─── Parse ─────────────────────────────────────────────────────────────────
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  const body = await parseRequestInput(request, webhookEnvelopeSchema, WEBHOOK_BODY_MAX_BYTES, 'Invalid webhook payload');
+  if (body instanceof NextResponse) return body;
+  // Unknown events are intentionally opaque, including future identity fields.
+  if (body.event.type !== 'TRANSFER' && !HANDLED_EVENT_TYPES.has(body.event.type)) {
+    return NextResponse.json({ received: true });
   }
-
-  const event = (body as { event?: RevenueCatEvent } | null)?.event;
-  if (!event || typeof event.type !== "string") {
-    return NextResponse.json({ error: "Missing event" }, { status: 400 });
-  }
+  const parsed = (body.event.type === 'TRANSFER' ? transferEventSchema : lifecycleEventSchema).safeParse(body.event);
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 });
+  const event = parsed.data;
 
   // A genuine sandbox purchase must never grant production access. TRANSFER
   // has no entitlement list, may omit environment, and is resolved by the
@@ -206,10 +184,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
   if (HANDLED_EVENT_TYPES.has(event.type)) {
-    if (!Array.isArray(event.entitlement_ids)) {
-      return NextResponse.json({ error: "Missing entitlements" }, { status: 400 });
-    }
-    if (!event.entitlement_ids.includes(PRO_ENTITLEMENT_ID)) return NextResponse.json({ received: true });
+    if (!event.entitlement_ids?.includes(PRO_ENTITLEMENT_ID)) return NextResponse.json({ received: true });
   }
 
   if (event.type === "TRANSFER") {
@@ -226,12 +201,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // TEST events (dashboard) and any lifecycle type we don't model: acknowledge
-  // without persisting, so an unrecognized event can't change entitlement state.
-  if (!HANDLED_EVENT_TYPES.has(event.type)) {
-    return NextResponse.json({ received: true }, { status: 200 });
-  }
-
   const appUserId = resolveUserId(event);
   // Anonymous ids (pre-login, never merged) and missing ids can't map to a
   // User row. Ack so RevenueCat doesn't retry indefinitely; nothing to persist.
@@ -239,23 +208,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Only accept a sane positive epoch-ms; ignore 0/negative/garbage.
-  const expiresAt =
-    typeof event.expiration_at_ms === "number" && event.expiration_at_ms > 0
-      ? new Date(event.expiration_at_ms)
-      : null;
+  const expiresAt = event.expiration_at_ms == null ? null : new Date(event.expiration_at_ms);
   const status = statusForEvent(event.type, expiresAt);
   const activePeriodEvent = status === "active" &&
     ["INITIAL_PURCHASE", "RENEWAL", "NON_RENEWING_PURCHASE", "SUBSCRIPTION_EXTENDED"].includes(event.type);
   const plan = event.product_id ?? "unknown";
   const appleTransactionId =
     event.original_transaction_id ?? event.transaction_id ?? null;
-  // An event with no usable timestamp is treated as "now" rather than dropped:
+  // An event with an omitted/null timestamp is treated as "now" rather than dropped:
   // losing a real lifecycle event is worse than applying it out of order.
-  const eventAt =
-    typeof event.event_timestamp_ms === "number" && event.event_timestamp_ms > 0
-      ? new Date(event.event_timestamp_ms)
-      : new Date();
+  const eventAt = event.event_timestamp_ms == null ? new Date() : new Date(event.event_timestamp_ms);
 
   // ─── Persist ─────────────────────────────────────────────────────────────────
   try {
@@ -277,21 +239,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // with nothing left to correct it. A stale event that agrees with the
     // row is simply acked.
     if (existing?.lastEventAt && existing.lastEventAt.getTime() > eventAt.getTime()) {
-      const differs = [
-        ...(existing.status !== status ? [`status ${existing.status} vs ${status}`] : []),
-        ...(!sameInstant(existing.expiresAt, expiresAt)
-          ? [`expiresAt ${isoOrNull(existing.expiresAt)} vs ${isoOrNull(expiresAt)}`]
-          : []),
-      ];
-      if (differs.length > 0) {
-        console.warn(
-          `[subscription] ${appUserId} stale ${event.type} (${eventAt.toISOString()}) ` +
-            `disagrees with row @ ${existing.lastEventAt.toISOString()} (${differs.join(", ")}); re-syncing`,
-        );
+      if (existing.status !== status || !sameInstant(existing.expiresAt, expiresAt)) {
+        console.warn('[subscription] stale_event_conflict');
         const reconciled = await syncSubscriptionFromRevenueCat(appUserId);
         const pendingPeriod = activePeriodEvent && !activePeriodRecorded((await readUserAndRow(appUserId)).row, expiresAt);
         if (reconciled === null || pendingPeriod) {
-          console.warn(`[subscription] ${appUserId} tiebreak sync failed: RevenueCat ${reconciled === null ? "unreachable" : "still inactive after purchase"}`);
+          console.warn(reconciled === null ? '[subscription] tiebreak_unavailable' : '[subscription] purchase_reconciliation_pending');
           return NextResponse.json({ error: "RevenueCat lookup unresolved" }, { status: 500 });
         }
       }

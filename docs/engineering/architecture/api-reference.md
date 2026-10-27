@@ -479,7 +479,13 @@ Idempotent: each row records the `event_timestamp_ms` of the newest event applie
 If a stale event would have produced a different status or `expiresAt` than the stored row, the handler logs a `[subscription]` warning and re-reads RevenueCat via the same sync as the tiebreaker; if RevenueCat cannot be read it returns 500 so RevenueCat retries, exactly as `TRANSFER` does.
 A stale event that agrees with the row is acked without any lookup.
 An event without a timestamp is applied as "now" rather than dropped.
-Every status transition from either write path logs one `[subscription] <userId> status <from> -> <to> (<webhook|sync>)` warning for Vercel log search.
+Bodies are limited to 256 KiB of actual bytes, and modeled events validate nested fields before any provider lookup or database write.
+Identifier strings are bounded to 1,024 characters and identity/entitlement arrays to 100 entries each; event types are bounded to 128 characters.
+Present lifecycle dates must be positive integer epoch milliseconds representable by JavaScript `Date`; omitted/null expiration still means lifetime, and omitted/null event time still falls back to now.
+Malformed modeled payloads return `400 { error: "Invalid webhook payload" }`, invalid JSON returns `400 { error: "Invalid JSON body" }`, and oversized bodies return `413 { error: "Request body too large" }`.
+Additional provider fields are ignored, and future/TEST event types are acknowledged without inspecting their identity or lifecycle fields or changing subscription state.
+Every status transition from either write path logs one `[subscription] status <from> -> <to> (<webhook|sync>)` info line, using only known status labels and no account identifier.
+Degraded paths log fixed codes and safe retry counts/durations, without account IDs, transaction IDs, lifecycle dates or raw provider/database errors.
 
 ---
 
