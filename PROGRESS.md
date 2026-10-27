@@ -52,7 +52,14 @@ The focused selector initially retained only the old suite; the supported setter
 The repository API-key review adapter is unavailable because `CODEX_API_KEY` is absent; no substitute credential or implementer verdict is allowed.
 The existing subscription reviewer must publish its own exact-head `AI review` after PR creation, without this task reading or modifying its protected checkout, state, controls or attributes.
 If that existing reviewer cannot run or rejects input size, report the genuine failure and leave merge blocked; do not alter it.
-Next: publish the current committed candidate through normal hooks, open the requested PR, publish selector-computed product-flow N/A, wait for trusted CI and the existing local AI review, then merge only on genuine green gates.
+PR https://github.com/dgmolla/fitsy/pull/566 opened on `e963596` after ordinary hooks passed all eight cheap gates and all 42 focused tests.
+The initial product-flow publisher fetched current main and refused because new main `79a47ec` was not yet an ancestor of this branch, retaining a genuine failed status on the old head.
+Recovery assessment: the selected ship-branch skill, normal Git merge and existing product-flow publisher provide the supported recovery; changing its freshness check or any reviewer control is excluded.
+Merged `origin/main` normally without conflicts, retaining all task commits and the source-bound historical replay.
+The next publisher invocation correctly refused the unpublished local merge head; publication must follow the ordinary push before evidence is republished.
+The upstream change adds optional simulator Slack previews and does not change eval adapters, prompts, fixtures or scoring.
+The existing publisher's exact-ancestor and exact-remote-head guards detected both conditions; no control change is needed to prevent an unsafe publication.
+Next: push the reconciled frozen head through ordinary hooks, publish computed N/A, then await current-head CI and the existing independent local review without protected-checkout access.
 
 ## Previous task history
 
