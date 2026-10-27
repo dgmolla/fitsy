@@ -23,6 +23,11 @@ All seven onboarding journeys open the area chooser through `helpers/open-locati
 `retryTapIfNoChange` can accept press feedback or unrelated hierarchy changes while the sheet stays closed; the helper retries only this idempotent action against its required outcome.
 `onboarding-out-of-area` retains its separate sheet assertion, DTLA selection, authenticated coverage and cold-start persistence checks.
 `OnboardingNavigationLocation.test.tsx` replays its recovery against the real location, waitlist and goal screens, including a cancelled first touch and a permanently unresponsive chooser that must fail without selecting an area or joining the waitlist.
+Both out-of-area cold resumes retry only bounded animation and accessibility observations before requiring the persisted waitlist or goal screen.
+`scripts/sim/ci.test.ts` exercises transient XCTest reads and rejects a permanently unavailable hierarchy or an incorrect resumed screen without relaunching or clearing app state.
+`paywall-live-terms` reconnects a cleared Debug client to local Metro, then uses semantic controls throughout live purchase recovery.
+After Test Store cancellation, it requires the discount modal to disappear before retrying a failed purchase; the welcome screen's warning-dismissal coordinate would tap Not now here and reopen the modal.
+`PaymentCompletionCheckout.test.tsx` replays those saved recovery commands against the real paywall and native SDK boundary, retaining the cancellation, safe failure message and incomplete-onboarding assertions.
 CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
 The read-only classifier supplies data to the protected `sim-scope.yml` publisher; the bounded status description contains scope and flow count, and the poller reads exact names from the artifact.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
