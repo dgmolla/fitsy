@@ -21,14 +21,63 @@ const originalFetch = global.fetch;
 let requests: { url: string; signal?: AbortSignal; resolve: (value: Response) => void }[];
 const row = (id: string) => ({ id, name: `${id} restaurant`, address: 'Test', lat: 34.04, lng: -118.24, distanceMiles: 1, cuisineTags: [], chainFlag: false,
   bestMatch: { menuItemId: id + '-dish', name: id + ' meal', calories: 600, proteinG: 40, carbsG: 60, fatG: 20, confidence: 'HIGH', matchScore: 0 } });
-function respond(index: number, id: string, extraMeta: { locked?: boolean; nextCursor?: string | null } = {}) {
-  requests[index].resolve({ ok: true, status: 200, json: async () => ({ data: [row(id)], meta: { radiusMiles: 3, nearbyDishCount: 90, limit: 20, total: 1, locked: true, nextCursor: null,
+function respond(index: number, id: string | string[], extraMeta: { locked?: boolean; nextCursor?: string | null } = {}) {
+  requests[index].resolve({ ok: true, status: 200, json: async () => ({ data: (Array.isArray(id) ? id : [id]).map(row), meta: { radiusMiles: 3, nearbyDishCount: 90, limit: 20, total: 1, locked: true, nextCursor: null,
     ...extraMeta } }) } as Response);
 }
 beforeEach(() => {
   jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
   requests = [];
   global.fetch = jest.fn((url, init) => new Promise(resolve => requests.push({ url: String(url), signal: init?.signal ?? undefined, resolve }))) as typeof fetch;
+});
+
+it('keeps shuffled results and pagination together, then replaces them for a new query', async () => {
+  const { result, rerender } = renderHook(({ query }) => useDiscoveryResults({ inputs, query, location, canSearch: true,
+    targetsLoaded: true, previewReady: true, isOnboardingPreview: false }), { initialProps: { query: 'shuffle-pages' } });
+  await act(async () => {});
+  expect(result.current.canShuffle).toBe(false);
+  await act(async () => respond(0, ['one', 'two', 'three'], { locked: false, nextCursor: 'page-two' }));
+  const original = result.current.results;
+  act(() => result.current.handleShuffle());
+  expect(result.current.results[0]).not.toBe(original[0]);
+  expect(new Set(result.current.results)).toEqual(new Set(original));
+  expect(result.current.nextCursor).toBe('page-two');
+  expect(requests).toHaveLength(1);
+  act(() => { void result.current.handleEndReached(); });
+  await act(async () => {});
+  expect(Object.fromEntries(new URL(requests[1].url).searchParams)).toMatchObject({ cursor: 'page-two' });
+  act(() => result.current.handleShuffle());
+  const reorderedPage = result.current.results;
+  await act(async () => respond(1, ['two', 'four'], { locked: false, nextCursor: null }));
+  expect(result.current.results.slice(0, 3)).toEqual(reorderedPage);
+  expect(result.current.results.map(item => item.id).sort()).toEqual(['four', 'one', 'three', 'two']);
+  expect(result.current.nextCursor).toBeNull();
+  rerender({ query: 'new-after-shuffle' });
+  expect(result.current.canShuffle).toBe(false);
+  act(() => result.current.handleShuffle());
+  expect(result.current.results.slice(0, 3)).toEqual(reorderedPage);
+  await act(async () => jest.advanceTimersByTime(600));
+  await act(async () => respond(2, ['new-one', 'new-two'], { locked: false }));
+  expect(result.current.results.map(item => item.id)).toEqual(['new-one', 'new-two']);
+  expect(result.current.canShuffle).toBe(true);
+});
+
+it.each([true, false])('preserves access while shuffling and disables it during refresh (locked=%s)', async locked => {
+  const { result } = renderHook(() => useDiscoveryResults({ inputs, query: `shuffle-access-${locked}`, location, canSearch: true,
+    targetsLoaded: true, previewReady: true, isOnboardingPreview: false }));
+  await act(async () => {});
+  await act(async () => respond(0, ['one', 'two'], { locked }));
+  act(() => result.current.handleShuffle());
+  expect(result.current.locked).toBe(locked);
+  const shuffled = result.current.results;
+  act(() => { void result.current.handleRefresh(); });
+  await act(async () => {});
+  expect(result.current.canShuffle).toBe(false);
+  act(() => result.current.handleShuffle());
+  expect(result.current.results).toBe(shuffled);
+  await act(async () => respond(1, ['refreshed-one', 'refreshed-two'], { locked }));
+  expect(result.current.results.map(item => item.id)).toEqual(['refreshed-one', 'refreshed-two']);
+  expect(result.current.canShuffle).toBe(true);
 });
 afterEach(() => { global.fetch = originalFetch; jest.useRealTimers(); });
 

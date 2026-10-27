@@ -62,7 +62,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const canSearch = (hasInputs || hasQuery || isOnboardingPreview) && previewReady;
   const [targetsLoaded, setTargetsLoaded] = useState(false);
   const discovery = useDiscoveryResults({ inputs, query, location, canSearch, targetsLoaded, previewReady, isOnboardingPreview });
-  const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, doFetch, handleRefresh, handleEndReached } = discovery;
+  const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, doFetch, handleRefresh, handleEndReached, canShuffle, handleShuffle } = discovery;
   const tourEnabled = isOnboardingPreview && locked === true && !filterVisible && !locationPickerVisible;
   const tourReady = previewTourReady({ preview: isOnboardingPreview, locked, loading, error, outOfArea, fetchSeq });
   const [emptyTour, setEmptyTour] = useState(false);
@@ -212,5 +212,5 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible: tour.visible, startTour: tour.start,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown: demo.showStep, cancelTourTyping: demo.cancel, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
-    unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached };
+    unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached, canShuffle, handleShuffle };
 }
