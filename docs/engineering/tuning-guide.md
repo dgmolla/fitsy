@@ -34,7 +34,7 @@ not here.
 | A shadow check has been quiet two weeks | PR the registry: `blocking: shadow` -> `true` |
 | A lens is noisy | Edit its `.claude/lenses/<name>.md`, compare independent findings against captured incident examples, and run `node --test scripts/review/simple-review.test.mjs` |
 | Mutation score stuck | Surviving mutants in `.evidence/mutation/report.json` name the exact untested lines |
-| An agent needs prod data | It does not; `scripts/dev/` refuses prod, `FITSY_ALLOW_PROD=1` is the deliberate exception |
+| An agent needs prod data | It does not; `scripts/dev/` refuses prod unconditionally; see [database guardrails](devops/db-guardrails.md) |
 
 Historical note: the pre-pipeline knobs (`human-review-gate: cruise`,
 `wave-progression`, `active-roles`) governed the sprint-skill review loop that

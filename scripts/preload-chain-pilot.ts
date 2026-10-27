@@ -1,4 +1,5 @@
 /** Offline catalog batches + existing-menu updates. The original seven-serving pilot remains the default. */
+import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
 import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
@@ -17,7 +18,7 @@ const [command, path, expectedHash] = args.filter(a => !a.startsWith("--"));
 if (!path || !["menu-inventory", "catalog-plan", "catalog-apply", "catalog-rollback", "april-plan", "april-apply", "april-rollback"].includes(command ?? "")) {
   throw new Error("Usage: preload-chain-pilot.ts <menu-inventory|catalog-plan|catalog-apply|catalog-rollback|april-plan|april-apply|april-rollback> <path> [plan-hash] [--batch=manifest.json] [--limit=N] [--chunk-size=1..100]");
 }
-if (options.some(a => !a.startsWith("--batch=") && !a.startsWith("--limit=") && !a.startsWith("--chunk-size=")) || options.filter(a => a.startsWith("--batch=")).length > 1) throw new Error("Unknown or duplicate batch option");
+if (options.some(a => !a.startsWith("--batch=") && !a.startsWith("--limit=") && !a.startsWith("--chunk-size=") && a !== "--prod") || options.filter(a => a.startsWith("--batch=")).length > 1) throw new Error("Unknown or duplicate batch option");
 if (options.filter(a => a.startsWith("--chunk-size=")).length > 1 || (command !== "april-apply" && options.some(a => a.startsWith("--chunk-size=")))) throw new Error("Chunk size applies only to April apply");
 const chunkText = options.find(a => a.startsWith("--chunk-size="))?.slice(13) ?? "1";
 const chunkSize = Number(chunkText);
@@ -31,7 +32,7 @@ let url: URL;
 try { url = new URL(rawUrl.trim()); } catch { throw new Error("Invalid database URL"); }
 const target = stateHash([url.host, url.pathname, url.username]);
 url.searchParams.set("connection_limit", "1");
-const p = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+const p = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(url.toString()) } } });
 const report = (data: unknown) => process.stdout.write(JSON.stringify(data) + "\n");
 function save(file: string, data: unknown) {
   const fd = openSync(file, "wx", 0o600);

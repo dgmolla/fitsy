@@ -1,3 +1,27 @@
+# Database guardrails Phase A
+
+**TL;DR:** Auditing database access and installing script guardrails in the isolated guardrails clone.
+
+Owner: this session, branch `data/guardrails-phase-a`, starting from fresh `origin/main`.
+Only `/Users/dawitmolla/fitsy-guardrails` is writable source; the requested secrets file and `/tmp/ga/report.md` are explicit output exceptions.
+No access to the four excluded checkouts, no paid provider calls, no PROD database connection or write, and no Supabase account token use.
+Audit sources are repository configuration, Vercel environment names, GitHub secret names and DEV-only database access.
+The existing `backfill-chain-flag.ts --dry-run` attempted one connection to a loopback fixture carrying a synthetic production username; no target guard refused it.
+Selected workflow: the installed ship-branch skill and its standalone Fitsy profile, ordinary hooks, independent local AI review, current green CI and ordinary squash merge.
+The shared guard is integrated into script writers, DEV/Auth fixtures, the owned local DB launcher and the production migration entrypoint.
+The legacy landing --apply path refuses before files or database access.
+The same loopback CLI regression now records zero connections; focused guard, local database launcher, pipeline-fixture and production-build tests pass.
+DEV catalogs confirmed RLS on all 17 application/operational tables; PostGIS spatial_ref_sys is the sole extension-table exception.
+DEV role creation first rolled back on Supabase SQLSTATE 42501 from an unnecessary ALTER of privileged role attributes.
+The provisioner now checks the fresh role defaults instead and retains secret-safe stage/SQLSTATE diagnostics through the actual entrypoint.
+The corrected provisioner saved dev_db_url and dev_db_readonly_url in ~/Desktop/secrets.env with mode 0600.
+Actual credential acceptance passed: SELECT on 18 public tables, zero write-capable tables, read-only default on, and six denied zero-row DML probes including after session read-only was disabled.
+No PROD role, credential change or deployable role migration was introduced.
+Current validation: cheap gates and selected focused tests; the supported planner requires the full native flow set because the existing production migration entrypoint changed.
+Next: freeze the reviewed source, publish normally, obtain current-head local AI review, CI and the required native acceptance before ordinary squash merge.
+
+## Earlier task history retained from main
+
 **TL;DR:** All 30 failed Haiku macro cases now parse strictly; new spend is $0.093628; review and CI remain.
 
 ## Haiku format fix and rerun

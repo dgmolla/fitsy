@@ -1,7 +1,7 @@
 import { assertNotProd, isProdUrl, prodReadOnlyUrl, PROD_PROJECT_REF } from "./guard";
 
 const PROD = `postgresql://postgres:x@db.${PROD_PROJECT_REF}.supabase.co:5432/postgres`;
-const DEV = "postgresql://postgres:x@db.abcdefghijklmnopqrst.supabase.co:5432/postgres";
+const DEV = "postgresql://postgres:x@db.kegycybiruksmrzvniha.supabase.co:5432/postgres";
 
 describe("guard", () => {
   const saved = process.env["FITSY_ALLOW_PROD"];
@@ -21,9 +21,9 @@ describe("guard", () => {
     expect(assertNotProd(DEV, "X")).toBe(DEV);
   });
 
-  it("allows prod only with FITSY_ALLOW_PROD=1", () => {
+  it("refuses prod even with the retired local override", () => {
     process.env["FITSY_ALLOW_PROD"] = "1";
-    expect(assertNotProd(PROD, "X")).toBe(PROD);
+    expect(() => assertNotProd(PROD, "X")).toThrow(/PRODUCTION/);
   });
 
   it("fails with a fix hint when unset", () => {

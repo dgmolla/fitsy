@@ -7,10 +7,8 @@ set -euo pipefail
 if [ "${VERCEL_ENV:-}" = "production" ]; then
   bash scripts/deploy/migrate-prod.sh
 else
-  # Development/preview bindings must never contain either production URL.
-  case "${POSTGRES_URL_NON_POOLING:-} ${POSTGRES_PRISMA_URL:-}" in
-    *zaxkmjqozvmbifiwbxps*) echo "refusing: nonproduction build points at PRODUCTION" >&2; exit 1 ;;
-  esac
+  node --import tsx scripts/lib/db-target-guard.ts --dev-only \
+    --env=POSTGRES_URL_NON_POOLING --env=POSTGRES_PRISMA_URL
 fi
 if [ "${VERCEL_ENV:-}" = "preview" ]; then
   case "${POSTGRES_URL_NON_POOLING:-}" in

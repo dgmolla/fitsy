@@ -311,10 +311,11 @@ class VercelBuildTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='fitsy-vercel-build-')
         self.root = Path(self.temp.name)
-        for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh'):
+        for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh', 'scripts/lib/db-target-guard.ts'):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
+        (self.root / 'node_modules').symlink_to(ROOT / 'node_modules', target_is_directory=True)
         self.bin = self.root / 'bin'
         self.bin.mkdir()
         for name in ('npx', 'npm'):
@@ -413,7 +414,7 @@ class VercelBuildTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_preview_migrates_only_development_and_development_refuses_either_production_binding(self):
-        dev = 'postgresql://postgres.dev:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
         result, calls = self.drive(VERCEL_ENV='preview', POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, ['npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])

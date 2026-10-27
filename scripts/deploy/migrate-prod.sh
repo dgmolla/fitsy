@@ -14,13 +14,13 @@ if [ "${VERCEL:-}" = "1" ]; then
      [[ ! "${VERCEL_GIT_COMMIT_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; then
     echo "refusing: production migration requires fitsy-api Git main production build" >&2; exit 1
   fi
-elif [ "${FITSY_ALLOW_PROD:-}" = "1" ] && [ "${GITHUB_ACTIONS:-}" != "true" ]; then
-  # Explicit existing operator recovery, never a second routine CI writer.
-  : "${PROD_DATABASE_URL:?PROD_DATABASE_URL required for operator migration}"
-  export POSTGRES_URL_NON_POOLING="$PROD_DATABASE_URL" POSTGRES_PRISMA_URL="$PROD_DATABASE_URL"
 else
   echo "refusing: production migration is owned by the Vercel Git build" >&2; exit 1
 fi
+# The verified Git main deployment is the sole routine production migration owner.
+# Supply both explicit intentions here without changing production credentials.
+FITSY_ALLOW_PROD_WRITE=1 node --import tsx scripts/lib/db-target-guard.ts --prod \
+  --env=POSTGRES_URL_NON_POOLING --env=POSTGRES_PRISMA_URL
 # Check target identity, not a substring that could appear in a password.
 # Read credentials only from the existing environment, never argv or output.
 node <<'NODE'

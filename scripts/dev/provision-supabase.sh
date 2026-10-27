@@ -53,7 +53,7 @@ else
     sleep 10
   done
   [ "$STATUS" = "ACTIVE_HEALTHY" ] || { log "project not healthy after 10 min (status=$STATUS)"; exit 1; }
-  log "DB password (store in your password manager, it is not retrievable later): $DB_PASS"
+  log "DB password generated; retain it privately without logging its value."
 fi
 
 [ "$REF" != "$PROD_REF" ] || { log "refusing to wire the PRODUCTION project as dev"; exit 1; }
@@ -101,6 +101,8 @@ push FITSY_ENV "dev"
 # ---------------------------------------------------------------------------
 export POSTGRES_PRISMA_URL="$POOLED_URL" POSTGRES_URL_NON_POOLING="$DIRECT_URL" \
        SUPABASE_URL="$SUPABASE_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY"
+node --import tsx scripts/lib/db-target-guard.ts --dev-only \
+  --env=POSTGRES_URL_NON_POOLING --env=POSTGRES_PRISMA_URL
 log "prisma migrate deploy"
 npx prisma migrate deploy --schema prisma/schema.prisma
 log "seed"

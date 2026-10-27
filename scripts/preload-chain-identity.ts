@@ -1,4 +1,5 @@
 /** Reviewed identity onboarding. No menu items or nutrition estimates are changed. */
+import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
 import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
@@ -6,8 +7,9 @@ import { stateHash } from "../apps/api/services/chainPilotPlan";
 import { planChainIdentity, readChainIdentities, applyChainIdentity, rollbackChainIdentity,
   type ChainIdentityPlan, type ChainIdentityJournal } from "../apps/api/services/chainIdentityPlan";
 
-const [command, path, input] = process.argv.slice(2);
-if (!path || !input || process.argv.length !== 5 || !["plan", "apply", "rollback"].includes(command ?? "")) {
+const positional = process.argv.slice(2).filter(arg => arg !== "--prod");
+const [command, path, input] = positional;
+if (!path || !input || positional.length !== 3 || !["plan", "apply", "rollback"].includes(command ?? "")) {
   throw new Error("Usage: preload-chain-identity.ts plan <output> <reviewed-batch> | apply <plan-file> <hash> | rollback <journal-file> <hash>");
 }
 const raw = process.env["POSTGRES_URL_NON_POOLING"];
@@ -16,7 +18,7 @@ let url: URL;
 try { url = new URL(raw.trim()); } catch { throw new Error("Invalid database URL"); }
 const target = stateHash([url.host, url.pathname, url.username]);
 url.searchParams.set("connection_limit", "1");
-const p = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+const p = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(url.toString()) } } });
 function save(file: string, value: unknown) {
   const fd = openSync(file, "wx", 0o600);
   try { writeFileSync(fd, JSON.stringify(value, null, 2) + "\n"); fsyncSync(fd); } finally { closeSync(fd); }

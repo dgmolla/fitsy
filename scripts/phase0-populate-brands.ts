@@ -7,13 +7,14 @@
  *   --apply   actually write (default is dry-run)
  * Existing brands require preload-chain-identity.ts for reviewed corrections.
  */
+import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
 import { PrismaClient } from "@prisma/client";
 import { readFileSync, existsSync } from "node:fs";
 const raw = process.env["POSTGRES_URL_NON_POOLING"];
 if (!raw) throw new Error("POSTGRES_URL_NON_POOLING required; choose the target explicitly");
 let url: URL;
 try { url = new URL(raw.trim()); } catch { throw new Error("Invalid database URL"); }
-const p = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+const p = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(url.toString()) } } });
 const APPLY = process.argv.includes("--apply");
 
 const MIN_ITEMS = 5, PAIR_CAP = 30, DIST_BEST = 0.5, DIST_REVIEW = 0.3, GEN_BEST = 0.6, GEN_REVIEW = 0.45, ISOLATED = 0.2, DISTINCT_TOKEN_MAXFREQ = 2;

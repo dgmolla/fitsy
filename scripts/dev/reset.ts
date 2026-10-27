@@ -10,7 +10,8 @@
 
 import { PrismaClient } from "@prisma/client";
 import { createClient } from "@supabase/supabase-js";
-import { assertNotProd, hostOf, isProdUrl } from "./lib/guard";
+import { assertNotProd, hostOf } from "./lib/guard";
+import { assertDevSupabase } from "../lib/db-target-guard";
 import { seedUsers } from "../../prisma/seed";
 
 const USER_TABLES = ["Feedback", "SavedItem", "Subscription", "MacroTarget", "LaunchWaitlist", "User"];
@@ -19,8 +20,7 @@ async function deleteAllAuthUsers(): Promise<number> {
   const url = process.env["SUPABASE_URL"];
   const key = process.env["SUPABASE_SERVICE_ROLE_KEY"];
   if (!url || !key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
-  if (isProdUrl(url) && process.env["FITSY_ALLOW_PROD"] !== "1") throw new Error("SUPABASE_URL points at production auth. Refusing.");
-  const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  const admin = createClient(assertDevSupabase(url), key, { auth: { autoRefreshToken: false, persistSession: false } });
   let deleted = 0;
   for (;;) {
     const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
