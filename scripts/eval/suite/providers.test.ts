@@ -418,7 +418,7 @@ test('real runner consumes both model clients, accounts both estimator stages, a
     expect(existsSync(join(directory, 'results/.jev.lock'))).toBe(false);
     const ledger = readFileSync(join(directory, 'results/spend.jsonl'), 'utf8');
     delete process.env['ANTHROPIC_API_KEY']; delete process.env['OPENROUTER_API_KEY'];
-    const network = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden during replay'));
+    const network = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden during replay')).mockClear();
     const replay = await run(['--methods=haiku,qwen', '--tier=curated', '--split=dev', '--live', '--replay-only'], directory);
     expect(replay.stopReason).toBeNull(); expect(replay.accounting.requests).toBe(0);
     expect(replay.accounting.reusedRequests).toBe(6); expect(replay.accounting.runKnownUsd).toBe(0);
