@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { ShuffleResponse } from '@fitsy/shared';
 import { getEntitlementStatus, optionalSubscription, syncSubscriptionFromRevenueCat } from '@/lib/subscription';
-import { createRateLimiter } from '@/lib/rateLimit';
+import { createRateLimiter, rateLimitResponse } from '@/lib/rateLimit';
 import { parseShuffleParams, type ShuffleParams } from '@/lib/shuffleParams';
 import { ShuffleCache } from '@/lib/shuffleSelection';
 import { findShuffle } from '@/lib/shuffleService';
 
-const limiter = createRateLimiter({ windowMs: 60_000, max: 30 });
+const limiter = createRateLimiter({ namespace: 'shuffle-user', windowMs: 60_000, max: 30 });
 const cache = new ShuffleCache<ShuffleResponse>();
 const headers = { 'Cache-Control': 'private, no-store' };
 // A denied caller can need the bounded 8 s RevenueCat read plus cold-start/DB time.
@@ -24,10 +24,8 @@ export async function GET(request: NextRequest) {
     // Always read the current verdict, including for cache hits and previously entitled callers.
     const { payload } = subscription;
     const principal = `user:${payload.sub}`;
-    const limited = limiter.check(principal);
-    if (!limited.ok) return NextResponse.json({ error: 'Too many requests' }, {
-      status: 429, headers: { ...headers, 'Retry-After': String(Math.ceil(limited.retryAfterMs / 1000)) },
-    });
+    const limited = await limiter.check(principal);
+    if (!limited.ok) return rateLimitResponse(limited);
     let { entitled } = subscription;
     if (payload && !entitled) {
       // Direct callers do not run the mobile purchase/sign-in sync first.

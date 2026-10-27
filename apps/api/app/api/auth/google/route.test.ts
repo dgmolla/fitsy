@@ -1,3 +1,4 @@
+import { useRateLimitTransport } from "@/tests/fixtures/rateLimitTransport";
 // ─── Mock modules ─────────────────────────────────────────────────────────────
 
 jest.mock("@/lib/supabase", () => ({
@@ -19,11 +20,6 @@ jest.mock("@/lib/restaurantService", () => {
     },
   };
 });
-
-jest.mock("@/lib/rateLimit", () => ({
-  ...jest.requireActual("@/lib/rateLimit"),
-  authLimiter: { check: () => ({ ok: true, remaining: 9, retryAfterMs: 0 }) },
-}));
 
 import { POST } from "./route";
 import { NextRequest } from "next/server";
@@ -52,6 +48,8 @@ beforeEach(() => {
   const user = (prisma as unknown as { user: { findUnique: jest.Mock; update: jest.Mock; upsert: jest.Mock } }).user;
   (prisma.$transaction as jest.Mock).mockImplementation(async (fn: (tx: { user: typeof user }) => unknown) => fn({ user }));
 });
+
+useRateLimitTransport();
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/auth/google", {

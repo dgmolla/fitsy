@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/services/authService";
 import type { JwtPayload } from "@/services/authService";
-import { dataIpLimiter, dataUserLimiter, type RateLimitResult } from "@/lib/rateLimit";
-
-function limited(result: RateLimitResult): NextResponse {
-  return NextResponse.json({ error: "Too many requests" }, {
-    status: 429,
-    headers: { "Retry-After": String(Math.max(1, Math.ceil(result.retryAfterMs / 1000))), "Cache-Control": "private, no-store" },
-  });
-}
+import { dataIpLimiter, dataUserLimiter, rateLimitResponse } from "@/lib/rateLimit";
+import { trustedClientIp } from '@/lib/clientIp';
 
 function unauthorized(): NextResponse {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
@@ -32,13 +26,8 @@ export async function requireAuth(
   const token = authHeader?.match(/^Bearer ([^\s]+)$/i)?.[1];
   if (!token) return unauthorized();
 
-  // Vercel overwrites these proxy headers. Prefer its canonical client IP.
-  // Local deployments must likewise sit behind a trusted forwarding proxy.
-  const ip = request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim()
-    || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-    || request.headers.get("x-real-ip")?.trim() || "unknown";
-  const ipLimit = dataIpLimiter.check(ip);
-  if (!ipLimit.ok) return limited(ipLimit);
+  const ipLimit = await dataIpLimiter.check(trustedClientIp(request));
+  if (!ipLimit.ok) return rateLimitResponse(ipLimit);
 
   let payload: JwtPayload;
   try {
@@ -46,7 +35,7 @@ export async function requireAuth(
   } catch {
     return unauthorized();
   }
-  const userLimit = dataUserLimiter.check(payload.sub);
-  if (!userLimit.ok) return limited(userLimit);
+  const userLimit = await dataUserLimiter.check(payload.sub);
+  if (!userLimit.ok) return rateLimitResponse(userLimit);
   return payload;
 }

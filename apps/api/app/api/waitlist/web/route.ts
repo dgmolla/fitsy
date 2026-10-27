@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/restaurantService";
-import { waitlistLimiter } from "@/lib/rateLimit";
+import { waitlistLimiter, rateLimitResponse } from "@/lib/rateLimit";
+import { trustedClientIp } from "@/lib/clientIp";
 import { isValidWaitlistEmail, normalizeEmail } from "@/lib/waitlist";
 import { sendWaitlistConfirmation } from "@/lib/waitlistConfirmSend";
 
@@ -27,20 +28,8 @@ export const runtime = "nodejs";
  * was already on the list, so the form cannot be used to probe membership.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown";
-  const limit = waitlistLimiter.check(ip);
-  if (!limit.ok) {
-    return NextResponse.json(
-      { error: "Too many requests" },
-      {
-        status: 429,
-        headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) },
-      },
-    );
-  }
+  const limit = await waitlistLimiter.check(trustedClientIp(request));
+  if (!limit.ok) return rateLimitResponse(limit);
 
   let body: unknown;
   try {

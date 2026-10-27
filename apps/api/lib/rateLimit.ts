@@ -1,23 +1,18 @@
-/**
- * In-process sliding-window rate limiter.
- *
- * Limitations: per-instance (resets on serverless cold starts, no cross-instance
- * sharing). Good enough as a deterrent for MVP; replace with Upstash Redis for
- * production hardening (SEC-02b).
- *
- * Usage:
- *   const limiter = createRateLimiter({ windowMs: 60_000, max: 10 });
- *   const result = limiter.check(ip);
- *   if (!result.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
- */
+import { NextResponse } from 'next/server';
+import { consumeSharedQuota } from '@/services/rateLimitStore';
+
+/** Shared sliding windows in deployments; bounded local windows for offline dev. */
 
 export interface RateLimitResult {
   ok: boolean;
   remaining: number;
   retryAfterMs: number;
+  unavailable?: boolean;
 }
 
 export interface RateLimiterOptions {
+  /** Stable, unique quota name shared by every API instance. */
+  namespace: string;
   /** Rolling window size in milliseconds */
   windowMs: number;
   /** Maximum requests allowed within the window */
@@ -35,8 +30,15 @@ export function createRateLimiter(opts: RateLimiterOptions) {
   const store = new Map<string, Entry>();
   const maxKeys = opts.maxKeys ?? 10_000;
   let nextSweepAt = 0;
+  let nextWarningAt = 0;
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(opts.namespace)
+    || !Number.isSafeInteger(opts.windowMs) || opts.windowMs < 1 || opts.windowMs > 86_400_000
+    || !Number.isSafeInteger(opts.max) || opts.max < 1 || opts.max > 1_000
+    || !Number.isSafeInteger(maxKeys) || maxKeys < 1 || maxKeys > 10_000) {
+    throw new Error('Invalid rate limiter policy');
+  }
 
-  function check(key: string): RateLimitResult {
+  function checkLocal(key: string): RateLimitResult {
     const now = Date.now();
     const windowStart = now - opts.windowMs;
 
@@ -73,7 +75,33 @@ export function createRateLimiter(opts: RateLimiterOptions) {
     };
   }
 
+  async function check(key: string): Promise<RateLimitResult> {
+    const deployed = process.env['VERCEL'] === '1' || ['production', 'preview'].includes(process.env['VERCEL_ENV'] ?? '')
+      || process.env['NODE_ENV'] === 'production';
+    if (!deployed && !process.env['UPSTASH_REDIS_REST_URL'] && !process.env['UPSTASH_REDIS_REST_TOKEN']) {
+      return checkLocal(key);
+    }
+    try {
+      return await consumeSharedQuota({ ...opts, maxKeys }, key);
+    } catch {
+      // Do not log credentials, IPs, user IDs or provider bodies. Bound outage logs.
+      if (Date.now() >= nextWarningAt) {
+        console.error(`[rate-limit] Shared store unavailable (${opts.namespace}); requests fail closed`);
+        nextWarningAt = Date.now() + 60_000;
+      }
+      return { ok: false, unavailable: true, remaining: 0, retryAfterMs: 1_000 };
+    }
+  }
+
   return { check };
+}
+
+/** Every denial is private, has an integer Retry-After, and distinguishes outages. */
+export function rateLimitResponse(result: RateLimitResult, message = 'Too many requests'): NextResponse<{ error: string }> {
+  return NextResponse.json({ error: result.unavailable ? 'Service unavailable' : message }, {
+    status: result.unavailable ? 503 : 429,
+    headers: { 'Retry-After': String(Math.max(1, Math.ceil(result.retryAfterMs / 1000))), 'Cache-Control': 'private, no-store' },
+  });
 }
 
 // ─── Shared limiters ──────────────────────────────────────────────────────────
@@ -82,20 +110,20 @@ export function createRateLimiter(opts: RateLimiterOptions) {
  * Auth endpoints: 10 attempts per IP per minute.
  * Covers both login (brute-force) and register (account spam).
  */
-export const authLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });
+export const authLimiter = createRateLimiter({ namespace: 'auth', windowMs: 60_000, max: 10 });
 
 /** Shared across all data routes, including subscription and preview reads. */
-export const dataIpLimiter = createRateLimiter({ windowMs: 60_000, max: 300 });
-export const dataUserLimiter = createRateLimiter({ windowMs: 60_000, max: 120 });
+export const dataIpLimiter = createRateLimiter({ namespace: 'data-ip', windowMs: 60_000, max: 300 });
+export const dataUserLimiter = createRateLimiter({ namespace: 'data-user', windowMs: 60_000, max: 120 });
 
 /**
  * Feedback endpoint: 5 submissions per user per 5 minutes.
  * Deters spamming the team inbox while leaving room for genuine follow-ups.
  */
-export const feedbackLimiter = createRateLimiter({ windowMs: 300_000, max: 5 });
+export const feedbackLimiter = createRateLimiter({ namespace: 'feedback-user', windowMs: 300_000, max: 5 });
 
 /**
  * Public website waitlist form: 5 signups per IP per 10 minutes.
  * The form is unauthenticated, so this is the only brake on list-stuffing.
  */
-export const waitlistLimiter = createRateLimiter({ windowMs: 600_000, max: 5 });
+export const waitlistLimiter = createRateLimiter({ namespace: 'waitlist-ip', windowMs: 600_000, max: 5 });

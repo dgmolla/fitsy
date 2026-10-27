@@ -21,7 +21,7 @@ const params = (query = '') => parseShuffleParams(new URLSearchParams(
 const optionsFor = (name: string, query = '') => ({ ...params(query), cuisineType: `${tag}-${name}` });
 const request = (query = '', auth: boolean | 'free' = true, ip = '192.0.2.145') => new NextRequest(
   `http://localhost/api/restaurants/shuffle?lat=21&lng=-41&calories=600&protein=40&carbs=60&fat=20&${query}`,
-  { headers: { ...(auth ? { authorization: `Bearer ${auth === 'free' ? freeToken : token}` } : {}), 'x-forwarded-for': ip } },
+  { headers: { ...(auth ? { authorization: `Bearer ${auth === 'free' ? freeToken : token}` } : {}), 'x-vercel-forwarded-for': ip } },
 );
 const body = async (response: Response): Promise<ShuffleResponse> => {
   assert.equal(response.status, 200, await response.clone().text());
@@ -175,7 +175,7 @@ test('signed-in free and expired subscriptions receive a target-independent teas
   assert.equal(freeSample.data.fitScore, null);
   assert.equal(freeSample.meta.tolerance, null);
   const impossible = new NextRequest(`http://localhost/api/restaurants/shuffle?lat=21&lng=-41&calories=0&fat=0&maxCalories=0&excludeRecent=${ids[0]}-a,${ids[0]}-b&${query}`,
-    { headers: { 'x-forwarded-for': '192.0.2.145', authorization: `Bearer ${freeToken}` } });
+    { headers: { 'x-vercel-forwarded-for': '192.0.2.145', authorization: `Bearer ${freeToken}` } });
   assert.deepEqual(await body(await GET(impossible)), freeSample);
   await prisma.subscription.update({ where: { userId }, data: { expiresAt: new Date('2000-01-01') } });
   try { assert.deepEqual(await body(await GET(request(query))), freeSample); }

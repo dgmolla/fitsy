@@ -1,3 +1,4 @@
+import { useRateLimitTransport } from "@/tests/fixtures/rateLimitTransport";
 // ─── Mock modules ─────────────────────────────────────────────────────────────
 
 jest.mock("@/lib/supabase", () => ({
@@ -6,11 +7,6 @@ jest.mock("@/lib/supabase", () => ({
 
 jest.mock("@/lib/restaurantService", () => ({
   prisma: { user: { upsert: jest.fn() } },
-}));
-
-jest.mock("@/lib/rateLimit", () => ({
-  ...jest.requireActual("@/lib/rateLimit"),
-  authLimiter: { check: () => ({ ok: true, remaining: 9, retryAfterMs: 0 }) },
 }));
 
 import { POST } from "./route";
@@ -37,6 +33,8 @@ beforeEach(() => {
     auth: { signInWithPassword: mockSignInWithPassword },
   });
 });
+
+useRateLimitTransport();
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/auth/login", {

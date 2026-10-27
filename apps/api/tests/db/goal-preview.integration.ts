@@ -13,7 +13,7 @@ const targets = 'calories=600&protein=40&carbs=60&fat=20';
 const at = 'lat=45&lng=45';
 let requestNumber = 0;
 const request = (path: string, query: string) => new NextRequest(`http://localhost/api/restaurants${path}?${query}`, {
-  headers: { authorization: `Bearer ${token}`, 'x-forwarded-for': `192.0.2.${++requestNumber}` },
+  headers: { authorization: `Bearer ${token}`, 'x-vercel-forwarded-for': `192.0.2.${++requestNumber}` },
 });
 const guided = async (query = targets, coordinates = at) => {
   const response = await preview(request('/preview', `${coordinates}&guided=1&${query}`));

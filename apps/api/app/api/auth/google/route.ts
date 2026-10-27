@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { getSupabaseClient } from "@/lib/supabase";
-import { authLimiter } from "@/lib/rateLimit";
+import { authLimiter, rateLimitResponse } from "@/lib/rateLimit";
+import { trustedClientIp } from "@/lib/clientIp";
 import type { GoogleAuthResponse } from "@fitsy/shared";
 
 export async function POST(
@@ -10,20 +11,8 @@ export async function POST(
 
   // ─── Rate limiting ───────────────────────────────────────────────────────────
 
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown";
-  const rateResult = authLimiter.check(ip);
-  if (!rateResult.ok) {
-    return NextResponse.json(
-      { error: "Too many requests — please try again later" },
-      {
-        status: 429,
-        headers: { "Retry-After": String(Math.ceil(rateResult.retryAfterMs / 1000)) },
-      },
-    );
-  }
+  const rateResult = await authLimiter.check(trustedClientIp(request));
+  if (!rateResult.ok) return rateLimitResponse(rateResult, 'Too many requests - please try again later');
 
   let body: unknown;
   try {

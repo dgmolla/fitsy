@@ -49,7 +49,7 @@ async function main() {
       queries.length = 0;
       const start = performance.now();
       const response = await GET(new NextRequest(`http://localhost/api/restaurants/preview?lat=47&lng=47&guided=1&calories=600&protein=40&carbs=60&fat=20&q=ramen${selectedItemId ? `&selectedItemId=${selectedItemId}` : ''}`, {
-        headers: { authorization: `Bearer ${token}`, 'x-forwarded-for': '192.0.2.240' },
+        headers: { authorization: `Bearer ${token}` },
       }));
       const result = await response.json();
       samples.push(performance.now() - start);
