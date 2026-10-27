@@ -24,7 +24,17 @@ The superseded collector finished and released `.jev.lock` before this owner sta
 Under cleanup-agent-resources, the exact idle predecessor PID 68283, started October 26 at 23:11:47 local time, was terminated after matching its original task command and confirming no collector or lock.
 Its dedicated CUA, REPL, Mobile MCP and code-mode children also exited; all source, raw journals, original ledger and `/private/tmp/hq2.log` remain retained.
 Disk has 27 GiB available and memory reports 54% free; use one sequential focused-test job with a 2 GiB Node heap.
-Next: complete focused regressions, commit the narrow source repair, then run all four methods with cache-only transport and generate the final audited report before review, CI and the authorized squash merge.
+The source repair is committed as `366d3ac`, followed by the isolated mock-history correction `56240b8`.
+All 60 focused regressions, suite lint and script type checks pass.
+Initial development failures included a missing shared replay method, a synthetic Jev reservation using the wrong envelope, the intended dirty-source refusal and an uncleared test spy; each was diagnosed and corrected without a live request.
+The actual cache-only run `2026-10-27T08-20-00-178Z-f95a6de8` completes all 465 predictions, with 527 reuse receipts, zero requests, zero new spend and a byte-identical ledger.
+The report/audit generator is now maintained at `scripts/eval/suite/compare.cjs` rather than depending on a temporary session script.
+It binds the same sample and previous complete audit, verifies all denominators and bills, retains original latency and emits per-request failure/probability diagnostics.
+No failed case is recoverable under the unchanged decoder: Haiku macro failures are curated 14/25 and bulk 16/26, while Qwen has 8/25 and 7/26 format failures plus one timeout in each tier.
+Haiku also has three matching format failures and Qwen has two; exact and Jev have none.
+There are no unattempted Qwen cases and no eligible unseen Haiku request after strict replay, so the no-repeat requirement excludes additional live inference.
+The scorer now shows Haiku parsed-only macro calorie medians of 37.5% curated and 51.4% bulk instead of conflating them with failed-output infinity.
+Next: freeze the maintained report generator and cache-miss reporting regression, regenerate the final source-bound cache-only report, commit all inherited raw evidence and current results, then complete cheap gates, existing local AI review, CI and the authorized squash merge.
 
 # Haiku and Qwen sample execution
 

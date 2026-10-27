@@ -159,7 +159,8 @@ export async function run(argv: string[], directory = suite) {
           priorCumulativeSpendUsd: modelSession.knownUsd,
           reservedUpperBoundUsd: 'reservedUpperBoundUsd' in selection ? selection.reservedUpperBoundUsd : null,
           fullUpperBoundUsd: 'fullUpperBoundUsd' in selection ? selection.fullUpperBoundUsd : null }
-        : { stopUsd: STOP_USD, hardCapUsd: HARD_CAP_USD, reservationPerPostUsd: RESERVATION_USD } };
+        : modelClients.size ? { stopUsd: MODEL_STOP_USD, hardCapUsd: MODEL_HARD_CAP_USD, transport: 'disabled' }
+          : { stopUsd: STOP_USD, hardCapUsd: HARD_CAP_USD, reservationPerPostUsd: RESERVATION_USD } };
     writeFileSync(join(out, 'run.json'), JSON.stringify(metadata, null, 2) + '\n', { flag: 'wx' });
     for (const name of config.methods) {
       const tracked = name === 'jev-v3' ? client : modelClients.get(name as Provider);
@@ -180,7 +181,8 @@ export async function run(argv: string[], directory = suite) {
         }
       }
     }
-    const report = { ...metadata, stopReason: modelSession?.stopped ?? client?.stopped ?? null, scores,
+    const report = { ...metadata, stopReason: modelSession?.stopped ?? client?.stopped
+      ?? [...modelClients.values()].find(c => c.stopped)?.stopped ?? null, scores,
       accounting: { cumulativeKnownUsd: config.live ? spendState(join(resultsDirectory, 'spend.jsonl')).knownUsd : null,
         requests: (client?.requests ?? 0) + [...modelClients.values()].reduce((n, c) => n + c.requests, 0),
         reusedRequests: (client?.reusedRequests ?? 0) + [...modelClients.values()].reduce((n, c) => n + c.reusedRequests, 0),

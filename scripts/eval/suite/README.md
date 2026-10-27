@@ -26,6 +26,9 @@ npm run eval:suite -w scripts -- --methods=exact,jev-v3 --split=dev --tier=both 
 # Re-parse the fixed four-method sample without credentials or paid transport.
 npm run eval:suite -w scripts -- --methods=exact,jev-v3,haiku,qwen --split=dev --tier=both --cases=haiku-qwen-dev-sample.json --live --replay-only
 
+# Generate the comparison from a cache-only run and its completed baseline audit.
+node --import tsx scripts/eval/suite/compare.cjs <replay-run-id> <completed-baseline-run-id>
+
 npm run lint:suite -w scripts
 npm run type-check -w scripts
 npm test -w scripts -- --runInBand --runTestsByPath eval/suite/suite.test.ts eval/suite/providers.test.ts

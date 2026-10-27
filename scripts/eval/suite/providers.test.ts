@@ -424,6 +424,11 @@ test('real runner consumes both model clients, accounts both estimator stages, a
     expect(replay.accounting.reusedRequests).toBe(6); expect(replay.accounting.runKnownUsd).toBe(0);
     expect(replay.scores['curated/macro/qwen']!.parsedOnly).toEqual(report.scores['curated/macro/qwen']!.parsedOnly);
     expect(network).not.toHaveBeenCalled(); expect(readFileSync(join(directory, 'results/spend.jsonl'), 'utf8')).toBe(ledger);
+    writeFileSync(join(directory, 'data/curated.dev.jsonl'), JSON.stringify({ ...cases[0]!, id: 'unseen', input: { ...cases[0]!.input, name: 'Unseen recipe' } }) + '\n');
+    const missing = await run(['--methods=haiku', '--tier=curated', '--split=dev', '--live', '--replay-only'], directory);
+    expect(missing.stopReason).toBe('Model replay unavailable; paid transport is disabled');
+    expect(missing.accounting.requests).toBe(0); expect(network).not.toHaveBeenCalled();
+    expect(readFileSync(join(directory, 'results/spend.jsonl'), 'utf8')).toBe(ledger);
   } finally {
     for (const [key, value] of Object.entries(prior)) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
