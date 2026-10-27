@@ -70,7 +70,9 @@ export async function run(argv: string[], directory = suite) {
   try {
     const fixture = loadCases(config.split, config.tier, directory);
     if (config.live) {
-      if (!process.env['TYPESAFE_API_KEY']?.trim()) throw new PreflightError('TYPESAFE_API_KEY is missing from the invoking environment; no Jev requests were sent.');
+      if (!process.env['TYPESAFE_API_KEY']?.trim()) throw new PreflightError(process.env['jev']?.trim()
+        ? 'TYPESAFE_API_KEY is missing; a legacy Jev variable named jev is present. Export it as TYPESAFE_API_KEY in the invoking shell; no requests were sent.'
+        : 'TYPESAFE_API_KEY is missing from the invoking environment; no Jev requests were sent.');
       // Freeze all executing source and data before spending. Result artifacts may be untracked.
       execFileSync('git', ['diff', '--exit-code', 'HEAD', '--', 'scripts/eval/suite', ':(exclude)scripts/eval/suite/results',
         'scripts/eval/lib/jev-experiment.ts', 'scripts/eval/jev-macro'],
@@ -100,14 +102,14 @@ export async function run(argv: string[], directory = suite) {
             const result = await evaluateCase(c, adapter, fixture.rows, name === 'jev-v3' ? client : undefined);
             durableAppend(join(out, 'predictions.jsonl'), result);
             partial.push(result); results.push(result);
-            if (partial.length % 100 === 0) process.stdout.write(`${name} ${tier}/${task}: ${partial.length}/${cases.length}; cumulative known Jev $${client?.knownUsd.toFixed(6) ?? '0'}\n`);
+            if (partial.length % 100 === 0) process.stdout.write(`${name} ${tier}/${task}: ${partial.length}/${cases.length}; ${client ? `cumulative known Jev $${client.knownUsd.toFixed(6)}` : 'deterministic run cost $0'}\n`);
           }
           scores[`${tier}/${task}/${name}`] = score(cases, partial);
         }
       }
     }
     const report = { ...metadata, stopReason: client?.stopped ?? null, scores,
-      accounting: { cumulativeKnownUsd: client?.knownUsd ?? 0, requests: client?.requests ?? 0,
+      accounting: { cumulativeKnownUsd: client?.knownUsd ?? null, requests: client?.requests ?? 0,
         runKnownUsd: results.reduce((sum, result) => sum + (result.knownCostUsd ?? result.costUsd ?? 0), 0), unknownUsage: client?.unknown ?? false } };
     const markdown = `**TL;DR:** ${config.split} ${config.tier} evaluation ${report.stopReason ? 'stopped with failures' : 'completed'}; ${selected.length} selected cases.\n\n`
       + table(scores) + '\nMatching pass requires exact ID/NO MATCH; abstentions fail.\n'
@@ -116,7 +118,9 @@ export async function run(argv: string[], directory = suite) {
       + 'Medians include failures; unavailable medians display as a dash.\n'
       + 'Cost/1k divides billed attempts by attempted cases, including both estimator stages.\n'
       + 'Repeated UE candidate pairs are correlated; these are case counts, not independent meals.\n'
-      + `Cumulative known Jev spend: $${report.accounting.cumulativeKnownUsd.toFixed(8)}; run known spend: $${report.accounting.runKnownUsd.toFixed(8)}; unknown usage: ${report.accounting.unknownUsage}.\n`;
+      + (report.accounting.cumulativeKnownUsd === null ? 'Jev was not selected; cumulative provider spend is not reported by this offline run.\n'
+        : `Cumulative known Jev spend: $${report.accounting.cumulativeKnownUsd.toFixed(8)}.\n`)
+      + `Run known spend: $${report.accounting.runKnownUsd.toFixed(8)}; unknown usage: ${report.accounting.unknownUsage}.\n`;
     writeFileSync(join(out, 'summary.json'), JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });
     writeFileSync(join(out, 'report.md'), markdown, { flag: 'wx' });
     if (config.split === 'holdout') durableAppend(holdoutLog, { event: 'end', at: new Date().toISOString(), runId, head,

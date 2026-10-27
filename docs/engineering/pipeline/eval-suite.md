@@ -180,6 +180,7 @@ Failed, overflowed, invalid, or unattempted estimates are big misses and contrib
 A nonfinite median is serialized as null and displayed as unavailable.
 Zero-correctness is the fraction of all zero-valued target macro fields predicted exactly zero, counting failures as incorrect.
 Cost per 1,000 uses attempted cases, including both estimator stages and billed failures; unknown usage leaves total cost unavailable while retaining its known subtotal.
+An offline-only run reports cumulative provider spend as unavailable instead of falsely resetting it to zero; the cumulative ledger remains untouched.
 Latency is end-to-end per attempted item, with nearest-rank p95; both estimator requests contribute.
 No successful-only filtering may replace the frozen-denominator primary metrics.
 
@@ -214,21 +215,30 @@ Source currency, regional recipe availability, correlated menus, manufacturer ro
 
 ## Baseline evidence
 
-Only dev is evaluated for v1.
-Recorded result paths, measured scores, spend, local validation, independent review, and CI state are attached to the PR and the committed result reports.
-Reading or checksumming holdout for integrity and rendering the requested human case list does not execute or score holdout.
+Only dev was evaluated.
+The [full comparison](../../../scripts/eval/suite/results/2026-10-27T00-11-38-494Z-178b74dc/report.md) ran from committed source `7798fce7154d`, before any result-driven method changes.
+All 2,712 selected dev cases were retained without sampling.
+The exact adapter supplies matching only; Jev supplies both tasks.
 
-The repaired-suite deterministic baseline ran from committed source `7883c7a3fb2a`; its [report](../../../scripts/eval/suite/results/2026-10-26T23-51-57-875Z-c535259f/report.md) retains category results and all predictions.
+| Dev matching | N | Pass | Wrong match | Recall | Abstain | $/1k | p95 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| curated/matching/exact | 102 | 90.2% | 0 | 80.0% | 0 | 0.0000 | 0.067 |
+| curated/matching/jev-v3 | 102 | 92.2% | 4 | 92.0% | 1 | 0.0409 | 155.196 |
+| bulk/matching/exact | 2,363 | 97.8% | 0 | 73.9% | 0 | 0.0000 | 0.069 |
+| bulk/matching/jev-v3 | 2,363 | 98.3% | 2 | 81.4% | 5 | 0.0296 | 162.364 |
 
-| Dev tier / method | Matching pass | Wrong matches | Positive recall | p95 latency | Cost/1k |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Curated / exact | 92/102 (90.2%) | 0 | 80.0% | 0.068 ms | $0 |
-| Bulk / exact | 2,311/2,363 (97.8%) | 0 | 73.9% | 0.067 ms | $0 |
-| Both / Jev v3 | Pending credential | Pending | Pending | Pending | Pending |
+| Dev Jev macro | N | All-four pass | Median % error Cal/P/C/F | Big miss | Zero correct | $/1k | p95 ms |
+| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: |
+| curated/macro/jev-v3 | 102 | 11.8% | 20.91/32.12/33.45/31.25 | 21.6% | 86.7% | 0.1262 | 317.2 |
+| bulk/macro/jev-v3 | 145 | 7.6% | 19.64/30.00/38.81/35.29 | 20.7% | 87.5% | 0.1268 | 315.6 |
 
-The exact adapter has no macro estimator.
-Live Jev preflight sent no requests because the authorized secrets file did not populate `TYPESAFE_API_KEY`; actual Jev spend remains $0.
-The implementation and synthetic-provider tests establish harness behavior, not measured Jev accuracy.
+Jev made 2,957 requests for $0.10539795, with no retries, model drift, stop condition, or unknown usage.
+The ledger retains every reservation and settlement; the remaining stop-threshold budget is $4.39460205.
+The authorized credential file used a legacy `jev` variable; it was mapped to `TYPESAFE_API_KEY` only in the invoking process without printing its value.
+The runner now reports that legacy naming mismatch with a safe mapping hint before any request.
+Neither Haiku nor Qwen was called.
+Reading/checksumming holdout or rendering the human case list did not evaluate holdout.
+The two tiers share servings and include correlated candidate pairs, so their scores are not independent population estimates or a production-adoption verdict.
 
 ## Case counts by category
 

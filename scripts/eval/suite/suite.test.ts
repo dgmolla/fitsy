@@ -245,6 +245,8 @@ test('actual runner is offline by default and logs toy holdout success and check
   const dir = toyFixture('holdout');
   const report = await run(['--methods=exact','--split=holdout','--tier=curated'],dir);
   expect(report.scores['curated/matching/exact']!.passRate).toBe(1);
+  expect(report.accounting.cumulativeKnownUsd).toBeNull();
+  expect(report.accounting.runKnownUsd).toBe(0);
   const file = join(dir,'results/holdout-runs.jsonl');
   expect(readFileSync(file,'utf8').trim().split('\n').map(l=>JSON.parse(l).event)).toEqual(['start','end']);
   writeFileSync(join(dir,'data/curated.holdout.jsonl'),'tampered');
@@ -265,5 +267,21 @@ test('missing live credentials yield an actionable secret-safe receipt before an
     expect(existsSync(join(dir,'results/spend.jsonl'))).toBe(false);
   } finally {
     if (prior === undefined) delete process.env['TYPESAFE_API_KEY']; else process.env['TYPESAFE_API_KEY'] = prior;
+  }
+});
+
+test('a legacy Jev environment name produces a safe mapping hint without using or disclosing its value', async () => {
+  const prior = process.env['TYPESAFE_API_KEY'], legacy = process.env['jev'];
+  delete process.env['TYPESAFE_API_KEY']; process.env['jev'] = 'fake-legacy-credential-never-disclose';
+  const fetcher = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden'));
+  const dir = toyFixture('dev');
+  try {
+    await expect(run(['--methods=jev-v3','--split=dev','--tier=curated','--live'],dir)).rejects.toThrow('legacy Jev variable named jev');
+    expect(fetcher).not.toHaveBeenCalled();
+    const failure = join(dir,'results',fs.readdirSync(join(dir,'results'))[0]!,'failure.json');
+    expect(readFileSync(failure,'utf8')).not.toContain(process.env['jev']);
+  } finally {
+    if (prior === undefined) delete process.env['TYPESAFE_API_KEY']; else process.env['TYPESAFE_API_KEY'] = prior;
+    if (legacy === undefined) delete process.env['jev']; else process.env['jev'] = legacy;
   }
 });

@@ -1,0 +1,24 @@
+{
+  "receipt": {
+    "head": "7798fce7154d5e332736f5704e1f5934e6e4b5b5",
+    "base": "0dbb0b4feab236be9f49542c92d4a4e280d96e6b",
+    "model": "gpt-6.1-sol",
+    "domains": [
+      "correctness",
+      "workflow-security"
+    ],
+    "windowSeconds": 180,
+    "elapsedSeconds": 139.81,
+    "code": 0,
+    "authority": "User requested local independent review; permanent global review execution exception retained."
+  },
+  "verdict": {
+    "domains": {
+      "correctness": "pass",
+      "workflow-security": "pass"
+    },
+    "verdict": "pass",
+    "findings": [],
+    "blocking": false
+  }
+}

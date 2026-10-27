@@ -41,5 +41,12 @@ It refuses to overwrite an existing suite.
 Expected-output changes and checksum updates need human review in a versioned PR.
 Result artifacts never supply new ground truth.
 
+If the authorized credential file exports the legacy name `jev`, map it only in the invoking process before selecting `--live`.
+The runner reports this naming mismatch without printing the credential or silently loading another source.
+
+```sh
+export TYPESAFE_API_KEY="${TYPESAFE_API_KEY:-${jev:-}}"
+```
+
 Large generated JSONL partitions, reference-row JSON, extracted page text, and result artifacts omit textual Git diffs through local `.gitattributes` rules.
 Their ordinary files remain readable with any JSON/JSONL tool; review the generator, explicit curation, independently entered PDF checks, checksum manifest, and human case list together.

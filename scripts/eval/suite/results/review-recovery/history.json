@@ -1,0 +1,23 @@
+{
+  "schema": "fitsy.eval.review-history.v1",
+  "issue": 557,
+  "pr": 558,
+  "priorSource": "7798fce7154d5e332736f5704e1f5934e6e4b5b5",
+  "publisherFailedAttempts": [
+    {
+      "startedAt": "2026-10-27T00:01:42.207Z",
+      "endedAt": "2026-10-27T00:01:48.955Z",
+      "elapsedPublisherSeconds": 6.748
+    },
+    {
+      "startedAt": "2026-10-27T00:02:58.013Z",
+      "endedAt": "2026-10-27T00:03:03.899Z",
+      "elapsedPublisherSeconds": 5.886
+    }
+  ],
+  "failure": "Codex input_too_large: 7635217 characters exceeds 1048576",
+  "oldCountersPreserved": true,
+  "additionalReviewWindowSeconds": 300,
+  "reason": "Actual dev model results and safe credential recovery are new meaningful source; independently reviewed operator attributes repair the diagnosed transport, with full original diff and raw failures retained privately. Require a genuine current-head public verdict.",
+  "authority": "User AGENTS.md permanent global review exception, 2026-10-10; no original attempts reset or reclassified."
+}
