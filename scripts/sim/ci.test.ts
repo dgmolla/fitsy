@@ -14,7 +14,7 @@ beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'fitsy-local-scope-'));
   copyProductFlowControls(directory);
   mkdirSync(join(directory, 'scripts/sim'), { recursive: true });
-  for (const file of ['ci.mjs', 'journey-fixtures.mjs']) copyFileSync(join(__dirname, file), join(directory, 'scripts/sim', file));
+  for (const file of ['ci.mjs', 'journey-fixtures.mjs', 'slack-video.mjs']) copyFileSync(join(__dirname, file), join(directory, 'scripts/sim', file));
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env: cleanEnv });
   git('init', '-q'); git('config', 'user.name', 'Local scope fixture'); git('config', 'user.email', 'fixture@example.test');
   git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'baseline');
@@ -108,6 +108,8 @@ test('missing render checkpoint fails before launching a native device', () => {
 test.each([
   { args: ['--scope=none'], scope: 'none', flows: [] },
   { args: ['--scope=none', '--flows=-'], scope: 'none', flows: [] },
+  { args: ['--scope=none', '--record-video'], scope: 'none', flows: [] },
+  { args: ['--scope=flow', '--flows=signin-options', '--record-video'], scope: 'flow', flows: ['signin-options'] },
   { args: ['--scope=flow', '--flows=signin-options,paywall-access,signin-options'], scope: 'flow', flows: ['paywall-access', 'signin-options'] },
   { args: ['--scope=full'], scope: 'full' },
   { args: ['--scope=all'], scope: 'full' },
@@ -125,6 +127,7 @@ test.each([
   ['--scope=none', '--flows=signin-options'], ['--scope=full', '--flows=signin-options'],
   ['--scope=flow', '--flows='], ['--scope=smoke', '--flows=signin-options'],
   ['--scope=flow', '--scope=none'], ['--preflight'], ['--flows=../../private'],
+  ['--record-video', '--record-video'], ['--record-video=true'],
 ].map(args => ({ args })))('invalid local scope cannot launch native resources: $args', ({ args }) => {
   const result = spawnSync(process.execPath, [cliPath, ...args, '--plan'], { env: cleanEnv, encoding: 'utf8' });
   expect(result.status).toBe(1);
@@ -139,8 +142,8 @@ test.each([{ GITHUB_ACTIONS: 'true' }, { CI: 'true' }, { FITSY_RUNS: 'ci' }])('l
   expect(JSON.parse(result.stdout)).toMatchObject({ status: 'fail', summary: expect.stringContaining('never in CI') });
 });
 
-test('none scope completes without native tools or local configuration', () => {
-  const result = spawnSync(process.execPath, [cliPath, '--scope=none', '--flows=-'], { env: cleanEnv, encoding: 'utf8' });
+test('none scope completes without native or recording tools or local configuration', () => {
+  const result = spawnSync(process.execPath, [cliPath, '--scope=none', '--flows=-', '--record-video'], { env: cleanEnv, encoding: 'utf8' });
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ status: 'skipped', required: false, scope: 'none' });
 });

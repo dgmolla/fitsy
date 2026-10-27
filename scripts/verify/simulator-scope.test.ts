@@ -147,7 +147,7 @@ const write = (path: string, value: string) => {
 const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env, encoding: 'utf8' }).trim();
 const commit = () => { git('add', '.'); git('commit', '-qm', 'fixture'); return git('rev-parse', 'HEAD'); };
 function fixture() {
-  for (const path of ['scripts/verify/impact-plan.mjs', 'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh', 'scripts/sim/ci.mjs', 'scripts/sim/journey-fixtures.mjs',
+  for (const path of ['scripts/verify/impact-plan.mjs', 'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh', 'scripts/sim/ci.mjs', 'scripts/sim/journey-fixtures.mjs', 'scripts/sim/slack-video.mjs',
     ...allFlows.map(name => `apps/mobile/e2e/flows/${name}.yaml`)]) {
     mkdirSync(dirname(join(directory, path)), { recursive: true }); copyFileSync(join(root, path), join(directory, path));
   }

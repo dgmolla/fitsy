@@ -126,8 +126,13 @@ Use the matching `FITSY_DIFF_BASE` and `FITSY_DIFF_HEAD` when reproducing CI's s
 npm run verify:sim-plan
 node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=changed --udid=<UDID>
 node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=flow --flows=signin-options,paywall-access --udid=<UDID>
+node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=changed --udid=<UDID> --record-video
 node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=full --udid=<UDID>
 ```
+
+Optional `--record-video` (or `FITSY_SIM_RECORD_VIDEO=1`) adds short Slack previews alongside screenshots without changing the simulator result.
+See [optional Slack previews](../../../scripts/sim/native-runner-controls.md#optional-slack-previews) for capture limits, non-fatal failure handling and the external poller's supported wrapper invocation.
+Complete explicitly requested product-acceptance videos keep their separate validation contract.
 
 All selected flows require their documented starting states, including billing fixtures.
 Configure `FITSY_E2E_FIXTURES` with the untracked local adapters and public environment files described in [the native README](../../../apps/mobile/e2e/README.md#local-journey-fixtures).
