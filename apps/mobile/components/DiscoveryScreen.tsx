@@ -45,6 +45,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
     });
   }), []);
   const closeTour = () => { finishTour(); listRef.current?.scrollToOffset({ offset: 0, animated: false }); };
+  const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} action={action} />;
   const header = (
     <>
       {isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
@@ -54,8 +55,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
         </Pressable>}
       </View>}
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
-      <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} />
-      {!isOnboardingPreview && <ShuffleSection values={inputs} lat={location.lat} lng={location.lng} locating={location.loading} onEditTargets={() => setFilterVisible(true)} />}
+      {isOnboardingPreview ? renderSearchBar() : <ShuffleSection values={inputs} lat={location.lat} lng={location.lng} locating={location.loading} onEditTargets={() => setFilterVisible(true)} renderSearchBar={renderSearchBar} />}
       {!canSearch && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.greenAccent} />

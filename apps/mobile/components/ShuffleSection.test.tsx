@@ -1,8 +1,9 @@
-import { act, deferred, fireEvent, getPaywallIntent, installPurchasedAccount, mockState, renderJourney, response, routes, saveOnboardingField, SecureStore, waitFor, withAccountProfile } from './OnboardingNavigationHarness';
+import { act, deferred, ExpoLocation, fireEvent, getPaywallIntent, installPurchasedAccount, mockState, renderJourney, response, routes, saveOnboardingField, SecureStore, waitFor, withAccountProfile } from './OnboardingNavigationHarness';
 import React, { useState } from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Button, Text } from 'react-native';
+import { within } from '@testing-library/react-native';
 import PostHog from 'posthog-react-native';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams } from 'expo-router';
@@ -35,10 +36,49 @@ let flagListeners: Set<() => void>;
 let requests: { url: URL; init?: RequestInit }[];
 let answer: (url: URL, init?: RequestInit) => Promise<Response>;
 let accountEntitled: boolean;
+let menuMeal: ShuffleResponse;
 const unsubscribe = jest.fn();
 const originalDev = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
-const [, shuffleCommands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/shuffle.yaml'), 'utf8')) as [unknown, { openLink?: string }[]];
+type Selector = string | { id: string; text?: string };
+interface FlowCommand {
+  openLink?: string;
+  tapOn?: string | { id?: string };
+  extendedWaitUntil?: { visible: Selector };
+  assertVisible?: Selector;
+  assertNotVisible?: Selector;
+  copyTextFrom?: { id: string };
+  evalScript?: string;
+  takeScreenshot?: string;
+  setLocation?: { latitude: number; longitude: number };
+}
+const [, shuffleCommands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/shuffle.yaml'), 'utf8')) as [unknown, FlowCommand[]];
+
+// Exercise the saved Maestro outcome selectors against the actual rendered app.
+// Live dev meals differ from prisma/seed.ts, including punctuation and nutrition basis.
+function checkSavedAssertions(screen: ReturnType<typeof renderJourney>, commands: FlowCommand[], output: Record<string, string> = {}) {
+  let copiedText = '';
+  const find = (selector: Selector) => {
+    if (typeof selector !== 'string') {
+      const element = screen.queryByTestId(selector.id);
+      if (selector.text) {
+        expect(element).toBeTruthy();
+        expect(within(element!).getByText(new RegExp(`^(?:${selector.text})$`))).toBe(element);
+      }
+      return element;
+    }
+    const text = selector.startsWith('${') ? new Function('output', `return (${selector.slice(2, -1)});`)(output) as string : selector;
+    return screen.queryByText(new RegExp(`^(?:${text})$`));
+  };
+  for (const command of commands) {
+    const visible = command.extendedWaitUntil?.visible ?? command.assertVisible;
+    if (visible) expect(find(visible)).toBeTruthy();
+    if (command.assertNotVisible) expect(find(command.assertNotVisible)).toBeNull();
+    if (command.copyTextFrom) copiedText = screen.getByTestId(command.copyTextFrom.id).props.children as string;
+    if (command.evalScript) new Function('maestro', 'output', command.evalScript.slice(2, -1))({ copiedText }, output);
+  }
+  return output;
+}
 
 afterEach(() => {
   if (originalDev) Object.defineProperty(globalThis, '__DEV__', originalDev);
@@ -51,6 +91,7 @@ beforeEach(async () => {
   __resetForTesting();
   flag = true;
   accountEntitled = true;
+  menuMeal = meal;
   flagListeners = new Set();
   unsubscribe.mockReset();
   jest.mocked(Haptics.impactAsync).mockClear().mockResolvedValue(undefined);
@@ -74,9 +115,9 @@ beforeEach(async () => {
       return response({ data: [], meta: { locked: false, total: 0, limit: 20, nearbyDishCount: 1, radiusMiles: 3 } });
     if (url.pathname === '/api/saved-items') return response({ data: [] });
     if (url.pathname === '/api/restaurants/seed-bowl/menu') return response({ data: {
-      restaurantId: 'seed-bowl', restaurantName: 'Seed Bowl Co #01', locked: false, totalItemCount: 1,
-      menuItems: [{ id: 'chicken', name: 'Grilled Chicken Bowl', category: 'Bowls',
-        macros: { ...meal.data!.macros, hadPhoto: false, estimatedAt: '2026-10-24T00:00:00Z' } }],
+      restaurantId: 'seed-bowl', restaurantName: menuMeal.data!.restaurant.name, locked: false, totalItemCount: 1,
+      menuItems: [{ ...menuMeal.data!.item!, category: 'Bowls',
+        macros: { ...menuMeal.data!.macros, hadPhoto: false, estimatedAt: '2026-10-24T00:00:00Z' } }],
     } });
     return response({ active: accountEntitled, verdict: accountEntitled ? 'active' : 'never_subscribed', synced: true, stale: false,
       lastRcVerifiedAt: new Date().toISOString(), expiresAt: '2030-01-08T12:00:00Z' });
@@ -358,8 +399,16 @@ it.each(['tolerance', 'radius'] as const)('discloses %s fallback and published n
   expect(screen.getByText(fallback === 'radius' ? 'Search widened to 6 miles with a wider macro range.' : 'This pick uses a wider macro range.')).toBeTruthy();
 });
 
-it('uses persisted targets and the chosen area on the real search screen, then opens the real menu', async () => {
+it.each([
+  { name: 'live dev juice', restaurant: "Winchell's Donut House", dish: 'FRESH GREEN JUICE',
+    macros: { calories: 90, proteinG: 3, carbsG: 19, fatG: 0 }, nutritionBasis: 'estimated' as const },
+  { name: 'published nutrition and regex punctuation', restaurant: 'Kitchen (DTLA) [A]', dish: 'Bowl (small) + juice [12 oz.]',
+    macros: { calories: 280, proteinG: 28, carbsG: 34, fatG: 5 }, nutritionBasis: 'published' as const },
+])('runs the saved Shuffle card and menu assertions with $name on the real search screen', async fixture => {
   flag = false;
+  menuMeal = { ...meal, data: { ...meal.data!, restaurant: { ...meal.data!.restaurant, name: fixture.restaurant },
+    item: { id: 'chicken', name: fixture.dish }, macros: { ...meal.data!.macros!, ...fixture.macros, nutritionBasis: fixture.nutritionBasis } } };
+  answer = async () => response(menuMeal);
   await saveDiscoveryMacroTargets(values, 'search');
   await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify({ name: 'DTLA', lat: 34.04, lng: -118.24 }));
   const links = shuffleCommands.flatMap(step => step.openLink ? [step.openLink] : []);
@@ -375,12 +424,82 @@ it('uses persisted targets and the chosen area on the real search screen, then o
   await waitFor(() => expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false));
   await press(screen);
   await screen.findByTestId('shuffle-dish');
+  const firstPick = shuffleCommands.findIndex(step => step.extendedWaitUntil && typeof step.extendedWaitUntil.visible !== 'string' && step.extendedWaitUntil.visible.id === 'shuffle-dish');
+  const cardScreenshot = shuffleCommands.findIndex(step => step.takeScreenshot);
+  expect(firstPick).toBeGreaterThan(0);
+  checkSavedAssertions(screen, shuffleCommands.slice(firstPick, cardScreenshot));
+  expect(within(screen.getByTestId('discovery-search-bar')).getByTestId('shuffle-button')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Shuffle a nearby meal' })).toBeTruthy();
+  expect(screen.queryByText('Shuffle')).toBeNull();
+  expect(screen.queryByText('Leave it to Fitsy')).toBeNull();
   expect(Object.fromEntries(requests[0].url.searchParams)).toMatchObject({ ...values, lat: '34.04', lng: '-118.24' });
   expect(screen.getByTestId('discovery-macro-strip')).toBeTruthy();
+  await press(screen, 'shuffle-again');
+  const viewMenu = shuffleCommands.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === 'shuffle-view-menu');
+  const selectedMenuScreenshot = shuffleCommands.findIndex(step => step.takeScreenshot === 'shuffle-selected-menu');
+  const output = checkSavedAssertions(screen, shuffleCommands.slice(cardScreenshot + 1, viewMenu));
   await press(screen, 'shuffle-view-menu');
   await screen.findByTestId('menu-item-chicken');
   expect(screen.getPathname()).toBe('/restaurant/seed-bowl');
-  expect(screen.getByText('Grilled Chicken Bowl')).toBeTruthy();
+  checkSavedAssertions(screen, shuffleCommands.slice(viewMenu + 1, selectedMenuScreenshot), output);
+  expect(screen.getByText(fixture.dish)).toBeTruthy();
+  await act(async () => screen.unmount());
+});
+
+it('keeps search and clear usable while the Shuffle flag is disabled', async () => {
+  flag = false;
+  await saveDiscoveryMacroTargets(values, 'search');
+  const screen = renderJourney('/search', { ...routes, '(tabs)/search': () => <Search /> });
+  await screen.findByTestId('discovery-search');
+  expect(screen.queryByTestId('shuffle-section')).toBeNull();
+  await act(async () => fireEvent.changeText(screen.getByTestId('discovery-search'), 'juice'));
+  expect(screen.getByTestId('discovery-search').props.value).toBe('juice');
+  await press(screen, 'discovery-clear-search');
+  expect(screen.getByTestId('discovery-search').props.value).toBe('');
+  expect(requests).toHaveLength(0);
+  await act(async () => screen.unmount());
+});
+
+it('uses the saved out-of-coverage GPS journey and recovers through target editing and the location picker', async () => {
+  const gps = shuffleCommands.find(step => step.setLocation)?.setLocation;
+  expect(gps).toEqual({ latitude: 40.7128, longitude: -74.0060 });
+  jest.spyOn(ExpoLocation, 'getLastKnownPositionAsync').mockResolvedValue(null);
+  jest.spyOn(ExpoLocation, 'getCurrentPositionAsync').mockResolvedValue({
+    coords: { ...gps!, accuracy: 10, altitude: null, altitudeAccuracy: null, heading: null, speed: null }, timestamp: Date.now(),
+  });
+  await saveDiscoveryMacroTargets(values, 'search');
+  await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify({ name: 'DTLA', lat: 34.0407, lng: -118.2468 }));
+  answer = async url => response(Object.fromEntries(url.searchParams).lat === '40.7128' ? empty : meal);
+  const screen = renderJourney('/search?shuffleDebug=1&shuffleSeed=maestro-shuffle', {
+    ...routes, '(tabs)/search': () => <Search />,
+  });
+  await screen.findByRole('button', { name: 'Location: DTLA' });
+  await press(screen, 'discovery-location');
+  await act(async () => {
+    fireEvent.press(screen.getByRole('button', { name: 'Use my current location' }));
+    jest.advanceTimersByTime(400);
+  });
+  await screen.findByRole('button', { name: 'Location: Near You' });
+  await press(screen);
+  expect(Object.fromEntries(requests[0].url.searchParams)).toMatchObject({ lat: '40.7128', lng: '-74.006' });
+  const emptyStart = shuffleCommands.findIndex(step => step.extendedWaitUntil && typeof step.extendedWaitUntil.visible !== 'string' && step.extendedWaitUntil.visible.id === 'shuffle-empty');
+  const emptyScreenshot = shuffleCommands.findIndex(step => step.takeScreenshot === 'shuffle-empty');
+  checkSavedAssertions(screen, shuffleCommands.slice(emptyStart, emptyScreenshot));
+  await press(screen, 'shuffle-edit-targets');
+  expect(screen.getByTestId('meal-filter-apply')).toBeTruthy();
+  await press(screen, 'meal-filter-apply');
+  await press(screen, 'discovery-location');
+  await act(async () => {
+    fireEvent.press(screen.getByRole('button', { name: 'Search near DTLA' }));
+    jest.advanceTimersByTime(400);
+  });
+  await screen.findByRole('button', { name: 'Location: DTLA' });
+  await press(screen);
+  const recovered = shuffleCommands.findIndex((step, index) => index > emptyScreenshot && step.extendedWaitUntil && typeof step.extendedWaitUntil.visible !== 'string' && step.extendedWaitUntil.visible.id === 'shuffle-dish');
+  const recoveredScreenshot = shuffleCommands.findIndex(step => step.takeScreenshot === 'shuffle-recovered');
+  checkSavedAssertions(screen, shuffleCommands.slice(recovered, recoveredScreenshot));
+  expect(Object.fromEntries(requests.at(-1)!.url.searchParams)).toMatchObject({ lat: '34.0407', lng: '-118.2468' });
+  await act(async () => screen.unmount());
 });
 
 it('keeps the guided onboarding preview unchanged when Shuffle is enabled', async () => {

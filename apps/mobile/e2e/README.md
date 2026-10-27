@@ -97,13 +97,20 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
-`shuffle` requires the standard synthetic dev seed, `entitled-dev` and a Debug Test Store build.
-It chooses DTLA and independent targets of 280 kcal, 28 g protein, 34 g carbs and 5 g fat, which select the seeded Protein Smoothie.
+`shuffle` requires a populated dev backend, `entitled-dev` and a Debug Test Store build.
+It chooses DTLA and independent targets of 280 kcal, 28 g protein, 34 g carbs and 5 g fat, then taps the compact Shuffle icon beside search.
+These targets are remaining budgets, so valid picks can have different macro values.
+The flow requires a nonempty restaurant and dish, all four formatted macros (estimated or published), distance, Shuffle again and View menu, without assuming a local `prisma/seed.ts` meal exists in dev Supabase.
 The flow's `shuffleDebug=1` search parameter explicitly enables Shuffle on Debug builds without changing PostHog flags or entitlement.
 The Debug-only `shuffleSeed=maestro-shuffle` search parameter makes the lottery replayable.
 Production builds ignore both parameters and require the PostHog boolean flag `shuffle` to be `true`.
-The flow verifies restaurant, dish, all macros, distance, Shuffle again, the selected restaurant's menu, and the empty-state recovery after setting fat to zero.
-`components/ShuffleSection.test.tsx` exercises the saved flow's deep link with PostHog disabled, production override rejection, locked teasers, flag changes, HTTP failures, request cancellation and account transitions against the real client and routing.
+After Shuffle again it copies the selected restaurant and dish, escapes them for Maestro's regex text selectors, and verifies both on View menu.
+The flow preflights real dev coverage in DTLA and the absence of restaurants near New York, then uses simulator GPS and the normal location picker to exercise the empty state outside coverage.
+It establishes that GPS fix before launch so a cached position cannot point at an earlier test's area, and restores DTLA GPS after recovery.
+Zero fat is not an empty-state fixture because real dev menus include zero-fat drinks.
+It also verifies target editing from the empty state and recovers a new pick by choosing DTLA again.
+`components/ShuffleSection.test.tsx` runs the saved card and menu assertions against rendered search/menu screens with live-style names, varied macros, published nutrition and regex punctuation.
+It also covers the deep link with PostHog disabled, production override rejection, locked teasers, flag changes, HTTP failures, request cancellation and account transitions against the real client and routing.
 Run it through `node scripts/sim/ci.mjs --scope=flow --flows=shuffle --udid=<UDID>` with the local fixture configuration.
 The planner expands this request when the candidate also affects shared UI or other journeys.
 
