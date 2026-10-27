@@ -1,3 +1,31 @@
+**TL;DR:** Cached Haiku failures are reproduced and quantified; changed-request DEV reruns are authorized and pending.
+
+## Haiku format fix and rerun
+
+This owner uses only `/Users/dawitmolla/fitsy-eval-suite` on `data/eval-suite-haiku-fix`, created from current `origin/main` at `c87dd14` after PR #568 merged.
+The current user supersedes the historical no-retry interpretation below: never resend a byte-identical billed payload, but retry these failed cases using a changed Haiku request.
+Scope is exactly 30 failed macro cases plus three failed matching cases from the frozen 129-case DEV sample.
+Keep the strict decoder primary and report normalization only as a labeled secondary cache-only view.
+No holdout evaluation, database, protected checkout, project board, hook bypass or admin merge is authorized.
+Use the selected standalone ship-branch workflow and existing local AI reviewer; merge only with green CI and no local P0/P1.
+
+The actual cache-only runner reproduced all 465 predictions in `2026-10-27T09-07-25-576Z-d1df9782`, adding zero requests and zero spend.
+The maintained `haiku-format.ts` diagnostic validates original replay/billing provenance and generates `results/haiku-format-preflight/` plus the exact failed-case selection.
+All 33 failed responses are completed JSON, containing 113 questions and 93 invalid question distributions.
+There are 92 invalid totals spanning 0.977 to 1.600, with absolute sum deviations from 0.020 to 0.600, plus one argmax-only violation with a 0.475 gap.
+Secondary normalization uses only the original consumed cache: matching parses all cases; macro parses 24/25 curated and 25/26 bulk.
+Two normalized coarse choices need an uncached refinement and remain explicit cache misses without transport.
+The original strict baseline remains unchanged.
+
+Starting ledger is $0.57796218, SHA-256 `8a405dca7cd8eb51e4b94edfbc3b53f3ed7e921f2bb4e393468aa95cd9f44495`, with no pending reservation or unknown usage.
+The cumulative stop is $2.70 and hard cap is $3, including all historical spend.
+Recovery assessment: ship-branch, existing provider payload/schema, replay, ledger reservation and explicit case-selection entrypoints support the requested recovery.
+The selected correction adds explicit Haiku probability-total and argmax instructions, recognizes both retained payload revisions, and retries only failed original requests while preserving successful cache entries and exact-payload deduplication.
+The suite README and actual runner/provider tests will carry this correction into the consuming entrypoints; external skill edits are excluded by the workspace-only constraint.
+Next: commit the diagnosis, implement and verify that source-bound change, then run the 33 selected cases detached with reservations before a cache-only four-method rescore.
+
+## Prior comparison history
+
 **TL;DR:** Re-parsing the completed 129-case DEV comparison without new bills and separating output failures from estimate error.
 
 ## Cached-output diagnosis and scoring continuation

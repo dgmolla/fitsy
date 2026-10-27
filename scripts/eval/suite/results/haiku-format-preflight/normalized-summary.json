@@ -1,0 +1,488 @@
+{
+  "view": "SECONDARY: cache-only renormalization plus exact argmax",
+  "baselineId": "2026-10-27T08-22-32-777Z-db8d6ccb",
+  "paidRequests": 0,
+  "newSpendUsd": 0,
+  "normalizedRequests": 176,
+  "cacheMissCases": [
+    "haiku/bulk:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce",
+    "haiku/curated:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce"
+  ],
+  "scores": {
+    "curated/matching/haiku": {
+      "total": 34,
+      "attempted": 34,
+      "missing": 0,
+      "passed": 26,
+      "failureCounts": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "parseFailures": 0,
+      "timeoutFailures": 0,
+      "parsedOnly": null,
+      "passRate": 0.7647058823529411,
+      "categories": {
+        "catering_family": {
+          "passed": 1,
+          "total": 2,
+          "passRate": 0.5
+        },
+        "combo_build_your_own": {
+          "passed": 3,
+          "total": 4,
+          "passRate": 0.75
+        },
+        "gluten_sensitive": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        },
+        "multiple_pdf_rows": {
+          "passed": 0,
+          "total": 1,
+          "passRate": 0
+        },
+        "naming_punctuation": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "size_variant": {
+          "passed": 3,
+          "total": 3,
+          "passRate": 1
+        },
+        "snapshot_missing": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        },
+        "snapshot_ue_only": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "ue_positive": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        },
+        "drink_oz": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "low_calorie": {
+          "passed": 3,
+          "total": 3,
+          "passRate": 1
+        },
+        "modifier": {
+          "passed": 0,
+          "total": 3,
+          "passRate": 0
+        },
+        "near_miss_name": {
+          "passed": 3,
+          "total": 3,
+          "passRate": 1
+        },
+        "non_chain_lookalike": {
+          "passed": 0,
+          "total": 2,
+          "passRate": 0
+        },
+        "section_dependent": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        },
+        "zero_macro": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        },
+        "regional_variant": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        },
+        "high_calorie": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        }
+      },
+      "wrongMatches": 6,
+      "recall": 0.9375,
+      "positives": 16,
+      "truePositives": 15,
+      "abstentions": 2,
+      "medianPercentError": null,
+      "bigMisses": null,
+      "bigMissRate": null,
+      "zeroCorrectness": null,
+      "zeroCorrect": 0,
+      "zeroTotal": 0,
+      "knownCostUsd": 0,
+      "costUsd": 0,
+      "costPer1000Usd": 0,
+      "p95LatencyMs": 0.3053749999999127
+    },
+    "curated/macro/haiku": {
+      "total": 25,
+      "attempted": 25,
+      "missing": 0,
+      "passed": 2,
+      "failureCounts": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 1,
+        "missing": 0
+      },
+      "parseFailures": 0,
+      "timeoutFailures": 0,
+      "parsedOnly": {
+        "total": 24,
+        "passed": 2,
+        "passRate": 0.08333333333333333,
+        "medianPercentError": {
+          "calories": 33.854166666666664,
+          "protein": 53.37995337995338,
+          "carbs": 30.384615384615387,
+          "fat": 79.03225806451613
+        },
+        "bigMisses": 10,
+        "bigMissRate": 0.4166666666666667,
+        "zeroCorrect": 12,
+        "zeroTotal": 12,
+        "zeroCorrectness": 1
+      },
+      "passRate": 0.08,
+      "categories": {
+        "high_calorie": {
+          "passed": 1,
+          "total": 2,
+          "passRate": 0.5
+        },
+        "near_miss_name": {
+          "passed": 0,
+          "total": 4,
+          "passRate": 0
+        },
+        "section_dependent": {
+          "passed": 0,
+          "total": 4,
+          "passRate": 0
+        },
+        "catering_family": {
+          "passed": 0,
+          "total": 1,
+          "passRate": 0
+        },
+        "drink_oz": {
+          "passed": 0,
+          "total": 2,
+          "passRate": 0
+        },
+        "low_calorie": {
+          "passed": 0,
+          "total": 3,
+          "passRate": 0
+        },
+        "modifier": {
+          "passed": 0,
+          "total": 2,
+          "passRate": 0
+        },
+        "size_variant": {
+          "passed": 0,
+          "total": 3,
+          "passRate": 0
+        },
+        "zero_macro": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        },
+        "combo_build_your_own": {
+          "passed": 0,
+          "total": 2,
+          "passRate": 0
+        },
+        "regional_variant": {
+          "passed": 0,
+          "total": 1,
+          "passRate": 0
+        }
+      },
+      "wrongMatches": null,
+      "recall": null,
+      "positives": 0,
+      "truePositives": 0,
+      "abstentions": null,
+      "medianPercentError": {
+        "calories": 37.5,
+        "protein": 60.60606060606061,
+        "carbs": 30.76923076923077,
+        "fat": 100
+      },
+      "bigMisses": 11,
+      "bigMissRate": 0.44,
+      "zeroCorrectness": 1,
+      "zeroCorrect": 12,
+      "zeroTotal": 12,
+      "knownCostUsd": 0,
+      "costUsd": 0,
+      "costPer1000Usd": 0,
+      "p95LatencyMs": 1.9608749999999873
+    },
+    "bulk/matching/haiku": {
+      "total": 44,
+      "attempted": 44,
+      "missing": 0,
+      "passed": 42,
+      "failureCounts": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "parseFailures": 0,
+      "timeoutFailures": 0,
+      "parsedOnly": null,
+      "passRate": 0.9545454545454546,
+      "categories": {
+        "catering_family": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "combo_build_your_own": {
+          "passed": 2,
+          "total": 3,
+          "passRate": 0.6666666666666666
+        },
+        "gluten_sensitive": {
+          "passed": 0,
+          "total": 1,
+          "passRate": 0
+        },
+        "high_calorie": {
+          "passed": 3,
+          "total": 3,
+          "passRate": 1
+        },
+        "multiple_pdf_rows": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        },
+        "naming_punctuation": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "near_miss_name": {
+          "passed": 4,
+          "total": 4,
+          "passRate": 1
+        },
+        "section_dependent": {
+          "passed": 4,
+          "total": 4,
+          "passRate": 1
+        },
+        "size_variant": {
+          "passed": 4,
+          "total": 4,
+          "passRate": 1
+        },
+        "snapshot_missing": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "snapshot_ue_only": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "ue_positive": {
+          "passed": 3,
+          "total": 3,
+          "passRate": 1
+        },
+        "cross_chain_name": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "drink_oz": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "low_calorie": {
+          "passed": 3,
+          "total": 3,
+          "passRate": 1
+        },
+        "modifier": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "same_chain_variant": {
+          "passed": 2,
+          "total": 2,
+          "passRate": 1
+        },
+        "zero_macro": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        },
+        "regional_variant": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        }
+      },
+      "wrongMatches": 2,
+      "recall": 1,
+      "positives": 31,
+      "truePositives": 31,
+      "abstentions": 0,
+      "medianPercentError": null,
+      "bigMisses": null,
+      "bigMissRate": null,
+      "zeroCorrectness": null,
+      "zeroCorrect": 0,
+      "zeroTotal": 0,
+      "knownCostUsd": 0,
+      "costUsd": 0,
+      "costPer1000Usd": 0,
+      "p95LatencyMs": 0.3646250000000464
+    },
+    "bulk/macro/haiku": {
+      "total": 26,
+      "attempted": 26,
+      "missing": 0,
+      "passed": 1,
+      "failureCounts": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 1,
+        "missing": 0
+      },
+      "parseFailures": 0,
+      "timeoutFailures": 0,
+      "parsedOnly": {
+        "total": 25,
+        "passed": 1,
+        "passRate": 0.04,
+        "medianPercentError": {
+          "calories": 41.66666666666667,
+          "protein": 48.861646234676016,
+          "carbs": 36.73647469458988,
+          "fat": 81.25
+        },
+        "bigMisses": 11,
+        "bigMissRate": 0.44,
+        "zeroCorrect": 9,
+        "zeroTotal": 10,
+        "zeroCorrectness": 0.9
+      },
+      "passRate": 0.038461538461538464,
+      "categories": {
+        "high_calorie": {
+          "passed": 0,
+          "total": 3,
+          "passRate": 0
+        },
+        "near_miss_name": {
+          "passed": 0,
+          "total": 4,
+          "passRate": 0
+        },
+        "section_dependent": {
+          "passed": 0,
+          "total": 4,
+          "passRate": 0
+        },
+        "catering_family": {
+          "passed": 0,
+          "total": 1,
+          "passRate": 0
+        },
+        "drink_oz": {
+          "passed": 0,
+          "total": 2,
+          "passRate": 0
+        },
+        "low_calorie": {
+          "passed": 0,
+          "total": 3,
+          "passRate": 0
+        },
+        "modifier": {
+          "passed": 0,
+          "total": 2,
+          "passRate": 0
+        },
+        "size_variant": {
+          "passed": 0,
+          "total": 3,
+          "passRate": 0
+        },
+        "zero_macro": {
+          "passed": 1,
+          "total": 1,
+          "passRate": 1
+        },
+        "combo_build_your_own": {
+          "passed": 0,
+          "total": 2,
+          "passRate": 0
+        },
+        "regional_variant": {
+          "passed": 0,
+          "total": 1,
+          "passRate": 0
+        }
+      },
+      "wrongMatches": null,
+      "recall": null,
+      "positives": 0,
+      "truePositives": 0,
+      "abstentions": null,
+      "medianPercentError": {
+        "calories": 45.77338129496403,
+        "protein": 49.43082311733801,
+        "carbs": 37.11823734729494,
+        "fat": 83.14344590062433
+      },
+      "bigMisses": 12,
+      "bigMissRate": 0.46153846153846156,
+      "zeroCorrectness": 0.9,
+      "zeroCorrect": 9,
+      "zeroTotal": 10,
+      "knownCostUsd": 0,
+      "costUsd": 0,
+      "costPer1000Usd": 0,
+      "p95LatencyMs": 4.039292000000046
+    }
+  }
+}
