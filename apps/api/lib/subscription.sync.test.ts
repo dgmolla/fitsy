@@ -126,7 +126,7 @@ describe("syncSubscriptionFromRevenueCat", () => {
     });
     mockFindUnique.mockResolvedValue({ status: "active" });
     await syncSubscriptionFromRevenueCat("u1");
-    expect(log).toHaveBeenCalledWith("[subscription] u1 status active -> expired (sync)");
+    expect(log).toHaveBeenCalledWith("[subscription] status active -> expired (sync)");
     expect(warn).not.toHaveBeenCalled();
   });
 

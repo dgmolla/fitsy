@@ -93,9 +93,9 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
             );
           } else setInputs(DEFAULT_INPUTS);
         })
-        .catch((err: unknown) => {
+        .catch(() => {
           // eslint-disable-next-line no-console
-          console.warn('[search] getMacroTargets failed:', err);
+          console.warn('[search] getMacroTargets failed:');
         })
         .finally(() => { if (live) setTargetsLoaded(true); });
       return () => { live = false; };

@@ -172,7 +172,7 @@ export async function GET(
       durationMs: tDone - tEntry,
       resultCount: total,
       hasTargets: Object.keys(targets).length > 0,
-      ...(cuisineTypeRaw !== null ? { cuisineFilter: cuisineTypeRaw } : {}),
+      hasCuisineFilter: cuisineTypeRaw !== null,
       ...(query !== "" ? { hasQuery: true, queryLength: query.length } : {}),
       status: 200,
     });
@@ -189,8 +189,8 @@ export async function GET(
       { data: responseData, meta: { total, limit, nextCursor, locked: !entitled } },
       { status: 200 },
     );
-  } catch (err) {
-    console.error("[GET /api/restaurants] Error:", err);
+  } catch {
+    console.error("[GET /api/restaurants] Error:");
     return NextResponse.json(
       { error: "Internal server error" } as never,
       { status: 500 },

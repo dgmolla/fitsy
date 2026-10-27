@@ -82,8 +82,8 @@ export async function fetchServerEntitlement(reason: EntitlementSyncReason): Pro
     if (result.verdict !== 'active' && result.verdict !== 'expired' &&
         result.verdict !== 'never_subscribed' && result.verdict !== 'unknown') return null;
     return result;
-  } catch (err) {
-    console.warn('[entitlement] sync failed', reason, err instanceof Error ? err.message : err);
+  } catch {
+    console.warn('[entitlement] sync failed', reason);
     return null;
   }
 }

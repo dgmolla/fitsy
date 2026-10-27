@@ -82,7 +82,7 @@ export async function fetchRestaurantsPage(
     }
     const t1 = Date.now();
     // eslint-disable-next-line no-console
-    console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0, err: String(err) }));
+    console.log(JSON.stringify({ event: 'fitsy_search_client_done', reqId, ok: false, client_total_ms: t1 - t0 }));
     // Errors are swallowed as an empty page (network blips read as "nothing
     // nearby" in the list itself, not a crash) - but `networkError: true`
     // lets callers that need to tell "no matches" apart from "couldn't reach

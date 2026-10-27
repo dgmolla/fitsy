@@ -121,7 +121,7 @@ describe("POST /api/auth/register — validation", () => {
     const res = await POST(makeRequest({ password: "password123" }));
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/email/i);
+    expect(body.error).toBe("Invalid authentication input");
   });
 
   it("returns 400 when email has no @", async () => {
@@ -133,7 +133,7 @@ describe("POST /api/auth/register — validation", () => {
     const res = await POST(makeRequest({ email: "a@b.com", password: "short" }));
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/8/);
+    expect(body.error).toBe("Invalid authentication input");
   });
 
   it("returns 400 for invalid JSON", async () => {

@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
     const response = await findShuffle(params, entitled, new Date(started));
     cache.set(key, response, started);
     return NextResponse.json(response, { headers });
-  } catch (error) {
-    console.error('[GET /api/restaurants/shuffle] Error:', error);
+  } catch {
+    console.error('[GET /api/restaurants/shuffle] Error:');
     return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers });
   }
 }

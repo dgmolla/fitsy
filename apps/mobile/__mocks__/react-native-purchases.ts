@@ -27,6 +27,7 @@ export enum INTRO_ELIGIBILITY_STATUS {
 
 const Purchases = {
   setLogLevel: async () => undefined,
+  setLogHandler: (_handler: (level: LOG_LEVEL, message: string) => void) => undefined,
   configure: () => undefined,
   logIn: async () => ({ customerInfo: emptyCustomerInfo, created: false }),
   logOut: async () => emptyCustomerInfo,

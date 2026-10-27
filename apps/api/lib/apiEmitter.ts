@@ -10,7 +10,7 @@ export interface SearchRouteEvent {
   durationMs: number;
   resultCount: number;
   hasTargets: boolean;
-  cuisineFilter?: string;
+  hasCuisineFilter?: boolean;
   /** Whether a free-text query was present. Raw text is omitted to avoid PII. */
   hasQuery?: boolean;
   /** Length of the free-text query (PII-safe signal for tuning relevance). */

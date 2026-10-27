@@ -66,14 +66,14 @@ describe("POST /api/auth/apple — validation", () => {
     const res = await POST(makeRequest({ nonce: "raw-nonce" }));
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/identityToken/i);
+    expect(body.error).toBe("Invalid authentication input");
   });
 
   it("returns 400 when nonce is missing", async () => {
     const res = await POST(makeRequest({ identityToken: "tok" }));
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/nonce/i);
+    expect(body.error).toBe("Invalid authentication input");
   });
 
   it("returns 400 on invalid JSON", async () => {

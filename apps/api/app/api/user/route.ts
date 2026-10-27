@@ -57,8 +57,8 @@ export async function DELETE(
       }
       await tx.user.delete({ where: { id: userId } });
     });
-  } catch (err) {
-    console.error("[DELETE /api/user] DB transaction failed:", err);
+  } catch {
+    console.error("[DELETE /api/user] DB transaction failed:");
     return NextResponse.json(
       { error: "Failed to delete account" },
       { status: 500 },
@@ -69,10 +69,9 @@ export async function DELETE(
   // the user is already gone from our system; log and move on.
   try {
     await getSupabaseAdmin().auth.admin.deleteUser(userId);
-  } catch (err) {
+  } catch {
     console.error(
       "[DELETE /api/user] Supabase auth deleteUser failed (non-fatal):",
-      err,
     );
   }
 

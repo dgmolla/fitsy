@@ -16,6 +16,15 @@ Onboarding signs in before the location lookup; expired sessions and anonymous r
 The guided client cache is scoped to the current account and is unavailable after sign-out.
 See [API authentication and limits](api-reference.md#authentication-and-rate-limits) for quotas, exact public exceptions and the automatic route regression.
 
+Auth POST bodies are limited to 64 KiB of actual bytes, including chunked requests and ignored fields.
+The bounded schemas in `apps/api/lib/authInput.ts` accept Apple/Google identity tokens up to 16,384 characters, Apple nonces up to 256, authorization codes up to 4,096, and Apple name components up to 100 each.
+Apple's optional email, nullable full name and nullable name components remain supported; authorization codes are accepted but not used for verification.
+Password credentials accept normalized email addresses up to 254 characters and passwords up to 1,024; registration retains the eight-character minimum and accepts names up to 200 characters.
+Malformed shapes and out-of-range fields return `400 { error: "Invalid authentication input" }`; invalid JSON returns `400 { error: "Invalid JSON body" }` and oversized bodies return `413 { error: "Request body too large" }`.
+Unexpected provider or persistence failures return safe JSON errors, and operational diagnostics omit credentials, provider bodies, personal attributes and account identifiers.
+Provider outages return `503 { error: "Authentication provider unavailable" }`; unexpected handler or database failures return `500 { error: "Internal server error" }`.
+Both server and mobile Supabase transports contain rejected fetch errors before the SDK can log them, and the mobile RevenueCat log handler reports fixed warning/error codes without forwarding SDK messages.
+
 ## Overview
 
 Fitsy uses **Apple Sign-In** and **Google Sign-In** as the only production auth paths. Both are implemented via Supabase's `signInWithIdToken`, which delegates JWKS-based verification to the identity provider (Apple or Google). The resulting Supabase JWT is verified on every protected API request using `jose` against Supabase's own JWKS endpoint — no local `JWT_SECRET` or HS256 signing exists in the codebase.
@@ -144,8 +153,8 @@ sequenceDiagram
 | Status | Body | Condition |
 |---|---|---|
 | 200 | `{ token, user, isNewUser }` | Success |
-| 400 | `{ error: "identityToken is required" }` | Missing token |
-| 400 | `{ error: "nonce is required" }` | Missing nonce |
+| 400 | `{ error: "Invalid authentication input" }` | Malformed or oversized fields |
+| 413 | `{ error: "Request body too large" }` | Body exceeds 64 KiB |
 | 401 | `{ error: "Invalid identity token" }` | Supabase verification failed |
 
 ---
@@ -194,7 +203,8 @@ The `/api/auth/google` handler wraps the account-linking check and upsert in a s
 | Status | Body | Condition |
 |---|---|---|
 | 200 | `{ token, refreshToken, user, isNewUser }` | Success |
-| 400 | `{ error: "idToken is required" }` | Missing token |
+| 400 | `{ error: "Invalid authentication input" }` | Malformed or oversized fields |
+| 413 | `{ error: "Request body too large" }` | Body exceeds 64 KiB |
 | 400 | `{ error: "Google account has no email" }` | No email on account |
 | 401 | `{ error: "Invalid Google ID token" }` | Supabase verification failed |
 | 429 | `{ error: "Too many requests…" }` | Rate limit exceeded |

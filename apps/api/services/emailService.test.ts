@@ -71,24 +71,36 @@ describe("sendWelcomeEmail", () => {
     await sendWelcomeEmail("bad@example.com");
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Resend API error 422"),
+      '[emailService] delivery_rejected', { status: 422 },
     );
     consoleSpy.mockRestore();
   });
 
-  it("handles fetch text() failure gracefully on error response", async () => {
+  it("does not read or log a sensitive rejection body", async () => {
     const consoleSpy = jest.spyOn(console, "error").mockImplementation();
+    const text = jest.fn().mockResolvedValue('PRIVATE_SENTINEL_575 recipient, API key and name');
     mockFetch.mockResolvedValue({
       ok: false,
       status: 500,
-      text: jest.fn().mockRejectedValue(new Error("body read failed")),
+      text,
     });
 
     await sendWelcomeEmail("bad@example.com");
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Resend API error 500"),
+      '[emailService] delivery_rejected', { status: 500 },
     );
+    expect(text).not.toHaveBeenCalled();
+    expect(consoleSpy.mock.calls.flat().join(' ')).not.toContain('PRIVATE_SENTINEL_575');
     consoleSpy.mockRestore();
+  });
+
+  it('contains sensitive transport errors without rejecting registration email delivery', async () => {
+    const log = jest.spyOn(console, 'error').mockImplementation();
+    mockFetch.mockRejectedValue(new Error('PRIVATE_SENTINEL_575 authorization and recipient'));
+    await expect(sendWelcomeEmail('private@example.test', 'Private name')).resolves.toBeUndefined();
+    expect(log).toHaveBeenCalledWith('[emailService] delivery_unavailable');
+    expect(log.mock.calls).toEqual([['[emailService] delivery_unavailable']]);
+    log.mockRestore();
   });
 });

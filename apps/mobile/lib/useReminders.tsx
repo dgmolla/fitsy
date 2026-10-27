@@ -12,7 +12,7 @@ import { explainMissedTrialReminder, missedTrialReminderWindow } from './trialRe
 
 interface ReminderContextValue { userId: string | null; preferences: ReminderPreferences; scheduled: { kind: string; date: string }[]; save: (value: ReminderPreferences) => Promise<void> }
 const ReminderContext = createContext<ReminderContextValue | null>(null);
-const reportFailure = (error: unknown) => console.warn('[reminders]', error instanceof Error ? error.message : error);
+const reportFailure = () => console.warn('[reminders] operation_failed');
 
 export function ReminderProvider({ children }: { children: React.ReactNode }) {
   const { entitled, customerInfo, ready, refresh } = usePurchases();
@@ -40,7 +40,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     });
     void supabase.auth.getSession().then(({ data: sessionData }) => {
       if (live && !authEventReceived) setAccount({ ready: true, id: sessionData.session?.user.id ?? null });
-    }).catch(error => { if (live) setAccount({ ready: true, id: null }); reportFailure(error); });
+    }).catch(() => { if (live) setAccount({ ready: true, id: null }); reportFailure(); });
     const unsubscribe = subscribeReminderPreferences(() => setRevision(value => value + 1));
     const foreground = AppState.addEventListener('change', state => {
       if (state === 'active') void refresh().catch(reportFailure).finally(() => { if (live) setRevision(value => value + 1); });
@@ -108,12 +108,12 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
           else if (legacyExpiry) {
             // A fired request disappears from the pending list. That alone
             // cannot establish delivery or failure, so only warn on permission loss.
-            const permission = await Notifications.getPermissionsAsync().catch(error => { reportFailure(error); return null; });
+            const permission = await Notifications.getPermissionsAsync().catch(() => { reportFailure(); return null; });
             if (live && permission?.status !== 'granted') notifyUnconfirmedTrial();
           }
         }
-      }).catch(error => {
-        reportFailure(error);
+      }).catch(() => {
+        reportFailure();
         notifyUnconfirmedTrial();
       });
     return () => { live = false; };

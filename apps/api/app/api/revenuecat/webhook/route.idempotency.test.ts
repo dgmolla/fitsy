@@ -62,7 +62,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     const res = await POST(makeRequest(event(), AUTH));
     expect(res.status).toBe(200);
     expect(mockSubscriptionUpdateMany).toHaveBeenCalledTimes(1);
-    expect(mockLogStatusChange).toHaveBeenCalledWith("user-1", "active", "active", "webhook");
+    expect(mockLogStatusChange).toHaveBeenCalledWith("active", "active", "webhook");
     expect(mockSync).not.toHaveBeenCalled();
   });
 
@@ -95,7 +95,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     expect(res.status).toBe(200);
     expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
     expect(mockSync).toHaveBeenCalledWith("user-1");
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("expiresAt"));
+    expect(warn).toHaveBeenCalledWith("[subscription] stale_event_conflict");
   });
 
   it("retries a stale renewal while the REST snapshot still has the old active period", async () => {
@@ -117,7 +117,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     expect(res.status).toBe(200);
     expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
     expect(mockSync).toHaveBeenCalledWith("user-1");
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("[subscription] user-1 stale EXPIRATION"));
+    expect(warn).toHaveBeenCalledWith("[subscription] stale_event_conflict");
   });
 
   it("returns 500 (RevenueCat retries) when a conflicting stale event's tiebreaker can't reach RevenueCat", async () => {
@@ -128,7 +128,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     );
     expect(res.status).toBe(500);
     expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("tiebreak sync failed"));
+    expect(warn).toHaveBeenCalledWith("[subscription] tiebreak_unavailable");
   });
 
   it("retries a delayed purchase while the empty REST snapshot still lags", async () => {
@@ -140,7 +140,7 @@ describe("POST /api/revenuecat/webhook - idempotency", () => {
     expect(res.status).toBe(500);
     expect(mockSync).toHaveBeenCalledWith("user-1");
     expect(mockSubscriptionUpdateMany).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("still inactive after purchase"));
+    expect(warn).toHaveBeenCalledWith("[subscription] purchase_reconciliation_pending");
   });
 
   it("retries a delayed repurchase while the expired REST snapshot still lags", async () => {

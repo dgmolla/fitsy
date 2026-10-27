@@ -241,18 +241,23 @@ describe("logStatusChange", () => {
   });
 
   it("logs a tagged from -> to line at info level when the status changes", () => {
-    logStatusChange("u1", "active", "expired", "sync");
-    expect(log).toHaveBeenCalledWith("[subscription] u1 status active -> expired (sync)");
+    logStatusChange("active", "expired", "sync");
+    expect(log).toHaveBeenCalledWith("[subscription] status active -> expired (sync)");
     expect(warn).not.toHaveBeenCalled();
   });
 
   it("reports a first row as coming from none", () => {
-    logStatusChange("u1", null, "active", "webhook");
-    expect(log).toHaveBeenCalledWith("[subscription] u1 status none -> active (webhook)");
+    logStatusChange(null, "active", "webhook");
+    expect(log).toHaveBeenCalledWith("[subscription] status none -> active (webhook)");
   });
 
   it("stays silent when the status is unchanged (renewals, repeated syncs)", () => {
-    logStatusChange("u1", "active", "active", "sync");
+    logStatusChange("active", "active", "sync");
     expect(log).not.toHaveBeenCalled();
+  });
+
+  it('only logs known status labels, even when stored values contain sensitive data', () => {
+    logStatusChange('PRIVATE_SENTINEL_575', 'active', 'webhook');
+    expect(log).toHaveBeenCalledWith('[subscription] status unknown -> active (webhook)');
   });
 });

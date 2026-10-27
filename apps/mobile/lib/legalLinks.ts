@@ -32,8 +32,8 @@ export async function openLegalLink(link: LegalLink): Promise<void> {
   trackLegalLinkOpened({ link });
   try {
     await WebBrowser.openBrowserAsync(legalUrl(link));
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn(`Failed to open ${link} link`, err);
+    console.warn(`Failed to open ${link} link`);
   }
 }

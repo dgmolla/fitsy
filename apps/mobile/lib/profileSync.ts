@@ -26,9 +26,9 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 export async function fetchProfile(expectedUserId?: string): Promise<ProfileResponse | null> {
   try {
     return await api.get<ProfileResponse>('/api/user/profile?goalSchema=2', true, {}, expectedUserId);
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn('[profileSync] fetchProfile failed:', err);
+    console.warn('[profileSync] fetchProfile failed:');
     return null;
   }
 }
@@ -45,12 +45,12 @@ async function performProfilePush(expectedUserId: string, savedBody?: Record<str
     if (isProfileSyncForgotten(expectedUserId)) return false;
     await api.patch('/api/user/profile?goalSchema=2', body, true, expectedUserId);
     return true;
-  } catch (err) {
+  } catch {
     // Data stays local; the next pushProfileToServer call retries. Surface in
     // console so we don't silently lose the entire profile sync silently
     // during onboarding the way we did before S-221.
     // eslint-disable-next-line no-console
-    console.warn('[profileSync] pushProfileToServer failed:', err);
+    console.warn('[profileSync] pushProfileToServer failed:');
     return false;
   }
 }
@@ -116,9 +116,9 @@ async function retryPendingProfileSync(scheduleRetry = true): Promise<boolean> {
     const delay = [1000, 5000, 15000][retryCount++] ?? 60000;
     retryTimer = setTimeout(() => {
       retryTimer = null;
-      void retryPendingProfileSync().catch(err => {
+      void retryPendingProfileSync().catch(() => {
         // eslint-disable-next-line no-console
-        console.warn('[profileSync] pending profile retry failed:', err);
+        console.warn('[profileSync] pending profile retry failed:');
       });
     }, delay);
   }
@@ -167,9 +167,9 @@ export async function syncSavedProfileToServer(bodyOverride?: Record<string, unk
 }
 
 export function deliverQueuedProfile(): void {
-  void retryPendingProfileSync().catch(err => {
+  void retryPendingProfileSync().catch(() => {
     // eslint-disable-next-line no-console
-    console.warn('[profileSync] pending profile delivery failed:', err);
+    console.warn('[profileSync] pending profile delivery failed:');
   });
 }
 
@@ -177,9 +177,9 @@ export function deliverQueuedProfile(): void {
 export async function replayPendingProfileSync(): Promise<void> {
   try {
     await retryPendingProfileSync();
-  } catch (err) {
+  } catch {
     // eslint-disable-next-line no-console
-    console.warn('[profileSync] pending profile replay failed:', err);
+    console.warn('[profileSync] pending profile replay failed:');
   }
 }
 
@@ -281,11 +281,11 @@ export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
     }
     if (!(await stillCurrent())) return 'account-changed';
     return profile.macroTarget || archivedTarget ? 'restored' : 'absent';
-  } catch (err) {
+  } catch {
     // Use whatever is in local storage; surface in dev console so we can spot
     // post-login profile-pull regressions instead of silently falling back.
     // eslint-disable-next-line no-console
-    console.warn('[profileSync] pullProfileFromServer failed:', err);
+    console.warn('[profileSync] pullProfileFromServer failed:');
     return 'unavailable';
   }
 }

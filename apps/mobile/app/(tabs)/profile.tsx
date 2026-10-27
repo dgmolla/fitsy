@@ -100,9 +100,9 @@ export default function ProfileScreen() {
             await syncSavedProfileToServer();
           }
           prevProfile.current = snapshot;
-        } catch (err) {
+        } catch {
           // eslint-disable-next-line no-console
-          console.warn('profile load failed', err);
+          console.warn('[profile] load_failed');
         } finally {
           setLoading(false);
         }

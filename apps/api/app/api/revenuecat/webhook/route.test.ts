@@ -156,7 +156,7 @@ describe("POST /api/revenuecat/webhook — persistence", () => {
   it("logs the status transition against the previously stored row", async () => {
     mockReadUserAndRow.mockResolvedValue({ userExists: true, row: { status: "expired", lastEventAt: null } });
     await POST(makeRequest(event(), AUTH));
-    expect(mockLogStatusChange).toHaveBeenCalledWith("user-1", "expired", "active", "webhook");
+    expect(mockLogStatusChange).toHaveBeenCalledWith("expired", "active", "webhook");
   });
 });
 

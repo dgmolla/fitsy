@@ -33,7 +33,7 @@ describe("getSupabaseAdmin", () => {
     expect(mockCreateClient).toHaveBeenCalledWith(
       "https://test.supabase.co",
       "test-service-role-key",
-      { auth: { autoRefreshToken: false, persistSession: false } },
+      { auth: { autoRefreshToken: false, persistSession: false }, global: { fetch: expect.any(Function) } },
     );
   });
 
@@ -60,7 +60,7 @@ describe("getSupabaseClient", () => {
     expect(mockCreateClient).toHaveBeenCalledWith(
       "https://test.supabase.co",
       "test-anon-key",
-      { auth: { autoRefreshToken: false, persistSession: false } },
+      { auth: { autoRefreshToken: false, persistSession: false }, global: { fetch: expect.any(Function) } },
     );
   });
 

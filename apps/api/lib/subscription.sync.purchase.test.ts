@@ -83,7 +83,7 @@ describe("neverDowngrade (purchase / restore)", () => {
       expect(mockFetchProEntitlement).toHaveBeenCalledTimes(7);
       expect(mockUpdateMany).not.toHaveBeenCalled();
       expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining("[subscription] u1 RevenueCat still inactive after 7 reads over 6000 ms"),
+        '[subscription] purchase_unconfirmed', { reads: 7, elapsedMs: 6000 },
       );
     });
 

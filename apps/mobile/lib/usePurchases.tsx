@@ -132,9 +132,9 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
           : Promise.resolve(null);
         await resolveAtBoot(userId, rcReady, isCancelled);
         if (!cancelled) setCustomerInfoSettled(true);
-      } catch (err) {
+      } catch {
         // The seams swallow their own errors, but no gate may hold forever.
-        console.warn('[purchases] boot failed', err instanceof Error ? err.message : err);
+        console.warn('[purchases] boot failed');
         if (!cancelled) setCustomerInfoSettled(true);
         await settleAfterBootFailure(userId, isCancelled);
       } finally {
@@ -186,8 +186,8 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
           }
         })().catch(() => undefined);
       });
-    } catch (err) {
-      console.warn('[purchases] listener unavailable', err instanceof Error ? err.message : err);
+    } catch {
+      console.warn('[purchases] listener unavailable');
     }
   }, [setCustomerInfo, syncEntitlement]);
 
