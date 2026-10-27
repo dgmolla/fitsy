@@ -1,4 +1,31 @@
-**TL;DR:** Re-parsing the completed 129-case DEV comparison without new bills and separating output failures from estimate error.
+**TL;DR:** The 129-case DEV comparison is merged, with green CI, clean independent review and $0 additional inference spend.
+
+## Completed delivery
+
+[PR #568](https://github.com/dgmolla/fitsy/pull/568) was squash-merged normally at `2026-10-27T08:49:01Z` as `c87dd14a271f78eab4d73acaf8336f881a8cfbf5`.
+The merged tree `c4e938ce16ccb4963fc64a72d52ed5b870b153d7` exactly matches reviewed source `44972956587d9164a0aa5c48b682919b3b68bcfc`.
+The exact-head local `gpt-6.1-sol` review passes correctness and workflow-security with no findings after the bounded P2 replay-planning repair.
+[PR Verify](https://github.com/dgmolla/fitsy/actions/runs/40474956664), [merged-main Verify](https://github.com/dgmolla/fitsy/actions/runs/40476164686) and [Deploy](https://github.com/dgmolla/fitsy/actions/runs/40477334091) are green.
+The existing product publisher computes N/A and simulator scope is none for this evaluation-only change.
+All 60 original focused regressions passed; the narrow repair and ordinary hook passed all 28 provider regressions, plus all eight applicable cheap checks.
+
+The authoritative [four-method comparison](scripts/eval/suite/results/2026-10-27T08-22-32-777Z-db8d6ccb/comparison-report.md) retains the same 129 DEV IDs, all 465 supported predictions, parsed-only and all-case metrics, failure counts, costs and original-versus-replay latency.
+The decoder, scoring, prompts, schema, targets and measured outputs are unchanged by the final replay-planning repair.
+Haiku's cached failures are completed valid JSON with invalid probability distributions; strict re-parsing recovers zero failed cases.
+The later pre-existing Qwen continuation already attempted every selected case, including the last nine bulk cases.
+No eligible unseen inference remains, and no billed input was repeated.
+Macro format failures are Haiku 14 curated and 16 bulk, and Qwen 8 curated and 7 bulk; Qwen also has one macro timeout per tier.
+Matching adds three Haiku and two Qwen format failures; exact and Jev have none.
+
+Additional spend for this task is **$0**.
+The complete Haiku/Qwen comparison costs **$0.45402165**, comprising Haiku $0.41557200 and Qwen $0.03844965.
+The cumulative ledger including $0.12394053 of historical Jev is **$0.57796218**, below the cumulative $2.70 stop and strict $3 cap.
+Ledger SHA-256 remains `8a405dca7cd8eb51e4b94edfbc3b53f3ed7e921f2bb4e393468aa95cd9f44495`, with the original prefix preserved, zero pending reservations and no unknown usage.
+No holdout evaluation, direct database connection, protected-checkout access, project-board edit or hook/protection bypass was performed.
+All evaluation and test jobs have ended; the superseded idle owner and its dedicated tool children were released while raw history was retained.
+
+This final handoff records postmerge completion on the retained task branch.
+Implementation and all comparison results are already integrated in the reviewed merge above; no implementation work remains for this request.
 
 ## Cached-output diagnosis and scoring continuation
 
