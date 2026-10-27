@@ -8,6 +8,7 @@ import { ModelClient, ModelReplayClient, ModelSession, MODEL_STOP_USD, answerSch
 import { modelSelection, options, requestedSelection, run } from './run';
 import { type JevRequest } from '../lib/jev-experiment';
 import type { Item } from './types';
+import { normalizedAnswers, probabilityChecks } from './haiku-format';
 
 const item: Item = { chain: 'Toy Chain', name: 'Beans', section: 'Sides', serving: '1 portion', region: '', description: '' };
 const rows = [{ id: 'hidden-id', chain: item.chain, name: item.name, section: item.section, serving: item.serving, region: '' }];
@@ -482,4 +483,54 @@ test('historical Jev bills consume the cumulative model stop allowance before an
     expect(session.remainingUsd).toBeCloseTo(.005);
     await expect(client.send(request)).rejects.toThrow('$2.70'); expect(fetcher).not.toHaveBeenCalled();
   } finally { client.close(); session.close(); }
+});
+
+test.each([false, true])('Haiku changed payload retries only original format failures once (repair fails=%s)', async fails => {
+  const invalid = transport('haiku', data => {
+    const raw = answer(request); raw.answers.match!.probabilities = { c0: .72, none: .5, abstain: .09 };
+    data['content'] = [{ type: 'text', text: JSON.stringify(raw) }];
+  });
+  const s = setup('haiku', invalid), goodRequest = matchingRequest({ ...item, name: 'Rice' }, rows);
+  await expect(s.client.send(request)).rejects.toMatchObject({ kind: 'format' });
+  s.fetcher.mockImplementationOnce(transport('haiku')); await s.client.send(goodRequest);
+  s.client.close(); s.session.close();
+  // Synthetic original-session history, using the exact supported original payload bytes.
+  const history = readFileSync(s.client.rawFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  for (const e of history.filter(e => e.event === 'request')) e.payload = providerRequest('haiku', e.request, 'original');
+  writeFileSync(s.client.rawFile, history.map(e => JSON.stringify(e)).join('\n') + '\n');
+  const prefix = readFileSync(s.session.ledger, 'utf8'), out = join(s.directory, 'changed'); mkdirSync(out);
+  const session = new ModelSession('changed', s.directory), fetcher = fails ? invalid.mockClear() : transport('haiku');
+  const client = new ModelClient('haiku', session, out, 'fake-key', fetcher);
+  try {
+    expect(client.hasReplay(request)).toBe(false); expect(client.cachedResponse(request)).toBeUndefined();
+    expect(client.hasReplay(goodRequest)).toBe(true);
+    await expect(client.send(goodRequest)).resolves.toMatchObject({ costUsd: 0 });
+    if (fails) await expect(client.send(request)).rejects.toMatchObject({ kind: 'format' });
+    else await expect(client.send(request)).resolves.toMatchObject({ costUsd: .001 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(String(fetcher.mock.calls[0]![1]!.body));
+    expect(payload.system).toContain('sum to exactly 1.00'); expect(payload.system).toContain('LARGEST probability');
+    expect(payload).not.toEqual(providerRequest('haiku', request, 'original'));
+    expect(client.hasReplay(request)).toBe(true);
+    if (fails) await expect(client.send(request)).rejects.toMatchObject({ kind: 'format' });
+    else await expect(client.send(request)).resolves.toMatchObject({ costUsd: 0 });
+    expect(fetcher).toHaveBeenCalledTimes(1); expect(readFileSync(session.ledger, 'utf8').startsWith(prefix)).toBe(true);
+  } finally { client.close(); session.close(); }
+  const ledger = readFileSync(session.ledger, 'utf8'), replay = new ModelReplayClient('haiku', 'replay', s.directory, join(out, 'replay.jsonl'));
+  if (fails) await expect(replay.send(request)).rejects.toMatchObject({ kind: 'format' });
+  else await expect(replay.send(request)).resolves.toMatchObject({ costUsd: 0 });
+  expect(readFileSync(session.ledger, 'utf8')).toBe(ledger);
+});
+
+test('normalization is a secondary copy, while the strict decoder rejects the original total and argmax', () => {
+  const raw = answer(request); raw.answers.match!.probabilities = { c0: .3, none: .8, abstain: .2 };
+  const original = structuredClone(raw), envelope = (value: unknown) => ({ content: [{ type: 'text', text: JSON.stringify(value) }], stop_reason: 'end_turn' });
+  expect(() => decodeProviderOutput('haiku', request, envelope(raw))).toThrow('probability');
+  expect(probabilityChecks(request, raw)[0]).toMatchObject({ invalidTotal: true, invalidArgmax: true });
+  const normalized = normalizedAnswers(request, raw);
+  expect(normalized.answers.match!.choice).toBe('none'); expect(raw).toEqual(original);
+  expect(() => decodeProviderOutput('haiku', request, envelope(normalized))).not.toThrow();
+  for (const probabilities of [{ c0: 0, none: 0, abstain: 0 }, { c0: -.1, none: 1, abstain: .1 }, { c0: 1 }]) {
+    expect(() => normalizedAnswers(request, { answers: { match: { ...raw.answers.match, probabilities } } })).toThrow();
+  }
 });

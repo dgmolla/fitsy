@@ -22,7 +22,15 @@ The cumulative stop is $2.70 and hard cap is $3, including all historical spend.
 Recovery assessment: ship-branch, existing provider payload/schema, replay, ledger reservation and explicit case-selection entrypoints support the requested recovery.
 The selected correction adds explicit Haiku probability-total and argmax instructions, recognizes both retained payload revisions, and retries only failed original requests while preserving successful cache entries and exact-payload deduplication.
 The suite README and actual runner/provider tests will carry this correction into the consuming entrypoints; external skill edits are excluded by the workspace-only constraint.
-Next: commit the diagnosis, implement and verify that source-bound change, then run the 33 selected cases detached with reservations before a cache-only four-method rescore.
+The diagnosis is committed as `5c59769`.
+The provider now adds the Haiku-only probability instruction and recognizes original versus changed payloads with exact serialized payload hashes.
+Only an original format failure is replaced; successful original stages and all changed-payload attempts are reused, including failed changed attempts.
+The budget planner sees original failures as requiring the fixed request and reserves both possible macro stages.
+The comparison consumer now proves payload uniqueness, the preserved starting ledger prefix, failed-case-only spending, and separate before/after output failures versus wrong estimates.
+The suite README documents the actual retry and detached collection entrypoints, while strict decoder tests and secondary normalization tests constrain their behavior.
+The first focused test compile found a Node assert import incompatible with Jest's module settings; its supported named import corrects that without changing scoring.
+Lint/type checks and the real comparison generator preflight pass before paid collection.
+Next: freeze this implementation, complete actual-runner regressions, then run only the 33 selected cases detached with reservations before the cache-only four-method rescore.
 
 ## Prior comparison history
 

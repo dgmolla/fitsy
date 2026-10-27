@@ -68,7 +68,9 @@ Their ordinary files remain readable with any JSON/JSONL tool; review the genera
 For the measured seed extension, use `--cases=measured/dev-selection.json` with `--split=dev --tier=both`.
 The frozen selection includes new dev cases and original dev matching cases whose candidate metadata changed.
 The collector reuses exact canonical requests only when the raw exchange, current required model, typed response and settled billing agree.
-Reuse receipts identify the original run/request and incur no reservation or charge; missing exchange evidence or a previously billed failed request refuses recollection.
+Reuse receipts identify the original run/request and incur no reservation or charge.
+Missing exchange evidence refuses recollection.
+A Haiku original-format failure may receive one changed probability-instruction payload; identical paid payloads and successful original requests always reuse cache.
 Do not delete historical exchanges while their paid inputs remain eligible for replay.
 
 ## Paid model adapters
@@ -76,7 +78,9 @@ Do not delete historical exchanges while their paid inputs remain eligible for r
 `haiku` uses the repository's production alias `claude-haiku-4-5` on Anthropic; `qwen` uses the spike's `qwen/qwen3-235b-a22b-2507` on OpenRouter.
 They reuse Jev's exact question instructions, input projections, choice probabilities, bin definitions, conditional refinement and final decoder.
 Their transport serializes the same `state` and `questions` into one user message with a JSON answer schema, temperature zero and at most 1,536 output tokens.
-No calibration, free-form macro prompt, reasoning request, tool, web search or retry is added.
+Haiku adds a provider-specific system instruction requiring each probability vector to total exactly one and its choice to equal argmax.
+The Jev questions, input state, schema, bins and strict decoder remain unchanged.
+Qwen retains its original payload.
 Model-specific chat serialization and constrained generation are transport differences from Jev and remain a comparison limitation.
 Both methods are dev-only; their presence forces Jev onto a client with no credential and no network transport.
 A Jev cache miss fails visibly rather than making another paid call.
@@ -92,14 +96,15 @@ Sampling is intentionally conservative and may leave substantial money unspent.
 For a continuation, freeze the original ordered IDs in a source selection file and pass `--cases=<file>.json`.
 An explicit paid-model selection must fit in full; it is never silently resampled.
 The durable model replay validates original payloads, model identity, usage and settled bills, and deducts already-paid requests from the remaining reservation.
-Known billed invalid answers remain failed cases and are replayed as failures, while other cases continue without changing prompts or validation.
+Known billed invalid answers remain failures under the strict decoder, while other cases continue.
+Only original Haiku format failures are eligible for the changed probability instruction; current-payload failures remain terminal cached outcomes.
 Unknown billing, missing paid evidence, unexpected models, reservation overruns and transport failures still stop collection.
 
 `--replay-only` also supports Haiku and Qwen with no credential, HTTP transport, reservation or ledger mutation.
 It re-parses the retained completed bodies with the same strict Jev decoder instead of trusting an old case-level failure label.
 Invalid JSON, invalid typed fields/probability distributions, incomplete output and reconciled timeouts retain distinct failure diagnostics.
 Probability totals and argmax validation are never relaxed or normalized for one provider.
-A billed invalid input remains cached and cannot be bought again.
+A byte-identical billed payload remains cached and cannot be bought again.
 Reports show parse/format failures, timeouts, abstentions and missing results separately, with both parsed-only macro metrics and the original all-case penalties.
 Parsed-only metrics exclude every case without a valid macro prediction; exact matching has no macro estimator.
 Anthropic's documented schema-compilation HTTP 400 rejection happens before inference and is recorded as a zero-cost transport failure, stopping the run for repair.
@@ -138,3 +143,21 @@ Without explicit shell-sourcing approval, select authorized keys using a dotenv 
 The actual four-method entrypoint lists every missing key and any recognized legacy name before any request or reservation, so an unavailable provider is never silently substituted.
 Other connected tools have no relevant credential source; unrelated hosting environments and all `~/fitsy-refactor` paths are excluded.
 An unavailable live run remains unavailable; offline fixtures prove adapter mechanics, not model quality or live API acceptance.
+
+## Haiku format recovery
+
+The strict result remains primary.
+`haiku-format.ts <baseline-run-id>` diagnoses cached failed distributions and produces a separate secondary normalized view, without credentials or transport.
+Normalization divides each vector by its positive sum and selects exact argmax; invalid shapes and zero totals remain failures.
+If normalization changes a coarse choice whose refinement is absent, the case fails explicitly rather than fetching it.
+
+The generated `sources/haiku-format-failed-dev.json` selects only the 30 failed Haiku macro cases and three matching failures in the original 129-case DEV sample.
+Commit all executing source and selection inputs before collection.
+Use the existing runner with `--methods=haiku --split=dev --tier=both --cases=haiku-format-failed-dev.json --live`.
+Source the authorized lowercase `anthropic` variable in the detached shell and export it as `ANTHROPIC_API_KEY` in process memory only.
+Never print or copy credential values into evidence.
+Use a detached session with stdout/stderr redirected to task-owned files so disconnects do not restart collection.
+The existing exclusive lock, durable per-request reservation and $2.70 cumulative stop apply before every request.
+Re-running the command consumes successful original stages and all current-payload attempts from cache, including current failures.
+A complete four-method `--replay-only` run on `haiku-qwen-dev-sample.json` supplies the final strict rescore.
+The comparison audit uses actual serialized payload hashes for no-repeat proof and preserves the entire starting ledger prefix.
