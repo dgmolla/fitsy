@@ -402,7 +402,7 @@ test('comparison CLI accepts historical and new summaries but rejects changed ov
   writeFileSync(file, JSON.stringify({ ...historical, scores }));
   const current = invoke();
   expect(current.stderr).toBe(''); expect(current.status).toBe(0);
-  const key = 'curated/matching/exact';
+  const key = 'curated/matching/exact'; // gitleaks:allow - metric group name, not a credential
   writeFileSync(file, JSON.stringify({ ...historical, scores: { ...historical.scores,
     [key]: { ...historical.scores[key], passed: historical.scores[key].passed + 1 } } }));
   expect(invoke().status).toBe(1);
