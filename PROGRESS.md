@@ -1,3 +1,35 @@
+**TL;DR:** Adding dev-only Haiku/Qwen adapters with shared Jev prompts, replay-only Jev and a $2.70 stop.
+
+# Haiku and Qwen dev comparison
+
+The current task owns `data/eval-suite-haiku-qwen` in `/Users/dawitmolla/fitsy-eval-suite`, starting at `ec1da10` from main.
+The human approved Haiku and Qwen for this run only, dev only, inference/read-only API calls only, no database connections, no board edits, no hook bypass and no access under `~/fitsy-refactor`.
+The requested PR is `data: eval suite haiku + qwen adapters and dev baseline`, with ordinary squash merge only after green CI and a source-bound local AI review without P0/P1.
+The prior task history below is retained; its Anthropic prohibition is superseded only for this run.
+
+## Current evidence and next action
+
+The exact requested command currently refuses the disabled model stubs before transport.
+Haiku uses the existing production alias `claude-haiku-4-5`; the open-model spike pins Qwen to `qwen/qwen3-235b-a22b-2507` on OpenRouter.
+The old provider helper referenced by the spike is absent at this revision, so use its documented model identity and verify current public provider contracts.
+Read-only OpenRouter model metadata reports $0.09/M input and $0.55/M output; Anthropic documents $1/M input and $5/M output for Haiku 4.5.
+Never use the stale April Haiku price of $0.80/$4.
+No new paid calls have occurred.
+
+Credential discovery selected only names, never printed values, in `~/Desktop/secrets.env`, conventional env files in this checkout, and conventional `~/fitsy` env paths.
+The named secrets file contains only the legacy Jev credential among relevant keys; neither `ANTHROPIC_API_KEY` nor `OPENROUTER_API_KEY` exists in those files or the process environment.
+Live paid execution is therefore stopped before transport; no human action is requested under the instruction to make conservative choices without questions.
+Recovery assessment: filesystem/dotenv tools support narrow in-memory loading; available connectors have no relevant credential reader, and unrelated hosting/credential sources are excluded.
+Close the recovery loop in the actual runner with combined credential preflight, documented allowed sources and an actionable secret-safe failure receipt.
+Continue implementing adapters, meaningful transport/budget regressions, full dev exact/Jev replay, checks and PR preparation.
+Do not invent Haiku/Qwen measurements if credentials remain unavailable.
+
+The selected ship-branch skill and standalone Fitsy/cutover references control shipping.
+One sequential local test job has a 2 GiB Node heap estimate, with no simulator, DB or native job needed; disk has 26 GiB free and memory-pressure output reports 58% free at entry.
+Next: commit this task checkpoint, then implement the shared protocol and additive billing before freezing execution source.
+
+## Previous task history
+
 **TL;DR:** Extending PR #558 with verified measured-menu seeds while preserving the frozen v1 population.
 
 # Eval suite seed extension
