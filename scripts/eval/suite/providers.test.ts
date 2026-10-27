@@ -1,6 +1,7 @@
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import * as childProcess from 'node:child_process';
 import { method, matchingRequest, coarseRequest } from './adapters';
 import { durableAppend, loadCases, sha256 } from './fixtures';
 import { spendState, preInferenceRejection, reconcileRejection, reconcileQwenTimeout, RESERVATION_USD } from './budget';
@@ -43,6 +44,22 @@ function appendHistoricalJev(ledger: string, usd: number) {
       { ...prior, event: 'settle', costUsd: usd / 4000, failure: null }];
   }).flat();
   writeFileSync(ledger, (existsSync(ledger) ? readFileSync(ledger, 'utf8') : '') + bills.map(b => JSON.stringify(b)).join('\n') + '\n');
+}
+// Simulate the external Git boundary independently of the developer's current edits.
+// Model transport remains fake, and the real runner still enforces source admission.
+function sourceState(state: 'clean' | 'dirty' | 'untracked') {
+  const execute = childProcess.execFileSync;
+  jest.spyOn(childProcess, 'execFileSync').mockImplementation((...args: unknown[]) => {
+    const [program, command] = args;
+    if (program === 'git' && Array.isArray(command) && command.includes('scripts/eval/suite')) {
+      if (command[0] === 'diff') {
+        if (state === 'dirty') throw new Error('Git reported modified source');
+        return Buffer.alloc(0);
+      }
+      if (command[0] === 'ls-files') return state === 'untracked' ? 'scripts/eval/suite/new-adapter.ts\n' : '';
+    }
+    return Reflect.apply(execute, childProcess, args);
+  });
 }
 
 test.each<Provider>(['haiku', 'qwen'])('%s uses the identical Jev prompts/state, typed answers and two-stage decoder', async provider => {
@@ -405,6 +422,7 @@ test.each([false, true])('real four-method entrypoint reports missing keys and l
 });
 
 test('real runner consumes both model clients, accounts both estimator stages, and closes its lock', async () => {
+  sourceState('clean');
   const { copyFileSync, writeFileSync } = await import('node:fs');
   const directory = temporary(), source = loadCases('dev', 'curated'); mkdirSync(join(directory, 'data'));
   for (const file of ['holdout.sha256', 'data/rows.json', 'data/curated.holdout.jsonl', 'data/bulk.holdout.jsonl']) {
@@ -448,6 +466,25 @@ test('real runner consumes both model clients, accounts both estimator stages, a
     for (const [key, value] of Object.entries(prior)) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
+  }
+});
+
+test.each(['dirty', 'untracked'] as const)('live runner rejects %s inference source before transport or spending', async state => {
+  sourceState(state);
+  const { copyFileSync } = await import('node:fs');
+  const directory = temporary(); mkdirSync(join(directory, 'data'));
+  for (const file of ['holdout.sha256', 'data/rows.json', 'data/curated.dev.jsonl', 'data/curated.holdout.jsonl', 'data/bulk.holdout.jsonl']) {
+    copyFileSync(join(__dirname, file), join(directory, file));
+  }
+  const prior = process.env['ANTHROPIC_API_KEY']; process.env['ANTHROPIC_API_KEY'] = 'fake-anthropic';
+  const network = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden'));
+  try {
+    await expect(run(['--methods=haiku', '--tier=curated', '--split=dev', '--live'], directory)).rejects.toThrow('source cleanliness');
+    expect(network).not.toHaveBeenCalled();
+    expect(existsSync(join(directory, 'results/spend.jsonl'))).toBe(false);
+    expect(existsSync(join(directory, 'results/.jev.lock'))).toBe(false);
+  } finally {
+    if (prior === undefined) delete process.env['ANTHROPIC_API_KEY']; else process.env['ANTHROPIC_API_KEY'] = prior;
   }
 });
 

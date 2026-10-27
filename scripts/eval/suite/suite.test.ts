@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync, symlinkSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as fs from 'node:fs';
@@ -337,22 +338,121 @@ test('macro metrics separate wrong parsed estimates, formatting, timeouts, abste
   expect(none.parsedOnly!.medianPercentError.calories).toBeNull(); expect(none.parsedOnly!.bigMissRate).toBeNull();
 });
 
+test('per-chain matching metrics retain wrong IDs, failures and missing positive denominators', () => {
+  const cases: MatchCase[] = [
+    { ...matchCase, id: 'right' }, { ...matchCase, id: 'wrong' },
+    { ...matchCase, id: 'failed', chain: 'Other Chain' }, { ...matchCase, id: 'missing', chain: 'Other Chain' },
+  ];
+  const metrics = score(cases, [result('right', { kind: 'match', matchId: row.id, confidence: 1 }),
+    result('wrong', { kind: 'match', matchId: 'wrong-id', confidence: 1 }),
+    result('failed', null, { failure: 'Timeout', failureKind: 'timeout', costUsd: null })]);
+  expect(metrics).toMatchObject({ total: 4, passed: 1, recall: .25, chains: {
+    'Toy Chain': { total: 2, attempted: 2, passed: 1, wrongMatches: 1, recall: .5, abstentions: 0, costPer1000Usd: 10 },
+    'Other Chain': { total: 2, attempted: 1, passed: 0, wrongMatches: 0, recall: 0, abstentions: 2,
+      failureCounts: { timeout: 1, missing: 1 }, costPer1000Usd: null },
+  } });
+});
+
+test('per-chain macro metrics include failed and entirely unattempted chains', () => {
+  const metrics = score([{ ...macroCase, id: 'right' }, { ...macroCase, id: 'failed' },
+    { ...macroCase, id: 'missing', chain: 'Other Chain' }], [result('right', row.macros),
+    result('failed', null, { failure: 'Bad probabilities', failureKind: 'format' })]);
+  expect(metrics).toMatchObject({ total: 3, passed: 1, bigMisses: 2, chains: {
+    'Toy Chain': { total: 2, attempted: 2, passed: 1, passRate: .5, bigMisses: 1, parseFailures: 1,
+      medianPercentError: { calories: null }, parsedOnly: { total: 1, passRate: 1 } },
+    'Other Chain': { total: 1, attempted: 0, missing: 1, passed: 0, passRate: 0, bigMisses: 1,
+      medianPercentError: { calories: null }, parsedOnly: { total: 0, passRate: null }, costPer1000Usd: null, p95LatencyMs: null },
+  } });
+});
+
+test('per-chain additions preserve every metric in the recorded dev comparison', () => {
+  const directory = join(__dirname, 'results/2026-10-27T09-17-50-049Z-7691bbd3');
+  const metadata = JSON.parse(readFileSync(join(directory, 'run.json'), 'utf8'));
+  const recorded = JSON.parse(readFileSync(join(directory, 'summary.json'), 'utf8'));
+  const predictions: Result[] = readFileSync(join(directory, 'predictions.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  const selected = new Set<string>(metadata.selectionIds);
+  const cases = loadCases('dev', 'both').cases.filter(c => selected.has(c.id));
+  for (const key of Object.keys(recorded.scores)) {
+    const [tier, task, method] = key.split('/');
+    const population = cases.filter(c => c.tier === tier && c.task === task), ids = new Set(population.map(c => c.id));
+    const { chains, ...original } = score(population, predictions.filter(r => r.method === method && ids.has(r.id)));
+    expect(original).toEqual(recorded.scores[key]);
+    expect(Object.values(chains).reduce((n, m) => n + m.total, 0)).toBe(original.total);
+    expect(Object.values(chains).reduce((n, m) => n + m.passed, 0)).toBe(original.passed);
+  }
+});
+
+test('comparison CLI accepts historical and new summaries but rejects changed overall or chain metrics', () => {
+  const snapshot = temporary(), evalDirectory = join(snapshot, 'scripts/eval'), copiedSuite = join(evalDirectory, 'suite');
+  mkdirSync(evalDirectory, { recursive: true }); cpSync(__dirname, copiedSuite, { recursive: true });
+  symlinkSync(join(__dirname, '../../../node_modules'), join(snapshot, 'node_modules'), 'dir');
+  for (const directory of ['lib', 'jev-macro']) symlinkSync(join(__dirname, '..', directory), join(evalDirectory, directory), 'dir');
+  const runId = '2026-10-27T09-17-50-049Z-7691bbd3', baselineId = '2026-10-27T08-22-32-777Z-db8d6ccb';
+  const out = join(copiedSuite, 'results', runId), file = join(out, 'summary.json');
+  const historical = JSON.parse(readFileSync(file, 'utf8'));
+  const invoke = () => {
+    for (const name of ['comparison-audit.json', 'comparison-report.md', 'failure-diagnosis.json']) rmSync(join(out, name), { force: true });
+    return spawnSync(process.execPath, ['--import', 'tsx', join(copiedSuite, 'compare.cjs'), runId, baselineId, '--haiku-format-fix'],
+      { cwd: snapshot, encoding: 'utf8', timeout: 30_000, maxBuffer: 8 * 1024 * 1024, env: { PATH: process.env['PATH'] } });
+  };
+  const legacy = invoke();
+  expect(legacy.stderr).toBe(''); expect(legacy.status).toBe(0);
+  expect(readFileSync(join(out, 'comparison-report.md'), 'utf8')).toContain('Tier / task / method / chain');
+  const scores = JSON.parse(readFileSync(join(out, 'comparison-audit.json'), 'utf8')).scores;
+  writeFileSync(file, JSON.stringify({ ...historical, scores }));
+  const current = invoke();
+  expect(current.stderr).toBe(''); expect(current.status).toBe(0);
+  const key = 'curated/matching/exact';
+  writeFileSync(file, JSON.stringify({ ...historical, scores: { ...historical.scores,
+    [key]: { ...historical.scores[key], passed: historical.scores[key].passed + 1 } } }));
+  expect(invoke().status).toBe(1);
+  const chain = Object.keys(scores[key].chains)[0]!; scores[key].chains[chain].total++;
+  writeFileSync(file, JSON.stringify({ ...historical, scores }));
+  expect(invoke().status).toBe(1);
+});
+
 test('invalid adapter IDs and outputs become failures through the real evaluator', async () => {
   const r = await evaluateCase(matchCase, { name: 'broken', matcher: { name: 'broken', async match() { return { kind: 'match', matchId: 'foreign', confidence: 1 }; } } }, [row]);
   expect(r.output).toBeNull(); expect(r.failure).toBeTruthy();
 });
 
-function toyFixture(split: 'dev' | 'holdout') {
+function toyFixture(split: 'dev' | 'holdout', cases: MatchCase[] = [matchCase], references: Row[] = [row]) {
   const dir = temporary(); mkdirSync(join(dir, 'data'));
-  const bytes = JSON.stringify({ ...matchCase, split }) + '\n';
+  const bytes = cases.map(c => JSON.stringify({ ...c, split })).join('\n') + '\n';
   for (const tier of ['curated','bulk']) for (const partition of ['dev','holdout']) {
     writeFileSync(join(dir, `data/${tier}.${partition}.jsonl`), tier === 'curated' && split === partition ? bytes : '\n');
   }
-  const rows = JSON.stringify([row]); writeFileSync(join(dir,'data/rows.json'),rows);
+  const rows = JSON.stringify(references); writeFileSync(join(dir,'data/rows.json'),rows);
   writeFileSync(join(dir,'holdout.sha256'), ['data/curated.holdout.jsonl','data/bulk.holdout.jsonl','data/rows.json']
     .map(p=>`${sha256(readFileSync(join(dir,p)))}  ${p}`).join('\n')+'\n');
   return dir;
 }
+
+test('actual offline dev runner saves and prints per-chain results without transport or spending', async () => {
+  const other: Row = { ...row, id: 'other:beans', chain: 'Other Chain' };
+  const alias: MatchCase = { ...matchCase, id: 'other-alias', group: other.id, chain: other.chain,
+    input: { ...input, chain: other.chain, name: 'Refried Beans' }, candidates: [other.id],
+    expected: { kind: 'match', matchId: other.id } };
+  const dir = toyFixture('dev', [matchCase, alias], [row, other]);
+  const fakeFetch = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden'));
+  const logging = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  const report = await run(['--methods=exact', '--split=dev', '--tier=curated'], dir);
+  expect(report.scores['curated/matching/exact']).toMatchObject({ total: 2, passRate: .5, recall: .5, chains: {
+    'Toy Chain': { total: 1, passed: 1, passRate: 1, recall: 1 },
+    'Other Chain': { total: 1, passed: 0, passRate: 0, recall: 0 },
+  } });
+  const out = join(dir, 'results', report.runId);
+  expect(JSON.parse(readFileSync(join(out, 'summary.json'), 'utf8')).scores).toEqual(report.scores);
+  const markdown = readFileSync(join(out, 'report.md'), 'utf8');
+  expect(markdown).toContain('Tier / task / method / chain');
+  expect(markdown).toContain('curated/matching/exact / Other Chain');
+  expect(markdown).toContain('curated/matching/exact / Toy Chain');
+  expect(logging.mock.calls.map(call => String(call[0])).join('')).toContain(markdown);
+  expect(report.accounting.runKnownUsd).toBe(0);
+  expect(existsSync(join(dir, 'results/spend.jsonl'))).toBe(false);
+  expect(existsSync(join(dir, 'results/holdout-runs.jsonl'))).toBe(false);
+  expect(fakeFetch).not.toHaveBeenCalled();
+});
 
 test('actual runner is offline by default and logs toy holdout success and checksum refusal', async () => {
   const fakeFetch = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden'));

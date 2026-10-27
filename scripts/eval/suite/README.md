@@ -43,6 +43,9 @@ Do not invoke the real holdout while building or tuning this version.
 Tests exercise holdout logging only with synthetic Toy Chain fixtures in temporary directories.
 
 `results/<UTC-run-id>/` retains the source/protocol/selection identities, predictions, typed provider exchanges, summaries, and Markdown comparison.
+The CLI and `report.md` show overall, per-chain and per-category results for each selected tier/task/method.
+Every score in `summary.json` also includes a `chains` map using that chain's complete selected denominator, including failed and unattempted cases.
+Original fields and historical summaries retain their meaning; comparison accepts older summaries without this additive map.
 `results/spend.jsonl` is the additive cumulative suite-wide spending history.
 It is never reset between commands or split/tier selections.
 `.jev.lock` enforces one live collection at a time.

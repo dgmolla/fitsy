@@ -221,21 +221,25 @@ Estimator state contains only chain, item name, section/description/region, and 
 | --- | --- | --- |
 | `exact` | Conservative normalized full name, chain, section, region, and explicit serving equality; multiple matches abstain. | Unsupported; displayed as unavailable, never lookup-ground-truth estimates. |
 | `jev-v3` | Multi-candidate choice with explicit none/abstain, published-default allowance, and protein/portion/modifier/region constraints; provider argmax, no confidence cutoff. | Existing v3 coarse/fine encoding: exact zero, twelve positive coarse intervals, ten refinements, midpoint decoding, explicit overflow failure. |
-| `haiku` | Disabled stub. | Disabled stub. |
-| `qwen` | Disabled stub. | Disabled stub. |
+| `haiku` | Shared v3 matcher through explicit dev-only Anthropic transport. | Shared v3 estimator with isolated usage accounting and budget. |
+| `qwen` | Shared v3 matcher through explicit dev-only OpenRouter transport. | Shared v3 estimator with isolated usage accounting and budget. |
 
 The matcher v3 is this suite's multi-candidate extension of the audited published-default experiment; it is not a claim that an earlier production matcher v3 existed.
 The estimator reuses v3 question definitions rather than inventing target-dependent bins.
 The coarse range stops at 3,000 kcal or 240 g per macro; larger observed overflow is an unsuccessful estimate, with no clipping.
 For a new adapter, implement the exported interface in `adapters.ts`, register it in `method` and the CLI allowlist, and test its external boundary before live use.
-A future Haiku/Qwen implementation must use its own explicit transport, usage accounting, and authorized budget, maintain the same projections and failure semantics, and never import the historical production pipeline.
-No Haiku/Anthropic requests are made by this version.
+The implemented Haiku/Qwen adapters maintain the same projections and failure semantics without importing the historical production pipeline.
+Their explicit transports, accounting, replay and previously authorized comparisons are described in the [runner guide](../../../scripts/eval/suite/README.md#paid-model-adapters).
+Adapter availability does not grant live-run authorization; each task's provider, budget and split restrictions still apply.
 
 ## Metrics and results
 
-One command prints side-by-side overall and per-category tables for each selected tier/task/method.
+One command prints side-by-side overall, per-chain and per-category tables for each selected tier/task/method.
 Each run saves `run.json`, `predictions.jsonl`, `summary.json`, `report.md`, and, for Jev, raw typed request/response exchanges under `scripts/eval/suite/results/<UTC-run-id>/`.
 Metadata pins the executing Git head, protocol, fixture bytes, checksum manifest, complete selection IDs and their digest, population size, and any budget-driven sampling.
+Each score also retains a `chains` map with the same metrics for each selected chain, including chains with no attempted results.
+Chain denominators include every selected case in that chain, with the same failure, omission, zero-truth and unknown-cost rules as the overall score.
+Historical summaries without this additive map remain valid; the comparison reader verifies their original fields without rewriting them.
 
 Matching pass requires the exact expected ID or explicit NO MATCH.
 A wrong-match count includes both false positives on negative cases and a wrong ID on a positive case.

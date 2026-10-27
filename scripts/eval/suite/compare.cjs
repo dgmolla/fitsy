@@ -3,7 +3,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '../../..');
 const { loadCases, sha256 } = require(root + '/scripts/eval/suite/fixtures.ts');
-const { score } = require(root + '/scripts/eval/suite/metrics.ts');
+const { score, chainTable } = require(root + '/scripts/eval/suite/metrics.ts');
 const { spendState, preInferenceRejection } = require(root + '/scripts/eval/suite/budget.ts');
 const { requestKey } = require(root + '/scripts/eval/suite/replay.ts');
 const { payloadKey, payloadRevision } = require(root + '/scripts/eval/suite/providers.ts');
@@ -43,7 +43,9 @@ for (const method of metadata.config.methods) {
     const ids = new Set(cases.map(c => c.id));
     const key = `${tier}/${task}/${method}`;
     scores[key] = score(cases, actual.filter(r => ids.has(r.id)));
-    assert.deepEqual(scores[key], summary.scores[key]);
+    // Older immutable summaries predate the additive chain breakdown.
+    const { chains, ...originalMetrics } = scores[key];
+    assert.deepEqual(summary.scores[key].chains === undefined ? originalMetrics : { ...originalMetrics, chains }, summary.scores[key]);
     assert.equal(scores[key].missing, 0);
   }
 }
@@ -301,7 +303,7 @@ for (const method of metadata.config.methods) {
   const { matching: m, macro: a } = aggregate[method], p = a?.parsedOnly;
   report.push(`| ${method} | ${countRate(m.passed, m.total)} | ${m.wrongMatches} | ${countRate(m.truePositives, m.positives)} | ${a ? `${p.total}/${a.total}` : 'N/A'} | ${a ? medians(p) : 'N/A'} | ${a ? medians(a) : 'N/A'} | ${a ? `${p.bigMisses}/${p.total}; ${a.bigMisses}/${a.total}` : 'N/A'} | ${a ? `${p.passed}/${p.total}; ${a.passed}/${a.total}` : 'N/A'} |`);
 }
-report.push('', '## Failure attribution before and after', '',
+report.push('', '## Per-chain results', '', chainTable(scores), '', '## Failure attribution before and after', '',
   'Wrong estimate means a parsed macro prediction with at least one error above 25%; output failures are counted separately.', '',
   '| Method / task | Before parse/format/timeout | After parse/format/timeout | Before wrong estimates | After wrong estimates |',
   '| --- | --- | --- | ---: | ---: |');

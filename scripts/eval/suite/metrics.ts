@@ -7,7 +7,7 @@ const median = (values: number[]) => {
   return Number.isFinite(value) ? value : null;
 };
 const divide = (a: number, b: number) => b ? a / b : null;
-export function score(cases: Case[], results: Result[]) {
+function summarize(cases: Case[], results: Result[]) {
   const byId = new Map(results.map(r => [r.id, r]));
   if (byId.size !== results.length || results.some(r => !cases.some(c => c.id === r.id))) throw new Error('Duplicate or foreign result ID');
   const categories: Record<string, { passed: number; total: number; passRate: number }> = {};
@@ -67,12 +67,32 @@ export function score(cases: Case[], results: Result[]) {
     costPer1000Usd: results.some(r => r.costUsd === null) ? null : divide(knownCostUsd * 1000, results.length),
     p95LatencyMs: latencies[Math.ceil(latencies.length * 0.95) - 1] ?? null };
 }
+export function score(cases: Case[], results: Result[]) {
+  const overall = summarize(cases, results);
+  const chains = Object.fromEntries([...new Set(cases.map(c => c.chain))].sort().map(chain => {
+    const selected = cases.filter(c => c.chain === chain), ids = new Set(selected.map(c => c.id));
+    return [chain, summarize(selected, results.filter(r => ids.has(r.id)))];
+  }));
+  return { ...overall, chains };
+}
 export type Metrics = ReturnType<typeof score>;
 const pct = (n: number | null | undefined) => n === null || n === undefined ? '-' : `${(n * 100).toFixed(1)}%`;
+const metricHeader = (label: string) => [
+  `| ${label} | N (attempted) | Pass / all four <=25% | Wrong match | Recall | Abstain | Median % error Cal/P/C/F (all) | >50% cal | Zero correct | Parse/format | Timeout | $/1k | p95 ms |`,
+  '| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+];
+const metricRow = (name: string, m: ReturnType<typeof summarize>) => `| ${name} | ${m.total} (${m.attempted}) | ${pct(m.passRate)} | ${m.wrongMatches ?? '-'} | ${pct(m.recall)} | ${m.abstentions ?? '-'} | ${m.medianPercentError ? macroNames.map(k => m.medianPercentError![k]?.toFixed(1) ?? (m.total ? 'infinity' : '-')).join('/') : '-'} | ${pct(m.bigMissRate)} | ${pct(m.zeroCorrectness)} | ${m.parseFailures} | ${m.timeoutFailures} | ${m.costPer1000Usd?.toFixed(4) ?? '-'} | ${m.p95LatencyMs?.toFixed(1) ?? '-'} |`;
+export function chainTable(scores: Record<string, Metrics>) {
+  const lines = metricHeader('Tier / task / method / chain');
+  for (const [name, m] of Object.entries(scores)) {
+    for (const [chain, measured] of Object.entries(m.chains)) lines.push(metricRow(`${name} / ${chain}`, measured));
+  }
+  return lines.join('\n') + '\n';
+}
 export function table(scores: Record<string, Metrics>) {
-  const lines = ['| Tier / task / method | N (attempted) | Pass / all four <=25% | Wrong match | Recall | Abstain | Median % error Cal/P/C/F (all) | >50% cal | Zero correct | Parse/format | Timeout | $/1k | p95 ms |',
-    '| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |'];
-  for (const [name, m] of Object.entries(scores)) lines.push(`| ${name} | ${m.total} (${m.attempted}) | ${pct(m.passRate)} | ${m.wrongMatches ?? '-'} | ${pct(m.recall)} | ${m.abstentions ?? '-'} | ${m.medianPercentError ? macroNames.map(k => m.medianPercentError![k]?.toFixed(1) ?? (m.total ? 'infinity' : '-')).join('/') : '-'} | ${pct(m.bigMissRate)} | ${pct(m.zeroCorrectness)} | ${m.parseFailures} | ${m.timeoutFailures} | ${m.costPer1000Usd?.toFixed(4) ?? '-'} | ${m.p95LatencyMs?.toFixed(1) ?? '-'} |`);
+  const lines = metricHeader('Tier / task / method');
+  for (const [name, m] of Object.entries(scores)) lines.push(metricRow(name, m));
+  lines.push('', chainTable(scores));
   lines.push('', '| Tier / macro / method (parsed only) | Parsed / all | Median % error Cal/P/C/F | >50% cal | Zero correct | All four <=25% |',
     '| --- | ---: | --- | ---: | ---: | ---: |');
   for (const [name, m] of Object.entries(scores)) {
