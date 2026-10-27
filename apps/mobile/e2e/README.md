@@ -104,6 +104,11 @@ The stable dev domain follows `main`; a successful feature-branch Vercel preview
 The host runner owner must verify the candidate dev deployment before native replay; do not merge early or remove the 401 assertions to satisfy Simulator.
 The helper requires missing-token and invalid-token 401s before login; an anonymous 200 means the deployed backend still lacks the candidate auth behavior.
 Retain that failure and correct the deployment through the existing host owner before replaying the selected journeys.
+For a pre-merge test window, the existing host owner can use the `fitsy-api` project's Vercel Domains page to edit `dev.fitsy.org`, keep the Preview environment, and temporarily select the candidate branch.
+Record the original `dev` branch mapping and the candidate's ready deployment and exact commit before saving.
+Verify the saved mapping and anonymous/invalid-token 401s before the existing runner replays; the branch preview URL alone does not prove that the app's configured origin changed.
+Keep that deployment assigned for the complete run, then restore the original Preview branch mapping and verify the restoration.
+Retain the failed run and the recovered run separately; changing deployment configuration does not require a product-code workaround or establish a passing native journey.
 
 `shuffle` requires a populated dev backend, `entitled-dev` and a Debug Test Store build.
 It first signs the entitled fixture into the dev API and checks an unlocked dish and persisted RevenueCat proof before mobile launch can synchronize the subscription.
