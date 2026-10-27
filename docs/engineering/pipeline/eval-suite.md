@@ -315,6 +315,38 @@ Neither Haiku nor Qwen was called.
 Reading/checksumming holdout or rendering the human case list did not evaluate holdout.
 The two tiers share servings and include correlated candidate pairs, so their scores are not independent population estimates or a production-adoption verdict.
 
+## Measured-extension dev baseline
+
+The [affected-dev comparison](../../../scripts/eval/suite/results/2026-10-27T01-10-06-197Z-2e7de0b8/report.md) ran from committed source `75bf11f867574757af486115fd7d295c3d2d7806`.
+It includes all 386 frozen affected/new dev cases, without budget sampling; all unaffected old cases and both holdout partitions were omitted.
+The selected population contains 49 curated matching, ten curated macro, 258 bulk matching and 69 bulk macro cases.
+These scores are for that subset and cannot be substituted for a fresh full-suite score or compared as a common denominator with the original full v1 baseline.
+The matching and estimator protocols were frozen before execution and were not tuned after observing results.
+
+| Affected dev matching | N | Pass | Wrong match | Recall | Abstain |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| curated/exact | 49 | 83.7% | 0 | 42.9% | 0 |
+| curated/jev-v3 | 49 | 69.4% | 0 | 50.0% | 15 |
+| bulk/exact | 258 | 95.7% | 0 | 89.3% | 0 |
+| bulk/jev-v3 | 258 | 86.4% | 1 | 86.4% | 32 |
+
+| Affected dev Jev macro | N | All-four pass | Median % error Cal/P/C/F | Big miss |
+| --- | ---: | ---: | --- | ---: |
+| curated | 10 | 0.0% | 35.38/23.64/26.99/35.45 | 10.0% |
+| bulk | 69 | 4.3% | 24.60/31.88/40.03/28.57 | 13.0% |
+
+Exact has no estimator, and this affected macro subset contains no zero-valued target fields.
+Jev frequently abstains on unresolved combos and catering negatives; abstention fails the pre-existing exact-NO-MATCH metric even when it avoids a wrong assignment.
+Both methods pass only one of four measured multi-row dev observations, exposing a difficulty that name hits alone conceal.
+The results establish a harder baseline, not a production matching or nutrition-accuracy claim.
+
+The run made **404 new requests** and reused **61** exact previously paid requests for **$0.01854258**.
+Total reported Jev spend across both sessions is **$0.12394053**, with no unknown usage or collector stop and $4.37605947 remaining before the $4.50 stop threshold.
+The [replay audit](../../../scripts/eval/suite/results/2026-10-27T01-10-06-197Z-2e7de0b8/replay-audit.json) proves zero repeated paid inputs against the earlier run and zero duplicate paid inputs within this run.
+The original spend-ledger bytes remain an unchanged prefix; reservations and settlements are additive.
+Marginal costs and wall-clock latency include replay reads and must not be described as fresh-provider-only measurements.
+The key was selected from the previously authorized local file and mapped only in memory; no other provider or database path ran.
+
 ## Case counts by category
 
 | Category | Curated matching | Curated macro | Bulk matching | Bulk macro |

@@ -92,3 +92,22 @@ This handoff now records the location to close the demonstrated continuation fai
 The existing local AI reviewer passed correctness and workflow-security on `e5376fb5ae34cc913adbdca3d3f6ae80e620a0b3` with no findings.
 CI static and build passed; tests continue.
 Next: run the committed affected-dev exact/Jev comparison, record cost and zero-duplicate-request proof, and publish the final source/evidence head for fresh gates.
+
+## Completed affected-dev baseline
+
+The combined run `2026-10-27T01-10-06-197Z-2e7de0b8` completed from committed source `75bf11f867574757af486115fd7d295c3d2d7806` on all 386 selected dev cases without sampling.
+It made 404 new Jev requests and replayed 61 identical paid requests for **$0.01854258**.
+Total reported Jev spend is **$0.12394053**, with no unknown usage or collector stop.
+The source-bound replay audit proves zero repeated paid inputs against the earlier session, zero duplicate paid inputs within this run and preservation of the complete original ledger prefix.
+No holdout cases or Claim Jumper inputs were evaluated.
+
+| Affected dev matching | N | Exact pass | Jev pass | Exact/Jev wrong | Exact/Jev recall | Jev abstain |
+| --- | ---: | ---: | ---: | ---: | --- | ---: |
+| Curated | 49 | 83.7% | 69.4% | 0/0 | 42.9%/50.0% | 15 |
+| Bulk | 258 | 95.7% | 86.4% | 0/1 | 89.3%/86.4% | 32 |
+
+Jev all-four macro pass is 0.0% on ten curated cases and 4.3% on 69 bulk cases.
+Frequent abstention fails the fixed exact-NO-MATCH metric; no method or prompt was changed after observing these results.
+The original full-v1 baseline remains separate, with its original denominator and history.
+The source checkout remains clean on its original unpushed head; no protected checkout or project board edits occurred.
+Next: commit and publish the final evidence/docs head, require fresh trusted Verify and existing local AI review, then squash merge only if all gates are green and no P0/P1 findings exist.
