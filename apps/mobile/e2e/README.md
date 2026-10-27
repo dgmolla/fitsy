@@ -98,6 +98,8 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 ## Native helper checks
 
 `shuffle` requires a populated dev backend, `entitled-dev` and a Debug Test Store build.
+It first signs the entitled fixture into the dev API and checks an unlocked dish and persisted RevenueCat proof before mobile launch can synchronize the subscription.
+Its `helpers/shuffle-subscriber.mjs` helper keeps tokens and credentials out of Maestro output, uses only `dev.fitsy.org`, and rejects a demo bypass without actual subscription proof.
 It chooses DTLA and independent targets of 280 kcal, 28 g protein, 34 g carbs and 5 g fat, then taps the compact Shuffle icon beside search.
 These targets are remaining budgets, so valid picks can have different macro values.
 The flow requires a nonempty restaurant and dish, all four formatted macros (estimated or published), distance, Shuffle again and View menu, without assuming a local `prisma/seed.ts` meal exists in dev Supabase.
@@ -116,6 +118,7 @@ It also verifies target editing from the empty state and recovers a new pick by 
 It executes the flow's saved selector helper and rejects inline expressions the installed Maestro parser would skip.
 Its selector checks model native button grouping and reject the old exact-title selector and a different dish, including the WILDBIRD / GREEN CHICKEN POZOLE failure case.
 It also covers the deep link with PostHog disabled, production override rejection, locked teasers, flag changes, HTTP failures, request cancellation and account transitions against the real client and routing.
+`lib/shuffleSubscriberFlow.test.ts` exercises the saved API preflight, its flow assertions, inactive or missing proof, authentication failure, and credential-output boundaries.
 Run it through `node scripts/sim/ci.mjs --scope=flow --flows=shuffle --udid=<UDID>` with the local fixture configuration.
 The planner expands this request when the candidate also affects shared UI or other journeys.
 

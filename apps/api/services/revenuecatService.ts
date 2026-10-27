@@ -93,7 +93,12 @@ export async function fetchProEntitlement(
     const res = await fetch(
       `${REVENUECAT_API}/subscribers/${encodeURIComponent(appUserId)}`,
       {
-        headers: { authorization: `Bearer ${key}`, "x-platform": "ios" },
+        headers: {
+          authorization: `Bearer ${key}`, "x-platform": "ios",
+          // Match RevenueCat's SDK: Test Store requests are always sandboxed.
+          // Derive this only from the configured key, never caller input.
+          ...(key.startsWith("test_") ? { "x-is-sandbox": "true" } : {}),
+        },
         signal: ctrl.signal,
       },
     );

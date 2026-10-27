@@ -222,6 +222,10 @@ The search screen uses this endpoint for Shuffle behind the PostHog boolean flag
 The mobile client sends its current meal targets and area, rotates the seed, excludes up to five recent dishes, and opens the chosen menu with `selectedItemId`.
 If exclusions exhaust the pool, it retries once without exclusions before showing an empty state.
 The endpoint also supports future iOS widget consumers and preserves the existing search response.
+An authenticated caller whose stored verdict denies access is reconciled with RevenueCat after rate limiting and before cache lookup.
+The lookup uses the verified JWT subject (the Supabase UUID used by the mobile SDK's `logIn`), then rechecks persisted proof so a newer webhook or account deletion still wins.
+Fresh active proof remains a database-only read; failed reconciliation preserves stored proof and never grants access without an active verdict.
+This lets direct callers recover missing or stale proof and missed renewals without first running the mobile sign-in synchronization.
 
 | Parameter | Required | Default | Constraints |
 |---|---|---|---|
@@ -423,6 +427,10 @@ Replaced the old stubbed `/api/subscriptions/verify` receipt endpoint: clients n
 **Auth:** Bearer JWT required  
 **File:** `apps/api/app/api/subscriptions/sync/route.ts`  
 **Env:** `REVENUECAT_PUBLIC_API_KEY` (the app's public SDK key; RevenueCat's v1 subscriber read accepts it)
+
+Use the public key from the same RevenueCat project as the mobile SDK.
+For dev Test Store builds, configure its `test_` key; the service sends `X-Is-Sandbox: true`, matching [RevenueCat's SDK routing](https://github.com/RevenueCat/purchases-ios/pull/7624).
+Platform store keys retain the existing request behavior; no client header or query parameter selects sandbox access.
 
 Pull path for entitlement state: asks RevenueCat for the caller's `pro` entitlement (`services/revenuecatService.ts`) and upserts the `Subscription` row.
 Optional JSON body `{ reason }` with one of `boot` | `purchase` | `restore` | `restore_history` | `sign_in` | `mismatch` (unknown values are ignored).

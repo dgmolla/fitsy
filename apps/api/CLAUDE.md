@@ -1,6 +1,7 @@
 # apps/api - Next.js API backend
 
-Read-only query layer over the preloaded DB; no runtime external API calls.
+Restaurant queries read the preloaded DB without runtime scraping or macro estimation.
+Authentication and subscription reconciliation call their providers through `services/`.
 
 ## Commands (from repo root)
 ```bash

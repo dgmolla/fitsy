@@ -105,12 +105,10 @@ Goal archetypes are the three macro presets Fitsy already defines:
 | Latency | Zero (pre-generated) | +200–800ms per meal detail load |
 | Scale risk | Fixed cost per pipeline run | Cost grows with DAUs × meal views |
 
-**Recommendation: preload-time.** At Fitsy's current scale, the user's exact
-macro target rarely differs meaningfully from the archetype bucket. Preload-
-time generation keeps the API a pure read path with no per-request LLM cost,
-consistent with the existing architecture principle ("The API backend is a read-
-only query layer — no runtime external API calls"). Personalization to exact
-targets can be added in v2 if archetype bucketing proves too coarse.
+**Recommendation: preload-time.**
+At Fitsy's current scale, the user's exact macro target rarely differs meaningfully from the archetype bucket.
+Preload-time generation keeps restaurant queries free of per-request LLM cost, consistent with the existing architecture principle of preloaded restaurant data without runtime macro estimation.
+Personalization to exact targets can be added in v2 if archetype bucketing proves too coarse.
 
 ### Data model
 
