@@ -71,16 +71,20 @@ const documentationPath = path => /^[^/]+\.md$/.test(path) ||
 
 // Flow names are the existing Maestro sources, not another scenario registry.
 const screenFlows = [
+  [/^apps\/mobile\/(components\/ShuffleSection\.|lib\/(shuffle|useShuffleFlag)\.|e2e\/helpers\/shuffle-selectors\.mjs$)/,
+    /^shuffle$/, ['billing', 'discovery', 'changed-journey']],
+  [/^apps\/api\/(app\/api\/restaurants\/shuffle\/|lib\/shuffle)/,
+    /^shuffle$/, ['billing', 'discovery', 'changed-journey']],
   [/^apps\/mobile\/(app\/\(tabs\)\/saved\.|lib\/menuBookmarks\.)/, /^log-meal$/, ['discovery']],
   [/^apps\/mobile\/(app\/restaurant\/|components\/MenuItemCard\.|lib\/(menuFilters|menuLoadState)\.)/,
-    /^(chain-menu-serving|log-meal|menu-load-recovery|menu-macro-serving)$/, ['billing', 'discovery', 'changed-journey']],
+    /^(chain-menu-serving|log-meal|menu-load-recovery|menu-macro-serving|shuffle)$/, ['billing', 'discovery', 'changed-journey']],
   [/^apps\/mobile\/(app\/notification-settings\.|lib\/(notification|pushToken|useNotifications|useReminders))/,
     /^reminders$/, ['notifications']],
   [/^apps\/mobile\/app\/macro-setup\./, /^onboarding-assisted-targets$/, ['onboarding']],
   [/^apps\/mobile\/(components\/ScrollPicker\.|lib\/(macroCalculator|macroPresets|macroSuggestions)\.)/,
     /^(meal-target-energy-sync|onboarding-(assisted-targets|target-ranked-search))$/, ['onboarding', 'discovery']],
   [/^apps\/mobile\/(app\/\(tabs\)\/search\.|components\/(Discovery|Restaurant|Location|FilterPopup|SearchHeader)|lib\/(discovery|searchLoading|locations|locationCache|useLocation|useDiscovery))/,
-    /^(meal-target-energy-sync|onboarding-(assisted-targets|guided-preview|out-of-area|search-highlight|target-ranked-search)|menu-load-recovery)$/, ['onboarding', 'discovery']],
+    /^(meal-target-energy-sync|onboarding-(assisted-targets|guided-preview|out-of-area|search-highlight|target-ranked-search)|menu-load-recovery|shuffle)$/, ['onboarding', 'discovery']],
   [/^apps\/mobile\/(components\/Preview|lib\/(preview|guidedPreview|usePreview))/,
     /^onboarding-(guided-preview|returning-preview|search-highlight|target-ranked-search)$/, ['billing', 'auth', 'onboarding', 'discovery']],
   [/^apps\/mobile\/(app\/(welcome\/|onboarding\.)|components\/(Welcome|Onboarding|ContinueButton|ProgressDots|ScrollPicker|SelectionCard)|lib\/onboarding)/,
@@ -88,7 +92,7 @@ const screenFlows = [
   [/^apps\/api\/app\/api\/search\//,
     /^(meal-target-energy-sync|onboarding-(assisted-targets|guided-preview|out-of-area|search-highlight|target-ranked-search)|menu-load-recovery)$/, ['discovery']],
   [/^apps\/api\/app\/api\/restaurants\//,
-    /^(chain-menu-serving|log-meal|menu-load-recovery|menu-macro-serving|paywall-access)$/, ['billing', 'discovery']],
+    /^(chain-menu-serving|log-meal|menu-load-recovery|menu-macro-serving|paywall-access|shuffle)$/, ['billing', 'discovery']],
 ];
 // Product acceptance consumes the same path map as local and hosted selection.
 export function mappedCategories(path) {

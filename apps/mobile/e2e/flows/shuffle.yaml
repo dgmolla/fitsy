@@ -1,0 +1,208 @@
+# Populated dev backend plus an entitled account on a Debug build.
+# Debug-only shuffleDebug opts in locally without changing PostHog flags;
+# shuffleSeed makes each lottery replayable. Entitlement is never overridden.
+appId: com.fitsy.mobile
+tags: [billing, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
+---
+- assertTrue: ${!!LOGIN_EMAIL && !!LOGIN_PASSWORD}
+- evalScript: ${output.nearby = http.get('https://dev.fitsy.org/api/restaurants?lat=34.0407&lng=-118.2468')}
+- assertTrue: ${output.nearby.status === 200 && json(output.nearby.body).data.length > 0}
+# Prove the empty-state location is outside dev coverage before driving the app.
+- evalScript: ${output.outside = http.get('https://dev.fitsy.org/api/restaurants?lat=40.7128&lng=-74.0060&radius=6')}
+- assertTrue: ${output.outside.status === 200 && json(output.outside.body).data.length === 0}
+# Establish GPS before launch so a cached fix also points outside coverage.
+- setLocation:
+    latitude: 40.7128
+    longitude: -74.0060
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
+- tapOn:
+    id: welcome-login
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 15000
+- tapOn: ".*Dev Login.*"
+- extendedWaitUntil:
+    visible: "Search restaurants or dishes"
+    timeout: 30000
+- assertNotVisible: "Dev Login Failed"
+- openLink: com.fitsy.mobile://search?shuffleDebug=1&shuffleSeed=maestro-shuffle
+- tapOn:
+    text: "^Open$"
+    optional: true
+- tapOn:
+    id: discovery-location
+- scrollUntilVisible:
+    element: "Search near DTLA"
+    direction: DOWN
+- tapOn: "Search near DTLA"
+- tapOn:
+    id: preview-edit-targets
+- runFlow:
+    when:
+      visible:
+        id: meal-filter-unlink
+    commands:
+      - tapOn:
+          id: meal-filter-unlink
+- tapOn: "Protein grams"
+- eraseText: 7
+- inputText: "28"
+- tapOn: "Carbs grams"
+- eraseText: 7
+- inputText: "34"
+- tapOn: "Fat grams"
+- eraseText: 7
+- inputText: "5"
+- tapOn: "Calories per meal"
+- eraseText: 7
+- inputText: "280"
+- tapOn:
+    id: meal-filter-apply
+- extendedWaitUntil:
+    visible:
+      id: shuffle-button
+    timeout: 30000
+- tapOn:
+    id: shuffle-button
+- extendedWaitUntil:
+    visible:
+      id: shuffle-dish
+      text: ".+"
+    timeout: 20000
+- assertVisible:
+    id: shuffle-result
+- assertVisible:
+    id: shuffle-restaurant
+    text: ".+"
+- assertVisible:
+    id: shuffle-macro-calories
+    text: "≈?[0-9]+ kcal"
+- assertVisible:
+    id: shuffle-macro-proteinG
+    text: "≈?[0-9]+ g protein"
+- assertVisible:
+    id: shuffle-macro-carbsG
+    text: "≈?[0-9]+ g carbs"
+- assertVisible:
+    id: shuffle-macro-fatG
+    text: "≈?[0-9]+ g fat"
+- assertVisible:
+    id: shuffle-distance
+    text: '[0-9]+\.[0-9] mi away'
+- assertVisible:
+    id: shuffle-again
+- assertVisible:
+    id: shuffle-view-menu
+- assertNotVisible:
+    id: shuffle-locked
+- takeScreenshot: shuffle-result
+- tapOn:
+    id: shuffle-again
+- extendedWaitUntil:
+    visible:
+      id: shuffle-dish
+      text: ".+"
+    timeout: 20000
+- assertVisible:
+    id: shuffle-result
+- assertVisible:
+    id: shuffle-again
+- assertVisible:
+    id: shuffle-view-menu
+- copyTextFrom:
+    id: shuffle-restaurant
+- evalScript: ${output.restaurant = maestro.copiedText}
+- copyTextFrom:
+    id: shuffle-dish
+- evalScript: ${output.dish = maestro.copiedText}
+# Regex escaping contains dollar signs that Maestro's inline parser skips.
+- runScript: ../helpers/shuffle-selectors.mjs
+- tapOn:
+    id: shuffle-view-menu
+- extendedWaitUntil:
+    visible: ${output.restaurant}
+    timeout: 20000
+- extendedWaitUntil:
+    visible:
+      id: menu-item-.+
+      text: ${output.menuDish}
+    timeout: 20000
+- takeScreenshot: shuffle-selected-menu
+- openLink: com.fitsy.mobile://search?shuffleDebug=1&shuffleSeed=maestro-shuffle
+- tapOn:
+    text: "^Open$"
+    optional: true
+# Real zero-fat drinks exist in dev; use the verified out-of-coverage GPS location.
+- setLocation:
+    latitude: 40.7128
+    longitude: -74.0060
+- tapOn:
+    id: discovery-location
+- tapOn: "Use my current location"
+- extendedWaitUntil:
+    visible: "Location: Near You"
+    timeout: 30000
+- tapOn:
+    id: shuffle-button
+- extendedWaitUntil:
+    visible:
+      id: shuffle-empty
+    timeout: 20000
+- assertVisible: "Nothing fits nearby"
+- assertVisible:
+    id: shuffle-edit-targets
+- assertNotVisible:
+    id: shuffle-view-menu
+- takeScreenshot: shuffle-empty
+- tapOn:
+    id: shuffle-edit-targets
+- assertVisible:
+    id: meal-filter-apply
+- tapOn:
+    id: meal-filter-apply
+# Recover through the real location picker and prove Shuffle works again.
+- tapOn:
+    id: discovery-location
+- scrollUntilVisible:
+    element: "Search near DTLA"
+    direction: DOWN
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible: "Location: DTLA"
+    timeout: 15000
+- tapOn:
+    id: shuffle-button
+- extendedWaitUntil:
+    visible:
+      id: shuffle-dish
+      text: ".+"
+    timeout: 20000
+- assertVisible:
+    id: shuffle-again
+- assertVisible:
+    id: shuffle-view-menu
+- assertNotVisible:
+    id: shuffle-empty
+- takeScreenshot: shuffle-recovered
+- setLocation:
+    latitude: 34.0407
+    longitude: -118.2468

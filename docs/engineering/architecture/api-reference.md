@@ -218,8 +218,10 @@ Unentitled responses set `bestMatch` to null and `meta.locked` to true.
 **File:** `apps/api/app/api/restaurants/shuffle/route.ts`
 **Executable contract:** `shuffleResponseSchema` and `ShuffleResponse` in `@fitsy/shared`.
 
-This additive endpoint supports the future search-screen Shuffle and iOS widget consumers.
-It changes no mobile journey or existing search response.
+The search screen uses this endpoint for Shuffle behind the PostHog boolean flag `shuffle`.
+The mobile client sends its current meal targets and area, rotates the seed, excludes up to five recent dishes, and opens the chosen menu with `selectedItemId`.
+If exclusions exhaust the pool, it retries once without exclusions before showing an empty state.
+The endpoint also supports future iOS widget consumers and preserves the existing search response.
 
 | Parameter | Required | Default | Constraints |
 |---|---|---|---|

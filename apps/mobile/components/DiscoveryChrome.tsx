@@ -106,14 +106,16 @@ export function SearchBar({
   onChangeText,
   onClear,
   containerRef,
+  action,
 }: {
   value: string;
   onChangeText: (text: string) => void;
   onClear: () => void;
   containerRef?: React.RefObject<View | null>;
+  action?: React.ReactNode;
 }) {
   return (
-    <View ref={containerRef} collapsable={false} style={s.search}>
+    <View ref={containerRef} collapsable={false} style={s.search} testID="discovery-search-bar">
       <Text style={s.searchIco}>⌕</Text>
       <TextInput
         style={s.searchInput}
@@ -134,6 +136,7 @@ export function SearchBar({
           <Text style={s.searchClear}>×</Text>
         </Pressable>
       )}
+      {action}
     </View>
   );
 }

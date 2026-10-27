@@ -47,7 +47,7 @@ test('anonymous menu startup retries only bounded observations before opening th
   expect(commands[launch + 2]).toEqual({ openLink: "${'fitsy://restaurant/' + output.seed.id}" });
 });
 
-test.each(['chain-menu-serving', 'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
+test.each(['chain-menu-serving', 'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight', 'shuffle'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, {
     launchApp?: object;
     retry?: { maxRetries: number; commands: {
