@@ -3,6 +3,7 @@
 The canonical scenario, ownership, evidence and publication procedure is in `docs/engineering/devops/shipping.md`.
 Inspect the dynamic selection with `npm run verify:sim-plan` from the repository root.
 The maintained path-to-flow mapping lives in `scripts/verify/impact-plan.mjs`; extend it and its table-driven tests when adding screen coverage.
+`signin-options` also opens the documented reviewer deep link and verifies that an ordinary email cannot submit reviewer credentials.
 Mapped mobile and API contracts select their affected journeys together.
 Shared behavior, native inputs and unmapped mobile-facing paths expand to the full flow set, and `needs-sim` forces flows for otherwise non-mobile changes.
 The plan explains every omitted journey; explicit local scopes and flow lists cannot omit required coverage.

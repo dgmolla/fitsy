@@ -53,3 +53,26 @@ test('invalid, expired, foreign-project and non-account tokens return 401', asyn
   const otherKeys = await generateKeyPair('ES256');
   assert.equal((await requireAuth(request(await token({}, otherKeys.privateKey))) as NextResponse).status, 401);
 });
+
+test('production also rejects non-review password sessions obtained directly from Supabase', async () => {
+  const original = process.env['VERCEL_ENV'];
+  process.env['VERCEL_ENV'] = 'production';
+  try {
+    const passwordSession = { app_metadata: { provider: 'email', providers: ['email', 'google'] },
+      amr: [{ method: 'password' }], user_metadata: { provider: 'google', email_verified: true } };
+    const denied = await requireAuth(request(await token(passwordSession)));
+    assert.ok(denied instanceof NextResponse);
+    assert.equal(denied.status, 401);
+    for (const provider of ['apple', 'google']) {
+      const accepted = await requireAuth(request(await token({
+        app_metadata: { provider, providers: [provider] }, amr: [{ method: 'oauth' }],
+      })));
+      assert.deepEqual(accepted, { sub: 'fixture-account', email: 'account@example.test' });
+    }
+    const reviewer = await requireAuth(request(await token({ ...passwordSession, email: 'appreview@fitsy.org' })));
+    assert.deepEqual(reviewer, { sub: 'fixture-account', email: 'appreview@fitsy.org' });
+  } finally {
+    if (original === undefined) delete process.env['VERCEL_ENV'];
+    else process.env['VERCEL_ENV'] = original;
+  }
+});

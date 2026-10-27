@@ -96,7 +96,7 @@ describe("GET /api/health — db unreachable", () => {
     const body = await res.json();
     expect(body.status).toBe("error");
     expect(body.db).toBe("unreachable");
-    expect(body.error).toBe("connection refused");
+    expect(body.error).toBe("Service unavailable");
     expect(body.deploymentSha).toBe(process.env.VERCEL_GIT_COMMIT_SHA);
     expect(res.headers.get("cache-control")).toContain("no-store");
   });
@@ -109,7 +109,7 @@ describe("GET /api/health — db unreachable", () => {
 
     expect(res.status).toBe(503);
     const body = await res.json();
-    expect(body.error).toBe("timeout");
+    expect(body.error).toBe("Service unavailable");
     expect(body.deploymentSha).toBeNull();
     expect(res.headers.get("cache-control")).toContain("no-store");
   });

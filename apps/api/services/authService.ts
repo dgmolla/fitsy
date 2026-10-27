@@ -1,4 +1,5 @@
 import { jwtVerify, createRemoteJWKSet, type FlattenedJWSInput, type JWSHeaderParameters, type GetKeyFunction } from "jose";
+import { isDevelopmentEnvironment, REVIEWER_EMAIL } from './runtimeEnvironment';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,18 @@ export async function verifyToken(token: string): Promise<JwtPayload> {
     || typeof payload["email"] !== "string" || !payload["email"].trim()
     || payload["role"] !== "authenticated" || payload["is_anonymous"] === true) {
     throw new Error("A signed-in Supabase account is required");
+  }
+  // The public anon key also permits direct calls to Supabase Auth. Enforce
+  // the production provider policy on signed claims at every data boundary,
+  // so bypassing Fitsy's password route cannot bypass its reviewer limit.
+  if (!isDevelopmentEnvironment() && payload['email'].trim().toLowerCase() !== REVIEWER_EMAIL) {
+    const metadata = payload['app_metadata'] as { provider?: unknown; providers?: unknown } | undefined;
+    const providers = Array.isArray(metadata?.providers) ? metadata.providers : [metadata?.provider];
+    const supportedProvider = providers.some(provider => provider === 'apple' || provider === 'google');
+    const oauthSession = Array.isArray(payload['amr']) && payload['amr'].some(
+      method => method && typeof method === 'object' && method.method === 'oauth',
+    );
+    if (!supportedProvider || !oauthSession) throw new Error('Apple or Google sign-in is required');
   }
   return {
     sub: payload.sub,

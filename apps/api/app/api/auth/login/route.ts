@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { getSupabaseClient } from "@/lib/supabase";
 import { authLimiter } from "@/lib/rateLimit";
+import { canUsePasswordLogin } from "@/lib/reviewerAccess";
 import type { AuthApiResponse } from "@fitsy/shared";
 
 export async function POST(
@@ -46,6 +47,10 @@ export async function POST(
       { error: "email and password are required" } as never,
       { status: 400 },
     );
+  }
+
+  if (!canUsePasswordLogin(email)) {
+    return NextResponse.json({ error: "Use Apple or Google to sign in" } as never, { status: 403 });
   }
 
   // ─── Sign in via Supabase ────────────────────────────────────────────────────

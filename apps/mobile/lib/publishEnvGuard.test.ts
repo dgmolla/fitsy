@@ -5,6 +5,7 @@ import {
   PUBLISH_ENV_OVERRIDE_VAR as OVERRIDE_VAR,
   REQUIRED_PUBLIC_ENV,
   assertPublishEnv,
+  assertPublicEnvSafety,
   missingPublicEnv,
   shouldEnforcePublishEnv,
 } from '../app.config';
@@ -22,6 +23,21 @@ describe('missingPublicEnv', () => {
     const env = { ...full, EXPO_PUBLIC_REVENUECAT_IOS_KEY: '   ', EXPO_PUBLIC_API_URL: undefined };
     expect(missingPublicEnv(env)).toEqual(['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_REVENUECAT_IOS_KEY']);
   });
+});
+
+test.each([
+  { EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: 'fixture' },
+  { EXPO_PUBLIC_SUPABASE_ANON_KEY: 'sb_secret_fixture' },
+  { EXPO_PUBLIC_REVENUECAT_IOS_KEY: ['sk', 'live', 'fixture'].join('_') },
+  { EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'fixture-password', NODE_ENV: 'production' },
+  { EXPO_PUBLIC_SUPABASE_ANON_KEY: `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64url')}.fixture` },
+])('rejects private public env even when presence enforcement is bypassed: %j', env => {
+  expect(() => assertPublishEnv({ ...env, EAS_BUILD: 'true', [OVERRIDE_VAR]: '1' })).toThrow(/Refusing to bundle secret/);
+});
+
+test('public Supabase/SDK keys and isolated Debug fixtures remain usable', () => {
+  expect(() => assertPublicEnvSafety({ NODE_ENV: 'development', EXPO_PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_fixture',
+    EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'fixture-only', EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_fixture' })).not.toThrow();
 });
 
 describe('shouldEnforcePublishEnv', () => {

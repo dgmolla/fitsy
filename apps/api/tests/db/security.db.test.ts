@@ -1,0 +1,56 @@
+import { Prisma, PrismaClient } from '@prisma/client';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const describeIfDb = process.env['POSTGRES_PRISMA_URL'] ? describe : describe.skip;
+describeIfDb('server-only application data (real Postgres)', () => {
+  const prisma = new PrismaClient();
+  afterAll(() => prisma.$disconnect());
+
+  test('all application models have RLS and no PUBLIC, anon or authenticated table grants', async () => {
+    const models = Prisma.dmmf.datamodel.models.map(model => model.dbName ?? model.name);
+    const rows = await prisma.$queryRaw<{ name: string; rls: boolean; clientGrants: bigint }[]>`
+      SELECT c.relname AS name, c.relrowsecurity AS rls,
+        (SELECT count(*) FROM aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+          LEFT JOIN pg_roles r ON r.oid = acl.grantee
+          WHERE acl.grantee = 0 OR r.rolname IN ('anon', 'authenticated')) AS "clientGrants"
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind = 'r'`;
+    for (const model of models) {
+      expect(rows.find(row => row.name === model)).toEqual({ name: model, rls: true, clientGrants: 0n });
+    }
+    // The server connection still reads the same data after RLS is enabled.
+    await expect(prisma.restaurant.count()).resolves.toBeGreaterThanOrEqual(0);
+  });
+
+  test('the read-only audit reports PUBLIC and client ACLs while excluding server-only grants', async () => {
+    const audit = readFileSync(resolve(__dirname, '../../../../scripts/security/supabase-audit.sql'), 'utf8');
+    const grantQuery = audit.split(';').find(query => query.includes('privilege_type'))!;
+    // Shadow catalog rows with synthetic ACLs, exercising the actual audit SQL
+    // and PostgreSQL ACL functions without creating tables, roles or grants.
+    const fixtureCatalogs = `
+      WITH pg_class AS (
+        SELECT fixture.*, 1::oid AS relowner, 99::oid AS relnamespace, 'r'::"char" AS relkind
+        FROM (VALUES
+          ('public_select', ARRAY[makeaclitem(0, 1, 'SELECT', false)]),
+          ('anon_insert', ARRAY[makeaclitem(2, 1, 'INSERT', false)]),
+          ('authenticated_update', ARRAY[makeaclitem(3, 1, 'UPDATE', false)]),
+          ('server_only', ARRAY[makeaclitem(1, 1, 'SELECT', false)]),
+          ('no_grants', NULL::aclitem[])
+        ) AS fixture(relname, relacl)
+      ), pg_namespace AS (SELECT 99::oid AS oid, 'public' AS nspname),
+      pg_roles AS (
+        SELECT * FROM (VALUES (1::oid, 'server'), (2::oid, 'anon'), (3::oid, 'authenticated')) AS role(oid, rolname)
+      )
+    `;
+    const grants = await prisma.$transaction(async tx => {
+      await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
+      return tx.$queryRawUnsafe(`${fixtureCatalogs}${grantQuery}`);
+    });
+    expect(grants).toEqual([
+      { table_name: 'anon_insert', grantee: 'anon', privilege_type: 'INSERT' },
+      { table_name: 'authenticated_update', grantee: 'authenticated', privilege_type: 'UPDATE' },
+      { table_name: 'public_select', grantee: 'PUBLIC', privilege_type: 'SELECT' },
+    ]);
+  });
+});

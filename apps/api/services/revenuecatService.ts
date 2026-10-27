@@ -18,6 +18,8 @@
  * Docs: https://www.revenuecat.com/reference/subscribers
  */
 
+import { isDevelopmentEnvironment } from './runtimeEnvironment';
+
 const REVENUECAT_API = "https://api.revenuecat.com/v1";
 const REVENUECAT_TIMEOUT_MS = 8_000;
 
@@ -64,6 +66,7 @@ interface SubscriberResponse {
         store_transaction_id?: string | null;
         original_transaction_id?: string | null;
         billing_issues_detected_at?: string | null;
+        is_sandbox?: boolean;
       }
     >;
   };
@@ -86,6 +89,8 @@ export async function fetchProEntitlement(
 ): Promise<RevenueCatEntitlementState | null> {
   const key = process.env["REVENUECAT_PUBLIC_API_KEY"];
   if (!key) return null;
+  const production = !isDevelopmentEnvironment();
+  if (production && key.startsWith('test_')) return null;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), REVENUECAT_TIMEOUT_MS);
@@ -97,7 +102,7 @@ export async function fetchProEntitlement(
           authorization: `Bearer ${key}`, "x-platform": "ios",
           // Match RevenueCat's SDK: Test Store requests are always sandboxed.
           // Derive this only from the configured key, never caller input.
-          ...(key.startsWith("test_") ? { "x-is-sandbox": "true" } : {}),
+          ...(key.startsWith("test_") ? { "x-is-sandbox": "true" } : production ? { "x-is-sandbox": "false" } : {}),
         },
         signal: ctrl.signal,
       },
@@ -131,6 +136,8 @@ export async function fetchProEntitlement(
     if (expiresAt && Number.isNaN(expiresAt.getTime())) return null;
     const plan = ent.product_identifier ?? null;
     const sub = plan ? subscriber.subscriptions?.[plan] : undefined;
+    // Fail closed when production store provenance cannot be established.
+    if (production && sub?.is_sandbox !== false) return null;
     return {
       active: expiresAt ? expiresAt.getTime() > Date.now() : true,
       hadProEntitlement: true,
@@ -140,8 +147,8 @@ export async function fetchProEntitlement(
       billingIssue: Boolean(sub?.billing_issues_detected_at),
       requestDate,
     };
-  } catch (err) {
-    console.warn("[revenuecat] subscriber lookup error", err instanceof Error ? err.message : err);
+  } catch {
+    console.warn("[revenuecat] subscriber lookup error");
     return null;
   } finally {
     clearTimeout(timer);

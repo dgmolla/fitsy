@@ -3,6 +3,8 @@ import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
 import type { JwtPayload } from "@/services/authService";
 import { fetchProEntitlement } from "@/services/revenuecatService";
+import { isDevelopmentEnvironment } from "@/services/runtimeEnvironment";
+import { REVIEWER_EMAIL } from "./reviewerAccess";
 import { classifySubscription, type SubscriptionRow, type SubscriptionVerdict } from "./subscriptionVerdict";
 export { classifySubscription, RC_VERDICT_MAX_AGE_MS } from "./subscriptionVerdict";
 export type { SubscriptionRow, SubscriptionVerdict } from "./subscriptionVerdict";
@@ -36,8 +38,9 @@ function demoEmails(): Set<string> {
 
 /** True when this email/env should skip the subscription requirement. */
 export function subscriptionBypass(email: string): boolean {
-  if (process.env["ALLOW_STUB_SUBSCRIPTIONS"] === "true") return true;
-  return demoEmails().has(email.toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  if (!isDevelopmentEnvironment()) return normalized === REVIEWER_EMAIL && demoEmails().has(normalized);
+  return process.env["ALLOW_STUB_SUBSCRIPTIONS"] === "true" || demoEmails().has(normalized);
 }
 
 /** The fields every entitlement read or write needs; null means history is unknown. */

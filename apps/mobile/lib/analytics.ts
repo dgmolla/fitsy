@@ -9,6 +9,7 @@
 
 import PostHog from 'posthog-react-native';
 import type { JsonType } from '@posthog/core';
+import { sanitizeAnalyticsEvent } from './analyticsPrivacy';
 
 const API_KEY =
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY ?? 'phc_placeholder_replace_via_vercel_cli';
@@ -29,6 +30,13 @@ export function getPostHogClient(): PostHog {
   if (!_client) {
     _client = new PostHog(API_KEY, {
       host: HOST,
+      before_send: sanitizeAnalyticsEvent,
+      disableGeoip: true,
+      personProfiles: 'never',
+      persistence: 'memory',
+      captureAppLifecycleEvents: false,
+      enableSessionReplay: false,
+      disableSurveys: true,
       // Aggressive flush during pre-launch testing so events land in PostHog
       // within seconds, not 30s. Revert to defaults (flushAt: 20, flushInterval:
       // 30000) before public launch — frequent flushes increase battery use.
@@ -39,34 +47,11 @@ export function getPostHogClient(): PostHog {
   return _client;
 }
 
-function logCaptureError(eventName: string, err: unknown): void {
+function logCaptureError(eventName: string, _err: unknown): void {
   // Replaces the silent `catch {}` pattern from before — surface analytics
   // failures so we don't ship another "PostHog isn't tracking anything" mystery.
   // eslint-disable-next-line no-console
-  console.warn(`[analytics] capture(${eventName}) failed:`, err);
-}
-
-export interface UserProperties {
-  email?: string;
-  goal?: string;
-  activity_level?: string;
-  macro_protein?: number;
-  macro_carbs?: number;
-  macro_fat?: number;
-  macro_calories?: number;
-  [key: string]: JsonType | undefined;
-}
-
-export function identifyUser(userId: string, props: UserProperties): void {
-  try {
-    const cleanProps: Record<string, JsonType> = {};
-    for (const [k, v] of Object.entries(props)) {
-      if (v !== undefined) cleanProps[k] = v;
-    }
-    getPostHogClient().identify(userId, cleanProps);
-  } catch (err) {
-    logCaptureError('identify', err);
-  }
+  console.warn(`[analytics] capture(${eventName}) failed`);
 }
 
 export function resetAnalyticsSession(): void {
@@ -470,17 +455,17 @@ export function trackAuthFailure(props: AuthFailureProps): void {
 // access token in the background; `session_refresh_failed` fires when the
 // refresh token has expired or was reused, forcing a SIGNED_OUT.
 
-export function trackSessionRefreshed(props: { user_id: string }): void {
+export function trackSessionRefreshed(): void {
   try {
-    getPostHogClient().capture('session_refreshed', props as unknown as Record<string, JsonType>);
+    getPostHogClient().capture('session_refreshed', {});
   } catch (err) {
     logCaptureError('session_refreshed', err);
   }
 }
 
-export function trackSessionRefreshFailed(props: { user_id: string }): void {
+export function trackSessionRefreshFailed(): void {
   try {
-    getPostHogClient().capture('session_refresh_failed', props as unknown as Record<string, JsonType>);
+    getPostHogClient().capture('session_refresh_failed', {});
   } catch (err) {
     logCaptureError('session_refresh_failed', err);
   }

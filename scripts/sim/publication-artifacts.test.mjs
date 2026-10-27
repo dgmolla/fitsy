@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import yaml from 'js-yaml';
 import { createPublicationArchive, publicationPlan, publishProductFlow as publishWithMediaEvidence } from './publish-product-flow.mjs';
 import { artifactPath, baseline, inputHash, root, publicConfigIdentity } from '../verify/product-flow.mjs';
 import { validateMediaReceipt, writeMediaReceipt } from '../verify/media-integration.mjs';
@@ -295,13 +296,23 @@ test('publisher default validator accepts complete non-video proof and rejects c
     const simulator = 'fixture-device', png = Buffer.from('89504e470d0a1a0a00000000', 'hex');
     const flows = baseline.map(name => {
       const source = `apps/mobile/e2e/flows/${name}.yaml`;
+      const sourceBytes = readFileSync(join(root, source));
+      const [, steps] = yaml.loadAll(sourceBytes.toString());
+      // Build synthetic assertion evidence from the maintained flow so adding
+      // a required outcome cannot leave this publication fixture truncated.
+      const assertionCommands = list => list.flatMap(step => [
+        ...['assertVisible', 'assertNotVisible', 'assertTrue', 'extendedWaitUntil']
+          .filter(key => step[key] !== undefined && step[key]?.optional !== true)
+          .map(() => ({ command: { assertConditionCommand: { condition: { visible: { textRegex: 'Fixture outcome' } } } }, metadata: { status: 'COMPLETED' } })),
+        ...assertionCommands(step.retry?.commands || []),
+        ...assertionCommands(step.runFlow?.when ? [] : step.runFlow?.commands || []),
+      ]);
       const commands = `${name}/commands.json`, screenshot = `${name}/outcome.png`;
       const captureReceipt = `${name}/xctest-capture-policy.jsonl`;
       const attachmentCloseout = `${name}/xctest-attachment-closeout.json`;
       const raw = JSON.stringify([
         { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name } } }, metadata: { status: 'COMPLETED' } },
-        // Match every required assertion in the actual baseline YAML, including startup waits.
-        ...Array.from({ length: 8 }, () => ({ command: { assertConditionCommand: { condition: { visible: { textRegex: 'Welcome' } } } }, metadata: { status: 'COMPLETED' } })),
+        ...assertionCommands(steps),
       ]);
       const capture = JSON.stringify({ udid: simulator, preferredScreenCaptureFormat: 'screenshots' }) + '\n';
       const closeout = JSON.stringify({ udid: simulator, generated: { videos: 0 }, deleted: [] }) + '\n';
@@ -310,7 +321,7 @@ test('publisher default validator accepts complete non-video proof and rejects c
       writeFileSync(join(evidenceDirectory, screenshot), png);
       writeFileSync(join(evidenceDirectory, captureReceipt), capture);
       writeFileSync(join(evidenceDirectory, attachmentCloseout), closeout);
-      return { name, source, sourceHash: sha(readFileSync(join(root, source))), commands, sha256: sha(raw),
+      return { name, source, sourceHash: sha(sourceBytes), commands, sha256: sha(raw),
         screenshot, screenshotHash: sha(png), captureReceipt, captureReceiptHash: sha(capture),
         attachmentCloseout, attachmentCloseoutHash: sha(closeout) };
     });
@@ -349,6 +360,19 @@ test('publisher default validator accepts complete non-video proof and rejects c
       .includes(flows[0].commands), true);
     assert.equal(execFileSync('tar', ['-tzf', join(publicationDirectory, 'local-evidence.tar.gz')], { encoding: 'utf8' })
       .includes(flows[0].attachmentCloseout), true);
+    const signIn = report.flows.find(flow => flow.name === 'signin-options');
+    const signInPath = join(evidenceDirectory, signIn.commands);
+    const completeSignIn = readFileSync(signInPath);
+    const truncatedSignIn = JSON.parse(completeSignIn);
+    truncatedSignIn.pop();
+    const truncatedBytes = JSON.stringify(truncatedSignIn);
+    writeFileSync(signInPath, truncatedBytes);
+    signIn.sha256 = sha(truncatedBytes);
+    writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
+    await assert.rejects(publishProductFlow('9', options), /missing\/skipped\/failed assertions: signin-options/);
+    assert.equal(uploads, 1, 'a missing required sign-in assertion must stop before another upload');
+    writeFileSync(signInPath, completeSignIn);
+    signIn.sha256 = sha(completeSignIn);
     const closeoutPath = report.flows[0].attachmentCloseout;
     const closeoutHash = report.flows[0].attachmentCloseoutHash;
     delete report.flows[0].attachmentCloseout;

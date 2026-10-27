@@ -285,8 +285,8 @@ Exceptions to user-session authentication (service callbacks still authenticate)
 | `POST /api/waitlist/web` | Write-only public website opt-in with abuse controls |
 | `POST /api/auth/apple` | Apple sign-in |
 | `POST /api/auth/google` | Google sign-in |
-| `POST /api/auth/login` | Legacy email/password |
-| `POST /api/auth/register` | Legacy email/password |
+| `POST /api/auth/login` | Demo reviewer only in production; dev fixture accounts elsewhere |
+| `POST /api/auth/register` | Dev fixtures only; production returns 403 |
 | `POST /api/revenuecat/webhook` | RevenueCat webhook (REVENUECAT_WEBHOOK_AUTH header) |
 | `GET /api/internal/audit-macro-drift` | Vercel cron (CRON_SECRET Bearer) |
 | `POST /api/internal/feedback-digest` | Vercel cron (CRON_SECRET Bearer) |
@@ -316,7 +316,13 @@ An authenticated API rejection clears expired tokens and sends a pending no-tria
 
 ## Legacy: Email/Password (Deprecated)
 
-`POST /api/auth/register` and `POST /api/auth/login` still exist in the codebase for test harness use, but email/password auth is **not exposed in the production mobile UI**. The original spec (`docs/engineering/archive/auth-spec.md`, S-22) described HS256 signing with a `JWT_SECRET` — this approach was superseded by Supabase JWKS verification when Apple and Google Sign-In were introduced.
+`POST /api/auth/register` is restricted to nonproduction fixtures; production clients create accounts through Apple or Google.
+Production `POST /api/auth/login` accepts only `appreview@fitsy.org`, which must already be provisioned with its own password.
+The reviewer deep link remains `fitsy://auth/reviewer`, and the server requires the configured reviewer subscription bypass as well.
+Missing deployment identity fails closed, and a production Supabase target overrides dev flags.
+Every production data request also checks Supabase-signed provider and authentication-method claims, so direct Supabase password sessions cannot bypass the reviewer restriction.
+User-editable metadata never grants provider access.
+The original HS256 spec was superseded by Supabase JWKS verification when Apple and Google Sign-In were introduced.
 
 The `passwordHash` column remains on the `User` model (nullable). No production code path sets it.
 

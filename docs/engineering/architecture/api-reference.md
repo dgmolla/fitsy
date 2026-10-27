@@ -26,8 +26,8 @@ RevenueCat validates its configured webhook Authorization secret using constant-
 | `/api/health` | GET | None | Health check + DB probe |
 | `/api/auth/apple` | POST | None | Apple Sign-In |
 | `/api/auth/google` | POST | None | Google Sign-In |
-| `/api/auth/register` | POST | None | Legacy email/password register (deprecated) |
-| `/api/auth/login` | POST | None | Legacy email/password login (deprecated) |
+| `/api/auth/register` | POST | None | Dev fixtures only; production returns 403 (use Apple/Google) |
+| `/api/auth/login` | POST | None | Production demo reviewer only; dev fixtures allowed |
 | `/api/restaurants` | GET | Bearer JWT | Search nearby restaurants |
 | `/api/restaurants/shuffle` | GET | Bearer JWT | One fit-weighted dish, or a locked restaurant teaser |
 | `/api/restaurants/preview` | GET | Bearer JWT | Onboarding teaser |
@@ -469,6 +469,8 @@ This covers the cases the webhook alone cannot: `TRANSFER` events carry no produ
 
 Push path for RevenueCat subscription lifecycle events (purchase, renewal, cancellation, expiration, billing issue).
 `TRANSFER` (same Apple ID moved to a new Fitsy account) re-reads both sides from RevenueCat via the same sync as above and returns 500 if the new owner cannot be read, so RevenueCat retries.
+Its optional `environment` field may be absent, in which case production-scoped REST reads determine access.
+Explicit sandbox transfers are acknowledged without changing production subscriptions.
 Purchases made under an anonymous pre-login id resolve to the merged account via the event's `aliases`.
 `billing_issue` rows stay entitled until `expiresAt` passes (store grace period), in both write paths.
 Idempotent: each row records the `event_timestamp_ms` of the newest event applied (`Subscription.lastEventAt`), and a lifecycle event older than that is acked with 200 without writing, so out-of-order deliveries cannot regress the row (equal timestamps re-apply the same payload harmlessly).

@@ -25,3 +25,21 @@ tags: [auth, changed-journey]
 - assertVisible: "Continue with Apple"
 - assertVisible: "Continue with Google"
 - assertNotVisible: "Continue with email"
+# The documented review deep link remains available, but rejects ordinary
+# accounts before their password is submitted to the API.
+- openLink: "fitsy://auth/reviewer"
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible: "App Review access"
+    timeout: 10000
+- tapOn: "Email"
+- inputText: "not-a-reviewer@example.test"
+- tapOn: "Password"
+- inputText: "fixture-password"
+- tapOn: "Sign in"
+- assertVisible: "Not a review account"
+- assertVisible: "This sign-in is reserved for App Store review."
+- tapOn: "OK"
+- assertVisible: "App Review access"

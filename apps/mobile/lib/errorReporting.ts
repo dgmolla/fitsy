@@ -9,8 +9,6 @@
  */
 import { getPostHogClient } from './analytics';
 
-const STACK_LIMIT = 4000;
-
 export interface ClientErrorProps {
   message: string;
   stack?: string;
@@ -22,10 +20,8 @@ export function trackClientError(props: ClientErrorProps): void {
   try {
     const client = getPostHogClient();
     client.capture('client_error', {
-      message: props.message,
       source: props.source,
       is_fatal: props.is_fatal,
-      stack: props.stack?.slice(0, STACK_LIMIT) ?? '',
     });
     // A fatal error may tear the app down before the periodic flush — push
     // the event out now, best-effort.
