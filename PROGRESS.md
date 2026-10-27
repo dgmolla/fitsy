@@ -64,6 +64,21 @@ The first full regression run passed 52 cases and caught a test assumption that 
 The task explicitly retains the original 129 IDs, so the regression now checks that frozen selection's hash and 34/25/44/26 counts separately from general budget sampling.
 Do not use the newly cheaper full-population selector to expand this run.
 
+## Qwen provider recovery
+
+All 53 focused tests passed on `4a917c3`, the actual macro schema expands byte-for-byte to the original schema, and the grammar rejection received an additive hash-bound zero-inference receipt.
+The offline recovery replayed all 34 billed Haiku responses (32 valid and two invalid) with transport forbidden, then the actual run `2026-10-27T06-37-12-117Z-a1a11c12` completed all 129 Haiku cases.
+Qwen's first request stopped with HTTP 400 because OpenRouter routed it to GMICloud, whose raw `BadRequest` says the model is deprecated and unavailable.
+Known new spend is $0.415572, entirely Haiku; the unserved Qwen request initially recorded unknown usage.
+The stopped execution and supported recovery were reported once, with no human action requested.
+Recovery assessment: official OpenRouter routing/error/current-key tools and the selected ship-branch workflow support pinning the same model to an advertised compatible endpoint and independently reading usage; model substitution, automatic fallback, paid repeats and broader credentials are excluded.
+OpenRouter's live metadata advertises `deepinfra/fp8` with structured outputs, temperature and the existing $0.09/M input / $0.55/M output ceiling.
+The authorized same-key read-only `GET /api/v1/key` at 06:47 UTC reports daily usage $0 and BYOK usage $0 after the 400, independently proving no new Qwen bill; historical lifetime usage is kept separate.
+Only numeric usage and endpoint/time were retained, never key values, labels or account identifiers.
+Pin Qwen's provider in the actual transport and metadata, keeping its model, prompts, decoding, parameter requirements, disabled fallbacks and price ceiling unchanged.
+Consolidate rejection reconciliation through `reconcileRejection`: this exact Qwen deprecation error also requires the same-day zero-usage receipt hash, while other missing usage stays blocked.
+Next: validate and commit the routing repair, append that exact evidence-backed reconciliation, then resume the original 129-case selection with all Haiku outputs replayed and no repeated paid input.
+
 ## Previous adapter task history
 
 **TL;DR:** Adding dev-only Haiku/Qwen adapters with shared Jev prompts, replay-only Jev and a $2.70 stop.

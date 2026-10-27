@@ -88,9 +88,12 @@ The durable model replay validates original payloads, model identity, usage and 
 Known billed invalid answers remain failed cases and are replayed as failures, while other cases continue without changing prompts or validation.
 Unknown billing, missing paid evidence, unexpected models, reservation overruns and transport failures still stop collection.
 Anthropic's documented schema-compilation HTTP 400 rejection happens before inference and is recorded as a zero-cost transport failure, stopping the run for repair.
-For an older runner that recorded that exact rejection as unknown usage, `reconcileSchemaRejection` appends a zero-cost receipt bound to the retained response hash; other missing usage stays unknown.
+For an older runner that recorded that exact rejection as unknown usage, `reconcileRejection` appends a zero-cost receipt bound to the retained response hash; other missing usage stays unknown.
 The ledger reader revalidates that original HTTP 400 response on every subsequent admission.
 Macro output schemas reuse equivalent answer definitions with `$ref` to stay within the provider's compiled-grammar limits; all choice/probability requirements and downstream validation remain intact.
+Qwen is pinned to OpenRouter's `deepinfra/fp8` endpoint at the same price ceiling, with fallbacks disabled, after the advertised GMICloud endpoint rejected the model as deprecated.
+A GMICloud deprecation HTTP 400 remains unknown until `reconcileRejection` also validates a retained same-day zero-usage read from the authorized key's `GET /api/v1/key` response.
+That sanitized usage receipt contains no key, label or user identifier, and its hash is rechecked during every later ledger admission.
 Haiku cost uses returned token counts at $1/M input and $5/M output; Qwen uses returned `usage.cost` with routing price ceilings of $0.09/M input and $0.55/M output, checked October 26, 2026.
 
 No env file is sourced or auto-loaded by the runner.

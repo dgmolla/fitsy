@@ -15,15 +15,30 @@ export interface ChoiceClient {
   send(request: JevRequest): Promise<{ raw: unknown; costUsd: number; latencyMs: number }>;
 }
 interface Receipt { event: 'reserve' | 'settle' | 'reconcile'; requestId: string; runId: string; at: string;
-  reserveUsd?: number; costUsd?: number | null; failure?: string | null; provider?: 'haiku' | 'qwen'; responseSha256?: string }
-/** These specific HTTP 400 validation errors occur during grammar compilation, before model inference. */
-export function schemaRejection(status: number, body: string) {
+  reserveUsd?: number; costUsd?: number | null; failure?: string | null; provider?: 'haiku' | 'qwen'; responseSha256?: string; usageProofSha256?: string }
+/** Narrow observed pre-inference rejections; missing usage on other errors remains unknown. */
+export function preInferenceRejection(provider: 'haiku' | 'qwen', status: number, body: string) {
   try {
     const data = JSON.parse(body);
-    return status === 400 && data.type === 'error' && data.error?.type === 'invalid_request_error'
+    if (status !== 400 || data.usage || data.choices || data.content) return false;
+    if (provider === 'qwen') {
+      const metadata = data.error?.metadata, raw = typeof metadata?.raw === 'string' ? JSON.parse(metadata.raw) : metadata?.raw;
+      return data.error?.code === 400 && metadata?.provider_name === 'GMICloud' && raw?.error?.type === 'BadRequest'
+        && raw.error.message === 'The requested model has been deprecated and is no longer available.';
+    }
+    return data.type === 'error' && data.error?.type === 'invalid_request_error'
       && ['The compiled grammar is too large, which would cause performance issues. Simplify your tool schemas or reduce the number of strict tools.',
         'Schema is too complex for compilation.'].includes(data.error.message);
   } catch { return false; }
+}
+function qwenUsageProof(directory: string, response: { at: string; latencyMs: number }) {
+  const bytes = readFileSync(join(directory, 'openrouter-before-paid-usage.json'), 'utf8'), proof = JSON.parse(bytes);
+  if (proof.provider !== 'qwen' || proof.endpoint !== 'https://openrouter.ai/api/v1/key' || proof.usageDailyUsd !== 0 || proof.byokUsageUsd !== 0
+    || !Number.isFinite(Date.parse(proof.at)) || !Number.isFinite(Date.parse(response.at)) || !Number.isFinite(response.latencyMs)
+    || Date.parse(proof.at) < Date.parse(response.at) + response.latencyMs || proof.at.slice(0, 10) !== response.at.slice(0, 10)) {
+    throw new Error('No same-day zero-usage proof for the unserved Qwen request');
+  }
+  return sha256(bytes);
 }
 export function spendState(file: string) {
   const pending = new Map<string, Receipt>(), settled = new Set<string>();
@@ -42,12 +57,13 @@ export function spendState(file: string) {
       if (r.costUsd === null) unknown.set(r.requestId, r);
       else if (typeof r.costUsd === 'number' && Number.isFinite(r.costUsd) && r.costUsd >= 0) { knownUsd += r.costUsd; if (r.provider) modelKnownUsd += r.costUsd; }
       else throw new Error('Invalid spend ledger cost');
-    } else if (r.event === 'reconcile' && unknown.has(r.requestId) && r.provider === 'haiku' && r.costUsd === 0
-      && r.runId === unknown.get(r.requestId)!.runId && unknown.get(r.requestId)!.provider === 'haiku') {
-      const exchanges = readFileSync(join(dirname(file), r.runId, 'haiku-exchanges.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    } else if (r.event === 'reconcile' && unknown.has(r.requestId) && ['haiku', 'qwen'].includes(r.provider ?? '') && r.costUsd === 0
+      && r.runId === unknown.get(r.requestId)!.runId && unknown.get(r.requestId)!.provider === r.provider) {
+      const exchanges = readFileSync(join(dirname(file), r.runId, `${r.provider}-exchanges.jsonl`), 'utf8').trim().split('\n').map(line => JSON.parse(line));
       const responses = exchanges.filter(e => e.event === 'response' && e.requestId === r.requestId && e.runId === r.runId && e.provider === r.provider);
-      if (responses.length !== 1 || responses[0].costUsd !== null || !schemaRejection(responses[0].status, responses[0].body)
+      if (responses.length !== 1 || responses[0].costUsd !== null || !preInferenceRejection(r.provider!, responses[0].status, responses[0].body)
         || sha256(responses[0].body) !== r.responseSha256) throw new Error('Invalid pre-inference rejection reconciliation');
+      if (r.provider === 'qwen' && qwenUsageProof(dirname(file), responses[0]) !== r.usageProofSha256) throw new Error('Qwen usage proof changed');
       unknown.delete(r.requestId);
     } else throw new Error('Invalid spend ledger sequence');
   }
@@ -55,7 +71,7 @@ export function spendState(file: string) {
 }
 
 /** Add a zero-inference reconciliation without replacing the original unknown settlement or response. */
-export function reconcileSchemaRejection(directory: string, runId: string, requestId: string) {
+export function reconcileRejection(directory: string, runId: string, requestId: string, provider: 'haiku' | 'qwen' = 'haiku') {
   if (!/^[a-zA-Z0-9_-]+$/.test(runId)) throw new Error('Invalid reconciliation run ID');
   const lock = join(directory, '.jev.lock'), fd = openSync(lock, 'wx', 0o600);
   try { writeFileSync(fd, JSON.stringify({ pid: process.pid, runId, phase: 'reconcile', startedAt: new Date().toISOString() }) + '\n'); }
@@ -63,13 +79,14 @@ export function reconcileSchemaRejection(directory: string, runId: string, reque
   try {
     const ledger = join(directory, 'spend.jsonl'), entries: Receipt[] = readFileSync(ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line));
     spendState(ledger);
-    const settled = entries.find(e => e.event === 'settle' && e.requestId === requestId && e.runId === runId && e.provider === 'haiku');
-    if (settled?.costUsd !== null || entries.some(e => e.event === 'reconcile' && e.requestId === requestId)) throw new Error('No unreconciled unknown Haiku settlement');
-    const exchanges = readFileSync(join(directory, runId, 'haiku-exchanges.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
-    const responses = exchanges.filter(e => e.event === 'response' && e.requestId === requestId && e.runId === runId && e.provider === 'haiku');
-    if (responses.length !== 1 || responses[0].costUsd !== null || !schemaRejection(responses[0].status, responses[0].body)) throw new Error('No documented pre-inference grammar rejection');
-    durableAppend(ledger, { provider: 'haiku', requestId, runId, at: new Date().toISOString(), event: 'reconcile', costUsd: 0,
-      responseSha256: sha256(responses[0].body), failure: 'Schema grammar rejected before inference' });
+    const settled = entries.find(e => e.event === 'settle' && e.requestId === requestId && e.runId === runId && e.provider === provider);
+    if (settled?.costUsd !== null || entries.some(e => e.event === 'reconcile' && e.requestId === requestId)) throw new Error('No unreconciled unknown provider settlement');
+    const exchanges = readFileSync(join(directory, runId, `${provider}-exchanges.jsonl`), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    const responses = exchanges.filter(e => e.event === 'response' && e.requestId === requestId && e.runId === runId && e.provider === provider);
+    if (responses.length !== 1 || responses[0].costUsd !== null || !preInferenceRejection(provider, responses[0].status, responses[0].body)) throw new Error('No documented pre-inference rejection');
+    const usageProofSha256 = provider === 'qwen' ? qwenUsageProof(directory, responses[0]) : undefined;
+    durableAppend(ledger, { provider, requestId, runId, at: new Date().toISOString(), event: 'reconcile', costUsd: 0,
+      responseSha256: sha256(responses[0].body), ...(usageProofSha256 ? { usageProofSha256 } : {}), failure: 'Request rejected before inference' });
     return spendState(ledger);
   } finally { unlinkSync(lock); }
 }

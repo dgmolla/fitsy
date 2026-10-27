@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { z } from 'zod';
 import { JEV_LIMITS, parseChoiceAnswers, type JevRequest } from '../lib/jev-experiment';
-import { spendState, schemaRejection, type ChoiceClient } from './budget';
+import { spendState, preInferenceRejection, type ChoiceClient } from './budget';
 import { durableAppend } from './fixtures';
 import { requestKey, type PaidResponse } from './replay';
 
@@ -17,6 +17,7 @@ export const providers = {
     key: 'ANTHROPIC_API_KEY', endpoint: 'https://api.anthropic.com/v1/messages', input: 1, output: 5,
     pricingSource: 'https://platform.claude.com/docs/en/about-claude/pricing' },
   qwen: { model: 'qwen/qwen3-235b-a22b-2507', requiredModel: 'qwen/qwen3-235b-a22b-2507',
+    onlyProvider: 'deepinfra/fp8',
     key: 'OPENROUTER_API_KEY', endpoint: 'https://openrouter.ai/api/v1/chat/completions', input: 0.09, output: 0.55,
     pricingSource: 'https://openrouter.ai/api/v1/models' },
 } as const;
@@ -45,7 +46,7 @@ export function providerRequest(provider: Provider, request: JevRequest) {
   const common = { model: providers[provider].model, temperature: 0, max_tokens: MAX_OUTPUT_TOKENS, messages };
   return provider === 'haiku' ? { ...common, output_config: { format: { type: 'json_schema', schema } } }
     : { ...common, response_format: { type: 'json_schema', json_schema: { name: 'choice_answers', strict: true, schema } },
-      usage: { include: true }, provider: { allow_fallbacks: false, require_parameters: true,
+      usage: { include: true }, provider: { only: [providers.qwen.onlyProvider], allow_fallbacks: false, require_parameters: true,
         max_price: { prompt: providers.qwen.input, completion: providers.qwen.output } } };
 }
 export function reservation(provider: Provider, request: JevRequest) {
@@ -87,9 +88,9 @@ function modelResponses(directory: string, provider: Provider) {
     const responses = new Map(exchanges.filter(e => e.event === 'response').map(e => [e.requestId, e]));
     for (const request of exchanges.filter(e => e.event === 'request')) {
       const bill = bills.get(request.requestId), response = responses.get(request.requestId);
-      if (provider === 'haiku' && bill && response && request.provider === provider && response.provider === provider
+      if (bill && response && request.provider === provider && response.provider === provider
         && bill.runId === request.runId && response.runId === request.runId && bill.costUsd === 0
-        && (response.costUsd === 0 || bill.reconciled && response.costUsd === null) && schemaRejection(response.status, response.body)) {
+        && (response.costUsd === 0 || bill.reconciled && response.costUsd === null) && preInferenceRejection(provider, response.status, response.body)) {
         found.add(request.requestId); continue;
       }
       if (!bill || !response || bill.runId !== request.runId || response.runId !== request.runId || request.provider !== provider
@@ -201,7 +202,7 @@ export class ModelClient implements ChoiceClient {
       status = response.status; body = await response.text();
       if (body.includes(this.apiKey)) { body = body.replaceAll(this.apiKey, '[REDACTED]'); failure = 'Credential echo redacted'; }
       const data = JSON.parse(body);
-      if (this.provider === 'haiku' && schemaRejection(status, body)) {
+      if (this.provider === 'haiku' && preInferenceRejection(this.provider, status, body)) {
         costUsd = 0; failure = 'Schema grammar rejected before inference';
         throw new Error(failure);
       }

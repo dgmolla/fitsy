@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { method, matchingRequest, coarseRequest } from './adapters';
 import { durableAppend, loadCases, sha256 } from './fixtures';
-import { spendState, schemaRejection, reconcileSchemaRejection } from './budget';
+import { spendState, preInferenceRejection, reconcileRejection } from './budget';
 import { ModelClient, ModelSession, MODEL_STOP_USD, answerSchema, providers, providerRequest, reservation, type Provider } from './providers';
 import { modelSelection, options, requestedSelection, run } from './run';
 import { type JevRequest } from '../lib/jev-experiment';
@@ -208,19 +208,48 @@ test('legacy unknown compiler billing is reconciled additively only against the 
   expect(spendState(s.session.ledger).unknown).toBe(true);
   expect(() => new ModelSession('blocked', s.directory)).toThrow('Unknown');
   writeFileSync(s.session.lock, 'another active collector');
-  expect(() => reconcileSchemaRejection(s.directory, 'run', bill.requestId)).toThrow();
+  expect(() => reconcileRejection(s.directory, 'run', bill.requestId)).toThrow();
   expect(readFileSync(s.session.ledger, 'utf8')).toBe(prefix); rmSync(s.session.lock);
   response.status = 500; writeFileSync(s.client.rawFile, records.map(e => JSON.stringify(e)).join('\n') + '\n');
-  expect(() => reconcileSchemaRejection(s.directory, 'run', bill.requestId)).toThrow('No documented');
+  expect(() => reconcileRejection(s.directory, 'run', bill.requestId)).toThrow('No documented');
   expect(readFileSync(s.session.ledger, 'utf8')).toBe(prefix);
   response.status = 400; writeFileSync(s.client.rawFile, records.map(e => JSON.stringify(e)).join('\n') + '\n');
-  expect(reconcileSchemaRejection(s.directory, 'run', bill.requestId)).toMatchObject({ unknown: false, modelKnownUsd: 0 });
+  expect(reconcileRejection(s.directory, 'run', bill.requestId)).toMatchObject({ unknown: false, modelKnownUsd: 0 });
   expect(readFileSync(s.session.ledger, 'utf8').startsWith(prefix)).toBe(true);
-  expect(() => reconcileSchemaRejection(s.directory, 'run', bill.requestId)).toThrow('No unreconciled');
+  expect(() => reconcileRejection(s.directory, 'run', bill.requestId)).toThrow('No unreconciled');
   response.body += ' '; writeFileSync(s.client.rawFile, records.map(e => JSON.stringify(e)).join('\n') + '\n');
   expect(() => spendState(s.session.ledger)).toThrow('reconciliation');
-  expect(schemaRejection(200, grammarError)).toBe(false); expect(schemaRejection(500, grammarError)).toBe(false);
-  expect(schemaRejection(400, '{}')).toBe(false);
+  expect(preInferenceRejection('haiku', 200, grammarError)).toBe(false); expect(preInferenceRejection('haiku', 500, grammarError)).toBe(false);
+  expect(preInferenceRejection('haiku', 400, '{}')).toBe(false);
+});
+
+test('unserved Qwen routing requires exact rejection plus a same-day zero-usage receipt before continuation', async () => {
+  const body = JSON.stringify({ error: { code: 400, message: 'Provider returned error', metadata: { provider_name: 'GMICloud',
+    raw: JSON.stringify({ error: { type: 'BadRequest', message: 'The requested model has been deprecated and is no longer available.' } }) } } });
+  const fetcher = transport('qwen').mockImplementation(async () => new Response(body, { status: 400 }));
+  const s = setup('qwen', fetcher);
+  await expect(s.client.send(request)).rejects.toThrow('unknown usage'); s.client.close(); s.session.close();
+  const records = readFileSync(s.client.rawFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  const response = records.find(e => e.event === 'response'); response.at = '2026-10-27T06:00:00.000Z';
+  writeFileSync(s.client.rawFile, records.map(e => JSON.stringify(e)).join('\n') + '\n');
+  const proofFile = join(s.directory, 'openrouter-before-paid-usage.json');
+  const proof = { provider: 'qwen', endpoint: 'https://openrouter.ai/api/v1/key', at: '2026-10-27T06:10:00.000Z', usageDailyUsd: .1, byokUsageUsd: 0 };
+  writeFileSync(proofFile, JSON.stringify(proof));
+  const prefix = readFileSync(s.session.ledger, 'utf8');
+  expect(() => reconcileRejection(s.directory, 'run', response.requestId, 'qwen')).toThrow('zero-usage');
+  expect(readFileSync(s.session.ledger, 'utf8')).toBe(prefix);
+  proof.usageDailyUsd = 0; writeFileSync(proofFile, JSON.stringify(proof));
+  expect(reconcileRejection(s.directory, 'run', response.requestId, 'qwen')).toMatchObject({ unknown: false, modelKnownUsd: 0 });
+  const out = join(s.directory, 'resumed'); mkdirSync(out);
+  const session = new ModelSession('resumed', s.directory), resumed = new ModelClient('qwen', session, out, 'fake-key', transport('qwen'));
+  try {
+    await expect(resumed.send(request)).resolves.toMatchObject({ costUsd: .0001 });
+    expect(resumed.requests).toBe(1);
+  } finally { resumed.close(); session.close(); }
+  writeFileSync(proofFile, JSON.stringify(proof) + '\n');
+  expect(() => spendState(s.session.ledger)).toThrow('proof changed');
+  expect(preInferenceRejection('qwen', 200, body)).toBe(false);
+  expect(preInferenceRejection('qwen', 400, body.replace('GMICloud', 'other-provider'))).toBe(false);
 });
 
 test('pending reservations consume the shared allowance and provider identity cannot disappear at settlement', () => {
@@ -255,7 +284,7 @@ test('four-method sampling is deterministic, dev-only, outcome-independent and b
   expect(options(['--methods=exact,jev-v3,haiku,qwen', '--live']).jevReplayOnly).toBe(true);
   expect(() => options(['--methods=qwen', '--live', '--split=holdout'])).toThrow('dev-only');
   expect(reservation('haiku', coarseRequest(item)).usd).toBeGreaterThan(0);
-  expect(providerRequest('qwen', request)).toMatchObject({ provider: { allow_fallbacks: false } });
+  expect(providerRequest('qwen', request)).toMatchObject({ provider: { only: ['deepinfra/fp8'], allow_fallbacks: false, require_parameters: true } });
   const resumed = modelSelection(selected.selected, fixture.rows, MODEL_STOP_USD - .004918, ['haiku', 'qwen'],
     provider => provider === 'haiku');
   expect(resumed.selected.map(c => c.id)).toEqual(selected.selected.map(c => c.id));
