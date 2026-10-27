@@ -100,12 +100,16 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       container = inspect();
       port = pinnedOwned(container);
       if (!container.State?.Running) throw new Error('owned database stopped before reset');
-      docker(['exec', pinnedId, 'psql', '-U', 'fitsy_test', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'DROP DATABASE IF EXISTS fitsy_verify WITH (FORCE)', '-c', 'CREATE DATABASE fitsy_verify']);
       const url = `postgresql://fitsy_test:fitsy_test@127.0.0.1:${port}/fitsy_verify`;
       const childEnv = { ...env, POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url,
         FITSY_VERIFY_CALLER_NON_POOLING_URL: env.POSTGRES_URL_NON_POOLING ?? '',
         FITSY_VERIFY_OWNED_DB: container.Id, FITSY_VERIFY_DB_IMAGE: container.Image, FITSY_LOCAL_DB: '1',
         FITSY_VERIFY_DB_HOST: container.NetworkSettings.Ports['5432/tcp'][0].HostIp };
+      assert(childEnv);
+      const guard = spawn(process.execPath, ['--import', 'tsx', 'scripts/lib/db-target-guard.ts', '--dev-only',
+        '--env=POSTGRES_PRISMA_URL', '--env=POSTGRES_URL_NON_POOLING'], { cwd: root, env: childEnv, stdio: 'inherit' });
+      if (guard.status !== 0) throw new Error('owned database target guard failed');
+      docker(['exec', pinnedId, 'psql', '-U', 'fitsy_test', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'DROP DATABASE IF EXISTS fitsy_verify WITH (FORCE)', '-c', 'CREATE DATABASE fitsy_verify']);
       for (const commandArgs of [['node_modules/prisma/build/index.js', 'migrate', 'deploy'], ['node_modules/tsx/dist/cli.mjs', 'prisma/seed.ts', '--data-only']]) {
         assert(childEnv);
         const result = spawn(process.execPath, commandArgs, { cwd: root, env: childEnv, stdio: 'inherit' });

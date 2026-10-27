@@ -11,6 +11,7 @@
  *   set -a && source .env.local && set +a && npx tsx scripts/backfill-menu-item-macros.ts
  */
 
+import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { macroWinnerSqlOrder } from "@fitsy/shared";
 
@@ -20,10 +21,8 @@ async function main(): Promise<void> {
   // Use the direct (non-pooled) URL so big batch UPDATEs aren't subject
   // to PgBouncer's transaction-mode prepared-statement quirks and
   // shorter statement timeouts. Falls back to default URL otherwise.
-  const directUrl = process.env["POSTGRES_URL_NON_POOLING"];
-  const prisma = directUrl
-    ? new PrismaClient({ datasources: { db: { url: directUrl } } })
-    : new PrismaClient();
+  const directUrl = assertDatabaseWriteAllowed(process.env["POSTGRES_URL_NON_POOLING"] ?? process.env["POSTGRES_PRISMA_URL"]);
+  const prisma = new PrismaClient({ datasources: { db: { url: directUrl } } });
   const startMs = Date.now();
 
   console.log("[backfill] starting"); // eslint-disable-line no-console

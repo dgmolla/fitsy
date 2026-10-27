@@ -166,7 +166,8 @@ Steps, in order:
    migrate-dev drift): `CREATE TABLE "ChainItem" (...)` + unique index `(brandId, canonicalKey)`
    + index `(brandId)` + FK → `Brand(id)`. Exec via a tiny script (`$executeRawUnsafe`) or psql.
    Idempotent guard: `CREATE TABLE IF NOT EXISTS`.
-4. **Land** — `npx tsx --env-file=.env.local scripts/phase1-land.ts --apply` → upserts 4,909
+4. **Historical landing (retired)** - `phase1-land.ts --apply` now refuses.
+   Use the reviewed `chainWriteGuard` / `chainPilotPlan` path through `preload-chain-pilot.ts`; the historical run upserted 4,909
    `ChainItem` rows on `(brandId, canonicalKey)`, `source='official'`, `confidence='HIGH'`,
    `officialUrl`, `retrievedAt`.
 5. **Verify** — `SELECT source, count(*) FROM "ChainItem" GROUP BY source;` = 4,909 official;

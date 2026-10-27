@@ -1,3 +1,4 @@
+import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
 import { computeMenuHash } from '../apps/api/services/menuSources/menuItemIdentity';
 import { validateHexInTx } from "./preload-invariants";
 import { loadChainServing, chainMenuResolver, type ChainServing } from "../apps/api/services/chainServing";
@@ -915,10 +916,10 @@ async function processRestaurant(
 
 async function main(): Promise<void> {
   validateEnv();
+  const directUrl = assertDatabaseWriteAllowed(process.env["POSTGRES_URL_NON_POOLING"]);
   await validateApiCredentials();
 
   const startTime = Date.now();
-  const directUrl = process.env["POSTGRES_URL_NON_POOLING"]!;
   const prisma = new PrismaClient({ datasources: { db: { url: directUrl } } });
   // Every retry must pass the chunk spend guard, rather than retry inside the SDK.
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"], maxRetries: 0 });

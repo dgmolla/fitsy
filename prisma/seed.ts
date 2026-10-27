@@ -22,6 +22,7 @@
 import { PrismaClient, ConfidenceLevel } from "@prisma/client";
 import { createClient } from "@supabase/supabase-js";
 import { assertNotProd, hostOf } from "../scripts/dev/lib/guard";
+import { assertDevSupabase } from "../scripts/lib/db-target-guard";
 
 export const SEED_CENTER = { lat: 34.0522, lng: -118.2437 }; // downtown LA
 export const SEED_PASSWORD = "fitsy-seed-pass-2026";
@@ -63,10 +64,7 @@ function supabaseAdmin() {
   const url = process.env["SUPABASE_URL"];
   const key = process.env["SUPABASE_SERVICE_ROLE_KEY"];
   if (!url || !key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required to seed users");
-  if (url.includes("zaxkmjqozvmbifiwbxps") && process.env["FITSY_ALLOW_PROD"] !== "1") {
-    throw new Error("SUPABASE_URL points at production auth. Refusing.");
-  }
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  return createClient(assertDevSupabase(url), key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
 export async function seedUsers(prisma: PrismaClient): Promise<void> {
