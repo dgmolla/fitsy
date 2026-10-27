@@ -9,9 +9,15 @@ FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
 ORDER BY c.relname;
 
-SELECT table_name, grantee, privilege_type
-FROM information_schema.role_table_grants
-WHERE table_schema = 'public' AND grantee IN ('PUBLIC', 'anon', 'authenticated')
+-- role_table_grants omits PUBLIC privileges, so inspect the catalog ACLs.
+SELECT c.relname AS table_name,
+       CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE r.rolname END AS grantee,
+       acl.privilege_type
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+CROSS JOIN LATERAL aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+LEFT JOIN pg_roles r ON r.oid = acl.grantee
+WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+  AND (acl.grantee = 0 OR r.rolname IN ('anon', 'authenticated'))
 ORDER BY table_name, grantee, privilege_type;
 
 SELECT schemaname, tablename, policyname, roles, cmd, qual, with_check

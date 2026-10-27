@@ -196,10 +196,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   // A genuine sandbox purchase must never grant production access. TRANSFER
-  // has no entitlement list and is resolved by the equally scoped REST read.
+  // has no entitlement list, may omit environment, and is resolved by the
+  // equally scoped REST read rather than granting access from its payload.
   if (!isDevelopmentEnvironment()) {
     if (event.environment === "SANDBOX") return NextResponse.json({ received: true });
-    if (event.environment !== "PRODUCTION") {
+    if (event.environment !== "PRODUCTION" &&
+      !(event.type === "TRANSFER" && event.environment === undefined)) {
       return NextResponse.json({ error: "Missing purchase environment" }, { status: 400 });
     }
   }

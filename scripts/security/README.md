@@ -17,6 +17,8 @@ flowchart LR
 
 The existing verifier discovers `scripts/verify/security-schema.test.ts` through the scripts workspace and `apps/api/tests/db/security.db.test.ts` through the API workspace.
 The latter checks the migrated catalog against the Prisma model inventory and preserves a real server read.
+It also exercises the audit's exact grant query against synthetic ACLs in a read-only transaction, including PUBLIC, anon and authenticated grants.
+The audit reads catalog ACLs because `information_schema.role_table_grants` excludes PUBLIC privileges.
 Missing database execution is a skipped check, never evidence that a migration works.
 Use the canonical owned-database verifier for that stage.
 

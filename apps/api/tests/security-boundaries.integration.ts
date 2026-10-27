@@ -83,3 +83,37 @@ test('sandbox purchases and unrelated entitlements never reach production persis
     assert.deepEqual(await response.json(), { received: true });
   }
 });
+
+test('production transfers with an optional environment use scoped REST and retry an unavailable lookup', async () => {
+  const savedFetch = global.fetch;
+  const savedKey = process.env['REVENUECAT_PUBLIC_API_KEY'];
+  const lookups: { url: string; sandbox: string | null }[] = [];
+  process.env['REVENUECAT_WEBHOOK_AUTH'] = 'fixture-webhook-auth';
+  process.env['REVENUECAT_PUBLIC_API_KEY'] = 'appl_fixture';
+  global.fetch = async (url, init) => {
+    lookups.push({ url: String(url), sandbox: new Headers(init?.headers).get('x-is-sandbox') });
+    return Response.json({}, { status: 503 });
+  };
+  try {
+    for (const [environment, status] of [[undefined, 500], ['PRODUCTION', 500], ['SANDBOX', 200], ['UNKNOWN', 400]] as const) {
+      const beforeLookups = lookups.length;
+      const response = await webhook(new NextRequest('http://localhost/api/revenuecat/webhook', {
+        method: 'POST', headers: { authorization: 'fixture-webhook-auth', 'content-type': 'application/json' },
+        body: JSON.stringify({ event: { type: 'TRANSFER', environment,
+          transferred_from: ['$RCAnonymousID:fixture'], transferred_to: ['fixture-account'] } }),
+      }));
+      assert.equal(response.status, status, String(environment));
+      if (status === 500) {
+        assert.deepEqual(await response.json(), { error: 'RevenueCat lookup unavailable' });
+        assert.deepEqual(lookups.at(-1), {
+          url: 'https://api.revenuecat.com/v1/subscribers/fixture-account', sandbox: 'false',
+        });
+      }
+      assert.equal(lookups.length - beforeLookups, status === 500 ? 1 : 0);
+    }
+  } finally {
+    global.fetch = savedFetch;
+    if (savedKey === undefined) delete process.env['REVENUECAT_PUBLIC_API_KEY'];
+    else process.env['REVENUECAT_PUBLIC_API_KEY'] = savedKey;
+  }
+});

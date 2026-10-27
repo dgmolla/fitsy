@@ -469,6 +469,8 @@ This covers the cases the webhook alone cannot: `TRANSFER` events carry no produ
 
 Push path for RevenueCat subscription lifecycle events (purchase, renewal, cancellation, expiration, billing issue).
 `TRANSFER` (same Apple ID moved to a new Fitsy account) re-reads both sides from RevenueCat via the same sync as above and returns 500 if the new owner cannot be read, so RevenueCat retries.
+Its optional `environment` field may be absent, in which case production-scoped REST reads determine access.
+Explicit sandbox transfers are acknowledged without changing production subscriptions.
 Purchases made under an anonymous pre-login id resolve to the merged account via the event's `aliases`.
 `billing_issue` rows stay entitled until `expiresAt` passes (store grace period), in both write paths.
 Idempotent: each row records the `event_timestamp_ms` of the newest event applied (`Subscription.lastEventAt`), and a lifecycle event older than that is acked with 200 without writing, so out-of-order deliveries cannot regress the row (equal timestamps re-apply the same payload harmlessly).
