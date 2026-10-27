@@ -19,7 +19,7 @@ export const providers = {
     pricingSource: 'https://platform.claude.com/docs/en/about-claude/pricing' },
   qwen: { model: 'qwen/qwen3-235b-a22b-2507', requiredModel: 'qwen/qwen3-235b-a22b-2507',
     onlyProvider: 'deepinfra/fp8',
-    timeoutMs: 180_000,
+    timeoutMs: 300_000,
     key: 'OPENROUTER_API_KEY', endpoint: 'https://openrouter.ai/api/v1/chat/completions', input: 0.09, output: 0.55,
     pricingSource: 'https://openrouter.ai/api/v1/models' },
 } as const;

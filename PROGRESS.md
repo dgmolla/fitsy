@@ -118,6 +118,15 @@ It verifies all 465 supported method/case predictions, original sample and ledge
 The full report must disclose the one usage-counter allocation, its unchanged raw missing output and censored latency, plus exact's unsupported macro surface.
 Next: finish collection, verify the final same-key total against all Qwen bills, generate and commit results, then cheap checks, existing exact-head local AI review, green current CI and authorized ordinary squash merge.
 
+The continuation reached Qwen case 120, then stopped at the 180-second body deadline on `bulk:measured:macro:wahoo-s-fish-taco:sides/side-beans-white`.
+Known new spend at that stop is $0.45063298; request `f35dc8ce-c5aa-4b66-8716-b9d77794ed98` retained header generation `gen-1793087348-UAxn2yCJwJ6yiiCIlTqF`.
+The changed stop was reported once; no human action or paid retry is requested.
+Recovery assessment: the corrected header journal and ordinary authorized `GET /api/v1/generation` now provide the exact per-request bill, so broader access and aggregate allocation are unnecessary for this request.
+The retained read reports the same DeepInfra Qwen canonical model, cancellation, 1,054 prompt tokens, 1,292 completion tokens and $0.00080546 total cost inside the $0.00136212 reservation.
+Its 179.921-second generation duration explains the cancellation and supports a bounded 300-second deadline for unseen inputs at the unchanged 1,536-token limit.
+Extend the existing timeout reconciler to consume that exact captured-generation proof, validating identity, completed/cancelled state, timing, token counts and reserved cost; keep the original missing output failed.
+Next: commit and validate that exact-generation path, reconcile this charge, and finish the remaining nine unseen Qwen cases with all paid inputs replayed.
+
 ## Previous adapter task history
 
 **TL;DR:** Adding dev-only Haiku/Qwen adapters with shared Jev prompts, replay-only Jev and a $2.70 stop.

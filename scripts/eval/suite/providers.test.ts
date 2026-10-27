@@ -294,6 +294,33 @@ test('a lost Qwen body retains its generation ID and stays failed after bounded 
   expect(() => spendState(s.session.ledger)).toThrow('proof changed');
 });
 
+test('a captured Qwen generation reconciles exact billing and refuses mismatched or still-running metadata', async () => {
+  const fetcher = transport('qwen').mockImplementation(async () => new Response(new ReadableStream({
+    start(controller) { controller.error(new Error('Body deadline exceeded')); },
+  }), { headers: { 'x-generation-id': 'gen-exact-fixture' } }));
+  const s = setup('qwen', fetcher), coarse = coarseRequest(item);
+  await expect(s.client.send(coarse)).rejects.toThrow('unknown usage'); s.client.close(); s.session.close();
+  const rows = readFileSync(s.client.rawFile, 'utf8').trim().split('\n').map(line => JSON.parse(line)), response = rows.find(e => e.event === 'response');
+  response.at = '2026-10-27T06:00:00.000Z'; response.latencyMs = 180_016;
+  writeFileSync(s.client.rawFile, rows.map(e => JSON.stringify(e)).join('\n') + '\n');
+  const proof = { at: '2026-10-27T06:10:00.000Z', endpoint: 'https://openrouter.ai/api/v1/generation', provider: 'qwen',
+    requestId: response.requestId, runId: 'run', generation: { id: 'gen-wrong', model: 'qwen/qwen3-235b-a22b-07-25',
+      provider_name: 'DeepInfra', created_at: response.at, cancelled: true, finish_reason: null, native_tokens_prompt: 500,
+      native_tokens_completion: 100, total_cost: .0001 } };
+  const file = join(s.directory, `qwen-timeout-${response.requestId}.json`), prefix = readFileSync(s.session.ledger, 'utf8');
+  writeFileSync(file, JSON.stringify(proof));
+  expect(() => reconcileQwenTimeout(s.directory, 'run', response.requestId)).toThrow('matching');
+  proof.generation.id = 'gen-exact-fixture'; proof.generation.cancelled = false; writeFileSync(file, JSON.stringify(proof));
+  expect(() => reconcileQwenTimeout(s.directory, 'run', response.requestId)).toThrow('completed-generation');
+  expect(readFileSync(s.session.ledger, 'utf8')).toBe(prefix);
+  proof.generation.cancelled = true; writeFileSync(file, JSON.stringify(proof));
+  expect(reconcileQwenTimeout(s.directory, 'run', response.requestId)).toMatchObject({ unknown: false, modelKnownUsd: .0001 });
+  const out = join(s.directory, 'resumed'); mkdirSync(out);
+  const session = new ModelSession('resumed', s.directory), live = transport('qwen'), client = new ModelClient('qwen', session, out, 'fake-key', live);
+  try { await expect(client.send(coarse)).rejects.toThrow('output unavailable'); expect(live).not.toHaveBeenCalled(); }
+  finally { client.close(); session.close(); }
+});
+
 test('pending reservations consume the shared allowance and provider identity cannot disappear at settlement', () => {
   const directory = temporary(), session = new ModelSession('run', directory);
   try {

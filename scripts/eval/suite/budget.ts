@@ -15,7 +15,8 @@ export interface ChoiceClient {
   send(request: JevRequest): Promise<{ raw: unknown; costUsd: number; latencyMs: number }>;
 }
 interface Receipt { event: 'reserve' | 'settle' | 'reconcile' | 'reconcile-timeout'; requestId: string; runId: string; at: string;
-  reserveUsd?: number; costUsd?: number | null; failure?: string | null; provider?: 'haiku' | 'qwen'; responseSha256?: string; usageProofSha256?: string }
+  reserveUsd?: number; costUsd?: number | null; failure?: string | null; provider?: 'haiku' | 'qwen'; responseSha256?: string; usageProofSha256?: string;
+  basis?: 'generation-metadata' | 'usage-counter' }
 /** Narrow observed pre-inference rejections; missing usage on other errors remains unknown. */
 export function preInferenceRejection(provider: 'haiku' | 'qwen', status: number, body: string) {
   try {
@@ -50,6 +51,21 @@ function qwenTimeoutBill(directory: string, runId: string, requestId: string, hi
   if (responses.length !== 1 || responses[0].status !== 200 || responses[0].body !== '' || responses[0].costUsd !== null
     || !Number.isFinite(Date.parse(responses[0].at)) || !Number.isFinite(responses[0].latencyMs) || responses[0].latencyMs < 60_000) throw new Error('No retained Qwen body-timeout evidence');
   const response = responses[0], bytes = readFileSync(join(directory, `qwen-timeout-${requestId}.json`), 'utf8'), proof = JSON.parse(bytes);
+  if (proof.generation) {
+    const generation = proof.generation, request = exchanges.find(e => e.event === 'request' && e.requestId === requestId && e.runId === runId && e.provider === 'qwen');
+    const headers = exchanges.filter(e => e.event === 'headers' && e.requestId === requestId && e.runId === runId && e.provider === 'qwen');
+    if (proof.requestId !== requestId || proof.runId !== runId || proof.provider !== 'qwen' || proof.endpoint !== 'https://openrouter.ai/api/v1/generation'
+      || headers.length !== 1 || generation.id !== headers[0].generationId || generation.provider_name !== 'DeepInfra'
+      || !['qwen/qwen3-235b-a22b-2507', 'qwen/qwen3-235b-a22b-07-25'].includes(generation.model)
+      || !(generation.cancelled === true || typeof generation.finish_reason === 'string' && generation.finish_reason.length > 0)
+      || !Number.isFinite(Date.parse(proof.at)) || Date.parse(proof.at) < Date.parse(response.at) + response.latencyMs
+      || !Number.isFinite(Date.parse(generation.created_at)) || Math.abs(Date.parse(generation.created_at) - Date.parse(response.at)) > 30_000
+      || !Number.isSafeInteger(generation.native_tokens_prompt) || generation.native_tokens_prompt < 0 || generation.native_tokens_prompt > request?.bound.inputTokens
+      || !Number.isSafeInteger(generation.native_tokens_completion) || generation.native_tokens_completion < 0 || generation.native_tokens_completion > request?.payload.max_tokens
+      || !request || request.bound.usd !== reserved.reserveUsd || !Number.isFinite(generation.total_cost) || generation.total_cost < 0
+      || generation.total_cost > reserved.reserveUsd) throw new Error('No matching completed-generation billing proof');
+    return { costUsd: generation.total_cost, responseSha256: sha256(response.body), usageProofSha256: sha256(bytes), basis: 'generation-metadata' as const };
+  }
   const { before, after, confirmed } = proof;
   if (proof.requestId !== requestId || proof.runId !== runId || [before, after, confirmed].some(p => !p || p.provider !== 'qwen'
     || p.endpoint !== 'https://openrouter.ai/api/v1/key' || p.byokUsageUsd !== 0 || !Number.isFinite(p.usageUsd) || p.usageUsd < 0
@@ -62,7 +78,7 @@ function qwenTimeoutBill(directory: string, runId: string, requestId: string, hi
     .reduce((sum, e) => sum + (e.costUsd ?? 0), 0);
   const costUsd = Number((confirmed.usageDailyUsd - knownQwenUsd).toFixed(10));
   if (!Number.isFinite(costUsd) || costUsd < 0 || costUsd > reserved.reserveUsd) throw new Error('Qwen usage delta exceeds the reserved timeout envelope');
-  return { costUsd, responseSha256: sha256(response.body), usageProofSha256: sha256(bytes) };
+  return { costUsd, responseSha256: sha256(response.body), usageProofSha256: sha256(bytes), basis: 'usage-counter' as const };
 }
 export function spendState(file: string) {
   const pending = new Map<string, Receipt>(), settled = new Set<string>();
@@ -92,14 +108,15 @@ export function spendState(file: string) {
     } else if (r.event === 'reconcile-timeout' && unknown.size === 1 && unknown.has(r.requestId) && r.provider === 'qwen'
       && unknown.get(r.requestId)!.provider === 'qwen' && unknown.get(r.requestId)!.runId === r.runId) {
       const proof = qwenTimeoutBill(dirname(file), r.runId, r.requestId, history.slice(0, index));
-      if (r.costUsd !== proof.costUsd || r.responseSha256 !== proof.responseSha256 || r.usageProofSha256 !== proof.usageProofSha256) throw new Error('Qwen timeout proof changed');
+      if (r.costUsd !== proof.costUsd || r.responseSha256 !== proof.responseSha256 || r.usageProofSha256 !== proof.usageProofSha256
+        || r.basis !== undefined && r.basis !== proof.basis) throw new Error('Qwen timeout proof changed');
       knownUsd += proof.costUsd; modelKnownUsd += proof.costUsd; unknown.delete(r.requestId);
     } else throw new Error('Invalid spend ledger sequence');
   }
   return { knownUsd, modelKnownUsd, unknown: unknown.size > 0 || pending.size > 0, pending: pending.size };
 }
 
-/** Allocate one lost response's charge from stable same-key counters, never fabricate its output or token usage. */
+/** Reconcile a lost response against its captured generation, or the retained isolated-window counters. */
 export function reconcileQwenTimeout(directory: string, runId: string, requestId: string) {
   if (!/^[a-zA-Z0-9_-]+$/.test(runId) || !/^[a-zA-Z0-9_-]+$/.test(requestId)) throw new Error('Invalid timeout reconciliation identity');
   const lock = join(directory, '.jev.lock'), fd = openSync(lock, 'wx', 0o600);
@@ -110,7 +127,8 @@ export function reconcileQwenTimeout(directory: string, runId: string, requestId
     const history: Receipt[] = readFileSync(ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line));
     const proof = qwenTimeoutBill(directory, runId, requestId, history);
     durableAppend(ledger, { provider: 'qwen', requestId, runId, at: new Date().toISOString(), event: 'reconcile-timeout', ...proof,
-      failure: 'Transport output unavailable; charge allocated from same-key usage counters' });
+      failure: proof.basis === 'generation-metadata' ? 'Transport output unavailable; exact generation billing recovered'
+        : 'Transport output unavailable; charge allocated from same-key usage counters' });
     return spendState(ledger);
   } finally { unlinkSync(lock); }
 }

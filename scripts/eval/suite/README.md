@@ -41,7 +41,8 @@ Tests exercise holdout logging only with synthetic Toy Chain fixtures in tempora
 It is never reset between commands or split/tier selections.
 `.jev.lock` enforces one live collection at a time.
 After an interrupted process, verify the recorded PID has ended before removing only its stale lock.
-A pending reservation or unknown usage still blocks collection until actual billing is reconciled with human review; removing a lock never clears that history.
+A pending reservation or unknown usage blocks collection until the supported reconciler validates retained provider evidence within the original reservation.
+Unverifiable billing stays blocked; removing a lock never clears that history.
 
 `--initialize` creates fixtures only when no frozen output exists.
 It refuses to overwrite an existing suite.
@@ -94,12 +95,14 @@ Macro output schemas reuse equivalent answer definitions with `$ref` to stay wit
 Qwen is pinned to OpenRouter's `deepinfra/fp8` endpoint at the same price ceiling, with fallbacks disabled, after the advertised GMICloud endpoint rejected the model as deprecated.
 A GMICloud deprecation HTTP 400 remains unknown until `reconcileRejection` also validates a retained same-day zero-usage read from the authorized key's `GET /api/v1/key` response.
 That sanitized usage receipt contains no key, label or user identifier, and its hash is rechecked during every later ledger admission.
-Qwen's body deadline is 180 seconds after a measured 60-second timeout on the slow endpoint; the token ceiling and price reservation are unchanged.
+Qwen's body deadline is 300 seconds after measured 60- and 180-second timeouts on the slow endpoint; the token ceiling and price reservation are unchanged.
 When the provider supplies a generation ID in response headers, it is journaled before reading the body so a lost body retains that billing lookup identity.
 For the original lost-ID timeout, `reconcileQwenTimeout` accepts exactly one unresolved reservation and stable same-key usage counters from the isolated run window.
 It requires a zero daily baseline, matching lifetime/daily deltas, two stable post-timeout reads at least 30 seconds apart, and a delta within the complete reserved envelope.
 The charge is explicitly allocated from aggregate provider usage, rather than fabricated token counts; the original missing response remains a failed case and can never be paid for again.
 Other unknown usage remains blocked, and later ledger admissions revalidate every retained proof hash.
+When a header generation ID is available, `reconcileQwenTimeout` instead requires its exact completed/cancelled `GET /api/v1/generation` record, matching model/provider/time, native token bounds and reserved cost.
+That exact-generation proof takes precedence over aggregate counter allocation, and the lost output still remains failed.
 Haiku cost uses returned token counts at $1/M input and $5/M output; Qwen uses returned `usage.cost` with routing price ceilings of $0.09/M input and $0.55/M output, checked October 26, 2026.
 
 No env file is sourced or auto-loaded by the runner.
