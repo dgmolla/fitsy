@@ -32,7 +32,21 @@ The adapters share the original matching/coarse/fine builders and decoder, with 
 The new session uses the existing ledger and lock, retains old entries, counts Haiku/Qwen spending across invocations, reserves the entire response envelope and stops at $2.70.
 Jev in a paid-model comparison uses a transport-free replay client; an explicit `--replay-only` mode also supports credential-free baseline recovery.
 The credential failure now names both missing keys in one secret-safe receipt before any request or reservation, and the actual entrypoint's regression covers that recovery contract.
-Next: finish focused/static checks, commit execution source, run the exact requested command for a durable preflight receipt, then run full dev exact/Jev replay without any paid calls.
+Execution source was frozen at `9be5a0c24e9e9b666d767907c407dc7ede23c66c`.
+All 42 focused tests now pass, including the actual runner using both provider-shaped network fixtures and both estimator stages; scripts lint and type checks pass.
+The exact requested four-method command produced `results/2026-10-27T05-18-29-842Z-7a919c80/failure.json`, naming both missing keys before transport.
+The full dev exact/Jev replay completed in `results/2026-10-27T05-18-34-761Z-1e20c0af` across all 3,007 dev cases, without sampling.
+It retained 5,688 method/case predictions and 3,331 exact-request Jev reuse receipts, with zero new requests, zero new spend and no unknown usage.
+The cumulative ledger remains byte-identical to the starting main blob `08dffcfaaf065a29ce51cdb826514ed4e2336a6b`, retaining $0.12394053 of historical Jev spend.
+A first one-off audit attempted to buffer the 1.5 MB ledger through Git's stdout and hit Node's default buffer ceiling; the corrected audit compares Git blob identities and records the independent SHA-256 without transporting the large blob through that buffer.
+No paid work was repeated during that diagnostic recovery.
+
+The prospective common paid-model sample is 129 cases: curated matching/macro 34/25, bulk matching/macro 44/26.
+Its conservative reservation is $2.69768053 versus $44.02095118 for all 3,007 dev cases.
+This is a frozen prospective selection only; neither paid model ran and no sampled quality metrics exist.
+The measured exact/Jev results instead cover full dev and their cost/latency are marginal replay values, not fresh provider performance.
+The canonical product plan computes N/A and simulator scope none.
+Next: commit baseline evidence and docs, complete cheap gates, open the requested PR through ordinary hooks, and inspect existing local-review and CI status without reading or modifying the protected checkout.
 
 ## Previous task history
 

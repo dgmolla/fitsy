@@ -1,0 +1,18 @@
+{
+  "runId": "2026-10-27T05-18-29-842Z-7a919c80",
+  "head": "9be5a0c24e9e9b666d767907c407dc7ede23c66c",
+  "config": {
+    "split": "dev",
+    "tier": "both",
+    "methods": [
+      "exact",
+      "jev-v3",
+      "haiku",
+      "qwen"
+    ],
+    "live": true,
+    "jevReplayOnly": true
+  },
+  "failure": "Missing process credentials: ANTHROPIC_API_KEY, OPENROUTER_API_KEY. Load only these keys from the authorized env files in memory; no requests were sent.",
+  "at": "2026-10-27T05:18:29.908Z"
+}

@@ -374,3 +374,35 @@ The key was selected from the previously authorized local file and mapped only i
 | snapshot_ue_only | 6 | 0 | 28 | 0 |
 | ue_positive | 5 | 0 | 94 | 0 |
 | zero_macro | 3 | 6 | 9 | 9 |
+
+## Haiku/Qwen adapter run and full dev replay, October 26
+
+The adapters were committed before execution at `9be5a0c24e9e9b666d767907c407dc7ede23c66c`.
+The exact four-method command [stopped at credential preflight](../../../scripts/eval/suite/results/2026-10-27T05-18-29-842Z-7a919c80/failure.json): neither authorized env sources nor the invoking process supplied `ANTHROPIC_API_KEY` or `OPENROUTER_API_KEY`.
+No Haiku or Qwen call occurred, and no live model quality or transport-acceptance result is claimed.
+Both adapters passed controlled provider-shaped transport and real-runner tests; those are implementation evidence only.
+
+A separate [full-dev replay](../../../scripts/eval/suite/results/2026-10-27T05-18-34-761Z-1e20c0af/report.md) evaluates all 3,007 dev cases, without sampling or paid transport.
+Its [audit](../../../scripts/eval/suite/results/2026-10-27T05-18-34-761Z-1e20c0af/replay-audit.json) retains the prospective paid selection and proves that all 3,331 Jev requests were reuses and the original spending ledger is byte-identical.
+No holdout case was evaluated.
+
+| Full dev matching | N | Pass | Wrong matches | Recall | Abstain |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Curated exact | 143 | 87.4% | 0 | 71.0% | 0 |
+| Curated Jev-v3 | 143 | 83.9% | 4 | 82.3% | 16 |
+| Bulk exact | 2,538 | 97.5% | 0 | 78.1% | 0 |
+| Bulk Jev-v3 | 2,538 | 97.1% | 3 | 82.3% | 37 |
+
+| Full dev Jev macro | N | Median % error Cal/P/C/F | >50% calories | Zero correct | All four within 25% |
+| --- | ---: | --- | ---: | ---: | ---: |
+| Curated | 112 | 24.2/32.1/31.2/31.6 | 20.5% | 86.7% | 10.7% |
+| Bulk | 214 | 23.3/31.3/38.1/32.3 | 17.8% | 87.5% | 8.9% |
+
+Exact has no macro estimator; both paid models have unavailable matching and macro measurements in both tiers.
+All measured methods cost $0 per 1,000 marginal replay attempts; the report retains replay p95 timings, which must not be compared to fresh-provider network timings.
+Total new spend is $0; historical cumulative Jev spend remains $0.12394053.
+
+The paid-model reservation plan would select 129 common cases deterministically by tier/task/chain/category: curated matching/macro 34/25 and bulk matching/macro 44/26.
+Its upper-bound reservation is $2.69768053 within the $2.70 stop, compared with $44.02095118 for full dev under the same conservative byte/token/output envelope.
+That selection was not executed and does not change the full-dev replay denominators.
+No model-specific prompt, output decoding or scoring adjustment was made after seeing results.
