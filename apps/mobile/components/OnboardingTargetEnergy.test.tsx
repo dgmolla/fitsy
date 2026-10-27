@@ -84,6 +84,63 @@ it('the saved ranked-search journey replaces generated grams and queries with it
   expect(Object.fromEntries(url.searchParams)).toEqual({ guided: '1', lat: '34.0407', lng: '-118.2468', ...saved });
 });
 
+it.each([
+  ['onboarding-guided-preview', { calories: '600', protein: '0', carbs: '105', fat: '20' }],
+  ['onboarding-search-highlight', { calories: '542', protein: '34', carbs: '61', fat: '18' }],
+])('the saved %s journey replaces grams after native focus precedes calorie blur', async (flow, expected) => {
+  const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
+  type Step = { tapOn?: { id?: string; text?: string }; eraseText?: number; inputText?: string;
+    copyTextFrom?: { id: string }; evalScript?: string; assertTrue?: string; assertVisible?: string };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, `../e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, Step[]];
+  const start = commands.findIndex(step => step.assertVisible === 'What works.*for one meal.*');
+  const end = commands.findIndex((step, index) => index > start && step.assertVisible === 'A little context.*A better choice.*');
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  await saveOnboardingField('goal', 'lose_fat');
+  await saveOnboardingField('targetMode', 'known');
+  const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
+  await waitFor(() => expect(screen.getByTestId('meal-target-calories').props.editable).toBe(true));
+  const context = { maestro: { copiedText: '' }, output: {} as Record<string, unknown> };
+  const evaluate = (script: string) => runInNewContext(script.slice(2, -1), context);
+  let focused: string | undefined;
+  let selection = { start: 0, end: 0 };
+  for (const step of commands.slice(start + 1, end)) {
+    if (step.tapOn?.id?.startsWith('meal-target-')) {
+      const previous = focused;
+      focused = step.tapOn.id;
+      const before = screen.getByTestId(focused).props.value as string;
+      await act(async () => { fireEvent(screen.getByTestId(focused!), 'focus'); });
+      selection = { start: 0, end: before.length };
+      // On iOS, the next input can focus before the previous blur recalculates
+      // its controlled value. That update collapses its selection to the start.
+      if (previous) await act(async () => { fireEvent(screen.getByTestId(previous), 'blur'); });
+      if (screen.getByTestId(focused).props.value !== before) selection = { start: 0, end: 0 };
+    } else if (step.tapOn?.text) {
+      expect(screen.getByText(step.tapOn.text)).toBeTruthy();
+      if (focused) await act(async () => { fireEvent(screen.getByTestId(focused!), 'blur'); });
+      focused = undefined;
+    } else if (step.tapOn?.id) {
+      await act(async () => { fireEvent.press(screen.getByTestId(step.tapOn!.id!)); });
+    }
+    if (step.eraseText !== undefined || step.inputText !== undefined) {
+      const input = screen.getByTestId(focused!);
+      const value = input.props.value as string;
+      const start = step.eraseText === undefined || selection.start !== selection.end
+        ? selection.start : Math.max(0, selection.start - step.eraseText);
+      const text = step.inputText ?? '';
+      await act(async () => { fireEvent.changeText(input, value.slice(0, start) + text + value.slice(selection.end)); });
+      selection = { start: start + text.length, end: start + text.length };
+    }
+    if (step.copyTextFrom) context.maestro.copiedText = screen.getByTestId(step.copyTextFrom.id).props.value;
+    if (step.evalScript) evaluate(step.evalScript);
+    if (step.assertTrue) expect({ expression: step.assertTrue, copied: context.maestro.copiedText, value: evaluate(step.assertTrue) })
+      .toEqual({ expression: step.assertTrue, copied: context.maestro.copiedText, value: true });
+  }
+  expect(screen.getPathname()).toBe('/welcome/how-it-works');
+  expect(await getMacroTargets()).toEqual(expected);
+  expect(await getMacroTargetSource()).toBe('manual');
+});
+
 it.each((['known', 'estimate'] as const).flatMap(targetMode =>
   (['calories', 'protein', 'carbs', 'fat'] as const).map(field => ({ targetMode, field })),
 ))('saves $targetMode targets after a $field edit through Continue without blurring first', async ({ targetMode, field }) => {

@@ -105,6 +105,11 @@ env:
 - copyTextFrom:
     id: meal-target-calories
 - assertTrue: ${maestro.copiedText === '600'}
+# Settle calorie-generated grams before iOS selects the next field. Focusing
+# protein first can collapse its selection when calorie blur updates its value.
+- tapOn:
+    text: "Protein / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-protein
 - waitForAnimationToEnd
@@ -123,6 +128,9 @@ env:
 - assertVisible:
     id: meal-target-carbs
 - tapOn:
+    text: "Carbs / meal"
+- waitForAnimationToEnd
+- tapOn:
     id: meal-target-carbs
 - waitForAnimationToEnd
 - eraseText: 100
@@ -131,6 +139,9 @@ env:
 - copyTextFrom:
     id: meal-target-carbs
 - assertTrue: ${maestro.copiedText === '0'}
+- tapOn:
+    text: "Fat / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-fat
 - waitForAnimationToEnd

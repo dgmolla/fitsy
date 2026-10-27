@@ -1,6 +1,8 @@
 jest.unmock('react-native');
 jest.unmock('expo-router');
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Animated, Button, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
@@ -13,6 +15,8 @@ import TrialReminder from '../app/welcome/trial-reminder';
 import * as ExpoNotifications from 'expo-notifications';
 import Notifications from '../app/welcome/notification-permission';
 import Location from '../app/welcome/location-permission';
+import OutOfArea from '../app/welcome/out-of-area';
+import Goal from '../app/welcome/goal';
 import Problem from '../app/welcome/problem';
 import WelcomeLayout from '../app/welcome/_layout';
 import { PurchasesProvider } from '../lib/usePurchases';
@@ -86,13 +90,14 @@ const routes = {
   'welcome/signin': SignIn, 'welcome/notification-permission': Notifications,
   'welcome/trial-reminder': TrialReminder,
   'welcome/location-permission': Location, 'welcome/preview': Preview,
-  'welcome/goal': () => <Text>Goal screen</Text>,
+  'welcome/goal': Goal,
   'welcome/trial': () => <Text>Trial introduction</Text>,
   'welcome/start-real': Problem,
   'welcome/payment': () => <Text>Payment plans</Text>,
+  'welcome/resubscribe': () => <Text>Subscription plans</Text>,
   'welcome/problem': () => <Button title="Choose location" onPress={() => router.push('/welcome/location-permission')} />,
   'welcome/tried': () => <Text>Healthy eating approaches</Text>,
-  'welcome/out-of-area': () => <Text>Area waitlist</Text>,
+  'welcome/out-of-area': OutOfArea,
   'welcome/complete': CompletePurchase,
   'macro-setup': () => <Text>Macro setup</Text>,
   '(tabs)/_layout': () => <Stack />, '(tabs)/search': () => <Text>Meal search</Text>,
@@ -107,6 +112,7 @@ beforeEach(async () => {
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
+  (ExpoLocation.getCurrentPositionAsync as jest.Mock).mockClear();
   global.fetch = jest.fn().mockImplementation((url: string) => Promise.resolve(response(
     String(url).includes('/api/user/profile')
       ? { user: { birthday: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null }, macroTarget: null }
@@ -167,6 +173,68 @@ it('resets a spent preview sample and tour when a new onboarding pass starts', a
     expect(await AsyncStorage.getItem('@fitsy/previewTourSeen')).toBeNull();
   });
 });
+
+it('replays saved out-of-area recovery after a cold launch without joining the waitlist', async () => {
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  jest.spyOn(ExpoLocation, 'requestForegroundPermissionsAsync')
+    .mockResolvedValue({ status: ExpoLocation.PermissionStatus.GRANTED } as never);
+  jest.spyOn(ExpoLocation, 'getCurrentPositionAsync')
+    .mockResolvedValue({ coords: { latitude: 40.7128, longitude: -74.0060 } } as never);
+  const otherRequest = global.fetch;
+  global.fetch = jest.fn(async (...args: Parameters<typeof fetch>) => {
+    const url = new URL(String(args[0]));
+    if (url.pathname.startsWith('/api/subscription')) return response({ active: false, synced: true,
+      verdict: 'never_subscribed', stale: false, lastRcVerifiedAt: new Date().toISOString() });
+    if (url.pathname !== '/api/restaurants/preview') return otherRequest(...args);
+    const { lat } = Object.fromEntries(url.searchParams);
+    return response({ data: [], meta: { radiusMiles: 3, nearbyDishCount: lat === '40.7128' ? 0 : 1 } });
+  });
+  const first = renderJourney('/welcome/location-permission');
+  await waitFor(() => expect(first.getByTestId('location-use-current').props.accessibilityState?.disabled).not.toBe(true));
+  await act(async () => { fireEvent.press(first.getByTestId('location-use-current')); });
+  await first.findByTestId('waitlist-join');
+  first.unmount();
+  const screen = renderJourney('/');
+  await screen.findByTestId('waitlist-join');
+  expect(screen.queryByTestId('signup-apple')).toBeNull();
+
+  const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
+  type Step = { tapOn?: string | { id: string; retryTapIfNoChange?: boolean }; assertVisible?: string;
+    extendedWaitUntil?: { visible: { id: string; enabled?: boolean } }; scrollUntilVisible?: { element: { text: string }; direction: string } };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/onboarding-out-of-area.yaml'), 'utf8')) as [unknown, Step[]];
+  const start = commands.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === 'waitlist-change-area');
+  const end = commands.findIndex((step, index) => index > start && step.extendedWaitUntil?.visible.id === 'goal-performance');
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  for (const step of commands.slice(start, end + 1)) {
+    const tap = step.tapOn;
+    if (typeof tap === 'object') {
+      if (tap.id === 'location-choose-area') expect(tap.retryTapIfNoChange).toBe(true);
+      await act(async () => { fireEvent.press(screen.getByTestId(tap.id)); });
+    } else if (tap) {
+      await act(async () => { fireEvent.press(screen.getByLabelText(tap)); });
+    }
+    if (step.extendedWaitUntil) {
+      const { id, enabled } = step.extendedWaitUntil.visible;
+      await screen.findByTestId(id);
+      if (enabled) expect(screen.getByTestId(id).props.accessibilityState?.disabled).not.toBe(true);
+    }
+    if (step.assertVisible) expect(screen.getByText(step.assertVisible)).toBeTruthy();
+    if (step.scrollUntilVisible) expect(screen.getByLabelText(step.scrollUntilVisible.element.text)).toBeTruthy();
+  }
+  expect(screen.getPathname()).toBe('/welcome/goal');
+  expect((await getOnboardingData()).area).toEqual({ lat: 34.0407, lng: -118.2468, name: 'DTLA', source: 'manual' });
+  expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/waitlist'))).toEqual([]);
+  const coverageCalls = (global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/restaurants/preview'));
+  expect(coverageCalls).toHaveLength(2);
+  for (const [, options] of coverageCalls) expect(options.headers).toEqual({ Authorization: 'Bearer test-token' });
+  screen.unmount();
+  const restarted = renderJourney('/');
+  await restarted.findByTestId('goal-performance');
+  expect((await getOnboardingData()).area?.name).toBe('DTLA');
+  expect(restarted.queryByTestId('waitlist-join')).toBeNull();
+});
+
 it('waits for a saved area before enabling location choices', async () => {
   mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
   const area = { lat: 34.05, lng: -118.25, name: 'Downtown', source: 'manual' as const };

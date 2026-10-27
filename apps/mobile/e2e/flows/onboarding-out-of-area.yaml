@@ -66,14 +66,21 @@ env:
 - extendedWaitUntil:
     visible:
       id: location-choose-area
+      enabled: true
     timeout: 15000
 - assertVisible: "Continue with Your location"
-# Wait for the returning screen to finish its navigation animation before tapping.
+# Native navigation can expose the button before it accepts touches. Retry only
+# an unchanged tap, then require the actual picker before selecting an area.
 - waitForAnimationToEnd
 - tapOn:
     id: location-choose-area
+    retryTapIfNoChange: true
 - assertVisible: "Choose a neighborhood"
 - waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "Search near DTLA"
+    direction: DOWN
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:

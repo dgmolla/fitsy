@@ -103,6 +103,10 @@ env:
 - copyTextFrom:
     id: meal-target-calories
 - assertTrue: ${maestro.copiedText === '544'}
+# Settle the calorie edit before iOS selects the generated protein value.
+- tapOn:
+    text: "Protein / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-protein
 - waitForAnimationToEnd
@@ -121,6 +125,9 @@ env:
 - assertVisible:
     id: meal-target-carbs
 - tapOn:
+    text: "Carbs / meal"
+- waitForAnimationToEnd
+- tapOn:
     id: meal-target-carbs
 - waitForAnimationToEnd
 - eraseText: 100
@@ -129,6 +136,9 @@ env:
 - copyTextFrom:
     id: meal-target-carbs
 - assertTrue: ${maestro.copiedText === '61'}
+- tapOn:
+    text: "Fat / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-fat
 - waitForAnimationToEnd

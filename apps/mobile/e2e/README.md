@@ -12,6 +12,11 @@ Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the main
 Its preview comparisons use those saved calories and grams, including whole-gram rounding, for the real dev API request.
 `onboarding-target-ranked-search` settles each previous field and clears generated values before typing, then saves with the decimal keyboard open and checks Back restores all four targets.
 Its live ranked queries and preview assertions use that persisted allocation: 50 g protein, 44 g carbs and 14 g fat settle to 502 kcal.
+`onboarding-guided-preview` and `onboarding-search-highlight` also blur through each field's label before focusing the next generated value.
+Calorie blur can update protein after iOS has selected it, collapsing the selection and leaving generated digits behind when Maestro backspaces.
+`OnboardingTargetEnergy.test.tsx` replays these saved commands against the real tuning screen with that native focus/blur order and checks the persisted targets.
+`onboarding-out-of-area` requires an enabled area chooser, recovers a navigation-time ignored tap with `retryTapIfNoChange`, and still requires the neighborhood sheet before scrolling to DTLA.
+`OnboardingNavigationLocation.test.tsx` replays its recovery against the real location, waitlist and goal screens, checking authenticated lookups, no implicit waitlist opt-in and the saved area after restart.
 CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
 The read-only classifier supplies data to the protected `sim-scope.yml` publisher; the bounded status description contains scope and flow count, and the poller reads exact names from the artifact.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
