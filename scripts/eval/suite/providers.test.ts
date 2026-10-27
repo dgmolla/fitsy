@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { method, matchingRequest, coarseRequest } from './adapters';
 import { durableAppend, loadCases } from './fixtures';
-import { spendState } from './budget';
-import { ModelClient, ModelSession, MODEL_STOP_USD, providers, providerRequest, reservation, type Provider } from './providers';
+import { spendState, schemaRejection, reconcileSchemaRejection } from './budget';
+import { ModelClient, ModelSession, MODEL_STOP_USD, answerSchema, providers, providerRequest, reservation, type Provider } from './providers';
 import { modelSelection, options, run } from './run';
 import { type JevRequest } from '../lib/jev-experiment';
 import type { Item } from './types';
@@ -157,6 +157,70 @@ test.each(['model identity', 'reserved token/cost envelope'])('a bad answer cann
     await expect(s.client.send(matchingRequest({ ...item, name: 'Rice' }, rows))).rejects.toThrow('stopped');
     expect(s.fetcher).toHaveBeenCalledTimes(1);
   } finally { s.client.close(); s.session.close(); }
+});
+
+const grammarError = JSON.stringify({ type: 'error', error: { type: 'invalid_request_error',
+  message: 'The compiled grammar is too large, which would cause performance issues. Simplify your tool schemas or reduce the number of strict tools.' } });
+test('macro schema shares equivalent answer definitions without dropping choice or probability constraints', () => {
+  type Definition = { required: string[]; properties: { choice: { enum: string[] }; probabilities: { required: string[]; additionalProperties: boolean } } };
+  const request = coarseRequest(item), schema = answerSchema(request) as unknown as {
+    properties: { answers: { properties: Record<string, { $ref: string }> } }; $defs: Record<string, Definition> };
+  const fields = schema.properties.answers.properties;
+  expect(Object.keys(fields)).toEqual(['calories', 'protein', 'carbs', 'fat']);
+  expect(new Set(Object.values(fields).map(field => field.$ref)).size).toBe(1);
+  for (const [name, field] of Object.entries(fields)) {
+    const definition = schema.$defs[field.$ref.split('/').at(-1)!]!;
+    expect(definition.required).toEqual(['type', 'choice', 'confidence', 'probabilities']);
+    expect(definition.properties.choice.enum).toEqual(Object.keys(request.questions[name]!.criteria));
+    expect(definition.properties.probabilities.required).toEqual(Object.keys(request.questions[name]!.criteria));
+    expect(definition.properties.probabilities.additionalProperties).toBe(false);
+  }
+});
+
+test('a documented compiler rejection is unbilled, stops execution, and can resume after a schema repair', async () => {
+  const fetcher = transport('haiku').mockImplementation(async () => new Response(grammarError, { status: 400 }));
+  const s = setup('haiku', fetcher);
+  try {
+    await expect(s.client.send(coarseRequest(item))).rejects.toThrow('before inference');
+    expect(spendState(s.session.ledger)).toMatchObject({ modelKnownUsd: 0, unknown: false, pending: 0 });
+    expect(s.client.requests).toBe(1);
+  } finally { s.client.close(); s.session.close(); }
+  const out = join(s.directory, 'resumed'); mkdirSync(out);
+  const session = new ModelSession('resumed', s.directory), client = new ModelClient('haiku', session, out, 'fake-key', transport('haiku'));
+  try {
+    await expect(method('haiku', client).estimator!.estimate(item)).resolves.toEqual({ calories: 337.5, protein: 0, carbs: 0, fat: 0 });
+    expect(client.requests).toBe(2);
+  } finally { client.close(); session.close(); }
+});
+
+test('legacy unknown compiler billing is reconciled additively only against the retained exact HTTP 400 evidence', async () => {
+  const fetcher = transport('haiku').mockImplementation(async () => new Response(grammarError, { status: 400 }));
+  const s = setup('haiku', fetcher);
+  await expect(s.client.send(coarseRequest(item))).rejects.toThrow('before inference'); s.client.close(); s.session.close();
+  // Simulate the original runner's unknown settlement without changing any real run evidence.
+  const bills = readFileSync(s.session.ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  const records = readFileSync(s.client.rawFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  const bill = bills.find(e => e.event === 'settle'), response = records.find(e => e.event === 'response');
+  bill.costUsd = response.costUsd = null;
+  writeFileSync(s.session.ledger, bills.map(e => JSON.stringify(e)).join('\n') + '\n');
+  writeFileSync(s.client.rawFile, records.map(e => JSON.stringify(e)).join('\n') + '\n');
+  const prefix = readFileSync(s.session.ledger, 'utf8');
+  expect(spendState(s.session.ledger).unknown).toBe(true);
+  expect(() => new ModelSession('blocked', s.directory)).toThrow('Unknown');
+  writeFileSync(s.session.lock, 'another active collector');
+  expect(() => reconcileSchemaRejection(s.directory, 'run', bill.requestId)).toThrow();
+  expect(readFileSync(s.session.ledger, 'utf8')).toBe(prefix); rmSync(s.session.lock);
+  response.status = 500; writeFileSync(s.client.rawFile, records.map(e => JSON.stringify(e)).join('\n') + '\n');
+  expect(() => reconcileSchemaRejection(s.directory, 'run', bill.requestId)).toThrow('No documented');
+  expect(readFileSync(s.session.ledger, 'utf8')).toBe(prefix);
+  response.status = 400; writeFileSync(s.client.rawFile, records.map(e => JSON.stringify(e)).join('\n') + '\n');
+  expect(reconcileSchemaRejection(s.directory, 'run', bill.requestId)).toMatchObject({ unknown: false, modelKnownUsd: 0 });
+  expect(readFileSync(s.session.ledger, 'utf8').startsWith(prefix)).toBe(true);
+  expect(() => reconcileSchemaRejection(s.directory, 'run', bill.requestId)).toThrow('No unreconciled');
+  response.body += ' '; writeFileSync(s.client.rawFile, records.map(e => JSON.stringify(e)).join('\n') + '\n');
+  expect(() => spendState(s.session.ledger)).toThrow('reconciliation');
+  expect(schemaRejection(200, grammarError)).toBe(false); expect(schemaRejection(500, grammarError)).toBe(false);
+  expect(schemaRejection(400, '{}')).toBe(false);
 });
 
 test('pending reservations consume the shared allowance and provider identity cannot disappear at settlement', () => {

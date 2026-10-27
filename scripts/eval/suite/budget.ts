@@ -1,10 +1,10 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { z } from 'zod';
 import { JEV_LIMITS, parseChoiceAnswers, type JevRequest } from '../lib/jev-experiment';
-import { durableAppend } from './fixtures';
+import { durableAppend, sha256 } from './fixtures';
 import { paidResponses, requestKey, type PaidResponse } from './replay';
 
 export const STOP_USD = 4.50;
@@ -14,12 +14,22 @@ export interface ChoiceClient {
   knownUsd: number; stopped: string | null; requests: number; reusedRequests: number; unknown: boolean; context: string;
   send(request: JevRequest): Promise<{ raw: unknown; costUsd: number; latencyMs: number }>;
 }
-interface Receipt { event: 'reserve' | 'settle'; requestId: string; runId: string; at: string;
-  reserveUsd?: number; costUsd?: number | null; failure?: string | null; provider?: 'haiku' | 'qwen' }
+interface Receipt { event: 'reserve' | 'settle' | 'reconcile'; requestId: string; runId: string; at: string;
+  reserveUsd?: number; costUsd?: number | null; failure?: string | null; provider?: 'haiku' | 'qwen'; responseSha256?: string }
+/** These specific HTTP 400 validation errors occur during grammar compilation, before model inference. */
+export function schemaRejection(status: number, body: string) {
+  try {
+    const data = JSON.parse(body);
+    return status === 400 && data.type === 'error' && data.error?.type === 'invalid_request_error'
+      && ['The compiled grammar is too large, which would cause performance issues. Simplify your tool schemas or reduce the number of strict tools.',
+        'Schema is too complex for compilation.'].includes(data.error.message);
+  } catch { return false; }
+}
 export function spendState(file: string) {
   const pending = new Map<string, Receipt>(), settled = new Set<string>();
-  let knownUsd = 0, modelKnownUsd = 0, unknown = false;
-  if (!existsSync(file)) return { knownUsd, modelKnownUsd, unknown, pending: 0 };
+  const unknown = new Map<string, Receipt>();
+  let knownUsd = 0, modelKnownUsd = 0;
+  if (!existsSync(file)) return { knownUsd, modelKnownUsd, unknown: false, pending: 0 };
   for (const line of readFileSync(file, 'utf8').trim().split('\n').filter(Boolean)) {
     const r = JSON.parse(line) as Receipt;
     if (!r.requestId || !r.runId || !r.at) throw new Error('Invalid spend ledger receipt');
@@ -29,12 +39,39 @@ export function spendState(file: string) {
       const reserved = pending.get(r.requestId)!;
       if (r.provider !== reserved.provider || r.runId !== reserved.runId) throw new Error('Spend settlement differs from reservation');
       pending.delete(r.requestId); settled.add(r.requestId);
-      if (r.costUsd === null) unknown = true;
+      if (r.costUsd === null) unknown.set(r.requestId, r);
       else if (typeof r.costUsd === 'number' && Number.isFinite(r.costUsd) && r.costUsd >= 0) { knownUsd += r.costUsd; if (r.provider) modelKnownUsd += r.costUsd; }
       else throw new Error('Invalid spend ledger cost');
+    } else if (r.event === 'reconcile' && unknown.has(r.requestId) && r.provider === 'haiku' && r.costUsd === 0
+      && r.runId === unknown.get(r.requestId)!.runId && unknown.get(r.requestId)!.provider === 'haiku') {
+      const exchanges = readFileSync(join(dirname(file), r.runId, 'haiku-exchanges.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+      const responses = exchanges.filter(e => e.event === 'response' && e.requestId === r.requestId && e.runId === r.runId && e.provider === r.provider);
+      if (responses.length !== 1 || responses[0].costUsd !== null || !schemaRejection(responses[0].status, responses[0].body)
+        || sha256(responses[0].body) !== r.responseSha256) throw new Error('Invalid pre-inference rejection reconciliation');
+      unknown.delete(r.requestId);
     } else throw new Error('Invalid spend ledger sequence');
   }
-  return { knownUsd, modelKnownUsd, unknown: unknown || pending.size > 0, pending: pending.size };
+  return { knownUsd, modelKnownUsd, unknown: unknown.size > 0 || pending.size > 0, pending: pending.size };
+}
+
+/** Add a zero-inference reconciliation without replacing the original unknown settlement or response. */
+export function reconcileSchemaRejection(directory: string, runId: string, requestId: string) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(runId)) throw new Error('Invalid reconciliation run ID');
+  const lock = join(directory, '.jev.lock'), fd = openSync(lock, 'wx', 0o600);
+  try { writeFileSync(fd, JSON.stringify({ pid: process.pid, runId, phase: 'reconcile', startedAt: new Date().toISOString() }) + '\n'); }
+  finally { closeSync(fd); }
+  try {
+    const ledger = join(directory, 'spend.jsonl'), entries: Receipt[] = readFileSync(ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    spendState(ledger);
+    const settled = entries.find(e => e.event === 'settle' && e.requestId === requestId && e.runId === runId && e.provider === 'haiku');
+    if (settled?.costUsd !== null || entries.some(e => e.event === 'reconcile' && e.requestId === requestId)) throw new Error('No unreconciled unknown Haiku settlement');
+    const exchanges = readFileSync(join(directory, runId, 'haiku-exchanges.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    const responses = exchanges.filter(e => e.event === 'response' && e.requestId === requestId && e.runId === runId && e.provider === 'haiku');
+    if (responses.length !== 1 || responses[0].costUsd !== null || !schemaRejection(responses[0].status, responses[0].body)) throw new Error('No documented pre-inference grammar rejection');
+    durableAppend(ledger, { provider: 'haiku', requestId, runId, at: new Date().toISOString(), event: 'reconcile', costUsd: 0,
+      responseSha256: sha256(responses[0].body), failure: 'Schema grammar rejected before inference' });
+    return spendState(ledger);
+  } finally { unlinkSync(lock); }
 }
 
 /** One exclusive durable ledger across all suite runs; an unknown bill blocks further collection. */

@@ -87,6 +87,10 @@ An explicit paid-model selection must fit in full; it is never silently resample
 The durable model replay validates original payloads, model identity, usage and settled bills, and deducts already-paid requests from the remaining reservation.
 Known billed invalid answers remain failed cases and are replayed as failures, while other cases continue without changing prompts or validation.
 Unknown billing, missing paid evidence, unexpected models, reservation overruns and transport failures still stop collection.
+Anthropic's documented schema-compilation HTTP 400 rejection happens before inference and is recorded as a zero-cost transport failure, stopping the run for repair.
+For an older runner that recorded that exact rejection as unknown usage, `reconcileSchemaRejection` appends a zero-cost receipt bound to the retained response hash; other missing usage stays unknown.
+The ledger reader revalidates that original HTTP 400 response on every subsequent admission.
+Macro output schemas reuse equivalent answer definitions with `$ref` to stay within the provider's compiled-grammar limits; all choice/probability requirements and downstream validation remain intact.
 Haiku cost uses returned token counts at $1/M input and $5/M output; Qwen uses returned `usage.cost` with routing price ceilings of $0.09/M input and $0.55/M output, checked October 26, 2026.
 
 No env file is sourced or auto-loaded by the runner.

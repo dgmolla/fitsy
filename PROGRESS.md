@@ -49,6 +49,17 @@ It proves the original ordered selection hash and all 129 cases fit a $2.6518855
 The first recovery regression run found one obsolete budget assertion that expected a cached request to incur a new reservation; it now proves free replay succeeds and an unseen input is denied before transport near the stop.
 The failed budget case and fatal identity/envelope controls pass, and suite lint/type checks pass.
 
+The recovery commit `ffeb06e` passed all 50 focused tests and the actual continuation `2026-10-27T06-25-33-209Z-4cb048df` reused all four prior paid Haiku responses.
+It retained the original sample hash, completed all 34 curated Haiku matching cases, then stopped when Anthropic rejected the first macro schema with HTTP 400 `invalid_request_error`: its compiled grammar was too large.
+Known new spend is $0.047382 across 34 billed Haiku requests; the additional compiler rejection initially recorded unknown usage because it carries no model message or token usage.
+Qwen has not started; the second stopped execution was reported with no request for human action.
+Recovery assessment: the selected ship-branch workflow, retained raw response, official Anthropic structured-output/error contracts, existing ledger and source selection support a narrow repair; broader billing/admin credentials, discarded evidence and any paid retry are excluded.
+Official docs describe grammar complexity as a request-compilation HTTP 400 and support internal `$ref` definitions.
+Use shared equivalent macro answer definitions to reduce grammar duplication without changing questions, task inputs, allowed choices, required probabilities, decoder validation or model settings.
+Append a zero-inference reconciliation bound to this exact retained HTTP 400 response, keeping its original unknown settlement intact; no other unknown-usage case may be cleared by that path.
+Regressions cover legacy unknown refusal, exact evidence/hash binding, non-400 refusal, additive history, unbilled rejection handling, equivalent schema constraints and ordinary continuation.
+Next: validate and commit the compilation repair, reconcile only the documented pre-inference rejection through the supported helper, then continue the original sample using all 34 billed Haiku responses from cache.
+
 ## Previous adapter task history
 
 **TL;DR:** Adding dev-only Haiku/Qwen adapters with shared Jev prompts, replay-only Jev and a $2.70 stop.

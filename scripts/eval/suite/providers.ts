@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { z } from 'zod';
 import { JEV_LIMITS, parseChoiceAnswers, type JevRequest } from '../lib/jev-experiment';
-import { spendState, type ChoiceClient } from './budget';
+import { spendState, schemaRejection, type ChoiceClient } from './budget';
 import { durableAppend } from './fixtures';
 import { requestKey, type PaidResponse } from './replay';
 
@@ -25,10 +25,19 @@ export const providers = {
 export function answerSchema(request: JevRequest) {
   const object = (properties: Record<string, unknown>) => ({ type: 'object', properties,
     required: Object.keys(properties), additionalProperties: false });
-  return object({ answers: object(Object.fromEntries(Object.entries(request.questions).map(([name, question]) => [name,
+  const answers = Object.fromEntries(Object.entries(request.questions).map(([name, question]) => [name,
     object({ type: { type: 'string', enum: ['choice'] }, choice: { type: 'string', enum: Object.keys(question.criteria) },
       confidence: { type: 'number' }, probabilities: object(Object.fromEntries(Object.keys(question.criteria)
-        .map(key => [key, { type: 'number' }]))) })]))) });
+        .map(key => [key, { type: 'number' }]))) })]));
+  if (Object.keys(answers).length <= 1) return object({ answers: object(answers) });
+  // Coarse/fine macro answers share their shape. Reuse definitions to avoid excessive compiled grammar size.
+  const definitions: Record<string, unknown> = {}, shapes = new Map<string, string>();
+  const references = Object.fromEntries(Object.entries(answers).map(([name, shape]) => {
+    const bytes = JSON.stringify(shape), key = shapes.get(bytes) ?? `answer${shapes.size}`;
+    shapes.set(bytes, key); definitions[key] = shape;
+    return [name, { $ref: `#/$defs/${key}` }];
+  }));
+  return { ...object({ answers: object(references) }), $defs: definitions };
 }
 export function providerRequest(provider: Provider, request: JevRequest) {
   if (Buffer.byteLength(JSON.stringify(request)) > JEV_LIMITS.maxRequestBytes) throw new Error('Request exceeds shared 12KB envelope');
@@ -59,16 +68,17 @@ function billedUsage(provider: Provider, data: Record<string, unknown>) {
 const caseFailure = (failure: string | null) => ['Invalid typed answer/probability distribution', 'Incomplete provider output', 'Invalid provider output'].includes(failure ?? '');
 type ModelResponse = PaidResponse & { failure: string | null };
 interface ModelExchange { event: string; requestId: string; runId: string; provider: Provider; request: JevRequest;
-  payload: unknown; status: number; body: string; failure: string | null; costUsd: number; latencyMs: number }
+  payload: unknown; status: number; body: string; failure: string | null; costUsd: number | null; latencyMs: number }
 
 /** Reconcile every paid model input, retaining invalid answers as failures rather than buying a replacement. */
 function modelResponses(directory: string, provider: Provider) {
   const cache = new Map<string, ModelResponse>(), found = new Set<string>(), ledger = join(directory, 'spend.jsonl');
   if (!existsSync(ledger)) return cache;
-  const bills = new Map<string, { runId: string; costUsd: number; failure: string | null }>();
+  const bills = new Map<string, { runId: string; costUsd: number; failure: string | null; reconciled?: boolean }>();
   for (const line of readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean)) {
     const entry = JSON.parse(line);
     if (entry.event === 'settle' && entry.provider === provider) bills.set(entry.requestId, entry);
+    if (entry.event === 'reconcile' && entry.provider === provider && bills.has(entry.requestId)) bills.set(entry.requestId, { ...bills.get(entry.requestId)!, costUsd: 0, reconciled: true });
   }
   for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
     const file = join(directory, entry.name, `${provider}-exchanges.jsonl`);
@@ -77,6 +87,11 @@ function modelResponses(directory: string, provider: Provider) {
     const responses = new Map(exchanges.filter(e => e.event === 'response').map(e => [e.requestId, e]));
     for (const request of exchanges.filter(e => e.event === 'request')) {
       const bill = bills.get(request.requestId), response = responses.get(request.requestId);
+      if (provider === 'haiku' && bill && response && request.provider === provider && response.provider === provider
+        && bill.runId === request.runId && response.runId === request.runId && bill.costUsd === 0
+        && (response.costUsd === 0 || bill.reconciled && response.costUsd === null) && schemaRejection(response.status, response.body)) {
+        found.add(request.requestId); continue;
+      }
       if (!bill || !response || bill.runId !== request.runId || response.runId !== request.runId || request.provider !== provider
         || response.provider !== provider || response.costUsd !== bill.costUsd || response.failure !== bill.failure
         || !Number.isFinite(response.latencyMs) || response.latencyMs < 0 || response.status !== 200
@@ -186,6 +201,10 @@ export class ModelClient implements ChoiceClient {
       status = response.status; body = await response.text();
       if (body.includes(this.apiKey)) { body = body.replaceAll(this.apiKey, '[REDACTED]'); failure = 'Credential echo redacted'; }
       const data = JSON.parse(body);
+      if (this.provider === 'haiku' && schemaRejection(status, body)) {
+        costUsd = 0; failure = 'Schema grammar rejected before inference';
+        throw new Error(failure);
+      }
       const usage = billedUsage(this.provider, data);
       const { inputTokens, outputTokens } = usage; costUsd = usage.costUsd;
       let text: string;
