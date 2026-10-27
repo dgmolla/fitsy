@@ -75,10 +75,11 @@ Published decimals remain intact.
 | --- | ---: | --- |
 | WaBa Grill | 88 | Previously audited official PDF and manufacturer labels from `jev-macro/truth.json`; original source and page retained. |
 | Yoshinoya | 71 | Previously audited official PDF and manufacturer label; all 31 fountain/craft drink rows excluded. |
-| Wahoo's Fish Taco | 32 | Directly fetched June 2026 official PDF; every used row visually checked on physical pages 62, 63, 70, and 80. |
-| Claim Jumper | 36 | Directly fetched official PDF; every used row visually checked on pages 1, 7, 8, and 14; this whole chain is holdout-only. |
+| Wahoo's Fish Taco | 87 | Original 32 rows visually checked on pages 62, 63, 70 and 80; 55 additional rows independently checked against exact physical-page text and column order in the measured extension. |
+| Claim Jumper | 38 | Original 36 rows visually checked on pages 1, 7, 8 and 14; two additional rows source-checked in the measured extension; the whole chain remains holdout-only. |
+| Old Spaghetti Factory | 54 | Individually checked official labelled HTML cards with exact section, serving and four-macro fields; no invented PDF page. |
 
-The 68 added PDF rows have independently entered observed tuples in `sources/pdf-checks.json`.
+The original 68 added PDF rows have independently entered observed tuples in `sources/pdf-checks.json`.
 They were compared row by row with the fetched PDF, its inspected column headers, and PR [#554](https://github.com/dgmolla/fitsy/pull/554)'s extraction, read from the fetched `pr554` ref.
 `source.page` always means the one-based physical PDF page; Wahoo's printed page is one less because its contents page counts physically.
 The label sources name the manufacturer product-label page rather than inventing a PDF page number.
@@ -104,7 +105,7 @@ The suite does not rescale or correct unusual source facts with 4/4/9 calculatio
 [The curated list](eval-suite-cases.md) shows all 224 matching and 178 macro cases for human review.
 The original v1 population contains 160 of each; the measured extension adds 64 matching and 18 macro cases.
 `sources/curation.json` is the explicit scenario plan, with chain quotas and deliberate category coverage fixed before collection.
-Half of curated matching cases are synthetic challenges changing chain, explicit modifiers, configuration completeness, or candidate availability.
+Half of the original 160 curated matching cases are synthetic challenges changing chain, explicit modifiers, configuration completeness, or candidate availability.
 Their source citations establish the unchanged reference recipe; they do not claim an official number for an unpublished modified dish.
 A no-rice bowl or add-avocado item returns NO MATCH when its modified row is absent; no subtraction or invented modified macro truth occurs.
 
@@ -136,7 +137,8 @@ Split assignment groups all cases of a canonical serving across both tiers and a
 Seven explicit reviewed equivalence groups in `sources/serving-groups.json` also bind identical named, sized components across combo and side headings, without equating unrelated dishes by macro values alone.
 It stratifies by chain, primary published-serving category, and whether an independently reviewed captured binding exists.
 The fixed `suite-v1` hash seed selects 35% in captured strata and 21% in published-only strata, with the entire 36-row Claim Jumper chain assigned to holdout.
-Those weights balance repeated UE pairs and macro rows; they were chosen from case counts before any provider result.
+Those original weights balance repeated UE pairs and macro rows; they were chosen from case counts before any provider result.
+The measured extension preserves all original assignments and separately stratifies new captured families, as described below.
 Small strata use deterministic rounding, so every rare category/chain combination cannot appear in both splits.
 Candidate distractors stay within the target serving's split, keeping the holdout-only chain out of dev prompts.
 

@@ -65,3 +65,30 @@ One temporary fixture initially lacked the new generated selection's parent dire
 Scripts lint and type checks pass.
 The actual offline runner completed the 386-case selection; that uncommitted-source diagnostic is retained and is not the final baseline.
 The next action is a clean-source exact/Jev dev comparison, then commit its results and current documentation before final gates and publication.
+
+## Publication and credential recovery checkpoint
+
+Pushed `e5376fb5ae34cc913adbdca3d3f6ae80e620a0b3` normally to PR #558 after all eight applicable cheap gates and the ordinary pre-push checks passed.
+The exact-head product/media publisher computed and published N/A; the supported simulator plan has scope none.
+Trusted Verify is running, Vercel preview is green, and the existing local reviewer is reviewing this exact head with `gpt-6.1-sol`.
+No reviewer controls, state, attributes or protected checkout files were modified.
+The original paid history validates as 2,775 unique canonical requests, with no unsuccessful or missing paid exchanges.
+
+Live Jev collection is stopped before any request because this shell has no credential and the earlier handoff omitted the authorized credential-file path.
+Recovery assessment: the filesystem/shell tools can safely map the existing legacy `jev` variable to `TYPESAFE_API_KEY` once the known file is identified; no installed connector supplies this credential.
+Value-free filename checks and known evaluation-environment checks did not locate it, so the existing owner requested only the file path through the asynchronous user-input tool.
+Do not search unrelated credentials, load production environment files, use another provider or repeat paid work as a fallback.
+The PR body records this actual stop and the remaining action; no human release approval is being requested.
+Keep the eventual authorized credential location, without its value, in this handoff so a later session can resume without repeating discovery.
+All independent offline preparation is complete, and CI/review can continue while that path is supplied.
+
+## Credential recovery and independent review
+
+Recovered the previously authorized file path from `/private/tmp/fitsy-eval-suite-status.md`: `~/Desktop/secrets.env`.
+The file exists and contains a usable Jev credential; only `TYPESAFE_API_KEY` or legacy `jev` is selected, never other environment entries.
+The secret is mapped in memory into the child collector process and is never copied into this repo, printed or evaluated as shell code.
+No human action is needed on the pending path question.
+This handoff now records the location to close the demonstrated continuation failure; the existing value-free runner preflight, selected-case entrypoint and paid replay remain the supported recovery path.
+The existing local AI reviewer passed correctness and workflow-security on `e5376fb5ae34cc913adbdca3d3f6ae80e620a0b3` with no findings.
+CI static and build passed; tests continue.
+Next: run the committed affected-dev exact/Jev comparison, record cost and zero-duplicate-request proof, and publish the final source/evidence head for fresh gates.
