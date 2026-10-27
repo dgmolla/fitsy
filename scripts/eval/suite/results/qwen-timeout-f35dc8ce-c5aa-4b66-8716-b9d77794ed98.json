@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-27T07:55:02.165Z",
+  "endpoint": "https://openrouter.ai/api/v1/generation",
+  "provider": "qwen",
+  "requestId": "f35dc8ce-c5aa-4b66-8716-b9d77794ed98",
+  "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+  "generation": {
+    "id": "gen-1793087348-UAxn2yCJwJ6yiiCIlTqF",
+    "model": "qwen/qwen3-235b-a22b-07-25",
+    "provider_name": "DeepInfra",
+    "created_at": "2026-10-27T07:49:08.1Z",
+    "cancelled": true,
+    "finish_reason": null,
+    "native_finish_reason": null,
+    "native_tokens_prompt": 1054,
+    "native_tokens_completion": 1292,
+    "total_cost": 0.00080546,
+    "generation_time": 179921,
+    "latency": 486
+  }
+}

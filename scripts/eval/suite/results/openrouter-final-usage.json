@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-27T08:12:06.265Z",
+  "provider": "qwen",
+  "endpoint": "https://openrouter.ai/api/v1/key",
+  "usageUsd": 1.1110984,
+  "byokUsageUsd": 0,
+  "usageDailyUsd": 0.03844965,
+  "knownSuiteQwenUsd": 0.03844965000000001,
+  "lifetimeDeltaUsd": 0.03844965,
+  "dailyDifferenceUsd": -6.938893903907228e-18
+}
