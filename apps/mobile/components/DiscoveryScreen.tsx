@@ -93,7 +93,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
           {hasQuery && <Pressable testID="discovery-empty-clear" accessibilityRole="button" style={s.waitlistBtn} onPress={handleClearQuery}><Text style={s.waitlistBtnText}>Clear search</Text></Pressable>}
         </View>
       )}
-      {canSearch && !loading && heroResult && <HeroCard result={heroResult} locked={locked === true && !isOnboardingPreview} unlocking={onLockedTap} containerRef={tourHeroRef} onOpen={isOnboardingPreview ? () => { void unlockPreview(heroResult); } : undefined} />}
+      {canSearch && !loading && heroResult && <HeroCard result={heroResult} locked={locked === true && !isOnboardingPreview} unlocking={onLockedTap} containerRef={tourHeroRef} onOpen={isOnboardingPreview ? unlockPreview : undefined} />}
       {canSearch && !loading && locked && !isOnboardingPreview && (results.length > 0) && (
         <Pressable
           style={s.lockedBanner}
@@ -187,7 +187,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
           data={canSearch && !loading ? (locked ? listResults.slice(0, FREE_RESULT_COUNT - 1) : listResults) : []}
           keyExtractor={(r) => r.id}
           renderItem={({ item, index }) => (
-            <RestaurantSection result={item} index={index} hideDishName={isOnboardingPreview} locked={locked === true && !isOnboardingPreview} unlocking={onLockedTap} onOpen={isOnboardingPreview ? () => { void unlockPreview(item); } : undefined} />
+            <RestaurantSection result={item} index={index} hideDishName={isOnboardingPreview} locked={locked === true && !isOnboardingPreview} unlocking={onLockedTap} onOpen={isOnboardingPreview ? unlockPreview : undefined} />
           )}
           ListHeaderComponent={header}
           ListFooterComponent={renderFooter}

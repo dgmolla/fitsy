@@ -1,0 +1,13 @@
+# The full-screen backdrop's center is covered by the editor and its steppers.
+# Target the exposed left gutter relative to the backdrop, then require dismissal.
+appId: com.fitsy.mobile
+---
+- assertVisible:
+    id: meal-filter-close
+- tapOn:
+    id: meal-filter-close
+    point: "2%,50%"
+- extendedWaitUntil:
+    notVisible:
+      id: meal-filter-close
+    timeout: 5000
