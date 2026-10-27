@@ -128,6 +128,7 @@ it('offers a safe exit when a cold sign-in checkpoint has no earlier route', asy
 });
 
 it.each(['covered', 'empty', 'failure'])('ignores a %s area response after Back', async (outcome) => {
+  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
   const coverage = deferred<Response>();
   const alert = jest.spyOn(Alert, 'alert');
   (global.fetch as jest.Mock).mockReturnValue(coverage.promise);

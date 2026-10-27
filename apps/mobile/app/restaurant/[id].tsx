@@ -114,16 +114,14 @@ export default function RestaurantDetailScreen() {
     async function load() {
       if (!id) { setError('Invalid restaurant ID'); setLoading(false); return; }
       setLoading(true); setError(null);
-      // Saves require a real account - for a session-less caller (the
-      // onboarding/lapsed-subscriber teaser), skip the call entirely rather
-      // than letting it 401: `/api/saved-items` isn't optional-auth like the
-      // menu endpoint, so a 401 here would sign the client out and bounce it
-      // to /welcome/problem the instant this screen opens. The session check
-      // runs inside the same Promise.all as the menu fetch (rather than
-      // ahead of it) so it doesn't add latency to every detail-screen open.
+      // A menu 401 already clears the session and opens discovery sign-in.
+      // Stop before bookmarks can issue another 401 and replace that recovery.
       const [outcome, session, macroTargets] = await Promise.all([
         fetchMenuOutcome(id, { selectedItemId: params.selectedItemId }), supabase.auth.getSession().then((r) => r.data.session), getDiscoveryMacroTargets(),
       ]);
+      if (cancelled || outcome.error === 'unauthorized') return;
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (cancelled || currentSession?.user.id !== session?.user.id) return;
       const savedResult = session ? await getSavedItems() : null;
       if (cancelled) return;
       const result = outcome.menu;

@@ -13,12 +13,11 @@ const FREE_SAMPLE_ITEM_COUNT = 3;
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-): Promise<NextResponse<MenuApiResponse>> {
-  // Same optional-auth pattern as GET /api/restaurants — an unentitled caller
-  // gets a truncated `locked: true` response instead of being turned away, so
-  // the onboarding teaser and the lapsed-subscriber flow can offer one real
-  // (partial) restaurant detail view before routing to the paywall.
-  const { entitled } = await optionalSubscription(request);
+): Promise<NextResponse<MenuApiResponse> | NextResponse> {
+  // Only signed-in callers may receive a menu, including the free sample.
+  const subscription = await optionalSubscription(request);
+  if (subscription instanceof NextResponse) return subscription;
+  const { entitled } = subscription;
 
   const { id } = await params;
   const paramsQuery = request.nextUrl.searchParams;

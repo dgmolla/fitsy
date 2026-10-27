@@ -110,10 +110,11 @@ describe("isEntitled", () => {
 });
 
 describe("optionalSubscription", () => {
-  it("never rejects - reports entitled: false when requireAuth fails (no/bad token)", async () => {
-    mockRequireAuth.mockResolvedValue(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+  it.each([401, 429])("propagates %s from requireAuth without reading entitlement", async status => {
+    const failure = NextResponse.json({ error: "Unauthorized" }, { status });
+    mockRequireAuth.mockResolvedValue(failure);
     const result = await optionalSubscription(req);
-    expect(result).toEqual({ payload: null, entitled: false });
+    expect(result).toBe(failure);
     expect(mockFindUnique).not.toHaveBeenCalled();
   });
 

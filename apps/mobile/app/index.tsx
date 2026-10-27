@@ -22,6 +22,7 @@ import { claimPaywallIntent, clearPaywallIntent, markPurchasedContinuation } fro
 import { clearPendingMealClaim, hasPendingMealClaim } from '@/lib/pendingMealClaim';
 import { withinMs } from '@/lib/async';
 import { PurchaseIdentityRecovery } from '@/components/PurchaseIdentityRecovery';
+import { clearDiscoverySignIn, readDiscoverySignIn } from '@/lib/discoverySignIn';
 
 export default function Index() {
   const navigation = useNavigation();
@@ -42,6 +43,7 @@ export default function Index() {
           getStoredToken(), getOnboardingResume(), readPaywallDecline(),
           AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY), hasSavedMealTargets(), readOnboardingPreviewEntry(),
           hasPaymentSignInContinuation(), hasPendingMealClaim(),
+          readDiscoverySignIn(),
         ]);
         let startup = await withinMs(startupRead, BOOT_VERDICT_CAP_MS);
         if (!current) return;
@@ -53,15 +55,20 @@ export default function Index() {
           if (!current) return;
           setIdentityUnavailable(false);
         }
-        const [token, resume, declined, completed, targets, onboardingPreviewEntry, savedPaymentContinuation, pendingMealClaim] = startup;
+        const [token, resume, declined, completed, targets, onboardingPreviewEntry, savedPaymentContinuation, pendingMealClaim, discoverySignIn] = startup;
         if (!current) return;
         setRecoveryUnavailable(false);
         if (token) void replayPendingProfileSync();
         if (resume === '/welcome/out-of-area') {
           // A prior checkout cannot replace a waitlist signup, including
           // after authentication finishes but before its callback navigates.
-          await Promise.allSettled([clearPaymentSignInContinuation(), clearPendingMealClaim(), clearPaywallIntent()]);
+          await Promise.allSettled([clearPaymentSignInContinuation(), clearPendingMealClaim(), clearPaywallIntent(), clearDiscoverySignIn()]);
           if (current) setDestination('/welcome/out-of-area');
+          return;
+        }
+        if (discoverySignIn) {
+          if (token) await clearDiscoverySignIn();
+          if (current) setDestination(token ? discoverySignIn : '/welcome/signin');
           return;
         }
         let paymentSignInContinuation = savedPaymentContinuation;

@@ -22,7 +22,7 @@ async function loadFlags(): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3000);
   try {
-    const body = await api.get<unknown>('/api/flags', false, { signal: controller.signal });
+    const body = await api.get<unknown>('/api/flags', true, { signal: controller.signal });
     overrides = new Map(Object.entries(flagsSchema.parse(body)));
   } catch {
     overrides.clear();

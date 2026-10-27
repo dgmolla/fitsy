@@ -14,6 +14,7 @@ jest.mock("@/services/emailService", () => ({
 }));
 
 jest.mock("@/lib/rateLimit", () => ({
+  ...jest.requireActual("@/lib/rateLimit"),
   authLimiter: { check: () => ({ ok: true, remaining: 9, retryAfterMs: 0 }) },
 }));
 

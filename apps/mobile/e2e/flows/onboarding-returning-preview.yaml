@@ -2,6 +2,9 @@
 # disposable simulator's auth keychain to reproduce anonymous return.
 appId: com.fitsy.mobile
 tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscribed-dev', 'store:test-store']
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
 - launchApp:
     clearState: true
@@ -26,8 +29,11 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
 - tapOn:
     text: "^Open$"
     optional: true
-- tapOn:
-    id: location-choose-area
+- runFlow:
+    file: ../helpers/discovery-signin.yaml
+    env:
+      DESTINATION: "^location-(use-current|continue-area)$"
+- runFlow: ../helpers/open-location-picker.yaml
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
@@ -37,30 +43,17 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
     id: goal-lose_fat
 - tapOn:
     id: welcome-continue
-# A direct payment link cannot expose plans before account creation.
+# The real account signed in before location lookup. A direct payment link
+# still enforces entitlement and opens the ordinary free-account paywall.
 - openLink: com.fitsy.mobile://welcome/payment
 - tapOn:
     text: "^Open$"
     optional: true
 - extendedWaitUntil:
-    visible: "Continue with Apple"
-    timeout: 15000
-- assertNotVisible:
-    id: paywall-logo
-# Authenticate through the configured disposable dev account and decline the
-# real paywall. This does not purchase or synthesize entitlement.
-- tapOn:
-    id: signup-dev
-# Wait for either checkout or an enabled sign-in control after failure.
-# Diagnose the authentication alert before asserting the checkout destination.
-- extendedWaitUntil:
     visible:
-      id: '^(paywall-logo|signup-dev)$'
-      enabled: true
+      id: paywall-logo
     timeout: 30000
-- assertNotVisible: "Dev Login Failed"
-- assertVisible:
-    id: paywall-logo
+- assertNotVisible: "Continue with Apple"
 - scrollUntilVisible:
     element:
       id: welcome-skip
@@ -103,65 +96,7 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
     timeout: 15000
 - assertNotVisible:
     id: paywall-logo
-# Continuing from the real nutrition-source screen carries onboarding intent.
-- openLink: com.fitsy.mobile://welcome/how-it-works
-- tapOn:
-    text: "^Open$"
-    optional: true
-- assertVisible:
-    id: nutrition-source-published
-- assertVisible:
-    id: nutrition-source-estimated
-- retry:
-    maxRetries: 2
-    commands:
-      - tapOn:
-          id: welcome-continue
-      - extendedWaitUntil:
-          visible:
-            id: preview-guide
-          timeout: 15000
-- tapOn:
-    id: coachmark-skip
-    optional: true
-- assertVisible:
-    id: preview-guide
-- assertVisible:
-    id: preview-pick-2
-# Replay can move back and forward without erasing the bounded preview entry.
-- tapOn:
-    id: preview-back
-- assertVisible:
-    id: nutrition-source-published
-- retry:
-    maxRetries: 2
-    commands:
-      - tapOn:
-          id: welcome-continue
-      - extendedWaitUntil:
-          visible:
-            id: preview-guide
-          timeout: 15000
-- assertVisible:
-    id: preview-pick-2
-# Restaurant details still require payment; preview is not an entitlement.
-- tapOn:
-    id: discovery-hero
-- extendedWaitUntil:
-    visible: "Continue with Apple"
-    timeout: 15000
-- assertNotVisible:
-    id: preview-guide
-# This disposable simulator must have no signed-in Apple account. Exercise
-# native dismissal or the captured authorization error before any dev login.
-# This proves routing recovery, not successful Apple authentication.
-- extendedWaitUntil:
-    visible:
-      id: signup-selected-restaurant
-    timeout: 15000
-- copyTextFrom:
-    id: signup-selected-restaurant-name
-- evalScript: ${output.selectedRestaurant = maestro.copiedText}
+# Native cancellation leaves the data destination pending and plans hidden.
 - tapOn:
     id: signup-apple
 - extendedWaitUntil:
@@ -178,18 +113,11 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
       visible: "Sign In Failed"
     commands:
       - tapOn: "OK"
-- extendedWaitUntil:
-    visible:
-      id: signup-apple
-      enabled: true
-    timeout: 15000
-- copyTextFrom:
-    id: signup-selected-restaurant-name
-- assertTrue: ${maestro.copiedText === output.selectedRestaurant}
+- assertVisible:
+    id: signup-apple
 - assertNotVisible:
     id: paywall-logo
-- assertNotVisible: "Test Store Purchase"
-# The locked choice survives interruption at sign-in, without a paywall flash.
+# The protected data destination survives interruption at sign-in without a paywall flash.
 - stopApp
 - launchApp
 # XCTest can observe the terminated PID on its first hierarchy request.
@@ -214,7 +142,7 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
     timeout: 15000
 - assertNotVisible:
     id: preview-guide
-# Cancel the resumed checkout and retry from the retained meal targets.
+# Cancel the resumed checkout and retry with the same account.
 # Cancellation must not reveal the old paywall or bounce back into sign-in.
 - tapOn:
     id: welcome-back
@@ -225,21 +153,49 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
 - assertNotVisible:
     id: paywall-logo
 - assertNotVisible: "Continue with Apple"
+- openLink: com.fitsy.mobile://welcome/location-permission
+- tapOn:
+    text: "^Open$"
+    optional: true
+# Account-owned goals are hidden while signed out. Restore authentication
+# before entering the goal-dependent nutrition context screen.
+- runFlow:
+    file: ../helpers/discovery-signin.yaml
+    env:
+      DESTINATION: "^location-(use-current|continue-area)$"
+- openLink: com.fitsy.mobile://welcome/goal
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: goal-lose_fat
+    timeout: 15000
+- tapOn:
+    id: goal-lose_fat
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: tried-meal_prep
+    timeout: 15000
 - openLink: com.fitsy.mobile://welcome/how-it-works
 - tapOn:
     text: "^Open$"
     optional: true
-# The first tap after a route transition can precede its native hit target.
-# Reacquire the same control and require a changed screen before selecting.
-- retry:
-    maxRetries: 2
-    commands:
-      - tapOn:
-          id: welcome-continue
-      - extendedWaitUntil:
-          visible:
-            id: preview-guide
-          timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: nutrition-source-published
+    timeout: 15000
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: preview-guide
+    timeout: 30000
+- tapOn:
+    id: coachmark-skip
+    optional: true
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -248,27 +204,10 @@ tags: [billing, discovery, onboarding, auth, changed-journey, 'fixture:unsubscri
     id: discovery-hero
 - extendedWaitUntil:
     visible:
-      id: signup-selected-restaurant
-    timeout: 15000
-- assertVisible: "Continue with Apple"
-- assertNotVisible:
-    id: paywall-logo
-# Real dev authentication completes the owned no-trial continuation once.
-# No purchase is made on this shared dev account.
-- tapOn:
-    id: signup-dev
-- extendedWaitUntil:
-    visible:
-      id: '^(paywall-logo|signup-dev)$'
-      enabled: true
+      id: paywall-logo
     timeout: 30000
-- assertNotVisible: "Dev Login Failed"
 - assertVisible:
-    id: paywall-logo
-- extendedWaitUntil:
-    visible:
-      id: paywall-offer-paid
-    timeout: 30000
+    id: paywall-offer-paid
 - assertNotVisible: "Continue with Apple"
 # Native Back must not pop into the spent preview and bounce into checkout.
 # The visible Back control below remains the owned cancellation path.

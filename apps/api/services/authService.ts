@@ -37,9 +37,15 @@ export async function verifyToken(token: string): Promise<JwtPayload> {
   const { payload } = await jwtVerify(token, getJwks(), {
     issuer: `${supabaseUrl}/auth/v1`,
     audience: "authenticated",
+    requiredClaims: ["sub", "exp", "iat"],
   });
+  if (typeof payload.sub !== "string" || !payload.sub.trim()
+    || typeof payload["email"] !== "string" || !payload["email"].trim()
+    || payload["role"] !== "authenticated" || payload["is_anonymous"] === true) {
+    throw new Error("A signed-in Supabase account is required");
+  }
   return {
-    sub: payload.sub as string,
-    email: payload["email"] as string,
+    sub: payload.sub,
+    email: payload["email"],
   };
 }

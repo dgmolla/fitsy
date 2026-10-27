@@ -1,7 +1,10 @@
 # Simulator GPS only; coverage and recovery use the real dev API.
 # Signup completion and waitlist database writes are checked in the native walkthrough.
 appId: com.fitsy.mobile
-tags: [onboarding, auth, changed-journey]
+tags: ['fixture:unsubscribed-dev', 'store:test-store', onboarding, auth, changed-journey]
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
 - launchApp:
     clearState: true
@@ -10,6 +13,11 @@ tags: [onboarding, auth, changed-journey]
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
       - waitForAnimationToEnd:
           timeout: 10000
       - extendedWaitUntil:
@@ -27,6 +35,10 @@ tags: [onboarding, auth, changed-journey]
 - tapOn:
     text: "^Open$"
     optional: true
+- runFlow:
+    file: ../helpers/discovery-signin.yaml
+    env:
+      DESTINATION: "^location-(use-current|continue-area)$"
 - extendedWaitUntil:
     visible:
       id: location-use-current
@@ -41,50 +53,32 @@ tags: [onboarding, auth, changed-journey]
 - assertVisible: "More menus are.*"
 - assertNotVisible:
     id: paywall-plan-yearly
-- tapOn:
-    id: waitlist-join
-- assertVisible: "Continue with Apple"
-- assertVisible: "Continue with Google"
-# Interrupting waitlist signup must keep its destination across a cold launch.
+# Restart before opting in: neither authentication nor a coverage lookup joins the list.
 - stopApp
 - launchApp
-# XCTest can reject a transient startup frame. Retry the read, not navigation.
-- retry:
-    maxRetries: 2
-    commands:
-      - waitForAnimationToEnd:
-          timeout: 10000
-      - extendedWaitUntil:
-          visible:
-            id: waitlist-join
-          timeout: 30000
-# A cold Debug launch recreates the native LogBox window above the footer.
-# Dismiss its close control in the blank right margin before product taps.
-- tapOn:
-    point: "92%,93%"
-- assertVisible: "More menus are.*"
+- extendedWaitUntil:
+    visible:
+      id: waitlist-join
+    timeout: 30000
 - assertNotVisible: "Continue with Apple"
-- tapOn:
-    id: waitlist-join
-- assertVisible: "Continue with Apple"
-- assertVisible: "Continue with Google"
-- tapOn:
-    id: welcome-back
-- assertVisible:
-    id: waitlist-change-area
 - tapOn:
     id: waitlist-change-area
 - extendedWaitUntil:
     visible:
       id: location-choose-area
+      enabled: true
     timeout: 15000
 - assertVisible: "Continue with Your location"
-# Wait for the returning screen to finish its navigation animation before tapping.
+# A cancelled touch can still animate the button. Require the actual sheet,
+# with one bounded retry of this idempotent action before selecting an area.
 - waitForAnimationToEnd
-- tapOn:
-    id: location-choose-area
+- runFlow: ../helpers/open-location-picker.yaml
 - assertVisible: "Choose a neighborhood"
 - waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      text: "Search near DTLA"
+    direction: DOWN
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:

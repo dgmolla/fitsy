@@ -4,7 +4,7 @@ import { saveMacroTargets } from './macroStorage';
 jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
-  return jest.requireActual('../__mocks__/supabase-js');
+  return { createClient: () => ({ auth: { getSession: async () => ({ data: { session: { access_token: 'fixture-token', user: { id: 'preview-user' } } } }) } }) };
 });
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));

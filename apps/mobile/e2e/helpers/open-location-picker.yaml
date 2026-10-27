@@ -1,0 +1,18 @@
+# Opening the chooser is idempotent. Judge success by the sheet itself, because
+# press feedback or an unrelated transition can satisfy retryTapIfNoChange.
+appId: com.fitsy.mobile
+---
+- extendedWaitUntil:
+    visible:
+      id: location-choose-area
+      enabled: true
+    timeout: 15000
+- retry:
+    maxRetries: 1
+    commands:
+      - waitForAnimationToEnd
+      - tapOn:
+          id: location-choose-area
+      - extendedWaitUntil:
+          visible: "Choose a neighborhood"
+          timeout: 5000

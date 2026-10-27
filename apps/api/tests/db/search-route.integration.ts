@@ -10,7 +10,7 @@ import { GET as menu } from '../../app/api/restaurants/[id]/menu/route';
 import type { RestaurantResult } from '@fitsy/shared';
 import { prisma } from '../../lib/restaurantService';
 
-import { userId, token, restaurantIds, request } from './search-route.fixture';
+import { userId, token, freeToken, restaurantIds, request } from './search-route.fixture';
 
 test('real authenticated search accepts equivalent aliases and keeps a valid wire contract', async () => {
   const short = await GET(request('calories=600&protein=40&carbs=60&fat=20'));
@@ -31,8 +31,9 @@ test('invalid targets return 400 through the handler', async () => {
   }
 });
 
-test('unauthenticated search still strips every best match', async () => {
-  const response = await GET(request('proteinG=40', false));
+test('unauthenticated search is rejected and signed-in free search strips every best match', async () => {
+  assert.equal((await GET(request('proteinG=40', false))).status, 401);
+  const response = await GET(request('proteinG=40', 'free'));
   assert.equal(response.status, 200);
   const { data, meta } = await response.json();
   assert.ok(data.length > 0);
@@ -40,9 +41,9 @@ test('unauthenticated search still strips every best match', async () => {
   assert.ok(data.every((row: { bestMatch?: unknown }) => !row.bestMatch));
 });
 
-const getMenu = (id: string, query = '', authenticated = true) => menu(new NextRequest(
+const getMenu = (id: string, query = '', authenticated: boolean | 'free' = true) => menu(new NextRequest(
   `http://localhost/api/restaurants/${id}/menu?${query}`,
-  authenticated ? { headers: { authorization: `Bearer ${token}` } } : {},
+  authenticated ? { headers: { authorization: `Bearer ${authenticated === 'free' ? freeToken : token}` } } : {},
 ), { params: Promise.resolve({ id }) });
 const targetQuery = 'calories=600&protein=40&carbs=60&fat=20';
 const body = async (response: Response) => {
@@ -120,12 +121,12 @@ test('invalid targets and page sizes return 400 on detail too', async () => {
 
 test('locked callers cannot enumerate dishes using targets, selection, page size or cursors', async () => {
   const id = restaurantIds[0]!;
-  const first = await body(await getMenu(id, '', false));
+  const first = await body(await getMenu(id, '', 'free'));
   assert.equal(first.locked, true);
   assert.equal(first.menuItems.length, 3);
   assert.equal(first.totalItemCount, 251);
   for (const query of [targetQuery, 'selectedItemId=' + id + '-251', 'cursor=garbage', 'pageSize=250']) {
-    const data = await body(await getMenu(id, query, false));
+    const data = await body(await getMenu(id, query, 'free'));
     assert.deepEqual(data, first);
     assert.equal(data.nextCursor, null);
   }
@@ -149,8 +150,8 @@ test('zero targets agree; empty pages keep the real total; unknown restaurants r
 });
 
 test('onboarding preview uses the same aliases and rejects invalid targets without exposing matches', async () => {
-  const a = await preview(request('calories=600&protein=40&carbs=60&fat=20', false));
-  const b = await preview(request('calories=600&proteinG=40&carbsG=60&fatG=20', false));
+  const a = await preview(request('calories=600&protein=40&carbs=60&fat=20', 'free'));
+  const b = await preview(request('calories=600&proteinG=40&carbsG=60&fatG=20', 'free'));
   assert.equal(a.status, 200);
   assert.equal(b.status, 200);
   const data = await a.json();
@@ -158,7 +159,7 @@ test('onboarding preview uses the same aliases and rejects invalid targets witho
   assert.deepEqual(data, await b.json());
   assert.ok(data.data.every((row: object) => !('bestMatch' in row)));
   for (const query of ['protein=NaN', 'protein=1e-300', 'protein=1e-400', 'carbs=%20', 'proteinG=-1', 'calories=', 'protein=40&proteinG=50']) {
-    assert.equal((await preview(request(query, false))).status, 400, query);
+    assert.equal((await preview(request(query, 'free'))).status, 400, query);
   }
 });
 
@@ -192,6 +193,7 @@ test('search and detail expose the same LOW confidence when provenance is missin
 
 const guidedRequest = (query = '') => new NextRequest(
   `http://localhost/api/restaurants/preview?lat=12&lng=12&guided=1&${targetQuery}&${query}`,
+  { headers: { authorization: `Bearer ${freeToken}` } },
 );
 
 test('guided preview reveals three real ranked meal summaries with provenance and a full area count', async () => {
@@ -206,6 +208,7 @@ test('guided preview reveals three real ranked meal summaries with provenance an
   assert.equal(result.meta.radiusMiles, 3);
   const estimated = guidedPreviewResponseSchema.parse(await (await preview(new NextRequest(
     'http://localhost/api/restaurants/preview?lat=12&lng=12&guided=1&q=dish&calories=900&protein=10&carbs=100&fat=50',
+    { headers: { authorization: `Bearer ${freeToken}` } },
   ))).json());
   assert.ok(estimated.data.length);
   assert.ok(estimated.data.every(restaurant => restaurant.bestMatch!.nutritionBasis === 'estimated'));
@@ -229,6 +232,7 @@ test('no craving matches preserve coverage count; genuinely uncovered areas retu
   assert.equal(noMatches.meta.nearbyDishCount, 1004);
   const uncovered = guidedPreviewResponseSchema.parse(await (await preview(new NextRequest(
     'http://localhost/api/restaurants/preview?lat=-40&lng=60&guided=1',
+    { headers: { authorization: `Bearer ${freeToken}` } },
   ))).json());
   assert.deepEqual(uncovered, { data: [], meta: { nearbyDishCount: 0, radiusMiles: 3, goalMatch: null } });
 });
@@ -247,14 +251,14 @@ test('local count excludes dishes without complete nutrition', async () => {
 
 test('guided preview applies a real burst limit with retry information, without changing legacy preview', async () => {
   const request = () => new NextRequest('http://localhost/api/restaurants/preview?lat=-40&lng=60&guided=1', {
-    headers: { 'x-forwarded-for': '192.0.2.43' },
+    headers: { authorization: `Bearer ${freeToken}`, 'x-forwarded-for': '192.0.2.43' },
   });
   for (let i = 0; i < 30; i++) assert.equal((await preview(request())).status, 200);
   const limited = await preview(request());
   assert.equal(limited.status, 429);
   assert.ok(Number(limited.headers.get('Retry-After')) > 0);
   const legacy = await preview(new NextRequest('http://localhost/api/restaurants/preview?lat=-40&lng=60', {
-    headers: { 'x-forwarded-for': '192.0.2.43' },
+    headers: { authorization: `Bearer ${freeToken}`, 'x-forwarded-for': '192.0.2.43' },
   }));
   assert.equal(legacy.status, 200);
 });

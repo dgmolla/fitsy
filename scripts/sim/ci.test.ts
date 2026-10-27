@@ -23,7 +23,7 @@ beforeAll(() => {
 });
 afterAll(() => { rmSync(directory, { recursive: true, force: true }); });
 
-test('anonymous menu startup retries only bounded observations before opening the restaurant', () => {
+test('menu startup retries only observations and authenticates once before reading data', () => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/menu-macro-serving.yaml'), 'utf8')) as [unknown, {
     launchApp?: object;
     retry?: object;
@@ -33,21 +33,31 @@ test('anonymous menu startup retries only bounded observations before opening th
   const launch = commands.findIndex(step => step.launchApp);
   expect(commands.filter(step => step.launchApp)).toHaveLength(1);
   expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true });
-  // This whole block must remain observations: no launch, links or product actions.
+  // Only local dev-client reconnection and bounded readiness reads may retry.
   expect(commands[launch + 1]).toEqual({
     retry: {
       maxRetries: 2,
       commands: [
+        { runFlow: { when: { visible: 'Development Build' }, commands: [
+          { tapOn: '^http://(localhost|127\\.0\\.0\\.1):[0-9]+$' },
+        ] } },
         { waitForAnimationToEnd: { timeout: 10000 } },
-        { extendedWaitUntil: { visible: 'Find meals that fit', timeout: 15000 } },
+        { extendedWaitUntil: { visible: { id: 'welcome-start' }, timeout: 30000 } },
       ],
     },
   });
-  expect(commands.filter(step => step.retry || step.runFlow)).toHaveLength(1);
+  expect(commands.filter(step => step.retry)).toHaveLength(1);
+  expect(commands.filter(step => step.runFlow)).toEqual([{
+    runFlow: { file: '../helpers/discovery-signin.yaml', env: { DESTINATION: 'menu-search' } },
+  }]);
+  const [, signIn] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/helpers/discovery-signin.yaml'), 'utf8')) as [unknown, Record<string, unknown>[]];
+  expect(signIn.some(step => step.retry || step.launchApp || step.openLink)).toBe(false);
   expect(commands[launch + 2]).toEqual({ openLink: "${'fitsy://restaurant/' + output.seed.id}" });
 });
 
-test.each(['chain-menu-serving', 'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight', 'shuffle'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
+test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-energy-sync', 'menu-load-recovery',
+  'menu-macro-serving', 'onboarding-assisted-targets', 'onboarding-guided-preview', 'onboarding-out-of-area',
+  'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight', 'paywall-access', 'shuffle'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, {
     launchApp?: object;
     retry?: { maxRetries: number; commands: {
@@ -59,7 +69,7 @@ test.each(['chain-menu-serving', 'onboarding-target-ranked-search', 'onboarding-
   }[]];
   const launch = commands.findIndex(step => step.launchApp);
   expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true,
-    ...(flow === 'onboarding-search-highlight' ? { permissions: { notifications: 'deny' } } : {}) });
+    ...(['onboarding-search-highlight', 'onboarding-guided-preview'].includes(flow) ? { permissions: { notifications: 'deny' } } : {}) });
   const startup = commands[launch + 1]?.retry;
   expect(startup).toBeDefined();
   expect(startup!.maxRetries).toBeLessThanOrEqual(2);

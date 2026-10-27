@@ -1,6 +1,9 @@
 # Real dev coverage and live offering terms. No purchase on the shared dev account.
 appId: com.fitsy.mobile
 tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fixture:unsubscribed-dev', 'store:test-store']
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
 - launchApp:
     clearState: true
@@ -12,6 +15,11 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fi
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
       - waitForAnimationToEnd:
           timeout: 10000
       - extendedWaitUntil:
@@ -23,12 +31,15 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fi
     point: "92%,93%"
 - tapOn:
     id: welcome-start
+- runFlow:
+    file: ../helpers/discovery-signin.yaml
+    env:
+      DESTINATION: "^location-(use-current|continue-area)$"
 - assertVisible:
     id: location-use-current
 - assertVisible:
     id: location-choose-area
-- tapOn:
-    id: location-choose-area
+- runFlow: ../helpers/open-location-picker.yaml
 # On a small iPhone, DTLA exists in accessibility but sits below the visible sheet.
 - swipe:
     start: "50%,78%"
@@ -93,6 +104,11 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fi
 - copyTextFrom:
     id: meal-target-calories
 - assertTrue: ${maestro.copiedText === '600'}
+# Settle calorie-generated grams before iOS selects the next field. Focusing
+# protein first can collapse its selection when calorie blur updates its value.
+- tapOn:
+    text: "Protein / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-protein
 - waitForAnimationToEnd
@@ -111,6 +127,9 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fi
 - assertVisible:
     id: meal-target-carbs
 - tapOn:
+    text: "Carbs / meal"
+- waitForAnimationToEnd
+- tapOn:
     id: meal-target-carbs
 - waitForAnimationToEnd
 - eraseText: 100
@@ -119,6 +138,9 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fi
 - copyTextFrom:
     id: meal-target-carbs
 - assertTrue: ${maestro.copiedText === '0'}
+- tapOn:
+    text: "Fat / meal"
+- waitForAnimationToEnd
 - tapOn:
     id: meal-target-fat
 - waitForAnimationToEnd
@@ -373,7 +395,12 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fi
 # The oracle uses the same manual area, craving and active target as the app.
 # This complete target has zero protein, an inactive protein search constraint.
 # Its carbs/fat constraints remain active and its calories equal their energy.
-- evalScript: ${output.contextResponse = http.get('https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&q=pizza&calories=654&protein=0&carbs=114&fat=22')}
+- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&q=pizza&calories=654&protein=0&carbs=114&fat=22']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+- evalScript: ${output.contextResponse = output.dataApiResponses[0]}
 - assertTrue: ${output.contextResponse.status === 200}
 - evalScript: ${output.context = json(output.contextResponse.body)}
 - assertTrue: ${output.context.data.length === 3 && output.context.data.every(function (r) { return r.bestMatch && r.bestMatch.calories > 0 && r.bestMatch.matchScore !== null; })}
@@ -398,45 +425,12 @@ tags: [billing, discovery, onboarding, auth, notifications, changed-journey, 'fi
     id: preview-pick-4
 - tapOn:
     id: preview-pick-3
-- assertVisible: "Continue with Apple"
-- assertVisible: "Continue with Google"
-- assertNotVisible: "Continue with email"
-- tapOn:
-    id: welcome-back
-- assertVisible:
-    id: preview-back
-# Back preserves the user's list position; scroll to inspect the retained query.
-- scrollUntilVisible:
-    element:
-      id: preview-guide
-    direction: UP
-- assertVisible:
-    id: preview-guide
-- assertVisible: "pizza"
-# The locked choice above reached sign-in before any plans. Continue from
-# preview and use its selected-pick sign-in for the live terms assertion below.
-# Sign in through the real dev auth seam and preserve the tapped third pick.
-# This never purchases on the shared dev account.
-- scrollUntilVisible:
-    element:
-      id: preview-pick-3
-    direction: DOWN
-- tapOn:
-    id: preview-pick-3
-# The summary is a container with separately accessible text children.
-# Assert the actual labels; copying the container does not include its children.
-- assertVisible:
-    id: signup-selected-restaurant
-- assertVisible: ${output.context.data[2].name}
-- assertVisible: "pizza · DTLA"
-- assertVisible: "654 kcal · 0g protein · 114g carbs · 22g fat"
-- tapOn: "Dev login"
+# Sign-in already happened before location lookup. Entitlement still gates checkout.
 - extendedWaitUntil:
     visible:
-      id: welcome-continue
-      enabled: true
+      id: paywall-logo
     timeout: 30000
-- assertNotVisible: "Get a trial reminder"
+- assertNotVisible: "Continue with Apple"
 - assertVisible:
     id: paywall-offer-paid
 - copyTextFrom:

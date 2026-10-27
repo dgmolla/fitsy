@@ -14,11 +14,11 @@ jest.mock("@/lib/restaurantService", () => ({
 }));
 
 import { GET } from "./route";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const VALID_PAYLOAD = { sub: "user-1", email: "alice@example.com" };
 const ENTITLED = { payload: VALID_PAYLOAD, entitled: true };
-const UNENTITLED = { payload: null, entitled: false };
+const UNENTITLED = { payload: VALID_PAYLOAD, entitled: false };
 
 const SAMPLE_MENU = {
   restaurantId: "rest-1",
@@ -57,21 +57,13 @@ function makeParams(id: string): { params: Promise<{ id: string }> } {
 // ─── Unentitled callers get a truncated, not a blocked, response ──────────────
 
 describe("GET /api/restaurants/[id]/menu — unentitled callers", () => {
-  it("returns 200 with a truncated menu and no Authorization header", async () => {
-    mockOptionalSubscription.mockResolvedValue(UNENTITLED);
-    mockGetRestaurantMenu.mockResolvedValue(SAMPLE_MENU);
+  it("returns 401 without reading the menu when authentication fails", async () => {
+    mockOptionalSubscription.mockResolvedValue(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
 
     const res = await GET(makeRequest("rest-1"), makeParams("rest-1"));
 
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.data.locked).toBe(true);
-    expect(body.data.menuItems).toHaveLength(3);
-    expect(body.data.menuItems.map((i: { id: string }) => i.id)).toEqual([
-      "mi-1",
-      "mi-2",
-      "mi-3",
-    ]);
+    expect(res.status).toBe(401);
+    expect(mockGetRestaurantMenu).not.toHaveBeenCalled();
   });
 
   it("truncates the menu when authenticated but not subscribed", async () => {

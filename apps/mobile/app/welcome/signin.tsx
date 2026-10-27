@@ -23,6 +23,7 @@ import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJour
 import { withinMs } from '@/lib/async';
 import { BOOT_VERDICT_CAP_MS } from '@/lib/usePurchases';
 import { useOwnedHardwareBack } from '@/lib/useOwnedHardwareBack';
+import { clearDiscoverySignIn, readDiscoverySignIn } from '@/lib/discoverySignIn';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -70,7 +71,7 @@ export default function SignInScreen() {
   }, [returnTo]);
   useEffect(() => {
     if (outOfArea === '1') void Promise.allSettled([
-      clearPaymentSignInContinuation(), clearPendingMealClaim(), clearPaywallIntent(),
+      clearPaymentSignInContinuation(), clearPendingMealClaim(), clearPaywallIntent(), clearDiscoverySignIn(),
     ]);
   }, [outOfArea]);
   // A cold launch cannot recover this screen's query parameters. Keep the
@@ -79,6 +80,13 @@ export default function SignInScreen() {
 
   const navigateAfterAuth = useCallback(async (isNewUser: boolean, userId: string, ownedCheckout: boolean | null, isCurrent: () => boolean) => {
     if (!isCurrent()) return;
+    if (returnTo === 'discovery' || !returnTo && outOfArea !== '1' && await readDiscoverySignIn()) {
+      const destination = await readDiscoverySignIn();
+      if (!isCurrent()) return;
+      await clearDiscoverySignIn();
+      if (isCurrent()) router.replace(destination ?? '/welcome/location-permission');
+      return;
+    }
     const trialDestination = previewReturn === '1'
       ? { pathname: '/welcome/trial' as const, params: { previewReturn } } : '/welcome/trial';
     if (outOfArea === '1') {
@@ -267,9 +275,9 @@ export default function SignInScreen() {
       // marker before clearing it. Never Back into a retained paywall.
       const paymentReturn = returnTo === 'payment' || returnTo === 'resubscribe' ||
         await hasPaymentSignInContinuation().catch(() => true);
-      await Promise.allSettled([clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(), clearOnboardingResume()]);
+      await Promise.allSettled([clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(), clearOnboardingResume(), clearDiscoverySignIn()]);
       if (!navigation.isFocused()) return;
-      if (paymentReturn || !navigation.canGoBack()) router.replace('/welcome/problem');
+      if (returnTo === 'discovery' || paymentReturn || !navigation.canGoBack()) router.replace('/welcome/problem');
       else if (navigation.canGoBack()) router.back();
     })();
   });

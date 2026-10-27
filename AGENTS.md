@@ -200,7 +200,8 @@ You are done when CI and deploy are green, not when you push. After pushing, pol
 
 ## Danger Zones
 
-- **Auth** — user accounts, session management
+- **Auth** - every data handler requires a Supabase account session, including onboarding samples; see `apps/api/app/api/auth-coverage.test.ts` for exact public exceptions.
+  User accounts and session management are security-sensitive.
 - **Data integrity (nutrition estimates)** — LLM-estimated macros are
   approximate; users may make health decisions based on this data.
   Always show confidence ranges, never false precision.

@@ -63,4 +63,15 @@ describe("createRateLimiter", () => {
     const r2 = limiter.check("ip1");
     expect(r2.remaining).toBe(3);
   });
+
+  it('bounds identity storage without evicting live quotas and reclaims expired keys', () => {
+    const limiter = createRateLimiter({ windowMs: 60_000, max: 1, maxKeys: 2 });
+    expect(limiter.check('first').ok).toBe(true);
+    expect(limiter.check('second').ok).toBe(true);
+    expect(limiter.check('third').ok).toBe(false);
+    expect(limiter.check('first').ok).toBe(false);
+    jest.advanceTimersByTime(60_000);
+    expect(limiter.check('third').ok).toBe(true);
+    expect(limiter.check('first').ok).toBe(true);
+  });
 });

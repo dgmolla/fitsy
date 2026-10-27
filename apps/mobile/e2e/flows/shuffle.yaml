@@ -8,10 +8,20 @@ env:
   LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
 - assertTrue: ${!!LOGIN_EMAIL && !!LOGIN_PASSWORD}
-- evalScript: ${output.nearby = http.get('https://dev.fitsy.org/api/restaurants?lat=34.0407&lng=-118.2468')}
+- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants?lat=34.0407&lng=-118.2468']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+- evalScript: ${output.nearby = output.dataApiResponses[0]}
 - assertTrue: ${output.nearby.status === 200 && json(output.nearby.body).data.length > 0}
 # Prove the empty-state location is outside dev coverage before driving the app.
-- evalScript: ${output.outside = http.get('https://dev.fitsy.org/api/restaurants?lat=40.7128&lng=-74.0060&radius=6')}
+- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants?lat=40.7128&lng=-74.0060&radius=6']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+- evalScript: ${output.outside = output.dataApiResponses[0]}
 - assertTrue: ${output.outside.status === 200 && json(output.outside.body).data.length === 0}
 # Direct API access must work before Dev Login runs its own RevenueCat sync.
 - runScript: ../helpers/shuffle-subscriber.mjs

@@ -9,7 +9,7 @@ import { prisma } from '../../lib/restaurantService';
 import { findShuffle } from '../../lib/shuffleService';
 import { parseShuffleParams } from '../../lib/shuffleParams';
 import { shufflePriority } from '../../lib/shuffleSelection';
-import { userId, token } from './authenticated-route.fixture';
+import { userId, token, freeToken } from './authenticated-route.fixture';
 
 const tag = randomUUID();
 const ids = ['exact', 'tolerance', 'radius', 'closed', 'unknown', 'diet'].map(name => `${tag}-${name}`);
@@ -19,9 +19,9 @@ const params = (query = '') => parseShuffleParams(new URLSearchParams(
   `lat=21&lng=-41&calories=600&protein=40&carbs=60&fat=20&cuisineType=${tag}-exact&${query}`,
 ));
 const optionsFor = (name: string, query = '') => ({ ...params(query), cuisineType: `${tag}-${name}` });
-const request = (query = '', auth = true, ip = '192.0.2.145') => new NextRequest(
+const request = (query = '', auth: boolean | 'free' = true, ip = '192.0.2.145') => new NextRequest(
   `http://localhost/api/restaurants/shuffle?lat=21&lng=-41&calories=600&protein=40&carbs=60&fat=20&${query}`,
-  { headers: { ...(auth ? { authorization: `Bearer ${token}` } : {}), 'x-forwarded-for': ip } },
+  { headers: { ...(auth ? { authorization: `Bearer ${auth === 'free' ? freeToken : token}` } : {}), 'x-forwarded-for': ip } },
 );
 const body = async (response: Response): Promise<ShuffleResponse> => {
   assert.equal(response.status, 200, await response.clone().text());
@@ -165,20 +165,20 @@ test('known closed restaurants are excluded and missing hours are labeled unknow
   assert.equal((await findShuffle(optionsFor('unknown'), true)).data!.availability, 'unknown');
 });
 
-test('anonymous and expired subscriptions receive a target-independent teaser without dish or macro data', async () => {
+test('signed-in free and expired subscriptions receive a target-independent teaser without dish or macro data', async () => {
   const query = `cuisineType=${tag}-exact&seed=locked`;
-  const anonymous = await body(await GET(request(query, false)));
-  assert.ok(anonymous.data);
-  assert.equal(anonymous.meta.locked, true);
-  assert.equal(anonymous.data.item, null);
-  assert.equal(anonymous.data.macros, null);
-  assert.equal(anonymous.data.fitScore, null);
-  assert.equal(anonymous.meta.tolerance, null);
+  const freeSample = await body(await GET(request(query, 'free')));
+  assert.ok(freeSample.data);
+  assert.equal(freeSample.meta.locked, true);
+  assert.equal(freeSample.data.item, null);
+  assert.equal(freeSample.data.macros, null);
+  assert.equal(freeSample.data.fitScore, null);
+  assert.equal(freeSample.meta.tolerance, null);
   const impossible = new NextRequest(`http://localhost/api/restaurants/shuffle?lat=21&lng=-41&calories=0&fat=0&maxCalories=0&excludeRecent=${ids[0]}-a,${ids[0]}-b&${query}`,
-    { headers: { 'x-forwarded-for': '192.0.2.145' } });
-  assert.deepEqual(await body(await GET(impossible)), anonymous);
+    { headers: { 'x-forwarded-for': '192.0.2.145', authorization: `Bearer ${freeToken}` } });
+  assert.deepEqual(await body(await GET(impossible)), freeSample);
   await prisma.subscription.update({ where: { userId }, data: { expiresAt: new Date('2000-01-01') } });
-  try { assert.deepEqual(await body(await GET(request(query))), anonymous); }
+  try { assert.deepEqual(await body(await GET(request(query))), freeSample); }
   finally { await prisma.subscription.update({ where: { userId }, data: { expiresAt: null } }); }
 });
 
@@ -205,7 +205,7 @@ test('exhausted budgets and uncovered locations return explicit empty results', 
 
 test('invalid input returns 400 and bound SQL treats filter strings as data', async () => {
   for (const query of ['radius=51', 'protein=NaN', 'maxCalories=-1', 'excludeRecent=a,,b']) {
-    const response = await GET(new NextRequest(`http://localhost/api/restaurants/shuffle?lat=21&lng=-41&calories=600&${query}`));
+    const response = await GET(new NextRequest(`http://localhost/api/restaurants/shuffle?lat=21&lng=-41&calories=600&${query}`, { headers: { authorization: `Bearer ${token}` } }));
     assert.equal(response.status, 400);
     assert.equal(typeof (await response.json()).error, 'string');
   }
@@ -226,5 +226,5 @@ test('rate limits count cache hits per user even when their IP changes, and incl
   assert.ok(limited);
   assert.ok(Number(limited.headers.get('Retry-After')) > 0);
   assert.equal((await GET(request(query, true, '192.0.2.146'))).status, 429);
-  assert.equal((await GET(request(query, false, '192.0.2.147'))).status, 200);
+  assert.equal((await GET(request(query, 'free', '192.0.2.147'))).status, 200);
 });

@@ -3,16 +3,31 @@
 # Pipeline writer replays and source review remain separate data checks.
 appId: com.fitsy.mobile
 tags:
+  - 'fixture:unsubscribed-dev'
+  - 'store:test-store'
   - billing
   - discovery
   - changed-journey
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
-- evalScript: ${output.search = http.get('https://dev.fitsy.org/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co')}
+- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+- evalScript: ${output.search = output.dataApiResponses[0]}
 - assertTrue: ${output.search.status === 200}
 - evalScript: >-
     ${output.seed = json(output.search.body).data.filter(function (r) { return r.name === 'Seed Bowl Co #01'; })[0]}
 - assertTrue: ${!!output.seed}
-- evalScript: ${output.response = http.get('https://dev.fitsy.org/api/restaurants/' + output.seed.id + '/menu')}
+- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants/' + output.seed.id + '/menu']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+- evalScript: ${output.response = output.dataApiResponses[0]}
 - assertTrue: ${output.response.status === 200}
 - evalScript: ${output.menu = json(output.response.body).data}
 - assertTrue: ${output.menu.totalItemCount === 8 && output.menu.locked && output.menu.menuItems.length === 3}
@@ -42,6 +57,10 @@ tags:
 - tapOn:
     text: "^Open$"
     optional: true
+- runFlow:
+    file: ../helpers/discovery-signin.yaml
+    env:
+      DESTINATION: menu-search
 - extendedWaitUntil:
     visible: "Seed Bowl Co #01"
     timeout: 20000
@@ -63,19 +82,12 @@ tags:
 - assertVisible: "3 dishes match"
 - tapOn:
     id: ${"menu-item-" + output.chicken.id}
-# A locked meal keeps its restaurant selection through the sign-in gate.
+# A signed-in free account still needs a subscription to open the full menu.
 - extendedWaitUntil:
     visible:
-      id: signup-selected-restaurant-name
-    timeout: 15000
+      id: paywall-logo
+    timeout: 30000
 - assertVisible:
-    id: signup-selected-restaurant-name
-    text: "Seed Bowl Co #01"
-- assertVisible:
-    id: signup-apple
-- assertVisible:
-    id: signup-google
-- assertNotVisible:
     id: paywall-plan-yearly
 - assertNotVisible:
-    id: paywall-price-yearly
+    id: signup-apple

@@ -109,7 +109,7 @@ export async function fetchMenu(restaurantId: string, options: { selectedItemId?
   return (await fetchMenuOutcome(restaurantId, options)).menu;
 }
 
-export type MenuLoadOutcome = { menu: MenuResponse; error: null } | { menu: null; error: 'transient' | 'unavailable' };
+export type MenuLoadOutcome = { menu: MenuResponse; error: null } | { menu: null; error: 'transient' | 'unavailable' | 'unauthorized' };
 export async function fetchMenuOutcome(restaurantId: string, options: { selectedItemId?: string } = {}): Promise<MenuLoadOutcome> {
   try {
     const targets = await getDiscoveryMacroTargets();
@@ -146,6 +146,7 @@ export async function fetchMenuOutcome(restaurantId: string, options: { selected
     }
     return { menu: result, error: null };
   } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 401) return { menu: null, error: 'unauthorized' };
     return { menu: null, error: error instanceof ApiRequestError && error.status < 500 ? 'unavailable' : 'transient' };
   }
 }

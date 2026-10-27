@@ -5,6 +5,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/rateLimit", () => ({
+  ...jest.requireActual("@/lib/rateLimit"),
   feedbackLimiter: { check: jest.fn(() => ({ ok: true, remaining: 4, retryAfterMs: 0 })) },
 }));
 

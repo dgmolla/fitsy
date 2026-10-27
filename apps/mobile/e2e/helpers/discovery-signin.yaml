@@ -1,0 +1,19 @@
+appId: com.fitsy.mobile
+---
+- extendedWaitUntil:
+    visible:
+      id: signup-dev
+    timeout: 30000
+- assertVisible:
+    id: signup-apple
+- assertVisible:
+    id: signup-google
+- assertNotVisible:
+    id: paywall-plan-yearly
+- tapOn:
+    id: signup-dev
+- extendedWaitUntil:
+    visible:
+      id: ${DESTINATION}
+    timeout: 30000
+- assertNotVisible: "Dev Login Failed"

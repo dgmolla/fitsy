@@ -13,6 +13,8 @@ const headers = { 'Cache-Control': 'private, no-store' };
 export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
+  const subscription = await optionalSubscription(request);
+  if (subscription instanceof NextResponse) return subscription;
   let params: ShuffleParams;
   try { params = parseShuffleParams(request.nextUrl.searchParams); }
   catch (error) {
@@ -20,9 +22,8 @@ export async function GET(request: NextRequest) {
   }
   try {
     // Always read the current verdict, including for cache hits and previously entitled callers.
-    const subscription = await optionalSubscription(request);
     const { payload } = subscription;
-    const principal = payload ? `user:${payload.sub}` : `ip:${request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'}`;
+    const principal = `user:${payload.sub}`;
     const limited = limiter.check(principal);
     if (!limited.ok) return NextResponse.json({ error: 'Too many requests' }, {
       status: 429, headers: { ...headers, 'Retry-After': String(Math.ceil(limited.retryAfterMs / 1000)) },

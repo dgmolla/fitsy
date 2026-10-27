@@ -14,8 +14,10 @@ export interface PreviewRestaurant {
  * no local claims; the paywall remains usable without restaurant cards. */
 export async function fetchPreviewRestaurants(
   coordsOverride?: { lat: number; lng: number },
+  options: { signal?: AbortSignal; expectedUserId?: string } = {},
 ): Promise<PreviewRestaurant[]> {
   const [macros, cached] = await Promise.all([getDiscoveryMacroTargets(), getCachedCoords()]);
+  if (options.signal?.aborted) throw new Error('Preview request cancelled');
   const coords = coordsOverride ?? cached;
   if (!coords) return [];
   const params = new URLSearchParams({
@@ -28,6 +30,7 @@ export async function fetchPreviewRestaurants(
   });
   const res = await api.get<{ data: PreviewRestaurant[] }>(
     `/api/restaurants/preview?${params.toString()}`,
+    true, { signal: options.signal }, options.expectedUserId,
   );
   return res.data;
 }

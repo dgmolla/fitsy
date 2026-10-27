@@ -111,23 +111,21 @@ export async function getEntitlementStatus(
 }
 
 export interface OptionalSubscriptionResult {
-  payload: JwtPayload | null;
+  payload: JwtPayload;
   entitled: boolean;
 }
 
 /**
- * Authenticate and check entitlement without ever rejecting the request: an
- * unauthenticated or unentitled caller gets `entitled: false` instead of a
- * 401/402, so the route can degrade to a locked/truncated response (the
- * onboarding teaser and the lapsed-subscriber browse-then-paywall flow)
- * rather than blocking access outright. Callers MUST check `entitled` before
- * returning any data gated behind the subscription.
+ * Require authentication, then check the optional subscription.
+ * Signed-in free/lapsed users can receive a locked sample, while missing or
+ * invalid sessions and rate limits must be returned before querying data.
+ * Callers MUST propagate NextResponse and check `entitled` for paid data.
  */
 export async function optionalSubscription(
   request: NextRequest,
-): Promise<OptionalSubscriptionResult> {
+): Promise<OptionalSubscriptionResult | NextResponse> {
   const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return { payload: null, entitled: false };
+  if (auth instanceof NextResponse) return auth;
   const entitled = await isEntitled(auth.sub, auth.email);
   return { payload: auth, entitled };
 }

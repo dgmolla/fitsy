@@ -14,6 +14,7 @@ import { clearPendingMealClaim } from './pendingMealClaim';
 import { archiveActiveMacroTargets, clearActiveMacroTargets } from './macroStorage';
 import { clearAccountOnboardingData } from './onboardingStorage';
 import { forgetPendingProfileSync } from './profileSyncStorage';
+import { clearDiscoverySignIn } from './discoverySignIn';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 // SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
@@ -59,7 +60,7 @@ export async function clearToken({ reason = 'logout', forgetTargets = false }: {
   await archiveActiveMacroTargets(data.session?.user?.id ?? null, forgetTargets);
   await clearAccountOnboardingData(data.session?.user?.id ?? null, forgetTargets);
   if (reason === 'logout') await Promise.allSettled([
-    clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(),
+    clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(), clearDiscoverySignIn(),
   ]);
   // Supabase's signOut clears its own SecureStore key (the session blob).
   await supabase.auth.signOut().catch(() => {

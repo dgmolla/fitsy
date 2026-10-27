@@ -12,6 +12,13 @@ Keep render checkpoints in `impact-plan.mjs` aligned with assertions in the main
 Its preview comparisons use those saved calories and grams, including whole-gram rounding, for the real dev API request.
 `onboarding-target-ranked-search` settles each previous field and clears generated values before typing, then saves with the decimal keyboard open and checks Back restores all four targets.
 Its live ranked queries and preview assertions use that persisted allocation: 50 g protein, 44 g carbs and 14 g fat settle to 502 kcal.
+`onboarding-guided-preview` and `onboarding-search-highlight` also blur through each field's label before focusing the next generated value.
+Calorie blur can update protein after iOS has selected it, collapsing the selection and leaving generated digits behind when Maestro backspaces.
+`OnboardingTargetEnergy.test.tsx` replays these saved commands against the real tuning screen with that native focus/blur order and checks the persisted targets.
+All seven onboarding journeys open the area chooser through `helpers/open-location-picker.yaml`, which waits for an enabled control and requires the neighborhood sheet with at most two taps.
+`retryTapIfNoChange` can accept press feedback or unrelated hierarchy changes while the sheet stays closed; the helper retries only this idempotent action against its required outcome.
+`onboarding-out-of-area` retains its separate sheet assertion, DTLA selection, authenticated coverage and cold-start persistence checks.
+`OnboardingNavigationLocation.test.tsx` replays its recovery against the real location, waitlist and goal screens, including a cancelled first touch and a permanently unresponsive chooser that must fail without selecting an area or joining the waitlist.
 CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
 The read-only classifier supplies data to the protected `sim-scope.yml` publisher; the bounded status description contains scope and flow count, and the poller reads exact names from the artifact.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
@@ -99,6 +106,21 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
+Deploy the candidate API to `dev.fitsy.org` through the existing coordinated preview procedure before running journeys that use `helpers/data-api.mjs`.
+The stable dev domain follows `main`; a successful feature-branch Vercel preview does not update that domain.
+The host runner owner must verify the candidate dev deployment before native replay; do not merge early or remove the 401 assertions to satisfy Simulator.
+The helper probes missing-token and invalid-token requests before login; an anonymous 200 means the deployed backend still lacks the candidate auth behavior.
+Every caller immediately requires 401/401 and successful fixture login through a labelled assertion that reports all three HTTP statuses.
+The helper returns without logging in when either auth probe fails, leaving that assertion to fail normally instead of throwing a Graal exception that Maestro truncates into invalid command JSON and an unknown JUnit error.
+Retain that failure and correct the deployment through the existing host owner before replaying the selected journeys.
+For a pre-merge test window, the existing host owner can use the `fitsy-api` project's Vercel Domains page to edit `dev.fitsy.org`, keep the Preview environment, and temporarily select the candidate branch.
+Record the original `dev` branch mapping and the candidate's ready deployment and exact commit before saving.
+Verify the saved mapping and anonymous/invalid-token 401s before the existing runner replays; the branch preview URL alone does not prove that the app's configured origin changed.
+Keep that deployment assigned for the complete selected run, including automatic retries and source-only follow-ups that still need the candidate API.
+The existing host runner owner closes the test window after terminal native verification or explicit cancellation, then restores the original Preview branch mapping and verifies the restoration.
+Do not restore after an intermediate group or failed attempt while that owner still has a required replay pending; doing so recreates the stale-backend failure on the next head.
+Retain the failed run and the recovered run separately; changing deployment configuration does not require a product-code workaround or establish a passing native journey.
+
 `shuffle` requires a populated dev backend, `entitled-dev` and a Debug Test Store build.
 It first signs the entitled fixture into the dev API and checks an unlocked dish and persisted RevenueCat proof before mobile launch can synchronize the subscription.
 Its `helpers/shuffle-subscriber.mjs` helper keeps tokens and credentials out of Maestro output, uses only `dev.fitsy.org`, and rejects a demo bypass without actual subscription proof.
@@ -124,7 +146,7 @@ It also covers the deep link with PostHog disabled, production override rejectio
 Run it through `node scripts/sim/ci.mjs --scope=flow --flows=shuffle --udid=<UDID>` with the local fixture configuration.
 The planner expands this request when the candidate also affects shared UI or other journeys.
 
-`onboarding-guided-preview` checks payment Back after fresh sign-in and after a second, already signed-in checkout, preserving the craving and all four meal targets without purchasing.
+`onboarding-guided-preview` signs in before location lookup and checks payment Back after both checkout entries, preserving the craving and all four meal targets without purchasing.
 Its payment and return screenshots distinguish an exit offer from a successful preview return.
 `components/OnboardingPaymentBack.test.tsx` exercises the real preview, sign-in, trial, reminder and payment screens with intact and deliberately removed native history, including both visible and hardware Back.
 Owned continuations and cold payment entry retain their exit checks in `PaymentCompletion.test.tsx` and `PaymentPlanSelection.test.tsx`.
@@ -137,25 +159,26 @@ This uses a separate Java cache without modifying the normal installation or cha
 The canonical media check also requires host process-ownership inspection; a sandbox denial must be resolved through the existing host owner without disabling that preflight.
 If XCTest setup reports `No space left on device`, recover eligible host resources before rerunning; `scripts/sim/ci.mjs` checks disk admission before driving any journey.
 
-`menu-macro-serving` clears app data and keychain to preserve its anonymous starting state.
+`menu-macro-serving` clears app data and keychain, proves unauthenticated API rejection, and signs in before inspecting the free menu sample.
 Its bounded startup retry waits for the launch animation and the original `Find meals that fit` screen before opening the restaurant.
 Missing welcome UI or a genuine crash still fails; product interactions and the full flow are never retried.
 `scripts/sim/ci.test.ts` protects that startup boundary, including the mandatory screen, timeouts and retry limit.
 
-`chain-menu-serving` clears app and keychain state to prove anonymous menu access.
+`chain-menu-serving` clears app and keychain state, checks the authenticated API contract, and requires account sign-in before the menu sample.
 On a Debug dev-client build, clearing state can return to Expo's Development Build launcher; the flow selects local Metro before waiting for `welcome-start`.
 Embedded builds skip that conditional launcher step, and startup retries never repeat menu or authentication actions.
-After tapping a locked dish, assert the selected restaurant and `signup-apple`/`signup-google` controls because this entry uses contextual signup copy.
-Keep checkout controls absent until authentication succeeds.
+The protected deep link first shows `signup-apple`/`signup-google` and keeps plans hidden.
+After authentication, tapping a locked dish opens subscription plans; being signed in does not grant paid menu access.
 `components/ChainMenuServing.test.tsx` checks the saved flow's final selectors against the real menu and sign-in screens, while `scripts/sim/ci.test.ts` covers its launch contract and render-smoke consumer.
 The Mac's advisory exclusions live outside this repository in `~/fitsy-refactor/sim-review/poller.mjs`; remove `chain-menu-serving.yaml` from `KNOWN_FAILING` after a passing native run of the repaired flow.
 Remove `onboarding-target-ranked-search.yaml` (#525) from that same list after its repaired flow passes on the Debug dev build.
 
 `onboarding-returning-preview` reconnects a cleared Debug client to local Metro before checking `welcome-start`.
-Both Dev Login checkpoints wait for checkout or a completed authentication failure, reject `Dev Login Failed`, and require the real paywall before continuing.
+Both discovery Dev Login checkpoints wait for the authenticated location screen and reject `Dev Login Failed`.
+After cancelling anonymous return, the flow signs back in and selects a goal before reopening the goal-dependent nutrition context screen and preview.
 Its original missing-logo capture contains `Dev Login Failed` with `Email already registered`: check the fixture credentials and the values bundled by owned Metro before investigating plan rendering.
-The flow records a real decline, clears only the disposable keychain, and retains the anonymous preview, locked-meal, cancellation and cold-resume checks without purchasing.
-`components/OnboardingReturningPreview.test.tsx` exercises the real sign-in, paywall and decline with a rejected fixture login followed by a corrected retry.
+The flow records a real decline, clears only the disposable keychain, and retains unauthenticated preview rejection, locked-meal, cancellation and cold-resume checks without purchasing.
+`components/OnboardingReturningPreview.test.tsx` exercises the real sign-in, paywall and decline with a rejected fixture login followed by a corrected retry, plus the saved cancellation-to-preview sequence through real screens.
 Run `node scripts/sim/ci.mjs --scope=flow --flows=onboarding-returning-preview --udid=<UDID>` with `unsubscribed-dev`, then remove `onboarding-returning-preview.yaml` (#527) from the Mac's `KNOWN_FAILING` list after a passing native run.
 
 `reminders` uses `unsubscribed-dev` to check guest access, leaving without opt-in, native denial, grant and permission persistence after relaunch without purchasing.
@@ -173,6 +196,22 @@ Mobile MCP text dumps include state names in their legend.
 Use `isNativeFocused(dump, testID)` on a fresh observation before typing and `assertNativeValue(dump, testID, expected)` afterward.
 These helpers inspect the exact element row and fail closed for missing or duplicate selectors.
 They do not prove search results; assert the returned dish or empty-state recovery separately and retain the complete raw tool trace.
+
+## Data authentication
+
+Onboarding and menu journeys use the real `unsubscribed-dev` fixture before requesting live restaurant data.
+`helpers/discovery-signin.yaml` checks Apple/Google availability and hidden plans, uses Dev login, and waits for the protected destination.
+It does not grant an entitlement or purchase anything.
+`helpers/data-api.mjs` probes missing/invalid-session requests, obtains a session only after both return 401, and makes the oracle requests with a Bearer token.
+Each saved-flow caller then asserts both 401s and the successful login, reporting the HTTP statuses in its assertion label.
+Only status and JSON bodies reach Maestro output; credentials and tokens remain inside the script.
+Every oracle flow reads the configured `EXPO_PUBLIC_DEV_LOGIN_EMAIL/PASSWORD`; owned Metro must use the same fixture.
+`lib/dataApiFlow.test.ts` executes the saved helper, covers login failure, and rejects new direct restaurant requests in maintained YAML flows.
+`lib/api.auth.test.ts` covers token attachment, account cache isolation and sign-in recovery.
+
+A restricted worker that cannot open local ports or access CoreSimulator must retain that failure and the planned scope for the existing host owner.
+Run the canonical `node scripts/sim/ci.mjs --scope=full --udid=<owned-UDID>` on the authorized host against the candidate backend and Metro source.
+Syntax checks and component tests do not establish a passing native journey or deployed 401s.
 
 ## Mixed-duration trial reminders
 
@@ -207,6 +246,7 @@ Use the same Sign in with Apple identity, including its private-relay address wh
 The flow retains receipt and login state, restores through the visible control, checks Welcome back, and repeats the routing check after cold launch.
 `subscription-restore-empty` is the negative control for a signed-in never-subscribed account whose store account has no Fitsy receipt.
 `subscription-expired-routing` starts with an already expired subscription linked to the current Fitsy account and covers inactive Restore from Welcome back plus cold launch.
+It also leaves win-back for sign-in and returns with the same expired account, retaining win-back routing while optional restaurant requests are cancelled.
 That same-account journey can use RevenueCat Test Store without requiring history transfer.
 All flows require their documented starting state and fail if that state is absent.
 Run simulator automation through the canonical procedure in the shipping contract; none of these flows resets billing state or fabricates receipts.

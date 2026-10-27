@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const securityHeaders = [
+  // Never share authenticated API responses or auth failures across callers.
+  { key: "Cache-Control", value: "private, no-store" },
   // Prevent MIME-type sniffing
   { key: "X-Content-Type-Options", value: "nosniff" },
   // Block clickjacking (API server, not rendered in iframes)

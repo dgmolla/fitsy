@@ -87,3 +87,33 @@ describe("requireAuth — valid token", () => {
     expect(mockVerifyToken).toHaveBeenCalledWith("valid.jwt.token");
   });
 });
+
+describe('data quotas across routes and credentials', () => {
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { jest.useRealTimers(); });
+
+  it('limits one user across rotating IPs and resumes after the window', async () => {
+    mockVerifyToken.mockResolvedValue({ sub: 'user-quota', email: 'quota@example.test' });
+    const request = (ip: number) => new NextRequest('http://localhost/api/restaurants', {
+      headers: { authorization: 'Bearer refreshed-token', 'x-forwarded-for': `192.0.2.${ip}` },
+    });
+    for (let i = 0; i < 120; i++) expect(await requireAuth(request(i))).not.toBeInstanceOf(NextResponse);
+    const denied = await requireAuth(request(121)) as NextResponse;
+    expect(denied.status).toBe(429);
+    expect(denied.headers.get('Retry-After')).toBe('60');
+    expect(await denied.json()).toEqual({ error: 'Too many requests' });
+    jest.advanceTimersByTime(60_000);
+    expect(await requireAuth(request(122))).not.toBeInstanceOf(NextResponse);
+  });
+
+  it('limits one canonical IP across users before invoking the JWT provider', async () => {
+    mockVerifyToken.mockImplementation(async token => ({ sub: token, email: 'quota@example.test' }));
+    const request = (i: number) => new NextRequest('http://localhost/api/subscriptions/status', {
+      headers: { authorization: `Bearer ip-quota-${i}`, 'x-vercel-forwarded-for': '198.51.100.1', 'x-forwarded-for': `spoofed-${i}` },
+    });
+    for (let i = 0; i < 300; i++) expect(await requireAuth(request(i))).not.toBeInstanceOf(NextResponse);
+    expect((await requireAuth(request(301)) as NextResponse).status).toBe(429);
+    expect(mockVerifyToken).toHaveBeenCalledTimes(300);
+    expect(await requireAuth(new NextRequest('http://localhost/api/restaurants'))).toMatchObject({ status: 401 });
+  });
+});

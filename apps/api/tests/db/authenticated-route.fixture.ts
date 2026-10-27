@@ -10,6 +10,8 @@ import { prisma } from '../../lib/restaurantService';
 const keys = createServer();
 export const userId = randomUUID();
 export let token: string;
+export let freeToken: string;
+const freeId = randomUUID();
 before(async () => {
   const { publicKey, privateKey } = await generateKeyPair('ES256');
   const jwk = { ...await exportJWK(publicKey), kid: 'fixture', alg: 'ES256', use: 'sig' };
@@ -27,15 +29,20 @@ before(async () => {
   const email = `${userId}@example.test`;
   await prisma.user.create({ data: { id: userId, email,
     subscription: { create: { plan: 'monthly', status: 'active', lastEventAt: new Date() } } } });
-  token = await new SignJWT({ email }).setProtectedHeader({ alg: 'ES256', kid: 'fixture' })
+  token = await new SignJWT({ email, role: 'authenticated', is_anonymous: false }).setIssuedAt().setProtectedHeader({ alg: 'ES256', kid: 'fixture' })
     .setSubject(userId).setIssuer(`${process.env['SUPABASE_URL']}/auth/v1`)
     .setAudience('authenticated').setExpirationTime('5m').sign(privateKey);
+  const freeEmail = `${freeId}@example.test`;
+  await prisma.user.create({ data: { id: freeId, email: freeEmail } });
+  freeToken = await new SignJWT({ email: freeEmail, role: 'authenticated', is_anonymous: false }).setIssuedAt()
+    .setProtectedHeader({ alg: 'ES256', kid: 'fixture' }).setSubject(freeId)
+    .setIssuer(`${process.env['SUPABASE_URL']}/auth/v1`).setAudience('authenticated').setExpirationTime('5m').sign(privateKey);
 });
 after(async () => {
-  await prisma.user.deleteMany({ where: { id: userId } });
+  await prisma.user.deleteMany({ where: { id: { in: [userId, freeId] } } });
   await new Promise<void>((resolve, reject) => keys.close(err => err ? reject(err) : resolve()));
 });
-export const request = (query: string, authenticated = true) => new NextRequest(
+export const request = (query: string, authenticated: boolean | 'free' = true) => new NextRequest(
   `http://localhost/api/restaurants?lat=34.05&lng=-118.25&${query}`,
-  authenticated ? { headers: { authorization: `Bearer ${token}` } } : {},
+  authenticated ? { headers: { authorization: `Bearer ${authenticated === 'free' ? freeToken : token}` } } : {},
 );

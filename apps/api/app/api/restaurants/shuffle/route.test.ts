@@ -99,13 +99,14 @@ it('recovers missing proof and a renewal whose old period has ended', async () =
   }
 });
 
-it('keeps anonymous and RevenueCat-confirmed expired users locked', async () => {
+it('rejects anonymous callers and keeps RevenueCat-confirmed expired users locked', async () => {
   global.fetch = jest.fn(async () => new Response(JSON.stringify({
     request_date_ms: Date.now(), subscriber: { entitlements: {
       pro: { expires_date: new Date(Date.now() - 1000).toISOString(), product_identifier: 'monthly' },
     } },
   }))) as typeof fetch;
-  for (const authenticated of [false, true]) {
+  expect((await GET(request(false))).status).toBe(401);
+  for (const authenticated of [true]) {
     row!.status = 'expired';
     const result = await responseBody(request(authenticated));
     expect(result.meta.locked).toBe(true);
@@ -124,7 +125,7 @@ it('repairs a previously persisted denial when RevenueCat confirms a current ent
 
 it('does not consult subscriber state for an invalid token', async () => {
   mockVerifyToken.mockRejectedValueOnce(new Error('invalid token'));
-  expect((await responseBody()).meta.locked).toBe(true);
+  expect((await GET(request())).status).toBe(401);
   expect(mockFindUnique).not.toHaveBeenCalled();
   expect(global.fetch).not.toHaveBeenCalled();
 });

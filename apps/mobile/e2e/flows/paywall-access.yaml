@@ -1,8 +1,16 @@
 # Standard dev seed, read-only menu; no purchase or synthetic entitlement.
 appId: com.fitsy.mobile
-tags: [billing, discovery, onboarding, changed-journey]
+tags: ['fixture:unsubscribed-dev', 'store:test-store', billing, discovery, onboarding, changed-journey]
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
-- evalScript: ${output.search = http.get('https://dev.fitsy.org/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co')}
+- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+- evalScript: ${output.search = output.dataApiResponses[0]}
 - assertTrue: ${output.search.status === 200}
 - evalScript: >-
     ${output.seed = json(output.search.body).data.filter(function (r) { return r.name === 'Seed Bowl Co #01'; })[0]}
@@ -15,82 +23,91 @@ tags: [billing, discovery, onboarding, changed-journey]
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
       - waitForAnimationToEnd:
           timeout: 10000
-      - assertVisible: "Find meals that fit"
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
 - waitForAnimationToEnd:
     timeout: 3000
 # Dismiss the Debug-only warning window outside the welcome controls.
 - tapOn:
     point: "92%,93%"
+# A restaurant deep link cannot expose even its sample before sign-in.
 - openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
-# A fresh simulator can require system confirmation for an app link.
 - tapOn:
     text: "^Open$"
     optional: true
 - extendedWaitUntil:
-    visible: "Seed Bowl Co #01"
-    timeout: 20000
+    visible:
+      id: signup-apple
+    timeout: 30000
+- assertNotVisible:
+    id: menu-search
+- assertNotVisible:
+    id: paywall-plan-yearly
 - tapOn:
-    text: Got it
-    optional: true
-- tapOn:
-    id: restaurant-back
-- assertVisible: "Find meals that fit"
-- assertNotVisible: "Continue with Apple"
-- openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
-# A fresh simulator can require system confirmation for an app link.
-- tapOn:
-    text: "^Open$"
-    optional: true
-- scrollUntilVisible:
-    element:
-      id: locked-value-cta
-    direction: DOWN
-- assertVisible: "Find meals that fit.*"
-- tapOn:
-    id: locked-value-cta
-- assertVisible: "Continue with Apple"
-- assertVisible: "Continue with Google"
-# Direct no-trial entry must authenticate before any plan or checkout control.
+    id: welcome-back
+- extendedWaitUntil:
+    visible:
+      id: welcome-start
+    timeout: 15000
+# Direct checkout and win-back links also keep plans behind sign-in.
 - openLink: com.fitsy.mobile://welcome/payment
 - tapOn:
     text: "^Open$"
     optional: true
 - extendedWaitUntil:
-    visible: "Continue with Apple"
+    visible:
+      id: signup-apple
     timeout: 15000
-- assertVisible: "Continue with Google"
-- assertNotVisible:
-    id: paywall-plan-yearly
 - assertNotVisible:
     id: paywall-price-yearly
-# A stale win-back link has the same pre-auth guard, and Back must not loop.
+- tapOn:
+    id: welcome-back
 - openLink: com.fitsy.mobile://welcome/resubscribe
 - tapOn:
     text: "^Open$"
     optional: true
 - extendedWaitUntil:
-    visible: "Continue with Apple"
+    visible:
+      id: signup-google
     timeout: 15000
 - assertNotVisible:
     id: resubscribe-restore
 - tapOn:
     id: welcome-back
 - extendedWaitUntil:
-    visible: "Find meals that fit"
+    visible:
+      id: welcome-start
     timeout: 15000
-# The post-decline preview and cold-resume route are exercised after an
-# observed paywall decline in onboarding-returning-preview.yaml.
-# A notification deep link cannot complete onboarding without entitlement.
-- openLink: com.fitsy.mobile://welcome/notification-permission
+# A real free account can inspect its bounded sample; a plan is still required.
+- openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id}
 - tapOn:
     text: "^Open$"
     optional: true
+- runFlow:
+    file: ../helpers/discovery-signin.yaml
+    env:
+      DESTINATION: menu-search
+- assertVisible: "Seed Bowl Co #01"
+- scrollUntilVisible:
+    element:
+      id: locked-value-cta
+    direction: DOWN
+- tapOn:
+    id: locked-value-cta
 - extendedWaitUntil:
-    visible: "Continue with Apple"
-    timeout: 15000
+    visible:
+      id: paywall-logo
+    timeout: 30000
+- assertVisible:
+    id: paywall-plan-yearly
 - assertNotVisible:
-    id: notification-skip
-- assertNotVisible:
-    id: paywall-logo
+    id: signup-apple
