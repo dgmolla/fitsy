@@ -78,6 +78,17 @@ Only numeric usage and endpoint/time were retained, never key values, labels or 
 Pin Qwen's provider in the actual transport and metadata, keeping its model, prompts, decoding, parameter requirements, disabled fallbacks and price ceiling unchanged.
 Consolidate rejection reconciliation through `reconcileRejection`: this exact Qwen deprecation error also requires the same-day zero-usage receipt hash, while other missing usage stays blocked.
 Next: validate and commit the routing repair, append that exact evidence-backed reconciliation, then resume the original 129-case selection with all Haiku outputs replayed and no repeated paid input.
+The routing repair is committed at `19805640ccee0153f31f6403945cb44298b80fa9`, and all 54 focused tests pass.
+The Qwen rejection is reconciled additively against its raw response and the exact retained zero-usage proof; ledger admission now has no unknown or pending usage before resumption.
+The offline route-recovery preflight replayed all 129 Haiku cases, preserving every output and all 33 failed outcomes with zero new requests or spend.
+The live continuation is `2026-10-27T06-53-51-562Z-3b1ecf75`, from that committed source and the original selection hash.
+Its collector is PID 94334, parent 94310, started October 26 at 23:53:51 local time, with about 74 MiB resident memory when observed.
+Retain the live collector and its `.jev.lock` until completion; do not repeat the command while it runs.
+At 06:59:34 UTC, exact and Jev had completed, Haiku replayed all 129 cases, and Qwen had completed 36 cases with one failed model answer.
+Known new spend at that checkpoint is $0.42016495; macro cases currently take about one minute each.
+The current tool command session is 3718; reap its final exit and inspect the run's summary before any results commit.
+The canonical product and simulator plans compute `required=false` and scope `none` for this evaluation-only change.
+Next: let the original sample finish, run the offline same-sample/billing audit, commit all raw results and the full comparison report, then obtain cheap checks, exact-head local review and current CI before the authorized squash merge.
 
 ## Previous adapter task history
 
