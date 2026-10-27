@@ -1,3 +1,4 @@
+import { useRateLimitTransport } from "@/tests/fixtures/rateLimitTransport";
 // ─── Mock modules ─────────────────────────────────────────────────────────────
 
 jest.mock("@/lib/supabase", () => ({
@@ -11,11 +12,6 @@ jest.mock("@/lib/restaurantService", () => ({
 
 jest.mock("@/services/emailService", () => ({
   sendWelcomeEmail: jest.fn(),
-}));
-
-jest.mock("@/lib/rateLimit", () => ({
-  ...jest.requireActual("@/lib/rateLimit"),
-  authLimiter: { check: () => ({ ok: true, remaining: 9, retryAfterMs: 0 }) },
 }));
 
 import { POST } from "./route";
@@ -51,6 +47,8 @@ beforeEach(() => {
   (sendWelcomeEmail as jest.Mock).mockResolvedValue(undefined);
   mockAdminDeleteUser.mockResolvedValue({ error: null });
 });
+
+useRateLimitTransport();
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/auth/register", {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { feedbackLimiter } from "@/lib/rateLimit";
+import { feedbackLimiter, rateLimitResponse } from "@/lib/rateLimit";
 import { containsProfanity } from "@/lib/moderation";
 import { prisma } from "@/lib/restaurantService";
 import {
@@ -24,9 +24,8 @@ import { buildFeedbackAlert } from "@/lib/feedbackDigest";
 // instead of after the fact.
 //
 // Throttling is two-layered and conservative:
-//   1. In-process limiter — cheap per-instance burst guard.
-//   2. DB count over the last 24h — survives serverless cold starts (which
-//      reset the in-process limiter) and caps sustained spam.
+//   1. Shared Redis limiter for bursts across instances and cold starts.
+//   2. DB count over the last 24h to cap sustained spam.
 
 /** Max feedback rows a single user may create in a rolling 24h window. */
 const DAILY_CAP = 20;
@@ -38,19 +37,9 @@ export async function POST(
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth as never;
 
-  // Layer 1: in-process burst limiter.
-  const rateResult = feedbackLimiter.check(auth.sub);
-  if (!rateResult.ok) {
-    return NextResponse.json(
-      { error: "Too many requests — please try again later" },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(rateResult.retryAfterMs / 1000)),
-        },
-      },
-    );
-  }
+  // Layer 1: shared burst limiter.
+  const rateResult = await feedbackLimiter.check(auth.sub);
+  if (!rateResult.ok) return rateLimitResponse(rateResult, 'Too many requests - please try again later');
 
   let body: { message?: unknown };
   try {

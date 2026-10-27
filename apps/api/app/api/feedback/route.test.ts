@@ -1,12 +1,10 @@
+import { useRateLimitTransport } from "@/tests/fixtures/rateLimitTransport";
+const quotaTransport = useRateLimitTransport();
+
 // ─── Mock modules ─────────────────────────────────────────────────────────────
 
 jest.mock("@/lib/auth", () => ({
   requireAuth: jest.fn(),
-}));
-
-jest.mock("@/lib/rateLimit", () => ({
-  ...jest.requireActual("@/lib/rateLimit"),
-  feedbackLimiter: { check: jest.fn(() => ({ ok: true, remaining: 4, retryAfterMs: 0 })) },
 }));
 
 jest.mock("@/lib/restaurantService", () => ({
@@ -47,7 +45,6 @@ jest.mock("next/server", () => {
 import { GET, POST } from "./route";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { feedbackLimiter } from "@/lib/rateLimit";
 import { containsProfanity } from "@/lib/moderation";
 import { prisma } from "@/lib/restaurantService";
 
@@ -57,11 +54,6 @@ const CREATED = { id: "fb-1", createdAt: new Date("2026-06-06T00:00:00.000Z") };
 beforeEach(() => {
   jest.clearAllMocks();
   (requireAuth as jest.Mock).mockResolvedValue(AUTH_OK);
-  (feedbackLimiter.check as jest.Mock).mockReturnValue({
-    ok: true,
-    remaining: 4,
-    retryAfterMs: 0,
-  });
   (containsProfanity as jest.Mock).mockReturnValue(false);
   (prisma.feedback.count as jest.Mock).mockResolvedValue(0);
   (prisma.feedback.create as jest.Mock).mockResolvedValue(CREATED);
@@ -141,12 +133,8 @@ describe("POST /api/feedback — auth", () => {
 // ─── Throttling ─────────────────────────────────────────────────────────────────
 
 describe("POST /api/feedback — throttling", () => {
-  it("returns 429 when the in-process limiter rejects", async () => {
-    (feedbackLimiter.check as jest.Mock).mockReturnValue({
-      ok: false,
-      remaining: 0,
-      retryAfterMs: 30_000,
-    });
+  it("returns 429 when the shared limiter rejects", async () => {
+    quotaTransport.mockImplementationOnce(async () => Response.json({ result: [0, 0, 30_000] }));
 
     const res = await POST(makeRequest({ message: "spam" }));
     expect(res.status).toBe(429);

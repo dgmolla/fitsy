@@ -12,9 +12,11 @@ All data routes require a verified, expiring Supabase account JWT for this proje
 Missing, invalid, expired, anonymous-user and service-role tokens return 401 before query validation, cached data or database reads.
 `optionalSubscription` makes the subscription optional, never authentication; signed-in free/lapsed users retain the existing locked samples.
 `requireAuth` shares limits of 120 requests per user and 300 per client IP per minute across data endpoints.
-IP quotas use Vercel's overwritten client-IP headers; other hosts require a trusted reverse proxy.
+IP quotas use only Vercel's platform `x-vercel-forwarded-for` on actual Vercel deployments; other hosts ignore forwarding headers and share an `unknown` bucket.
 429 includes `Retry-After` in seconds, and API responses are private with no shared caching.
-Limits are bounded in memory, expire idle identities, reset on cold starts and are not shared across instances.
+All deployed quotas use atomic, bounded Upstash Redis sliding windows shared across instances and cold starts.
+Store operations have one-second deadlines and fail closed with private 503 responses and `Retry-After: 1` on outages or missing deployment configuration.
+See [shared API quotas](../backend/api-rate-limits.md) for configuration, every quota, proxy trust, storage bounds and real-Redis verification.
 Health and the exact login/signup credential exchanges remain public; the write-only website waitlist remains an explicit exception with its existing abuse controls.
 RevenueCat validates its configured webhook Authorization secret using constant-time comparison, and internal jobs retain `CRON_SECRET` authentication.
 `apps/api/app/api/auth-coverage.test.ts` discovers all route handlers and is the maintained public allowlist.
@@ -300,11 +302,11 @@ Known closed or malformed schedules are excluded.
 Existing preload data has no hours, so those restaurants return `availability: "unknown"`; the endpoint does not claim they are open.
 Verified business-hour ingestion is still needed to establish availability for that legacy data; the read-only API makes no external availability calls.
 
-The instance-local limiter allows 30 requests per user per minute, including cache hits.
+The shared Redis limiter allows 30 requests per user per minute, including cache hits.
 429 responses include `Retry-After` in seconds.
 The instance-local cache lasts at most ten seconds, expires at a minute boundary, holds at most 256 responses, and separates user, entitlement and input contexts.
 All responses use `Cache-Control: private, no-store` so shared HTTP caches cannot serve subscription data.
-As with the existing limiter, cold starts and multiple server instances do not share rate-limit state.
+Quota state persists across cold starts and is shared by API instances.
 
 ### GET /api/restaurants/preview
 

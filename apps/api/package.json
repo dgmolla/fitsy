@@ -7,6 +7,7 @@
     "build": "prisma generate --schema ../../prisma/schema.prisma && next build",
     "start": "next start",
     "test": "jest",
+    "test:rate-limits": "bash ../../scripts/verify/rate-limit-store.sh",
     "test:coverage": "jest --coverage",
     "test:coverage:gc": "node --expose-gc ../../node_modules/jest/bin/jest.js --coverage",
     "type-check": "prisma generate --schema ../../prisma/schema.prisma && tsc --noEmit",

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findNearbyRestaurants } from "@/lib/restaurantService";
 import { findGuidedPreview } from '@/lib/guidedPreviewService';
-import { createRateLimiter } from "@/lib/rateLimit";
+import { createRateLimiter, rateLimitResponse } from "@/lib/rateLimit";
+import { trustedClientIp } from '@/lib/clientIp';
 import { requireAuth } from "@/lib/auth";
 import { parseMacroTargetParams } from "@/lib/macroTargetParams";
 import type { GuidedPreviewResponse, RestaurantResult } from "@fitsy/shared";
 
-const guidedLimiter = createRateLimiter({ windowMs: 60_000, max: 30 });
+const guidedLimiter = createRateLimiter({ namespace: 'preview-ip', windowMs: 60_000, max: 30 });
 
 interface PreviewRestaurant {
   id: string;
@@ -72,12 +73,8 @@ export async function GET(
     if (guided) {
       // A signed-in account can see the bounded tour sample before subscribing.
       // The shared auth guard also limits IPs across every data route.
-      const ip = request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim()
-        || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip")?.trim() || "unknown";
-      const quota = guidedLimiter.check(ip);
-      if (!quota.ok) return NextResponse.json({ error: "Too many preview searches. Please try again shortly." }, {
-        status: 429, headers: { "Retry-After": String(Math.ceil(quota.retryAfterMs / 1000)) },
-      });
+      const quota = await guidedLimiter.check(trustedClientIp(request));
+      if (!quota.ok) return rateLimitResponse(quota, 'Too many preview searches. Please try again shortly.');
       return NextResponse.json(await findGuidedPreview({ lat, lng, targets, query, selectedItemId }));
     }
     // Prefer indie restaurants for the teaser — chains are less compelling as

@@ -1,6 +1,7 @@
 # Perf + Security Handoff — 2026-04-25
 
-**Status:** Perf shipped, security parked
+**Status:** Historical handoff; current rate-limit contract: [shared API quotas](api-rate-limits.md).
+The historical security proposal below does not override current authentication, quotas or failure behavior.
 **Author:** Claude (with Dawit)
 **Date:** 2026-04-25
 

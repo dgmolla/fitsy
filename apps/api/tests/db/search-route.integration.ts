@@ -251,14 +251,14 @@ test('local count excludes dishes without complete nutrition', async () => {
 
 test('guided preview applies a real burst limit with retry information, without changing legacy preview', async () => {
   const request = () => new NextRequest('http://localhost/api/restaurants/preview?lat=-40&lng=60&guided=1', {
-    headers: { authorization: `Bearer ${freeToken}`, 'x-forwarded-for': '192.0.2.43' },
+    headers: { authorization: `Bearer ${freeToken}`, 'x-vercel-forwarded-for': '192.0.2.43' },
   });
   for (let i = 0; i < 30; i++) assert.equal((await preview(request())).status, 200);
   const limited = await preview(request());
   assert.equal(limited.status, 429);
   assert.ok(Number(limited.headers.get('Retry-After')) > 0);
   const legacy = await preview(new NextRequest('http://localhost/api/restaurants/preview?lat=-40&lng=60', {
-    headers: { authorization: `Bearer ${freeToken}`, 'x-forwarded-for': '192.0.2.43' },
+    headers: { authorization: `Bearer ${freeToken}`, 'x-vercel-forwarded-for': '192.0.2.43' },
   }));
   assert.equal(legacy.status, 200);
 });

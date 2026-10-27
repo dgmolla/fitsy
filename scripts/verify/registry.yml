@@ -117,6 +117,13 @@ checks:
     runs: [local, ci]
     why: Complete affected API, scripts and mobile tests; retain all diagnostics through run.mjs even when later workspaces pass (incident 267).
 
+  - name: rate-limit-store
+    script: rate-limit-store.sh
+    layer: 2
+    blocking: true
+    runs: [local, ci]
+    why: Actual Redis Lua and independent API workers prove shared quotas, forged-header resistance, atomic admission, key bounds and expiry.
+
   - name: media-integration
     script: media-integration.sh
     layer: 2

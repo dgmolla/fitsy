@@ -15,11 +15,14 @@ const originalFetch = global.fetch;
 let providerCalls = 0;
 before(() => {
   process.env['VERCEL_ENV'] = 'production';
+  process.env['UPSTASH_REDIS_REST_URL'] = 'https://quota.example.test';
+  process.env['UPSTASH_REDIS_REST_TOKEN'] = 'fixture-token';
   process.env['SUPABASE_URL'] = 'https://fixture.supabase.test';
   process.env['SUPABASE_ANON_KEY'] = 'fixture-public-key';
   process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'fixture-server-key';
   process.env['POSTGRES_PRISMA_URL'] = 'invalid-security-audit-sentinel';
-  global.fetch = async () => {
+  global.fetch = async input => {
+    if (String(input) === 'https://quota.example.test/') return Response.json({ result: [1, 0, 0] });
     providerCalls++;
     return Response.json({ msg: 'Invalid login credentials' }, { status: 400 });
   };

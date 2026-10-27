@@ -89,7 +89,9 @@ describe("requireAuth — valid token", () => {
 });
 
 describe('data quotas across routes and credentials', () => {
-  beforeEach(() => { jest.useFakeTimers(); });
+  const epoch = Date.now();
+  let windows = 0;
+  beforeEach(() => { jest.useFakeTimers({ now: epoch + ++windows * 120_000 }); });
   afterEach(() => { jest.useRealTimers(); });
 
   it('limits one user across rotating IPs and resumes after the window', async () => {

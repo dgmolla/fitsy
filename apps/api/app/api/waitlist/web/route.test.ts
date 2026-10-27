@@ -1,7 +1,5 @@
-jest.mock("@/lib/rateLimit", () => ({
-  ...jest.requireActual("@/lib/rateLimit"),
-  waitlistLimiter: { check: jest.fn() },
-}));
+import { useRateLimitTransport } from "@/tests/fixtures/rateLimitTransport";
+const quotaTransport = useRateLimitTransport();
 
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
@@ -28,7 +26,6 @@ jest.mock("next/server", () => {
 
 import { POST } from "./route";
 import { NextRequest } from "next/server";
-import { waitlistLimiter } from "@/lib/rateLimit";
 import { prisma } from "@/lib/restaurantService";
 import { sendWaitlistConfirmation } from "@/lib/waitlistConfirmSend";
 
@@ -42,32 +39,28 @@ function makeRequest(body: unknown, headers: Record<string, string> = {}): NextR
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (waitlistLimiter.check as jest.Mock).mockReturnValue({ ok: true, remaining: 4, retryAfterMs: 0 });
   (prisma.launchWaitlist.upsert as jest.Mock).mockResolvedValue({ id: "wl-new", confirmedAt: null });
   (sendWaitlistConfirmation as jest.Mock).mockResolvedValue(true);
 });
 
 describe("POST /api/waitlist/web (public form)", () => {
-  it("rate limits per forwarded IP with a Retry-After header", async () => {
-    (waitlistLimiter.check as jest.Mock).mockReturnValue({
-      ok: false,
-      remaining: 0,
-      retryAfterMs: 61_000,
-    });
+  it("rate limits untrusted forwarding headers with a Retry-After header", async () => {
+    quotaTransport.mockImplementationOnce(async () => Response.json({ result: [0, 0, 61_000] }));
     const res = await POST(
       makeRequest({ email: "a@b.com" }, { "x-forwarded-for": "203.0.113.9, 198.51.100.1" }),
     );
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBe("61");
-    expect(waitlistLimiter.check).toHaveBeenCalledWith("203.0.113.9");
+
     expect(prisma.launchWaitlist.upsert).not.toHaveBeenCalled();
   });
 
-  it("falls back to x-real-ip, then a shared bucket, for the rate-limit key", async () => {
+  it("ignores x-real-ip and forwarding headers outside Vercel", async () => {
+    delete process.env['VERCEL'];
     await POST(makeRequest({ email: "a@b.com" }, { "x-real-ip": "203.0.113.7" }));
-    expect(waitlistLimiter.check).toHaveBeenLastCalledWith("203.0.113.7");
     await POST(makeRequest({ email: "a@b.com" }));
-    expect(waitlistLimiter.check).toHaveBeenLastCalledWith("unknown");
+    const commands = quotaTransport.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
+    expect(commands[0][4]).toBe(commands[1][4]);
   });
 
   it("rejects invalid JSON", async () => {

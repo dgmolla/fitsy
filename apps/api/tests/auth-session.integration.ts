@@ -8,21 +8,23 @@ import { requireAuth } from '../lib/auth';
 // NextRequest, requireAuth and shared rate limits execute as application code.
 const issuer = 'https://fixture.supabase.test/auth/v1';
 const originalFetch = global.fetch;
-const originalUrl = process.env['SUPABASE_URL'];
+const originalEnv = { ...process.env };
 let keys: Awaited<ReturnType<typeof generateKeyPair>>;
 before(async () => {
   process.env['SUPABASE_URL'] = 'https://fixture.supabase.test';
+  process.env['UPSTASH_REDIS_REST_URL'] = 'https://quota.example.test';
+  process.env['UPSTASH_REDIS_REST_TOKEN'] = 'fixture-token';
   keys = await generateKeyPair('ES256');
   const jwk = { ...await exportJWK(keys.publicKey), kid: 'session-fixture', alg: 'ES256', use: 'sig' };
   global.fetch = async input => {
+    if (String(input) === 'https://quota.example.test/') return Response.json({ result: [1, 0, 0] });
     assert.equal(String(input), `${issuer}/.well-known/jwks.json`);
     return Response.json({ keys: [jwk] });
   };
 });
 after(() => {
   global.fetch = originalFetch;
-  if (originalUrl === undefined) delete process.env['SUPABASE_URL'];
-  else process.env['SUPABASE_URL'] = originalUrl;
+  process.env = originalEnv;
 });
 async function token(overrides: Record<string, unknown> = {}, signingKey = keys.privateKey) {
   const now = Math.floor(Date.now() / 1000);
