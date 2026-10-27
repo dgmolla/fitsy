@@ -15,6 +15,9 @@ Its live ranked queries and preview assertions use that persisted allocation: 50
 `onboarding-guided-preview` and `onboarding-search-highlight` also blur through each field's label before focusing the next generated value.
 Calorie blur can update protein after iOS has selected it, collapsing the selection and leaving generated digits behind when Maestro backspaces.
 `OnboardingTargetEnergy.test.tsx` replays these saved commands against the real tuning screen with that native focus/blur order and checks the persisted targets.
+Both `shuffle` and `meal-target-energy-sync` dismiss the meal editor through `helpers/dismiss-meal-targets.yaml`, which taps the exposed backdrop gutter and requires the modal to disappear.
+The backdrop selector spans the full screen; its center is covered by the editor and can decrement carbs instead of closing.
+`FilterPopupDismissFlow.test.tsx` checks both callers against the failed native capture's hit bounds, while `DiscoveryPerformance.test.tsx` replays the helper and requires the retained hero and zero extra card renders.
 All seven onboarding journeys open the area chooser through `helpers/open-location-picker.yaml`, which waits for an enabled control and requires the neighborhood sheet with at most two taps.
 `retryTapIfNoChange` can accept press feedback or unrelated hierarchy changes while the sheet stays closed; the helper retries only this idempotent action against its required outcome.
 `onboarding-out-of-area` retains its separate sheet assertion, DTLA selection, authenticated coverage and cold-start persistence checks.

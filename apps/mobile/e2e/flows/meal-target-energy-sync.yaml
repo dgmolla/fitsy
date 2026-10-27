@@ -145,5 +145,4 @@ env:
     id: preview-edit-targets
 - copyTextFrom: "Calories per meal"
 - assertTrue: ${Number(maestro.copiedText) === output.kcal + 20}
-- tapOn:
-    id: meal-filter-close
+- runFlow: ../helpers/dismiss-meal-targets.yaml

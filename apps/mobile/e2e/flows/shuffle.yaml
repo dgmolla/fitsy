@@ -96,8 +96,7 @@ env:
 - evalScript: ${output.perfHero = maestro.copiedText}
 - tapOn:
     id: preview-edit-targets
-- tapOn:
-    id: meal-filter-close
+- runFlow: ../helpers/dismiss-meal-targets.yaml
 - extendedWaitUntil:
     visible:
       id: discovery-hero

@@ -6,6 +6,14 @@ import { saveDiscoveryMacroTargets } from '../lib/macroStorage';
 import { MANUAL_LOCATION_KEY } from '../lib/useLocation';
 import { render } from '@testing-library/react-native';
 import { RestaurantSection } from './DiscoveryCards';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
+const [, dismissCommands] = loadAll(readFileSync(resolve(__dirname, '../e2e/helpers/dismiss-meal-targets.yaml'), 'utf8')) as [unknown, {
+  assertVisible?: { id: string }; tapOn?: { id: string };
+  extendedWaitUntil?: { notVisible: { id: string } };
+}[]];
 
 // Count work at the native gradient boundary while exercising the real screen,
 // hooks, cards and router. No application component or hook is replaced.
@@ -36,8 +44,14 @@ it('does no additional card work when opening and closing the meal editor', asyn
   await act(async () => {});
   mockCardRenders.mockClear();
   await act(async () => fireEvent.press(screen.getByTestId('preview-edit-targets')));
-  await act(async () => fireEvent.press(screen.getByTestId('meal-filter-close')));
-  await act(async () => { jest.advanceTimersByTime(200); });
+  for (const command of dismissCommands) {
+    if (command.assertVisible) expect(screen.getByTestId(command.assertVisible.id)).toBeTruthy();
+    if (command.tapOn) {
+      await act(async () => fireEvent.press(screen.getByTestId(command.tapOn!.id)));
+      await act(async () => { jest.advanceTimersByTime(200); });
+    }
+    if (command.extendedWaitUntil) expect(screen.queryByTestId(command.extendedWaitUntil.notVisible.id)).toBeNull();
+  }
   expect(mockCardRenders).toHaveBeenCalledTimes(0);
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toContain('Kitchen 0');
   await act(async () => fireEvent.press(screen.getByTestId('discovery-dish-perf-2')));
