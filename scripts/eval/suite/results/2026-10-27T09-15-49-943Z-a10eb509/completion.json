@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-27T09:18:53.642699+00:00",
+  "runId": "2026-10-27T09-15-49-943Z-a10eb509",
+  "sourceHead": "0e7333ab48a94171f9090afdc343444442f0e7e9",
+  "exitCode": 0,
+  "launcherAndCollectorEnded": true,
+  "lockReleased": true,
+  "selectedCases": 33,
+  "completedCases": 33,
+  "accounting": {
+    "cumulativeKnownUsd": 0.6715901800000003,
+    "requests": 30,
+    "reusedRequests": 33,
+    "runKnownUsd": 0.09362800000000002,
+    "unknownUsage": false
+  },
+  "finalRescoreRunId": "2026-10-27T09-17-50-049Z-7691bbd3",
+  "ledgerSha256": "003d2a19a7a8bec1f583b92b6a07fa8f66f3361dfe4917c0207a5bbc360efaf7",
+  "originalLedgerPrefixPreserved": true,
+  "byteIdenticalPaidPayloadsRepeated": 0,
+  "credentialMatches": 0
+}

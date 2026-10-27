@@ -1,0 +1,1606 @@
+{
+  "reparse": {
+    "baselineId": "2026-10-27T08-22-32-777Z-db8d6ccb",
+    "baselineLedgerSha256": "8a405dca7cd8eb51e4b94edfbc3b53f3ed7e921f2bb4e393468aa95cd9f44495",
+    "newSpendUsd": 0.09362800000000016,
+    "newRequests": 30,
+    "recoveredCases": 32,
+    "failureCounts": {
+      "curated/matching/exact": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "bulk/matching/exact": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "curated/matching/jev-v3": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "curated/macro/jev-v3": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "bulk/matching/jev-v3": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "bulk/macro/jev-v3": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "curated/matching/haiku": {
+        "parse": 0,
+        "format": 1,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "curated/macro/haiku": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "bulk/matching/haiku": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "bulk/macro/haiku": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "curated/matching/qwen": {
+        "parse": 0,
+        "format": 0,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "curated/macro/qwen": {
+        "parse": 0,
+        "format": 8,
+        "timeout": 1,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "bulk/matching/qwen": {
+        "parse": 0,
+        "format": 2,
+        "timeout": 0,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      },
+      "bulk/macro/qwen": {
+        "parse": 0,
+        "format": 7,
+        "timeout": 1,
+        "abstain": 0,
+        "adapter": 0,
+        "missing": 0
+      }
+    }
+  },
+  "diagnostics": [
+    {
+      "provider": "haiku",
+      "requestId": "e9a956ca-68f2-4004-8fef-c1a5ac981a33",
+      "runId": "2026-10-27T06-17-06-088Z-4ba60377",
+      "context": "haiku/curated:measured:ue:old-spaghetti-factory:fdf458f8-8364-562e-99f5-326466f08310",
+      "stage": "matching",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.match: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "match",
+          "choice": "abstain",
+          "sum": 1.5,
+          "chosenProbability": 0.5,
+          "maximumProbability": 0.5
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "0b67b0d7-b0ac-424f-97a7-97f0516284fb",
+      "runId": "2026-10-27T06-25-33-209Z-4cb048df",
+      "context": "haiku/curated:match:122",
+      "stage": "matching",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.match: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "match",
+          "choice": "none",
+          "sum": 1.02,
+          "chosenProbability": 0.95,
+          "maximumProbability": 0.95
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "d612ad0f-5deb-41e6-9105-1c4ddfdb62c5",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:measured:macro:the-old-spaghetti-factory:pasta-classic-entrees/mizithra-cheese-and-brown-butter",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r5",
+          "sum": 1.31,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "protein",
+          "choice": "r4",
+          "sum": 1.4000000000000004,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "carbs",
+          "choice": "r5",
+          "sum": 1.32,
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65
+        },
+        {
+          "name": "fat",
+          "choice": "r6",
+          "sum": 1.32,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "3f0f6752-e147-456c-acba-b7321a7fbe83",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:measured:macro:the-old-spaghetti-factory:guss-sally-s-favorites/spinach-meat-tortellini",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r6",
+          "sum": 1.45,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.6,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.4000000000000004,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "r4",
+          "sum": 1.43,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "bbae62ab-65e6-4677-9c95-2aca2c0f82c3",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:macro:waba-grill:packaged/pure-leaf/raspberry/16-9-fl-oz",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.carbs: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r1",
+          "sum": 1,
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.2000000000000002,
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "f61bc4e5-8e6f-4f93-88bf-ed5101e2946d",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:macro:waba-grill:sides/half-ocado",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r6",
+          "sum": 1.09,
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85
+        },
+        {
+          "name": "carbs",
+          "choice": "r3",
+          "sum": 1,
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8
+        },
+        {
+          "name": "fat",
+          "choice": "r4",
+          "sum": 1,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "1880a482-dc9e-49d1-b02d-cb588d79fa2b",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:macro:waba-grill:mini-chicken-bowl",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r5",
+          "sum": 1.2800000000000002,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r6",
+          "sum": 1.4,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.32,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "r3",
+          "sum": 1.45,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "e3633219-d40b-4744-b7e0-67894259394b",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:measured:macro:wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 0.9999999999999999,
+          "chosenProbability": 0.22,
+          "maximumProbability": 0.22
+        },
+        {
+          "name": "protein",
+          "choice": "r4",
+          "sum": 1.1199999999999999,
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25
+        },
+        {
+          "name": "carbs",
+          "choice": "r5",
+          "sum": 1.0799999999999998,
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25
+        },
+        {
+          "name": "fat",
+          "choice": "r5",
+          "sum": 1.07,
+          "chosenProbability": 0.22,
+          "maximumProbability": 0.22
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "8fac84a2-fe4d-41df-9ccf-caef4fc0187c",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:measured:macro:wahoo-s-fish-taco:burritos/1988-burrito-carne-asada",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 1.34,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.49,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.4000000000000001,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "r6",
+          "sum": 1.5,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "34b13cdd-82b1-4c3a-88b2-e82556958a19",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:macro:wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-white-rice-black-beans",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.protein: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r6",
+          "sum": 1,
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.0199999999999998,
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1,
+          "chosenProbability": 0.28,
+          "maximumProbability": 0.28
+        },
+        {
+          "name": "fat",
+          "choice": "r4",
+          "sum": 1,
+          "chosenProbability": 0.28,
+          "maximumProbability": 0.28
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "cf4e72e9-3b45-437b-b2f1-ae0326b64b89",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:measured:macro:wahoo-s-fish-taco:plates/ensenada-tacos-with-white-rice-black-beans",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 1.33,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.4000000000000001,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.29,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "r6",
+          "sum": 1.4000000000000004,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "926ecc13-96e2-4852-b95d-2be9c198cda3",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:macro:wahoo-s-fish-taco:sides/6-oz-white-rice",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.carbs: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r5",
+          "sum": 1.0999999999999999,
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85
+        },
+        {
+          "name": "protein",
+          "choice": "r1",
+          "sum": 1,
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8
+        },
+        {
+          "name": "carbs",
+          "choice": "r5",
+          "sum": 1.2000000000000002,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "49b014b2-22cb-4b7a-b925-30141524ff76",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:macro:yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-ribeye-steak",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 1.27,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r6",
+          "sum": 1.34,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "fat",
+          "choice": "r5",
+          "sum": 1.4,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "ec0e4827-5ab3-42e5-9308-1972831513d8",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce",
+      "stage": "coarse",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.carbs: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "b7",
+          "sum": 1.5,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "protein",
+          "choice": "b3",
+          "sum": 1,
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65
+        },
+        {
+          "name": "carbs",
+          "choice": "b8",
+          "sum": 1.56,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "b2",
+          "sum": 0.9899999999999999,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "c7374e05-f16a-41ed-9f02-a5c3f4661659",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:macro:yoshinoya:appetizers/shrimp-tempura-2-pc-1-sauce",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 1.27,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r6",
+          "sum": 1.2,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.2000000000000002,
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65
+        },
+        {
+          "name": "fat",
+          "choice": "r5",
+          "sum": 1.3,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "37a21ae9-6e24-48a7-9c31-97dae7e9afe3",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/curated:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/gyudon-beef-w-o-veg",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 1.3,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.28,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        },
+        {
+          "name": "carbs",
+          "choice": "r5",
+          "sum": 1.3000000000000003,
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65
+        },
+        {
+          "name": "fat",
+          "choice": "r4",
+          "sum": 1.3000000000000003,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "efab7340-e6bb-4a61-809e-bbcffe355590",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:measured:ue:wahoos:2f5e7e95-76c9-5237-887d-e135f035bec4",
+      "stage": "matching",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.match: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "match",
+          "choice": "abstain",
+          "sum": 1,
+          "chosenProbability": 0,
+          "maximumProbability": 0.475
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "815a357b-a87c-4490-81df-64b11fbf5272",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:measured:macro:the-old-spaghetti-factory:guss-sally-s-favorites/chicken-marsala",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 1.33,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r6",
+          "sum": 1.49,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.3800000000000001,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "r5",
+          "sum": 1.41,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "03c14bdf-8639-4ff9-bed5-e493cfc61f95",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:measured:macro:the-old-spaghetti-factory:salads/caesar-salad",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r5",
+          "sum": 1.2800000000000002,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r4",
+          "sum": 1.21,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "carbs",
+          "choice": "r3",
+          "sum": 1.2100000000000002,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "r5",
+          "sum": 1.27,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "f90ad71f-dba9-4d95-9890-8eab82a95fcd",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:macro:waba-grill:family-a-la-carte/sweet-spicy-chicken",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 1.27,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.29,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.3800000000000003,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "r4",
+          "sum": 1.3199999999999998,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "f7dbb2e9-9a9b-411f-aea4-1796a12279b7",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:macro:waba-grill:packaged/dole/apple-100-percent/15-2-fl-oz",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r6",
+          "sum": 0.977,
+          "chosenProbability": 0.94,
+          "maximumProbability": 0.94
+        },
+        {
+          "name": "carbs",
+          "choice": "r9",
+          "sum": 1.0070000000000001,
+          "chosenProbability": 0.92,
+          "maximumProbability": 0.92
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "0815b316-6d00-4813-80d7-cba61205b96f",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:macro:waba-grill:bowls/waba-chicken-steak",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r6",
+          "sum": 1.45,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.45,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.47,
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65
+        },
+        {
+          "name": "fat",
+          "choice": "r4",
+          "sum": 1.4400000000000002,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "5348de77-fc84-4c0e-9f3c-d6d1f2db347f",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:macro:waba-grill:sauce-dressing/ranch-dressing-1-5-fluid-oz",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r8",
+          "sum": 1.1,
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85
+        },
+        {
+          "name": "fat",
+          "choice": "r7",
+          "sum": 1.2000000000000002,
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "ddd4c766-0f77-4a93-a477-2a21c9f7c9a4",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:macro:waba-grill:mini-bowls/organic-tofu",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r5",
+          "sum": 1.36,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r4",
+          "sum": 1.28,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "carbs",
+          "choice": "r5",
+          "sum": 1.35,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "r2",
+          "sum": 1.19,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "3d98da41-14cf-4df5-8860-7d9c1e28e283",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:measured:macro:wahoo-s-fish-taco:plates/ensenada-fish-taco-with-brown-rice-black-beans",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r6",
+          "sum": 1.5,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.4,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.4100000000000004,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "r4",
+          "sum": 1.4300000000000002,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "1fdda8fd-4af2-40e1-9b43-4922f1c63d0d",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:measured:macro:wahoo-s-fish-taco:burritos/1988-burrito-carnitas",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 1.2599999999999998,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.4,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.4000000000000001,
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65
+        },
+        {
+          "name": "fat",
+          "choice": "r5",
+          "sum": 1.4,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "e5a2886a-2810-4df9-aa48-8dac45e19423",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:macro:wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-white-beans",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.protein: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r6",
+          "sum": 1,
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.0199999999999998,
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1,
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25
+        },
+        {
+          "name": "fat",
+          "choice": "r4",
+          "sum": 1,
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "e0a4f3fe-aebd-47df-9663-bb61d9d7f58c",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:measured:macro:wahoo-s-fish-taco:shared-plates/chips-basket",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 1.34,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r1",
+          "sum": 1,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.35,
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65
+        },
+        {
+          "name": "fat",
+          "choice": "r6",
+          "sum": 1.3800000000000001,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "21656e4e-cdbd-4c45-ade7-e086218bd67b",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "context": "haiku/bulk:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r7",
+          "sum": 1.39,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r6",
+          "sum": 1.48,
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72
+        },
+        {
+          "name": "carbs",
+          "choice": "r5",
+          "sum": 1.39,
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68
+        },
+        {
+          "name": "fat",
+          "choice": "r5",
+          "sum": 1.4,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "b138b4bd-e5d8-48cb-a115-b3d27a6b6ad0",
+      "runId": "2026-10-27T06-53-51-562Z-3b1ecf75",
+      "context": "qwen/curated:measured:macro:the-old-spaghetti-factory:guss-sally-s-favorites/spinach-meat-tortellini",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r5",
+          "sum": 1.27,
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.23,
+          "chosenProbability": 0.88,
+          "maximumProbability": 0.88
+        },
+        {
+          "name": "carbs",
+          "choice": "r7",
+          "sum": 1.3,
+          "chosenProbability": 0.82,
+          "maximumProbability": 0.82
+        },
+        {
+          "name": "fat",
+          "choice": "r5",
+          "sum": 1.25,
+          "chosenProbability": 0.86,
+          "maximumProbability": 0.86
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "5e6cd61a-060c-4f1d-aa13-81a732fef40e",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/curated:measured:macro:wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice",
+      "stage": "coarse",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.protein: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "b2",
+          "sum": 1.01,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "b1",
+          "sum": 1,
+          "chosenProbability": 0.19,
+          "maximumProbability": 0.8
+        },
+        {
+          "name": "carbs",
+          "choice": "b3",
+          "sum": 1.01,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        },
+        {
+          "name": "fat",
+          "choice": "b1",
+          "sum": 1.01,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "cfdfead5-34b9-4302-a37f-d74cdccad156",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/curated:measured:macro:wahoo-s-fish-taco:sides/roasted-tomato-salsa",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.carbs: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r1",
+          "sum": 1,
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.3,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "cc10d0f0-efd1-4a07-828d-c80c0eafd521",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/curated:measured:macro:wahoo-s-fish-taco:plates/ensenada-tacos-with-white-rice-black-beans",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.protein: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r3",
+          "sum": 1,
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.1,
+          "chosenProbability": 0.88,
+          "maximumProbability": 0.88
+        },
+        {
+          "name": "carbs",
+          "choice": "r5",
+          "sum": 1.01,
+          "chosenProbability": 0.82,
+          "maximumProbability": 0.82
+        },
+        {
+          "name": "fat",
+          "choice": "r2",
+          "sum": 1,
+          "chosenProbability": 0.84,
+          "maximumProbability": 0.84
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "f2f18fcb-347c-4895-a61b-2f938f6941ae",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/curated:macro:wahoo-s-fish-taco:sides/6-oz-white-rice",
+      "stage": "coarse",
+      "originalFailure": "Incomplete provider output",
+      "currentFailure": "Incomplete provider output",
+      "kind": "format",
+      "probabilityChecks": []
+    },
+    {
+      "provider": "qwen",
+      "requestId": "2b81a94f-d504-4f7f-8af6-7e6a300d79c1",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/curated:macro:yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-ribeye-steak",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.protein: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r5",
+          "sum": 1.3499999999999999,
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.3100000000000003,
+          "chosenProbability": 0.88,
+          "maximumProbability": 0.88
+        },
+        {
+          "name": "fat",
+          "choice": "r6",
+          "sum": 1.45,
+          "chosenProbability": 0.82,
+          "maximumProbability": 0.82
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "e04bc02d-5531-4157-aded-480fe3c13375",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/curated:macro:yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-salmon",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.protein: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r3",
+          "sum": 1,
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.09,
+          "chosenProbability": 0.88,
+          "maximumProbability": 0.88
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1,
+          "chosenProbability": 0.82,
+          "maximumProbability": 0.82
+        },
+        {
+          "name": "fat",
+          "choice": "r1",
+          "sum": 1,
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "731eead7-f03d-4a1d-97c5-4a1844e746b3",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/curated:macro:yoshinoya:appetizers/shrimp-tempura-2-pc-1-sauce",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.protein: Invalid choice probabilities; answers.carbs: Invalid choice probabilities; answers.fat: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r3",
+          "sum": 1,
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.3,
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8
+        },
+        {
+          "name": "carbs",
+          "choice": "r4",
+          "sum": 1.2000000000000002,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "fat",
+          "choice": "r5",
+          "sum": 1.2800000000000002,
+          "chosenProbability": 0.78,
+          "maximumProbability": 0.78
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "7f833d72-cfdb-4d15-a51a-025a3972889a",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/bulk:published:yoshinoya:packets/sriracha-sauce-packet",
+      "stage": "matching",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.match: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "match",
+          "choice": "c5",
+          "sum": 1.06,
+          "chosenProbability": 0.99,
+          "maximumProbability": 0.99
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "6a75ab93-536f-4179-87f0-c3c0b2b8b890",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/bulk:ue:172:positive",
+      "stage": "matching",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.match: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "match",
+          "choice": "none",
+          "sum": 1.15,
+          "chosenProbability": 0.95,
+          "maximumProbability": 0.95
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "75d3dd4a-7b0a-43f4-8c01-96a4b1006ca7",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/bulk:macro:waba-grill:family-a-la-carte/sweet-spicy-chicken",
+      "stage": "fine",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.protein: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "r3",
+          "sum": 1,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "r5",
+          "sum": 1.1,
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8
+        },
+        {
+          "name": "carbs",
+          "choice": "r6",
+          "sum": 1,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        },
+        {
+          "name": "fat",
+          "choice": "r4",
+          "sum": 1,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "381d73b2-8ea7-450b-bb85-0e7522e82b74",
+      "runId": "2026-10-27T07-25-46-652Z-d4f0ef24",
+      "context": "qwen/bulk:measured:macro:wahoo-s-fish-taco:burritos/1988-burrito-carnitas",
+      "stage": "coarse",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.carbs: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "b2",
+          "sum": 1.1996599999999997,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "b1",
+          "sum": 1.001688,
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8
+        },
+        {
+          "name": "carbs",
+          "choice": "b3",
+          "sum": 1.3185999999999998,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        },
+        {
+          "name": "fat",
+          "choice": "b1",
+          "sum": 1.0088799999999998,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        }
+      ]
+    },
+    {
+      "provider": "qwen",
+      "requestId": "17014b34-3bb3-42ef-8d03-5b1d0b11089d",
+      "runId": "2026-10-27T08-03-39-011Z-0135102d",
+      "context": "qwen/bulk:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken",
+      "stage": "coarse",
+      "originalFailure": "Invalid typed answer/probability distribution",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.calories: Invalid choice probabilities; answers.carbs: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "calories",
+          "choice": "b3",
+          "sum": 1.19,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        },
+        {
+          "name": "protein",
+          "choice": "b2",
+          "sum": 1,
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8
+        },
+        {
+          "name": "carbs",
+          "choice": "b6",
+          "sum": 1.2000000000000002,
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7
+        },
+        {
+          "name": "fat",
+          "choice": "b1",
+          "sum": 1,
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75
+        }
+      ]
+    },
+    {
+      "provider": "haiku",
+      "requestId": "8859b6be-c68d-4a97-b9e2-4c2017332c7e",
+      "runId": "2026-10-27T09-15-49-943Z-a10eb509",
+      "context": "haiku/curated:match:122",
+      "stage": "matching",
+      "originalFailure": "Invalid typed answer/probability distribution: answers.match: Invalid choice probabilities",
+      "currentFailure": "Invalid typed answer/probability distribution: answers.match: Invalid choice probabilities",
+      "kind": "format",
+      "probabilityChecks": [
+        {
+          "name": "match",
+          "choice": "none",
+          "sum": 1.02,
+          "chosenProbability": 0.95,
+          "maximumProbability": 0.95
+        }
+      ]
+    }
+  ]
+}

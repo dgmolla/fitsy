@@ -1,4 +1,4 @@
-**TL;DR:** Cached Haiku failures are reproduced and quantified; changed-request DEV reruns are authorized and pending.
+**TL;DR:** All 30 failed Haiku macro cases now parse strictly; new spend is $0.093628; review and CI remain.
 
 ## Haiku format fix and rerun
 
@@ -36,7 +36,29 @@ The diagnostic now uses the existing `process.stdout.write` convention; retained
 An earlier development runner test correctly refused dirty executing source; the committed-source rerun passes.
 The credential-free live preflight reserves at most $0.452784 across exactly 33 cases, putting worst-case cumulative spend at $1.03074618.
 Its audit is `results/haiku-format-live-preflight/audit.json`; it leaves the ledger byte-identical and makes zero transport calls.
-Next: rerun the repaired cheap gate, then launch exactly one detached collection of the 33 selected cases and retain its PID/log/exit receipt before the cache-only rescore.
+The repaired canonical cheap gate passes all eight applicable checks and all 63 focused regressions on `0e7333a`.
+Its full logs are under `.evidence/verify/logs/run-jEezdm/`.
+Product acceptance computes `required=false` and simulator scope `none` for this evaluation-only change.
+At `2026-10-27T09:15:49Z`, detached launcher PID 98105 started exactly one `--methods=haiku --cases=haiku-format-failed-dev.json --split=dev --tier=both --live` run from that frozen source.
+The process sources only the authorized secrets file, maps lowercase `anthropic` into `ANTHROPIC_API_KEY` in memory, and retains no credential values in the launch receipt.
+The launch receipt is `results/haiku-format-live-preflight/launch.json`; stdout/stderr and terminal exit code are `.git/haiku-format-live.log` and `.git/haiku-format-live.exit`.
+The durable ledger and `.jev.lock` own all live collection and prevent competing inference.
+The detached run `2026-10-27T09-15-49-943Z-a10eb509` exits zero after all 33 selected cases, with 30 distinct changed-payload requests and 33 reused stages.
+All 30 originally failed macro cases now parse under the unchanged strict decoder: curated 14/14 and bulk 16/16 recovered.
+Matching format failures decline from three to one; `curated:match:122` still returns probabilities totaling 1.02 and stays a strict failure without another identical paid request.
+All collector processes ended, the lock was released, and no unknown usage or reservation remains.
+The completion receipt and complete collection log are retained with the run.
+Actual new spend is $0.09362800 and the cumulative ledger is $0.67159018, far below the $2.70 stop and $3 hard cap.
+
+The final cache-only run `2026-10-27T09-17-50-049Z-7691bbd3` produces all 465 predictions on the original 129 DEV IDs with zero requests, zero new spend and unchanged successful outputs.
+Its comparison report and audit prove the preserved original ledger prefix, zero byte-identical repeated paid payloads, failed-case-only new Haiku spending, no new Jev/Qwen calls, and complete bill reconciliation.
+The combined strict table reports matching pass/wrong/recall as exact 72/78, 0, 41/47; Jev 66/78, 1, 40/47; Haiku 67/78, 7, 46/47; Qwen 69/78, 3, 41/47.
+Macro parsed/all becomes Haiku 51/51, Jev 51/51 and unchanged Qwen 34/51.
+Parsed wrong macro estimates, defined by any field exceeding 25% error, are Jev 46, Haiku 48 and Qwen 32; format recovery does not establish accurate nutrition estimates.
+Qwen retains 15 macro format failures, two macro timeouts and two matching format failures, with no Qwen rerun.
+The original normalized-cache secondary view remains separate: Haiku 49/51 macro parsed, two uncached refinements, zero paid requests, and no replacement of strict results.
+A value-only in-memory scan of 22 new evidence/ledger/log files finds zero credential matches.
+Next: commit completed results, publish through the ordinary pre-push hook, obtain exact-head installed local AI review and green CI, and merge normally only after the gate passes.
 
 ## Prior comparison history
 
