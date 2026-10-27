@@ -1,7 +1,10 @@
 # Issues #433 and #524: actual onboarding with Search as the first preview tip.
 # Run on an owned small and normal iPhone against the real dev backend.
 appId: com.fitsy.mobile
-tags: [discovery, onboarding, changed-journey]
+tags: ['fixture:unsubscribed-dev', 'store:test-store', discovery, onboarding, changed-journey]
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
 - launchApp:
     clearState: true
@@ -30,6 +33,10 @@ tags: [discovery, onboarding, changed-journey]
     point: "92%,93%"
 - tapOn:
     id: welcome-start
+- runFlow:
+    file: ../helpers/discovery-signin.yaml
+    env:
+      DESTINATION: "^location-(use-current|continue-area)$"
 - assertVisible:
     id: location-use-current
 - assertVisible:

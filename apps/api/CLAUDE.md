@@ -16,6 +16,8 @@ scripts/gen/route.sh <path> --auth=...   # scaffold a route the correct shape
 that talks to the outside world; never import upward.
 
 ## Non-negotiables
+- Every data handler requires `requireAuth` before parsing input or querying data.
+  `app/api/auth-coverage.test.ts` discovers every handler and owns explicit public exceptions.
 - Every route under `/api/restaurants` enforces entitlement server-side
   (`optionalSubscription` teaser-lock or a 402 gate); structural check 12.
 - Response shapes get a zod twin in `packages/shared/src/contracts/` (T4).

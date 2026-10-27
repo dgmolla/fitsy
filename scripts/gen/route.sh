@@ -7,12 +7,16 @@
 #
 # Emits: apps/api/app/api/<path>/route.ts + colocated route.test.ts, and
 # prints the follow-ups (zod contract in packages/shared, structural check 12
-# allowlist if public under /restaurants).
+# coverage for every handler in app/api/auth-coverage.test.ts).
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-SEG="${1:?route path, e.g. coach/tips}"; AUTH="public"
+SEG="${1:?route path, e.g. coach/tips}"; AUTH="user"
 for a in "$@"; do case "$a" in --auth=*) AUTH="${a#--auth=}";; esac; done
 case "$AUTH" in public|user|subscriber) ;; *) echo "--auth must be public|user|subscriber" >&2; exit 1;; esac
+if [ "$AUTH" = public ] && [ "$SEG" != health ]; then
+  echo "Only health can be scaffolded public; webhooks and auth exchanges need provider-specific verification and an explicit auth-coverage allowlist entry." >&2
+  exit 1
+fi
 DIR="$REPO_ROOT/apps/api/app/api/$SEG"
 [ -e "$DIR/route.ts" ] && { echo "$DIR/route.ts already exists" >&2; exit 1; }
 mkdir -p "$DIR"
@@ -33,10 +37,9 @@ import { NextRequest } from "next/server";'
   subscriber)
     GUARD_IMPORT='import { optionalSubscription } from "@/lib/subscription";
 import { NextRequest } from "next/server";'
-    GUARD_BODY='  const { payload, entitled } = await optionalSubscription(request);
-  if (!payload) {
-    return NextResponse.json({ error: "Unauthorized" } as never, { status: 401 });
-  }
+    GUARD_BODY='  const subscription = await optionalSubscription(request);
+  if (subscription instanceof NextResponse) return subscription;
+  const { entitled } = subscription;
   if (!entitled) {
     // Either 402-gate hard, or serve a locked teaser like /api/restaurants
     // (meta.locked) - pick one and test it in apps/api/tests/db/.
@@ -109,7 +112,7 @@ if [[ "$SEG" == restaurants/* ]]; then
   if [ "$AUTH" = "subscriber" ]; then
     echo "  - /restaurants family standard is the TEASER LOCK (serve results with meta.locked=true when unentitled), not the scaffold's 402 gate - follow apps/api/app/api/restaurants/route.ts"
   else
-    echo "  - route under /restaurants without the subscription guard: structural check 12 will fail until you allowlist it in scripts/structural-tests.sh with a why"
+    echo "  - route under /restaurants without the subscription guard: structural check 12 will fail until you add a subscription sample exception in scripts/structural-tests.sh; authentication remains mandatory"
   fi
 fi
 echo "  - npm run verify before pushing"

@@ -1,12 +1,13 @@
 # Goal-matched guided preview
 
 `GET /api/restaurants/preview?guided=1` returns up to three restaurant picks and separate coverage and meal-target counts.
-It stays public, rate limited and fixed to a three-mile radius.
+It requires a Supabase account session, stays rate limited and fixed to a three-mile radius.
 It never returns full menus or a cursor.
 
 ```mermaid
 flowchart LR
-    A[Location, craving, meal targets] --> B[Nearby dishes with complete nutrition]
+    S[Verified Supabase session and quotas] --> A[Location, craving, meal targets]
+    A --> B[Nearby dishes with complete nutrition]
     B --> C[Resolve craving relevance]
     C --> D[Qualify every active target]
     D --> E[Count dishes and selected membership]
@@ -62,18 +63,18 @@ Clients must not unconditionally subtract one or reuse the coverage count as a t
 A short-lived cached response may derive the additional count only when the same location, query and target context is retained and the selected ID is verified in that response’s visible qualifying picks.
 A zero matching count with positive coverage is a search/target empty state, not an unsupported area.
 
-## Intentional public exposure
+## Authenticated sample exposure
 
 The launch product deliberately exposes exact query-and-target-qualified counts before subscription so the paywall can show a truthful number of additional meals.
 This includes queries containing an exact restaurant name, which can narrow the qualifying set to that restaurant.
-Repeated public queries with changing targets can infer restaurant-level aggregate nutrition/count distributions, including increasingly fine calorie and joint macro histograms.
-Changing public queries can also expose different three-pick samples over time.
-This is an accepted product tradeoff, not an anti-reconstruction or paid-data confidentiality guarantee.
+Repeated authenticated queries with changing targets can infer restaurant-level aggregate nutrition/count distributions, including increasingly fine calorie and joint macro histograms.
+Changing authenticated queries can also expose different three-pick samples over time.
+The bounded sample remains a product tradeoff; account authentication and quotas reduce anonymous scraping without guaranteeing reconstruction prevention.
 
 The full-menu endpoint remains entitlement gated, and standard search redacts dish matches for unentitled callers.
 An arbitrary hidden item ID receives no selected-item membership signal; only a dish already in the current visible sample can be subtracted from its count.
-These controls limit direct responses, not inference from repeated public aggregate queries.
-The public preview has a fixed three-mile radius, no cursor, at most three restaurant picks, and an in-memory per-instance IP burst limit of 30 requests per minute.
+These controls limit direct responses, not inference from repeated authenticated aggregate queries.
+The authenticated preview has a fixed three-mile radius, no cursor, at most three restaurant picks, and an in-memory per-instance IP burst limit of 30 requests per minute.
 That limiter is not shared across serverless instances and must not be treated as an identity, anti-scraping or reconstruction-prevention boundary.
 
 ## Execution and verification

@@ -13,9 +13,11 @@ type Step = {
   extendedWaitUntil?: { visible: { id: string; enabled?: boolean }; timeout: number };
   assertVisible?: { id: string };
   assertNotVisible?: string | { id: string };
+  runFlow?: { file?: string; env?: { DESTINATION?: string } };
 };
 const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/onboarding-returning-preview.yaml'), 'utf8')) as [unknown, Step[]];
-const loginSteps = commands.flatMap((step, index) => typeof step.tapOn === 'object' && step.tapOn.id === 'signup-dev' ? [index] : []);
+const [, signinCommands] = loadAll(readFileSync(resolve(__dirname, '../e2e/helpers/discovery-signin.yaml'), 'utf8')) as [unknown, Step[]];
+const login = signinCommands.find(step => typeof step.tapOn === 'object' && step.tapOn.id === 'signup-dev')!.tapOn as { id: string };
 const routeMap = { ...routes, 'welcome/payment': () => <Payment />, 'welcome/preview': () => <Preview /> };
 const noSubscription = { entitlements: { active: {}, all: {} } } as CustomerInfo;
 const annual = { identifier: '$rc_annual', product: { identifier: 'annual', price: 59.99,
@@ -39,14 +41,11 @@ afterEach(() => {
   else process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD = originalPassword;
 });
 
-test('both saved authentication checkpoints distinguish login failure from checkout readiness', () => {
-  expect(loginSteps).toHaveLength(2);
-  for (const index of loginSteps) {
-    const ready = commands[index + 1]?.extendedWaitUntil;
-    expect(ready).toEqual({ visible: { id: '^(paywall-logo|signup-dev)$', enabled: true }, timeout: 30000 });
-    expect(commands[index + 2]?.assertNotVisible).toBe('Dev Login Failed');
-    expect(commands[index + 3]?.assertVisible).toEqual({ id: 'paywall-logo' });
-  }
+test('saved authentication checkpoints cover the location and resumed-preview data boundaries', () => {
+  const gates = commands.filter(step => step.runFlow?.file === '../helpers/discovery-signin.yaml');
+  expect(gates.map(step => step.runFlow?.env?.DESTINATION)).toEqual(['^location-(use-current|continue-area)$', 'preview-guide']);
+  expect(signinCommands.some(step => step.assertNotVisible === 'Dev Login Failed')).toBe(true);
+  expect(login.id).toBe('signup-dev');
 });
 
 test('a corrected fixture login reaches the real paywall, records decline and gates anonymous return without purchasing', async () => {
@@ -72,7 +71,6 @@ test('a corrected fixture login reaches the real paywall, records decline and ga
   expect(screen.queryByTestId('paywall-logo')).toBeNull();
 
   rejectLogin = false;
-  const login = commands[loginSteps[0]!]!.tapOn as { id: string };
   await act(async () => { fireEvent.press(screen.getByTestId(login.id)); });
   await screen.findByTestId('paywall-offer-paid');
   expect(screen.getByTestId('paywall-logo')).toBeTruthy();
@@ -95,8 +93,7 @@ test('a corrected fixture login reaches the real paywall, records decline and ga
   await act(async () => { router.push('/welcome/payment'); });
   await returning.findByTestId('signup-dev');
   expect(returning.queryByTestId('paywall-logo')).toBeNull();
-  const secondLogin = commands[loginSteps[1]!]!.tapOn as { id: string };
-  await act(async () => { fireEvent.press(returning.getByTestId(secondLogin.id)); });
+  await act(async () => { fireEvent.press(returning.getByTestId(login.id)); });
   await returning.findByTestId('paywall-offer-paid');
   expect(returning.getByTestId('paywall-logo')).toBeTruthy();
   expect(returning.queryByTestId('preview-guide')).toBeNull();

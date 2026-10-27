@@ -124,7 +124,34 @@ function renderJourney(initialUrl: string) {
   return screen;
 }
 
+it('signs in before live coverage and resumes the protected step after a cold launch', async () => {
+  global.fetch = jest.fn(async (url: RequestInfo | URL) => {
+    const path = new URL(String(url)).pathname;
+    if (path === '/api/auth/apple') return response({ token: 'test-token', refreshToken: 'refresh-token',
+      user: { id: 'buyer', email: 'buyer@example.test' }, isNewUser: true });
+    if (path === '/api/user/profile') return response({ user: { id: 'buyer', email: 'buyer@example.test', name: null,
+      birthday: null, age: null, heightCm: null, weightKg: null, sex: null, activityLevel: null, goal: null, onboardingStep: 0 }, macroTarget: null });
+    if (path === '/api/restaurants/preview') return response({ data: [], meta: { radiusMiles: 3, nearbyDishCount: 1 } });
+    return response({ active: false, synced: true, verdict: 'never_subscribed', stale: false, lastRcVerifiedAt: new Date().toISOString() });
+  });
+  const first = renderJourney('/welcome/location-permission');
+  await first.findByTestId('signup-apple');
+  expect((global.fetch as jest.Mock).mock.calls.some(([url]) => String(url).includes('/api/restaurants'))).toBe(false);
+  first.unmount();
+  const resumed = renderJourney('/');
+  await resumed.findByTestId('signup-apple');
+  expect(resumed.queryByText('Trial introduction')).toBeNull();
+  await act(async () => { fireEvent.press(resumed.getByTestId('signup-apple')); });
+  await resumed.findByTestId('location-choose-area');
+  await act(async () => { fireEvent.press(resumed.getByTestId('location-choose-area')); });
+  await act(async () => { fireEvent.press(resumed.getByText('Silver Lake')); });
+  await waitFor(() => expect(resumed.getPathname()).toBe('/welcome/goal'));
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/restaurants/preview?'),
+    expect.objectContaining({ headers: { Authorization: 'Bearer test-token' } }));
+});
+
 it('resets a spent preview sample and tour when a new onboarding pass starts', async () => {
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
   markPreviewSampleUsed();
   markPreviewTourSeen();
   expect(await hasUsedPreviewSample()).toBe(true);
@@ -141,6 +168,7 @@ it('resets a spent preview sample and tour when a new onboarding pass starts', a
   });
 });
 it('waits for a saved area before enabling location choices', async () => {
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
   const area = { lat: 34.05, lng: -118.25, name: 'Downtown', source: 'manual' as const };
   const stored = deferred<string | null>();
   jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key => key === '@fitsy/onboarding' ? stored.promise : defaultGetItem(key));
@@ -149,7 +177,7 @@ it('waits for a saved area before enabling location choices', async () => {
   fireEvent.press(screen.getByTestId('location-use-current'));
   expect(permission).not.toHaveBeenCalled();
   expect(screen.getPathname()).toBe('/welcome/location-permission');
-  await act(async () => { stored.resolve(JSON.stringify({ area })); });
+  await act(async () => { stored.resolve(JSON.stringify({ _owner: 'buyer', area })); });
   await screen.findByTestId('location-continue-area');
   global.fetch = jest.fn().mockResolvedValue(response({ data: [], meta: { nearbyDishCount: 1, radiusMiles: 3 } }));
   await act(async () => { fireEvent.press(screen.getByTestId('location-continue-area')); });
@@ -158,7 +186,8 @@ it('waits for a saved area before enabling location choices', async () => {
 });
 
 it('lets a saved-area user switch to device location', async () => {
-  await AsyncStorage.setItem('@fitsy/onboarding', JSON.stringify({ area: { lat: 34.05, lng: -118.25, name: 'Downtown', source: 'manual' } }));
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
+  await AsyncStorage.setItem('@fitsy/onboarding', JSON.stringify({ _owner: 'buyer', area: { lat: 34.05, lng: -118.25, name: 'Downtown', source: 'manual' } }));
   const permission = jest.spyOn(ExpoLocation, 'requestForegroundPermissionsAsync')
     .mockResolvedValue({ status: ExpoLocation.PermissionStatus.GRANTED } as never);
   jest.spyOn(ExpoLocation, 'getCurrentPositionAsync')
@@ -174,6 +203,7 @@ it('lets a saved-area user switch to device location', async () => {
 });
 
 it('uses device permission only after confirming there is no saved area', async () => {
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
   const stored = deferred<string | null>();
   jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key => key === '@fitsy/onboarding' ? stored.promise : defaultGetItem(key));
   const permission = jest.spyOn(ExpoLocation, 'requestForegroundPermissionsAsync').mockResolvedValue({ status: ExpoLocation.PermissionStatus.DENIED } as never);
@@ -186,6 +216,7 @@ it('uses device permission only after confirming there is no saved area', async 
 });
 
 it('offers a retry when the saved area read fails', async () => {
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
   let reads = 0;
   jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key => {
     if (key !== '@fitsy/onboarding') return defaultGetItem(key);
@@ -204,19 +235,20 @@ it('offers a retry when the saved area read fails', async () => {
 });
 
 it('keeps the newer saved area when an earlier read finishes after returning', async () => {
+  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
   const stale = deferred<string | null>();
   let reads = 0;
   jest.spyOn(AsyncStorage, 'getItem').mockImplementation(key => {
     if (key !== '@fitsy/onboarding') return defaultGetItem(key);
     reads += 1;
-    return reads === 1 ? stale.promise : Promise.resolve(JSON.stringify({ area: { lat: 34.05, lng: -118.25, name: 'New area', source: 'manual' } }));
+    return reads === 1 ? stale.promise : Promise.resolve(JSON.stringify({ _owner: 'buyer', area: { lat: 34.05, lng: -118.25, name: 'New area', source: 'manual' } }));
   });
   const screen = renderJourney('/welcome/problem');
   await act(async () => { fireEvent.press(screen.getByText('Choose location')); });
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   await act(async () => { fireEvent.press(screen.getByText('Choose location')); });
   expect(await screen.findByText('Continue with New area')).toBeTruthy();
-  await act(async () => { stale.resolve(JSON.stringify({ area: { lat: 40.71, lng: -74, name: 'Old area', source: 'manual' } })); });
+  await act(async () => { stale.resolve(JSON.stringify({ _owner: 'buyer', area: { lat: 40.71, lng: -74, name: 'Old area', source: 'manual' } })); });
   expect(screen.getByText('Continue with New area')).toBeTruthy();
   expect(screen.queryByText('Continue with Old area')).toBeNull();
 });

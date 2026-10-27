@@ -3,8 +3,7 @@
 const mockOptionalSubscription = jest.fn();
 const mockFindNearbyRestaurants = jest.fn();
 
-// The route gates on optionalSubscription (never rejects — just reports
-// entitlement). The entitlement logic itself is unit-tested in
+// The route requires authentication and checks the optional subscription. The entitlement logic itself is unit-tested in
 // lib/subscription.test.ts; here we mock the gate so these tests focus on
 // route behavior (happy path = authenticated AND entitled).
 jest.mock("@/lib/subscription", () => ({
@@ -22,12 +21,12 @@ jest.mock("@/lib/restaurantService", () => {
 });
 
 import { GET } from "./route";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { encodeCursor } from "@/lib/restaurantService";
 
 const VALID_PAYLOAD = { sub: "user-1", email: "alice@example.com" };
 const ENTITLED = { payload: VALID_PAYLOAD, entitled: true };
-const UNENTITLED = { payload: null, entitled: false };
+const UNENTITLED = { payload: VALID_PAYLOAD, entitled: false };
 
 beforeEach(() => {
   mockOptionalSubscription.mockReset();
@@ -49,21 +48,12 @@ function makeRequest(query: Record<string, string> = {}, authHeader?: string): N
 // ─── Unentitled callers get a locked, not a blocked, response ─────────────────
 
 describe("GET /api/restaurants — unentitled callers", () => {
-  it("returns 200 with locked: true and no Authorization header", async () => {
-    mockOptionalSubscription.mockResolvedValue(UNENTITLED);
-    mockFindNearbyRestaurants.mockResolvedValue({
-      data: [{ id: "r1", bestMatch: { menuItemId: "mi1", name: "Bowl", calories: 500, proteinG: 40, carbsG: 30, fatG: 10, confidence: "HIGH", matchScore: 0.1 } }],
-      total: 1,
-      nextCursor: null,
-    });
-
-    const res = await GET(makeRequest({ lat: "34.0", lng: "-118.0" }));
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.meta.locked).toBe(true);
-    expect(body.data[0].bestMatch).toBeNull();
-    expect(mockFindNearbyRestaurants).toHaveBeenCalledTimes(1);
+  it("returns 401 without querying when the session is missing", async () => {
+    mockOptionalSubscription.mockResolvedValue(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+    const response = await GET(makeRequest({ lat: '34', lng: '-118' }));
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'Unauthorized' });
+    expect(mockFindNearbyRestaurants).not.toHaveBeenCalled();
   });
 
   it("strips bestMatch on every row when authenticated but not subscribed", async () => {
@@ -241,10 +231,10 @@ describe("GET /api/restaurants — validation", () => {
     expect(body.error).toMatch(/lat/i);
   });
 
-  it("returns 400 when lat is missing, even for an unentitled caller", async () => {
+  it("returns 400 when lat is missing for a signed-in free caller", async () => {
     mockOptionalSubscription.mockResolvedValue(UNENTITLED);
 
-    const res = await GET(makeRequest({ lng: "-118.0" }));
+    const res = await GET(makeRequest({ lng: "-118.0" }, "Bearer valid.token"));
 
     expect(res.status).toBe(400);
     expect(mockFindNearbyRestaurants).not.toHaveBeenCalled();

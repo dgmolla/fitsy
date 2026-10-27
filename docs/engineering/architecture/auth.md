@@ -6,6 +6,16 @@ End-to-end reference for Fitsy authentication: mobile UX, provider flows, JWT ve
 
 ---
 
+## Data access
+
+Every restaurant endpoint, including guided previews and aggregate stats, and every other data endpoint requires a valid Bearer session.
+The server validates the Supabase issuer, authenticated audience, expiry, subject, email and account role, and rejects anonymous-user sessions.
+Authentication runs before validation, entitlement queries and cached results; a free subscription can return a locked sample only after sign-in.
+The mobile client gets current tokens from the SDK for all data reads and writes, including preview, stats and flag requests.
+Onboarding signs in before the location lookup; expired sessions and anonymous restaurant deep links preserve a bounded local destination across authentication and cold resume.
+The guided client cache is scoped to the current account and is unavailable after sign-out.
+See [API authentication and limits](api-reference.md#authentication-and-rate-limits) for quotas, exact public exceptions and the automatic route regression.
+
 ## Overview
 
 Fitsy uses **Apple Sign-In** and **Google Sign-In** as the only production auth paths. Both are implemented via Supabase's `signInWithIdToken`, which delegates JWKS-based verification to the identity provider (Apple or Google). The resulting Supabase JWT is verified on every protected API request using `jose` against Supabase's own JWKS endpoint — no local `JWT_SECRET` or HS256 signing exists in the codebase.
@@ -267,18 +277,16 @@ Routes that call `requireAuth`:
 | `/api/subscriptions/verify` | POST | RevenueCat subscription check |
 | `/api/feedback` | POST | Submit feedback |
 
-Public routes (no auth required):
+Exceptions to user-session authentication (service callbacks still authenticate):
 
 | Route | Notes |
 |---|---|
 | `GET /api/health` | Health check |
+| `POST /api/waitlist/web` | Write-only public website opt-in with abuse controls |
 | `POST /api/auth/apple` | Apple sign-in |
 | `POST /api/auth/google` | Google sign-in |
 | `POST /api/auth/login` | Legacy email/password |
 | `POST /api/auth/register` | Legacy email/password |
-| `GET /api/restaurants/preview` | Onboarding teaser (unauthenticated) |
-| `GET /api/restaurants/stats` | Onboarding stats (unauthenticated) |
-| `GET /api/restaurants/shuffle` | Optional JWT; unentitled callers receive a restaurant teaser without dish or macro details |
 | `POST /api/revenuecat/webhook` | RevenueCat webhook (REVENUECAT_WEBHOOK_AUTH header) |
 | `GET /api/internal/audit-macro-drift` | Vercel cron (CRON_SECRET Bearer) |
 | `POST /api/internal/feedback-digest` | Vercel cron (CRON_SECRET Bearer) |

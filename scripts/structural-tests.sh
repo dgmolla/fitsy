@@ -307,30 +307,32 @@ fi
 
 echo -n "12. Subscriber-data routes are subscription-gated... "
 # Routes under /api/restaurants/ serve subscriber-only data and MUST check
-# entitlement via optionalSubscription (never rejects, but the route redacts /
+# entitlement via optionalSubscription (requires auth, then redacts /
 # truncates for an unentitled caller - see GET /api/restaurants and [id]/menu,
 # which power the locked search-screen teaser). There is no reject-outright
 # gate any more (requireSubscription and its 402 were deleted 2026-09), so the
 # route must not skip the entitlement check.
-# EXCEPTION — these are intentionally public (used during onboarding, before the
-# user subscribes); over-gating them would break the onboarding flow:
+# These authenticated samples do not require a paid subscription:
 RESTAURANTS_API="$REPO_ROOT/apps/api/app/api/restaurants"
-PUBLIC_ALLOWLIST=("preview/route.ts" "stats/route.ts")
+SAMPLE_ALLOWLIST=("preview/route.ts" "stats/route.ts")
 GATE_ERRORS=""
 if [ -d "$RESTAURANTS_API" ]; then
   while IFS= read -r route; do
     rel="${route#"$RESTAURANTS_API"/}"
-    is_public=false
-    for pub in "${PUBLIC_ALLOWLIST[@]}"; do
-      if [ "$rel" = "$pub" ]; then is_public=true; break; fi
+    is_sample=false
+    for pub in "${SAMPLE_ALLOWLIST[@]}"; do
+      if [ "$rel" = "$pub" ]; then is_sample=true; break; fi
     done
-    if $is_public; then
+    if ! grep -Eq 'requireAuth|optionalSubscription' "$route"; then
+      GATE_ERRORS="$GATE_ERRORS\n  $rel must require a Supabase session, including onboarding samples"
+    fi
+    if $is_sample; then
       if grep -q 'optionalSubscription' "$route"; then
-        GATE_ERRORS="$GATE_ERRORS\n  $rel is public (onboarding) but calls optionalSubscription - remove the gate or it breaks onboarding"
+        GATE_ERRORS="$GATE_ERRORS\n  $rel is an authenticated onboarding sample; use requireAuth without a subscription gate"
       fi
     else
       if ! grep -q 'optionalSubscription' "$route"; then
-        GATE_ERRORS="$GATE_ERRORS\n  $rel serves restaurant data but does NOT call optionalSubscription - gate it (or add to PUBLIC_ALLOWLIST if intentionally public)"
+        GATE_ERRORS="$GATE_ERRORS\n  $rel serves restaurant data but does NOT call optionalSubscription - gate it (SAMPLE_ALLOWLIST only exempts paid entitlement, never authentication)"
       fi
     fi
   done < <(find "$RESTAURANTS_API" -name "route.ts" -not -path "*/node_modules/*" -not -path "*/.next/*" 2>/dev/null)

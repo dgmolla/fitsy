@@ -1,4 +1,5 @@
 jest.mock("@/lib/rateLimit", () => ({
+  ...jest.requireActual("@/lib/rateLimit"),
   waitlistLimiter: { check: jest.fn() },
 }));
 

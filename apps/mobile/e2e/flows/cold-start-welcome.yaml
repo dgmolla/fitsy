@@ -1,7 +1,7 @@
 # Fresh-install cold start lands on the welcome problem screen.
 # Guards the +not-found boot-loop class (env wiring) and the first-run path.
-# Target: the e2e-simulator build (embedded JS bundle). clearState is correct
-# there; against a dev-client install it would drop you in the launcher UI.
+# Supports embedded bundles and Debug clients using owned local Metro.
+# Clearing app and keychain state preserves the signed-out starting point.
 appId: com.fitsy.mobile
 tags: [onboarding, changed-journey]
 ---
@@ -12,21 +12,28 @@ tags: [onboarding, changed-journey]
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
       - waitForAnimationToEnd:
           timeout: 10000
       - extendedWaitUntil:
           visible:
             id: welcome-start
-          timeout: 15000
+          timeout: 30000
 - assertVisible: ".*Log in.*"
 - assertVisible: "Good food. Your goals in mind."
-# Start goes directly to location, without a second generic promise screen.
+# Start requires account sign-in before a live location lookup.
 - tapOn:
     id: welcome-start
 - extendedWaitUntil:
     visible:
-      id: location-use-current
+      id: signup-apple
     timeout: 15000
 - assertVisible:
-    id: location-choose-area
+    id: signup-google
+- assertNotVisible:
+    id: paywall-plan-yearly
 - assertNotVisible: "Discover restaurants that fit your goals"

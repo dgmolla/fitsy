@@ -13,6 +13,8 @@ import { setCachedCoords } from '@/lib/locationCache';
 import { MANUAL_LOCATION_KEY } from '@/lib/useLocation';
 import { getOnboardingData, saveOnboardingField, type OnboardingArea } from '@/lib/onboardingStorage';
 import { fetchGuidedPreview } from '@/lib/guidedPreview';
+import { supabase } from '@/lib/supabase';
+import { requestDiscoverySignIn } from '@/lib/discoverySignIn';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { trackLocationPrimingShown, trackLocationPermissionGranted, trackLocationPermissionDenied } from '@/lib/analytics';
 
@@ -32,8 +34,16 @@ export default function LocationPermissionScreen() {
     setBusy(false);
     setArea(undefined);
     setAreaRead('loading');
-    void getOnboardingData().then(data => {
+    void supabase.auth.getSession().then(async ({ data }) => {
       if (!current) return;
+      if (!data.session?.access_token || data.session.user.is_anonymous) {
+        await requestDiscoverySignIn('/welcome/location-permission', () => current);
+        return null;
+      }
+      return getOnboardingData();
+    }).then(data => {
+      if (!current) return;
+      if (!data) return;
       setArea(data.area);
       setAreaRead('ready');
     }).catch(() => { if (current) setAreaRead('failed'); });

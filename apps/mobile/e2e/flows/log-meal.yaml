@@ -12,7 +12,10 @@ env:
   LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
 - assertTrue: ${!!LOGIN_EMAIL && !!LOGIN_PASSWORD}
-- evalScript: ${output.search = http.get('https://dev.fitsy.org/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co')}
+- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+- evalScript: ${output.search = output.dataApiResponses[0]}
 - assertTrue: ${output.search.status === 200}
 - evalScript: >-
     ${output.seed = json(output.search.body).data.filter(function (r) { return r.name === 'Seed Bowl Co #01'; })[0]}
@@ -20,6 +23,20 @@ env:
 - launchApp:
     clearState: true
     clearKeychain: true
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
 - extendedWaitUntil:
     visible:
       id: welcome-login

@@ -1,6 +1,7 @@
 import { guidedPreviewResponseSchema, type GuidedPreviewResponse } from '../../../packages/shared/src/contracts/restaurants';
 import { api } from './api';
 import { getMacroTargets, type StoredMacroTargets } from './macroStorage';
+import { supabase } from './supabase';
 
 const CACHE_MS = 30_000;
 const MAX_CONTEXTS = 10;
@@ -16,12 +17,15 @@ export async function fetchGuidedPreview(area: { lat: number; lng: number }, cra
     if (Number.isFinite(value) && value > 0) params.set(key, String(value));
   }
   if (options.signal?.aborted) throw new Error('Preview request cancelled');
-  const key = params.toString();
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user.id;
+  // A cached response is usable only by its current authenticated owner.
+  const key = `${userId ?? ''}:${params}`;
   const cached = cache.get(key);
-  if (!options.refresh && cached && Date.now() - cached.at < CACHE_MS) {
+  if (userId && !options.refresh && cached && Date.now() - cached.at < CACHE_MS) {
     return cached.response;
   }
-  const response = guidedPreviewResponseSchema.parse(await api.get(`/api/restaurants/preview?${params}`, false, { signal: options.signal }));
+  const response = guidedPreviewResponseSchema.parse(await api.get(`/api/restaurants/preview?${params}`, true, { signal: options.signal }, userId));
   if (options.signal?.aborted) throw new Error('Preview request cancelled');
   cache.delete(key);
   cache.set(key, { at: Date.now(), response });

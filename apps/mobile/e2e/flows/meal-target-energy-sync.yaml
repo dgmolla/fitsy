@@ -1,6 +1,9 @@
 # Real onboarding and discovery edits on the dev backend.
 appId: com.fitsy.mobile
-tags: [onboarding, discovery, changed-journey]
+tags: ['fixture:unsubscribed-dev', 'store:test-store', onboarding, discovery, changed-journey]
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
 - launchApp:
     clearState: true
@@ -8,6 +11,11 @@ tags: [onboarding, discovery, changed-journey]
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
       - waitForAnimationToEnd:
           timeout: 10000
       - extendedWaitUntil:
@@ -18,6 +26,10 @@ tags: [onboarding, discovery, changed-journey]
     point: "92%,93%"
 - tapOn:
     id: welcome-start
+- runFlow:
+    file: ../helpers/discovery-signin.yaml
+    env:
+      DESTINATION: "^location-(use-current|continue-area)$"
 - tapOn:
     id: location-choose-area
 - swipe:

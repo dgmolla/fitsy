@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
+import { requireAuth } from "@/lib/auth";
 
 interface StatsResponse {
   totalDishes: number;
@@ -9,10 +10,11 @@ interface StatsResponse {
 /**
  * GET /api/restaurants/stats
  *
- * Public — returns aggregate stats for the onboarding data-scale screen.
- * Cached for 1 hour since these numbers change infrequently.
+ * Authenticated aggregate stats for the onboarding data-scale screen.
  */
-export async function GET(): Promise<NextResponse<StatsResponse>> {
+export async function GET(request: NextRequest): Promise<NextResponse<StatsResponse> | NextResponse> {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const [totalDishes, totalRestaurants, chainCount] = await Promise.all([
     prisma.menuItem.count({
       where: { retiredAt: null, macroEstimates: { some: {} } },
@@ -30,7 +32,7 @@ export async function GET(): Promise<NextResponse<StatsResponse>> {
     { totalDishes, indiePercent },
     {
       status: 200,
-      headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" },
+      headers: { "Cache-Control": "private, no-store" },
     },
   );
 }

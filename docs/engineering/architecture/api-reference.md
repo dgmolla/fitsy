@@ -6,6 +6,19 @@ Merged reference for all Fitsy API routes. Supersedes the archived `api-endpoint
 
 ---
 
+## Authentication and rate limits
+
+All data routes require a verified, expiring Supabase account JWT for this project's issuer and the `authenticated` audience.
+Missing, invalid, expired, anonymous-user and service-role tokens return 401 before query validation, cached data or database reads.
+`optionalSubscription` makes the subscription optional, never authentication; signed-in free/lapsed users retain the existing locked samples.
+`requireAuth` shares limits of 120 requests per user and 300 per client IP per minute across data endpoints.
+IP quotas use Vercel's overwritten client-IP headers; other hosts require a trusted reverse proxy.
+429 includes `Retry-After` in seconds, and API responses are private with no shared caching.
+Limits are bounded in memory, expire idle identities, reset on cold starts and are not shared across instances.
+Health and the exact login/signup credential exchanges remain public; the write-only website waitlist remains an explicit exception with its existing abuse controls.
+RevenueCat validates its configured webhook Authorization secret using constant-time comparison, and internal jobs retain `CRON_SECRET` authentication.
+`apps/api/app/api/auth-coverage.test.ts` discovers all route handlers and is the maintained public allowlist.
+
 ## Route Table
 
 | Path | Method | Auth | Purpose |
@@ -16,12 +29,13 @@ Merged reference for all Fitsy API routes. Supersedes the archived `api-endpoint
 | `/api/auth/register` | POST | None | Legacy email/password register (deprecated) |
 | `/api/auth/login` | POST | None | Legacy email/password login (deprecated) |
 | `/api/restaurants` | GET | Bearer JWT | Search nearby restaurants |
-| `/api/restaurants/shuffle` | GET | Optional Bearer JWT | One fit-weighted dish, or a locked restaurant teaser |
-| `/api/restaurants/preview` | GET | None | Onboarding teaser (no auth) |
-| `/api/restaurants/stats` | GET | None | Onboarding aggregate stats |
+| `/api/restaurants/shuffle` | GET | Bearer JWT | One fit-weighted dish, or a locked restaurant teaser |
+| `/api/restaurants/preview` | GET | Bearer JWT | Onboarding teaser |
+| `/api/restaurants/stats` | GET | Bearer JWT | Onboarding aggregate stats |
 | `/api/restaurants/[id]/menu` | GET | Bearer JWT | Restaurant detail + menu |
 | `/api/saved-items` | GET, POST | Bearer JWT | List / save items |
 | `/api/saved-items/[id]` | DELETE | Bearer JWT | Unsave item |
+| `/api/flags` | GET | Bearer JWT | Mobile feature flags |
 | `/api/user/profile` | GET, PATCH | Bearer JWT | User profile |
 | `/api/user/push-token` | POST | Bearer JWT | Register push token |
 | `/api/user` | DELETE | Bearer JWT | Delete account |
@@ -214,7 +228,7 @@ Unentitled responses set `bestMatch` to null and `meta.locked` to true.
 
 ### GET /api/restaurants/shuffle
 
-**Auth:** Optional Bearer JWT, using the same server-trusted subscription verdict as search.
+**Auth:** Bearer JWT, using the same server-trusted subscription verdict as search.
 **File:** `apps/api/app/api/restaurants/shuffle/route.ts`
 **Executable contract:** `shuffleResponseSchema` and `ShuffleResponse` in `@fitsy/shared`.
 
@@ -287,7 +301,7 @@ Known closed or malformed schedules are excluded.
 Existing preload data has no hours, so those restaurants return `availability: "unknown"`; the endpoint does not claim they are open.
 Verified business-hour ingestion is still needed to establish availability for that legacy data; the read-only API makes no external availability calls.
 
-The instance-local limiter allows 30 requests per user per minute, including cache hits, with an IP fallback for anonymous requests.
+The instance-local limiter allows 30 requests per user per minute, including cache hits.
 429 responses include `Retry-After` in seconds.
 The instance-local cache lasts at most ten seconds, expires at a minute boundary, holds at most 256 responses, and separates user, entitlement and input contexts.
 All responses use `Cache-Control: private, no-store` so shared HTTP caches cannot serve subscription data.
@@ -295,16 +309,18 @@ As with the existing limiter, cold starts and multiple server instances do not s
 
 ### GET /api/restaurants/preview
 
-**Auth:** None (public)  
+**Auth:** Bearer JWT
 **File:** `apps/api/app/api/restaurants/preview/route.ts`
 
-Used in the onboarding teaser screen before the user signs up. Accepts the same `lat`, `lng`, and macro target params as the main search but returns only `{ id, name, cuisineTags, distanceMiles, photoUrl? }` — `bestMatch` and meal details are intentionally omitted to act as a teaser.
+Used in the onboarding teaser screen after sign-in and before subscribing.
+Accepts the same `lat`, `lng`, and macro target params as the main search but returns only `{ id, name, cuisineTags, distanceMiles, photoUrl? }` for the legacy teaser.
+The bounded guided sample also exposes meal summaries; neither grants full-menu entitlement.
 
 ---
 
 ### GET /api/restaurants/stats
 
-**Auth:** None (public, 1-hour cache)  
+**Auth:** Bearer JWT; private, no-store
 **File:** `apps/api/app/api/restaurants/stats/route.ts`
 
 Returns aggregate stats for the onboarding data-scale screen.

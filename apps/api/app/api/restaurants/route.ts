@@ -8,14 +8,12 @@ import { parseMacroTargetParams } from "@/lib/macroTargetParams";
 
 export async function GET(
   request: NextRequest,
-): Promise<NextResponse<RestaurantsApiResponse>> {
+): Promise<NextResponse<RestaurantsApiResponse> | NextResponse> {
   const tEntry = Date.now();
-  // Unauthenticated/unsubscribed callers aren't turned away — they get every
-  // row with `bestMatch` stripped (see `locked` below), which powers the
-  // onboarding + lapsed-subscriber teaser on the search screen. The API stays
-  // the sole enforcement point: the mobile client never receives macro-match
-  // data it isn't entitled to, regardless of what the UI shows.
-  const { entitled } = await optionalSubscription(request);
+  // A session is mandatory, including for the signed-in free/lapsed teaser.
+  const subscription = await optionalSubscription(request);
+  if (subscription instanceof NextResponse) return subscription;
+  const { entitled } = subscription;
   const tAfterAuth = Date.now();
 
   const { searchParams } = request.nextUrl;

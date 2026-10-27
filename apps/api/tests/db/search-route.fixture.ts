@@ -1,7 +1,7 @@
 import { before, after } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../../lib/restaurantService';
-export { userId, token, request } from './authenticated-route.fixture';
+export { userId, token, freeToken, request } from './authenticated-route.fixture';
 
 export const restaurantIds = Array.from({ length: 4 }, () => randomUUID());
 export const targets = { calories: 600, proteinG: 40, carbsG: 60, fatG: 20 };

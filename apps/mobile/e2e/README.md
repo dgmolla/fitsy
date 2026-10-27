@@ -124,7 +124,7 @@ It also covers the deep link with PostHog disabled, production override rejectio
 Run it through `node scripts/sim/ci.mjs --scope=flow --flows=shuffle --udid=<UDID>` with the local fixture configuration.
 The planner expands this request when the candidate also affects shared UI or other journeys.
 
-`onboarding-guided-preview` checks payment Back after fresh sign-in and after a second, already signed-in checkout, preserving the craving and all four meal targets without purchasing.
+`onboarding-guided-preview` signs in before location lookup and checks payment Back after both checkout entries, preserving the craving and all four meal targets without purchasing.
 Its payment and return screenshots distinguish an exit offer from a successful preview return.
 `components/OnboardingPaymentBack.test.tsx` exercises the real preview, sign-in, trial, reminder and payment screens with intact and deliberately removed native history, including both visible and hardware Back.
 Owned continuations and cold payment entry retain their exit checks in `PaymentCompletion.test.tsx` and `PaymentPlanSelection.test.tsx`.
@@ -137,16 +137,16 @@ This uses a separate Java cache without modifying the normal installation or cha
 The canonical media check also requires host process-ownership inspection; a sandbox denial must be resolved through the existing host owner without disabling that preflight.
 If XCTest setup reports `No space left on device`, recover eligible host resources before rerunning; `scripts/sim/ci.mjs` checks disk admission before driving any journey.
 
-`menu-macro-serving` clears app data and keychain to preserve its anonymous starting state.
+`menu-macro-serving` clears app data and keychain, proves unauthenticated API rejection, and signs in before inspecting the free menu sample.
 Its bounded startup retry waits for the launch animation and the original `Find meals that fit` screen before opening the restaurant.
 Missing welcome UI or a genuine crash still fails; product interactions and the full flow are never retried.
 `scripts/sim/ci.test.ts` protects that startup boundary, including the mandatory screen, timeouts and retry limit.
 
-`chain-menu-serving` clears app and keychain state to prove anonymous menu access.
+`chain-menu-serving` clears app and keychain state, checks the authenticated API contract, and requires account sign-in before the menu sample.
 On a Debug dev-client build, clearing state can return to Expo's Development Build launcher; the flow selects local Metro before waiting for `welcome-start`.
 Embedded builds skip that conditional launcher step, and startup retries never repeat menu or authentication actions.
-After tapping a locked dish, assert the selected restaurant and `signup-apple`/`signup-google` controls because this entry uses contextual signup copy.
-Keep checkout controls absent until authentication succeeds.
+The protected deep link first shows `signup-apple`/`signup-google` and keeps plans hidden.
+After authentication, tapping a locked dish opens subscription plans; being signed in does not grant paid menu access.
 `components/ChainMenuServing.test.tsx` checks the saved flow's final selectors against the real menu and sign-in screens, while `scripts/sim/ci.test.ts` covers its launch contract and render-smoke consumer.
 The Mac's advisory exclusions live outside this repository in `~/fitsy-refactor/sim-review/poller.mjs`; remove `chain-menu-serving.yaml` from `KNOWN_FAILING` after a passing native run of the repaired flow.
 Remove `onboarding-target-ranked-search.yaml` (#525) from that same list after its repaired flow passes on the Debug dev build.
@@ -154,7 +154,7 @@ Remove `onboarding-target-ranked-search.yaml` (#525) from that same list after i
 `onboarding-returning-preview` reconnects a cleared Debug client to local Metro before checking `welcome-start`.
 Both Dev Login checkpoints wait for checkout or a completed authentication failure, reject `Dev Login Failed`, and require the real paywall before continuing.
 Its original missing-logo capture contains `Dev Login Failed` with `Email already registered`: check the fixture credentials and the values bundled by owned Metro before investigating plan rendering.
-The flow records a real decline, clears only the disposable keychain, and retains the anonymous preview, locked-meal, cancellation and cold-resume checks without purchasing.
+The flow records a real decline, clears only the disposable keychain, and retains unauthenticated preview rejection, locked-meal, cancellation and cold-resume checks without purchasing.
 `components/OnboardingReturningPreview.test.tsx` exercises the real sign-in, paywall and decline with a rejected fixture login followed by a corrected retry.
 Run `node scripts/sim/ci.mjs --scope=flow --flows=onboarding-returning-preview --udid=<UDID>` with `unsubscribed-dev`, then remove `onboarding-returning-preview.yaml` (#527) from the Mac's `KNOWN_FAILING` list after a passing native run.
 
@@ -173,6 +173,21 @@ Mobile MCP text dumps include state names in their legend.
 Use `isNativeFocused(dump, testID)` on a fresh observation before typing and `assertNativeValue(dump, testID, expected)` afterward.
 These helpers inspect the exact element row and fail closed for missing or duplicate selectors.
 They do not prove search results; assert the returned dish or empty-state recovery separately and retain the complete raw tool trace.
+
+## Data authentication
+
+Onboarding and menu journeys use the real `unsubscribed-dev` fixture before requesting live restaurant data.
+`helpers/discovery-signin.yaml` checks Apple/Google availability and hidden plans, uses Dev login, and waits for the protected destination.
+It does not grant an entitlement or purchase anything.
+`helpers/data-api.mjs` obtains a session inside a local script, asserts missing/invalid-session 401s, and makes the oracle requests with a Bearer token.
+Only status and JSON bodies reach Maestro output; credentials and tokens remain inside the script.
+Every oracle flow reads the configured `EXPO_PUBLIC_DEV_LOGIN_EMAIL/PASSWORD`; owned Metro must use the same fixture.
+`lib/dataApiFlow.test.ts` executes the saved helper, covers login failure, and rejects new direct restaurant requests in maintained YAML flows.
+`lib/api.auth.test.ts` covers token attachment, account cache isolation and sign-in recovery.
+
+A restricted worker that cannot open local ports or access CoreSimulator must retain that failure and the planned scope for the existing host owner.
+Run the canonical `node scripts/sim/ci.mjs --scope=full --udid=<owned-UDID>` on the authorized host against the candidate backend and Metro source.
+Syntax checks and component tests do not establish a passing native journey or deployed 401s.
 
 ## Mixed-duration trial reminders
 

@@ -24,7 +24,7 @@ export function usePaywallDiscovery(focused: boolean, userId: string | null = nu
         show({ selected: intent.previewResult });
         return;
       }
-      // The guided public sample carries the same result contract as search.
+      // The authenticated guided sample carries the same contract as search.
       // A stored summary from an older app version cannot fabricate meal data.
       const area = intent?.area ?? LOS_ANGELES;
       let response = await fetchGuidedPreview(area, intent?.query ?? '', intent?.targets ?? null, { signal: controller.signal });

@@ -1,7 +1,7 @@
 import type { getOnboardingResume } from './onboardingResume';
 
 type Resume = Awaited<ReturnType<typeof getOnboardingResume>>;
-export type EntryDestination = Resume | '/(tabs)/search' | '/welcome/problem' | '/welcome/signin?returnTo=payment' | '/macro-setup' | '/welcome/resubscribe' | '/welcome/subscription-check';
+export type EntryDestination = Resume | '/(tabs)/search' | `/restaurant/${string}` | '/welcome/problem' | '/welcome/signin?returnTo=payment' | '/macro-setup' | '/welcome/resubscribe' | '/welcome/subscription-check';
 interface EntryState {
   signedIn: boolean;
   purchasesReady: boolean;

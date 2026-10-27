@@ -241,7 +241,7 @@ export const renderCheckpoints = [
   [/^apps\/mobile\/app\/notification-settings\./, 'reminders', { id: 'reminder-permission' }],
   [/^apps\/mobile\/app\/restaurant\//, 'chain-menu-serving', 'Seed Bowl Co #01'],
   [/^apps\/mobile\/app\/welcome\/problem\./, 'cold-start-welcome', { id: 'welcome-start' }],
-  [/^apps\/mobile\/app\/welcome\/location-permission\./, 'cold-start-welcome', { id: 'location-use-current' }],
+  [/^apps\/mobile\/app\/welcome\/location-permission\./, 'onboarding-guided-preview', { id: 'location-use-current' }],
   [/^apps\/mobile\/app\/welcome\/goal\./, 'onboarding-assisted-targets', { id: 'goal-performance' }],
   [/^apps\/mobile\/app\/welcome\/tried\./, 'onboarding-assisted-targets', { id: 'tried-meal_prep' }],
   [/^apps\/mobile\/app\/welcome\/goal-payoff\./, 'onboarding-assisted-targets', { id: 'goal-progress-graph' }],

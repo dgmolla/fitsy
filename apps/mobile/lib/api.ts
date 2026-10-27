@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { supabase } from './supabase';
 import { clearToken } from './authClient';
 import { hasPaymentSignInContinuation } from './paymentSignInContinuation';
+import { discoveryDestinationForApi, requestDiscoverySignIn } from './discoverySignIn';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -16,19 +17,24 @@ export class ApiRequestError extends Error {
  */
 async function getAccessToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+  return data.session?.user.is_anonymous ? null : data.session?.access_token ?? null;
 }
 
-async function handleUnauthorized(): Promise<never> {
+async function handleUnauthorized(path: string): Promise<never> {
   // Sign out clears the Supabase session blob in SecureStore. clearToken also
   // wipes the legacy fitsy_authToken key for users mid-upgrade.
   await clearToken({ reason: 'session-expired' });
   const checkout = await hasPaymentSignInContinuation();
+  const destination = discoveryDestinationForApi(path);
+  if (!checkout && destination) {
+    await requestDiscoverySignIn(destination);
+    throw new ApiRequestError(401, 'Session expired');
+  }
   router.replace(checkout ? '/welcome/signin?returnTo=payment' : '/welcome/problem');
   throw new ApiRequestError(401, 'Session expired');
 }
 
-async function get<T>(path: string, authenticated = false, options: { signal?: AbortSignal } = {},
+async function get<T>(path: string, authenticated = true, options: { signal?: AbortSignal } = {},
   expectedUserId?: string): Promise<T> {
   const headers: Record<string, string> = {};
   let requestToken: string | undefined;
@@ -36,7 +42,7 @@ async function get<T>(path: string, authenticated = false, options: { signal?: A
   if (authenticated) {
     const { data } = await supabase.auth.getSession();
     if (expectedUserId && data.session?.user.id !== expectedUserId) throw new Error('Account changed before request');
-    const token = data.session?.access_token;
+    const token = data.session?.user.is_anonymous ? undefined : data.session?.access_token;
     requestToken = token;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -47,6 +53,7 @@ async function get<T>(path: string, authenticated = false, options: { signal?: A
     { headers, signal: options.signal };
 
   const res = await fetch(`${BASE_URL}${path}`, init);
+  if (options.signal?.aborted) throw new Error('Request cancelled');
 
   if (res.status === 401 && authenticated) {
     if (expectedUserId) {
@@ -54,7 +61,7 @@ async function get<T>(path: string, authenticated = false, options: { signal?: A
       if (data.session?.user.id !== expectedUserId || data.session?.access_token !== requestToken)
         throw new ApiRequestError(401, 'Previous account request expired');
     }
-    return handleUnauthorized();
+    return handleUnauthorized(path);
   }
 
   if (!res.ok) {
@@ -73,7 +80,7 @@ async function post<T>(path: string, body: unknown, authenticated = true, expect
   if (authenticated) {
     const { data } = await supabase.auth.getSession();
     if (expectedUserId && data.session?.user.id !== expectedUserId) throw new Error('Account changed before request');
-    const token = data.session?.access_token;
+    const token = data.session?.user.is_anonymous ? undefined : data.session?.access_token;
     requestToken = token;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -93,7 +100,7 @@ async function post<T>(path: string, body: unknown, authenticated = true, expect
         throw new ApiRequestError(401, 'Previous account request expired');
       }
     }
-    return handleUnauthorized();
+    return handleUnauthorized(path);
   }
 
   if (!res.ok) {
@@ -119,7 +126,7 @@ async function del(path: string, authenticated = true): Promise<void> {
   });
 
   if (res.status === 401 && authenticated) {
-    return handleUnauthorized() as Promise<never>;
+    return handleUnauthorized(path) as Promise<never>;
   }
 
   if (!res.ok) {
@@ -138,7 +145,7 @@ async function patch<T>(path: string, body: unknown, authenticated = true, expec
   if (authenticated) {
     const { data } = await supabase.auth.getSession();
     if (expectedUserId && data.session?.user.id !== expectedUserId) throw new Error('Account changed before request');
-    const token = data.session?.access_token;
+    const token = data.session?.user.is_anonymous ? undefined : data.session?.access_token;
     requestToken = token;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -158,7 +165,7 @@ async function patch<T>(path: string, body: unknown, authenticated = true, expec
         throw new ApiRequestError(401, 'Previous account request expired');
       }
     }
-    return handleUnauthorized();
+    return handleUnauthorized(path);
   }
 
   if (!res.ok) {

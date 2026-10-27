@@ -27,13 +27,15 @@ say() { echo "  $1 -> $2" >&2; }
 code() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$@"; }
 
 H="$(code "$BASE/api/health")"; say health "$H"; [ "$H" = "200" ] || FAILS="$FAILS health=$H"
-# Since the onboarding teaser (2026-09), unauth search returns 200 with
-# meta.locked=true. The invariant: unentitled responses are ALWAYS locked.
-UO="$(curl -s --max-time 20 "$BASE/api/restaurants?lat=34.0522&lng=-118.2437&radius=3" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("meta",{}).get("locked"), len(d.get("data",[])))' 2>/dev/null)"
-UL="${UO%% *}"; UN="${UO##* }"
-say "unauth search locked/results (expect True / >0)" "$UO"
-[ "$UL" = "True" ] || FAILS="$FAILS unauth-locked=$UL"
-[ "${UN:-0}" -gt 0 ] || FAILS="$FAILS unauth-results=0"
+# All data surfaces must reject missing sessions, even before input validation.
+for route in 'restaurants?lat=34.0522&lng=-118.2437&radius=3' \
+  restaurants/preview restaurants/stats restaurants/shuffle restaurants/fixture/menu \
+  flags saved-items feedback user/profile subscriptions/status; do
+  U="$(code "$BASE/api/$route")"; say "unauth $route (expect 401)" "$U"
+  [ "$U" = "401" ] || FAILS="$FAILS unauth-$route=$U"
+done
+I="$(code -H 'Authorization: Bearer invalid.jwt.signature' "$BASE/api/restaurants?lat=34.0522&lng=-118.2437")"
+say "invalid-session search (expect 401)" "$I"; [ "$I" = "401" ] || FAILS="$FAILS invalid-session=$I"
 # optional authenticated probe on prod: set PROD_SMOKE_EMAIL/PASSWORD (demo acct)
 if [ "$SAFE" = "1" ] && { [ -z "${PROD_SMOKE_EMAIL:-}" ] || [ -z "${PROD_SMOKE_PASSWORD:-}" ]; }; then
   say "entitled-account probe" "SKIPPED (set PROD_SMOKE_EMAIL/PASSWORD to activate)"

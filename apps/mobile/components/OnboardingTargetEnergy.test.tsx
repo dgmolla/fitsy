@@ -36,10 +36,10 @@ beforeEach(async () => {
 it('the saved ranked-search journey replaces generated grams and queries with its persisted targets', async () => {
   const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
   type Step = { tapOn?: { id?: string; text?: string }; inputText?: string; eraseText?: number;
-    copyTextFrom?: { id: string }; evalScript?: string; assertTrue?: string; assertVisible?: string };
+    copyTextFrom?: { id: string }; evalScript?: string; assertTrue?: string; assertVisible?: string; runScript?: string };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/onboarding-target-ranked-search.yaml'), 'utf8')) as [unknown, Step[]];
   const start = commands.findIndex(step => step.assertVisible === 'What works.*for one meal.*');
-  const request = commands.findIndex(step => /\bhttp\./.test(step.evalScript ?? ''));
+  const request = commands.findIndex(step => step.runScript === '../helpers/data-api.mjs');
   expect(start).toBeGreaterThan(-1);
   expect(request).toBeGreaterThan(start);
   await saveOnboardingField('goal', 'lose_fat');

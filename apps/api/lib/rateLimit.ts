@@ -22,22 +22,36 @@ export interface RateLimiterOptions {
   windowMs: number;
   /** Maximum requests allowed within the window */
   max: number;
+  /** Bound memory even when callers rotate IPs or accounts. */
+  maxKeys?: number;
 }
 
 interface Entry {
   timestamps: number[];
+  expiresAt: number;
 }
 
 export function createRateLimiter(opts: RateLimiterOptions) {
   const store = new Map<string, Entry>();
+  const maxKeys = opts.maxKeys ?? 10_000;
+  let nextSweepAt = 0;
 
   function check(key: string): RateLimitResult {
     const now = Date.now();
     const windowStart = now - opts.windowMs;
 
+    if (now >= nextSweepAt) {
+      for (const [storedKey, entry] of store) {
+        if (entry.expiresAt <= now) store.delete(storedKey);
+      }
+      nextSweepAt = now + opts.windowMs;
+    }
+
     let entry = store.get(key);
     if (!entry) {
-      entry = { timestamps: [] };
+      // Do not evict live buckets: rotating identities must not reset quotas.
+      if (store.size >= maxKeys) return { ok: false, remaining: 0, retryAfterMs: opts.windowMs };
+      entry = { timestamps: [], expiresAt: now + opts.windowMs };
       store.set(key, entry);
     }
 
@@ -51,6 +65,7 @@ export function createRateLimiter(opts: RateLimiterOptions) {
     }
 
     entry.timestamps.push(now);
+    entry.expiresAt = now + opts.windowMs;
     return {
       ok: true,
       remaining: opts.max - entry.timestamps.length,
@@ -68,6 +83,10 @@ export function createRateLimiter(opts: RateLimiterOptions) {
  * Covers both login (brute-force) and register (account spam).
  */
 export const authLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });
+
+/** Shared across all data routes, including subscription and preview reads. */
+export const dataIpLimiter = createRateLimiter({ windowMs: 60_000, max: 300 });
+export const dataUserLimiter = createRateLimiter({ windowMs: 60_000, max: 120 });
 
 /**
  * Feedback endpoint: 5 submissions per user per 5 minutes.

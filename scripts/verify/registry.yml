@@ -131,7 +131,7 @@ checks:
     runs: [scheduled, local]   # bare invocation defaults to dev.fitsy.org
     paths: ["apps/api/**", "packages/**", "prisma/**"]
     why: >
-      Deployed-API smoke (health, teaser lock invariants, auth, register).
+      Deployed-API smoke (health, data-route 401s, authenticated entitlement locks, register).
       Invoked directly by deploy.yml against prod (--prod-safe) and usable
       against dev/previews; replaced scripts/verify-prod.sh 2026-09-07.
 

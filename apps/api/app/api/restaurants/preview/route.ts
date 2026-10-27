@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { findNearbyRestaurants } from "@/lib/restaurantService";
 import { findGuidedPreview } from '@/lib/guidedPreviewService';
 import { createRateLimiter } from "@/lib/rateLimit";
+import { requireAuth } from "@/lib/auth";
 import { parseMacroTargetParams } from "@/lib/macroTargetParams";
 import type { GuidedPreviewResponse, RestaurantResult } from "@fitsy/shared";
 
@@ -22,7 +23,7 @@ interface PreviewResponse {
 /**
  * GET /api/restaurants/preview
  *
- * Public (no auth required) - returns a short list of restaurant names that
+ * Requires a session - returns a short list of restaurant names that
  * match the caller's macro targets. Used in the onboarding teaser screen to
  * show prospective users real restaurants before they subscribe.
  *
@@ -33,7 +34,9 @@ interface PreviewResponse {
  */
 export async function GET(
   request: NextRequest,
-): Promise<NextResponse<PreviewResponse | GuidedPreviewResponse | { error: string }>> {
+): Promise<NextResponse<PreviewResponse | GuidedPreviewResponse | { error: string }> | NextResponse> {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const { searchParams } = request.nextUrl;
 
   const latRaw = searchParams.get("lat");
@@ -67,15 +70,10 @@ export async function GET(
 
   try {
     if (guided) {
-      // The launch preview deliberately makes these three meal summaries public,
-      // including names and macros, before account creation. Standard search
-      // still redacts bestMatch; this sample has no cursor or full-menu data.
-      // The exact area-wide qualifying count is also deliberately public for
-      // the paywall value claim. Repeated target queries can reveal aggregate
-      // nutrition distribution; arbitrary hidden-item membership stays private.
-      // The per-instance IP brake limits bursts, not determined scraping across
-      // serverless instances. The app's one-craving tour is a UX limit only.
-      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+      // A signed-in account can see the bounded tour sample before subscribing.
+      // The shared auth guard also limits IPs across every data route.
+      const ip = request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim()
+        || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip")?.trim() || "unknown";
       const quota = guidedLimiter.check(ip);
       if (!quota.ok) return NextResponse.json({ error: "Too many preview searches. Please try again shortly." }, {
         status: 429, headers: { "Retry-After": String(Math.ceil(quota.retryAfterMs / 1000)) },

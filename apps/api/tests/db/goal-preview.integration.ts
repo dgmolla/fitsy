@@ -6,7 +6,7 @@ import { guidedPreviewResponseSchema, restaurantsResponseSchema } from '@fitsy/s
 import { GET as preview } from '../../app/api/restaurants/preview/route';
 import { GET as search } from '../../app/api/restaurants/route';
 import { prisma } from '../../lib/restaurantService';
-import { token } from './authenticated-route.fixture';
+import { token, freeToken } from './authenticated-route.fixture';
 after(() => prisma.$disconnect());
 
 const targets = 'calories=600&protein=40&carbs=60&fat=20';
@@ -169,10 +169,10 @@ test('preview and older main clients share target ranking and retain context-bou
     assert.equal(matched.data.length, 3);
     assert.deepEqual(matched.data, ranked.data, 'The retired goalMatched flag must never hide relevant meals');
     assert.deepEqual(await guided(`${query}&selectedItemId=${ids[3]}-meal`), preview);
-    const anonymous = async (flag: string) => restaurantsResponseSchema.parse(await (await search(
-      new NextRequest(`http://localhost/api/restaurants?${at}&${query}&limit=3${flag}`))).json());
-    const lockedLegacy = await anonymous('');
-    const lockedFlag = await anonymous('&goalMatched=1');
+    const free = async (flag: string) => restaurantsResponseSchema.parse(await (await search(
+      new NextRequest(`http://localhost/api/restaurants?${at}&${query}&limit=3${flag}`, { headers: { authorization: `Bearer ${freeToken}` } }))).json());
+    const lockedLegacy = await free('');
+    const lockedFlag = await free('&goalMatched=1');
     assert.ok(lockedLegacy.data.length > 0);
     assert.deepEqual(lockedFlag, lockedLegacy, 'The retired flag must not expose locked dish membership');
     assert.ok(lockedFlag.data.every(row => row.bestMatch === null));
