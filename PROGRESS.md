@@ -21,6 +21,13 @@ Current validation: cheap gates and selected focused tests; the supported planne
 PR: https://github.com/dgmolla/fitsy/pull/582 (open).
 Published normally after 85 focused tests and all cheap gates passed, including the actual shared guard through the owned Docker migration/seed caller.
 Current main is an ancestor of the candidate, and both installed local review services are loaded.
+The first exact-head local review passed the P0/P1 gate but identified a confirmed P2 provisioning-order regression.
+The actual shell entrypoints reproduced 12 attempted Preview/Development updates before the new target refusal, using only fake external services.
+The repair validates both derived URLs before any key lookup, database probe or Vercel mutation and retires automatic creation that conflicts with the fixed DEV allowlist.
+Four actual-entrypoint regressions now prove early production/replacement/creation refusal and successful allowlisted DEV wiring against fake services.
+The repaired candidate passed all cheap gates and all 89 focused tests.
+The source-owned test database was retired after the first validation phase through its canonical lock and exact-owner teardown; other owners were preserved.
+The updated source requires a fresh independent review and current CI; earlier review/CI remain historical evidence only.
 The native planner selects all 22 flows because scripts/deploy/migrate-prod.sh changed; no applicable gate is waived.
 The source/configuration audit and actual DEV credential acceptance are complete; runtime PROD RLS remains unqueried.
 Next: require exact-head trusted CI, independent local AI review without P0/P1 and native acceptance, then ordinary squash merge and verify merged-main CI/deploy.

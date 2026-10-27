@@ -103,6 +103,8 @@ PROD requires all of `FITSY_ALLOW_PROD_WRITE=1`, the separate `--prod` argument,
 The production migration wrapper supplies both explicit intentions only after its existing deploy identity checks.
 The old local `FITSY_ALLOW_PROD=1` operator-migration exception is removed.
 DEV-only resets, seeds, fixture installation, provisioning and preview migrations forbid PROD unconditionally, including when override variables are present.
+Provisioning validates both derived URLs before credential lookup, database probes or Vercel updates.
+Automatic project creation is retired; a replacement DEV reference must be reviewed before wiring shared credentials.
 Auth mutations independently require the exact DEV Supabase API origin.
 
 | Writer entrypoints | Guarded target |

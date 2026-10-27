@@ -3,17 +3,23 @@
 Tooling for the **dev environment**: a second Supabase project (`fitsy-dev`) that Vercel previews, local dev, and simulator E2E use instead of production.
 Design: `docs/engineering/devops/staging-environment.md`.
 
-Every script refuses to target production (`lib/guard.ts`); override only with `FITSY_ALLOW_PROD=1`.
+Every DEV writer refuses production unconditionally through the [shared database guard](../../docs/engineering/devops/db-guardrails.md).
+The retired `FITSY_ALLOW_PROD=1` override has no effect.
 
 | Script | What it does | When |
 |---|---|---|
-| `provision-supabase.sh` | create `fitsy-dev`, push its creds to Vercel Preview + Development, migrate, seed, snapshot | once |
+| `provision-supabase.sh` | validate the allowlisted existing DEV target before credential lookup or Vercel Preview/Development updates, then migrate, seed, snapshot | once |
+| `provision-audit-role.ts` | create the DEV-only SELECT role and privately save credential names | once, with `--apply` |
+| `audit-readonly.ts` | verify saved DEV audit access and optional zero-row write denials | after audit provisioning |
 | `write-local-env.sh` | pull dev creds into `apps/api/.env.local`, `.env.dev`, `apps/mobile/.env.development.local` | after provisioning; whenever creds rotate |
 | `../../prisma/seed.ts` (`npx prisma db seed`) | deterministic fixture: 3 users, 50 restaurants, 400 items | on a fresh DB; safe to re-run |
 | `snapshot.ts` | copy ~500 real LA restaurants (no user data) from prod read-only into dev | monthly, or when search needs fresher data |
 | `reset.ts` | reset user data to seed state (admin mode with a service key; sql-only mode otherwise preserves seed auth users) | nightly (CI, sql-only); before E2E |
 | `vercel-build.sh` | Vercel build entrypoint; migrates dev on preview builds | every Vercel build |
 | `../verify/dev-drift.sh` | dev has every migration on `main` and seed data present | scheduled + before E2E |
+
+Automatic Supabase project creation is retired.
+A replacement project requires a reviewed DEV-reference update before wiring.
 
 ## Env
 
