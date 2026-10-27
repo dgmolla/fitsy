@@ -1,3 +1,68 @@
+**TL;DR:** Adding dev-only Haiku/Qwen adapters with shared Jev prompts, replay-only Jev and a $2.70 stop.
+
+# Haiku and Qwen dev comparison
+
+The current task owns `data/eval-suite-haiku-qwen` in `/Users/dawitmolla/fitsy-eval-suite`, starting at `ec1da10` from main.
+The human approved Haiku and Qwen for this run only, dev only, inference/read-only API calls only, no database connections, no board edits, no hook bypass and no access under `~/fitsy-refactor`.
+The requested PR is `data: eval suite haiku + qwen adapters and dev baseline`, with ordinary squash merge only after green CI and a source-bound local AI review without P0/P1.
+The prior task history below is retained; its Anthropic prohibition is superseded only for this run.
+
+## Current evidence and next action
+
+The exact requested command currently refuses the disabled model stubs before transport.
+Haiku uses the existing production alias `claude-haiku-4-5`; the open-model spike pins Qwen to `qwen/qwen3-235b-a22b-2507` on OpenRouter.
+The old provider helper referenced by the spike is absent at this revision, so use its documented model identity and verify current public provider contracts.
+Read-only OpenRouter model metadata reports $0.09/M input and $0.55/M output; Anthropic documents $1/M input and $5/M output for Haiku 4.5.
+Never use the stale April Haiku price of $0.80/$4.
+No new paid calls have occurred.
+
+Credential discovery selected only names, never printed values, in `~/Desktop/secrets.env`, conventional env files in this checkout, and conventional `~/fitsy` env paths.
+The named secrets file contains only the legacy Jev credential among relevant keys; neither `ANTHROPIC_API_KEY` nor `OPENROUTER_API_KEY` exists in those files or the process environment.
+Live paid execution is therefore stopped before transport; no human action is requested under the instruction to make conservative choices without questions.
+Recovery assessment: filesystem/dotenv tools support narrow in-memory loading; available connectors have no relevant credential reader, and unrelated hosting/credential sources are excluded.
+Close the recovery loop in the actual runner with combined credential preflight, documented allowed sources and an actionable secret-safe failure receipt.
+Continue implementing adapters, meaningful transport/budget regressions, full dev exact/Jev replay, checks and PR preparation.
+Do not invent Haiku/Qwen measurements if credentials remain unavailable.
+
+The selected ship-branch skill and standalone Fitsy/cutover references control shipping.
+One sequential local test job has a 2 GiB Node heap estimate, with no simulator, DB or native job needed; disk has 26 GiB free and memory-pressure output reports 58% free at entry.
+The first 41 focused tests passed across the original suite and the new provider transports/budget tests.
+The initial test run found one obsolete disabled-stub assertion; it now verifies explicit client admission and dev-only selection.
+The adapters share the original matching/coarse/fine builders and decoder, with unchanged Jev task prompts and protocol identity.
+The new session uses the existing ledger and lock, retains old entries, counts Haiku/Qwen spending across invocations, reserves the entire response envelope and stops at $2.70.
+Jev in a paid-model comparison uses a transport-free replay client; an explicit `--replay-only` mode also supports credential-free baseline recovery.
+The credential failure now names both missing keys in one secret-safe receipt before any request or reservation, and the actual entrypoint's regression covers that recovery contract.
+Execution source was frozen at `9be5a0c24e9e9b666d767907c407dc7ede23c66c`.
+All 42 focused tests now pass, including the actual runner using both provider-shaped network fixtures and both estimator stages; scripts lint and type checks pass.
+The exact requested four-method command produced `results/2026-10-27T05-18-29-842Z-7a919c80/failure.json`, naming both missing keys before transport.
+The full dev exact/Jev replay completed in `results/2026-10-27T05-18-34-761Z-1e20c0af` across all 3,007 dev cases, without sampling.
+It retained 5,688 method/case predictions and 3,331 exact-request Jev reuse receipts, with zero new requests, zero new spend and no unknown usage.
+The cumulative ledger remains byte-identical to the starting main blob `08dffcfaaf065a29ce51cdb826514ed4e2336a6b`, retaining $0.12394053 of historical Jev spend.
+A first one-off audit attempted to buffer the 1.5 MB ledger through Git's stdout and hit Node's default buffer ceiling; the corrected audit compares Git blob identities and records the independent SHA-256 without transporting the large blob through that buffer.
+No paid work was repeated during that diagnostic recovery.
+
+The prospective common paid-model sample is 129 cases: curated matching/macro 34/25, bulk matching/macro 44/26.
+Its conservative reservation is $2.69768053 versus $44.02095118 for all 3,007 dev cases.
+This is a frozen prospective selection only; neither paid model ran and no sampled quality metrics exist.
+The measured exact/Jev results instead cover full dev and their cost/latency are marginal replay values, not fresh provider performance.
+The canonical product plan computes N/A and simulator scope none.
+Baseline evidence and the explicit unavailable-paid-run result are committed at `1dee689`.
+All eight applicable cheap canonical checks passed; migration safety is legitimately skipped because no migration changed.
+The focused selector initially retained only the old suite; the supported setter now selects both suite and provider tests so the ordinary hook consumes all 42 regressions.
+The repository API-key review adapter is unavailable because `CODEX_API_KEY` is absent; no substitute credential or implementer verdict is allowed.
+The existing subscription reviewer must publish its own exact-head `AI review` after PR creation, without this task reading or modifying its protected checkout, state, controls or attributes.
+If that existing reviewer cannot run or rejects input size, report the genuine failure and leave merge blocked; do not alter it.
+PR https://github.com/dgmolla/fitsy/pull/566 opened on `e963596` after ordinary hooks passed all eight cheap gates and all 42 focused tests.
+The initial product-flow publisher fetched current main and refused because new main `79a47ec` was not yet an ancestor of this branch, retaining a genuine failed status on the old head.
+Recovery assessment: the selected ship-branch skill, normal Git merge and existing product-flow publisher provide the supported recovery; changing its freshness check or any reviewer control is excluded.
+Merged `origin/main` normally without conflicts, retaining all task commits and the source-bound historical replay.
+The next publisher invocation correctly refused the unpublished local merge head; publication must follow the ordinary push before evidence is republished.
+The upstream change adds optional simulator Slack previews and does not change eval adapters, prompts, fixtures or scoring.
+The existing publisher's exact-ancestor and exact-remote-head guards detected both conditions; no control change is needed to prevent an unsafe publication.
+Next: push the reconciled frozen head through ordinary hooks, publish computed N/A, then await current-head CI and the existing independent local review without protected-checkout access.
+
+## Previous task history
+
 **TL;DR:** Extending PR #558 with verified measured-menu seeds while preserving the frozen v1 population.
 
 # Eval suite seed extension
