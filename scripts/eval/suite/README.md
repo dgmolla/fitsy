@@ -18,7 +18,7 @@ npm run eval:suite -w scripts -- --methods=exact,jev-v3 --split=dev --tier=both 
 
 # One-run-approved Haiku/Qwen comparison; Jev is automatically replay-only.
 # Requires ANTHROPIC_API_KEY and OPENROUTER_API_KEY; does not require a Jev key.
-npm run eval:suite -w scripts -- --methods=exact,jev-v3,haiku,qwen --split=dev --tier=both --live
+npm run eval:suite -w scripts -- --methods=exact,jev-v3,haiku,qwen --split=dev --tier=both --cases=haiku-qwen-dev-sample.json --live
 
 # Recover a dev baseline without credentials or any paid transport.
 npm run eval:suite -w scripts -- --methods=exact,jev-v3 --split=dev --tier=both --live --replay-only
@@ -95,7 +95,7 @@ Qwen is pinned to OpenRouter's `deepinfra/fp8` endpoint at the same price ceilin
 A GMICloud deprecation HTTP 400 remains unknown until `reconcileRejection` also validates a retained same-day zero-usage read from the authorized key's `GET /api/v1/key` response.
 That sanitized usage receipt contains no key, label or user identifier, and its hash is rechecked during every later ledger admission.
 Qwen's body deadline is 180 seconds after a measured 60-second timeout on the slow endpoint; the token ceiling and price reservation are unchanged.
-Generation IDs from response headers are journaled before reading the body so a lost body does not also discard its billing lookup identity.
+When the provider supplies a generation ID in response headers, it is journaled before reading the body so a lost body retains that billing lookup identity.
 For the original lost-ID timeout, `reconcileQwenTimeout` accepts exactly one unresolved reservation and stable same-key usage counters from the isolated run window.
 It requires a zero daily baseline, matching lifetime/daily deltas, two stable post-timeout reads at least 30 seconds apart, and a delta within the complete reserved envelope.
 The charge is explicitly allocated from aggregate provider usage, rather than fabricated token counts; the original missing response remains a failed case and can never be paid for again.

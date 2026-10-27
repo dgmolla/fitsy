@@ -106,6 +106,17 @@ This is an allocation from aggregate provider billing counters, not recovered to
 The supported helper will require one unresolved reservation, retained body-timeout evidence, the same UTC day, a zero daily baseline, stable counters and a nonnegative delta inside the reservation, with additive hash-bound history.
 Future Qwen calls get a measured 180-second body deadline and retain generation IDs from headers before reading a body; token and price limits remain unchanged.
 Next: validate and commit this recovery, reconcile the single bounded charge without inventing an output, replay all paid inputs, then continue only unseen inputs on the original 129 IDs.
+The recovery is committed at `4ef8f9fe3e8a56384c87df50ddd6cb33c4a92064`, and all 55 focused tests pass.
+The actual helper allocated $0.00070390 from the retained counter proofs, leaving no unresolved or pending usage and $0.42598808 known new spend at resumption.
+An offline transport-forbidden proof replayed all 129 Haiku outcomes and all 44 prior Qwen outcomes without a request or charge, retaining every prior failed outcome.
+The live continuation is `2026-10-27T07-25-46-652Z-d4f0ef24` from that committed source; its command session is 25728.
+Collector PID 29804, parent 29779, started October 27 at 00:25:46 local time and was observed at about 97 MiB RSS.
+Do not start another collector or remove this live `.jev.lock`.
+Qwen reached 49 cases with four failed outcomes at $0.43005242 total new spend; 11 actual response-header generation IDs prove the corrected transport is adopted.
+The offline report/audit generator is retained at `/private/tmp/fitsy-eval-four-method-audit.cjs` and must run only after a complete summary exists.
+It verifies all 465 supported method/case predictions, original sample and ledger prefix, zero repeated paid inputs, all metric denominators, replay/reference costs and original request timing; it writes `comparison-audit.json` and `comparison-report.md` in the completed run directory.
+The full report must disclose the one usage-counter allocation, its unchanged raw missing output and censored latency, plus exact's unsupported macro surface.
+Next: finish collection, verify the final same-key total against all Qwen bills, generate and commit results, then cheap checks, existing exact-head local AI review, green current CI and authorized ordinary squash merge.
 
 ## Previous adapter task history
 
