@@ -64,7 +64,7 @@ fitsy/
 | System | Location | What it does |
 |--------|----------|-------------|
 | Preload pipeline (UE-first) | `scripts/preload-ue-first.ts` | Uber Eats discovery → FatSecret/Brave menus → Claude Haiku macros → PostgreSQL (H3 hex checkpoints, Axiom telemetry) |
-| API backend | `apps/api/` | Query + filter preloaded data; no external API calls |
+| API backend | `apps/api/` | Query + filter preloaded data; only auth/subscription provider lookups at request time |
 
 Architecture: `docs/engineering/architecture/system-design.md` (+ `auth.md`, `api-reference.md`). Pipeline: `docs/engineering/pipeline/` (runbook, ue-first-pipeline, macro-accuracy-recommendations-2026-08-16).
 ---
@@ -205,7 +205,8 @@ You are done when CI and deploy are green, not when you push. After pushing, pol
   Always show confidence ranges, never false precision.
 - **External APIs** — Uber Eats (discovery), FatSecret/Brave (menus), and
   Claude Haiku (macros) are core preload dependencies. Handle rate limits,
-  failures, and resume. The runtime API makes no external calls.
+  failures, and resume.
+  Runtime restaurant queries never call discovery, menu or macro-estimation providers.
 
 ---
 

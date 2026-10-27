@@ -23,6 +23,7 @@ before(async () => {
   process.env['SUPABASE_URL'] = `http://localhost:${address.port}`;
   delete process.env['ALLOW_STUB_SUBSCRIPTIONS'];
   delete process.env['DEMO_REVIEW_EMAILS'];
+  delete process.env['REVENUECAT_PUBLIC_API_KEY'];
   const email = `${userId}@example.test`;
   await prisma.user.create({ data: { id: userId, email,
     subscription: { create: { plan: 'monthly', status: 'active', lastEventAt: new Date() } } } });

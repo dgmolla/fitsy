@@ -13,6 +13,10 @@ env:
 # Prove the empty-state location is outside dev coverage before driving the app.
 - evalScript: ${output.outside = http.get('https://dev.fitsy.org/api/restaurants?lat=40.7128&lng=-74.0060&radius=6')}
 - assertTrue: ${output.outside.status === 200 && json(output.outside.body).data.length === 0}
+# Direct API access must work before Dev Login runs its own RevenueCat sync.
+- runScript: ../helpers/shuffle-subscriber.mjs
+- assertTrue: ${output.shuffleApiLoginStatus === 200 && output.shuffleApiStatus === 200}
+- assertTrue: ${output.shuffleApiUnlocked && output.shuffleApiHasDish && output.shuffleApiHasMacros && output.shuffleApiVerified}
 # Establish GPS before launch so a cached fix also points outside coverage.
 - setLocation:
     latitude: 40.7128

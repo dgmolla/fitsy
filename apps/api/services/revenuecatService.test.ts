@@ -52,6 +52,16 @@ describe("fetchProEntitlement", () => {
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.revenuecat.com/v1/subscribers/u1");
     expect((init.headers as Record<string, string>)["authorization"]).toBe("Bearer appl_test");
+    expect((init.headers as Record<string, string>)["x-is-sandbox"]).toBeUndefined();
+  });
+
+  it("uses sandbox routing for a Test Store key and looks up the authenticated UUID", async () => {
+    process.env["REVENUECAT_PUBLIC_API_KEY"] = "test_fixture";
+    mockFetch(200, { subscriber: { entitlements: { pro: { expires_date: null, product_identifier: "monthly" } } } });
+    expect(await fetchProEntitlement("auth/uuid")).toMatchObject({ active: true, hadProEntitlement: true });
+    expect(global.fetch).toHaveBeenCalledWith("https://api.revenuecat.com/v1/subscribers/auth%2Fuuid", expect.objectContaining({
+      headers: { authorization: "Bearer test_fixture", "x-platform": "ios", "x-is-sandbox": "true" },
+    }));
   });
 
   it("reports a lapsed entitlement as inactive (not unknown)", async () => {

@@ -79,7 +79,8 @@ Telemetry for each run ships to Axiom dataset `fitsy-pipeline`. Slack alerts go 
 
 ### 1.3 API Backend (Online)
 
-The Next.js backend is a **read-only query layer**. No external API calls at request time. No scraping, no LLM calls, no macro estimation.
+The Next.js backend queries preloaded restaurant and menu data without runtime scraping, LLM calls or macro estimation.
+Authentication uses Supabase, and subscription reconciliation uses RevenueCat through service wrappers.
 
 | Component | Purpose |
 |---|---|
@@ -314,7 +315,8 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 
 ### 4.1 Integration Principles
 - **Preload script**: calls external APIs directly (no wrappers needed — it's a batch script, not a service)
-- **API backend**: no external API calls at runtime. All data served from DB. Auth delegates to Supabase JWKS.
+- **API backend**: restaurant and nutrition data come from the database.
+  Authentication delegates to Supabase, while subscription reconciliation reads RevenueCat through its service wrapper.
 - No raw external API types leak into business logic
 
 ### 4.2 Uber Eats `getFeedV1` (Preload — Discovery)
@@ -541,7 +543,8 @@ erDiagram
 - **MVP geography**: Los Angeles only (90029 zip code for MVP-0). Preload cost: ~$0.25 for 50 restaurants.
 - **Place Details not needed**: `websiteUri` is available directly from Nearby Search, saving $0.017/restaurant.
 - **Two-phase estimation**: Macros-only for preload (cheap), ingredient breakdown on-demand post-MVP.
-- **No runtime external API calls**: MVP-0 is preload-only. The API backend is a read-only query layer.
+- **Preloaded restaurant data**: no runtime discovery, menu scraping or macro estimation.
+  Authentication and subscription provider lookups are separate from restaurant queries.
 - **Menu extraction rate**: ~85-90% validated in spike (50 restaurants in 90029). Remaining ~10-15% are image-based menus or restaurants with no online presence.
 
 ## Open Questions

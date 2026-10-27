@@ -68,6 +68,48 @@ test('subscriber gets a complete dish contract with confidence and distance', as
   assert.ok(!('bestMatch' in result.data!.restaurant));
 });
 
+test('an entitled Test Store account recovers missing, stale and previously denied proof without mobile sync', async () => {
+  const realFetch = global.fetch;
+  process.env['REVENUECAT_PUBLIC_API_KEY'] = 'test_fixture';
+  let lookups = 0;
+  global.fetch = async (input, init) => {
+    if (String(input).startsWith('https://api.revenuecat.com/')) {
+      assert.equal(String(input), `https://api.revenuecat.com/v1/subscribers/${userId}`);
+      assert.equal(new Headers(init?.headers).get('x-is-sandbox'), 'true');
+      lookups++;
+      return new Response(JSON.stringify({ request_date_ms: Date.now(), subscriber: {
+        original_app_user_id: '$RCAnonymousID:before-login',
+        entitlements: { pro: { product_identifier: 'monthly', expires_date: new Date(Date.now() + 86_400_000).toISOString() } },
+        subscriptions: { monthly: { store: 'test_store', is_sandbox: true } },
+      } }));
+    }
+    return realFetch(input, init);
+  };
+  try {
+    for (const scenario of ['stale', 'renewal', 'denied', 'missing']) {
+      if (scenario === 'missing') await prisma.subscription.delete({ where: { userId } });
+      else await prisma.subscription.update({ where: { userId }, data: {
+        status: scenario === 'denied' ? 'never_subscribed' : 'active',
+        expiresAt: scenario === 'renewal' ? new Date(Date.now() - 1000) : null,
+        lastEventAt: new Date(Date.now() - (scenario === 'stale' ? 25 * 60 * 60 * 1000 : 2000)),
+      } });
+      const result = await body(await GET(request(`cuisineType=${tag}-exact&seed=subscription-${scenario}`)));
+      assert.equal(result.meta.locked, false, scenario);
+      assert.ok(result.data!.item?.id);
+      assert.equal(result.data!.macros!.proteinG, targets.proteinG);
+      assert.equal((await prisma.subscription.findUniqueOrThrow({ where: { userId } })).status, 'active');
+    }
+    assert.equal(lookups, 4);
+  } finally {
+    global.fetch = realFetch;
+    delete process.env['REVENUECAT_PUBLIC_API_KEY'];
+    await prisma.subscription.upsert({ where: { userId },
+      create: { userId, plan: 'monthly', status: 'active', lastEventAt: new Date() },
+      update: { status: 'active', expiresAt: null, lastEventAt: new Date() },
+    });
+  }
+});
+
 test('SQL seeded weighting agrees with the unit-tested race and can choose multiple items per restaurant', async () => {
   const candidates = [`${ids[0]}-a`, `${ids[0]}-b`];
   const expectedWinner = (seed: string) => [...candidates].sort((a, b) => shufflePriority(seed, a, 0) - shufflePriority(seed, b, 0))[0];

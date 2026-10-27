@@ -18,7 +18,7 @@ testIfDb('Shuffle route with real JWT, subscriptions and PostgreSQL', () => {
     const e = error as { stdout?: string; stderr?: string };
     throw Error(`Shuffle route acceptance failed:\n${e.stdout ?? ''}\n${e.stderr ?? ''}`);
   }
-  expect(Number(output.match(/^# tests (\d+)$/m)?.[1])).toBe(12);
+  expect(Number(output.match(/^# tests (\d+)$/m)?.[1])).toBe(13);
   expect(output).toMatch(/^# fail 0$/m);
   expect(output).toMatch(/^# skipped 0$/m);
 }, 65_000);
