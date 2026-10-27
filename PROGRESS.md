@@ -1,3 +1,40 @@
+# Database guardrails Phase A
+
+**TL;DR:** Auditing database access and installing script guardrails in the isolated guardrails clone.
+
+Owner: this session, branch `data/guardrails-phase-a`, starting from fresh `origin/main`.
+Only `/Users/dawitmolla/fitsy-guardrails` is writable source; the requested secrets file and `/tmp/ga/report.md` are explicit output exceptions.
+No access to the four excluded checkouts, no paid provider calls, no PROD database connection or write, and no Supabase account token use.
+Audit sources are repository configuration, Vercel environment names, GitHub secret names and DEV-only database access.
+The existing `backfill-chain-flag.ts --dry-run` attempted one connection to a loopback fixture carrying a synthetic production username; no target guard refused it.
+Selected workflow: the installed ship-branch skill and its standalone Fitsy profile, ordinary hooks, independent local AI review, current green CI and ordinary squash merge.
+The shared guard is integrated into script writers, DEV/Auth fixtures, the owned local DB launcher and the production migration entrypoint.
+The legacy landing --apply path refuses before files or database access.
+The same loopback CLI regression now records zero connections; focused guard, local database launcher, pipeline-fixture and production-build tests pass.
+DEV catalogs confirmed RLS on all 17 application/operational tables; PostGIS spatial_ref_sys is the sole extension-table exception.
+DEV role creation first rolled back on Supabase SQLSTATE 42501 from an unnecessary ALTER of privileged role attributes.
+The provisioner now checks the fresh role defaults instead and retains secret-safe stage/SQLSTATE diagnostics through the actual entrypoint.
+The corrected provisioner saved dev_db_url and dev_db_readonly_url in ~/Desktop/secrets.env with mode 0600.
+Actual credential acceptance passed: SELECT on 18 public tables, zero write-capable tables, read-only default on, and six denied zero-row DML probes including after session read-only was disabled.
+No PROD role, credential change or deployable role migration was introduced.
+Current validation: cheap gates and selected focused tests; the supported planner requires the full native flow set because the existing production migration entrypoint changed.
+PR: https://github.com/dgmolla/fitsy/pull/582 (open).
+Published normally after 85 focused tests and all cheap gates passed, including the actual shared guard through the owned Docker migration/seed caller.
+Current main is an ancestor of the candidate, and both installed local review services are loaded.
+The first exact-head local review passed the P0/P1 gate but identified a confirmed P2 provisioning-order regression.
+The actual shell entrypoints reproduced 12 attempted Preview/Development updates before the new target refusal, using only fake external services.
+The repair validates both derived URLs before any key lookup, database probe or Vercel mutation and retires automatic creation that conflicts with the fixed DEV allowlist.
+Four actual-entrypoint regressions now prove early production/replacement/creation refusal and successful allowlisted DEV wiring against fake services.
+The repaired candidate passed all cheap gates and all 89 focused tests.
+The source-owned test database was retired after the first validation phase through its canonical lock and exact-owner teardown; other owners were preserved.
+The updated source requires a fresh independent review and current CI; earlier review/CI remain historical evidence only.
+The native planner selects all 22 flows because scripts/deploy/migrate-prod.sh changed; no applicable gate is waived.
+The source/configuration audit and actual DEV credential acceptance are complete; runtime PROD RLS remains unqueried.
+Next: require exact-head trusted CI, independent local AI review without P0/P1 and native acceptance, then ordinary squash merge and verify merged-main CI/deploy.
+Final live PR/deployment state is retained in /tmp/ga/report.md so status reporting does not manufacture code changes after candidate review.
+
+## Earlier task history retained from main
+
 **TL;DR:** All 30 failed Haiku macro cases now parse strictly; new spend is $0.093628; review and CI remain.
 
 ## Haiku format fix and rerun

@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# One-time: create the fitsy-dev Supabase project and wire it into Vercel's
-# Preview + Development environments, then migrate, seed, and snapshot.
+# Wire the reviewed, allowlisted fitsy-dev project into Preview + Development,
+# then migrate, seed and snapshot. Project creation/replacement requires review.
 #
 # Prereqs (interactive, run once by a human):
 #   npx supabase login
 #   vercel whoami            (already linked to project "fitsy")
 #
 # Usage:
-#   bash scripts/dev/provision-supabase.sh            # create + wire + migrate + seed
 #   bash scripts/dev/provision-supabase.sh --wire-only <project-ref> <db-password>
 #
 # Idempotent where it can be: re-running with --wire-only re-pushes env vars.
@@ -15,9 +14,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-PROJECT_NAME="fitsy-dev"
 REGION="${SUPABASE_REGION:-us-west-1}"
-PROD_REF="zaxkmjqozvmbifiwbxps"
 
 log() { echo "[provision] $*" >&2; }
 need() { command -v "$1" >/dev/null || { log "missing: $1"; exit 1; }; }
@@ -26,46 +23,17 @@ need npx; need vercel; need jq; need curl
 sb() { npx --yes supabase "$@"; }
 
 # ---------------------------------------------------------------------------
-# 1. Create (or locate) the project
+# 1. Select the already-reviewed project. Never create an unallowlisted project.
 # ---------------------------------------------------------------------------
-if [ "${1:-}" = "--wire-only" ]; then
-  REF="${2:?project ref}"; DB_PASS="${3:?db password}"
-else
-  log "checking Supabase CLI auth"
-  if ! sb projects list -o json >/tmp/sb-projects.json 2>/dev/null; then
-    log "Supabase CLI is not logged in. Run:  npx supabase login   then re-run this script."
-    exit 1
-  fi
-  REF="$(jq -r --arg n "$PROJECT_NAME" '.[] | select(.name==$n) | .id' /tmp/sb-projects.json | head -1)"
-  if [ -n "$REF" ]; then
-    log "project $PROJECT_NAME already exists ($REF). Need its DB password to wire; re-run with --wire-only $REF <password>."
-    exit 1
-  fi
-  ORG_ID="${SUPABASE_ORG_ID:-$(sb orgs list -o json | jq -r '.[0].id')}"
-  DB_PASS="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-28)"
-  log "creating $PROJECT_NAME in org $ORG_ID region $REGION"
-  sb projects create "$PROJECT_NAME" --org-id "$ORG_ID" --region "$REGION" --db-password "$DB_PASS" -o json >/tmp/sb-create.json
-  REF="$(jq -r '.id' /tmp/sb-create.json)"
-  log "created $REF. Waiting for ACTIVE_HEALTHY..."
-  for _ in $(seq 1 60); do
-    STATUS="$(sb projects list -o json | jq -r --arg r "$REF" '.[] | select(.id==$r) | .status')"
-    [ "$STATUS" = "ACTIVE_HEALTHY" ] && break
-    sleep 10
-  done
-  [ "$STATUS" = "ACTIVE_HEALTHY" ] || { log "project not healthy after 10 min (status=$STATUS)"; exit 1; }
-  log "DB password (store in your password manager, it is not retrievable later): $DB_PASS"
+if [ "${1:-}" != "--wire-only" ] || [ "$#" -ne 3 ]; then
+  log "automatic project creation is retired; use --wire-only <reviewed-dev-ref> <db-password>. A replacement needs a reviewed DEV allowlist update first."
+  exit 1
 fi
-
-[ "$REF" != "$PROD_REF" ] || { log "refusing to wire the PRODUCTION project as dev"; exit 1; }
+REF="$2"; DB_PASS="$3"
 
 # ---------------------------------------------------------------------------
-# 2. Derive connection strings + keys
+# 2. Derive and validate routing before any credential lookup or Vercel change.
 # ---------------------------------------------------------------------------
-KEYS_JSON="$(sb projects api-keys --project-ref "$REF" -o json)"
-ANON_KEY="$(echo "$KEYS_JSON" | jq -r '.[] | select(.name=="anon") | .api_key')"
-SERVICE_KEY="$(echo "$KEYS_JSON" | jq -r '.[] | select(.name=="service_role") | .api_key')"
-[ -n "$ANON_KEY" ] && [ -n "$SERVICE_KEY" ] || { log "could not read API keys"; exit 1; }
-
 SUPABASE_URL="https://${REF}.supabase.co"
 # The direct host db.<ref>.supabase.co is IPv6-only on the free tier and Vercel
 # builders are IPv4, so both URLs go through Supavisor: session mode (5432)
@@ -73,6 +41,14 @@ SUPABASE_URL="https://${REF}.supabase.co"
 POOLER_HOST="${SUPABASE_POOLER_HOST:-aws-0-${REGION}.pooler.supabase.com}"
 DIRECT_URL="postgresql://postgres.${REF}:${DB_PASS}@${POOLER_HOST}:5432/postgres"
 POOLED_URL="postgresql://postgres.${REF}:${DB_PASS}@${POOLER_HOST}:6543/postgres?pgbouncer=true"
+
+export POSTGRES_PRISMA_URL="$POOLED_URL" POSTGRES_URL_NON_POOLING="$DIRECT_URL"
+node --import tsx scripts/lib/db-target-guard.ts --dev-only \
+  --env=POSTGRES_URL_NON_POOLING --env=POSTGRES_PRISMA_URL
+KEYS_JSON="$(sb projects api-keys --project-ref "$REF" -o json)"
+ANON_KEY="$(echo "$KEYS_JSON" | jq -r '.[] | select(.name=="anon") | .api_key')"
+SERVICE_KEY="$(echo "$KEYS_JSON" | jq -r '.[] | select(.name=="service_role") | .api_key')"
+[ -n "$ANON_KEY" ] && [ -n "$SERVICE_KEY" ] || { log "could not read API keys"; exit 1; }
 
 log "verifying direct connection"
 POSTGRES_URL_NON_POOLING="$DIRECT_URL" npx prisma migrate status --schema prisma/schema.prisma >/dev/null 2>&1 || true
@@ -99,8 +75,7 @@ push FITSY_ENV "dev"
 # ---------------------------------------------------------------------------
 # 4. Migrate, seed, snapshot
 # ---------------------------------------------------------------------------
-export POSTGRES_PRISMA_URL="$POOLED_URL" POSTGRES_URL_NON_POOLING="$DIRECT_URL" \
-       SUPABASE_URL="$SUPABASE_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY"
+export SUPABASE_URL="$SUPABASE_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY"
 log "prisma migrate deploy"
 npx prisma migrate deploy --schema prisma/schema.prisma
 log "seed"

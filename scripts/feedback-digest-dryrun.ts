@@ -12,6 +12,7 @@
  * Full run (real Slack post):
  *   set -a && . ./.env.local && set +a && npx tsx scripts/feedback-digest-dryrun.ts --post
  */
+import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
 import { PrismaClient } from "@prisma/client";
 import { postSlackMessage } from "../packages/shared/src/utils/notifySlack";
 import { buildFeedbackDigest } from "../apps/api/lib/feedbackDigest";
@@ -20,7 +21,7 @@ const WINDOW_HOURS = 24;
 const POST = process.argv.includes("--post");
 
 async function main(): Promise<void> {
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(process.env["POSTGRES_PRISMA_URL"]) } } });
   const seededIds: string[] = [];
   try {
     const user = await prisma.user.findFirst({ select: { id: true, email: true } });

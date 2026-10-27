@@ -1,18 +1,15 @@
 /**
  * Phase 1 — landing (M6). Consolidates validated extraction rows into the final ChainItem
- * dataset and (gated) upserts them to the DB.
+ * proposal dataset. Database writes from this legacy entrypoint are disabled.
  *
  *   - Reads scripts/phase1-out/run/_coverage.json → official brands.
  *   - Loads each official brand's row file, keeps `valid` rows.
  *   - Resolves Brand.id by slug (read-only DB).
  *   - Requires the verifier's aliases-high.json for both dry runs and DB landing.
  *   - Writes the consolidated set to scripts/phase1-out/chainitems.json after validation.
- *   - With --apply: upserts unreviewed ChainItem candidates on (brandId, canonicalKey).
- *     This is a real database write and is outside issue #498's proposal-only scope.
- *     Reviewed catalog bindings use preload-chain-product-batch.ts and the guarded catalog planner.
+ *   - --apply always refuses; use chainWriteGuard/chainPilotPlan through preload-chain-pilot.ts.
  *
- * Run (dry, safe):  npx tsx --env-file=.env.local scripts/phase1-land.ts
- * Run (apply, GATED): npx tsx --env-file=.env.local scripts/phase1-land.ts --apply
+ * Run (proposal only): npx tsx --env-file=.env.local scripts/phase1-land.ts
  *
  * Historical M6 runbook: docs/engineering/archive/phase1-extraction-execution.md
  * Current proposal scope: docs/engineering/pipeline/chain-rollout-proposals.md
@@ -20,14 +17,17 @@
 import { PrismaClient } from "@prisma/client";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { chainLandingUpsert } from "./phase1-land-payload";
 import { loadVerifiedAliases } from "./phase1-alias-input";
+
+if (process.argv.slice(2).some(arg => /^--apply(?:=|$)/.test(arg))) {
+  console.error("DEPRECATED: phase1-land.ts --apply is disabled. Use the reviewed chainWriteGuard/chainPilotPlan path via preload-chain-pilot.ts; see docs/engineering/pipeline/chain-rollout-proposals.md.");
+  process.exit(1);
+}
 
 // These legacy name aliases remain candidates, not ChainItem.review approval.
 const ALIASES = loadVerifiedAliases("scripts/phase1-out");
 
 const RUN_DIR = "scripts/phase1-out/run";
-const APPLY = process.argv.includes("--apply");
 const p = new PrismaClient();
 
 interface Row { name: string; servingSize: string | null; calories: number | null; proteinG: number | null; carbsG: number | null; fatG: number | null; alluloseG?: number | null; canonicalKey: string; valid: boolean }
@@ -66,22 +66,6 @@ async function main() {
   console.log(`  total UE aliases    : ${out.reduce((a, o) => a + o.aliases.length, 0)} (runtime canon-first lookup keys)`);
   console.log(`  → scripts/phase1-out/chainitems.json`);
 
-  if (APPLY) {
-    const client = p as any;
-    if (!client.chainItem) {
-      console.warn(`\n  🔴 --apply requested but prisma.chainItem is absent.\n     Add the ChainItem model to schema.prisma + run \`prisma migrate dev --name add_chain_item\` first (M6 gate).`);
-    } else {
-      console.log(`\n  applying ${out.length} ChainItem upserts...`);
-      let n = 0;
-      for (const o of out) {
-        if (!o.brandId) continue;
-        await client.chainItem.upsert(chainLandingUpsert({ ...o, brandId: o.brandId }));
-        n++;
-      }
-      console.log(`  applied ${n} ChainItem rows.`);
-    }
-  } else {
-    console.log(`\n  (dry run — no DB writes. Re-run with --apply after the M6 gate.)`);
-  }
+  console.log("Proposal only. Database application requires the reviewed chainWriteGuard/chainPilotPlan path via preload-chain-pilot.ts.");
 }
 main().catch((e) => { console.error("LAND ERROR:", e.message); process.exit(1); }).finally(() => p.$disconnect());

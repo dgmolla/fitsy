@@ -4,16 +4,21 @@
  * Every script under scripts/dev mutates a database. This module makes it
  * structurally impossible to point one at production by accident: the prod
  * Supabase project ref is hardcoded, and any target URL containing it is
- * refused unless FITSY_ALLOW_PROD=1 is set explicitly in the environment.
+ * refused unconditionally, including when legacy override variables are set.
  *
  * Source (read-only) connections to prod are allowed via `prodReadOnlyUrl()`,
  * which appends a session-level read-only flag so a bug cannot write.
  */
 
-export const PROD_PROJECT_REF = "zaxkmjqozvmbifiwbxps";
+import { assertDevDatabase, databaseTarget, PROD_PROJECT_REF } from "../../lib/db-target-guard";
+export { PROD_PROJECT_REF } from "../../lib/db-target-guard";
 
 export function isProdUrl(url: string): boolean {
-  return url.includes(PROD_PROJECT_REF);
+  try {
+    return databaseTarget(url).ref === PROD_PROJECT_REF;
+  } catch {
+    try { return new URL(url).hostname === `${PROD_PROJECT_REF}.supabase.co`; } catch { return false; }
+  }
 }
 
 export function assertNotProd(url: string | undefined, label: string): string {
@@ -22,13 +27,7 @@ export function assertNotProd(url: string | undefined, label: string): string {
       `${label} is not set. Run: vercel env pull --environment=preview .env.dev  (then: export $(grep -v '^#' .env.dev | xargs))`,
     );
   }
-  if (isProdUrl(url) && process.env["FITSY_ALLOW_PROD"] !== "1") {
-    throw new Error(
-      `${label} points at PRODUCTION (${PROD_PROJECT_REF}). Refusing. ` +
-        `This script is for the dev environment. If you really mean prod, set FITSY_ALLOW_PROD=1.`,
-    );
-  }
-  return url;
+  return assertDevDatabase(url);
 }
 
 /**

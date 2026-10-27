@@ -48,7 +48,7 @@ graph LR
 
 ## Guardrails
 
-- Every script in `scripts/dev/` refuses a URL containing the prod project ref unless `FITSY_ALLOW_PROD=1` (`scripts/dev/lib/guard.ts`).
+- DEV-only scripts refuse production unconditionally through the shared [database target guard](db-guardrails.md).
 - `snapshot.ts` opens prod with `default_transaction_read_only=on`; it cannot write there.
 - `vercel-build.sh` refuses to migrate when a preview build sees the prod URL.
 - `scripts/verify/dev-drift.sh` fails when dev lacks a migration on `main` or the seed floor is missing. Registered in `scripts/verify/registry.yml` as shadow; scheduled once the local runner exists.

@@ -45,7 +45,7 @@ function scenario(name: string) {
     const spawned = [];
     const control = databaseControl({ root, command, spawn: (_node, args, opts) => {
       spawned.push({ args, env: opts.env, resetBeforeSpawn: calls.some(call => call[0] === 'exec' && call.includes('psql')) });
-      return { status: mode === 'migration_failure' && args[1] === 'migrate' ? 1 : 0 };
+      return { status: (mode === 'migration_failure' && args[1] === 'migrate') || (mode === 'guard_failure' && args.includes('scripts/lib/db-target-guard.ts')) ? 1 : 0 };
     }, disk: () => ({ bavail: mode === 'low_disk' ? 1 : 3 * 1024 ** 3, bsize: 1 }),
     assertLock: () => {}, env: {
       ...(mode.startsWith('stop_bound_') ? { FITSY_VERIFY_OWNED_DB: 'owned-container-id',
@@ -163,7 +163,7 @@ test('a stopped owned container with no active port restarts before reset', () =
   expect(result.error).toBe('');
   expect(result.calls.some(call => call[0] === 'start')).toBe(true);
   expect(result.calls.some(call => call.includes('psql'))).toBe(true);
-  expect(result.spawned).toHaveLength(3);
+  expect(result.spawned).toHaveLength(4);
 });
 test('startup failure retires a newly created container by its pinned ID', () => {
   const result = scenario('created_startup_failure');
@@ -176,7 +176,7 @@ test('new container is retired after migration failure', () => {
   expect(result.error).toMatch(/migration or seed failed/);
   expect(result.calls.some(call => call[0] === 'rm')).toBe(true);
   expect(result.containerExists).toBe(false);
-  expect(result.spawned).toHaveLength(1);
+  expect(result.spawned).toHaveLength(2);
 });
 test('low disk is rejected before Docker starts', () => {
   const result = scenario('low_disk');
@@ -186,19 +186,21 @@ test('low disk is rejected before Docker starts', () => {
 test('controlled flow overrides configured external URLs and checks ownership before each write', () => {
   const result = scenario('success');
   expect(result.error).toBe('');
-  expect(result.spawned).toHaveLength(3);
+  expect(result.spawned).toHaveLength(4);
   for (const child of result.spawned) {
     expect(child.url).toBe('postgresql://fitsy_test:fitsy_test@' + ['127', '0', '0', '1'].join('.') + ':55432/fitsy_verify');
     expect(child.direct).toBe(child.url);
     expect(child.id).toBe('owned-container-id');
     expect(child.host).toBe(new URL(child.url).hostname);
   }
-  expect(result.calls.filter(call => call[0] === 'inspect')).toHaveLength(6);
+  expect(result.calls.filter(call => call[0] === 'inspect')).toHaveLength(7);
   expect(result.calls.some(call => call.includes('psql'))).toBe(true);
   expect(result.resetCalls).toEqual([['exec', 'owned-container-id', 'psql', '-U', 'fitsy_test', '-d', 'postgres',
     '-v', 'ON_ERROR_STOP=1', '-c', 'DROP DATABASE IF EXISTS fitsy_verify WITH (FORCE)',
     '-c', 'CREATE DATABASE fitsy_verify']]);
-  expect(result.spawned.every(child => child.resetBeforeSpawn)).toBe(true);
+  expect(result.spawned[0]!.args).toContain('scripts/lib/db-target-guard.ts');
+  expect(result.spawned[0]!.resetBeforeSpawn).toBe(false);
+  expect(result.spawned.slice(1).every(child => child.resetBeforeSpawn)).toBe(true);
   expect(result.lockExists).toBe(false);
 });
 test('explicit stop rejects a foreign container', () => {
@@ -303,4 +305,13 @@ test('bound database stop removes the genuine acquired immutable ID', () => {
   expect(result.error).toBe('');
   expect(result.calls).toContainEqual(['rm', '-f', 'owned-container-id']);
   expect(result.containerExists).toBe(false);
+});
+
+// The shared guard adds a denial before the already-owned database reset.
+test('shared target refusal prevents every database reset, migration and seed', () => {
+  const result = scenario('guard_failure');
+  expect(result.error).toMatch(/target guard failed/);
+  expect(result.resetCalls).toEqual([]);
+  expect(result.spawned).toHaveLength(1);
+  expect(result.calls).toContainEqual(['rm', '-f', 'owned-container-id']);
 });

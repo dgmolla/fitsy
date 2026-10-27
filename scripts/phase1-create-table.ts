@@ -7,8 +7,9 @@
  *
  *   npx tsx --env-file=.env.local scripts/phase1-create-table.ts
  */
+import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
 import { PrismaClient } from "@prisma/client";
-const p = new PrismaClient();
+const p = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(process.env["POSTGRES_PRISMA_URL"]) } } });
 
 const STMTS = [
   `CREATE TABLE IF NOT EXISTS "ChainItem" (
