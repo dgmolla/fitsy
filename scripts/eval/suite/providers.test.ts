@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { method, matchingRequest, coarseRequest } from './adapters';
 import { durableAppend, loadCases, sha256 } from './fixtures';
-import { spendState, preInferenceRejection, reconcileRejection } from './budget';
+import { spendState, preInferenceRejection, reconcileRejection, reconcileQwenTimeout } from './budget';
 import { ModelClient, ModelSession, MODEL_STOP_USD, answerSchema, providers, providerRequest, reservation, type Provider } from './providers';
 import { modelSelection, options, requestedSelection, run } from './run';
 import { type JevRequest } from '../lib/jev-experiment';
@@ -250,6 +250,48 @@ test('unserved Qwen routing requires exact rejection plus a same-day zero-usage 
   expect(() => spendState(s.session.ledger)).toThrow('proof changed');
   expect(preInferenceRejection('qwen', 200, body)).toBe(false);
   expect(preInferenceRejection('qwen', 400, body.replace('GMICloud', 'other-provider'))).toBe(false);
+});
+
+test('a lost Qwen body retains its generation ID and stays failed after bounded usage-counter reconciliation', async () => {
+  const fetcher = transport('qwen').mockImplementation(async () => new Response(new ReadableStream({
+    start(controller) { controller.error(new Error('Body deadline exceeded')); },
+  }), { headers: { 'x-generation-id': 'gen-timeout-fixture' } }));
+  const s = setup('qwen', fetcher), coarse = coarseRequest(item);
+  await expect(s.client.send(coarse)).rejects.toThrow('unknown usage'); s.client.close(); s.session.close();
+  const records = readFileSync(s.client.rawFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  expect(records.find(e => e.event === 'headers').generationId).toBe('gen-timeout-fixture');
+  const response = records.find(e => e.event === 'response');
+  // Synthetic elapsed time reproduces the retained live 60-second body timeout without waiting a minute in CI.
+  response.at = '2026-10-27T06:00:00.000Z'; response.latencyMs = 60_010;
+  writeFileSync(s.client.rawFile, records.map(e => JSON.stringify(e)).join('\n') + '\n');
+  expect(() => new ModelSession('blocked', s.directory)).toThrow('Unknown');
+  const base = { provider: 'qwen', endpoint: 'https://openrouter.ai/api/v1/key', byokUsageUsd: 0 };
+  const proof = { requestId: response.requestId, runId: 'run',
+    before: { ...base, at: '2026-10-27T05:59:00.000Z', usageUsd: 1, usageDailyUsd: 0 },
+    after: { ...base, at: '2026-10-27T06:02:00.000Z', usageUsd: 1.0006, usageDailyUsd: .0006 },
+    confirmed: { ...base, at: '2026-10-27T06:02:10.000Z', usageUsd: 1.0006, usageDailyUsd: .0006 } };
+  const proofFile = join(s.directory, `qwen-timeout-${response.requestId}.json`), prefix = readFileSync(s.session.ledger, 'utf8');
+  writeFileSync(proofFile, JSON.stringify(proof));
+  expect(() => reconcileQwenTimeout(s.directory, 'run', response.requestId)).toThrow('stable');
+  expect(readFileSync(s.session.ledger, 'utf8')).toBe(prefix);
+  proof.confirmed.at = '2026-10-27T06:03:00.000Z';
+  for (const p of [proof.after, proof.confirmed]) { p.usageDailyUsd = 1; p.usageUsd = 2; }
+  writeFileSync(proofFile, JSON.stringify(proof));
+  expect(() => reconcileQwenTimeout(s.directory, 'run', response.requestId)).toThrow('reserved');
+  for (const p of [proof.after, proof.confirmed]) { p.usageDailyUsd = .0006; p.usageUsd = 1.0006; }
+  writeFileSync(proofFile, JSON.stringify(proof));
+  expect(reconcileQwenTimeout(s.directory, 'run', response.requestId)).toMatchObject({ unknown: false, modelKnownUsd: .0006 });
+  expect(readFileSync(s.session.ledger, 'utf8').startsWith(prefix)).toBe(true);
+  const out = join(s.directory, 'resumed'); mkdirSync(out);
+  const session = new ModelSession('resumed', s.directory), live = transport('qwen'), client = new ModelClient('qwen', session, out, 'fake-key', live);
+  try {
+    await expect(client.send(coarse)).rejects.toThrow('output unavailable');
+    expect(live).not.toHaveBeenCalled(); expect(client.stopped).toBeNull();
+    await expect(client.send(request)).resolves.toMatchObject({ costUsd: .0001 });
+    expect(spendState(s.session.ledger).modelKnownUsd).toBeCloseTo(.0007);
+  } finally { client.close(); session.close(); }
+  writeFileSync(proofFile, JSON.stringify(proof) + '\n');
+  expect(() => spendState(s.session.ledger)).toThrow('proof changed');
 });
 
 test('pending reservations consume the shared allowance and provider identity cannot disappear at settlement', () => {

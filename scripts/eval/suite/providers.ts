@@ -14,10 +14,12 @@ export const MODEL_HARD_CAP_USD = 3;
 export const MAX_OUTPUT_TOKENS = 1536;
 export const providers = {
   haiku: { model: 'claude-haiku-4-5', requiredModel: 'claude-haiku-4-5-20251001',
+    timeoutMs: 60_000,
     key: 'ANTHROPIC_API_KEY', endpoint: 'https://api.anthropic.com/v1/messages', input: 1, output: 5,
     pricingSource: 'https://platform.claude.com/docs/en/about-claude/pricing' },
   qwen: { model: 'qwen/qwen3-235b-a22b-2507', requiredModel: 'qwen/qwen3-235b-a22b-2507',
     onlyProvider: 'deepinfra/fp8',
+    timeoutMs: 180_000,
     key: 'OPENROUTER_API_KEY', endpoint: 'https://openrouter.ai/api/v1/chat/completions', input: 0.09, output: 0.55,
     pricingSource: 'https://openrouter.ai/api/v1/models' },
 } as const;
@@ -75,11 +77,12 @@ interface ModelExchange { event: string; requestId: string; runId: string; provi
 function modelResponses(directory: string, provider: Provider) {
   const cache = new Map<string, ModelResponse>(), found = new Set<string>(), ledger = join(directory, 'spend.jsonl');
   if (!existsSync(ledger)) return cache;
-  const bills = new Map<string, { runId: string; costUsd: number; failure: string | null; reconciled?: boolean }>();
+  const bills = new Map<string, { runId: string; costUsd: number; failure: string | null; reconciled?: boolean; lostOutput?: boolean }>();
   for (const line of readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean)) {
     const entry = JSON.parse(line);
     if (entry.event === 'settle' && entry.provider === provider) bills.set(entry.requestId, entry);
     if (entry.event === 'reconcile' && entry.provider === provider && bills.has(entry.requestId)) bills.set(entry.requestId, { ...bills.get(entry.requestId)!, costUsd: 0, reconciled: true });
+    if (entry.event === 'reconcile-timeout' && entry.provider === provider && bills.has(entry.requestId)) bills.set(entry.requestId, { ...bills.get(entry.requestId)!, costUsd: entry.costUsd, lostOutput: true });
   }
   for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
     const file = join(directory, entry.name, `${provider}-exchanges.jsonl`);
@@ -88,6 +91,16 @@ function modelResponses(directory: string, provider: Provider) {
     const responses = new Map(exchanges.filter(e => e.event === 'response').map(e => [e.requestId, e]));
     for (const request of exchanges.filter(e => e.event === 'request')) {
       const bill = bills.get(request.requestId), response = responses.get(request.requestId);
+      if (provider === 'qwen' && bill?.lostOutput && response && response.runId === request.runId && bill.runId === request.runId
+        && response.provider === provider && request.provider === provider && response.body === '' && response.status === 200
+        && response.costUsd === null && Number.isFinite(response.latencyMs) && response.latencyMs >= 60_000
+        && JSON.stringify(request.payload) === JSON.stringify(providerRequest(provider, request.request))) {
+        const key = requestKey(request.request);
+        if (cache.has(key)) throw new Error('Duplicate paid model input in history');
+        cache.set(key, { requestId: request.requestId, runId: request.runId, raw: null,
+          failure: 'Reconciled transport failure; output unavailable', latencyMs: response.latencyMs });
+        found.add(request.requestId); continue;
+      }
       if (bill && response && request.provider === provider && response.provider === provider
         && bill.runId === request.runId && response.runId === request.runId && bill.costUsd === 0
         && (response.costUsd === 0 || bill.reconciled && response.costUsd === null) && preInferenceRejection(provider, response.status, response.body)) {
@@ -198,8 +211,12 @@ export class ModelClient implements ChoiceClient {
       const response = await this.transport(config.endpoint, { method: 'POST', redirect: 'error',
         headers: this.provider === 'haiku' ? { 'x-api-key': this.apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
           : { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload), signal: AbortSignal.timeout(60_000) });
-      status = response.status; body = await response.text();
+        body: JSON.stringify(payload), signal: AbortSignal.timeout(config.timeoutMs) });
+      status = response.status;
+      const generationId = response.headers.get('x-generation-id');
+      if (generationId && /^gen-[a-zA-Z0-9_-]+$/.test(generationId)) this.session.record(this.rawFile,
+        { ...receipt, event: 'headers', context: this.context, status, generationId });
+      body = await response.text();
       if (body.includes(this.apiKey)) { body = body.replaceAll(this.apiKey, '[REDACTED]'); failure = 'Credential echo redacted'; }
       const data = JSON.parse(body);
       if (this.provider === 'haiku' && preInferenceRejection(this.provider, status, body)) {

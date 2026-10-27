@@ -90,6 +90,23 @@ The current tool command session is 3718; reap its final exit and inspect the ru
 The canonical product and simulator plans compute `required=false` and scope `none` for this evaluation-only change.
 Next: let the original sample finish, run the offline same-sample/billing audit, commit all raw results and the full comparison report, then obtain cheap checks, exact-head local review and current CI before the authorized squash merge.
 
+## Qwen body timeout and billing recovery
+
+The live continuation stopped at Qwen case 44 when the body of an HTTP 200 macro response exceeded the fixed 60-second timer.
+Retain request `29e09896-35e1-4c34-96ca-bc31c5180787` and its original unknown settlement; known new spend at the stop is $0.42528418.
+The lost request belongs to the original curated macro case `waba-grill:mini-chicken-bowl` and reserved $0.00136077 before transport.
+The failed output must remain failed and must not be retried.
+Recovery assessment: official OpenRouter current-key/generation tools, the existing ledger and transport, the selected ship-branch workflow and read-only browser lookup were assessed.
+Exact generation lookup needs an ID that the body-reading failure discarded; the activity API requires a management key, and the browser has no existing signed-in session.
+No broader credential, new login, admin grant or interactive question was requested; the temporary browser tab was closed.
+Two authorized same-key usage reads at 07:11:10 and 07:15:59 UTC remain identical, 289.436 seconds apart.
+The daily total is $0.01041608 against $0.00971218 of known Qwen responses, leaving $0.00070390 for the sole unresolved request, below its reserved envelope.
+The lifetime delta from the retained zero-daily baseline matches the daily total exactly.
+This is an allocation from aggregate provider billing counters, not recovered token-level usage; preserve that distinction in the report.
+The supported helper will require one unresolved reservation, retained body-timeout evidence, the same UTC day, a zero daily baseline, stable counters and a nonnegative delta inside the reservation, with additive hash-bound history.
+Future Qwen calls get a measured 180-second body deadline and retain generation IDs from headers before reading a body; token and price limits remain unchanged.
+Next: validate and commit this recovery, reconcile the single bounded charge without inventing an output, replay all paid inputs, then continue only unseen inputs on the original 129 IDs.
+
 ## Previous adapter task history
 
 **TL;DR:** Adding dev-only Haiku/Qwen adapters with shared Jev prompts, replay-only Jev and a $2.70 stop.

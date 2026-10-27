@@ -14,7 +14,7 @@ export interface ChoiceClient {
   knownUsd: number; stopped: string | null; requests: number; reusedRequests: number; unknown: boolean; context: string;
   send(request: JevRequest): Promise<{ raw: unknown; costUsd: number; latencyMs: number }>;
 }
-interface Receipt { event: 'reserve' | 'settle' | 'reconcile'; requestId: string; runId: string; at: string;
+interface Receipt { event: 'reserve' | 'settle' | 'reconcile' | 'reconcile-timeout'; requestId: string; runId: string; at: string;
   reserveUsd?: number; costUsd?: number | null; failure?: string | null; provider?: 'haiku' | 'qwen'; responseSha256?: string; usageProofSha256?: string }
 /** Narrow observed pre-inference rejections; missing usage on other errors remains unknown. */
 export function preInferenceRejection(provider: 'haiku' | 'qwen', status: number, body: string) {
@@ -40,13 +40,37 @@ function qwenUsageProof(directory: string, response: { at: string; latencyMs: nu
   }
   return sha256(bytes);
 }
+function qwenTimeoutBill(directory: string, runId: string, requestId: string, history: Receipt[]) {
+  const unresolved = new Set(history.filter(e => e.event === 'settle' && e.costUsd === null).map(e => e.requestId));
+  for (const e of history.filter(e => e.event === 'reconcile' || e.event === 'reconcile-timeout')) unresolved.delete(e.requestId);
+  const reserved = history.find(e => e.event === 'reserve' && e.requestId === requestId && e.runId === runId && e.provider === 'qwen');
+  if (unresolved.size !== 1 || !unresolved.has(requestId) || !reserved?.reserveUsd) throw new Error('Timeout reconciliation requires exactly one unresolved reservation');
+  const exchanges = readFileSync(join(directory, runId, 'qwen-exchanges.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  const responses = exchanges.filter(e => e.event === 'response' && e.requestId === requestId && e.runId === runId && e.provider === 'qwen');
+  if (responses.length !== 1 || responses[0].status !== 200 || responses[0].body !== '' || responses[0].costUsd !== null
+    || !Number.isFinite(Date.parse(responses[0].at)) || !Number.isFinite(responses[0].latencyMs) || responses[0].latencyMs < 60_000) throw new Error('No retained Qwen body-timeout evidence');
+  const response = responses[0], bytes = readFileSync(join(directory, `qwen-timeout-${requestId}.json`), 'utf8'), proof = JSON.parse(bytes);
+  const { before, after, confirmed } = proof;
+  if (proof.requestId !== requestId || proof.runId !== runId || [before, after, confirmed].some(p => !p || p.provider !== 'qwen'
+    || p.endpoint !== 'https://openrouter.ai/api/v1/key' || p.byokUsageUsd !== 0 || !Number.isFinite(p.usageUsd) || p.usageUsd < 0
+    || !Number.isFinite(p.usageDailyUsd) || p.usageDailyUsd < 0 || !Number.isFinite(Date.parse(p.at)) || p.at.slice(0, 10) !== response.at.slice(0, 10))
+    || before.usageDailyUsd !== 0 || Date.parse(before.at) > Date.parse(response.at)
+    || Date.parse(after.at) < Date.parse(response.at) + response.latencyMs + 30_000 || Date.parse(confirmed.at) < Date.parse(after.at) + 30_000
+    || after.usageUsd !== confirmed.usageUsd || after.usageDailyUsd !== confirmed.usageDailyUsd
+    || Math.abs(confirmed.usageUsd - before.usageUsd - confirmed.usageDailyUsd) > 1e-9) throw new Error('No stable isolated-window Qwen usage proof');
+  const knownQwenUsd = history.filter(e => e.provider === 'qwen' && (e.event === 'settle' || e.event === 'reconcile-timeout'))
+    .reduce((sum, e) => sum + (e.costUsd ?? 0), 0);
+  const costUsd = Number((confirmed.usageDailyUsd - knownQwenUsd).toFixed(10));
+  if (!Number.isFinite(costUsd) || costUsd < 0 || costUsd > reserved.reserveUsd) throw new Error('Qwen usage delta exceeds the reserved timeout envelope');
+  return { costUsd, responseSha256: sha256(response.body), usageProofSha256: sha256(bytes) };
+}
 export function spendState(file: string) {
   const pending = new Map<string, Receipt>(), settled = new Set<string>();
   const unknown = new Map<string, Receipt>();
   let knownUsd = 0, modelKnownUsd = 0;
   if (!existsSync(file)) return { knownUsd, modelKnownUsd, unknown: false, pending: 0 };
-  for (const line of readFileSync(file, 'utf8').trim().split('\n').filter(Boolean)) {
-    const r = JSON.parse(line) as Receipt;
+  const history: Receipt[] = readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+  for (const [index, r] of history.entries()) {
     if (!r.requestId || !r.runId || !r.at) throw new Error('Invalid spend ledger receipt');
     if (r.event === 'reserve' && !pending.has(r.requestId) && !settled.has(r.requestId) && (r.provider === undefined ? r.reserveUsd === RESERVATION_USD
       : ['haiku', 'qwen'].includes(r.provider) && Number.isFinite(r.reserveUsd) && r.reserveUsd! > 0)) pending.set(r.requestId, r);
@@ -65,9 +89,30 @@ export function spendState(file: string) {
         || sha256(responses[0].body) !== r.responseSha256) throw new Error('Invalid pre-inference rejection reconciliation');
       if (r.provider === 'qwen' && qwenUsageProof(dirname(file), responses[0]) !== r.usageProofSha256) throw new Error('Qwen usage proof changed');
       unknown.delete(r.requestId);
+    } else if (r.event === 'reconcile-timeout' && unknown.size === 1 && unknown.has(r.requestId) && r.provider === 'qwen'
+      && unknown.get(r.requestId)!.provider === 'qwen' && unknown.get(r.requestId)!.runId === r.runId) {
+      const proof = qwenTimeoutBill(dirname(file), r.runId, r.requestId, history.slice(0, index));
+      if (r.costUsd !== proof.costUsd || r.responseSha256 !== proof.responseSha256 || r.usageProofSha256 !== proof.usageProofSha256) throw new Error('Qwen timeout proof changed');
+      knownUsd += proof.costUsd; modelKnownUsd += proof.costUsd; unknown.delete(r.requestId);
     } else throw new Error('Invalid spend ledger sequence');
   }
   return { knownUsd, modelKnownUsd, unknown: unknown.size > 0 || pending.size > 0, pending: pending.size };
+}
+
+/** Allocate one lost response's charge from stable same-key counters, never fabricate its output or token usage. */
+export function reconcileQwenTimeout(directory: string, runId: string, requestId: string) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(runId) || !/^[a-zA-Z0-9_-]+$/.test(requestId)) throw new Error('Invalid timeout reconciliation identity');
+  const lock = join(directory, '.jev.lock'), fd = openSync(lock, 'wx', 0o600);
+  try { writeFileSync(fd, JSON.stringify({ pid: process.pid, runId, phase: 'reconcile-timeout', startedAt: new Date().toISOString() }) + '\n'); }
+  finally { closeSync(fd); }
+  try {
+    const ledger = join(directory, 'spend.jsonl'); spendState(ledger);
+    const history: Receipt[] = readFileSync(ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    const proof = qwenTimeoutBill(directory, runId, requestId, history);
+    durableAppend(ledger, { provider: 'qwen', requestId, runId, at: new Date().toISOString(), event: 'reconcile-timeout', ...proof,
+      failure: 'Transport output unavailable; charge allocated from same-key usage counters' });
+    return spendState(ledger);
+  } finally { unlinkSync(lock); }
 }
 
 /** Add a zero-inference reconciliation without replacing the original unknown settlement or response. */
