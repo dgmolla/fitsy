@@ -129,11 +129,14 @@ test('four-method sampling is deterministic, dev-only, outcome-independent and b
   expect(providerRequest('qwen', request)).toMatchObject({ provider: { allow_fallbacks: false } });
 });
 
-test('real four-method entrypoint reports all missing keys before transport, with no bill or secret in its receipt', async () => {
+test.each([false, true])('real four-method entrypoint reports missing keys and legacy-name recovery before transport (aliases=%s)', async aliases => {
   const directory = temporary(), source = loadCases('dev', 'curated');
   // Use actual immutable fixture files for preflight; no holdout case is evaluated.
-  const prior = Object.fromEntries(['ANTHROPIC_API_KEY', 'OPENROUTER_API_KEY'].map(k => [k, process.env[k]]));
+  const prior = Object.fromEntries(['ANTHROPIC_API_KEY', 'OPENROUTER_API_KEY', 'anthropic', 'openrouter'].map(k => [k, process.env[k]]));
   delete process.env['ANTHROPIC_API_KEY']; delete process.env['OPENROUTER_API_KEY'];
+  for (const key of ['anthropic', 'openrouter']) {
+    if (aliases) process.env[key] = 'fake-legacy-secret-never-disclose'; else delete process.env[key];
+  }
   const fetcher = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden'));
   try {
     expect(source.cases.every(c => c.split === 'dev')).toBe(true);
@@ -149,6 +152,11 @@ test('real four-method entrypoint reports all missing keys before transport, wit
     expect(existsSync(join(directory, 'results/spend.jsonl'))).toBe(false);
     const failure = JSON.parse(readFileSync(join(directory, 'results', readdirSync(join(directory, 'results'))[0]!, 'failure.json'), 'utf8'));
     expect(failure.failure).toContain('no requests were sent');
+    expect(JSON.stringify(failure)).not.toContain('fake-legacy-secret-never-disclose');
+    if (aliases) {
+      expect(failure.failure).toContain('anthropic -> ANTHROPIC_API_KEY');
+      expect(failure.failure).toContain('openrouter -> OPENROUTER_API_KEY');
+    }
   } finally {
     for (const [key, value] of Object.entries(prior)) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;

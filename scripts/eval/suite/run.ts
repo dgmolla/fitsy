@@ -110,7 +110,11 @@ export async function run(argv: string[], directory = suite) {
     if (config.live) {
       const missing = config.methods.filter((m): m is Provider => m === 'haiku' || m === 'qwen')
         .map(m => providers[m].key).filter(key => !process.env[key]?.trim());
-      if (missing.length) throw new PreflightError(`Missing process credentials: ${missing.join(', ')}. Load only these keys from the authorized env files in memory; no requests were sent.`);
+      if (missing.length) {
+        const aliases: Record<string, string> = { ANTHROPIC_API_KEY: 'anthropic', OPENROUTER_API_KEY: 'openrouter' };
+        const hints = missing.filter(key => process.env[aliases[key]!]?.trim()).map(key => `${aliases[key]} -> ${key}`);
+        throw new PreflightError(`Missing process credentials: ${missing.join(', ')}. Load only these keys from the authorized env files in memory; no requests were sent.${hints.length ? ` Legacy names present; export in the invoking shell: ${hints.join(', ')}.` : ''}`);
+      }
       if (config.methods.includes('jev-v3') && !config.jevReplayOnly && !process.env['TYPESAFE_API_KEY']?.trim()) throw new PreflightError(process.env['jev']?.trim()
         ? 'TYPESAFE_API_KEY is missing; a legacy Jev variable named jev is present. Export it as TYPESAFE_API_KEY in the invoking shell; no requests were sent.'
         : 'TYPESAFE_API_KEY is missing from the invoking environment; no Jev requests were sent.');

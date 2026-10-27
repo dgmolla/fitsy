@@ -1,3 +1,37 @@
+**TL;DR:** Running the fixed 129-case DEV comparison with cached Jev and a $2.70 new-spend stop.
+
+# Haiku and Qwen sample execution
+
+The current task owns `data/eval-suite-haiku-qwen-run` in `/Users/dawitmolla/fitsy-eval-suite`, starting at main `89a6885f68decf87df22dc1e1c904c4095a096ed`, including merged PR #566.
+The human authorized the four-method DEV comparison, process-only sourcing of `~/Desktop/secrets.env`, committed results, PR `data: haiku + qwen dev sample comparison`, and `gh pr merge --squash` only after green CI and local AI review without P0/P1.
+Never evaluate holdout, connect to a database, touch `~/fitsy-refactor`, edit project boards, bypass hooks or use an admin merge.
+The selected standalone ship-branch skill and Fitsy/cutover references control shipping; the existing external local reviewer must supply exact-head independent review.
+
+## Preflight and fixed evidence plan
+
+Read the previous progress, additive spend ledger and paid caches before any paid request.
+The initial ledger is 1,245,175 bytes and 6,722 events, SHA-256 `ad837186b1b70bf6841a0984ca7d12a129dc04c9616d8e4ce1873d4b134924ac`, Git blob `08dffcfaaf065a29ce51cdb826514ed4e2336a6b`.
+It retains $0.12394053 historical Jev spend, zero Haiku/Qwen spend, no pending reservations and no unknown usage.
+The validated Jev cache has 3,179 unique canonical requests and no failed entries; no Haiku/Qwen exchange files or holdout run log exist.
+`modelSelection` at $2.70 selects exactly 129 DEV cases: curated matching/macro 34/25 and bulk matching/macro 44/26.
+The ordered selection SHA-256 is `3ec69529643a0253f95c4e04f927fe0d157c2d9fef14891af309962015a4fa70`.
+The conservative reservation is $2.69768053, compared with $44.02095118 for full DEV.
+All four methods must retain this selection; exact has no macro estimator, which must remain explicitly unavailable rather than invented.
+Jev must use its transport-free replay client; never rerun a previously paid input.
+Report matching pass/wrong/recall/abstain, macro errors and strict pass metrics, method costs/latencies, replay limitations and actual new spend with raw evidence.
+
+The first process preflight found the expected uppercase keys missing.
+Recovery assessment: the selected ship-branch workflow and existing shell/runner support safe process-only mapping; unrelated credential sources and connectors are excluded.
+The approved file actually exports `anthropic` and `openrouter`; sourcing followed by explicit in-memory mapping proves `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY` present by name only.
+No key value was printed or written to the repository.
+The runner now reports these legacy-name recovery hints before transport, with an actual-entrypoint regression and documented invocation, closing the naming failure in the supported consumer.
+A one-off value-free diagnostic had a JavaScript parenthesis typo; the corrected presence check passed without any transport.
+At entry, disk has 27 GiB free and system memory reports 54% free.
+Use one sequential evaluation/test job with a 2 GiB Node heap, no database, native build or simulator, then release its compute before waiting on remote gates.
+Next: run focused regressions, commit source and this preflight, then execute the frozen paid comparison once.
+
+## Previous adapter task history
+
 **TL;DR:** Adding dev-only Haiku/Qwen adapters with shared Jev prompts, replay-only Jev and a $2.70 stop.
 
 # Haiku and Qwen dev comparison

@@ -85,9 +85,21 @@ Sampling is intentionally conservative and may leave substantial money unspent.
 Haiku cost uses returned token counts at $1/M input and $5/M output; Qwen uses returned `usage.cost` with routing price ceilings of $0.09/M input and $0.55/M output, checked October 26, 2026.
 
 No env file is sourced or auto-loaded by the runner.
-Only explicitly authorized credential keys may be selected with a dotenv parser into the child process environment; never evaluate an env file as shell code, copy secrets into result files, or load database variables.
-For the October 26 run, the permitted sources were `~/Desktop/secrets.env` and repository env files.
-The named file contained legacy Jev only, and conventional repository env files and the process environment supplied neither paid-model key.
-The actual four-method entrypoint lists every missing key before any request or reservation, so an unavailable provider is never silently substituted.
+Only explicitly authorized credential keys may enter the child process environment; never copy secrets into result files or connect to a database for this suite.
+For the follow-up October 26 run, the human explicitly approved shell sourcing of `~/Desktop/secrets.env` into the invoking process.
+That file uses legacy `anthropic` and `openrouter` names, mapped in memory with the following authorized invocation.
+
+```sh
+set +x
+set -a
+source "$HOME/Desktop/secrets.env"
+set +a
+export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-${anthropic:-}}"
+export OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-${openrouter:-}}"
+# Check presence by name only; never print values or the whole environment.
+```
+
+Without explicit shell-sourcing approval, select authorized keys using a dotenv parser.
+The actual four-method entrypoint lists every missing key and any recognized legacy name before any request or reservation, so an unavailable provider is never silently substituted.
 Other connected tools have no relevant credential source; unrelated hosting environments and all `~/fitsy-refactor` paths are excluded.
 An unavailable live run remains unavailable; offline fixtures prove adapter mechanics, not model quality or live API acceptance.
