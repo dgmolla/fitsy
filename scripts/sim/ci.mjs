@@ -6,6 +6,7 @@ import { delimiter, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { impactPlan, repository, simulatorFlows, gitEnv, isMain } from '../verify/impact-plan.mjs';
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
+import { withSlackVideo } from './slack-video.mjs';
 
 export function renderSmoke(documents, selector) {
   const [header, commands] = documents;
@@ -23,9 +24,9 @@ export function renderSmoke(documents, selector) {
 export function localSelection(args, plan = impactPlan()) {
   const options = {};
   for (const arg of args) {
-    const match = /^--(scope|flows|udid)=(.*)$|^--(plan)$/.exec(arg);
+    const match = /^--(scope|flows|udid)=(.*)$|^--(plan|record-video)$/.exec(arg);
     if (!match || Object.hasOwn(options, match[1] || match[3]))
-      throw new Error('Usage: ci.mjs [--scope=none|smoke|flow|full|changed|all] [--flows=name,...] [--udid=UDID] [--plan]');
+      throw new Error('Usage: ci.mjs [--scope=none|smoke|flow|full|changed|all] [--flows=name,...] [--udid=UDID] [--plan] [--record-video]');
     options[match[1] || match[3]] = match[1] ? match[2] : true;
   }
   const scope = options.scope === 'all' ? 'full' : !options.scope || options.scope === 'changed' ? plan.simulator.scope : options.scope;
@@ -112,14 +113,15 @@ export async function runLocal(args = process.argv.slice(2)) {
             if (fixture.name === 'entitled-dev' && !process.env[key]?.trim()) throw new Error(`Local ${key} is required for log-meal`);
             return process.env[key] ? ['-e', `${key}=${process.env[key]}`] : [];
           });
-          const result = await runOwnedMaestro(maestro, ['--device', udid, 'test', ...loginArgs, '--format', 'junit',
+          const result = await withSlackVideo({ enabled: options['record-video'] || process.env.FITSY_SIM_RECORD_VIDEO === '1',
+            udid, dir, signal: controller.signal }, () => runOwnedMaestro(maestro, ['--device', udid, 'test', ...loginArgs, '--format', 'junit',
             '--output', resolve(dir, 'report.xml'), '--debug-output', dir, '--test-output-dir', dir, path], {
             cwd: repository, dir, timeline: resolve(out, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'),
             signal: controller.signal, env: { ...gitEnv(),
               PATH: `${resolve(repository, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
               FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: resolve(dir, 'capture.jsonl') },
             diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', resolve(dir, 'failure.png')]),
-          });
+          }));
           if (result.code !== 0 || result.reason) throw new Error(`Maestro flow ${name} failed; inspect ${dir}`);
           const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file));
           if (reports.length !== 1) throw new Error(`Expected exactly one command report: ${name}`);
