@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { JEV_LIMITS, parseChoiceAnswers, type JevRequest } from '../lib/jev-experiment';
-import { sha256 } from './fixtures';
+import { durableAppend, sha256 } from './fixtures';
 
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -21,8 +21,8 @@ export function paidResponses(directory: string) {
   if (!existsSync(ledger)) return cache;
   const settlements = new Map<string, { runId: string; costUsd: number; failure: string | null }>();
   for (const line of readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean)) {
-    const entry = JSON.parse(line) as { event: string; requestId: string; runId: string; costUsd: number; failure?: string | null };
-    if (entry.event === 'settle') settlements.set(entry.requestId, { runId: entry.runId, costUsd: entry.costUsd, failure: entry.failure ?? null });
+    const entry = JSON.parse(line) as { event: string; requestId: string; runId: string; costUsd: number; failure?: string | null; provider?: string };
+    if (entry.event === 'settle' && entry.provider === undefined) settlements.set(entry.requestId, { runId: entry.runId, costUsd: entry.costUsd, failure: entry.failure ?? null });
   }
   const found = new Set<string>();
   for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -55,4 +55,30 @@ export function paidResponses(directory: string) {
   }
   if ([...settlements.keys()].some(id => !found.has(id))) throw new Error('Paid exchange evidence is missing; refuse duplicate collection');
   return cache;
+}
+
+/** No credential or transport exists on this client: a cache miss cannot spend. */
+export class ReplayClient {
+  knownUsd = 0;
+  stopped: string | null = null;
+  requests = 0;
+  reusedRequests = 0;
+  unknown = false;
+  context = '';
+  private replay: Map<string, PaidResponse | null>;
+  constructor(readonly runId: string, directory: string, private rawFile: string) {
+    this.replay = paidResponses(directory);
+  }
+  async send(request: JevRequest) {
+    const key = requestKey(request), cached = this.replay.get(key);
+    if (!cached || this.stopped) {
+      this.stopped ??= 'Jev replay unavailable; paid transport is disabled';
+      throw new Error(this.stopped);
+    }
+    durableAppend(this.rawFile, { event: 'reuse', runId: this.runId, context: this.context,
+      requestSha256: key, sourceRunId: cached.runId, sourceRequestId: cached.requestId,
+      originalLatencyMs: cached.latencyMs, costUsd: 0, at: new Date().toISOString() });
+    this.reusedRequests++;
+    return { raw: structuredClone(cached.raw), costUsd: 0, latencyMs: cached.latencyMs };
+  }
 }

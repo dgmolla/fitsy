@@ -140,9 +140,10 @@ test('Jev projections expose no expected macros, fixture IDs, labels, rationale 
   const all = JSON.stringify({ state, estimator: estimatorState(input) });
   for (const text of [row.id, 'expected', 'calories', 'protein', 'category', 'holdout', 'source', 'why']) expect(all.includes(text)).toBe(false);
   expect(() => estimatorState({ ...input, description: 'Provides 100 calories.' })).toThrow('Nutrition target');
-  expect(() => method('haiku')).toThrow('stub'); expect(() => method('qwen')).toThrow('stub');
+  expect(() => method('haiku')).toThrow('client missing'); expect(() => method('qwen')).toThrow('client missing');
   expect(() => options(['--methods=jev-v3'])).toThrow('explicit');
-  expect(() => options(['--methods=haiku', '--live'])).toThrow('disabled');
+  expect(options(['--methods=haiku', '--live']).jevReplayOnly).toBe(true);
+  expect(() => options(['--methods=qwen', '--split=holdout', '--live'])).toThrow('dev-only');
   expect(() => options(['--split=dev', '--split=holdout'])).toThrow('Usage');
 });
 

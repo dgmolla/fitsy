@@ -26,7 +26,13 @@ Do not invent Haiku/Qwen measurements if credentials remain unavailable.
 
 The selected ship-branch skill and standalone Fitsy/cutover references control shipping.
 One sequential local test job has a 2 GiB Node heap estimate, with no simulator, DB or native job needed; disk has 26 GiB free and memory-pressure output reports 58% free at entry.
-Next: commit this task checkpoint, then implement the shared protocol and additive billing before freezing execution source.
+The first 41 focused tests passed across the original suite and the new provider transports/budget tests.
+The initial test run found one obsolete disabled-stub assertion; it now verifies explicit client admission and dev-only selection.
+The adapters share the original matching/coarse/fine builders and decoder, with unchanged Jev task prompts and protocol identity.
+The new session uses the existing ledger and lock, retains old entries, counts Haiku/Qwen spending across invocations, reserves the entire response envelope and stops at $2.70.
+Jev in a paid-model comparison uses a transport-free replay client; an explicit `--replay-only` mode also supports credential-free baseline recovery.
+The credential failure now names both missing keys in one secret-safe receipt before any request or reservation, and the actual entrypoint's regression covers that recovery contract.
+Next: finish focused/static checks, commit execution source, run the exact requested command for a durable preflight receipt, then run full dev exact/Jev replay without any paid calls.
 
 ## Previous task history
 

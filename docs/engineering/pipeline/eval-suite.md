@@ -18,14 +18,15 @@ flowchart LR
   H --> V[Verify hashes and append run receipt]
   V --> R
   R --> M[Failure-inclusive metrics and durable results]
-  R --> J[Explicit live Jev: exclusive additive budget]
+  R --> J[Explicit live providers: exclusive additive budget]
+  R --> CACHED[Exact-request Jev replay: no paid transport]
 ```
 
 ## Run
 
 Install dependencies with `npm ci` in the repository root.
-No command loads environment files, connects to any database, or imports an Anthropic client.
-The sole network path is an explicitly selected Jev adapter sending to `https://api.typesafe.ai/v1/systemone`.
+No command loads environment files or connects to any database.
+Explicit live adapters use fixed inference endpoints for Jev, Anthropic and OpenRouter, without provider tools, production writers or automatic retries.
 Do not configure or connect to production Supabase for this work.
 
 ```sh
@@ -58,7 +59,9 @@ It excludes all unaffected old work and all holdout cases.
 All 386 eligible cases fit the conservative remaining reservation budget without sampling.
 
 `--methods` selects a comma-separated set; `--split` accepts `dev` or `holdout`; `--tier` accepts `curated`, `bulk`, or `both`.
-Haiku and Qwen names are documented, disabled stubs and cannot make requests.
+Haiku and Qwen implement the same Jev-v3 matcher and hierarchical estimator through isolated inference transports.
+Their one-run-approved dev comparison, credential preflight, $2.70 combined stop and deterministic common sampling are documented in the [runner guide](../../../scripts/eval/suite/README.md#paid-model-adapters).
+Selecting either makes Jev strictly replay-only; selecting either with holdout is refused before fixture evaluation.
 No actual holdout evaluation is authorized for the construction and baseline work recorded here.
 Tests use an unrelated Toy Chain temporary fixture to exercise holdout logging; they never score repository holdout cases.
 

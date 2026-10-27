@@ -10,24 +10,31 @@ import { paidResponses, requestKey, type PaidResponse } from './replay';
 export const STOP_USD = 4.50;
 export const HARD_CAP_USD = 5;
 export const RESERVATION_USD = JEV_LIMITS.reservedInputTokens * JEV_LIMITS.pricing.inputUsdPerMillion / 1_000_000;
+export interface ChoiceClient {
+  knownUsd: number; stopped: string | null; requests: number; reusedRequests: number; unknown: boolean; context: string;
+  send(request: JevRequest): Promise<{ raw: unknown; costUsd: number; latencyMs: number }>;
+}
 interface Receipt { event: 'reserve' | 'settle'; requestId: string; runId: string; at: string;
-  reserveUsd?: number; costUsd?: number | null; failure?: string | null }
+  reserveUsd?: number; costUsd?: number | null; failure?: string | null; provider?: 'haiku' | 'qwen' }
 export function spendState(file: string) {
-  const pending = new Set<string>(), settled = new Set<string>();
-  let knownUsd = 0, unknown = false;
-  if (!existsSync(file)) return { knownUsd, unknown, pending: 0 };
+  const pending = new Map<string, Receipt>(), settled = new Set<string>();
+  let knownUsd = 0, modelKnownUsd = 0, unknown = false;
+  if (!existsSync(file)) return { knownUsd, modelKnownUsd, unknown, pending: 0 };
   for (const line of readFileSync(file, 'utf8').trim().split('\n').filter(Boolean)) {
     const r = JSON.parse(line) as Receipt;
     if (!r.requestId || !r.runId || !r.at) throw new Error('Invalid spend ledger receipt');
-    if (r.event === 'reserve' && !pending.has(r.requestId) && !settled.has(r.requestId) && r.reserveUsd === RESERVATION_USD) pending.add(r.requestId);
-    else if (r.event === 'settle' && pending.delete(r.requestId) && !settled.has(r.requestId)) {
-      settled.add(r.requestId);
+    if (r.event === 'reserve' && !pending.has(r.requestId) && !settled.has(r.requestId) && (r.provider === undefined ? r.reserveUsd === RESERVATION_USD
+      : ['haiku', 'qwen'].includes(r.provider) && Number.isFinite(r.reserveUsd) && r.reserveUsd! > 0)) pending.set(r.requestId, r);
+    else if (r.event === 'settle' && pending.has(r.requestId) && !settled.has(r.requestId)) {
+      const reserved = pending.get(r.requestId)!;
+      if (r.provider !== reserved.provider || r.runId !== reserved.runId) throw new Error('Spend settlement differs from reservation');
+      pending.delete(r.requestId); settled.add(r.requestId);
       if (r.costUsd === null) unknown = true;
-      else if (typeof r.costUsd === 'number' && Number.isFinite(r.costUsd) && r.costUsd >= 0) knownUsd += r.costUsd;
+      else if (typeof r.costUsd === 'number' && Number.isFinite(r.costUsd) && r.costUsd >= 0) { knownUsd += r.costUsd; if (r.provider) modelKnownUsd += r.costUsd; }
       else throw new Error('Invalid spend ledger cost');
     } else throw new Error('Invalid spend ledger sequence');
   }
-  return { knownUsd, unknown: unknown || pending.size > 0, pending: pending.size };
+  return { knownUsd, modelKnownUsd, unknown: unknown || pending.size > 0, pending: pending.size };
 }
 
 /** One exclusive durable ledger across all suite runs; an unknown bill blocks further collection. */
