@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "rows": ["yoshinoya:combo-xl-bowls-select-one-base/brown-rice", "yoshinoya:regular-combo-bowls-select-one-base/brown-rice"],
+      "why": "The official table publishes the same 312 g brown-rice base in both combo headings, with identical four-macro facts."
+    },
+    {
+      "rows": ["yoshinoya:combo-xl-bowls-select-one-base/japanese-udon-noodles", "yoshinoya:regular-combo-bowls-select-one-base/japanese-udon-noodles"],
+      "why": "Both combo headings identify the same 290 g Japanese Udon Noodles base, with identical four-macro facts."
+    },
+    {
+      "rows": ["yoshinoya:combo-xl-bowls-select-one-base/white-rice", "yoshinoya:regular-combo-bowls-select-one-base/white-rice"],
+      "why": "Both combo headings identify the same 312 g white-rice base, with identical four-macro facts."
+    },
+    {
+      "rows": ["yoshinoya:combo-xl-bowls-select-one-vegetable/mixed-veggies", "yoshinoya:regular-combo-bowls-select-one-vegetable/mixed-veggies"],
+      "why": "Both combo headings identify the same 113 g mixed-vegetable component, with identical four-macro facts; the distinct 35-kcal side remains separate."
+    },
+    {
+      "rows": ["yoshinoya:habanero-chicken-side", "yoshinoya:regular-combo-bowls-select-two-regular-proteins/grilled-habanero-chicken"],
+      "why": "The reviewed 166 g no-rice habanero chicken side is the same published recipe and portion as the regular combo protein component."
+    },
+    {
+      "rows": ["yoshinoya:sides/teriyaki-chicken", "yoshinoya:regular-combo-bowls-select-two-regular-proteins/grilled-teriyaki-chicken"],
+      "why": "The 166 g teriyaki chicken side and regular combo protein component have the same published recipe, portion, and four-macro facts."
+    },
+    {
+      "rows": ["yoshinoya:sides/teriyaki-salmon", "yoshinoya:regular-combo-bowls-select-two-regular-proteins/grilled-teriyaki-salmon"],
+      "why": "The 166 g teriyaki salmon side and regular combo protein component have the same published recipe, portion, and four-macro facts."
+    }
+  ]
+}

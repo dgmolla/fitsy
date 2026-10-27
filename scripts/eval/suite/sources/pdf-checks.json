@@ -1,0 +1,1503 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-26",
+  "macroOrder": "calories, protein g, carbohydrate g, total fat g",
+  "rows": [
+    {
+      "id": "wahoo-s-fish-taco:sides/6-oz-black-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "6 oz Black Beans",
+      "section": "Sides",
+      "serving": "6 oz",
+      "observed": {
+        "calories": 218.76,
+        "protein": 13.88,
+        "carbs": 41.05,
+        "fat": 1.09
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 9-10, Sides, 6 oz Black Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "6 oz Black Beans\n                                                  218.76     9.78   13.88      41.05    1.09    0.31     0.00   0.00    732.78   15.63    2.41"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/6-oz-brown-rice",
+      "chain": "Wahoo's Fish Taco",
+      "name": "6 oz Brown Rice",
+      "section": "Sides",
+      "serving": "6 oz",
+      "observed": {
+        "calories": 209.99,
+        "protein": 3.99,
+        "carbs": 38.58,
+        "fat": 4.39
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 11-12, Sides, 6 oz Brown Rice"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "6 oz Brown Rice\n                                                  209.99    39.52    3.99      38.58    4.39    0.71     0.00   0.00    230.43    1.80    0.44"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/6-oz-white-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "6 oz White Beans",
+      "section": "Sides",
+      "serving": "6 oz",
+      "observed": {
+        "calories": 139.72,
+        "protein": 7.73,
+        "carbs": 27.15,
+        "fat": 1.16
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 13-14, Sides, 6 oz White Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "6 oz White Beans\n                                                  139.72    10.41    7.73      27.15    1.16    0.26     0.00   0.00    991.07   10.92    4.27"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/6-oz-white-rice",
+      "chain": "Wahoo's Fish Taco",
+      "name": "6 oz White Rice",
+      "section": "Sides",
+      "serving": "6 oz",
+      "observed": {
+        "calories": 240.43,
+        "protein": 3.74,
+        "carbs": 41.91,
+        "fat": 5.75
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 15-16, Sides, 6 oz White Rice"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "6 oz White Rice\n                                                  240.43    51.77    3.74      41.91    5.75    3.53    14.74   0.00    464.81    0.70    0.06"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-brown-rice-black-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Large Side 1/2 & 1/2 Brown Rice Black Beans",
+      "section": "Sides",
+      "serving": "1 published menu portion; Large Side 1/2 & 1/2 Brown Rice Black Beans",
+      "observed": {
+        "calories": 374.15,
+        "protein": 15.86,
+        "carbs": 66.65,
+        "fat": 5.69
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 25-26, Sides, Large Side 1/2 & 1/2 Brown Rice Black Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Large Side 1/2 & 1/2 Brown Rice Black Beans\n                                                  374.15    51.19   15.86      66.65    5.69    0.98     0.00   0.00    798.52   11.64    1.86"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-brown-rice-white-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Large Side 1/2 & 1/2 Brown Rice White Beans",
+      "section": "Sides",
+      "serving": "1 published menu portion; Large Side 1/2 & 1/2 Brown Rice White Beans",
+      "observed": {
+        "calories": 329.57,
+        "protein": 11.78,
+        "carbs": 59.41,
+        "fat": 6.26
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 27-28, Sides, Large Side 1/2 & 1/2 Brown Rice White Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Large Side 1/2 & 1/2 Brown Rice White Beans\n                                                  329.57    56.34   11.78      59.41    6.26    1.06     0.00   0.00   2224.71   14.53    5.47"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-black-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Large Side 1/2 & 1/2 White Rice Black Beans",
+      "section": "Sides",
+      "serving": "1 published menu portion; Large Side 1/2 & 1/2 White Rice Black Beans",
+      "observed": {
+        "calories": 492.39,
+        "protein": 17.51,
+        "carbs": 88.21,
+        "fat": 7.67
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 29-30, Sides, Large Side 1/2 & 1/2 White Rice Black Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Large Side 1/2 & 1/2 White Rice Black Beans\n                                                  492.39    69.02   17.51      88.21    7.67    4.38    17.20   0.00   1112.83   11.13    1.69"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-white-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Large Side 1/2 & 1/2 White Rice White Beans",
+      "section": "Sides",
+      "serving": "1 published menu portion; Large Side 1/2 & 1/2 White Rice White Beans",
+      "observed": {
+        "calories": 447.82,
+        "protein": 13.43,
+        "carbs": 80.98,
+        "fat": 8.24
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 31-32, Sides, Large Side 1/2 & 1/2 White Rice White Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Large Side 1/2 & 1/2 White Rice White Beans\n                                                  447.82    74.17   13.43      80.98    8.24    4.46    17.20   0.00   2539.01   14.01    5.30"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-black-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side 1/2 & 1/2 Brown Rice Black Beans",
+      "section": "Sides",
+      "serving": "1 published menu portion; Side 1/2 & 1/2 Brown Rice Black Beans",
+      "observed": {
+        "calories": 240.52,
+        "protein": 10.2,
+        "carbs": 42.85,
+        "fat": 3.66
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 33-34, Sides, Side 1/2 & 1/2 Brown Rice Black Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side 1/2 & 1/2 Brown Rice Black Beans\n                                                  240.52    32.91   10.20      42.85    3.66    0.63     0.00   0.00    513.34    7.48    1.20"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-white-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side 1/2 & 1/2 Brown Rice White Beans",
+      "section": "Sides",
+      "serving": "1 published menu portion; Side 1/2 & 1/2 Brown Rice White Beans",
+      "observed": {
+        "calories": 211.87,
+        "protein": 7.57,
+        "carbs": 38.2,
+        "fat": 4.02
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 35-36, Sides, Side 1/2 & 1/2 Brown Rice White Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side 1/2 & 1/2 Brown Rice White Beans\n                                                  211.87    36.22    7.57      38.20    4.02    0.68     0.00   0.00   1430.17    9.34    3.52"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-black-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side 1/2 & 1/2 White Rice Black Beans",
+      "section": "Sides",
+      "serving": "1 published menu portion; Side 1/2 & 1/2 White Rice Black Beans",
+      "observed": {
+        "calories": 316.54,
+        "protein": 11.26,
+        "carbs": 56.71,
+        "fat": 4.93
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 37-38, Sides, Side 1/2 & 1/2 White Rice Black Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side 1/2 & 1/2 White Rice Black Beans\n                                                  316.54    44.37   11.26      56.71    4.93    2.82    11.06   0.00    715.39    7.15    1.09"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-white-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side 1/2 & 1/2 White Rice White Beans",
+      "section": "Sides",
+      "serving": "1 published menu portion; Side 1/2 & 1/2 White Rice White Beans",
+      "observed": {
+        "calories": 287.88,
+        "protein": 8.63,
+        "carbs": 52.06,
+        "fat": 5.3
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 62,
+        "printedPage": 61,
+        "locator": "page 62, source.txt lines 39-40, Sides, Side 1/2 & 1/2 White Rice White Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side 1/2 & 1/2 White Rice White Beans\n                                                  287.88    47.68    8.63      52.06    5.30    2.87    11.06   0.00   1632.22    9.01    3.41"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-citrus-slaw-large-6oz",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side Citrus Slaw Large 6oz.",
+      "section": "Sides",
+      "serving": "6oz",
+      "observed": {
+        "calories": 127.42,
+        "protein": 2.48,
+        "carbs": 9.24,
+        "fat": 10.24
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 63,
+        "printedPage": 62,
+        "locator": "page 63, source.txt lines 9-10, Sides, Side Citrus Slaw Large 6oz."
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side Citrus Slaw Large 6oz.\n                                                127.42    92.12    2.48       9.24   10.24   1.45    0.00   0.00    367.88    3.97    3.86"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-citrus-slaw-small-3oz",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side Citrus Slaw Small 3oz.",
+      "section": "Sides",
+      "serving": "3oz",
+      "observed": {
+        "calories": 63.71,
+        "protein": 1.24,
+        "carbs": 4.62,
+        "fat": 5.12
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 63,
+        "printedPage": 62,
+        "locator": "page 63, source.txt lines 11-12, Sides, Side Citrus Slaw Small 3oz."
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side Citrus Slaw Small 3oz.\n                                                 63.71    46.06    1.24       4.62    5.12   0.72    0.00   0.00    183.94    1.99    1.93"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-guac-12-oz",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side Guac 12 oz.",
+      "section": "Sides",
+      "serving": "12 oz",
+      "observed": {
+        "calories": 474.18,
+        "protein": 6.04,
+        "carbs": 22.72,
+        "fat": 44.27
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 63,
+        "printedPage": 62,
+        "locator": "page 63, source.txt lines 13-14, Sides, Side Guac 12 oz."
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side Guac 12 oz.\n                                                474.18   398.45    6.04      22.72   44.27   5.22    0.00   0.00   1070.83   13.56    2.55"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-guac-3-oz",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side Guac 3 oz.",
+      "section": "Sides",
+      "serving": "3 oz",
+      "observed": {
+        "calories": 118.54,
+        "protein": 1.51,
+        "carbs": 5.68,
+        "fat": 11.07
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 63,
+        "printedPage": 62,
+        "locator": "page 63, source.txt lines 15-16, Sides, Side Guac 3 oz."
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side Guac 3 oz.\n                                                118.54    99.61    1.51       5.68   11.07   1.31    0.00   0.00    267.71    3.39    0.64"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-of-cauliflower-rice-7oz",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side of Cauliflower Rice 7oz",
+      "section": "Sides",
+      "serving": "7oz",
+      "observed": {
+        "calories": 48.01,
+        "protein": 4.54,
+        "carbs": 9.85,
+        "fat": 0.03
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 63,
+        "printedPage": 62,
+        "locator": "page 63, source.txt lines 23-24, Sides, Side of Cauliflower Rice 7oz"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side of Cauliflower Rice 7oz\n                                                 48.01     0.30    4.54       9.85    0.03   0.01    0.00   0.00    517.54    4.67    4.62"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-pico-de-gallo-salsa-12-oz",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side Pico De Gallo Salsa 12 oz.",
+      "section": "Sides",
+      "serving": "12 oz",
+      "observed": {
+        "calories": 73.2,
+        "protein": 3.53,
+        "carbs": 15.69,
+        "fat": 0.76
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 63,
+        "printedPage": 62,
+        "locator": "page 63, source.txt lines 25-26, Sides, Side Pico De Gallo Salsa 12 oz."
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side Pico De Gallo Salsa 12 oz.\n                                                 73.20     6.83    3.53      15.69    0.76   0.11    0.00   0.00   1069.34    4.57    8.78"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-pico-de-gallo-salsa-3-oz",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side Pico De Gallo Salsa 3 oz.",
+      "section": "Sides",
+      "serving": "3 oz",
+      "observed": {
+        "calories": 18.3,
+        "protein": 0.88,
+        "carbs": 3.92,
+        "fat": 0.19
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 63,
+        "printedPage": 62,
+        "locator": "page 63, source.txt lines 27-28, Sides, Side Pico De Gallo Salsa 3 oz."
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side Pico De Gallo Salsa 3 oz.\n                                                 18.30     1.71    0.88       3.92    0.19   0.03    0.00   0.00    267.34    1.14    2.19"
+    },
+    {
+      "id": "wahoo-s-fish-taco:sides/side-roasted-tomato-salsa-large-12oz",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Side Roasted Tomato Salsa Large 12oz.",
+      "section": "Sides",
+      "serving": "12oz",
+      "observed": {
+        "calories": 100.08,
+        "protein": 3.22,
+        "carbs": 16.43,
+        "fat": 3.63
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 63,
+        "printedPage": 62,
+        "locator": "page 63, source.txt lines 39-40, Sides, Side Roasted Tomato Salsa Large 12oz."
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Side Roasted Tomato Salsa Large 12oz.\n                                                100.08    32.63    3.22      16.43    3.63   0.50    0.00   0.00   1443.25    4.59    8.47"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carne-asada-white-rice-white-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Fajita Veggie Bowl - Carne Asada White Rice White Beans",
+      "section": "Wahoo's Fresno",
+      "serving": "1 published menu portion; Fajita Veggie Bowl - Carne Asada White Rice White Beans",
+      "observed": {
+        "calories": 802.73,
+        "protein": 34.47,
+        "carbs": 90.76,
+        "fat": 34.24
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 70,
+        "printedPage": 69,
+        "locator": "page 70, source.txt lines 1-2, Wahoo's Fresno, Fajita Veggie Bowl - Carne Asada White Rice White Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Fajita Veggie Bowl - Carne Asada White Rice White\nBeans                                                 802.73   308.14   34.47      90.76   34.24   10.93    83.24   0.25   2866.31   16.41   10.93"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-brown-rice-black-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Fajita Veggie Bowl - Carnitas Brown Rice Black Beans",
+      "section": "Wahoo's Fresno",
+      "serving": "1 published menu portion; Fajita Veggie Bowl - Carnitas Brown Rice Black Beans",
+      "observed": {
+        "calories": 814.41,
+        "protein": 51.58,
+        "carbs": 77.93,
+        "fat": 33.66
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 70,
+        "printedPage": 69,
+        "locator": "page 70, source.txt lines 3-4, Wahoo's Fresno, Fajita Veggie Bowl - Carnitas Brown Rice Black Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Fajita Veggie Bowl - Carnitas Brown Rice Black\nBeans                                                 814.41   302.96   51.58      77.93   33.66    7.25   113.51   0.36   2042.13   15.70    8.50"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-brown-rice-white-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Fajita Veggie Bowl - Carnitas Brown Rice White Beans",
+      "section": "Wahoo's Fresno",
+      "serving": "1 published menu portion; Fajita Veggie Bowl - Carnitas Brown Rice White Beans",
+      "observed": {
+        "calories": 776.2,
+        "protein": 48.08,
+        "carbs": 71.73,
+        "fat": 34.15
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 70,
+        "printedPage": 69,
+        "locator": "page 70, source.txt lines 5-6, Wahoo's Fresno, Fajita Veggie Bowl - Carnitas Brown Rice White Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Fajita Veggie Bowl - Carnitas Brown Rice White\nBeans                                                 776.20   307.37   48.08      71.73   34.15    7.31   113.51   0.36   3264.57   18.17   11.60"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-black-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Fajita Veggie Bowl - Carnitas White Rice Black Beans",
+      "section": "Wahoo's Fresno",
+      "serving": "1 published menu portion; Fajita Veggie Bowl - Carnitas White Rice Black Beans",
+      "observed": {
+        "calories": 932.65,
+        "protein": 53.23,
+        "carbs": 99.5,
+        "fat": 35.64
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 70,
+        "printedPage": 69,
+        "locator": "page 70, source.txt lines 7-8, Wahoo's Fresno, Fajita Veggie Bowl - Carnitas White Rice Black Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Fajita Veggie Bowl - Carnitas White Rice Black\nBeans                                                 932.65   320.79   53.23      99.50   35.64   10.65   130.70   0.36   2356.43   15.18    8.33"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-white-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Fajita Veggie Bowl - Carnitas White Rice White Beans",
+      "section": "Wahoo's Fresno",
+      "serving": "1 published menu portion; Fajita Veggie Bowl - Carnitas White Rice White Beans",
+      "observed": {
+        "calories": 894.44,
+        "protein": 49.73,
+        "carbs": 93.3,
+        "fat": 36.13
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 70,
+        "printedPage": 69,
+        "locator": "page 70, source.txt lines 9-10, Wahoo's Fresno, Fajita Veggie Bowl - Carnitas White Rice White Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Fajita Veggie Bowl - Carnitas White Rice White\nBeans                                                 894.44   325.20   49.73      93.30   36.13   10.71   130.70   0.36   3578.87   17.66   11.42"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-black-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Fajita Veggie Bowl - Charbroiled Chicken Brown Rice Black Beans",
+      "section": "Wahoo's Fresno",
+      "serving": "1 published menu portion; Fajita Veggie Bowl - Charbroiled Chicken Brown Rice Black Beans",
+      "observed": {
+        "calories": 647.66,
+        "protein": 37.76,
+        "carbs": 74.14,
+        "fat": 23.14
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 70,
+        "printedPage": 69,
+        "locator": "page 70, source.txt lines 11-12, Wahoo's Fresno, Fajita Veggie Bowl - Charbroiled Chicken Brown Rice Black Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Fajita Veggie Bowl - Charbroiled Chicken Brown Rice\nBlack Beans                                           647.66   208.24   37.76      74.14   23.14    2.99    70.58   0.26   1407.04   13.87    7.95"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-white-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Fajita Veggie Bowl - Charbroiled Chicken Brown Rice White Beans",
+      "section": "Wahoo's Fresno",
+      "serving": "1 published menu portion; Fajita Veggie Bowl - Charbroiled Chicken Brown Rice White Beans",
+      "observed": {
+        "calories": 609.45,
+        "protein": 34.26,
+        "carbs": 67.94,
+        "fat": 23.63
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 70,
+        "printedPage": 69,
+        "locator": "page 70, source.txt lines 13-14, Wahoo's Fresno, Fajita Veggie Bowl - Charbroiled Chicken Brown Rice White Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Fajita Veggie Bowl - Charbroiled Chicken Brown Rice\nWhite Beans                                           609.45   212.65   34.26      67.94   23.63    3.05    70.58   0.26   2629.48   16.34   11.04"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-white-rice-black-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Fajita Veggie Bowl - Charbroiled Chicken White Rice Black Beans",
+      "section": "Wahoo's Fresno",
+      "serving": "1 published menu portion; Fajita Veggie Bowl - Charbroiled Chicken White Rice Black Beans",
+      "observed": {
+        "calories": 765.9,
+        "protein": 39.41,
+        "carbs": 95.71,
+        "fat": 25.12
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 70,
+        "printedPage": 69,
+        "locator": "page 70, source.txt lines 15-16, Wahoo's Fresno, Fajita Veggie Bowl - Charbroiled Chicken White Rice Black Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Fajita Veggie Bowl - Charbroiled Chicken White Rice\nBlack Beans                                           765.90   226.07   39.41      95.71   25.12    6.39    87.77   0.25   1721.34   13.35    7.78"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoo-s-las-vegas/power-chopper-vegetarian-white-rice-white-beans",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Power Chopper Vegetarian White Rice White Beans",
+      "section": "Wahoo's Las Vegas",
+      "serving": "1 published menu portion; Power Chopper Vegetarian White Rice White Beans",
+      "observed": {
+        "calories": 242.36,
+        "protein": 8.85,
+        "carbs": 45.35,
+        "fat": 3.83
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 80,
+        "printedPage": 79,
+        "locator": "page 80, source.txt lines 1-2, Wahoo's Las Vegas, Power Chopper Vegetarian White Rice White Beans"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Power Chopper Vegetarian White Rice White Beans\n                                                   242.36     34.46     8.85      45.35     3.83    1.96     7.37   0.00   1178.95   9.52   6.65"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoos-new-jersey/wahoos-nj-32-wings",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Wahoos NJ 32 Wings",
+      "section": "Wahoos New Jersey",
+      "serving": "1 published menu portion; Wahoos NJ 32 Wings",
+      "observed": {
+        "calories": 3629.67,
+        "protein": 320.58,
+        "carbs": 1.83,
+        "fat": 262.55
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 80,
+        "printedPage": 79,
+        "locator": "page 80, source.txt lines 7-8, Wahoos New Jersey, Wahoos NJ 32 Wings"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Wahoos NJ 32 Wings\n                                                  3629.67   2362.99   320.58       1.83   262.55   86.13 2058.97    0.90   4287.31   0.12   0.07"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoos-new-jersey/wahoos-nj-16-wings",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Wahoos NJ 16 Wings",
+      "section": "Wahoos New Jersey",
+      "serving": "1 published menu portion; Wahoos NJ 16 Wings",
+      "observed": {
+        "calories": 1814.84,
+        "protein": 160.29,
+        "carbs": 0.91,
+        "fat": 131.28
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 80,
+        "printedPage": 79,
+        "locator": "page 80, source.txt lines 9-10, Wahoos New Jersey, Wahoos NJ 16 Wings"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Wahoos NJ 16 Wings\n                                                  1814.84   1181.48   160.29       0.91   131.28   43.07 1029.48    0.45   2143.66   0.06   0.04"
+    },
+    {
+      "id": "wahoo-s-fish-taco:wahoos-new-jersey/wahoo-s-nj-8-wings",
+      "chain": "Wahoo's Fish Taco",
+      "name": "Wahoo's NJ 8 Wings",
+      "section": "Wahoos New Jersey",
+      "serving": "1 published menu portion; Wahoo's NJ 8 Wings",
+      "observed": {
+        "calories": 907.42,
+        "protein": 80.15,
+        "carbs": 0.46,
+        "fat": 65.64
+      },
+      "source": {
+        "url": "https://www.wahoos.com/wp-content/uploads/2026/06/Wahoos-Nutritional-info-6-26.pdf",
+        "sha256": "105423afbefb12ae06fd368596ec974a8ce9935b73c474663432c54f5fee3c21",
+        "page": 80,
+        "printedPage": 79,
+        "locator": "page 80, source.txt lines 11-12, Wahoos New Jersey, Wahoo's NJ 8 Wings"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Wahoo's NJ 8 Wings\n                                                   907.42    590.74    80.15       0.46    65.64   21.53   514.74   0.23   1071.83   0.03   0.02"
+    },
+    {
+      "id": "claim-jumper:appetizers/bbq-chicken-sliders",
+      "chain": "Claim Jumper",
+      "name": "BBQ Chicken Sliders",
+      "section": "APPETIZERS",
+      "serving": "1 published menu portion; BBQ Chicken Sliders",
+      "observed": {
+        "calories": 663,
+        "protein": 37,
+        "carbs": 95,
+        "fat": 14
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 29-29, APPETIZERS, BBQ Chicken Sliders"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "BBQ Chicken Sliders                                       663           128            14             2           0            62        2359        95          3       38       37       1178     14       105       4"
+    },
+    {
+      "id": "claim-jumper:appetizers/beef-sliders-with-cheese",
+      "chain": "Claim Jumper",
+      "name": "Beef Sliders with Cheese",
+      "section": "APPETIZERS",
+      "serving": "1 published menu portion; Beef Sliders with Cheese",
+      "observed": {
+        "calories": 741,
+        "protein": 38,
+        "carbs": 67,
+        "fat": 35
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 30-30, APPETIZERS, Beef Sliders with Cheese"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Beef Sliders with Cheese                                  741           315            35            12           0            94        2195        67          3       14       38       743      8        224       5"
+    },
+    {
+      "id": "claim-jumper:appetizers/bonanza-platter",
+      "chain": "Claim Jumper",
+      "name": "Bonanza Platter",
+      "section": "APPETIZERS",
+      "serving": "1 published menu portion; Bonanza Platter",
+      "observed": {
+        "calories": 2150,
+        "protein": 80,
+        "carbs": 180,
+        "fat": 120
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 31-31, APPETIZERS, Bonanza Platter"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Bonanza Platter                                           2150          1110          120            60           0           420        6110       180         20       20       80       9910     70       1900      20"
+    },
+    {
+      "id": "claim-jumper:appetizers/buffalo-chicken-wings-share-size",
+      "chain": "Claim Jumper",
+      "name": "Buffalo Chicken Wings, Share Size",
+      "section": "APPETIZERS",
+      "serving": "Share Size",
+      "observed": {
+        "calories": 1113,
+        "protein": 59,
+        "carbs": 18,
+        "fat": 90
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 32-32, APPETIZERS, Buffalo Chicken Wings, Share Size"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Buffalo Chicken Wings, Share Size                         1113          810            90            21           0           214        3617        18          3        6       59       11963    7         94       4"
+    },
+    {
+      "id": "claim-jumper:appetizers/buffalo-chicken-wings-snack-size",
+      "chain": "Claim Jumper",
+      "name": "Buffalo Chicken Wings, Snack Size",
+      "section": "APPETIZERS",
+      "serving": "Snack Size",
+      "observed": {
+        "calories": 600,
+        "protein": 32,
+        "carbs": 11,
+        "fat": 48
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 33-33, APPETIZERS, Buffalo Chicken Wings, Snack Size"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Buffalo Chicken Wings, Snack Size                         600           432            48            11           0           116        1876        11          2        4       32       7749     4         53       2"
+    },
+    {
+      "id": "claim-jumper:appetizers/calamari-share-size",
+      "chain": "Claim Jumper",
+      "name": "Calamari, Share Size",
+      "section": "APPETIZERS",
+      "serving": "Share Size",
+      "observed": {
+        "calories": 985,
+        "protein": 55,
+        "carbs": 118,
+        "fat": 33
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 34-34, APPETIZERS, Calamari, Share Size"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Calamari, Share Size                                      985           295            33             6           0           359        3184       118          9       17       55       2634     27       174       6"
+    },
+    {
+      "id": "claim-jumper:appetizers/calamari-snack-size",
+      "chain": "Claim Jumper",
+      "name": "Calamari, Snack Size",
+      "section": "APPETIZERS",
+      "serving": "Snack Size",
+      "observed": {
+        "calories": 565,
+        "protein": 29,
+        "carbs": 70,
+        "fat": 19
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 35-35, APPETIZERS, Calamari, Snack Size"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Calamari, Snack Size                                      565           169            19             4           0           180        1922        70          6       16       29       2212     26       112       3"
+    },
+    {
+      "id": "claim-jumper:appetizers/pub-pretzel-snack-size",
+      "chain": "Claim Jumper",
+      "name": "Pub Pretzel, Snack Size",
+      "section": "APPETIZERS",
+      "serving": "Snack Size",
+      "observed": {
+        "calories": 479,
+        "protein": 12,
+        "carbs": 81,
+        "fat": 12
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 50-50, APPETIZERS, Pub Pretzel, Snack Size"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Pub Pretzel, Snack Size                                   479           109            12             7           0            30        3158        81          3       13       12       400      0         20       4"
+    },
+    {
+      "id": "claim-jumper:appetizers/pub-pretzel-snack-size-with-cheese-sauce",
+      "chain": "Claim Jumper",
+      "name": "Pub Pretzel, Snack Size, with Cheese Sauce",
+      "section": "APPETIZERS",
+      "serving": "Snack Size",
+      "observed": {
+        "calories": 655,
+        "protein": 17,
+        "carbs": 84,
+        "fat": 27
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 51-51, APPETIZERS, Pub Pretzel, Snack Size, with Cheese Sauce"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Pub Pretzel, Snack Size, with Cheese Sauce                655           244            27            16           0            83        3651        84          3       14       17       893      0        175       4"
+    },
+    {
+      "id": "claim-jumper:appetizers/pub-pretzels-share-size",
+      "chain": "Claim Jumper",
+      "name": "Pub Pretzels, Share Size",
+      "section": "APPETIZERS",
+      "serving": "Share Size",
+      "observed": {
+        "calories": 957,
+        "protein": 23,
+        "carbs": 162,
+        "fat": 24
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 54-54, APPETIZERS, Pub Pretzels, Share Size"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Pub Pretzels, Share Size                                  957           217            24            14           0            60        6317       162          6       26       23       800      0         40       8"
+    },
+    {
+      "id": "claim-jumper:appetizers/pub-pretzels-share-size-with-cheese-sauce",
+      "chain": "Claim Jumper",
+      "name": "Pub Pretzels, Share Size, with Cheese Sauce",
+      "section": "APPETIZERS",
+      "serving": "Share Size",
+      "observed": {
+        "calories": 1133,
+        "protein": 29,
+        "carbs": 165,
+        "fat": 39
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 1,
+        "printedPage": 1,
+        "locator": "page 1, source.txt lines 55-55, APPETIZERS, Pub Pretzels, Share Size, with Cheese Sauce"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Pub Pretzels, Share Size, with Cheese Sauce               1133          353            39            23           0           113        6810       165          6       27       29       1293     0        195       8"
+    },
+    {
+      "id": "claim-jumper:lunch/chives",
+      "chain": "Claim Jumper",
+      "name": "Chives",
+      "section": "LUNCH",
+      "serving": "1 published menu portion; Chives",
+      "observed": {
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 7,
+        "printedPage": 7,
+        "locator": "page 7, source.txt lines 65-65, LUNCH, Chives"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "       Chives                                     0             0             0             0           0            0           0          0          0        0        0         0       0         0       0"
+    },
+    {
+      "id": "claim-jumper:lunch/sliced-avocado-2-ounces-add",
+      "chain": "Claim Jumper",
+      "name": "Sliced Avocado (2 ounces) (add)",
+      "section": "LUNCH",
+      "serving": "1 published menu portion; Sliced Avocado (2 ounces) (add)",
+      "observed": {
+        "calories": 100,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 10
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 7,
+        "printedPage": 7,
+        "locator": "page 7, source.txt lines 72-72, LUNCH, Sliced Avocado (2 ounces) (add)"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Sliced Avocado (2 ounces) (add)                 100            70            10             0           0            0           0          0          0        0        0        80      10        10       0"
+    },
+    {
+      "id": "claim-jumper:non-alcoholic-beverages/coffee",
+      "chain": "Claim Jumper",
+      "name": "Coffee",
+      "section": "NON-ALCOHOLIC BEVERAGES",
+      "serving": "1 published menu portion; Coffee",
+      "observed": {
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 33-33, NON-ALCOHOLIC BEVERAGES, Coffee"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Coffee                                                             0             0             0             0           0            0          10          0          0        0        0        0       0        10        0"
+    },
+    {
+      "id": "claim-jumper:non-alcoholic-beverages/diet-coke",
+      "chain": "Claim Jumper",
+      "name": "Diet Coke",
+      "section": "NON-ALCOHOLIC BEVERAGES",
+      "serving": "1 published menu portion; Diet Coke",
+      "observed": {
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 36-36, NON-ALCOHOLIC BEVERAGES, Diet Coke"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Diet Coke                                                          0             0             0             0           0            0          20          0          0        0        0        0       0         0        0"
+    },
+    {
+      "id": "claim-jumper:non-alcoholic-beverages/diet-sprite",
+      "chain": "Claim Jumper",
+      "name": "Diet Sprite",
+      "section": "NON-ALCOHOLIC BEVERAGES",
+      "serving": "1 published menu portion; Diet Sprite",
+      "observed": {
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 37-37, NON-ALCOHOLIC BEVERAGES, Diet Sprite"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Diet Sprite                                                        0             0             0             0           0            0          10          0          0        0        0        0       0         0        0"
+    },
+    {
+      "id": "claim-jumper:non-alcoholic-beverages/hot-tea",
+      "chain": "Claim Jumper",
+      "name": "Hot Tea",
+      "section": "NON-ALCOHOLIC BEVERAGES",
+      "serving": "1 published menu portion; Hot Tea",
+      "observed": {
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 38-38, NON-ALCOHOLIC BEVERAGES, Hot Tea"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Hot Tea                                                            0             0             0             0           0            0          10          0          0        0        0        0       0         0        0"
+    },
+    {
+      "id": "claim-jumper:non-alcoholic-beverages/iced-tea",
+      "chain": "Claim Jumper",
+      "name": "Iced Tea",
+      "section": "NON-ALCOHOLIC BEVERAGES",
+      "serving": "1 published menu portion; Iced Tea",
+      "observed": {
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 40-40, NON-ALCOHOLIC BEVERAGES, Iced Tea"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Iced Tea                                                           0             0             0             0           0            0          20          0          0        0        0        0       0         0        0"
+    },
+    {
+      "id": "claim-jumper:non-alcoholic-beverages/coke",
+      "chain": "Claim Jumper",
+      "name": "Coke",
+      "section": "NON-ALCOHOLIC BEVERAGES",
+      "serving": "1 published menu portion; Coke",
+      "observed": {
+        "calories": 160,
+        "protein": 0,
+        "carbs": 40,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 34-34, NON-ALCOHOLIC BEVERAGES, Coke"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Coke                                                             160             0             0             0           0            0          10         40          0       40        0        0       0         0        0"
+    },
+    {
+      "id": "claim-jumper:non-alcoholic-beverages/kids-coke",
+      "chain": "Claim Jumper",
+      "name": "Kids Coke",
+      "section": "NON-ALCOHOLIC BEVERAGES",
+      "serving": "1 published menu portion; Kids Coke",
+      "observed": {
+        "calories": 90,
+        "protein": 0,
+        "carbs": 20,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 54-54, NON-ALCOHOLIC BEVERAGES, Kids Coke"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Kids Coke                                                         90             0             0             0           0            0          10         20          0       20        0        0       0         0        0"
+    },
+    {
+      "id": "claim-jumper:non-alcoholic-beverages/kids-diet-coke",
+      "chain": "Claim Jumper",
+      "name": "Kids Diet Coke",
+      "section": "NON-ALCOHOLIC BEVERAGES",
+      "serving": "1 published menu portion; Kids Diet Coke",
+      "observed": {
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 56-56, NON-ALCOHOLIC BEVERAGES, Kids Diet Coke"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Kids Diet Coke                                                     0             0             0             0           0            0          10          0          0        0        0        0       0         0        0"
+    },
+    {
+      "id": "claim-jumper:non-alcoholic-beverages/red-bull-sugar-free",
+      "chain": "Claim Jumper",
+      "name": "Red Bull, Sugar Free",
+      "section": "NON-ALCOHOLIC BEVERAGES",
+      "serving": "1 published menu portion; Red Bull, Sugar Free",
+      "observed": {
+        "calories": 10,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 47-47, NON-ALCOHOLIC BEVERAGES, Red Bull, Sugar Free"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Red Bull, Sugar Free                                              10             0             0             0           0            0         100          0          0        0        0        0       0         0        0"
+    },
+    {
+      "id": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-marinara-sauce",
+      "chain": "Claim Jumper",
+      "name": "Kids, Build Your Own Pizza (1 slice) with Marinara Sauce",
+      "section": "KID\u2019S MENU",
+      "serving": "1 slice",
+      "observed": {
+        "calories": 90,
+        "protein": 0,
+        "carbs": 20,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 97-97, KID\u2019S MENU, Kids, Build Your Own Pizza (1 slice) with Marinara Sauce"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Kids, Build Your Own Pizza (1 slice) with Marinara Sauce          90            10             0             0           0            0         170         20          0        0        0        20      0        10        0"
+    },
+    {
+      "id": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-mozzarella-cheese",
+      "chain": "Claim Jumper",
+      "name": "Kids, Build Your Own Pizza (1 slice) with Mozzarella Cheese",
+      "section": "KID\u2019S MENU",
+      "serving": "1 slice",
+      "observed": {
+        "calories": 130,
+        "protein": 10,
+        "carbs": 20,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 98-98, KID\u2019S MENU, Kids, Build Your Own Pizza (1 slice) with Mozzarella Cheese"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Kids, Build Your Own Pizza (1 slice) with Mozzarella Cheese      130            40             0             0           0            10        280         20          0        0       10       120      0        100       0"
+    },
+    {
+      "id": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-bbq-chicken",
+      "chain": "Claim Jumper",
+      "name": "Kids, Build Your Own Pizza (1 slice) with BBQ Chicken",
+      "section": "KID\u2019S MENU",
+      "serving": "1 slice",
+      "observed": {
+        "calories": 90,
+        "protein": 0,
+        "carbs": 20,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 99-99, KID\u2019S MENU, Kids, Build Your Own Pizza (1 slice) with BBQ Chicken"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Kids, Build Your Own Pizza (1 slice) with BBQ Chicken             90            10             0             0           0            0         160         20          0        0        0        0       0        10        0"
+    },
+    {
+      "id": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-italian-sausage",
+      "chain": "Claim Jumper",
+      "name": "Kids, Build Your Own Pizza (1 slice) with Italian Sausage",
+      "section": "KID\u2019S MENU",
+      "serving": "1 slice",
+      "observed": {
+        "calories": 100,
+        "protein": 0,
+        "carbs": 20,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 100-100, KID\u2019S MENU, Kids, Build Your Own Pizza (1 slice) with Italian Sausage"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Kids, Build Your Own Pizza (1 slice) with Italian Sausage        100            10             0             0           0            0         170         20          0        0        0        0       0        10        0"
+    },
+    {
+      "id": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-pepperoni",
+      "chain": "Claim Jumper",
+      "name": "Kids, Build Your Own Pizza (1 slice) with Pepperoni",
+      "section": "KID\u2019S MENU",
+      "serving": "1 slice",
+      "observed": {
+        "calories": 100,
+        "protein": 0,
+        "carbs": 20,
+        "fat": 0
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 101-101, KID\u2019S MENU, Kids, Build Your Own Pizza (1 slice) with Pepperoni"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Kids, Build Your Own Pizza (1 slice) with Pepperoni              100            20             0             0           0            0         190         20          0        0        0        0       0         0        0"
+    },
+    {
+      "id": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-onions",
+      "chain": "Claim Jumper",
+      "name": "Kids, Build Your Own Pizza (1 slice) with Onions",
+      "section": "KID\u2019S MENU",
+      "serving": "1 slice",
+      "observed": {
+        "calories": 90,
+        "protein": 3,
+        "carbs": 18,
+        "fat": 1
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 102-102, KID\u2019S MENU, Kids, Build Your Own Pizza (1 slice) with Onions"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Kids, Build Your Own Pizza (1 slice) with Onions                  90             7             1             0           0            0         153         18          1        1        3        0       0         5        1"
+    },
+    {
+      "id": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-black-olives",
+      "chain": "Claim Jumper",
+      "name": "Kids, Build Your Own Pizza (1 slice) with Black Olives",
+      "section": "KID\u2019S MENU",
+      "serving": "1 slice",
+      "observed": {
+        "calories": 120,
+        "protein": 5,
+        "carbs": 15,
+        "fat": 4
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 8,
+        "printedPage": 8,
+        "locator": "page 8, source.txt lines 103-103, KID\u2019S MENU, Kids, Build Your Own Pizza (1 slice) with Black Olives"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Kids, Build Your Own Pizza (1 slice) with Black Olives           120            37             4             2           0            5         240         15          1        1        5       122      1        90        1"
+    },
+    {
+      "id": "claim-jumper:garden-salad-platters/bbq-chicken-salad-platter-4-6-6-servings",
+      "chain": "Claim Jumper",
+      "name": "BBQ Chicken Salad Platter, 4-6 (6 servings)",
+      "section": "GARDEN SALAD PLATTERS",
+      "serving": "6 servings",
+      "observed": {
+        "calories": 3380,
+        "protein": 160,
+        "carbs": 220,
+        "fat": 200
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 14,
+        "printedPage": 14,
+        "locator": "page 14, source.txt lines 29-29, GARDEN SALAD PLATTERS, BBQ Chicken Salad Platter, 4-6 (6 servings)"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "BBQ Chicken Salad Platter, 4-6 (6 servings)                                 3380          1820          200            40           0           460        6290       220         20      120      160       37630    270        890      10"
+    },
+    {
+      "id": "claim-jumper:garden-salad-platters/bbq-chicken-salad-platter-8-10-10-servings",
+      "chain": "Claim Jumper",
+      "name": "BBQ Chicken Salad Platter, 8-10 (10 servings)",
+      "section": "GARDEN SALAD PLATTERS",
+      "serving": "10 servings",
+      "observed": {
+        "calories": 5530,
+        "protein": 250,
+        "carbs": 360,
+        "fat": 330
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 14,
+        "printedPage": 14,
+        "locator": "page 14, source.txt lines 30-30, GARDEN SALAD PLATTERS, BBQ Chicken Salad Platter, 8-10 (10 servings)"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "BBQ Chicken Salad Platter, 8-10 (10 servings)                               5530          3000          330            60           0           750        10350      360         40      200      250       60270    440       1440      20"
+    },
+    {
+      "id": "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings",
+      "chain": "Claim Jumper",
+      "name": "Caesar Salad Platter, 4-6 (6 servings)",
+      "section": "GARDEN SALAD PLATTERS",
+      "serving": "6 servings",
+      "observed": {
+        "calories": 2880,
+        "protein": 40,
+        "carbs": 80,
+        "fat": 260
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 14,
+        "printedPage": 14,
+        "locator": "page 14, source.txt lines 31-31, GARDEN SALAD PLATTERS, Caesar Salad Platter, 4-6 (6 servings)"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Caesar Salad Platter, 4-6 (6 servings)                                      2880          2380          260            50           0           250        5480        80         20       10       40       50790    220       1070      10"
+    },
+    {
+      "id": "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings-with-broiled-chicken",
+      "chain": "Claim Jumper",
+      "name": "Caesar Salad Platter, 4-6 (6 servings) with Broiled Chicken",
+      "section": "GARDEN SALAD PLATTERS",
+      "serving": "6 servings",
+      "observed": {
+        "calories": 3830,
+        "protein": 160,
+        "carbs": 90,
+        "fat": 310
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 14,
+        "printedPage": 14,
+        "locator": "page 14, source.txt lines 32-32, GARDEN SALAD PLATTERS, Caesar Salad Platter, 4-6 (6 servings) with Broiled Chicken"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Caesar Salad Platter, 4-6 (6 servings) with Broiled Chicken                 3830          2760          310            60           0           560        7160        90         20       20      160       51030    240       1150      20"
+    },
+    {
+      "id": "claim-jumper:garden-salad-platters/caesar-salad-platter-8-10-10-servings",
+      "chain": "Claim Jumper",
+      "name": "Caesar Salad Platter, 8-10 (10 servings)",
+      "section": "GARDEN SALAD PLATTERS",
+      "serving": "10 servings",
+      "observed": {
+        "calories": 4750,
+        "protein": 60,
+        "carbs": 130,
+        "fat": 440
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 14,
+        "printedPage": 14,
+        "locator": "page 14, source.txt lines 33-33, GARDEN SALAD PLATTERS, Caesar Salad Platter, 8-10 (10 servings)"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Caesar Salad Platter, 8-10 (10 servings)                                    4750          3950          440            90           0           410        9030       130         30       20       60       81270    360       1740      20"
+    },
+    {
+      "id": "claim-jumper:garden-salad-platters/caesar-salad-platter-8-10-10-servings-with-broiled-chicken",
+      "chain": "Claim Jumper",
+      "name": "Caesar Salad Platter, 8-10 (10 servings) with Broiled Chicken",
+      "section": "GARDEN SALAD PLATTERS",
+      "serving": "10 servings",
+      "observed": {
+        "calories": 6270,
+        "protein": 260,
+        "carbs": 140,
+        "fat": 510
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 14,
+        "printedPage": 14,
+        "locator": "page 14, source.txt lines 34-34, GARDEN SALAD PLATTERS, Caesar Salad Platter, 8-10 (10 servings) with Broiled Chicken"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Caesar Salad Platter, 8-10 (10 servings) with Broiled Chicken               6270          4560          510           100           0           910        11720      140         30       30      260       81650    380       1860      20"
+    },
+    {
+      "id": "claim-jumper:garden-salad-platters/chinese-salad-platter-4-6-6-servings",
+      "chain": "Claim Jumper",
+      "name": "Chinese Salad Platter, 4-6 (6 servings)",
+      "section": "GARDEN SALAD PLATTERS",
+      "serving": "6 servings",
+      "observed": {
+        "calories": 1690,
+        "protein": 20,
+        "carbs": 220,
+        "fat": 70
+      },
+      "source": {
+        "url": "https://www.claimjumper.com/files/nutrition-guide-pdf.pdf",
+        "sha256": "e754c6727379534fec0fff36055933c13730dbc2cc9adb4f5f279cb01f766835",
+        "page": 14,
+        "printedPage": 14,
+        "locator": "page 14, source.txt lines 39-39, GARDEN SALAD PLATTERS, Chinese Salad Platter, 4-6 (6 servings)"
+      },
+      "review": "Agent visual row and column verification, 2026-10-26; independently transcribed tuple matches fetched PDF and PR #554 extraction.",
+      "sourceText": "Chinese Salad Platter, 4-6 (6 servings)                                     1690          660            70            10           0            0         4680       220         30      140       20       59230    310        610      10"
+    }
+  ]
+}

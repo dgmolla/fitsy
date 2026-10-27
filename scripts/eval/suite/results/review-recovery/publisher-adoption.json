@@ -1,0 +1,14 @@
+{
+  "schema": "fitsy.review-input-adoption.v1",
+  "at": 1793059988.434548,
+  "sourceHead": "7798fce7154d5e332736f5704e1f5934e6e4b5b5",
+  "operatorAttributesSha256": "f5e9a9e266b965badf55fe966a2600c44d57c5fde8b69fff106260f1930486af",
+  "reviewedAttributePayloadSha256": "b1a24069d19a30ec9383966f98bbcb97629504309885b90460742ea9ac3b9835",
+  "priorAttemptsPreserved": 2,
+  "oldStateUnchanged": true,
+  "actualDiffBytes": 456547,
+  "inputLimitCharacters": 1048576,
+  "controlReviewSeconds": 99.411,
+  "controlReviewVerdict": "pass",
+  "authority": "User AGENTS.md permanent review execution exception, 2026-10-10; diagnosed operator recovery, independent controls review before installation."
+}

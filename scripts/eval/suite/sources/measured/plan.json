@@ -1,0 +1,86 @@
+{
+  "version": "measured-2026-10-26",
+  "policy": "Indices address the frozen per-chain ueInventory arrays, never provider outcomes. All unlisted or uncertain observations are excluded individually. NO MATCH is relative to the supplied verified candidates, not a claim that the complete source lacks a dish. Captured prices, ratings and nutrition claims never enter adapter inputs or define numeric truth.",
+  "curatedPerStratum": 3,
+  "curatedMacroPerChain": 8,
+  "chains": {
+    "wahoos": {
+      "name": "Wahoo's Fish Taco",
+      "slug": "wahoo-s-fish-taco",
+      "positive": [17, 19, 35, 52, 75],
+      "negative": [],
+      "negativeCategories": ["combo/build-your-own", "missing from PDF", "UE-only"],
+      "excluded": [5],
+      "overrides": {
+        "48": {
+          "why": "Excluded: the UE quesadilla includes an unselected rice-and-beans or fries side, and the source title alone does not establish whether its serving includes those sides."
+        }
+      },
+      "fallbackKeys": ["tacos/ensenada-fish-taco", "sides/side-guac-3-oz", "sides/side-sour-cream-3-oz"],
+      "exclusionReason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    "claim-jumper": {
+      "name": "Claim Jumper",
+      "slug": "claim-jumper",
+      "positive": [9],
+      "negative": [7],
+      "negativeCategories": ["missing from PDF"],
+      "excluded": [],
+      "overrides": {
+        "7": {
+          "category": "combo_build_your_own",
+          "why": "The captured multi-person ribs, wings, fries and coleslaw bundle cannot match an individual ribs, wings or fries row."
+        },
+        "66": {
+          "why": "Excluded: the PDF has a plain side, a lunch potato including indented butter/chives/sour cream, and a plain lunch subrow. The UE dressed potato does not identify the lunch versus ordinary side serving safely."
+        }
+      },
+      "fallbackKeys": ["appetizers/bonanza-platter", "appetizers/bbq-chicken-sliders", "appetizers/calamari-share-size"],
+      "exclusionReason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    "old-spaghetti-factory": {
+      "name": "The Old Spaghetti Factory",
+      "slug": "the-old-spaghetti-factory",
+      "positive": [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 28, 29, 30, 31, 32, 33, 34, 39, 43, 47, 49, 53, 61],
+      "negative": [8, 36, 45, 54, 55, 56, 57, 58, 59, 60, 66, 67, 68, 69, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 82, 91],
+      "negativeCategories": ["combo/build-your-own", "missing from PDF", "UE-only"],
+      "excluded": [],
+      "overrides": {
+        "1": {
+          "expectedKey": "pasta-classic-entrees/mizithra-cheese-and-brown-butter",
+          "why": "The captured standard pasta is the adult published Mizithra serving, not the lunch row that happens to have the identical spelling."
+        },
+        "53": {
+          "expectedKey": "gluten-sensitive/meat-sauce",
+          "category": "gluten_sensitive",
+          "why": "The captured recipe explicitly uses gluten-sensitive fusilli; select the published Gluten Sensitive Meat Sauce serving rather than any identical Rich Meat Sauce title on regular, lunch or child pasta."
+        },
+        "61": {
+          "expectedKey": "gluten-sensitive/marinara-sauce",
+          "category": "gluten_sensitive",
+          "why": "The captured recipe explicitly uses gluten-sensitive fusilli; only the published Gluten Sensitive Marinara serving is compatible among four identical sauce titles."
+        },
+        "64": {
+          "why": "Excluded: catering garlic bread has the same displayed calories as the appetizer and no verified independent serving distinction; section alone cannot establish a negative."
+        },
+        "24": {
+          "why": "Excluded: captured regular Olive Tapenade and official appetizer have materially different published calorie claims; recipe/portion correspondence is unresolved."
+        },
+        "25": {
+          "why": "Excluded: captured regular Caesar Salad and official salad have materially different published calorie claims; recipe/portion correspondence is unresolved."
+        },
+        "26": {
+          "why": "Excluded: the captured chicken salad and official salad have materially different calorie claims; a name-order alias is insufficient."
+        },
+        "36": {
+          "why": "Two captured meatballs cannot match the explicitly one-each published side; no multiplying nutrition to invent a new row."
+        },
+        "45": {
+          "why": "Three captured meatballs cannot match the explicitly one-each published side; no multiplying nutrition to invent a new row."
+        }
+      },
+      "fallbackKeys": ["guss-sally-s-favorites/fettuccine-alfredo", "sides/seasoned-chicken-breast", "sides/side-of-sicilian-meatballs-1-each"],
+      "exclusionReason": "Serving, recipe, regional applicability or a malformed label remains unresolved; no inference from equal calories, source typo, missing quantity or section alone."
+    }
+  }
+}

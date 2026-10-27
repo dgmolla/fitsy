@@ -1,0 +1,1779 @@
+{
+  "version": 1,
+  "selection": "Deliberate chain quotas and category coverage across individually vetted servings; 160 explicit macro rows and 160 explicit matching scenarios, fixed before provider execution.",
+  "macro": [
+    {
+      "row": "waba-grill:family-a-la-carte/all-broccoli",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "waba-grill:packaged/dole/apple-100-percent/15-2-fl-oz",
+      "category": "drink_oz",
+      "why": "Use the entire labelled bottle/can in fluid ounces; never reinterpret it as grams."
+    },
+    {
+      "row": "waba-grill:miso-soup",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "waba-grill:sides/half-ocado",
+      "category": "modifier",
+      "why": "The published side/add-on or no-rice protein has its own facts; do not substitute a full bowl."
+    },
+    {
+      "row": "waba-grill:bowls/organic-tofu",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/boom-boom-sauce-1-fluid-oz",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "waba-grill:mini-bowls/organic-tofu",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "waba-grill:packaged/pure-leaf/unsweetened/16-9-fl-oz",
+      "category": "zero_macro",
+      "why": "Published zero is exact; do not invent calories, protein, carbohydrate, or fat."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/broccoli-carrots",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "waba-grill:packaged/gatorade/cool-blue/20-fl-oz",
+      "category": "drink_oz",
+      "why": "Use the entire labelled bottle/can in fluid ounces; never reinterpret it as grams."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/garlic-serrano-sauce-1-fluid-oz",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "waba-grill:bowls/plantspired-steak",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/ranch-dressing-1-5-fluid-oz",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "waba-grill:mini-bowls/organic-tofu-veggies",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/waba-hot-sauce-packet",
+      "category": "zero_macro",
+      "why": "Published zero is exact; do not invent calories, protein, carbohydrate, or fat."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/brown-rice-2-servings",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "waba-grill:packaged/gatorade/fruit-punch/20-fl-oz",
+      "category": "drink_oz",
+      "why": "Use the entire labelled bottle/can in fluid ounces; never reinterpret it as grams."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/sweet-chili-sauce-1-fluid-oz",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "waba-grill:bowls/rib-eye-steak",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/spicy-sesame-dressing-1-fluid-oz",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "waba-grill:mini-bowls/plantspired-steak",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/chicken",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "waba-grill:packaged/pepsi/original/20-fl-oz",
+      "category": "drink_oz",
+      "why": "Use the entire labelled bottle/can in fluid ounces; never reinterpret it as grams."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/waba-sauce-packet",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "waba-grill:bowls/sweet-spicy-chicken",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/spicy-waba-sauce-1-fluid-oz",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "waba-grill:mini-bowls/sweet-spicy",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/mixed-veggies",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "waba-grill:packaged/poppi/raspberry-rose/12-fl-oz",
+      "category": "drink_oz",
+      "why": "Use the entire labelled bottle/can in fluid ounces; never reinterpret it as grams."
+    },
+    {
+      "row": "waba-grill:sides/salad",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "waba-grill:bowls/waba-chicken-steak",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/waba-sesame-dressing-1-fluid-oz",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "waba-grill:mini-bowls/sweet-spicy-chicken-veggies",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/organic-tofu",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "waba-grill:packaged/poppi/strawberry-lemon/12-fl-oz",
+      "category": "drink_oz",
+      "why": "Use the entire labelled bottle/can in fluid ounces; never reinterpret it as grams."
+    },
+    {
+      "row": "waba-grill:sides/steamed-veggies",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "waba-grill:bowls/waba-wm-chicken-steak",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "waba-grill:sides/brown-rice-10-oz",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "waba-grill:mini-bowls/wm-chicken",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/rib-eye-steak",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "waba-grill:packaged/pure-leaf/raspberry/16-9-fl-oz",
+      "category": "drink_oz",
+      "why": "Use the entire labelled bottle/can in fluid ounces; never reinterpret it as grams."
+    },
+    {
+      "row": "waba-grill:bowls/wild-caught-salmon",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "waba-grill:sides/chicken-4-5-oz",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "waba-grill:mini-bowls/wm-chicken-veggies",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/sweet-spicy-chicken",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "waba-grill:bowls/wm-chicken",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "waba-grill:sides/loaded-miso-soup-w-chicken",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "waba-grill:mini-chicken-bowl",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/waba-chicken-steak",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "waba-grill:chicken-bowl",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "waba-grill:sides/loaded-miso-soup-w-tofu",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "waba-grill:mini-chicken-bowl-veggies",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/waba-wm-chicken-steak",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "waba-grill:chicken-plate",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "waba-grill:sides/loaded-miso-soup-w-wm-chicken",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "waba-grill:sides/tofu-6-oz",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-one-base/brown-rice",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:packaged/gatorade/lime-cucumber/20-fl-oz",
+      "category": "drink_oz",
+      "why": "Use the entire labelled bottle/can in fluid ounces; never reinterpret it as grams."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-salmon",
+      "category": "high_calorie",
+      "why": "Retain the full high-energy serving; no clipping or conversion to a smaller portion."
+    },
+    {
+      "row": "yoshinoya:packets/ginger-packet",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "yoshinoya:gyudon-beef-side",
+      "category": "modifier",
+      "why": "The published side/add-on or no-rice protein has its own facts; do not substitute a full bowl."
+    },
+    {
+      "row": "yoshinoya:appetizers/edamame-salted",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:appetizers/shrimp-tempura-2-pc-1-sauce",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-one-base/japanese-udon-noodles",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce",
+      "category": "high_calorie",
+      "why": "Retain the full high-energy serving; no clipping or conversion to a smaller portion."
+    },
+    {
+      "row": "yoshinoya:packets/shichimi-seasoning",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "yoshinoya:habanero-chicken-side",
+      "category": "modifier",
+      "why": "The published side/add-on or no-rice protein has its own facts; do not substitute a full bowl."
+    },
+    {
+      "row": "yoshinoya:appetizers/spring-rolls-4-pc",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:appetizers/shrimp-tempura-8-pc-2-sauce",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-ribeye-steak",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-one-base/white-rice",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:packets/soy-sauce-packet",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "yoshinoya:appetizers/springs-rolls-2-pc",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:appetizers/tfc-blended-sauce-3-for-3pc-promo",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-chicken",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-one-vegetable/coleslaw",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:packets/sriracha-sauce-packet",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "yoshinoya:appetizers/sweet-and-spicy-edamame",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:appetizers/tfc-blended-sauce-side-addon-same-portion-as-reg",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/gyudon-beef-w-o-veg",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-one-vegetable/mixed-veggies",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:side-sauces/beef-broth",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "yoshinoya:blount-clam-chowder",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:packets/gyoza-sauce-2-packs",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-habanero-chicken",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:side-sauces/tempura-sauce",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "yoshinoya:desserts/chocolate-chip-cookie-1",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/tfc-regular-blended-sauce",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-ribeye-steak",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:sides/veggies",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "yoshinoya:desserts/junior-s-double-chocolate-devil-s-food-cheesecake",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:side-sauces/habanero-sauce",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-teriyaki-chicken",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:desserts/junior-s-original-cheesecake",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:side-sauces/hanabi-mayo",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-teriyaki-salmon",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:desserts/junior-s-strawberry-swirl-cheesecake",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:side-sauces/sweet-spicy-sauce",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/gyudon-beef",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:side-sauces/teriyaki-sauce",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/gyudon-beef-with-yellow-onion-beef-broth",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-ribeye-steak",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:sides/teriyaki-chicken",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-hot-grilled-chicken",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-chicken",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:sides/teriyaki-ribeye",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-hot-gyudon-beef",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-salmon",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "yoshinoya:sides/teriyaki-salmon",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-ribeye-steak",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-of-cauliflower-rice-7oz",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carne-asada-white-rice-white-beans",
+      "category": "regional_variant",
+      "why": "The named regional recipe and complete portion determine the published facts."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-black-beans",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/6-oz-black-beans",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-pico-de-gallo-salsa-3-oz",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-brown-rice-black-beans",
+      "category": "regional_variant",
+      "why": "The named regional recipe and complete portion determine the published facts."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-white-beans",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/6-oz-brown-rice",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-brown-rice-white-beans",
+      "category": "regional_variant",
+      "why": "The named regional recipe and complete portion determine the published facts."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-black-beans",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/6-oz-white-beans",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-black-beans",
+      "category": "regional_variant",
+      "why": "The named regional recipe and complete portion determine the published facts."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-white-beans",
+      "category": "section_dependent",
+      "why": "The section and serving distinguish a component from a complete meal."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/6-oz-white-rice",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-white-beans",
+      "category": "regional_variant",
+      "why": "The named regional recipe and complete portion determine the published facts."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-brown-rice-black-beans",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-black-beans",
+      "category": "regional_variant",
+      "why": "The named regional recipe and complete portion determine the published facts."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-brown-rice-white-beans",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-white-beans",
+      "category": "regional_variant",
+      "why": "The named regional recipe and complete portion determine the published facts."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-black-beans",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-white-rice-black-beans",
+      "category": "regional_variant",
+      "why": "The named regional recipe and complete portion determine the published facts."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-white-beans",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "claim-jumper:appetizers/bonanza-platter",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-bbq-chicken",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "claim-jumper:appetizers/buffalo-chicken-wings-share-size",
+      "category": "high_calorie",
+      "why": "Retain the full high-energy serving; no clipping or conversion to a smaller portion."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/red-bull-sugar-free",
+      "category": "low_calorie",
+      "why": "Keep small nonzero published values and decimals; rounding to a meal estimate is a large miss."
+    },
+    {
+      "row": "claim-jumper:lunch/sliced-avocado-2-ounces-add",
+      "category": "modifier",
+      "why": "The published side/add-on or no-rice protein has its own facts; do not substitute a full bowl."
+    },
+    {
+      "row": "claim-jumper:appetizers/bbq-chicken-sliders",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "claim-jumper:appetizers/buffalo-chicken-wings-snack-size",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "claim-jumper:lunch/chives",
+      "category": "zero_macro",
+      "why": "Published zero is exact; do not invent calories, protein, carbohydrate, or fat."
+    },
+    {
+      "row": "claim-jumper:garden-salad-platters/bbq-chicken-salad-platter-4-6-6-servings",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-black-olives",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "claim-jumper:appetizers/pub-pretzels-share-size-with-cheese-sauce",
+      "category": "high_calorie",
+      "why": "Retain the full high-energy serving; no clipping or conversion to a smaller portion."
+    },
+    {
+      "row": "claim-jumper:appetizers/beef-sliders-with-cheese",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "claim-jumper:appetizers/calamari-share-size",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/coffee",
+      "category": "zero_macro",
+      "why": "Published zero is exact; do not invent calories, protein, carbohydrate, or fat."
+    },
+    {
+      "row": "claim-jumper:garden-salad-platters/bbq-chicken-salad-platter-8-10-10-servings",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-italian-sausage",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/coke",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "claim-jumper:appetizers/calamari-snack-size",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/diet-coke",
+      "category": "zero_macro",
+      "why": "Published zero is exact; do not invent calories, protein, carbohydrate, or fat."
+    },
+    {
+      "row": "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-marinara-sauce",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/kids-coke",
+      "category": "near_miss_name",
+      "why": "Similar protein and sauce names denote different published recipes."
+    },
+    {
+      "row": "claim-jumper:appetizers/pub-pretzel-snack-size",
+      "category": "size_variant",
+      "why": "A mini/large or sized side must keep its exact published portion."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/diet-sprite",
+      "category": "zero_macro",
+      "why": "Published zero is exact; do not invent calories, protein, carbohydrate, or fat."
+    },
+    {
+      "row": "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings-with-broiled-chicken",
+      "category": "catering_family",
+      "why": "Family/catering totals apply to the entire published portion, not one diner."
+    },
+    {
+      "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-mozzarella-cheese",
+      "category": "combo_build_your_own",
+      "why": "A named combo component is one published component, not an assembled meal."
+    }
+  ],
+  "matching": [
+    {
+      "row": "waba-grill:family-a-la-carte/all-broccoli",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "waba-grill:packaged/dole/apple-100-percent/15-2-fl-oz",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "waba-grill:miso-soup",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "waba-grill:sides/half-ocado",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "Only other published portions are offered; reject a forced nearest-name match."
+    },
+    {
+      "row": "waba-grill:bowls/organic-tofu",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/boom-boom-sauce-1-fluid-oz",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:mini-bowls/organic-tofu",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:packaged/pure-leaf/unsweetened/16-9-fl-oz",
+      "category": "zero_macro",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/broccoli-carrots",
+      "category": "catering_family",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:packaged/gatorade/cool-blue/20-fl-oz",
+      "category": "drink_oz",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/garlic-serrano-sauce-1-fluid-oz",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "waba-grill:bowls/plantspired-steak",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/ranch-dressing-1-5-fluid-oz",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "waba-grill:mini-bowls/organic-tofu-veggies",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
+    },
+    {
+      "row": "waba-grill:sauce-dressing/waba-hot-sauce-packet",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/brown-rice-2-servings",
+      "category": "catering_family",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:packaged/gatorade/fruit-punch/20-fl-oz",
+      "category": "drink_oz",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/sweet-chili-sauce-1-fluid-oz",
+      "category": "low_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:bowls/rib-eye-steak",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/spicy-sesame-dressing-1-fluid-oz",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:mini-bowls/plantspired-steak",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/chicken",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "waba-grill:packaged/pepsi/original/20-fl-oz",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/waba-sauce-packet",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "Only other published portions are offered; reject a forced nearest-name match."
+    },
+    {
+      "row": "waba-grill:bowls/sweet-spicy-chicken",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/spicy-waba-sauce-1-fluid-oz",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:mini-bowls/sweet-spicy",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/mixed-veggies",
+      "category": "catering_family",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:packaged/poppi/raspberry-rose/12-fl-oz",
+      "category": "drink_oz",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:sides/salad",
+      "category": "low_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:bowls/waba-chicken-steak",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "waba-grill:sauce-dressing/waba-sesame-dressing-1-fluid-oz",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "waba-grill:mini-bowls/sweet-spicy-chicken-veggies",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/organic-tofu",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "Only other published portions are offered; reject a forced nearest-name match."
+    },
+    {
+      "row": "waba-grill:packaged/poppi/strawberry-lemon/12-fl-oz",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "waba-grill:sides/steamed-veggies",
+      "category": "low_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:bowls/waba-wm-chicken-steak",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:sides/brown-rice-10-oz",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:mini-bowls/wm-chicken",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/rib-eye-steak",
+      "category": "catering_family",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:packaged/pure-leaf/raspberry/16-9-fl-oz",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "waba-grill:bowls/wild-caught-salmon",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "waba-grill:sides/chicken-4-5-oz",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "waba-grill:mini-bowls/wm-chicken-veggies",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/sweet-spicy-chicken",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "waba-grill:bowls/wm-chicken",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:sides/loaded-miso-soup-w-chicken",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:mini-chicken-bowl",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/waba-chicken-steak",
+      "category": "catering_family",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:chicken-bowl",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "waba-grill:sides/loaded-miso-soup-w-tofu",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "waba-grill:mini-chicken-bowl-veggies",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "waba-grill:family-a-la-carte/waba-wm-chicken-steak",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "waba-grill:chicken-plate",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Adding avocado changes this published recipe/component; no modified row or derived nutrition is supplied.",
+      "modifier": "add avocado"
+    },
+    {
+      "row": "waba-grill:sides/loaded-miso-soup-w-wm-chicken",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "waba-grill:sides/tofu-6-oz",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-one-base/brown-rice",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:packaged/gatorade/lime-cucumber/20-fl-oz",
+      "category": "drink_oz",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-salmon",
+      "category": "high_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:packets/ginger-packet",
+      "category": "low_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:gyudon-beef-side",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "yoshinoya:appetizers/edamame-salted",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "yoshinoya:appetizers/shrimp-tempura-2-pc-1-sauce",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-one-base/japanese-udon-noodles",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce",
+      "category": "high_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:packets/shichimi-seasoning",
+      "category": "low_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:habanero-chicken-side",
+      "category": "modifier",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:appetizers/spring-rolls-4-pc",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:appetizers/shrimp-tempura-8-pc-2-sauce",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-ribeye-steak",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-one-base/white-rice",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "yoshinoya:packets/soy-sauce-packet",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "yoshinoya:appetizers/springs-rolls-2-pc",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "Only other published portions are offered; reject a forced nearest-name match."
+    },
+    {
+      "row": "yoshinoya:appetizers/tfc-blended-sauce-3-for-3pc-promo",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-chicken",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-one-vegetable/coleslaw",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:packets/sriracha-sauce-packet",
+      "category": "low_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:appetizers/sweet-and-spicy-edamame",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:appetizers/tfc-blended-sauce-side-addon-same-portion-as-reg",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/gyudon-beef-w-o-veg",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-one-vegetable/mixed-veggies",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "yoshinoya:side-sauces/beef-broth",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "yoshinoya:blount-clam-chowder",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "Only other published portions are offered; reject a forced nearest-name match."
+    },
+    {
+      "row": "yoshinoya:packets/gyoza-sauce-2-packs",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-habanero-chicken",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:side-sauces/tempura-sauce",
+      "category": "low_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:desserts/chocolate-chip-cookie-1",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/tfc-regular-blended-sauce",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-ribeye-steak",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:sides/veggies",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "yoshinoya:desserts/junior-s-double-chocolate-devil-s-food-cheesecake",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "yoshinoya:side-sauces/habanero-sauce",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-teriyaki-chicken",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Adding avocado changes this published recipe/component; no modified row or derived nutrition is supplied.",
+      "modifier": "add avocado"
+    },
+    {
+      "row": "yoshinoya:desserts/junior-s-original-cheesecake",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "yoshinoya:side-sauces/hanabi-mayo",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-teriyaki-salmon",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:desserts/junior-s-strawberry-swirl-cheesecake",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:side-sauces/sweet-spicy-sauce",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/gyudon-beef",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "yoshinoya:side-sauces/teriyaki-sauce",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/gyudon-beef-with-yellow-onion-beef-broth",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-ribeye-steak",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
+    },
+    {
+      "row": "yoshinoya:sides/teriyaki-chicken",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-hot-grilled-chicken",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-chicken",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:sides/teriyaki-ribeye",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-hot-gyudon-beef",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-salmon",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "yoshinoya:sides/teriyaki-salmon",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-ribeye-steak",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-of-cauliflower-rice-7oz",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carne-asada-white-rice-white-beans",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-black-beans",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/6-oz-black-beans",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-pico-de-gallo-salsa-3-oz",
+      "category": "low_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-brown-rice-black-beans",
+      "category": "regional_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-white-beans",
+      "category": "section_dependent",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/6-oz-brown-rice",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-brown-rice-white-beans",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-black-beans",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/6-oz-white-beans",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-black-beans",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-white-beans",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/6-oz-white-rice",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-white-beans",
+      "category": "regional_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-brown-rice-black-beans",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-black-beans",
+      "category": "regional_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-brown-rice-white-beans",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-white-beans",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-black-beans",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-white-rice-black-beans",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-white-beans",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Explicit no-rice changes this rice-containing published recipe; no modified row is supplied.",
+      "modifier": "no rice"
+    },
+    {
+      "row": "claim-jumper:appetizers/bonanza-platter",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-bbq-chicken",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:appetizers/buffalo-chicken-wings-share-size",
+      "category": "high_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/red-bull-sugar-free",
+      "category": "low_calorie",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:lunch/sliced-avocado-2-ounces-add",
+      "category": "modifier",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:appetizers/bbq-chicken-sliders",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:appetizers/buffalo-chicken-wings-snack-size",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "claim-jumper:lunch/chives",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "claim-jumper:garden-salad-platters/bbq-chicken-salad-platter-4-6-6-servings",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-black-olives",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Adding avocado changes this published recipe/component; no modified row or derived nutrition is supplied.",
+      "modifier": "add avocado"
+    },
+    {
+      "row": "claim-jumper:appetizers/pub-pretzels-share-size-with-cheese-sauce",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "claim-jumper:appetizers/beef-sliders-with-cheese",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:appetizers/calamari-share-size",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/coffee",
+      "category": "zero_macro",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:garden-salad-platters/bbq-chicken-salad-platter-8-10-10-servings",
+      "category": "catering_family",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-italian-sausage",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/coke",
+      "category": "non_chain_lookalike",
+      "challenge": "non-chain",
+      "why": "An independent restaurant copying a chain dish name has no official chain match."
+    },
+    {
+      "row": "claim-jumper:appetizers/calamari-snack-size",
+      "category": "near_miss_name",
+      "challenge": "cross-chain",
+      "why": "Shared dish words across different chains cannot transfer an official match."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/diet-coke",
+      "category": "size_variant",
+      "challenge": "wrong-serving",
+      "why": "The correct serving is absent; nearby size/protein variants must return NO MATCH."
+    },
+    {
+      "row": "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings",
+      "category": "modifier",
+      "challenge": "modifier",
+      "why": "Adding avocado changes this published recipe/component; no modified row or derived nutrition is supplied.",
+      "modifier": "add avocado"
+    },
+    {
+      "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-marinara-sauce",
+      "category": "combo_build_your_own",
+      "challenge": "unresolved",
+      "why": "Unselected proteins and base do not identify any one published component or meal."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/kids-coke",
+      "category": "near_miss_name",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:appetizers/pub-pretzel-snack-size",
+      "category": "size_variant",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:non-alcoholic-beverages/diet-sprite",
+      "category": "zero_macro",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings-with-broiled-chicken",
+      "category": "catering_family",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    },
+    {
+      "row": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-mozzarella-cheese",
+      "category": "combo_build_your_own",
+      "challenge": "positive",
+      "why": "Select the exact published chain, recipe, section and serving among near misses."
+    }
+  ]
+}

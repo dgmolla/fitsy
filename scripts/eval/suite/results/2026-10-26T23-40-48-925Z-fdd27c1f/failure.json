@@ -1,0 +1,14 @@
+{
+  "runId": "2026-10-26T23-40-48-925Z-fdd27c1f",
+  "head": "e975cd684b48d9f1cc38c865f7b6b4cbb13c1e0c",
+  "config": {
+    "split": "dev",
+    "tier": "curated",
+    "methods": [
+      "jev-v3"
+    ],
+    "live": true
+  },
+  "failure": "TYPESAFE_API_KEY is missing from the invoking environment; no Jev requests were sent.",
+  "at": "2026-10-26T23:40:48.955Z"
+}

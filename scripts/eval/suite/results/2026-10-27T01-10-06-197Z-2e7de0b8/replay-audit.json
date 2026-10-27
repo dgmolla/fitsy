@@ -1,0 +1,20 @@
+{
+  "head": "75bf11f867574757af486115fd7d295c3d2d7806",
+  "selectionSha256": "8cc9e249ed385217079e5ec803eabe3d91e3c49215167f41d6c48249c7f760ce",
+  "split": "dev",
+  "selected": 386,
+  "realRequests": 404,
+  "reusedRequests": 61,
+  "priorUniqueRequests": 2775,
+  "duplicatePriorPaidInputs": 0,
+  "duplicateNewPaidInputs": 0,
+  "originalLedgerPrefixPreserved": true,
+  "accounting": {
+    "cumulativeKnownUsd": 0.12394053000000027,
+    "requests": 404,
+    "reusedRequests": 61,
+    "runKnownUsd": 0.018542579999999934,
+    "unknownUsage": false
+  },
+  "stopReason": null
+}
