@@ -90,7 +90,7 @@ async function openRestaurantOrPaywall(
 
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
-export function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false, hideDistance = false }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: () => void; paywallPreview?: boolean; hideDistance?: boolean }) {
+export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false, hideDistance = false }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: (result: RestaurantResult) => void; paywallPreview?: boolean; hideDistance?: boolean }) {
   const bm = result.bestMatch;
   return (
     <View ref={containerRef} collapsable={false} testID={paywallPreview ? 'paywall-restaurant-card' : 'preview-pick-1'}>
@@ -108,7 +108,7 @@ export function HeroCard({ result, locked, unlocking, containerRef, onOpen, payw
           entry_point: 'hero',
           best_match_calories: result.bestMatch?.calories,
         });
-        if (onOpen) { onOpen(); return; }
+        if (onOpen) { onOpen(result); return; }
         void openRestaurantOrPaywall(locked, () => router.push({
           pathname: `/restaurant/${result.id}`,
           params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
@@ -150,7 +150,7 @@ export function HeroCard({ result, locked, unlocking, containerRef, onOpen, payw
     </TouchableOpacity>
     </View>
   );
-}
+});
 
 const paywallCard = StyleSheet.create({
   container: { height: 136, marginHorizontal: 0, marginTop: 0, borderRadius: 17 },
@@ -195,12 +195,12 @@ function DishCard({ result, locked, hideDishName = false, onPress }: { result: R
 
 // ─── Numbered restaurant section (#02+) ──────────────────────────────────────
 
-export function RestaurantSection({ result, index, locked, hideDishName = false, unlocking, onOpen }: { result: RestaurantResult; index: number; locked: boolean; hideDishName?: boolean; unlocking?: () => void; onOpen?: () => void }) {
+export const RestaurantSection = React.memo(function RestaurantSection({ result, index, locked, hideDishName = false, unlocking, onOpen }: { result: RestaurantResult; index: number; locked: boolean; hideDishName?: boolean; unlocking?: () => void; onOpen?: (result: RestaurantResult) => void }) {
   const indexStr = String(index + 2).padStart(2, '0');
   const position = index + 1;
 
   function navigateToRestaurant() {
-    if (onOpen) { onOpen(); return; }
+    if (onOpen) { onOpen(result); return; }
     void openRestaurantOrPaywall(locked, () => router.push({
       pathname: `/restaurant/${result.id}`,
       params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
@@ -255,7 +255,7 @@ export function RestaurantSection({ result, index, locked, hideDishName = false,
       )}
     </TouchableOpacity>
   );
-}
+});
 
 
 function previewRowLabel(result: RestaurantResult): string {

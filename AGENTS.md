@@ -77,10 +77,13 @@ npm run dev:env        # Pull DEV env creds (api .env.local, mobile .env.develop
 npm run dev:api        # API dev server (talks to the dev DB by default)
 npm run dev:mobile     # Expo dev client
 npm test               # Run tests
+npm run perf:check     # Stable performance invariants (no network timing gate)
+npm run perf:bundle    # Local production iOS JS size budget; never publishes
 npx prisma migrate dev # Run migrations
 ```
 
 Environments: ephemeral (CI + `prisma/seed.ts`), **dev** (`fitsy-dev` Supabase: previews, local, simulator), prod. `docs/engineering/devops/staging-environment.md`; `scripts/dev/` refuses prod.
+Performance baselines, dev API sampling and native profiling: [performance runbook](docs/engineering/devops/performance.md).
 
 ### Git Hooks Setup (one-time, per clone)
 ```bash

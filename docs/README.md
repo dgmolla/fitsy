@@ -47,6 +47,8 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 **`devops/`** — [production-deployment](engineering/devops/production-deployment.md) · [staging-environment](engineering/devops/staging-environment.md) · [monitoring-alerting](engineering/devops/monitoring-alerting.md) · [costs](engineering/devops/costs.md) · [ios-release-runbook](engineering/devops/ios-release-runbook.md)
 
+[Performance measurement and budgets](engineering/devops/performance.md) records the #563 baseline, stable checks, dev request sampling and native profiling protocol.
+
 **`archive/`** — historical ticket specs, spikes, and superseded specs.
 
 [tuning-guide.md](engineering/tuning-guide.md) — Shipyard Settings knobs (referenced by `CLAUDE.md`)

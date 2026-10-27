@@ -57,10 +57,10 @@ console-log scripts/ue-feed-spike.ts
 console-log scripts/ue-mode-smoke.ts
 direct-api apps/api/app/restaurants/[slug]/page.tsx
 direct-api apps/mobile/app/(tabs)/saved.tsx
-direct-api apps/mobile/app/mockups/search-v3a.tsx
-direct-api apps/mobile/app/mockups/search-v3b.tsx
-direct-api apps/mobile/app/mockups/search-v3c.tsx
-direct-api apps/mobile/app/mockups/search-v3d.tsx
+direct-api apps/mobile/mockups/search-v3a.tsx
+direct-api apps/mobile/mockups/search-v3b.tsx
+direct-api apps/mobile/mockups/search-v3c.tsx
+direct-api apps/mobile/mockups/search-v3d.tsx
 direct-api apps/mobile/app/restaurant/[id].tsx
 direct-api apps/mobile/app/welcome/notification-permission.tsx
 direct-api apps/mobile/app/welcome/out-of-area.tsx
@@ -86,9 +86,9 @@ long-file apps/api/services/menuSources/ueApiClient.ts
 long-file apps/mobile/app/(tabs)/profile.tsx
 long-file apps/mobile/app/(tabs)/saved.tsx
 long-file apps/mobile/app/macro-setup.tsx
-long-file apps/mobile/app/mockups/search-v3b.tsx
-long-file apps/mobile/app/mockups/search-v3c.tsx
-long-file apps/mobile/app/mockups/search-v3d.tsx
+long-file apps/mobile/mockups/search-v3b.tsx
+long-file apps/mobile/mockups/search-v3c.tsx
+long-file apps/mobile/mockups/search-v3d.tsx
 long-file apps/mobile/app/restaurant/[id].tsx
 long-file apps/mobile/components/MacroTargetsSection.tsx
 long-file apps/mobile/components/ProfileEditSheet.tsx

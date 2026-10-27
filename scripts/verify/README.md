@@ -29,6 +29,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `secrets.sh` | 0 | no hardcoded keys, committed .env, or build output in the diff |
 | `lint.sh` | 1 | eslint clean across workspaces |
 | `typecheck.sh` | 1 | workspace type-check scripts pass; API generates the current Prisma client before tsc |
+| `performance.sh` | 1 | no routed prototypes or resolved runtime preload/LLM dependencies |
 | `product-flow.sh` | 1 (local, blocking) | fresh candidate-bound simulator and affected-journey evidence; see `docs/engineering/devops/shipping.md` |
 | `boundaries.sh` | 1 | imports respect the layer graph in `.dependency-cruiser.cjs` (T3) |
 | `size-check.sh` | 1 | reports counted review size above or below the 600-line signal without imposing a hard cap |
@@ -40,10 +41,15 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `media-integration.sh` | 2 (local, blocking when simulator or product-flow controls change) | real decoder and attachment suites plus a source-bound receipt; hosted L2 stays media-tool free |
 | `own-code-mocks.sh` | 2 (shadow) | api tests mock only external services |
 | `build.sh` | 3 | production API build, no stray compiled output |
+| `mobile-bundle.sh` | 3 | production iOS minified JS and gzip budgets; offline local export only |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |
 | `api-e2e.sh` | 6 | a deployed API serves health + data-route 401s + authenticated entitlement locks (read-only by default; `--write` adds the register probe) |
 
 Callers: `.githooks/pre-push` (size/domain checks plus cheap layers 0-1, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
+
+Performance commands, measured baselines, native profiling and dev request sampling are documented in [the performance runbook](../../docs/engineering/devops/performance.md).
+The scripts test group includes `scripts/perf/*.test.mjs`; mobile tests include the search card-render budget.
+No network latency or native frame-time threshold runs in the ordinary loop.
 
 ## Diagnostic logs
 

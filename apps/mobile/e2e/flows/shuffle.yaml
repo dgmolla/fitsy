@@ -90,6 +90,32 @@ env:
     timeout: 30000
 - assertVisible:
     id: shuffle-button
+# Opening an unrelated editor must preserve the loaded hero and usable list.
+- copyTextFrom:
+    id: discovery-hero
+- evalScript: ${output.perfHero = maestro.copiedText}
+- tapOn:
+    id: preview-edit-targets
+- tapOn:
+    id: meal-filter-close
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 10000
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText === output.perfHero}
+- scrollUntilVisible:
+    element:
+      id: preview-pick-3
+    direction: DOWN
+- assertVisible:
+    id: preview-pick-3
+- takeScreenshot: discovery-scroll
+- scrollUntilVisible:
+    element:
+      id: discovery-hero
+    direction: UP
 - tapOn:
     id: shuffle-button
 - extendedWaitUntil:

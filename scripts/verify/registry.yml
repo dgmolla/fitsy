@@ -42,6 +42,13 @@ checks:
     runs: [local, ci]
     why: Workspace type-check scripts (api, mobile, shared, scripts); API regenerates Prisma from the current schema and scripts resolves shared imports to checkout-owned source.
 
+  - name: performance
+    script: performance.sh
+    layer: 1
+    blocking: true
+    runs: [local, ci]
+    why: Stable zero budgets for routed prototypes and resolved runtime discovery/LLM dependencies; no network or timing thresholds.
+
   - name: product-flow
     stage: acceptance
     script: product-flow.sh
@@ -123,6 +130,13 @@ checks:
     blocking: true
     runs: [local, ci]
     why: Next.js production build catches what tests miss; asserts no compiled output lands in the tree.
+
+  - name: mobile-bundle
+    script: mobile-bundle.sh
+    layer: 3
+    blocking: true
+    runs: [local, ci]
+    why: Production iOS minified JS and gzip size budgets from the measured audit; keyless local export only, no native build or OTA publication.
 
   - name: api-e2e
     script: api-e2e.sh
