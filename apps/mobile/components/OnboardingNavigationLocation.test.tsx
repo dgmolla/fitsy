@@ -174,8 +174,12 @@ it('resets a spent preview sample and tour when a new onboarding pass starts', a
   });
 });
 
-it('replays saved out-of-area recovery after a cold launch without joining the waitlist', async () => {
-  mockSession = { access_token: 'test-token', user: { id: 'buyer' } };
+it.each([
+  ['opens the chooser on the first tap', 0],
+  ['recovers a cancelled chooser touch', 1],
+  ['fails when the chooser never opens', Infinity],
+] as const)('replays saved out-of-area recovery after a cold launch: %s', async (_, cancelledTouches) => {
+  mockSession = { access_token: 'test-token', user: { id: `area-recovery-${cancelledTouches}` } };
   jest.spyOn(ExpoLocation, 'requestForegroundPermissionsAsync')
     .mockResolvedValue({ status: ExpoLocation.PermissionStatus.GRANTED } as never);
   jest.spyOn(ExpoLocation, 'getCurrentPositionAsync')
@@ -199,29 +203,58 @@ it('replays saved out-of-area recovery after a cold launch without joining the w
   expect(screen.queryByTestId('signup-apple')).toBeNull();
 
   const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
-  type Step = { tapOn?: string | { id: string; retryTapIfNoChange?: boolean }; assertVisible?: string;
-    extendedWaitUntil?: { visible: { id: string; enabled?: boolean } }; scrollUntilVisible?: { element: { text: string }; direction: string } };
+  type Selector = string | { id: string; enabled?: boolean };
+  type Step = { tapOn?: Selector; assertVisible?: Selector; waitForAnimationToEnd?: unknown;
+    extendedWaitUntil?: { visible: Selector }; scrollUntilVisible?: { element: { text: string }; direction: string };
+    runFlow?: string; retry?: { maxRetries: number; commands: Step[] } };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/onboarding-out-of-area.yaml'), 'utf8')) as [unknown, Step[]];
   const start = commands.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === 'waitlist-change-area');
-  const end = commands.findIndex((step, index) => index > start && step.extendedWaitUntil?.visible.id === 'goal-performance');
+  const end = commands.findIndex((step, index) => index > start && typeof step.extendedWaitUntil?.visible === 'object' && step.extendedWaitUntil.visible.id === 'goal-performance');
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
-  for (const step of commands.slice(start, end + 1)) {
-    const tap = step.tapOn;
-    if (typeof tap === 'object') {
-      if (tap.id === 'location-choose-area') expect(tap.retryTapIfNoChange).toBe(true);
-      await act(async () => { fireEvent.press(screen.getByTestId(tap.id)); });
-    } else if (tap) {
-      await act(async () => { fireEvent.press(screen.getByLabelText(tap)); });
-    }
-    if (step.extendedWaitUntil) {
-      const { id, enabled } = step.extendedWaitUntil.visible;
-      await screen.findByTestId(id);
-      if (enabled) expect(screen.getByTestId(id).props.accessibilityState?.disabled).not.toBe(true);
-    }
-    if (step.assertVisible) expect(screen.getByText(step.assertVisible)).toBeTruthy();
-    if (step.scrollUntilVisible) expect(screen.getByLabelText(step.scrollUntilVisible.element.text)).toBeTruthy();
+  let chooserTouches = 0;
+  function assertVisible(selector: Selector) {
+    const element = typeof selector === 'string' ? screen.queryByText(selector) : screen.queryByTestId(selector.id);
+    if (!element) throw new Error(`Missing visible outcome: ${JSON.stringify(selector)}`);
+    if (typeof selector === 'object' && selector.enabled) expect(element.props.accessibilityState?.disabled).not.toBe(true);
   }
+  async function replay(steps: Step[], directory: string): Promise<void> {
+    for (const step of steps) {
+      if (step.retry) {
+        for (let attempt = 0; ; attempt++) {
+          try { await replay(step.retry.commands, directory); break; }
+          catch (error) { if (attempt >= step.retry.maxRetries) throw error; }
+        }
+      } else if (step.runFlow) {
+        const file = resolve(directory, step.runFlow);
+        const [, nested] = loadAll(readFileSync(file, 'utf8')) as [unknown, Step[]];
+        await replay(nested, resolve(file, '..'));
+      } else if (step.tapOn) {
+        const selector = step.tapOn;
+        const element = typeof selector === 'string' ? screen.getByLabelText(selector) : screen.getByTestId(selector.id);
+        if (typeof selector === 'object' && selector.id === 'location-choose-area' && ++chooserTouches <= cancelledTouches) {
+          // UIKit can cancel a touch during route replacement. Press feedback
+          // changes the screen, so Maestro's generic change detector is insufficient.
+          await act(async () => { fireEvent(element, 'pressIn'); fireEvent(element, 'pressOut'); });
+        } else await act(async () => { fireEvent.press(element); });
+      }
+      if (step.extendedWaitUntil) await waitFor(() => assertVisible(step.extendedWaitUntil!.visible));
+      if (step.assertVisible) assertVisible(step.assertVisible);
+      if (step.scrollUntilVisible) expect(screen.getByLabelText(step.scrollUntilVisible.element.text)).toBeTruthy();
+    }
+  }
+  const recovery = replay(commands.slice(start, end + 1), resolve(__dirname, '../e2e/flows'));
+  if (cancelledTouches === Infinity) {
+    await expect(recovery).rejects.toThrow('Missing visible outcome: "Choose a neighborhood"');
+    expect(chooserTouches).toBe(2);
+    expect(screen.getPathname()).toBe('/welcome/location-permission');
+    expect((await getOnboardingData()).area?.source).toBe('gps');
+    expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/restaurants/preview'))).toHaveLength(1);
+    expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/waitlist'))).toHaveLength(0);
+    return;
+  }
+  await recovery;
+  expect(chooserTouches).toBe(cancelledTouches + 1);
   expect(screen.getPathname()).toBe('/welcome/goal');
   expect((await getOnboardingData()).area).toEqual({ lat: 34.0407, lng: -118.2468, name: 'DTLA', source: 'manual' });
   expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/waitlist'))).toEqual([]);

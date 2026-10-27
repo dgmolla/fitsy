@@ -69,12 +69,10 @@ env:
       enabled: true
     timeout: 15000
 - assertVisible: "Continue with Your location"
-# Native navigation can expose the button before it accepts touches. Retry only
-# an unchanged tap, then require the actual picker before selecting an area.
+# A cancelled touch can still animate the button. Require the actual sheet,
+# with one bounded retry of this idempotent action before selecting an area.
 - waitForAnimationToEnd
-- tapOn:
-    id: location-choose-area
-    retryTapIfNoChange: true
+- runFlow: ../helpers/open-location-picker.yaml
 - assertVisible: "Choose a neighborhood"
 - waitForAnimationToEnd
 - scrollUntilVisible:

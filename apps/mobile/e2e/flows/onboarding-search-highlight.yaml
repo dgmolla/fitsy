@@ -41,8 +41,7 @@ env:
     id: location-use-current
 - assertVisible:
     id: location-choose-area
-- tapOn:
-    id: location-choose-area
+- runFlow: ../helpers/open-location-picker.yaml
 # On a small iPhone, DTLA exists in accessibility but sits below the visible sheet.
 - swipe:
     start: "50%,78%"

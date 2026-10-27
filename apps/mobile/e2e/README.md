@@ -15,8 +15,10 @@ Its live ranked queries and preview assertions use that persisted allocation: 50
 `onboarding-guided-preview` and `onboarding-search-highlight` also blur through each field's label before focusing the next generated value.
 Calorie blur can update protein after iOS has selected it, collapsing the selection and leaving generated digits behind when Maestro backspaces.
 `OnboardingTargetEnergy.test.tsx` replays these saved commands against the real tuning screen with that native focus/blur order and checks the persisted targets.
-`onboarding-out-of-area` requires an enabled area chooser, recovers a navigation-time ignored tap with `retryTapIfNoChange`, and still requires the neighborhood sheet before scrolling to DTLA.
-`OnboardingNavigationLocation.test.tsx` replays its recovery against the real location, waitlist and goal screens, checking authenticated lookups, no implicit waitlist opt-in and the saved area after restart.
+All seven onboarding journeys open the area chooser through `helpers/open-location-picker.yaml`, which waits for an enabled control and requires the neighborhood sheet with at most two taps.
+`retryTapIfNoChange` can accept press feedback or unrelated hierarchy changes while the sheet stays closed; the helper retries only this idempotent action against its required outcome.
+`onboarding-out-of-area` retains its separate sheet assertion, DTLA selection, authenticated coverage and cold-start persistence checks.
+`OnboardingNavigationLocation.test.tsx` replays its recovery against the real location, waitlist and goal screens, including a cancelled first touch and a permanently unresponsive chooser that must fail without selecting an area or joining the waitlist.
 CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
 The read-only classifier supplies data to the protected `sim-scope.yml` publisher; the bounded status description contains scope and flow count, and the poller reads exact names from the artifact.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.

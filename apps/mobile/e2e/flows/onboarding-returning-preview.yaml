@@ -33,8 +33,7 @@ env:
     file: ../helpers/discovery-signin.yaml
     env:
       DESTINATION: "^location-(use-current|continue-area)$"
-- tapOn:
-    id: location-choose-area
+- runFlow: ../helpers/open-location-picker.yaml
 - tapOn: "Search near DTLA"
 - extendedWaitUntil:
     visible:
