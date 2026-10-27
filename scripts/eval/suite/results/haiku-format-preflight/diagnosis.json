@@ -1,0 +1,1839 @@
+{
+  "baselineId": "2026-10-27T08-22-32-777Z-db8d6ccb",
+  "selectionSha256": "3ec69529643a0253f95c4e04f927fe0d157c2d9fef14891af309962015a4fa70",
+  "ledger": {
+    "bytes": 1371033,
+    "sha256": "8a405dca7cd8eb51e4b94edfbc3b53f3ed7e921f2bb4e393468aa95cd9f44495",
+    "knownUsd": 0.5779621800000001,
+    "modelKnownUsd": 0.45402165000000005,
+    "unknown": false,
+    "pending": 0
+  },
+  "failedCaseIds": [
+    "curated:measured:ue:old-spaghetti-factory:fdf458f8-8364-562e-99f5-326466f08310",
+    "curated:match:122",
+    "curated:measured:macro:the-old-spaghetti-factory:pasta-classic-entrees/mizithra-cheese-and-brown-butter",
+    "curated:measured:macro:the-old-spaghetti-factory:guss-sally-s-favorites/spinach-meat-tortellini",
+    "curated:macro:waba-grill:packaged/pure-leaf/raspberry/16-9-fl-oz",
+    "curated:macro:waba-grill:sides/half-ocado",
+    "curated:macro:waba-grill:mini-chicken-bowl",
+    "curated:measured:macro:wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice",
+    "curated:measured:macro:wahoo-s-fish-taco:burritos/1988-burrito-carne-asada",
+    "curated:macro:wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-white-rice-black-beans",
+    "curated:measured:macro:wahoo-s-fish-taco:plates/ensenada-tacos-with-white-rice-black-beans",
+    "curated:macro:wahoo-s-fish-taco:sides/6-oz-white-rice",
+    "curated:macro:yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-ribeye-steak",
+    "curated:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce",
+    "curated:macro:yoshinoya:appetizers/shrimp-tempura-2-pc-1-sauce",
+    "curated:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/gyudon-beef-w-o-veg",
+    "bulk:measured:ue:wahoos:2f5e7e95-76c9-5237-887d-e135f035bec4",
+    "bulk:measured:macro:the-old-spaghetti-factory:guss-sally-s-favorites/chicken-marsala",
+    "bulk:measured:macro:the-old-spaghetti-factory:salads/caesar-salad",
+    "bulk:macro:waba-grill:family-a-la-carte/sweet-spicy-chicken",
+    "bulk:macro:waba-grill:packaged/dole/apple-100-percent/15-2-fl-oz",
+    "bulk:macro:waba-grill:sides/half-ocado",
+    "bulk:macro:waba-grill:bowls/waba-chicken-steak",
+    "bulk:macro:waba-grill:sauce-dressing/ranch-dressing-1-5-fluid-oz",
+    "bulk:macro:waba-grill:mini-bowls/organic-tofu",
+    "bulk:measured:macro:wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice",
+    "bulk:measured:macro:wahoo-s-fish-taco:plates/ensenada-fish-taco-with-brown-rice-black-beans",
+    "bulk:measured:macro:wahoo-s-fish-taco:burritos/1988-burrito-carnitas",
+    "bulk:macro:wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-white-beans",
+    "bulk:measured:macro:wahoo-s-fish-taco:shared-plates/chips-basket",
+    "bulk:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce",
+    "bulk:macro:yoshinoya:appetizers/shrimp-tempura-2-pc-1-sauce",
+    "bulk:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken"
+  ],
+  "counts": {
+    "failedCases": 33,
+    "completedJson": 33,
+    "questionCount": 113,
+    "invalidQuestions": 93,
+    "invalidTotals": 92,
+    "invalidArgmax": 1,
+    "exactArgmaxMismatch": 1,
+    "totalOnly": 92,
+    "argmaxOnly": 1,
+    "both": 0,
+    "sumRange": [
+      0.977,
+      1.6
+    ],
+    "absoluteSumDeviationRange": [
+      0.019999999999999796,
+      0.6000000000000001
+    ],
+    "invalidArgmaxGapRange": [
+      0.475,
+      0.475
+    ]
+  },
+  "diagnostics": [
+    {
+      "caseId": "curated:measured:ue:old-spaghetti-factory:fdf458f8-8364-562e-99f5-326466f08310",
+      "requestId": "e9a956ca-68f2-4004-8fef-c1a5ac981a33",
+      "runId": "2026-10-27T06-17-06-088Z-4ba60377",
+      "stage": "matching",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "match",
+          "sum": 1.5,
+          "sumDeviation": 0.5,
+          "absoluteSumDeviation": 0.5,
+          "invalidTotal": true,
+          "choice": "abstain",
+          "chosenProbability": 0.5,
+          "maximumProbability": 0.5,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:match:122",
+      "requestId": "0b67b0d7-b0ac-424f-97a7-97f0516284fb",
+      "runId": "2026-10-27T06-25-33-209Z-4cb048df",
+      "stage": "matching",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "match",
+          "sum": 1.02,
+          "sumDeviation": 0.020000000000000018,
+          "absoluteSumDeviation": 0.020000000000000018,
+          "invalidTotal": true,
+          "choice": "none",
+          "chosenProbability": 0.95,
+          "maximumProbability": 0.95,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:measured:macro:the-old-spaghetti-factory:pasta-classic-entrees/mizithra-cheese-and-brown-butter",
+      "requestId": "d612ad0f-5deb-41e6-9105-1c4ddfdb62c5",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.31,
+          "sumDeviation": 0.31000000000000005,
+          "absoluteSumDeviation": 0.31000000000000005,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.4000000000000004,
+          "sumDeviation": 0.40000000000000036,
+          "absoluteSumDeviation": 0.40000000000000036,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.32,
+          "sumDeviation": 0.32000000000000006,
+          "absoluteSumDeviation": 0.32000000000000006,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.32,
+          "sumDeviation": 0.32000000000000006,
+          "absoluteSumDeviation": 0.32000000000000006,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:measured:macro:the-old-spaghetti-factory:guss-sally-s-favorites/spinach-meat-tortellini",
+      "requestId": "3f0f6752-e147-456c-acba-b7321a7fbe83",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.45,
+          "sumDeviation": 0.44999999999999996,
+          "absoluteSumDeviation": 0.44999999999999996,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.6,
+          "sumDeviation": 0.6000000000000001,
+          "absoluteSumDeviation": 0.6000000000000001,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.4000000000000004,
+          "sumDeviation": 0.40000000000000036,
+          "absoluteSumDeviation": 0.40000000000000036,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.43,
+          "sumDeviation": 0.42999999999999994,
+          "absoluteSumDeviation": 0.42999999999999994,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:macro:waba-grill:packaged/pure-leaf/raspberry/16-9-fl-oz",
+      "requestId": "bbae62ab-65e6-4677-9c95-2aca2c0f82c3",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r1",
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.2000000000000002,
+          "sumDeviation": 0.20000000000000018,
+          "absoluteSumDeviation": 0.20000000000000018,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:macro:waba-grill:sides/half-ocado",
+      "requestId": "f61bc4e5-8e6f-4f93-88bf-ed5101e2946d",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.09,
+          "sumDeviation": 0.09000000000000008,
+          "absoluteSumDeviation": 0.09000000000000008,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r3",
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r4",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:macro:waba-grill:mini-chicken-bowl",
+      "requestId": "1880a482-dc9e-49d1-b02d-cb588d79fa2b",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.2800000000000002,
+          "sumDeviation": 0.28000000000000025,
+          "absoluteSumDeviation": 0.28000000000000025,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.4,
+          "sumDeviation": 0.3999999999999999,
+          "absoluteSumDeviation": 0.3999999999999999,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.32,
+          "sumDeviation": 0.32000000000000006,
+          "absoluteSumDeviation": 0.32000000000000006,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.45,
+          "sumDeviation": 0.44999999999999996,
+          "absoluteSumDeviation": 0.44999999999999996,
+          "invalidTotal": true,
+          "choice": "r3",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:measured:macro:wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice",
+      "requestId": "e3633219-d40b-4744-b7e0-67894259394b",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 0.9999999999999999,
+          "sumDeviation": -1.1102230246251565e-16,
+          "absoluteSumDeviation": 1.1102230246251565e-16,
+          "invalidTotal": false,
+          "choice": "r7",
+          "chosenProbability": 0.22,
+          "maximumProbability": 0.22,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.1199999999999999,
+          "sumDeviation": 0.11999999999999988,
+          "absoluteSumDeviation": 0.11999999999999988,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.0799999999999998,
+          "sumDeviation": 0.07999999999999985,
+          "absoluteSumDeviation": 0.07999999999999985,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.07,
+          "sumDeviation": 0.07000000000000006,
+          "absoluteSumDeviation": 0.07000000000000006,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.22,
+          "maximumProbability": 0.22,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:measured:macro:wahoo-s-fish-taco:burritos/1988-burrito-carne-asada",
+      "requestId": "8fac84a2-fe4d-41df-9ccf-caef4fc0187c",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.34,
+          "sumDeviation": 0.3400000000000001,
+          "absoluteSumDeviation": 0.3400000000000001,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.49,
+          "sumDeviation": 0.49,
+          "absoluteSumDeviation": 0.49,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.4000000000000001,
+          "sumDeviation": 0.40000000000000013,
+          "absoluteSumDeviation": 0.40000000000000013,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.5,
+          "sumDeviation": 0.5,
+          "absoluteSumDeviation": 0.5,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:macro:wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-white-rice-black-beans",
+      "requestId": "34b13cdd-82b1-4c3a-88b2-e82556958a19",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r6",
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.0199999999999998,
+          "sumDeviation": 0.019999999999999796,
+          "absoluteSumDeviation": 0.019999999999999796,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r4",
+          "chosenProbability": 0.28,
+          "maximumProbability": 0.28,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r4",
+          "chosenProbability": 0.28,
+          "maximumProbability": 0.28,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:measured:macro:wahoo-s-fish-taco:plates/ensenada-tacos-with-white-rice-black-beans",
+      "requestId": "cf4e72e9-3b45-437b-b2f1-ae0326b64b89",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.33,
+          "sumDeviation": 0.33000000000000007,
+          "absoluteSumDeviation": 0.33000000000000007,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.4000000000000001,
+          "sumDeviation": 0.40000000000000013,
+          "absoluteSumDeviation": 0.40000000000000013,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.29,
+          "sumDeviation": 0.29000000000000004,
+          "absoluteSumDeviation": 0.29000000000000004,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.4000000000000004,
+          "sumDeviation": 0.40000000000000036,
+          "absoluteSumDeviation": 0.40000000000000036,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:macro:wahoo-s-fish-taco:sides/6-oz-white-rice",
+      "requestId": "926ecc13-96e2-4852-b95d-2be9c198cda3",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.0999999999999999,
+          "sumDeviation": 0.09999999999999987,
+          "absoluteSumDeviation": 0.09999999999999987,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r1",
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.2000000000000002,
+          "sumDeviation": 0.20000000000000018,
+          "absoluteSumDeviation": 0.20000000000000018,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:macro:yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-ribeye-steak",
+      "requestId": "49b014b2-22cb-4b7a-b925-30141524ff76",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.27,
+          "sumDeviation": 0.27,
+          "absoluteSumDeviation": 0.27,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.34,
+          "sumDeviation": 0.3400000000000001,
+          "absoluteSumDeviation": 0.3400000000000001,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.4,
+          "sumDeviation": 0.3999999999999999,
+          "absoluteSumDeviation": 0.3999999999999999,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce",
+      "requestId": "ec0e4827-5ab3-42e5-9308-1972831513d8",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "coarse",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.5,
+          "sumDeviation": 0.5,
+          "absoluteSumDeviation": 0.5,
+          "invalidTotal": true,
+          "choice": "b7",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "b3",
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.56,
+          "sumDeviation": 0.56,
+          "absoluteSumDeviation": 0.56,
+          "invalidTotal": true,
+          "choice": "b8",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 0.9899999999999999,
+          "sumDeviation": -0.01000000000000012,
+          "absoluteSumDeviation": 0.01000000000000012,
+          "invalidTotal": false,
+          "choice": "b2",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:macro:yoshinoya:appetizers/shrimp-tempura-2-pc-1-sauce",
+      "requestId": "c7374e05-f16a-41ed-9f02-a5c3f4661659",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.27,
+          "sumDeviation": 0.27,
+          "absoluteSumDeviation": 0.27,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.2,
+          "sumDeviation": 0.19999999999999996,
+          "absoluteSumDeviation": 0.19999999999999996,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.2000000000000002,
+          "sumDeviation": 0.20000000000000018,
+          "absoluteSumDeviation": 0.20000000000000018,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.3,
+          "sumDeviation": 0.30000000000000004,
+          "absoluteSumDeviation": 0.30000000000000004,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "curated:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/gyudon-beef-w-o-veg",
+      "requestId": "37a21ae9-6e24-48a7-9c31-97dae7e9afe3",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.3,
+          "sumDeviation": 0.30000000000000004,
+          "absoluteSumDeviation": 0.30000000000000004,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.28,
+          "sumDeviation": 0.28,
+          "absoluteSumDeviation": 0.28,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.3000000000000003,
+          "sumDeviation": 0.30000000000000027,
+          "absoluteSumDeviation": 0.30000000000000027,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.3000000000000003,
+          "sumDeviation": 0.30000000000000027,
+          "absoluteSumDeviation": 0.30000000000000027,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:measured:ue:wahoos:2f5e7e95-76c9-5237-887d-e135f035bec4",
+      "requestId": "efab7340-e6bb-4a61-809e-bbcffe355590",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "matching",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "match",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "abstain",
+          "chosenProbability": 0,
+          "maximumProbability": 0.475,
+          "argmaxGap": 0.475,
+          "exactArgmaxMismatch": true,
+          "invalidArgmax": true
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:measured:macro:the-old-spaghetti-factory:guss-sally-s-favorites/chicken-marsala",
+      "requestId": "815a357b-a87c-4490-81df-64b11fbf5272",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.33,
+          "sumDeviation": 0.33000000000000007,
+          "absoluteSumDeviation": 0.33000000000000007,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.49,
+          "sumDeviation": 0.49,
+          "absoluteSumDeviation": 0.49,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.3800000000000001,
+          "sumDeviation": 0.3800000000000001,
+          "absoluteSumDeviation": 0.3800000000000001,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.41,
+          "sumDeviation": 0.4099999999999999,
+          "absoluteSumDeviation": 0.4099999999999999,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:measured:macro:the-old-spaghetti-factory:salads/caesar-salad",
+      "requestId": "03c14bdf-8639-4ff9-bed5-e493cfc61f95",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.2800000000000002,
+          "sumDeviation": 0.28000000000000025,
+          "absoluteSumDeviation": 0.28000000000000025,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.21,
+          "sumDeviation": 0.20999999999999996,
+          "absoluteSumDeviation": 0.20999999999999996,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.2100000000000002,
+          "sumDeviation": 0.2100000000000002,
+          "absoluteSumDeviation": 0.2100000000000002,
+          "invalidTotal": true,
+          "choice": "r3",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.27,
+          "sumDeviation": 0.27,
+          "absoluteSumDeviation": 0.27,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:macro:waba-grill:family-a-la-carte/sweet-spicy-chicken",
+      "requestId": "f90ad71f-dba9-4d95-9890-8eab82a95fcd",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.27,
+          "sumDeviation": 0.27,
+          "absoluteSumDeviation": 0.27,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.29,
+          "sumDeviation": 0.29000000000000004,
+          "absoluteSumDeviation": 0.29000000000000004,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.3800000000000003,
+          "sumDeviation": 0.38000000000000034,
+          "absoluteSumDeviation": 0.38000000000000034,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.3199999999999998,
+          "sumDeviation": 0.31999999999999984,
+          "absoluteSumDeviation": 0.31999999999999984,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:macro:waba-grill:packaged/dole/apple-100-percent/15-2-fl-oz",
+      "requestId": "f7dbb2e9-9a9b-411f-aea4-1796a12279b7",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 0.977,
+          "sumDeviation": -0.02300000000000002,
+          "absoluteSumDeviation": 0.02300000000000002,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.94,
+          "maximumProbability": 0.94,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.0070000000000001,
+          "sumDeviation": 0.007000000000000117,
+          "absoluteSumDeviation": 0.007000000000000117,
+          "invalidTotal": false,
+          "choice": "r9",
+          "chosenProbability": 0.92,
+          "maximumProbability": 0.92,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:macro:waba-grill:sides/half-ocado",
+      "requestId": "f61bc4e5-8e6f-4f93-88bf-ed5101e2946d",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.09,
+          "sumDeviation": 0.09000000000000008,
+          "absoluteSumDeviation": 0.09000000000000008,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r3",
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r4",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:macro:waba-grill:bowls/waba-chicken-steak",
+      "requestId": "0815b316-6d00-4813-80d7-cba61205b96f",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.45,
+          "sumDeviation": 0.44999999999999996,
+          "absoluteSumDeviation": 0.44999999999999996,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.45,
+          "sumDeviation": 0.44999999999999996,
+          "absoluteSumDeviation": 0.44999999999999996,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.47,
+          "sumDeviation": 0.47,
+          "absoluteSumDeviation": 0.47,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.4400000000000002,
+          "sumDeviation": 0.44000000000000017,
+          "absoluteSumDeviation": 0.44000000000000017,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:macro:waba-grill:sauce-dressing/ranch-dressing-1-5-fluid-oz",
+      "requestId": "5348de77-fc84-4c0e-9f3c-d6d1f2db347f",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.1,
+          "sumDeviation": 0.10000000000000009,
+          "absoluteSumDeviation": 0.10000000000000009,
+          "invalidTotal": true,
+          "choice": "r8",
+          "chosenProbability": 0.85,
+          "maximumProbability": 0.85,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.2000000000000002,
+          "sumDeviation": 0.20000000000000018,
+          "absoluteSumDeviation": 0.20000000000000018,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.8,
+          "maximumProbability": 0.8,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:macro:waba-grill:mini-bowls/organic-tofu",
+      "requestId": "ddd4c766-0f77-4a93-a477-2a21c9f7c9a4",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.36,
+          "sumDeviation": 0.3600000000000001,
+          "absoluteSumDeviation": 0.3600000000000001,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.28,
+          "sumDeviation": 0.28,
+          "absoluteSumDeviation": 0.28,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.35,
+          "sumDeviation": 0.3500000000000001,
+          "absoluteSumDeviation": 0.3500000000000001,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.19,
+          "sumDeviation": 0.18999999999999995,
+          "absoluteSumDeviation": 0.18999999999999995,
+          "invalidTotal": true,
+          "choice": "r2",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:measured:macro:wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice",
+      "requestId": "e3633219-d40b-4744-b7e0-67894259394b",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 0.9999999999999999,
+          "sumDeviation": -1.1102230246251565e-16,
+          "absoluteSumDeviation": 1.1102230246251565e-16,
+          "invalidTotal": false,
+          "choice": "r7",
+          "chosenProbability": 0.22,
+          "maximumProbability": 0.22,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.1199999999999999,
+          "sumDeviation": 0.11999999999999988,
+          "absoluteSumDeviation": 0.11999999999999988,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.0799999999999998,
+          "sumDeviation": 0.07999999999999985,
+          "absoluteSumDeviation": 0.07999999999999985,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.07,
+          "sumDeviation": 0.07000000000000006,
+          "absoluteSumDeviation": 0.07000000000000006,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.22,
+          "maximumProbability": 0.22,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:measured:macro:wahoo-s-fish-taco:plates/ensenada-fish-taco-with-brown-rice-black-beans",
+      "requestId": "3d98da41-14cf-4df5-8860-7d9c1e28e283",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.5,
+          "sumDeviation": 0.5,
+          "absoluteSumDeviation": 0.5,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.4,
+          "sumDeviation": 0.3999999999999999,
+          "absoluteSumDeviation": 0.3999999999999999,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.4100000000000004,
+          "sumDeviation": 0.41000000000000036,
+          "absoluteSumDeviation": 0.41000000000000036,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.4300000000000002,
+          "sumDeviation": 0.43000000000000016,
+          "absoluteSumDeviation": 0.43000000000000016,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:measured:macro:wahoo-s-fish-taco:burritos/1988-burrito-carnitas",
+      "requestId": "1fdda8fd-4af2-40e1-9b43-4922f1c63d0d",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.2599999999999998,
+          "sumDeviation": 0.2599999999999998,
+          "absoluteSumDeviation": 0.2599999999999998,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.4,
+          "sumDeviation": 0.3999999999999999,
+          "absoluteSumDeviation": 0.3999999999999999,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.4000000000000001,
+          "sumDeviation": 0.40000000000000013,
+          "absoluteSumDeviation": 0.40000000000000013,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.4,
+          "sumDeviation": 0.3999999999999999,
+          "absoluteSumDeviation": 0.3999999999999999,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:macro:wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-white-beans",
+      "requestId": "e5a2886a-2810-4df9-aa48-8dac45e19423",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r6",
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.0199999999999998,
+          "sumDeviation": 0.019999999999999796,
+          "absoluteSumDeviation": 0.019999999999999796,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r4",
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r4",
+          "chosenProbability": 0.25,
+          "maximumProbability": 0.25,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:measured:macro:wahoo-s-fish-taco:shared-plates/chips-basket",
+      "requestId": "e0a4f3fe-aebd-47df-9663-bb61d9d7f58c",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.34,
+          "sumDeviation": 0.3400000000000001,
+          "absoluteSumDeviation": 0.3400000000000001,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "r1",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.35,
+          "sumDeviation": 0.3500000000000001,
+          "absoluteSumDeviation": 0.3500000000000001,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.3800000000000001,
+          "sumDeviation": 0.3800000000000001,
+          "absoluteSumDeviation": 0.3800000000000001,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce",
+      "requestId": "ec0e4827-5ab3-42e5-9308-1972831513d8",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "coarse",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.5,
+          "sumDeviation": 0.5,
+          "absoluteSumDeviation": 0.5,
+          "invalidTotal": true,
+          "choice": "b7",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1,
+          "sumDeviation": 0,
+          "absoluteSumDeviation": 0,
+          "invalidTotal": false,
+          "choice": "b3",
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.56,
+          "sumDeviation": 0.56,
+          "absoluteSumDeviation": 0.56,
+          "invalidTotal": true,
+          "choice": "b8",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 0.9899999999999999,
+          "sumDeviation": -0.01000000000000012,
+          "absoluteSumDeviation": 0.01000000000000012,
+          "invalidTotal": false,
+          "choice": "b2",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:macro:yoshinoya:appetizers/shrimp-tempura-2-pc-1-sauce",
+      "requestId": "c7374e05-f16a-41ed-9f02-a5c3f4661659",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.27,
+          "sumDeviation": 0.27,
+          "absoluteSumDeviation": 0.27,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.2,
+          "sumDeviation": 0.19999999999999996,
+          "absoluteSumDeviation": 0.19999999999999996,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.2000000000000002,
+          "sumDeviation": 0.20000000000000018,
+          "absoluteSumDeviation": 0.20000000000000018,
+          "invalidTotal": true,
+          "choice": "r4",
+          "chosenProbability": 0.65,
+          "maximumProbability": 0.65,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.3,
+          "sumDeviation": 0.30000000000000004,
+          "absoluteSumDeviation": 0.30000000000000004,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    },
+    {
+      "caseId": "bulk:macro:yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken",
+      "requestId": "21656e4e-cdbd-4c45-ade7-e086218bd67b",
+      "runId": "2026-10-27T06-37-12-117Z-a1a11c12",
+      "stage": "fine",
+      "completedJson": true,
+      "checks": [
+        {
+          "name": "calories",
+          "sum": 1.39,
+          "sumDeviation": 0.3899999999999999,
+          "absoluteSumDeviation": 0.3899999999999999,
+          "invalidTotal": true,
+          "choice": "r7",
+          "chosenProbability": 0.75,
+          "maximumProbability": 0.75,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "protein",
+          "sum": 1.48,
+          "sumDeviation": 0.48,
+          "absoluteSumDeviation": 0.48,
+          "invalidTotal": true,
+          "choice": "r6",
+          "chosenProbability": 0.72,
+          "maximumProbability": 0.72,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "carbs",
+          "sum": 1.39,
+          "sumDeviation": 0.3899999999999999,
+          "absoluteSumDeviation": 0.3899999999999999,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.68,
+          "maximumProbability": 0.68,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        },
+        {
+          "name": "fat",
+          "sum": 1.4,
+          "sumDeviation": 0.3999999999999999,
+          "absoluteSumDeviation": 0.3999999999999999,
+          "invalidTotal": true,
+          "choice": "r5",
+          "chosenProbability": 0.7,
+          "maximumProbability": 0.7,
+          "argmaxGap": 0,
+          "exactArgmaxMismatch": false,
+          "invalidArgmax": false
+        }
+      ]
+    }
+  ]
+}
