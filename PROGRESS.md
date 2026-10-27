@@ -54,3 +54,14 @@ All 27 focused tests, scripts lint/type checks, source verification and fixture/
 There are 295 new dev cases and 91 existing dev matching cases whose projected candidates acquire source tags.
 Next: add exact-request paid-call replay and an explicit affected-dev selection, then run both methods only on that selection from committed source.
 No new paid requests, database commands, Anthropic calls, source-checkout writes, protected-checkout writes or project board edits have occurred.
+
+## Replay and affected-selection checkpoint
+
+Added a generated 386-case dev-only selection (295 new cases plus 91 existing matching cases with newly tagged candidate projections).
+The live collector now replays exact canonical requests from reconciled paid exchanges, including duplicates across tiers, and records the original request identity without another charge.
+It refuses missing paid evidence and previously billed unsuccessful identical requests.
+All 31 focused tests pass, including replay across invocations, changed-tag invalidation, failed-paid refusal and selection boundaries.
+One temporary fixture initially lacked the new generated selection's parent directory; the fixture now creates output parents, and both the failed case and full focused suite pass.
+Scripts lint and type checks pass.
+The actual offline runner completed the 386-case selection; that uncommitted-source diagnostic is retained and is not the final baseline.
+The next action is a clean-source exact/Jev dev comparison, then commit its results and current documentation before final gates and publication.

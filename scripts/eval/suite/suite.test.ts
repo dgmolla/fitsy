@@ -1,5 +1,5 @@
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as fs from 'node:fs';
 import { buildSuite, servingGroups, writeSuite } from './build';
@@ -7,7 +7,7 @@ import { durableAppend, loadCases, sha256, stratifiedSample, verifyChecksums } f
 import { exactMatcher, estimatorState, jevMethod, matchingRequest, method } from './adapters';
 import { JevClient, RESERVATION_USD, STOP_USD, spendState } from './budget';
 import { score, percentError } from './metrics';
-import { affordableSelection, evaluateCase, options, run } from './run';
+import { affordableSelection, evaluateCase, options, requestedSelection, run } from './run';
 import { candidate, rowSchema, type MacroCase, type MatchCase, type Result, type Row } from './types';
 import { type JevRequest } from '../lib/jev-experiment';
 
@@ -63,7 +63,9 @@ test('frozen suite reproduces exactly with official references and 30-40% holdou
 
 test('tampered holdout/reference checksum fails without scoring any held-out cases', () => {
   const dir = temporary(), built = buildSuite(); mkdirSync(join(dir, 'data'));
-  for (const [file, bytes] of built.outputs) writeFileSync(join(dir, file), bytes);
+  for (const [file, bytes] of built.outputs) {
+    mkdirSync(dirname(join(dir, file)), { recursive: true }); writeFileSync(join(dir, file), bytes);
+  }
   expect(verifyChecksums(dir)).toEqual(verifyChecksums());
   writeFileSync(join(dir, 'data/curated.holdout.jsonl'), '{}\n');
   expect(() => loadCases('dev', 'both', dir)).toThrow('checksum mismatch');
@@ -193,6 +195,63 @@ test('exclusive ledger, cross-run cumulative cap and interrupted reservations re
   durableAppend(join(directory, 'spend.jsonl'), { event: 'settle', requestId: 'past', runId: 'past', at: 'today', costUsd: STOP_USD - RESERVATION_USD / 2 });
   expect(() => new JevClient('other', directory, out, 'fake-key')).toThrow('threshold');
   expect(existsSync(join(directory, '.jev.lock'))).toBe(false);
+});
+
+test('identical paid requests replay across invocations, while changed candidate tags require a new answer', async () => {
+  const first = client();
+  await first.client.send(request);
+  await first.client.send(request);
+  expect(first.fetcher).toHaveBeenCalledTimes(1);
+  expect(first.client.reusedRequests).toBe(1);
+  first.client.close();
+  const out = join(first.directory, 'second'); mkdirSync(out);
+  const fetcher = mockTransport();
+  const second = new JevClient('second', first.directory, out, 'fake-key', fetcher);
+  try {
+    const reordered = Object.fromEntries(Object.entries(request).reverse()) as unknown as JevRequest;
+    const reused = await second.send(reordered);
+    expect(reused.costUsd).toBe(0); expect(fetcher).not.toHaveBeenCalled();
+    await second.send(matchingRequest(input, [candidate({ ...row, tags: ['component'] })]));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(second.requests).toBe(1); expect(second.reusedRequests).toBe(1);
+    expect(spendState(second.ledger).knownUsd).toBeCloseTo(2 * 100 * .042 / 1e6);
+    expect(readFileSync(second.rawFile, 'utf8')).toContain('sourceRequestId');
+  } finally { second.close(); }
+});
+
+test('a previously billed unsuccessful request cannot be resent by a later invocation', async () => {
+  const fetcher = mockTransport();
+  fetcher.mockImplementationOnce(async (_url, init) => new Response(JSON.stringify(response(JSON.parse(String(init?.body)))), { status: 429 }));
+  const first = client(fetcher);
+  await expect(first.client.send(request)).rejects.toThrow('HTTP 429');
+  first.client.close();
+  const out = join(first.directory, 'second'); mkdirSync(out);
+  const nextFetch = mockTransport(), second = new JevClient('second', first.directory, out, 'fake-key', nextFetch);
+  try {
+    await expect(second.send(request)).rejects.toThrow('previously billed unsuccessfully');
+    expect(nextFetch).not.toHaveBeenCalled(); expect(second.requests).toBe(0);
+  } finally { second.close(); }
+});
+
+test('missing paid-exchange evidence refuses collection instead of risking a repeated charge', async () => {
+  const first = client();
+  await first.client.send(request); first.client.close();
+  rmSync(first.client.rawFile);
+  expect(() => new JevClient('second', first.directory, first.out, 'fake-key')).toThrow('Paid exchange evidence is missing');
+  expect(existsSync(first.client.lock)).toBe(false);
+});
+
+test('explicit selection rejects holdout, unknown IDs, duplicates and traversal before collection', () => {
+  expect(() => options(['--split=holdout', '--cases=measured/dev-selection.json'])).toThrow('dev-only');
+  expect(() => options(['--cases=../outside.json'])).toThrow('dev-only');
+  const directory = temporary(); mkdirSync(join(directory, 'sources'));
+  const file = join(directory, 'sources/selection.json');
+  writeFileSync(file, JSON.stringify({ caseIds: [matchCase.id] }));
+  expect(requestedSelection([matchCase, macroCase], 'selection.json', directory).cases).toEqual([matchCase]);
+  writeFileSync(file, JSON.stringify({ caseIds: [matchCase.id, matchCase.id] }));
+  expect(() => requestedSelection([matchCase], 'selection.json', directory)).toThrow('unique');
+  writeFileSync(file, JSON.stringify({ caseIds: ['unavailable-or-holdout'] }));
+  expect(() => requestedSelection([matchCase], 'selection.json', directory)).toThrow('requested dev tier');
 });
 
 test.each(['response-append', 'settle-append', 'response-fsync', 'settle-fsync'])('journal %s failure latches collector stop and retains known billed usage', async fault => {

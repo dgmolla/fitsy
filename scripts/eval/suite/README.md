@@ -50,3 +50,9 @@ export TYPESAFE_API_KEY="${TYPESAFE_API_KEY:-${jev:-}}"
 
 Large generated JSONL partitions, reference-row JSON, extracted page text, and result artifacts omit textual Git diffs through local `.gitattributes` rules.
 Their ordinary files remain readable with any JSON/JSONL tool; review the generator, explicit curation, independently entered PDF checks, checksum manifest, and human case list together.
+
+For the measured seed extension, use `--cases=measured/dev-selection.json` with `--split=dev --tier=both`.
+The frozen selection includes new dev cases and original dev matching cases whose candidate metadata changed.
+The collector reuses exact canonical requests only when the raw exchange, current required model, typed response and settled billing agree.
+Reuse receipts identify the original run/request and incur no reservation or charge; missing exchange evidence or a previously billed failed request refuses recollection.
+Do not delete historical exchanges while their paid inputs remain eligible for replay.

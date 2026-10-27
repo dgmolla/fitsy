@@ -5,6 +5,7 @@ import { performance } from 'node:perf_hooks';
 import { z } from 'zod';
 import { JEV_LIMITS, parseChoiceAnswers, type JevRequest } from '../lib/jev-experiment';
 import { durableAppend } from './fixtures';
+import { paidResponses, requestKey, type PaidResponse } from './replay';
 
 export const STOP_USD = 4.50;
 export const HARD_CAP_USD = 5;
@@ -37,9 +38,11 @@ export class JevClient {
   knownUsd: number;
   stopped: string | null = null;
   requests = 0;
+  reusedRequests = 0;
   unknown = false;
   context = '';
   private closed = false;
+  private replay: Map<string, PaidResponse | null>;
   constructor(readonly runId: string, resultsDirectory: string, runDirectory: string, private apiKey: string,
     private transport: typeof fetch = fetch) {
     if (!apiKey.trim()) throw new Error('TYPESAFE_API_KEY is required for explicit live Jev execution');
@@ -55,6 +58,7 @@ export class JevClient {
       this.knownUsd = state.knownUsd;
       if (state.unknown) throw new Error('Unknown prior Jev usage; reconcile real billing before any further calls');
       if (this.knownUsd + RESERVATION_USD > STOP_USD) throw new Error('Cumulative Jev stop threshold reached');
+      this.replay = paidResponses(resultsDirectory);
     } catch (error) { unlinkSync(this.lock); throw error; }
   }
   get remainingUsd() { return Math.max(0, STOP_USD - this.knownUsd); }
@@ -66,6 +70,15 @@ export class JevClient {
   async send(request: JevRequest): Promise<{ raw: unknown; costUsd: number; latencyMs: number }> {
     if (this.closed || this.stopped) throw new Error('Jev client stopped');
     if (Buffer.byteLength(JSON.stringify(request)) > JEV_LIMITS.maxRequestBytes) return this.stop('Request exceeds reserved 12KB envelope');
+    const key = requestKey(request), cached = this.replay.get(key);
+    if (cached === null) return this.stop('Identical request previously billed unsuccessfully; no automatic retry');
+    if (cached) {
+      this.record(this.rawFile, { event: 'reuse', at: new Date().toISOString(), runId: this.runId,
+        context: this.context, requestSha256: key, sourceRunId: cached.runId, sourceRequestId: cached.requestId,
+        originalLatencyMs: cached.latencyMs, costUsd: 0 });
+      this.reusedRequests++;
+      return { raw: structuredClone(cached.raw), costUsd: 0, latencyMs: cached.latencyMs };
+    }
     if (this.knownUsd + RESERVATION_USD > STOP_USD) return this.stop('Cumulative Jev stop threshold reached');
     const requestId = randomUUID();
     const receipt = { requestId, runId: this.runId, at: new Date().toISOString() };
@@ -99,6 +112,7 @@ export class JevClient {
     this.record(this.ledger, { ...receipt, event: 'settle', costUsd, failure });
     if (this.knownUsd >= STOP_USD) failure ??= 'Cumulative Jev stop threshold reached';
     if (failure) return this.stop(failure);
+    this.replay.set(key, { requestId, runId: this.runId, raw, latencyMs });
     return { raw, costUsd: costUsd!, latencyMs };
   }
   close() {

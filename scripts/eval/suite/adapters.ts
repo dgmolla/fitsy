@@ -72,6 +72,7 @@ export function method(name: string, client?: JevClient): Method {
   throw new Error('Unknown method or Jev live client missing');
 }
 export const adapterProtocol = { matchingVersion: 3, matchingInstructions,
+  candidateFields: ['chain', 'name', 'section', 'serving', 'region', 'optional source tags'],
   estimatorVersion: 3, coarse: HIERARCHICAL_PROTOCOL.coarse, fine: HIERARCHICAL_PROTOCOL.fine,
   instructions: HIERARCHICAL_PROTOCOL.instructions, pricing: JEV_LIMITS.pricing,
   requiredModel: JEV_LIMITS.requiredModel, decoder: 'provider argmax choice, zero exact, overflow failure, no confidence cutoff' };

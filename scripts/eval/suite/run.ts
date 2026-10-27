@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -16,8 +16,8 @@ export function options(argv: string[]) {
   const flags = new Map<string, string>();
   for (const arg of argv) {
     if (arg === '--live' && !flags.has('live')) { flags.set('live', 'true'); continue; }
-    const match = /^--(split|tier|methods)=(.+)$/.exec(arg);
-    if (!match || flags.has(match[1]!)) throw new Error('Usage: --methods=exact,jev-v3 --split=dev|holdout --tier=curated|bulk|both [--live]');
+    const match = /^--(split|tier|methods|cases)=(.+)$/.exec(arg);
+    if (!match || flags.has(match[1]!)) throw new Error('Usage: --methods=exact,jev-v3 --split=dev|holdout --tier=curated|bulk|both [--cases=source-relative.json] [--live]');
     flags.set(match[1]!, match[2]!);
   }
   const split = z.enum(['dev', 'holdout']).parse(flags.get('split') ?? 'dev');
@@ -26,11 +26,23 @@ export function options(argv: string[]) {
   if (!methods.length || new Set(methods).size !== methods.length || methods.some(m => !['exact', 'jev-v3', 'haiku', 'qwen'].includes(m))) throw new Error('Invalid method selection');
   if (methods.some(m => m === 'haiku' || m === 'qwen')) throw new Error('Haiku and Qwen are disabled adapter stubs');
   if (methods.includes('jev-v3') !== flags.has('live')) throw new Error('Jev requires explicit --live; --live requires the Jev method');
-  return { split, tier, methods, live: flags.has('live') };
+  const cases = flags.get('cases');
+  if (cases && (split !== 'dev' || !/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.json$/.test(cases))) throw new Error('Explicit case selection is dev-only and relative to suite sources');
+  return { split, tier, methods, live: flags.has('live'), ...(cases ? { cases } : {}) };
+}
+export function requestedSelection(cases: Case[], file: string | undefined, directory = suite) {
+  if (!file) return { cases, source: null };
+  const bytes = readFileSync(join(directory, 'sources', file), 'utf8');
+  const ids = z.object({ caseIds: z.array(z.string().min(1)).min(1) }).parse(JSON.parse(bytes)).caseIds;
+  const allowed = new Set(cases.map(c => c.id));
+  if (new Set(ids).size !== ids.length || ids.some(id => !allowed.has(id))) throw new Error('Selected IDs must be unique and belong to the requested dev tier');
+  const wanted = new Set(ids);
+  return { cases: cases.filter(c => wanted.has(c.id)), source: { file, sha256: sha256(bytes) } };
 }
 const matchOutputSchema = z.object({ kind: z.enum(['match', 'none', 'abstain']), matchId: z.string().nullable(), confidence: z.number().finite().min(0).max(1) }).strict();
 export async function evaluateCase(c: Case, adapter: Method, rows: ReturnType<typeof loadCases>['rows'], client?: JevClient): Promise<Result> {
-  const started = performance.now(), costBefore = client?.knownUsd ?? 0, requestsBefore = client?.requests ?? 0;
+  const started = performance.now(), costBefore = client?.knownUsd ?? 0, requestsBefore = client?.requests ?? 0,
+    reusedBefore = client?.reusedRequests ?? 0;
   if (client) client.context = `${adapter.name}/${c.id}`;
   let output: Result['output'] = null, failure: string | null = null;
   try {
@@ -45,7 +57,8 @@ export async function evaluateCase(c: Case, adapter: Method, rows: ReturnType<ty
   } catch { failure = client?.stopped ?? 'Adapter failed or returned an invalid output'; output = null; }
   return { id: c.id, method: adapter.name, output, failure, latencyMs: performance.now() - started,
     costUsd: client?.unknown ? null : (client?.knownUsd ?? 0) - costBefore,
-    knownCostUsd: (client?.knownUsd ?? 0) - costBefore, requests: (client?.requests ?? 0) - requestsBefore };
+    knownCostUsd: (client?.knownUsd ?? 0) - costBefore, requests: (client?.requests ?? 0) - requestsBefore,
+    reusedRequests: (client?.reusedRequests ?? 0) - reusedBefore };
 }
 
 export function affordableSelection(cases: Case[], remainingUsd: number) {
@@ -69,6 +82,7 @@ export async function run(argv: string[], directory = suite) {
   let client: JevClient | undefined;
   try {
     const fixture = loadCases(config.split, config.tier, directory);
+    const requested = requestedSelection(fixture.cases, config.cases, directory);
     if (config.live) {
       if (!process.env['TYPESAFE_API_KEY']?.trim()) throw new PreflightError(process.env['jev']?.trim()
         ? 'TYPESAFE_API_KEY is missing; a legacy Jev variable named jev is present. Export it as TYPESAFE_API_KEY in the invoking shell; no requests were sent.'
@@ -83,11 +97,12 @@ export async function run(argv: string[], directory = suite) {
       if (untracked.trim()) throw new Error('Uncommitted suite input');
       client = new JevClient(runId, resultsDirectory, out, process.env['TYPESAFE_API_KEY'] ?? '');
     }
-    const selection = client ? affordableSelection(fixture.cases, client.remainingUsd) : { selected: fixture.cases, sampled: false };
+    const selection = client ? affordableSelection(requested.cases, client.remainingUsd) : { selected: requested.cases, sampled: false };
     const selected = selection.selected, results: Result[] = [], scores: Record<string, Metrics> = {};
     const metadata = { version: 1, runId, head, config, checksum: fixture.checksum, fixtureSha256: fixture.fixtureSha256,
       protocolSha256: sha256(JSON.stringify(adapterProtocol)), protocol: adapterProtocol, sampled: selection.sampled,
-      population: fixture.cases.length, selected: selected.length, selectionIds: selected.map(c => c.id),
+      population: fixture.cases.length, eligiblePopulation: requested.cases.length, selectionSource: requested.source,
+      selected: selected.length, selectionIds: selected.map(c => c.id),
       selectionSha256: sha256(JSON.stringify(selected.map(c => c.id))), budget: { stopUsd: STOP_USD, hardCapUsd: HARD_CAP_USD, reservationPerPostUsd: RESERVATION_USD } };
     writeFileSync(join(out, 'run.json'), JSON.stringify(metadata, null, 2) + '\n', { flag: 'wx' });
     for (const name of config.methods) {
@@ -109,7 +124,7 @@ export async function run(argv: string[], directory = suite) {
       }
     }
     const report = { ...metadata, stopReason: client?.stopped ?? null, scores,
-      accounting: { cumulativeKnownUsd: client?.knownUsd ?? null, requests: client?.requests ?? 0,
+      accounting: { cumulativeKnownUsd: client?.knownUsd ?? null, requests: client?.requests ?? 0, reusedRequests: client?.reusedRequests ?? 0,
         runKnownUsd: results.reduce((sum, result) => sum + (result.knownCostUsd ?? result.costUsd ?? 0), 0), unknownUsage: client?.unknown ?? false } };
     const markdown = `**TL;DR:** ${config.split} ${config.tier} evaluation ${report.stopReason ? 'stopped with failures' : 'completed'}; ${selected.length} selected cases.\n\n`
       + table(scores) + '\nMatching pass requires exact ID/NO MATCH; abstentions fail.\n'
@@ -118,6 +133,7 @@ export async function run(argv: string[], directory = suite) {
       + 'Medians include failures; unavailable medians display as a dash.\n'
       + 'Cost/1k divides billed attempts by attempted cases, including both estimator stages.\n'
       + 'Repeated UE candidate pairs are correlated; these are case counts, not independent meals.\n'
+      + `Replayed identical paid requests: ${report.accounting.reusedRequests}; replay incurs no new charge. Latency includes replay reads.\n`
       + (report.accounting.cumulativeKnownUsd === null ? 'Jev was not selected; cumulative provider spend is not reported by this offline run.\n'
         : `Cumulative known Jev spend: $${report.accounting.cumulativeKnownUsd.toFixed(8)}.\n`)
       + `Run known spend: $${report.accounting.runKnownUsd.toFixed(8)}; unknown usage: ${report.accounting.unknownUsage}.\n`;

@@ -46,6 +46,17 @@ npm run type-check -w scripts
 npm test -w scripts -- --runInBand --runTestsByPath eval/suite/suite.test.ts
 ```
 
+For the measured extension, run only the frozen affected-dev selection:
+
+```sh
+npm run eval:suite -w scripts -- --methods=exact,jev-v3 --split=dev --tier=both --cases=measured/dev-selection.json --live
+```
+
+`--cases` accepts a source-relative selection JSON only on dev and rejects unknown, duplicate or out-of-tier IDs before collection.
+The recorded selection contains all 295 new dev cases and 91 original dev matching cases whose candidate projection acquires source tags.
+It excludes all unaffected old work and all holdout cases.
+All 386 eligible cases fit the conservative remaining reservation budget without sampling.
+
 `--methods` selects a comma-separated set; `--split` accepts `dev` or `holdout`; `--tier` accepts `curated`, `bulk`, or `both`.
 Haiku and Qwen names are documented, disabled stubs and cannot make requests.
 No actual holdout evaluation is authorized for the construction and baseline work recorded here.
@@ -250,6 +261,11 @@ The selected IDs, denominator, and sampling flag remain visible.
 
 `results/spend.jsonl` durably records reserve and settle events across invocations, with an exclusive `.jev.lock` preventing overlapping collectors.
 Never reset the ledger, split it by method to gain budget, or retry an unknown bill as a free request.
+Before sending, the collector indexes prior paid exchanges against their matching run/request settlements, exact model, typed answers and usage.
+An identical canonical request, including all candidate fields and tags, replays the recorded answer for zero new charge and writes a source-request reuse receipt.
+A changed request needs its own reservation; a previously billed unsuccessful identical request is refused.
+Missing paid exchange evidence refuses collection instead of risking a repeated charge.
+The replay policy also deduplicates identical inputs across curated and bulk within the same run; reported latency includes replay reads and must not be treated as fresh provider-only latency.
 A pending reservation or missing/invalid usage stops future live collection until actual billing is reconciled with human review.
 Model drift from `jev-1.14.0`, invalid typed probabilities, HTTP/transport failure, credential echo, token-envelope violation, or spend exhaustion stops the current collector without automatic retry.
 Responses are redacted before disk writes if they echo the key; exception messages and headers are never printed or retained.

@@ -38,4 +38,4 @@ export interface Matcher { name: string; match(item: Item, rows: Candidate[]): P
 export interface Estimator { name: string; estimate(item: Item): Promise<Macros | null> }
 export interface Method { name: string; matcher?: Matcher; estimator?: Estimator }
 export interface Result { id: string; method: string; output: MatchOutput | Macros | null;
-  failure: string | null; latencyMs: number; costUsd: number | null; knownCostUsd?: number; requests: number }
+  failure: string | null; latencyMs: number; costUsd: number | null; knownCostUsd?: number; requests: number; reusedRequests?: number }

@@ -232,6 +232,12 @@ export function buildSuite() {
     outputs.set(dataFile(tier, split), cases.filter(c => c.tier === tier && c.split === split).sort((a, b) => a.id.localeCompare(b.id))
       .map(c => JSON.stringify(c)).join('\n') + '\n');
   }
+  const projected = new Map(rows.map(row => [row.id, row]));
+  outputs.set('sources/measured/dev-selection.json', JSON.stringify({ version: 'measured-2026-10-26',
+    reason: 'All new dev cases plus original dev matching cases whose candidate projection acquires source tags; no holdout or unaffected paid work.',
+    caseIds: cases.filter(c => c.split === 'dev' && (c.id.includes(':measured:')
+      || c.task === 'matching' && c.candidates.some(id => projected.get(id)?.tags?.length)))
+      .map(c => c.id).sort() }, null, 2) + '\n');
   outputs.set('holdout.sha256', ['data/curated.holdout.jsonl', 'data/bulk.holdout.jsonl', 'data/rows.json']
     .map(file => `${sha256(outputs.get(file)!)}  ${file}`).join('\n') + '\n');
   return { outputs, cases, manifest };
