@@ -24,6 +24,48 @@ Retire owned Metro, drivers and idle simulator resources through the existing li
 The build and run phases enforce an 8 GiB free-space floor.
 If the free-space check fails, clear only proven task-owned disposable data at an idle boundary and retry.
 
+## Optional Slack previews
+
+The local scripted gate accepts `--record-video` or `FITSY_SIM_RECORD_VIDEO=1` to add best-effort preview evidence around each selected Maestro invocation.
+Recording is off by default, and `--plan` and scope `none` never launch recording tools.
+The gate's flow selection, assertions, exit result, device lease and dev-target checks retain their existing contracts.
+These previews are separate from explicitly requested complete product-acceptance videos described above.
+
+`slack-video.mjs` starts `xcrun simctl io <UDID> recordVideo --type=mp4` against the selected device, never the ambiguous `booted` alias.
+It captures at most the first 90 seconds of the invocation, then accelerates longer captures into a silent H.264 MP4 of at most 30 seconds, at 360 pixels wide and 12 fps.
+The recorder starts alongside Maestro with no readiness delay.
+Finalization signals only its directly owned recorder process, with INT, TERM and KILL grace periods totaling at most 1.25 seconds.
+FFprobe has a one-second deadline per probe and FFmpeg encoding has a five-second deadline and one encoder thread.
+Missing tools, early exit, invalid media, oversized output, interruption and evidence-write errors are advisory and cannot replace Maestro's return value or original exception.
+Operator interruption still stops the wrapped command and returns a failing exit status.
+
+Only a finalized nonempty preview strictly below 10,000,000 bytes gets a public `flow-preview-*.mp4` filename beside the run's screenshots.
+Each attempt also writes an advisory `.mp4.json` receipt and recorder `.mp4.log`.
+Raw captures and incomplete encodes use other suffixes in a private temporary subdirectory, so the existing Slack glob cannot select them.
+Those intermediates are removed after recorder exit; an unconfirmed recorder exit retains them for the owner to diagnose.
+The preview is a short sample and cannot establish full-journey or release acceptance.
+
+The existing Mac poller at `~/fitsy-refactor/sim-review/poller.mjs` invokes Maestro directly, so its owner must adopt this wrapper at an idle runner boundary.
+Replace only the selected saved-flow `run('maestro', args, options)` call with the following argument shape, preserving its existing args, environment, timeout and result handling:
+
+```js
+const videoWrapper = join(wt, 'scripts/sim/slack-video.mjs');
+const videoArgs = existsSync(videoWrapper)
+  ? [videoWrapper, '--record-video', `--udid=${udid}`, `--dir=${ev}`, '--', 'maestro'] : [];
+run(videoArgs.length ? process.execPath : 'maestro', [...videoArgs, ...args], options);
+```
+
+The existence check preserves the original Maestro invocation for older PR heads that predate the helper.
+This wraps the already selected flows without adding fixture setup, new journeys, a publisher or a schedule.
+For a grouped Maestro invocation, the preview samples the first 90 seconds of that group; the local scripted gate saves a separate preview for each selected journey.
+Keep `ev` at `~/fitsy-refactor/sim-review/evidence/<head-sha-prefix>` so `~/fitsy-refactor/loop/evidence.py` finds the MP4 recursively with the existing screenshots on merge.
+That publisher already enforces the same decimal size limit and needs no Slack API or credential changes.
+External poller adoption and a real simulator run are separate from the repository's wrapper tests.
+Replay deterministic regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath sim/slack-video.test.ts sim/ci.test.ts`.
+The canonical local media-integration check includes the real FFmpeg preview test; the ordinary scripts suite skips that real-media case when `FITSY_MEDIA_INTEGRATION=0`.
+
+## Product acceptance evidence
+
 Each run writes `.evidence/product-flow/runner-timeline.jsonl` with wall and monotonic runner boundaries.
 Each flow retains its original Maestro command JSON, screenshots, an XCTest capture policy receipt and a derived `timing-summary.json`.
 Video modes also retain the complete untrimmed `flow-untrimmed.mp4` and recorder log.

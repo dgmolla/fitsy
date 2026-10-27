@@ -17,6 +17,8 @@ The read-only classifier supplies data to the protected `sim-scope.yml` publishe
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
 The pre-push hook stays free of simulator execution.
 Use `node scripts/sim/ci.mjs --scope=<none|smoke|flow|full> --flows=<comma-list> --udid=<UDID>` with environment configuration loaded from the Mac.
+Add `--record-video` or set `FITSY_SIM_RECORD_VIDEO=1` for optional short Slack previews beside the screenshots; recording failures do not fail a journey.
+See [runner controls](../../../scripts/sim/native-runner-controls.md#optional-slack-previews) for bounds and the existing Mac poller integration.
 The runner uses saved Maestro YAML and the existing exclusive simulator lease; use Maestro MCP (`maestro mcp`) for interactive inspection.
 It requires the current candidate installed through the canonical native procedure and refuses GitHub CI execution.
 Full scope includes every saved flow, including `signin-options`, `paywall-access`, `onboarding-guided-preview` and `log-meal`.

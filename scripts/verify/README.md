@@ -100,6 +100,8 @@ The final Verify aggregator is unchanged.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
 Run the local scripted gate with `node scripts/sim/ci.mjs --scope=<scope> --flows=<comma-list> --udid=<UDID>` after loading the Mac's dev environment and preparing its candidate build.
 Use `--plan` to inspect explicit scope and flows without launching native tools; `--scope=changed` consumes the shared impact plan.
+Optional `--record-video` or `FITSY_SIM_RECORD_VIDEO=1` records a bounded Slack preview beside each journey's screenshots; recording failures are non-fatal.
+The [runner controls](../sim/native-runner-controls.md#optional-slack-previews) document size and timing bounds, the external Mac poller wrapper and the existing Slack discovery path.
 Keep render checkpoints and the comparison range aligned with the selected PR head.
 Account-dependent journeys declare `fixture:` and `store:` tags in their maintained YAML.
 Load `FITSY_E2E_FIXTURES` with local, untracked preparation commands and per-fixture public environments as described in [the native README](../../apps/mobile/e2e/README.md#local-journey-fixtures).
@@ -110,7 +112,7 @@ Use an existing compatible binary or a supported build with measured capacity; a
 The ordinary native build command checks the [shared immutable cache](../../docs/engineering/devops/native-binary-reuse.md#shared-native-cache) after local receipts; its regression suite runs through the scripts workspace's Node bridge in the existing test check.
 Retire owned Metro, drivers and simulator resources at the end of the phase through the existing lifecycle controls.
 CI execution is refused by the local runner, and the registry contains no native execution check.
-Replay scope regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/simulator-scope.test.ts sim/ci.test.ts`.
+Replay scope and preview regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/simulator-scope.test.ts sim/ci.test.ts sim/slack-video.test.ts`.
 Replay trusted publication and fixture isolation with `node --test scripts/verify/sim-scope-status.test.mjs scripts/sim/journey-fixtures.test.mjs`.
 See [shipping.md](../../docs/engineering/devops/shipping.md) for native setup, billing starting states and separate source-bound product acceptance.
 
