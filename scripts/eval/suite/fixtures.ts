@@ -38,7 +38,7 @@ export function loadCases(split: Split, tier: Tier | 'both', directory = suite) 
   if (new Set(rows.map(row => row.id)).size !== rows.length) throw new Error('Duplicate reference ID');
   const byId = new Map(rows.map(row => [row.id, row]));
   for (const c of cases) {
-    if (!byId.has(c.group)) throw new Error('Missing serving group');
+    if (!byId.has(c.group) && !(c.origin === 'captured-uber-eats' && c.capture && /^capture:[a-f0-9]{24}$/.test(c.group))) throw new Error('Missing serving group');
     if (c.task === 'matching' && (new Set(c.candidates).size !== c.candidates.length
       || c.candidates.some(id => !byId.has(id)) || (c.expected.kind === 'match'
         ? !c.expected.matchId || !c.candidates.includes(c.expected.matchId) : c.expected.matchId !== null))) {

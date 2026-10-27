@@ -8,7 +8,7 @@ import { exactMatcher, estimatorState, jevMethod, matchingRequest, method } from
 import { JevClient, RESERVATION_USD, STOP_USD, spendState } from './budget';
 import { score, percentError } from './metrics';
 import { affordableSelection, evaluateCase, options, run } from './run';
-import { candidate, type MacroCase, type MatchCase, type Result, type Row } from './types';
+import { candidate, rowSchema, type MacroCase, type MatchCase, type Result, type Row } from './types';
 import { type JevRequest } from '../lib/jev-experiment';
 
 const dirs: string[] = [];
@@ -46,11 +46,11 @@ test('frozen suite reproduces exactly with official references and 30-40% holdou
     const cases = built.cases.filter(c => c.tier === tier && c.task === task);
     const holdout = cases.filter(c => c.split === 'holdout').length / cases.length;
     expect(holdout).toBeGreaterThanOrEqual(0.30); expect(holdout).toBeLessThanOrEqual(0.40);
-    if (tier === 'curated') expect(cases).toHaveLength(160);
+    if (tier === 'curated') expect(cases.filter(c => !c.id.includes(':measured:'))).toHaveLength(160);
   }
   const rows = JSON.parse(built.outputs.get('data/rows.json')!) as Row[];
   expect(built.cases.filter(c => c.tier === 'bulk' && c.task === 'macro')).toHaveLength(rows.length);
-  expect(rows).toHaveLength(227);
+  expect(rows).toHaveLength(338);
   expect(built.cases.some(c => c.split === 'dev' && (c.chain === 'Claim Jumper'
     || c.task === 'matching' && c.candidates.some(id => id.startsWith('claim-jumper:'))))).toBe(false);
   expect(built.cases.some(c => c.group.startsWith('yoshinoya:drinks/'))).toBe(false);
@@ -72,7 +72,7 @@ test('tampered holdout/reference checksum fails without scoring any held-out cas
 test('equivalent named component servings share a split across combo headings and side contexts', () => {
   const built = buildSuite(), rows = JSON.parse(built.outputs.get('data/rows.json')!) as Row[], groups = servingGroups(rows);
   const splitByRow = new Map(built.cases.filter(c => c.tier === 'bulk' && c.task === 'macro')
-    .map(c => [c.id.slice('bulk:macro:'.length), c.split]));
+    .map(c => [c.id.replace(/^bulk:(?:measured:)?macro:/, ''), c.split]));
   const identity = new Map<string, string>();
   for (const row of rows) {
     const group = groups.get(row.id)!;
@@ -85,6 +85,44 @@ test('equivalent named component servings share a split across combo headings an
   const modifiedComponent = built.cases.find(c => c.id === 'curated:match:094')!;
   expect(modifiedComponent.input.name).toContain('add avocado');
   expect(modifiedComponent.input.name).not.toContain('no rice');
+});
+
+test('measured cases preserve all reviewed collisions and candidate portions without uncertain bindings', () => {
+  const built = buildSuite();
+  const measured = built.cases.filter((c): c is MatchCase => c.tier === 'bulk' && c.task === 'matching' && !!c.capture);
+  expect(measured).toHaveLength(176);
+  expect(built.manifest.extension.excluded).toBe(83);
+  const osf = measured.filter(c => c.chain === 'The Old Spaghetti Factory');
+  const regular = osf.find(c => c.input.name === 'Marinara Sauce' && c.input.section === 'Pasta Classics')!;
+  const gluten = osf.find(c => c.input.name === 'Marinara Sauce' && c.input.section === 'Gluten Sensitive')!;
+  const catering = osf.find(c => c.input.name === 'Marinara Sauce' && c.input.section === 'Catering')!;
+  expect(regular.candidates).toHaveLength(4);
+  expect(regular.expected.matchId).toBe('the-old-spaghetti-factory:pasta-classic-entrees/marinara-sauce');
+  expect(gluten.expected.matchId).toBe('the-old-spaghetti-factory:gluten-sensitive/marinara-sauce');
+  expect(catering.expected.kind).toBe('none');
+  expect(gluten.group).toBe(regular.group); expect(catering.group).toBe(regular.group);
+  expect(gluten.split).toBe(regular.split); expect(catering.split).toBe(regular.split);
+  expect(osf.some(c => c.input.section === 'Catering' && c.input.name === 'Sicilian Garlic Cheese Bread')).toBe(false);
+  expect(measured.some(c => c.chain === 'Claim Jumper' && c.input.name === 'Baked Potato')).toBe(false);
+  const rowSplits = new Map(built.cases.filter(c => c.task === 'macro' && c.tier === 'bulk')
+    .map(c => [c.id.replace(/^bulk:(?:measured:)?macro:/, ''), c.split]));
+  for (const c of measured) {
+    expect(c.candidates.every(id => rowSplits.get(id) === c.split)).toBe(true);
+    expect(c.input.description).not.toMatch(/\b\d+\s*(?:cal\.|calories|kcal)/i);
+  }
+});
+
+test('optional source tags reach matcher adapters without exposing labels or mutating references', () => {
+  const tagged = rowSchema.parse({ ...row, tags: ['component', 'gluten-sensitive'] });
+  const projected = candidate(tagged);
+  expect(projected.tags).toEqual(['component', 'gluten-sensitive']);
+  expect(matchingRequest(input, [projected]).state).toMatchObject({ candidates: { c0: { tags: tagged.tags } } });
+  projected.tags!.push('dish');
+  expect(tagged.tags).toEqual(['component', 'gluten-sensitive']);
+  expect(candidate(row)).not.toHaveProperty('tags');
+  expect(() => rowSchema.parse({ ...row, tags: ['expected-positive'] })).toThrow();
+  const state = JSON.stringify(matchingRequest(input, [candidate(tagged)]).state);
+  for (const hidden of [row.id, 'macros', 'expected', 'source', 'category', 'holdout']) expect(state).not.toContain(hidden);
 });
 
 test('exact matcher keeps brand, portion, modifier and regional distinctions; ambiguity abstains', async () => {

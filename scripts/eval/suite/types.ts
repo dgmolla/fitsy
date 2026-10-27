@@ -10,17 +10,20 @@ export const itemSchema = z.object({ chain: text, name: text, section: z.string(
 export type Item = z.infer<typeof itemSchema>;
 export const sourceSchema = z.object({ url: z.url(), page: z.union([z.number().int().positive(), text]),
   sha256: z.string().regex(/^[a-f0-9]{64}$/), locator: text }).strict();
+export const rowTagSchema = z.enum(['dish', 'component', 'catering', 'regional', 'size-variant', 'other', 'gluten-sensitive']);
 export const rowSchema = z.object({ id: text, chain: text, name: text, section: z.string(), serving: text,
-  region: z.string(), macros: macrosSchema, source: sourceSchema }).strict();
+  region: z.string(), tags: z.array(rowTagSchema).min(1).optional(), macros: macrosSchema, source: sourceSchema }).strict();
 export type Row = z.infer<typeof rowSchema>;
 export type Candidate = Omit<Row, 'macros' | 'source'>;
 export function candidate(row: Row): Candidate {
-  const { id, chain, name, section, serving, region } = row;
-  return { id, chain, name, section, serving, region };
+  const { id, chain, name, section, serving, region, tags } = row;
+  return { id, chain, name, section, serving, region, ...(tags ? { tags: [...tags] } : {}) };
 }
 const base = { id: text, tier: z.enum(['curated', 'bulk']), split: z.enum(['dev', 'holdout']),
   group: text, category: text, chain: text, why: text, source: sourceSchema,
-  origin: z.enum(['captured-uber-eats', 'published-row', 'synthetic-challenge']), input: itemSchema };
+  origin: z.enum(['captured-uber-eats', 'published-row', 'synthetic-challenge']), input: itemSchema,
+  capture: z.object({ itemId: text, url: z.url(), sha256: text, line: z.number().int().positive(),
+    missCategory: text }).strict().optional() };
 export const matchCaseSchema = z.object({ ...base, task: z.literal('matching'), candidates: z.array(text).min(1),
   expected: z.object({ kind: z.enum(['match', 'none']), matchId: text.nullable() }).strict() }).strict();
 export const macroCaseSchema = z.object({ ...base, task: z.literal('macro'), expected: macrosSchema }).strict();

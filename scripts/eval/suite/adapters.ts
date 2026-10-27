@@ -26,7 +26,8 @@ export function matchingRequest(item: Item, rows: Candidate[]): JevRequest {
   criteria['abstain'] = 'Insufficient context or more than one equivalent candidate prevents a safe unique match.';
   return { model: JEV_LIMITS.model, questions: { match: { type: 'choice', instructions: matchingInstructions, criteria } },
     state: { menuItem: { ...item }, candidates: Object.fromEntries(rows.map((row, i) => [`c${i}`, {
-      chain: row.chain, name: row.name, section: row.section, serving: row.serving, region: row.region }])) } };
+      chain: row.chain, name: row.name, section: row.section, serving: row.serving, region: row.region,
+      ...(row.tags ? { tags: [...row.tags] } : {}) }])) } };
 }
 // Numeric targets, fixture IDs, provenance, category, split and rationale never enter estimator state.
 export function estimatorState(item: Item) {

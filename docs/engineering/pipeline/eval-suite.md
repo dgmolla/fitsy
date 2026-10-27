@@ -1,4 +1,4 @@
-**TL;DR:** Suite v1 freezes 320 curated and 3,642 bulk cases from 227 official servings, with dev-only baselines.
+**TL;DR:** The measured extension freezes 402 curated and 4,040 bulk cases while preserving the complete original v1 population.
 
 # Restaurant matching and macro evaluation suite
 
@@ -90,20 +90,23 @@ The suite does not rescale or correct unusual source facts with 4/4/9 calculatio
 
 ## Curated and bulk tiers
 
-[The curated list](eval-suite-cases.md) shows all 160 matching and 160 macro cases for human review.
+[The curated list](eval-suite-cases.md) shows all 224 matching and 178 macro cases for human review.
+The original v1 population contains 160 of each; the measured extension adds 64 matching and 18 macro cases.
 `sources/curation.json` is the explicit scenario plan, with chain quotas and deliberate category coverage fixed before collection.
 Half of curated matching cases are synthetic challenges changing chain, explicit modifiers, configuration completeness, or candidate availability.
 Their source citations establish the unchanged reference recipe; they do not claim an official number for an unpublished modified dish.
 A no-rice bowl or add-avocado item returns NO MATCH when its modified row is absent; no subtraction or invented modified macro truth occurs.
 
-Bulk includes one macro case for every one of the 227 verified rows and one contextual multi-candidate matching case per row.
+The original bulk population includes one macro case for each of its 227 verified rows and one contextual multi-candidate matching case per row.
+The measured extension brings the reference table to 338 rows and retains one bulk macro case per row.
 It additionally contains 81 captured Uber Eats variants with independent official-row bindings, each with a positive case, up to 24 same-chain negatives and 16 cross-chain negatives ranked by name-token overlap.
 The captured input text is preserved except complete nutrition-bearing marketing sentences are removed.
 Unresolved or multiply bound observations are excluded.
 Equal macro-vector same-chain rows are not used as negative pairs because they may represent equivalent published components under different headings.
 Cross-chain identical or near-identical names and same-chain size/recipe variants are explicit negative categories.
 Published-row and synthetic inputs are clearly tagged and must not be reported as captured UE traffic.
-The bulk tier has 3,415 matching cases and 227 macro cases, including two additional cross-chain identical-published-name negatives.
+The original bulk tier has 3,415 matching cases and 227 macro cases, including two additional cross-chain identical-published-name negatives.
+The extended bulk tier has 3,702 matching cases and 338 macro cases.
 
 Repeated candidate pairs share inputs and source servings, so thousands of cases do not constitute thousands of independent dishes.
 Use per-category and per-chain results and retain case counts and sampling identity when comparing methods.
@@ -113,10 +116,10 @@ An overall matching pass rate is sensitive to the many negative pairs; recall an
 
 | Tier / task | Dev | Locked holdout | Holdout share |
 | --- | ---: | ---: | ---: |
-| Curated matching | 102 | 58 | 36.3% |
-| Curated macro | 102 | 58 | 36.3% |
-| Bulk matching | 2,363 | 1,052 | 30.8% |
-| Bulk macro | 145 | 82 | 36.1% |
+| Curated matching | 143 | 81 | 36.2% |
+| Curated macro | 112 | 66 | 37.1% |
+| Bulk matching | 2,538 | 1,164 | 31.4% |
+| Bulk macro | 214 | 124 | 36.7% |
 
 Split assignment groups all cases of a canonical serving across both tiers and all captured aliases.
 Seven explicit reviewed equivalence groups in `sources/serving-groups.json` also bind identical named, sized components across combo and side headings, without equating unrelated dishes by macro values alone.
@@ -140,11 +143,62 @@ Before the first release, independent review corrected equivalent-serving member
 Add fresh official cases periodically, especially independent chains and real observed failures, and version the split rather than silently refreshing the old holdout.
 This repository-visible holdout is protected by process and checksums, not a claim of cryptographic secrecy from developers.
 
+## Measured-menu extension: 2026-10-26
+
+The human authorized this versioned seed addition and checksum refresh on PR #558.
+The read-only source checkout is `data/pdf-match-scope` at `3e8f13afb05f8aba0fc10744484c5d1d023fc6ce`.
+`sources/measured/` copies the hash-pinned 259-item measurement and three successful UE captures; no source checkout files are modified.
+The existing PDF-finder snapshots already match that checkout byte for byte.
+
+| Chain | Measured UE items | Admitted bulk UE seeds | Excluded observations |
+| --- | ---: | ---: | ---: |
+| Wahoo's | 79 | 61 | 18 |
+| Claim Jumper | 74 | 20 | 54 |
+| Old Spaghetti Factory | 106 | 95 | 11 |
+| Total | 259 | 176 | 83 |
+
+The explicit admission plan precedes evaluation and records every exclusion individually in the fixture manifest.
+Each admitted observation supplies one bulk matching case; the curated tier selects three per chain/category stratum plus every admitted multi-row, catering-title and gluten-sensitive-title hit.
+New published rows also receive bulk matching and macro cases; eight macros per chain, or all if fewer, are chosen by deterministic category rotation for curated coverage.
+This adds 480 cases: 64 curated matching, 18 curated macro, 287 bulk matching and 111 bulk macro.
+No captured nutrition claim, model answer, arithmetic scaling or inferred modifier becomes numerical truth.
+
+The 17 OSF observations matching multiple raw source rows are all admitted as exact-row choices or candidate-relative negatives.
+Seven gluten-sensitive exact-title hits and 12 catering lowercase/trim hits are included, with overlap in those 17 collisions.
+Regular, lunch, child and gluten-sensitive portions stay distinct even when their names match.
+The gluten-sensitive Rich Meat Sauce case selects the differently named official Gluten Sensitive Meat Sauce card; the ordinary identically named rows are distractors.
+Catering garlic bread is excluded because its serving may equal the appetizer; catering context alone cannot prove otherwise.
+The extra Claim Jumper Baked Potato collision is excluded after inspecting page 7: the first lunch row includes indented toppings, while its subrow is plain, and the UE item does not resolve the applicable portion.
+Unverified small/snack, large/share, recipe, side and regional equivalences are also excluded.
+
+NO MATCH means none of the supplied verified candidates identifies the captured configuration.
+For the 74 observations labelled missing-from-snapshot or UE-only, negatives test explicit supplied candidates and make no claim of exhaustive original-document absence.
+Unselected combos test complete configured rows or components without guessing choices.
+Captured names and descriptions retain menu wording, while prices, ratings, images and nutrition-bearing text are removed from provider inputs.
+
+`verify-sources.py` independently reads the official labelled HTML cards and physical PDF pages, checks source hashes, verifies exact row text and established numeric column order, and compares all four macros.
+It checks 118 rows against 28 PDF pages and labelled HTML cards, with source observations in `row-checks.jsonl` and reproducible page evidence.
+
+```sh
+python3 -B scripts/eval/suite/sources/measured/verify-sources.py --source-dir=/path/to/official-source-bytes
+```
+
+The directory contains `wahoos.pdf`, `claim-jumper.pdf` and `old-spaghetti-factory.html` with the hashes recorded in their original source manifests.
+`--initialize` creates source-check artifacts only when absent; normal verification never rewrites them.
+
+`sources/measured/v1-lock.json` pins all four original case partitions and reference bytes at the pre-extension head.
+The generator validates those complete original cases before appending seeds, so no old input, expected output, candidate set or split can silently change.
+New collision families use the original `suite-v1` seed and 35% captured chain/category strata, inherit an existing split when touching an original serving, and keep every Claim Jumper row in holdout.
+Observations without a reference target group by captured chain/name; identical observations across contexts remain on one split.
+Every candidate stays within its case's split.
+The extended reference table and both holdout partitions receive fresh SHA-256 pins; neither holdout partition has been scored.
+The explicitly authorized `--extend-measured` generator accepts only the pinned original bytes or already-generated extension bytes and refuses divergent frozen files.
+
 ## Adapter contract
 
 `types.ts` exports `Matcher` (`item + candidate rows -> match ID | none | abstain, confidence`) and `Estimator` (`item -> calories/protein/carbs/fat | null`).
 The runner validates output shape, finite nonnegative macros, confidence bounds, and membership of returned IDs in the supplied candidate set.
-Matcher candidate projections contain only chain, published name, section, serving and region; target macros, labels, aliases, case IDs, split, category, rationale, and source locators are omitted.
+Matcher candidate projections contain only chain, published name, section, serving, region and optional source row tags; target macros, labels, aliases, case IDs, split, category, rationale, and source locators are omitted.
 Estimator state contains only chain, item name, section/description/region, and serving; it rejects numeric nutrition-bearing input text.
 
 | Method | Matching | Estimation |
@@ -207,9 +261,12 @@ The reservation assumes provider billing stays within its advertised/requested e
 `data/manifest.json` retains the original 17 held/derived-serving exclusions and the additional 31 Yoshinoya drink-unit exclusions individually.
 The audited 22 regular/large/bottled unit defects and nine 14-oz craft drinks with unresolved volume/mass context are all excluded rather than silently converted.
 WaBa shrimp, inconsistent dumpling quantities, K-ribs, family salad, Yoshinoya gyoza/kids/one combo/sweet-and-sour facts, and multiplied two-cookie nutrition remain excluded under their prior audit reasons.
-All 2,874 PDF-finder rows outside the 68 individually inspected rows remain unverified and unused.
+The original version left all 2,874 PDF-finder rows outside its 68 individually inspected rows unused.
+The measured extension independently checks 118 selected rows, reusing seven original references and admitting 111 additional rows.
+Every remaining unchecked PDF-finder row stays unused.
 This includes Wahoo's repeated black-bean salsa portions and competing white-rice rows without a reliable serving distinction.
-Old Spaghetti Factory is excluded because the demo source is HTML-only with no PDF page in this verification scope; malformed labels also require a separate review.
+The measured extension explicitly expands source scope to individually checked labelled official Old Spaghetti Factory HTML cards.
+It preserves the real HTML section/card locator instead of inventing a PDF page; malformed labels remain excluded.
 No third-party nutrition, production database snapshot query, FatSecret value, inferred modifier arithmetic, or model prediction becomes truth.
 Source currency, regional recipe availability, correlated menus, manufacturer rounding, and published-table imperfections limit any production-accuracy claim.
 
@@ -244,18 +301,23 @@ The two tiers share servings and include correlated candidate pairs, so their sc
 
 | Category | Curated matching | Curated macro | Bulk matching | Bulk macro |
 | --- | ---: | ---: | ---: | ---: |
-| catering_family | 7 | 15 | 20 | 20 |
-| combo_build_your_own | 27 | 19 | 34 | 34 |
+| catering_family | 21 | 15 | 46 | 20 |
+| combo_build_your_own | 34 | 20 | 75 | 35 |
 | cross_chain_name | 0 | 0 | 1300 | 0 |
 | drink_oz | 4 | 8 | 8 | 8 |
-| high_calorie | 3 | 4 | 4 | 4 |
-| low_calorie | 9 | 16 | 16 | 16 |
+| gluten_sensitive | 7 | 0 | 10 | 0 |
+| high_calorie | 3 | 9 | 17 | 17 |
+| low_calorie | 9 | 17 | 17 | 17 |
 | modifier | 13 | 4 | 4 | 4 |
-| near_miss_name | 29 | 27 | 48 | 48 |
+| multiple_pdf_rows | 7 | 0 | 7 | 0 |
+| naming_punctuation | 6 | 0 | 11 | 0 |
+| near_miss_name | 29 | 32 | 96 | 96 |
 | non_chain_lookalike | 16 | 0 | 0 | 0 |
 | regional_variant | 3 | 8 | 12 | 12 |
 | same_chain_variant | 0 | 0 | 1807 | 0 |
-| section_dependent | 12 | 27 | 38 | 38 |
-| size_variant | 34 | 26 | 34 | 34 |
-| ue_positive | 0 | 0 | 81 | 0 |
+| section_dependent | 12 | 30 | 78 | 78 |
+| size_variant | 37 | 29 | 45 | 42 |
+| snapshot_missing | 9 | 0 | 38 | 0 |
+| snapshot_ue_only | 6 | 0 | 28 | 0 |
+| ue_positive | 5 | 0 | 94 | 0 |
 | zero_macro | 3 | 6 | 9 | 9 |

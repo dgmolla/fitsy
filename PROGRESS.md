@@ -38,3 +38,19 @@ Using the human-selected standalone `ship-branch` skill and its Fitsy/cutover re
 No mobile, database, scraper or pipeline runtime is needed for offline seed construction.
 Use the existing installed local review publisher; do not create another review pipeline or modify the protected checkout.
 Record each material checkpoint and the next action here before yielding or ending the session.
+
+## Seed construction checkpoint
+
+Copied the measurement and three successful UE captures from source head `3e8f13afb05f8aba0fc10744484c5d1d023fc6ce`, retaining their SHA-256 identities.
+The explicit source-first plan admits 176 observations (Wahoo's 61, Claim Jumper 20, OSF 95) and excludes 83 (18/54/11), with item-level reasons in the fixture manifest.
+All 17 OSF multi-row hits, seven gluten-sensitive hits and 12 catering folded-title hits are included; these sets overlap.
+Excluded catering garlic bread and the extra Claim Jumper potato collision after checking their ambiguous serving evidence.
+The official-source checker verifies 118 selected rows against 28 physical PDF pages and labelled OSF HTML cards; seven references already existed, and 111 are new.
+
+The extension adds **480 cases**, making 4,442 total: curated matching 224, curated macro 178, bulk matching 3,702 and bulk macro 338.
+The complete original 3,962 case objects, including candidate lists and splits, compare equal to the starting commit.
+Dev/holdout counts are now curated matching 143/81, curated macro 112/66, bulk matching 2,538/1,164 and bulk macro 214/124.
+All 27 focused tests, scripts lint/type checks, source verification and fixture/case-list reproduction pass locally.
+There are 295 new dev cases and 91 existing dev matching cases whose projected candidates acquire source tags.
+Next: add exact-request paid-call replay and an explicit affected-dev selection, then run both methods only on that selection from committed source.
+No new paid requests, database commands, Anthropic calls, source-checkout writes, protected-checkout writes or project board edits have occurred.

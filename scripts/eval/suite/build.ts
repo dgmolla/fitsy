@@ -4,6 +4,7 @@ import { gunzipSync } from 'node:zlib';
 import { chainBindingTruth } from '../../../apps/api/tests/fixtures/chain-batch-truth';
 import { root, suite, sha256, dataFile } from './fixtures';
 import { caseSchema, rowSchema, type Row, type Item, type Case, type Split, type Tier } from './types';
+import { extendMeasured } from './measured';
 
 const read = <T>(file: string): T => JSON.parse(readFileSync(join(root, file), 'utf8')) as T;
 const truthFile = 'scripts/eval/jev-macro/truth.json';
@@ -69,8 +70,8 @@ export function references() {
       region: /fresno/i.test(c.section) ? 'Fresno' : /las vegas/i.test(c.section) ? 'Las Vegas' : /new jersey/i.test(c.section) ? 'New Jersey' : '',
       macros: c.observed, source: { url, page: physicalPage, sha256: hash, locator } }));
   }
-  exclusions.push({ id: 'pdf-finder:unselected', reason: 'All PDF-finder rows outside the 68 individually inspected rows remain unverified and excluded; duplicate white-rice/salsa portions are unresolved.' },
-    { id: 'old-spaghetti-factory:*', reason: 'HTML-only source has no PDF page; exclude under this suite\'s PDF/page verification scope. Malformed source labels also require separate review.' },
+  exclusions.push({ id: 'pdf-finder:unselected', reason: 'Rows outside the original 68 inspected PDF rows and measured-extension source checks remain unverified and unused; unresolved duplicates are not inferred.' },
+    { id: 'old-spaghetti-factory:unchecked', reason: 'Only explicitly checked labelled official HTML cards are admitted in the versioned measured extension; malformed or unchecked labels remain excluded.' },
     { id: 'estimated:*', reason: 'No DB, estimated, FatSecret, historical third-party, inferred scaling, or derived modifier nutrition is ground truth.' });
   return { rows: rows.sort((a, b) => a.id.localeCompare(b.id)), exclusions, priorById };
 }
@@ -205,12 +206,24 @@ export function buildSuite() {
         'captured-uber-eats', input, [negative.id], null);
     }
   }
+  // Verify the entire old population before appending anything or adding optional metadata.
+  const lock = read<{ head: string; files: Record<string, string> }>('scripts/eval/suite/sources/measured/v1-lock.json');
+  const partition = (tier: Tier, split: Split) => cases.filter(c => c.tier === tier && c.split === split)
+    .sort((a, b) => a.id.localeCompare(b.id)).map(c => JSON.stringify(c)).join('\n') + '\n';
+  for (const tier of ['curated', 'bulk'] as const) for (const split of ['dev', 'holdout'] as const) {
+    if (sha256(partition(tier, split)) !== lock.files[dataFile(tier, split)]) throw new Error('Original v1 cases changed');
+  }
+  if (sha256(JSON.stringify(rows, null, 2) + '\n') !== lock.files['data/rows.json']) throw new Error('Original v1 reference rows changed');
+  const extension = extendMeasured(rows, cases, servingGroup, category);
+  for (const row of rows) if (!servingGroup.has(row.id)) servingGroup.set(row.id, row.id);
+  exclusions.push(...extension.exclusions);
   const sourceFiles = [truthFile, catalogFile, extractionFile, observationFile, checksFile,
     'apps/api/tests/fixtures/chain-batch-truth.ts', 'scripts/eval/suite/sources/pdf-pages.json', 'scripts/eval/suite/sources/curation.json',
     'scripts/eval/suite/sources/serving-groups.json'];
-  const manifest = { version: 1, seed: 'suite-v1', splitPolicy: 'Serving identity grouped across tiers; chain/category/captured-origin strata (35% captured, 21% published-only) plus Claim Jumper wholly holdout to balance correlated UE pairs and macro rows.',
+  const manifest = { version: 2, seed: 'suite-v1', splitPolicy: 'Original v1 cases, candidates and splits remain byte-identical. New captured-serving collision families use chain/category strata (35% holdout), anchored to existing splits when applicable; Claim Jumper stays wholly holdout. Unknown-target negatives group by captured chain/name.',
     holdoutOnlyChains: ['Claim Jumper'], servingGroups: Object.fromEntries(servingGroup),
-    sources: sourceFiles.map(file => ({ file, sha256: sha256(readFileSync(join(root, file))) })),
+    extension: { ...extension, exclusions: undefined, sources: undefined, originalHead: lock.head },
+    sources: [...sourceFiles.map(file => ({ file, sha256: sha256(readFileSync(join(root, file))) })), ...extension.sources],
     exclusions, counts: Object.fromEntries(['curated', 'bulk'].map(tier => [tier,
       Object.fromEntries(['dev', 'holdout'].map(split => [split, Object.fromEntries(['matching', 'macro'].map(task =>
         [task, cases.filter(c => c.tier === tier && c.split === split && c.task === task).length]))]))])) };
@@ -225,13 +238,20 @@ export function buildSuite() {
 }
 
 export function writeSuite(mode: string) {
-  if (!['--check', '--initialize'].includes(mode)) throw new Error('Use --check or --initialize (only before first lock)');
+  if (!['--check', '--initialize', '--extend-measured'].includes(mode)) throw new Error('Use --check, --initialize or the explicitly reviewed --extend-measured');
   const { outputs, manifest } = buildSuite();
   if (mode === '--initialize' && [...outputs.keys()].some(file => existsSync(join(suite, file)))) throw new Error('Suite already frozen; human review required for expected-output changes');
+  if (mode === '--extend-measured') {
+    const lock = read<{ files: Record<string, string> }>('scripts/eval/suite/sources/measured/v1-lock.json');
+    for (const [file, hash] of Object.entries(lock.files)) {
+      const current = readFileSync(join(suite, file), 'utf8');
+      if (sha256(current) !== hash && current !== outputs.get(file)) throw new Error('Unexpected frozen bytes; refuse measured extension');
+    }
+  }
   for (const [file, contents] of outputs) {
     if (mode === '--check') {
       if (readFileSync(join(suite, file), 'utf8') !== contents) throw new Error(`Frozen suite differs: ${file}`);
-    } else writeFileSync(join(suite, file), contents, { flag: 'wx' });
+    } else writeFileSync(join(suite, file), contents, { flag: mode === '--initialize' ? 'wx' : 'w' });
   }
   return manifest;
 }
