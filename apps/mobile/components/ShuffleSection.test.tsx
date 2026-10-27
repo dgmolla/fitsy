@@ -54,22 +54,38 @@ interface FlowCommand {
   setLocation?: { latitude: number; longitude: number };
 }
 const [, shuffleCommands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/shuffle.yaml'), 'utf8')) as [unknown, FlowCommand[]];
+interface NativeTextNode {
+  type: unknown;
+  props: { accessibilityLabel?: string };
+  children: (string | NativeTextNode)[];
+}
 
 // Exercise the saved Maestro outcome selectors against the actual rendered app.
 // Live dev meals differ from prisma/seed.ts, including punctuation and nutrition basis.
-function checkSavedAssertions(screen: ReturnType<typeof renderJourney>, commands: FlowCommand[], output: Record<string, string> = {}) {
+function checkSavedAssertions(screen: ReturnType<typeof within>, commands: FlowCommand[], output: Record<string, string> = {}) {
   let copiedText = '';
+  const evaluate = (text: string) => text.startsWith('${') ? new Function('output', `return (${text.slice(2, -1)});`)(output) as string : text;
+  const nativeLabel = (element: NativeTextNode): string => element.props.accessibilityLabel ?? element.children
+    .map(child => typeof child === 'string' ? child : nativeLabel(child)).filter(Boolean).join(element.type === 'Text' ? '' : ', ');
+  const nativeTextMatches = (text: string) => {
+    const pattern = new RegExp(`^(?:${evaluate(text)})$`);
+    // iOS exposes accessible buttons as a single label, including their children.
+    // RNTL text queries also expose those children, which Maestro cannot select.
+    const standalone = screen.queryAllByText(pattern).filter(element => {
+      for (let parent = element.parent; parent; parent = parent.parent) {
+        if (parent.props.accessible) return false;
+      }
+      return true;
+    });
+    return [...standalone, ...screen.queryAllByRole('button').filter(button => pattern.test(nativeLabel(button)))];
+  };
   const find = (selector: Selector) => {
     if (typeof selector !== 'string') {
-      const element = screen.queryByTestId(selector.id);
-      if (selector.text) {
-        expect(element).toBeTruthy();
-        expect(within(element!).getByText(new RegExp(`^(?:${selector.text})$`))).toBe(element);
-      }
-      return element;
+      const elements = screen.queryAllByTestId(new RegExp(`^(?:${selector.id})$`));
+      const textMatches = selector.text ? nativeTextMatches(selector.text) : elements;
+      return elements.find(element => textMatches.includes(element)) ?? null;
     }
-    const text = selector.startsWith('${') ? new Function('output', `return (${selector.slice(2, -1)});`)(output) as string : selector;
-    return screen.queryByText(new RegExp(`^(?:${text})$`));
+    return nativeTextMatches(selector)[0] ?? null;
   };
   for (const command of commands) {
     const visible = command.extendedWaitUntil?.visible ?? command.assertVisible;
@@ -406,6 +422,8 @@ it.each(['tolerance', 'radius'] as const)('discloses %s fallback and published n
 });
 
 it.each([
+  { name: 'native failure with grouped menu label', restaurant: 'WILDBIRD', dish: 'GREEN CHICKEN POZOLE',
+    macros: { calories: 125, proteinG: 8, carbsG: 17, fatG: 3 }, nutritionBasis: 'estimated' as const },
   { name: 'live dev juice', restaurant: "Winchell's Donut House", dish: 'FRESH GREEN JUICE',
     macros: { calories: 90, proteinG: 3, carbsG: 19, fatG: 0 }, nutritionBasis: 'estimated' as const },
   { name: 'published nutrition and regex punctuation', restaurant: 'Kitchen (DTLA) [A] $5.00', dish: 'Bowl (small) + juice [12 oz.] {combo} $5.00 \\ refill',
@@ -448,6 +466,10 @@ it.each([
   await screen.findByTestId('menu-item-chicken');
   expect(screen.getPathname()).toBe('/restaurant/seed-bowl');
   checkSavedAssertions(screen, shuffleCommands.slice(viewMenu + 1, selectedMenuScreenshot), output);
+  // A child title query passed in RNTL while the same exact selector failed on iOS.
+  expect(() => checkSavedAssertions(screen, [{ assertVisible: '${output.dish}' }], output)).toThrow();
+  expect(() => checkSavedAssertions(screen, shuffleCommands.slice(viewMenu + 1, selectedMenuScreenshot),
+    { ...output, menuDish: 'A different dish that was not selected' })).toThrow();
   expect(screen.getByText(fixture.dish)).toBeTruthy();
   await act(async () => screen.unmount());
 });

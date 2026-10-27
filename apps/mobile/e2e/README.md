@@ -105,6 +105,8 @@ The flow's `shuffleDebug=1` search parameter explicitly enables Shuffle on Debug
 The Debug-only `shuffleSeed=maestro-shuffle` search parameter makes the lottery replayable.
 Production builds ignore both parameters and require the PostHog boolean flag `shuffle` to be `true`.
 After Shuffle again it copies the selected restaurant and dish, escapes them for Maestro's regex text selectors, and verifies both on View menu.
+The menu check requires a `menu-item-*` control containing the literal selected dish name, since iOS groups the dish, match score, price and macros into one accessibility label.
+It waits for that control instead of requiring a standalone title accessibility element.
 Escaping runs in `helpers/shuffle-selectors.mjs` because Maestro's inline `${...}` parser skips expressions containing additional dollar signs, leaving selectors undefined.
 The flow preflights real dev coverage in DTLA and the absence of restaurants near New York, then uses simulator GPS and the normal location picker to exercise the empty state outside coverage.
 It establishes that GPS fix before launch so a cached position cannot point at an earlier test's area, and restores DTLA GPS after recovery.
@@ -112,6 +114,7 @@ Zero fat is not an empty-state fixture because real dev menus include zero-fat d
 It also verifies target editing from the empty state and recovers a new pick by choosing DTLA again.
 `components/ShuffleSection.test.tsx` runs the saved card and menu assertions against rendered search/menu screens with live-style names, varied macros, published nutrition and regex punctuation.
 It executes the flow's saved selector helper and rejects inline expressions the installed Maestro parser would skip.
+Its selector checks model native button grouping and reject the old exact-title selector and a different dish, including the WILDBIRD / GREEN CHICKEN POZOLE failure case.
 It also covers the deep link with PostHog disabled, production override rejection, locked teasers, flag changes, HTTP failures, request cancellation and account transitions against the real client and routing.
 Run it through `node scripts/sim/ci.mjs --scope=flow --flows=shuffle --udid=<UDID>` with the local fixture configuration.
 The planner expands this request when the candidate also affects shared UI or other journeys.

@@ -141,7 +141,11 @@ env:
 - extendedWaitUntil:
     visible: ${output.restaurant}
     timeout: 20000
-- assertVisible: ${output.dish}
+- extendedWaitUntil:
+    visible:
+      id: menu-item-.+
+      text: ${output.menuDish}
+    timeout: 20000
 - takeScreenshot: shuffle-selected-menu
 - openLink: com.fitsy.mobile://search?shuffleDebug=1&shuffleSeed=maestro-shuffle
 - tapOn:
