@@ -191,7 +191,7 @@ describe('fetchMenu', () => {
     global.fetch = makeMockFetch({ ok: false, status: 403 });
     expect(await fetchMenuOutcome('r1')).toEqual({ menu: null, error: 'unavailable' });
     global.fetch = makeMockFetch({ ok: false, status: 401 });
-    expect(await fetchMenuOutcome('r1')).toEqual({ menu: null, error: 'unavailable' });
+    expect(await fetchMenuOutcome('r1')).toEqual({ menu: null, error: 'unauthorized' });
     global.fetch = makeMockFetch({ ok: true, body: { error: 'Access unavailable' } });
     expect(await fetchMenuOutcome('r1')).toEqual({ menu: null, error: 'unavailable' });
   });

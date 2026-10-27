@@ -143,7 +143,7 @@ env:
     timeout: 15000
 - assertNotVisible:
     id: preview-guide
-# Cancel the resumed checkout and retry from the retained meal targets.
+# Cancel the resumed checkout and retry with the same account.
 # Cancellation must not reveal the old paywall or bounce back into sign-in.
 - tapOn:
     id: welcome-back
@@ -154,16 +154,46 @@ env:
 - assertNotVisible:
     id: paywall-logo
 - assertNotVisible: "Continue with Apple"
+- openLink: com.fitsy.mobile://welcome/location-permission
+- tapOn:
+    text: "^Open$"
+    optional: true
+# Account-owned goals are hidden while signed out. Restore authentication
+# before entering the goal-dependent nutrition context screen.
+- runFlow:
+    file: ../helpers/discovery-signin.yaml
+    env:
+      DESTINATION: "^location-(use-current|continue-area)$"
+- openLink: com.fitsy.mobile://welcome/goal
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: goal-lose_fat
+    timeout: 15000
+- tapOn:
+    id: goal-lose_fat
+- tapOn:
+    id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: tried-meal_prep
+    timeout: 15000
 - openLink: com.fitsy.mobile://welcome/how-it-works
 - tapOn:
     text: "^Open$"
     optional: true
+- extendedWaitUntil:
+    visible:
+      id: nutrition-source-published
+    timeout: 15000
 - tapOn:
     id: welcome-continue
-- runFlow:
-    file: ../helpers/discovery-signin.yaml
-    env:
-      DESTINATION: preview-guide
+- extendedWaitUntil:
+    visible:
+      id: preview-guide
+    timeout: 30000
 - tapOn:
     id: coachmark-skip
     optional: true

@@ -1,4 +1,4 @@
-/** Manual synthetic density benchmark: POSTGRES_PRISMA_URL=... POSTGRES_URL_NON_POOLING=... tsx --tsconfig apps/api/tsconfig.json apps/api/tests/db/goal-preview.performance.ts */
+/** Manual synthetic density benchmark: supply local DB URLs, SUPABASE_URL and a valid GOAL_BENCH_TOKEN, then run tsx --tsconfig apps/api/tsconfig.json apps/api/tests/db/goal-preview.performance.ts. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -8,6 +8,8 @@ import { NextRequest } from 'next/server';
 async function main() {
   const url = new URL(process.env['POSTGRES_PRISMA_URL'] ?? '');
   assert.equal(url.hostname, 'localhost', 'Synthetic benchmark requires an explicitly local database');
+  const token = process.env['GOAL_BENCH_TOKEN'];
+  assert.ok(token, 'GOAL_BENCH_TOKEN must be a valid account session for SUPABASE_URL');
   const prisma = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
   (globalThis as unknown as { prisma: PrismaClient }).prisma = prisma;
   const { GET } = await import('../../app/api/restaurants/preview/route');
@@ -47,7 +49,7 @@ async function main() {
       queries.length = 0;
       const start = performance.now();
       const response = await GET(new NextRequest(`http://localhost/api/restaurants/preview?lat=47&lng=47&guided=1&calories=600&protein=40&carbs=60&fat=20&q=ramen${selectedItemId ? `&selectedItemId=${selectedItemId}` : ''}`, {
-        headers: { 'x-forwarded-for': '192.0.2.240' },
+        headers: { authorization: `Bearer ${token}`, 'x-forwarded-for': '192.0.2.240' },
       }));
       const result = await response.json();
       samples.push(performance.now() - start);

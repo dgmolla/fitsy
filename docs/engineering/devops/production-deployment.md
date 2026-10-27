@@ -150,16 +150,21 @@ PROD_URL=https://fitsy-api.vercel.app
 # Health check
 curl -sf "$PROD_URL/api/health" | jq .
 
-# Search restaurants unauthenticated (LA centroid — auth is Apple/Google OAuth in production)
-curl -sf "$PROD_URL/api/restaurants?lat=34.0928&lng=-118.3086&protein=40&calories=600" \
-  | jq '{count: (.results | length), first: .results[0].name}'
+# Missing sessions must be rejected before returning restaurant data.
+curl -s -o /dev/null -w '%{http_code}\n' "$PROD_URL/api/restaurants?lat=34.0928&lng=-118.3086"
+
+# Use a valid Supabase account session from the production mobile sign-in.
+curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+  "$PROD_URL/api/restaurants?lat=34.0928&lng=-118.3086&protein=40&calories=600" \
+  | jq '{count: (.data | length), first: .data[0].name, locked: .meta.locked}'
 
 # Note: authenticated endpoints require a Supabase-signed JWT from Apple/Google
 # Sign in via the mobile app (EAS dev build) and copy the token from the keychain (SecureStore)
 # to test protected routes manually.
 ```
 
-**Expected:** ≥1 restaurant result for the 90029 area with macro-matched items.
+**Expected:** The unauthenticated request returns 401.
+The authenticated request returns at least one restaurant for the 90029 area; macro matches require an active subscription.
 
 ---
 

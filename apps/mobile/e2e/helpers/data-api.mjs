@@ -10,6 +10,10 @@
   });
   output.dataApiUnauthStatus = http.get(base + paths[0]).status;
   output.dataApiInvalidStatus = http.get(base + paths[0], { headers: { Authorization: 'Bearer invalid.jwt.signature' } }).status;
+  if (output.dataApiUnauthStatus !== 401 || output.dataApiInvalidStatus !== 401) {
+    throw new Error('Data API auth preflight requires the candidate backend to be deployed to dev.fitsy.org: ' +
+      'missing/invalid-token requests must return 401 (got ' + output.dataApiUnauthStatus + '/' + output.dataApiInvalidStatus + ').');
+  }
   var login = http.post(base + '/api/auth/login', {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: LOGIN_EMAIL, password: LOGIN_PASSWORD }),

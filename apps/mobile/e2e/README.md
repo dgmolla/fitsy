@@ -99,6 +99,10 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
+Deploy the candidate API to `dev.fitsy.org` through the existing coordinated preview procedure before running journeys that use `helpers/data-api.mjs`.
+The helper requires missing-token and invalid-token 401s before login; an anonymous 200 means the deployed backend still lacks the candidate auth behavior.
+Retain that failure and correct the deployment through the existing host owner before replaying the selected journeys.
+
 `shuffle` requires a populated dev backend, `entitled-dev` and a Debug Test Store build.
 It first signs the entitled fixture into the dev API and checks an unlocked dish and persisted RevenueCat proof before mobile launch can synchronize the subscription.
 Its `helpers/shuffle-subscriber.mjs` helper keeps tokens and credentials out of Maestro output, uses only `dev.fitsy.org`, and rejects a demo bypass without actual subscription proof.
@@ -152,10 +156,11 @@ The Mac's advisory exclusions live outside this repository in `~/fitsy-refactor/
 Remove `onboarding-target-ranked-search.yaml` (#525) from that same list after its repaired flow passes on the Debug dev build.
 
 `onboarding-returning-preview` reconnects a cleared Debug client to local Metro before checking `welcome-start`.
-Both Dev Login checkpoints wait for checkout or a completed authentication failure, reject `Dev Login Failed`, and require the real paywall before continuing.
+Both discovery Dev Login checkpoints wait for the authenticated location screen and reject `Dev Login Failed`.
+After cancelling anonymous return, the flow signs back in and selects a goal before reopening the goal-dependent nutrition context screen and preview.
 Its original missing-logo capture contains `Dev Login Failed` with `Email already registered`: check the fixture credentials and the values bundled by owned Metro before investigating plan rendering.
 The flow records a real decline, clears only the disposable keychain, and retains unauthenticated preview rejection, locked-meal, cancellation and cold-resume checks without purchasing.
-`components/OnboardingReturningPreview.test.tsx` exercises the real sign-in, paywall and decline with a rejected fixture login followed by a corrected retry.
+`components/OnboardingReturningPreview.test.tsx` exercises the real sign-in, paywall and decline with a rejected fixture login followed by a corrected retry, plus the saved cancellation-to-preview sequence through real screens.
 Run `node scripts/sim/ci.mjs --scope=flow --flows=onboarding-returning-preview --udid=<UDID>` with `unsubscribed-dev`, then remove `onboarding-returning-preview.yaml` (#527) from the Mac's `KNOWN_FAILING` list after a passing native run.
 
 `reminders` uses `unsubscribed-dev` to check guest access, leaving without opt-in, native denial, grant and permission persistence after relaunch without purchasing.

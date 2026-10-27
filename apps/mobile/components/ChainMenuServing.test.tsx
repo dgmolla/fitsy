@@ -5,6 +5,7 @@ import type { MenuResponse } from '@fitsy/shared';
 import Restaurant from '../app/restaurant/[id]';
 import Payment from '../app/welcome/payment';
 import Purchases from 'react-native-purchases';
+import { readDiscoverySignIn } from '../lib/discoverySignIn';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
@@ -23,6 +24,29 @@ const menu: MenuResponse = {
     macros: { calories: 520, proteinG: 42, carbsG: 48, fatG: 14, confidence: 'HIGH', hadPhoto: false, estimatedAt: '2026-10-24T00:00:00Z' },
   })),
 };
+
+it.each(['first', 'next'])('a rejected %s menu page keeps sign-in recovery without requesting bookmarks', async page => {
+  mockState.session = { access_token: 'rejected-token', user: { id: 'buyer' } };
+  const fetch = jest.fn(withAccountProfile(async url => {
+    const path = new URL(url);
+    if (path.pathname.endsWith('/menu')) {
+      if (page === 'next' && !path.searchParams.has('cursor'))
+        return response({ data: { ...menu, locked: false, nextCursor: 'next-page' } });
+      return { ...response({ error: 'Unauthorized' }), ok: false, status: 401 };
+    }
+    if (path.pathname === '/api/saved-items')
+      return { ...response({ error: 'Unauthorized' }), ok: false, status: 401 };
+    return response({ active: false, verdict: 'never_subscribed', synced: true, stale: false, lastRcVerifiedAt: new Date().toISOString() });
+  }));
+  global.fetch = fetch;
+  const screen = renderJourney('/restaurant/seed-bowl', { ...routes, 'restaurant/[id]': () => <Restaurant /> });
+  await screen.findByTestId('signup-apple');
+  await act(async () => {});
+  expect(screen.getPathname()).toBe('/welcome/signin');
+  expect(await readDiscoverySignIn()).toBe('/restaurant/seed-bowl');
+  expect(fetch.mock.calls.some(([url]) => new URL(String(url)).pathname === '/api/saved-items')).toBe(false);
+  expect(screen.queryByTestId('menu-search')).toBeNull();
+});
 
 it('the signed-in free chain journey reaches subscription plans with its selected restaurant', async () => {
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };

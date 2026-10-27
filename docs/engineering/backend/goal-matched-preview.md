@@ -87,6 +87,7 @@ There is no response cache, result overfetch or per-result network request.
 `apps/api/tests/db/goal-preview.db.test.ts` runs real handlers, JWT verification and Postgres for query, target, count, navigation-context and boundary regressions.
 The existing search-route suite covers backward compatibility, aliases, invalid inputs, sample limits and rate limiting.
 Run `apps/api/tests/db/goal-preview.performance.ts` with `tsx --tsconfig apps/api/tsconfig.json` against an explicitly local database for a reproducible 400-restaurant, 32,000-dish benchmark.
+Supply `SUPABASE_URL` and a valid account access token in `GOAL_BENCH_TOKEN`; the benchmark preserves the handler's authentication guard.
 Set `GOAL_BENCH_RESTAURANTS=2000` for 160,000 dishes, with the standard query tested at its 50-mile maximum radius.
 It verifies one application data query per call, exact counts and three returned picks, records separate connection health checks, and writes timing and `EXPLAIN ANALYZE` evidence under `.evidence/goal-preview/`.
 Synthetic local measurements do not establish production latency.

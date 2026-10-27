@@ -3,12 +3,12 @@ import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(resolve(__dirname, '../e2e/helpers/data-api.mjs'), 'utf8');
-function execute(loginStatus = 200, token: string | undefined = 'private-access-token') {
+function execute(loginStatus = 200, token: string | undefined = 'private-access-token', unauthStatus = 401) {
   const output: Record<string, unknown> = { apiPaths: ['/api/restaurants?lat=34&lng=-118', '/api/restaurants/fixture/menu'] };
   const http = {
     post: jest.fn(() => ({ status: loginStatus, body: JSON.stringify({ token }) })),
     get: jest.fn((_url: string, config?: { headers: { Authorization: string } }) => ({
-      status: config?.headers.Authorization === 'Bearer private-access-token' ? 200 : 401,
+      status: config?.headers.Authorization === 'Bearer private-access-token' ? 200 : unauthStatus,
       body: JSON.stringify(config?.headers.Authorization === 'Bearer private-access-token' ? { data: [] } : { error: 'Unauthorized' }),
     })),
   };
@@ -29,6 +29,10 @@ test.each([[401, 'token'], [200, '']])('failed login (%s) cannot send an authent
   const { http, output } = execute(status as number, token as string | undefined);
   expect(http.get).toHaveBeenCalledTimes(2); // Only explicit no-session/invalid-session controls.
   expect(output.dataApiResponses).toEqual([]);
+});
+
+test('a stale dev backend explains the deployment prerequisite before authenticating or driving the UI', () => {
+  expect(() => execute(200, 'private-access-token', 200)).toThrow(/candidate backend.*deployed.*200/);
 });
 
 test('every maintained flow uses the authenticated helper for direct restaurant API requests', () => {

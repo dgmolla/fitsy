@@ -1,4 +1,4 @@
-import { mockState, response, routes, renderJourney, withAccountProfile, AsyncStorage, act, fireEvent, waitFor, router } from './OnboardingNavigationHarness';
+import { mockState, response, routes, renderJourney, withAccountProfile, saveOnboardingField, saveMacroTargets, AsyncStorage, act, fireEvent, waitFor, router } from './OnboardingNavigationHarness';
 import { Alert } from 'react-native';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -6,9 +6,15 @@ import * as SecureStore from 'expo-secure-store';
 import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-native-purchases';
 import Payment from '../app/welcome/payment';
 import Preview from '../app/welcome/preview';
+import Goal from '../app/welcome/goal';
+import Tried from '../app/welcome/tried';
+import HowItWorks from '../app/welcome/how-it-works';
+import Problem from '../app/welcome/problem';
+import { getOnboardingData } from '../lib/onboardingStorage';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 type Step = {
+  openLink?: string;
   tapOn?: string | { id: string };
   extendedWaitUntil?: { visible: { id: string; enabled?: boolean }; timeout: number };
   assertVisible?: { id: string };
@@ -43,9 +49,54 @@ afterEach(() => {
 
 test('saved authentication checkpoints cover the location and resumed-preview data boundaries', () => {
   const gates = commands.filter(step => step.runFlow?.file === '../helpers/discovery-signin.yaml');
-  expect(gates.map(step => step.runFlow?.env?.DESTINATION)).toEqual(['^location-(use-current|continue-area)$', 'preview-guide']);
+  expect(gates.map(step => step.runFlow?.env?.DESTINATION)).toEqual(Array(2).fill('^location-(use-current|continue-area)$'));
   expect(signinCommands.some(step => step.assertNotVisible === 'Dev Login Failed')).toBe(true);
   expect(login.id).toBe('signup-dev');
+});
+
+test('the saved cancellation-to-preview sequence restores authentication before goal-dependent screens', async () => {
+  mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  await saveOnboardingField('goal', 'lose_fat');
+  await saveOnboardingField('area', { lat: 34.05, lng: -118.25, name: 'DTLA', source: 'manual' });
+  await saveMacroTargets({ calories: '600', protein: '40', carbs: '60', fat: '20' });
+  await AsyncStorage.setItem('@fitsy/paywallDeclined', '1');
+  mockState.session = null;
+  global.fetch = jest.fn(withAccountProfile(async url => {
+    if (url.endsWith('/api/auth/login')) return response({ token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false });
+    if (new URL(url).pathname.startsWith('/api/restaurants'))
+      return response({ data: [], meta: { nearbyDishCount: 10, radiusMiles: 3, goalMatch: null } });
+    return response({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false });
+  }));
+  const resumedRoutes = { ...routeMap, 'welcome/problem': () => <Problem />,
+    'welcome/goal': () => <Goal />, 'welcome/tried': () => <Tried />, 'welcome/how-it-works': () => <HowItWorks /> };
+  const screen = renderJourney('/welcome/preview', resumedRoutes);
+  await screen.findByTestId('signup-apple');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await screen.findByTestId('welcome-start');
+  const start = commands.findIndex(step => step.extendedWaitUntil?.visible.id === 'welcome-start');
+  const end = commands.findIndex((step, index) => index > start && typeof step.tapOn === 'object' && step.tapOn.id === 'coachmark-skip');
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  // Replay the actual saved YAML segment through real screens and routing.
+  for (const step of commands.slice(start + 1, end)) {
+    const link = step.openLink;
+    if (link) await act(async () => { router.push(link.replace('com.fitsy.mobile://', '/') as never); });
+    if (typeof step.tapOn === 'object' && step.tapOn.id) {
+      const control = await screen.findByTestId(step.tapOn.id);
+      await act(async () => { fireEvent.press(control); });
+    }
+    if (step.runFlow?.file === '../helpers/discovery-signin.yaml') {
+      const control = await screen.findByTestId(login.id);
+      await act(async () => { fireEvent.press(control); });
+      await screen.findAllByTestId(new RegExp(step.runFlow.env!.DESTINATION!));
+    }
+    if (step.extendedWaitUntil?.visible.id) await screen.findByTestId(step.extendedWaitUntil.visible.id);
+  }
+  await screen.findByTestId('preview-guide');
+  expect(mockState.session).toMatchObject({ user: { id: 'buyer' } });
+  expect((await getOnboardingData()).goal).toBe('lose_fat');
+  expect(screen.queryByTestId('signup-apple')).toBeNull();
+  expect(screen.queryByTestId('paywall-logo')).toBeNull();
 });
 
 test('a corrected fixture login reaches the real paywall, records decline and gates anonymous return without purchasing', async () => {

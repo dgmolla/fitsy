@@ -73,7 +73,10 @@ test('real guided and authenticated search preserve craving, target, selection a
         assert.ok(result.data.length > 0);
         assert.ok(result.data.every(row => row.bestMatch!.name.toLowerCase().includes(craving)));
       }
-      const locked = await search(new NextRequest(`http://localhost/api/restaurants?${at}&${targets}&q=ramen`));
+      const locked = await search(new NextRequest(`http://localhost/api/restaurants?${at}&${targets}&q=ramen`, {
+        headers: { authorization: `Bearer ${freeToken}` },
+      }));
+      assert.equal(locked.status, 200);
       const result = restaurantsResponseSchema.parse(await locked.json());
       assert.equal(result.meta.locked, true);
       assert.ok(result.data.length > 0);
