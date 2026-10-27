@@ -1,4 +1,30 @@
-**TL;DR:** Running the fixed 129-case DEV comparison with cached Jev and a $2.70 new-spend stop.
+**TL;DR:** Re-parsing the completed 129-case DEV comparison without new bills and separating output failures from estimate error.
+
+## Cached-output diagnosis and scoring continuation
+
+The current owner resumes `data/eval-suite-haiku-qwen-run` at `a2ea9d394e3c76417a00d56d1b7d8e6fd45998f7`.
+The later run `2026-10-27T08-03-39-011Z-0135102d` completed all 465 supported predictions, including the previously pending nine Qwen cases.
+At entry, ledger SHA-256 is `8a405dca7cd8eb51e4b94edfbc3b53f3ed7e921f2bb4e393468aa95cd9f44495`, cumulative spend is $0.57796218 and Haiku/Qwen spend is $0.45402165.
+No usage or reservation remains unresolved.
+The latest instruction tightens the stop to $2.70 including historical Jev spend, with a strict $3 cumulative cap.
+Never repeat a billed input, even when its returned estimate is invalid.
+
+The actual end-user reproduction reads the retained HTTP bodies and applies the existing Jev decoder.
+Haiku's failed macro bodies are valid completed JSON but violate the shared probability-total or argmax contract.
+One example contains ten calorie probabilities summing to 1.31, rather than one.
+No evidence supports repairing JSON syntax, normalizing the probabilities or treating the selected choice alone as a valid answer.
+Those changes would weaken the unchanged Jev comparison contract.
+The adapter currently loses that distinction by turning all exceptions into a generic failed output and replaying stored failure labels without re-parsing their original bodies.
+The repair carries decoder-owned parse/format/timeout diagnostics through the real evaluator and re-parses all cached case-level failures using the unchanged strict decoder.
+The runner gains a credential-free, transport-free model replay mode; cache misses refuse rather than spending.
+Scoring retains the original failure-penalized all-case view and adds explicit failure counts plus parsed-only macro denominators.
+Selected recovery tools are the ship-branch workflow, existing provider/replay primitives and canonical focused runner; altered prompts/schema, paid replacements, new credentials, holdout, database and board access are excluded.
+
+The superseded collector finished and released `.jev.lock` before this owner started.
+Under cleanup-agent-resources, the exact idle predecessor PID 68283, started October 26 at 23:11:47 local time, was terminated after matching its original task command and confirming no collector or lock.
+Its dedicated CUA, REPL, Mobile MCP and code-mode children also exited; all source, raw journals, original ledger and `/private/tmp/hq2.log` remain retained.
+Disk has 27 GiB available and memory reports 54% free; use one sequential focused-test job with a 2 GiB Node heap.
+Next: complete focused regressions, commit the narrow source repair, then run all four methods with cache-only transport and generate the final audited report before review, CI and the authorized squash merge.
 
 # Haiku and Qwen sample execution
 

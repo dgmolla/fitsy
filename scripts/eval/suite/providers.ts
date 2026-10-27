@@ -7,6 +7,7 @@ import { JEV_LIMITS, parseChoiceAnswers, type JevRequest } from '../lib/jev-expe
 import { spendState, preInferenceRejection, type ChoiceClient } from './budget';
 import { durableAppend } from './fixtures';
 import { requestKey, type PaidResponse } from './replay';
+import { OutputFailure, type FailureKind } from './failures';
 
 export type Provider = 'haiku' | 'qwen';
 export const MODEL_STOP_USD = 2.70;
@@ -68,8 +69,36 @@ function billedUsage(provider: Provider, data: Record<string, unknown>) {
   return { inputTokens: u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0), outputTokens: u.output_tokens,
     costUsd: (u.input_tokens + (u.cache_read_input_tokens ?? 0) * 0.1 + (u.cache_creation_input_tokens ?? 0) * 1.25 + u.output_tokens * providers.haiku.output) / 1e6 };
 }
-const caseFailure = (failure: string | null) => ['Invalid typed answer/probability distribution', 'Incomplete provider output', 'Invalid provider output'].includes(failure ?? '');
-type ModelResponse = PaidResponse & { failure: string | null };
+const caseFailure = (failure: string | null) => ['Invalid typed answer/probability distribution', 'Incomplete provider output', 'Invalid provider output'].some(prefix => failure?.startsWith(prefix));
+type ModelResponse = PaidResponse & { failure: string | null; failureKind?: FailureKind | undefined; originalFailure?: string | null };
+
+/** Parse the transport envelope, then apply the identical strict Jev answer decoder, including probability totals. */
+export function decodeProviderOutput(provider: Provider, request: JevRequest, data: Record<string, unknown>) {
+  let text: string;
+  try {
+    if (provider === 'haiku') {
+      text = z.array(z.object({ type: z.literal('text'), text: z.string() })).parse(data.content).map(c => c.text).join('');
+      if (data.stop_reason !== 'end_turn') throw new OutputFailure('format', 'Incomplete provider output');
+    } else {
+      const choices = z.array(z.object({ message: z.object({ content: z.string() }), finish_reason: z.string() })).length(1).parse(data.choices);
+      text = choices[0]!.message.content;
+      if (choices[0]!.finish_reason !== 'stop') throw new OutputFailure('format', 'Incomplete provider output');
+    }
+  } catch (error) {
+    if (error instanceof OutputFailure) throw error;
+    throw new OutputFailure('format', 'Invalid provider output envelope');
+  }
+  let raw: unknown;
+  try { raw = JSON.parse(text); }
+  catch { throw new OutputFailure('parse', 'Invalid provider output JSON'); }
+  try { parseChoiceAnswers(request, raw); }
+  catch (error) {
+    // Only decoder-owned paths/messages escape; raw provider strings never become exception messages.
+    const issues = error instanceof z.ZodError ? error.issues.map(i => `${i.path.join('.')}: ${i.code === 'custom' ? 'Invalid choice probabilities' : 'Invalid answer field'}`).join('; ') : 'Invalid answer fields';
+    throw new OutputFailure('format', `Invalid typed answer/probability distribution: ${issues}`);
+  }
+  return raw;
+}
 interface ModelExchange { event: string; requestId: string; runId: string; provider: Provider; request: JevRequest;
   payload: unknown; status: number; body: string; failure: string | null; costUsd: number | null; latencyMs: number }
 
@@ -98,7 +127,7 @@ function modelResponses(directory: string, provider: Provider) {
         const key = requestKey(request.request);
         if (cache.has(key)) throw new Error('Duplicate paid model input in history');
         cache.set(key, { requestId: request.requestId, runId: request.runId, raw: null,
-          failure: 'Reconciled transport failure; output unavailable', latencyMs: response.latencyMs });
+          failure: 'Reconciled transport failure; output unavailable', failureKind: 'timeout', latencyMs: response.latencyMs });
         found.add(request.requestId); continue;
       }
       if (bill && response && request.provider === provider && response.provider === provider
@@ -113,17 +142,18 @@ function modelResponses(directory: string, provider: Provider) {
       const data = JSON.parse(response.body), usage = billedUsage(provider, data), bound = reservation(provider, request.request);
       if (usage.costUsd !== bill.costUsd || usage.inputTokens > bound.inputTokens || usage.outputTokens > MAX_OUTPUT_TOKENS || usage.costUsd > bound.usd
         || (data.model !== providers[provider].requiredModel && !(provider === 'haiku' && data.model === providers.haiku.model))) throw new Error('Model replay identity or usage differs from billing');
-      const failure = response.failure;
-      if (failure && !caseFailure(failure)) throw new Error('Prior fatal model failure requires reconciliation');
+      if (response.failure && !caseFailure(response.failure)) throw new Error('Prior fatal model failure requires reconciliation');
       let raw: unknown = null;
-      if (!failure) {
-        if (provider === 'haiku' ? data.stop_reason !== 'end_turn' : data.choices?.[0]?.finish_reason !== 'stop') throw new Error('Incomplete model replay');
-        raw = JSON.parse(provider === 'haiku' ? data.content.map((c: { text: string }) => c.text).join('') : data.choices[0].message.content);
-        parseChoiceAnswers(request.request, raw);
+      let failure: string | null = null, failureKind: FailureKind | undefined;
+      try { raw = decodeProviderOutput(provider, request.request, data); }
+      catch (error) {
+        if (!(error instanceof OutputFailure) || !response.failure) throw error;
+        failure = error.message; failureKind = error.kind;
       }
       const key = requestKey(request.request);
       if (cache.has(key)) throw new Error('Duplicate paid model input in history');
-      cache.set(key, { requestId: request.requestId, runId: request.runId, raw, failure, latencyMs: response.latencyMs });
+      cache.set(key, { requestId: request.requestId, runId: request.runId, raw, failure, failureKind,
+        originalFailure: response.failure, latencyMs: response.latencyMs });
       found.add(request.requestId);
     }
   }
@@ -151,11 +181,11 @@ export class ModelSession {
       const state = spendState(this.ledger);
       this.knownUsd = state.knownUsd; this.modelKnownUsd = state.modelKnownUsd;
       if (state.unknown) throw new Error('Unknown prior provider usage; reconcile billing before collection');
-      if (this.modelKnownUsd >= MODEL_STOP_USD) throw new Error('Haiku/Qwen $2.70 stop threshold reached');
+      if (this.knownUsd >= MODEL_STOP_USD) throw new Error('Cumulative suite $2.70 stop threshold reached');
     } catch (error) { unlinkSync(this.lock); throw error; }
   }
-  get remainingUsd() { return Math.max(0, MODEL_STOP_USD - this.modelKnownUsd); }
-  stop(message: string): never { this.stopped ??= message; throw new Error(this.stopped); }
+  get remainingUsd() { return Math.max(0, MODEL_STOP_USD - this.knownUsd); }
+  stop(message: string, kind?: FailureKind): never { this.stopped ??= message; throw new OutputFailure(kind ?? 'adapter', this.stopped); }
   record(file: string, value: unknown) {
     try { durableAppend(file, value); }
     catch { this.unknown = true; this.stop('Journal write failed; reconcile reserved provider usage before collection'); }
@@ -197,16 +227,17 @@ export class ModelClient implements ChoiceClient {
     if (cached) {
       this.session.record(this.rawFile, { event: 'reuse', runId: this.session.runId, context: this.context,
         requestSha256: key, sourceRunId: cached.runId, sourceRequestId: cached.requestId,
-        originalLatencyMs: cached.latencyMs, failure: cached.failure, costUsd: 0, at: new Date().toISOString() });
+        originalLatencyMs: cached.latencyMs, failure: cached.failure, failureKind: cached.failureKind,
+        originalFailure: cached.originalFailure, costUsd: 0, at: new Date().toISOString() });
       this.reusedRequests++;
-      if (cached.failure) throw new Error(cached.failure);
+      if (cached.failure) throw new OutputFailure(cached.failureKind ?? 'adapter', cached.failure);
       return { raw: structuredClone(cached.raw), costUsd: 0, latencyMs: cached.latencyMs };
     }
     const config = providers[this.provider], payload = providerRequest(this.provider, request), bound = reservation(this.provider, request);
     const receipt = this.session.reserve(this.provider, bound.usd);
     this.session.record(this.rawFile, { ...receipt, event: 'request', context: this.context, request, payload, bound });
     const started = performance.now(); this.requests++;
-    let status = 0, body = '', failure: string | null = null, costUsd: number | null = null, raw: unknown;
+    let status = 0, body = '', failure: string | null = null, failureKind: FailureKind | undefined, costUsd: number | null = null, raw: unknown;
     try {
       const response = await this.transport(config.endpoint, { method: 'POST', redirect: 'error',
         headers: this.provider === 'haiku' ? { 'x-api-key': this.apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
@@ -225,30 +256,57 @@ export class ModelClient implements ChoiceClient {
       }
       const usage = billedUsage(this.provider, data);
       const { inputTokens, outputTokens } = usage; costUsd = usage.costUsd;
-      let text: string;
-      if (this.provider === 'haiku') {
-        text = z.array(z.object({ type: z.literal('text'), text: z.string() })).parse(data.content).map(c => c.text).join('');
-        if (data.stop_reason !== 'end_turn') failure ??= 'Incomplete provider output';
-      } else {
-        const choices = z.array(z.object({ message: z.object({ content: z.string() }), finish_reason: z.string() })).length(1).parse(data.choices);
-        text = choices[0]!.message.content;
-        if (choices[0]!.finish_reason !== 'stop') failure ??= 'Incomplete provider output';
-      }
       if (status !== 200) failure = `HTTP ${status}`;
       if (data.model !== config.requiredModel && !(this.provider === 'haiku' && data.model === config.model)) failure = 'Unexpected provider model identity';
       if (inputTokens > bound.inputTokens || outputTokens > MAX_OUTPUT_TOKENS || costUsd > bound.usd) failure = 'Provider exceeded reserved token/cost envelope';
-      raw = JSON.parse(text);
-      try { parseChoiceAnswers(request, raw); } catch { failure ??= 'Invalid typed answer/probability distribution'; }
-    } catch { failure ??= costUsd === null ? 'Transport/response failure; unknown usage' : 'Invalid provider output'; }
+      try { raw = decodeProviderOutput(this.provider, request, data); }
+      catch (error) {
+        if (!(error instanceof OutputFailure)) throw error;
+        failure ??= error.message; failureKind = error.kind;
+      }
+    } catch (error) {
+      if (error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name)) failureKind = 'timeout';
+      failure ??= costUsd === null ? 'Transport/response failure; unknown usage' : 'Invalid provider output';
+    }
     const latencyMs = performance.now() - started;
     this.knownUsd += costUsd ?? 0;
     // Settle even if response journaling fails, so a known bill is never lost from the ledger.
-    try { this.session.record(this.rawFile, { ...receipt, event: 'response', context: this.context, status, body, failure, latencyMs, costUsd }); }
+    try { this.session.record(this.rawFile, { ...receipt, event: 'response', context: this.context, status, body, failure, failureKind, latencyMs, costUsd }); }
     finally { this.session.settle(receipt, costUsd, failure); }
-    if (failure && !caseFailure(failure)) return this.session.stop(failure);
-    this.replay.set(key, { ...receipt, raw, latencyMs, failure });
-    if (failure) throw new Error(failure);
+    if (failure && !caseFailure(failure)) return this.session.stop(failure, failureKind);
+    this.replay.set(key, { ...receipt, raw, latencyMs, failure, failureKind });
+    if (failure) throw new OutputFailure(failureKind ?? 'adapter', failure);
     return { raw, costUsd: costUsd!, latencyMs };
   }
   close() { this.apiKey = ''; }
+}
+
+/** Cache-only model client: no credentials, transport, reservation or ledger writes exist on this path. */
+export class ModelReplayClient implements ChoiceClient {
+  knownUsd = 0;
+  requests = 0;
+  reusedRequests = 0;
+  unknown = false;
+  stopped: string | null = null;
+  context = '';
+  private replay: Map<string, ModelResponse>;
+  constructor(readonly provider: Provider, readonly runId: string, directory: string, private rawFile: string) {
+    const state = spendState(join(directory, 'spend.jsonl'));
+    if (state.unknown || state.pending) throw new Error('Unreconciled model billing');
+    this.replay = modelResponses(directory, provider);
+  }
+  hasReplay(request: JevRequest) { return this.replay.has(requestKey(request)); }
+  async send(request: JevRequest) {
+    const key = requestKey(request), cached = this.replay.get(key);
+    if (!cached) {
+      this.stopped ??= 'Model replay unavailable; paid transport is disabled';
+      throw new OutputFailure('adapter', this.stopped);
+    }
+    durableAppend(this.rawFile, { event: 'reuse', runId: this.runId, context: this.context, requestSha256: key,
+      sourceRunId: cached.runId, sourceRequestId: cached.requestId, originalLatencyMs: cached.latencyMs,
+      failure: cached.failure, failureKind: cached.failureKind, originalFailure: cached.originalFailure, costUsd: 0, at: new Date().toISOString() });
+    this.reusedRequests++;
+    if (cached.failure) throw new OutputFailure(cached.failureKind ?? 'adapter', cached.failure);
+    return { raw: structuredClone(cached.raw), costUsd: 0, latencyMs: cached.latencyMs };
+  }
 }

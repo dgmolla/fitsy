@@ -322,6 +322,21 @@ test('metrics penalize wrong positive IDs, abstentions, omissions, exact zeros, 
   expect(failed.zeroCorrectness).toBe(0);
 });
 
+test('macro metrics separate wrong parsed estimates, formatting, timeouts, abstentions and missing cases', () => {
+  const cases = ['right', 'wrong', 'format', 'timeout', 'abstain', 'missing'].map(id => ({ ...macroCase, id }));
+  const metrics = score(cases, [result('right', macroCase.expected), result('wrong', { ...macroCase.expected, calories: 3 * macroCase.expected.calories }),
+    result('format', null, { failure: 'Invalid probabilities', failureKind: 'format' }),
+    result('timeout', null, { failure: 'Lost output', failureKind: 'timeout' }),
+    result('abstain', null, { failure: 'Overflow', failureKind: 'abstain' })]);
+  expect(metrics.failureCounts).toEqual({ parse: 0, format: 1, timeout: 1, abstain: 1, adapter: 0, missing: 1 });
+  expect(metrics.parseFailures).toBe(1); expect(metrics.timeoutFailures).toBe(1);
+  expect(metrics.parsedOnly).toMatchObject({ total: 2, passed: 1, passRate: .5, bigMisses: 1, bigMissRate: .5 });
+  expect(metrics.parsedOnly!.medianPercentError.calories).toBe(100);
+  expect(metrics.medianPercentError!.calories).toBeNull(); expect(metrics.bigMisses).toBe(5); expect(metrics.passRate).toBe(1 / 6);
+  const none = score(cases, []);
+  expect(none.parsedOnly!.medianPercentError.calories).toBeNull(); expect(none.parsedOnly!.bigMissRate).toBeNull();
+});
+
 test('invalid adapter IDs and outputs become failures through the real evaluator', async () => {
   const r = await evaluateCase(matchCase, { name: 'broken', matcher: { name: 'broken', async match() { return { kind: 'match', matchId: 'foreign', confidence: 1 }; } } }, [row]);
   expect(r.output).toBeNull(); expect(r.failure).toBeTruthy();

@@ -7,7 +7,8 @@ import { z } from 'zod';
 import { adapterProtocol, coarseRequest, refinementRequest, matchingRequest, method } from './adapters';
 import { JevClient, RESERVATION_USD, STOP_USD, HARD_CAP_USD, spendState, type ChoiceClient } from './budget';
 import { ReplayClient } from './replay';
-import { ModelClient, ModelSession, MODEL_STOP_USD, MODEL_HARD_CAP_USD, providers, reservation, type Provider } from './providers';
+import { ModelClient, ModelReplayClient, ModelSession, MODEL_STOP_USD, MODEL_HARD_CAP_USD, providers, reservation, type Provider } from './providers';
+import { OutputFailure, type FailureKind } from './failures';
 import { durableAppend, loadCases, root, sha256, stratifiedSample, suite } from './fixtures';
 import { score, table, type Metrics } from './metrics';
 import { candidate, macrosSchema, type Case, type Method, type Result, type Tier } from './types';
@@ -29,11 +30,11 @@ export function options(argv: string[]) {
   if (!methods.length || new Set(methods).size !== methods.length || methods.some(m => !['exact', 'jev-v3', 'haiku', 'qwen'].includes(m))) throw new Error('Invalid method selection');
   const paid = methods.some(m => m !== 'exact');
   if (paid !== flags.has('live')) throw new Error('Provider methods require explicit --live; --live requires a provider method');
-  if (flags.has('replay-only') && (!methods.includes('jev-v3') || methods.some(m => m === 'haiku' || m === 'qwen'))) throw new Error('--replay-only selects Jev without paid adapters');
+  if (flags.has('replay-only') && !paid) throw new Error('--replay-only requires a provider method');
   if (split !== 'dev' && methods.some(m => m === 'haiku' || m === 'qwen')) throw new Error('Haiku/Qwen execution is dev-only');
   const cases = flags.get('cases');
   if (cases && (split !== 'dev' || !/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.json$/.test(cases))) throw new Error('Explicit case selection is dev-only and relative to suite sources');
-  return { split, tier, methods, live: flags.has('live'), jevReplayOnly: flags.has('replay-only') || methods.some(m => m === 'haiku' || m === 'qwen'), ...(cases ? { cases } : {}) };
+  return { split, tier, methods, live: flags.has('live'), replayOnly: flags.has('replay-only'), jevReplayOnly: flags.has('replay-only') || methods.some(m => m === 'haiku' || m === 'qwen'), ...(cases ? { cases } : {}) };
 }
 export function requestedSelection(cases: Case[], file: string | undefined, directory = suite) {
   if (!file) return { cases, source: null };
@@ -49,7 +50,7 @@ export async function evaluateCase(c: Case, adapter: Method, rows: ReturnType<ty
   const started = performance.now(), costBefore = client?.knownUsd ?? 0, requestsBefore = client?.requests ?? 0,
     reusedBefore = client?.reusedRequests ?? 0;
   if (client) client.context = `${adapter.name}/${c.id}`;
-  let output: Result['output'] = null, failure: string | null = null;
+  let output: Result['output'] = null, failure: string | null = null, failureKind: FailureKind | null = null;
   try {
     if (c.task === 'matching' && adapter.matcher) {
       output = matchOutputSchema.parse(await adapter.matcher.match(c.input, c.candidates.map(id => candidate(rows.find(row => row.id === id)!))));
@@ -57,10 +58,13 @@ export async function evaluateCase(c: Case, adapter: Method, rows: ReturnType<ty
     } else if (c.task === 'macro' && adapter.estimator) {
       const estimated = await adapter.estimator.estimate(c.input);
       output = estimated === null ? null : macrosSchema.parse(estimated);
-      if (output === null) failure = 'Estimator abstained or overflowed';
+      if (output === null) { failure = 'Estimator abstained or overflowed'; failureKind = 'abstain'; }
     } else throw new Error('Adapter does not support task');
-  } catch { failure = client?.stopped ?? 'Adapter failed or returned an invalid output'; output = null; }
-  return { id: c.id, method: adapter.name, output, failure, latencyMs: performance.now() - started,
+  } catch (error) {
+    failure = client?.stopped ?? (error instanceof OutputFailure ? error.message : 'Adapter failed or returned an invalid output');
+    failureKind = error instanceof OutputFailure ? error.kind : 'adapter'; output = null;
+  }
+  return { id: c.id, method: adapter.name, output, failure, failureKind, latencyMs: performance.now() - started,
     costUsd: client?.unknown ? null : (client?.knownUsd ?? 0) - costBefore,
     knownCostUsd: (client?.knownUsd ?? 0) - costBefore, requests: (client?.requests ?? 0) - requestsBefore,
     reusedRequests: (client?.reusedRequests ?? 0) - reusedBefore };
@@ -105,12 +109,12 @@ export async function run(argv: string[], directory = suite) {
   const holdoutLog = join(resultsDirectory, 'holdout-runs.jsonl');
   if (config.split === 'holdout') durableAppend(holdoutLog, { event: 'start', at: new Date().toISOString(), runId, head, config });
   let client: JevClient | ReplayClient | undefined, modelSession: ModelSession | undefined;
-  const modelClients = new Map<Provider, ModelClient>();
+  const modelClients = new Map<Provider, ModelClient | ModelReplayClient>();
   try {
     const fixture = loadCases(config.split, config.tier, directory);
     const requested = requestedSelection(fixture.cases, config.cases, directory);
     if (config.live) {
-      const missing = config.methods.filter((m): m is Provider => m === 'haiku' || m === 'qwen')
+      const missing = config.methods.filter((m): m is Provider => !config.replayOnly && (m === 'haiku' || m === 'qwen'))
         .map(m => providers[m].key).filter(key => !process.env[key]?.trim());
       if (missing.length) {
         const aliases: Record<string, string> = { ANTHROPIC_API_KEY: 'anthropic', OPENROUTER_API_KEY: 'openrouter' };
@@ -129,7 +133,10 @@ export async function run(argv: string[], directory = suite) {
         ':(exclude)scripts/eval/suite/results'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
       if (untracked.trim()) throw new Error('Uncommitted suite input');
       const selectedProviders = config.methods.filter((m): m is Provider => m === 'haiku' || m === 'qwen');
-      if (selectedProviders.length) {
+      if (selectedProviders.length && config.replayOnly) {
+        for (const provider of selectedProviders) modelClients.set(provider,
+          new ModelReplayClient(provider, runId, resultsDirectory, join(out, `${provider}-exchanges.jsonl`)));
+      } else if (selectedProviders.length) {
         modelSession = new ModelSession(runId, resultsDirectory);
         for (const provider of selectedProviders) modelClients.set(provider,
           new ModelClient(provider, modelSession, out, process.env[providers[provider].key] ?? ''));
@@ -149,6 +156,7 @@ export async function run(argv: string[], directory = suite) {
       selected: selected.length, selectionIds: selected.map(c => c.id),
       selectionSha256: sha256(JSON.stringify(selected.map(c => c.id))), budget: modelSession
         ? { stopUsd: MODEL_STOP_USD, hardCapUsd: MODEL_HARD_CAP_USD, priorModelSpendUsd: modelSession.modelKnownUsd,
+          priorCumulativeSpendUsd: modelSession.knownUsd,
           reservedUpperBoundUsd: 'reservedUpperBoundUsd' in selection ? selection.reservedUpperBoundUsd : null,
           fullUpperBoundUsd: 'fullUpperBoundUsd' in selection ? selection.fullUpperBoundUsd : null }
         : { stopUsd: STOP_USD, hardCapUsd: HARD_CAP_USD, reservationPerPostUsd: RESERVATION_USD } };
@@ -181,7 +189,8 @@ export async function run(argv: string[], directory = suite) {
       + table(scores) + '\nMatching pass requires exact ID/NO MATCH; abstentions fail.\n'
       + 'Macro pass requires every macro error <=25%; exact zero is required against zero truth.\n'
       + 'Big miss is strictly >50% calorie error; failures and omissions count as misses and infinite error.\n'
-      + 'Medians include failures; unavailable medians display as a dash.\n'
+      + 'All-case medians include failures as infinity; parsed-only metrics exclude failed, abstained and missing outputs.\n'
+      + 'Parse/format failures and timeouts are counted separately from wrong estimates.\n'
       + 'Cost/1k divides billed attempts by attempted cases, including both estimator stages.\n'
       + 'Repeated UE candidate pairs are correlated; these are case counts, not independent meals.\n'
       + `Replayed identical paid requests: ${report.accounting.reusedRequests}; replay incurs no new charge. Latency includes replay reads.\n`
@@ -201,7 +210,7 @@ export async function run(argv: string[], directory = suite) {
     writeFileSync(join(out, 'failure.json'), JSON.stringify({ runId, head, config, failure, at: new Date().toISOString() }, null, 2) + '\n', { flag: 'wx' });
     if (config.split === 'holdout') durableAppend(holdoutLog, { event: 'end', at: new Date().toISOString(), runId, head, status: 'failed-preflight-or-execution' });
     throw new PreflightError(failure);
-  } finally { if (client instanceof JevClient) client.close(); modelClients.forEach(c => c.close()); modelSession?.close(); }
+  } finally { if (client instanceof JevClient) client.close(); modelClients.forEach(c => { if (c instanceof ModelClient) c.close(); }); modelSession?.close(); }
 }
 if (require.main === module) run(process.argv.slice(2)).then(report => {
   if (report.stopReason) process.exitCode = 1;

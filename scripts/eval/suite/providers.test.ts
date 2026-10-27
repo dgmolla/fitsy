@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { method, matchingRequest, coarseRequest } from './adapters';
 import { durableAppend, loadCases, sha256 } from './fixtures';
-import { spendState, preInferenceRejection, reconcileRejection, reconcileQwenTimeout } from './budget';
-import { ModelClient, ModelSession, MODEL_STOP_USD, answerSchema, providers, providerRequest, reservation, type Provider } from './providers';
+import { spendState, preInferenceRejection, reconcileRejection, reconcileQwenTimeout, RESERVATION_USD } from './budget';
+import { ModelClient, ModelReplayClient, ModelSession, MODEL_STOP_USD, answerSchema, decodeProviderOutput, providers, providerRequest, reservation, type Provider } from './providers';
 import { modelSelection, options, requestedSelection, run } from './run';
 import { type JevRequest } from '../lib/jev-experiment';
 import type { Item } from './types';
@@ -416,9 +416,56 @@ test('real runner consumes both model clients, accounts both estimator stages, a
     expect(report.scores['curated/matching/haiku']!.attempted).toBe(1);
     expect(report.scores['curated/macro/qwen']!.attempted).toBe(1);
     expect(existsSync(join(directory, 'results/.jev.lock'))).toBe(false);
+    const ledger = readFileSync(join(directory, 'results/spend.jsonl'), 'utf8');
+    delete process.env['ANTHROPIC_API_KEY']; delete process.env['OPENROUTER_API_KEY'];
+    const network = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden during replay'));
+    const replay = await run(['--methods=haiku,qwen', '--tier=curated', '--split=dev', '--live', '--replay-only'], directory);
+    expect(replay.stopReason).toBeNull(); expect(replay.accounting.requests).toBe(0);
+    expect(replay.accounting.reusedRequests).toBe(6); expect(replay.accounting.runKnownUsd).toBe(0);
+    expect(replay.scores['curated/macro/qwen']!.parsedOnly).toEqual(report.scores['curated/macro/qwen']!.parsedOnly);
+    expect(network).not.toHaveBeenCalled(); expect(readFileSync(join(directory, 'results/spend.jsonl'), 'utf8')).toBe(ledger);
   } finally {
     for (const [key, value] of Object.entries(prior)) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
   }
+});
+
+test('cached Haiku JSON reparses without accepting its observed invalid probability totals', async () => {
+  const s = setup('haiku', transport('haiku', data => {
+    const raw = answer(request);
+    raw.answers.match!.probabilities = { c0: .72, none: .5, abstain: .09 };
+    data['content'] = [{ type: 'text', text: JSON.stringify(raw) }];
+  }));
+  try { await expect(s.client.send(request)).rejects.toMatchObject({ kind: 'format' }); }
+  finally { s.client.close(); s.session.close(); }
+  const ledger = readFileSync(s.session.ledger, 'utf8'), out = join(s.directory, 'cache-only'); mkdirSync(out);
+  const replay = new ModelReplayClient('haiku', 'cache-only', s.directory, join(out, 'haiku-exchanges.jsonl'));
+  await expect(replay.send(request)).rejects.toMatchObject({ kind: 'format', message: expect.stringContaining('answers.match: Invalid choice probabilities') });
+  expect(replay.requests).toBe(0); expect(readFileSync(s.session.ledger, 'utf8')).toBe(ledger);
+  await expect(replay.send(matchingRequest({ ...item, name: 'Unseen' }, rows))).rejects.toThrow('paid transport is disabled');
+});
+
+test('provider decoder distinguishes malformed JSON, incomplete bodies and invalid typed fields', () => {
+  const data = { content: [{ type: 'text', text: '{' }], stop_reason: 'end_turn' };
+  expect(() => decodeProviderOutput('haiku', request, data)).toThrow('Invalid provider output JSON');
+  try { decodeProviderOutput('haiku', request, data); } catch (error) { expect(error).toMatchObject({ kind: 'parse' }); }
+  expect(() => decodeProviderOutput('haiku', request, { ...data, stop_reason: 'max_tokens' })).toThrow('Incomplete');
+  expect(() => decodeProviderOutput('haiku', request, { ...data, content: [{ type: 'text', text: '{}' }] })).toThrow('Invalid answer field');
+});
+
+test('historical Jev bills consume the cumulative model stop allowance before any new transport', async () => {
+  const s = setup('haiku'); s.client.close(); s.session.close();
+  const bills = Array.from({ length: 4000 }, (_, i) => {
+    const prior = { requestId: `historical-jev-${i}`, runId: 'historical', at: 'today' };
+    return [{ ...prior, event: 'reserve', reserveUsd: RESERVATION_USD },
+      { ...prior, event: 'settle', costUsd: 2.695 / 4000, failure: null }];
+  }).flat();
+  writeFileSync(s.session.ledger, bills.map(b => JSON.stringify(b)).join('\n') + '\n');
+  const session = new ModelSession('next', s.directory), fetcher = transport('haiku');
+  const client = new ModelClient('haiku', session, s.out, 'fake-key', fetcher);
+  try {
+    expect(session.remainingUsd).toBeCloseTo(.005);
+    await expect(client.send(request)).rejects.toThrow('$2.70'); expect(fetcher).not.toHaveBeenCalled();
+  } finally { client.close(); session.close(); }
 });
