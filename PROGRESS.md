@@ -46,7 +46,13 @@ Its conservative reservation is $2.69768053 versus $44.02095118 for all 3,007 de
 This is a frozen prospective selection only; neither paid model ran and no sampled quality metrics exist.
 The measured exact/Jev results instead cover full dev and their cost/latency are marginal replay values, not fresh provider performance.
 The canonical product plan computes N/A and simulator scope none.
-Next: commit baseline evidence and docs, complete cheap gates, open the requested PR through ordinary hooks, and inspect existing local-review and CI status without reading or modifying the protected checkout.
+Baseline evidence and the explicit unavailable-paid-run result are committed at `1dee689`.
+All eight applicable cheap canonical checks passed; migration safety is legitimately skipped because no migration changed.
+The focused selector initially retained only the old suite; the supported setter now selects both suite and provider tests so the ordinary hook consumes all 42 regressions.
+The repository API-key review adapter is unavailable because `CODEX_API_KEY` is absent; no substitute credential or implementer verdict is allowed.
+The existing subscription reviewer must publish its own exact-head `AI review` after PR creation, without this task reading or modifying its protected checkout, state, controls or attributes.
+If that existing reviewer cannot run or rejects input size, report the genuine failure and leave merge blocked; do not alter it.
+Next: publish the current committed candidate through normal hooks, open the requested PR, publish selector-computed product-flow N/A, wait for trusted CI and the existing local AI review, then merge only on genuine green gates.
 
 ## Previous task history
 
