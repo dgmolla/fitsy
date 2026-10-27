@@ -59,6 +59,10 @@ Use shared equivalent macro answer definitions to reduce grammar duplication wit
 Append a zero-inference reconciliation bound to this exact retained HTTP 400 response, keeping its original unknown settlement intact; no other unknown-usage case may be cleared by that path.
 Regressions cover legacy unknown refusal, exact evidence/hash binding, non-400 refusal, additive history, unbilled rejection handling, equivalent schema constraints and ordinary continuation.
 Next: validate and commit the compilation repair, reconcile only the documented pre-inference rejection through the supported helper, then continue the original sample using all 34 billed Haiku responses from cache.
+Compilation/reconciliation regressions and suite lint/types pass, including exclusive-lock refusal and evidence tampering refusal.
+The first full regression run passed 52 cases and caught a test assumption that the cheaper equivalent grammar would still sample 129 by default; its new prospective bound fits 138.
+The task explicitly retains the original 129 IDs, so the regression now checks that frozen selection's hash and 34/25/44/26 counts separately from general budget sampling.
+Do not use the newly cheaper full-population selector to expand this run.
 
 ## Previous adapter task history
 

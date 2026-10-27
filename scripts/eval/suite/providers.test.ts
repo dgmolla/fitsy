@@ -2,10 +2,10 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { method, matchingRequest, coarseRequest } from './adapters';
-import { durableAppend, loadCases } from './fixtures';
+import { durableAppend, loadCases, sha256 } from './fixtures';
 import { spendState, schemaRejection, reconcileSchemaRejection } from './budget';
 import { ModelClient, ModelSession, MODEL_STOP_USD, answerSchema, providers, providerRequest, reservation, type Provider } from './providers';
-import { modelSelection, options, run } from './run';
+import { modelSelection, options, requestedSelection, run } from './run';
 import { type JevRequest } from '../lib/jev-experiment';
 import type { Item } from './types';
 
@@ -241,7 +241,11 @@ test('four-method sampling is deterministic, dev-only, outcome-independent and b
   const selected = modelSelection(fixture.cases, fixture.rows, MODEL_STOP_USD, ['haiku', 'qwen']);
   expect(selected.sampled).toBe(true); expect(selected.reservedUpperBoundUsd).toBeLessThanOrEqual(MODEL_STOP_USD);
   expect(selected.fullUpperBoundUsd).toBeGreaterThan(MODEL_STOP_USD);
-  expect(selected.selected).toHaveLength(129);
+  const frozen = requestedSelection(fixture.cases, 'haiku-qwen-dev-sample.json').cases;
+  expect(frozen).toHaveLength(129);
+  expect(sha256(JSON.stringify(frozen.map(c => c.id)))).toBe('3ec69529643a0253f95c4e04f927fe0d157c2d9fef14891af309962015a4fa70');
+  expect(['curated', 'bulk'].flatMap(tier => ['matching', 'macro'].map(task => frozen.filter(c => c.tier === tier && c.task === task).length)))
+    .toEqual([34, 25, 44, 26]);
   const again = modelSelection([...fixture.cases].reverse(), fixture.rows, MODEL_STOP_USD, ['haiku', 'qwen']);
   expect(selected.selected.map(c => c.id)).toEqual(again.selected.map(c => c.id));
   for (const tier of ['curated', 'bulk']) for (const task of ['matching', 'macro']) {
