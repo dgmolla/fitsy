@@ -1,0 +1,11 @@
+{
+  "head": "7798fce7154d5e332736f5704e1f5934e6e4b5b5",
+  "comparison": "0dbb0b4feab236be9f49542c92d4a4e280d96e6b",
+  "originalDiffBytes": 7619413,
+  "boundedDiffBytes": 456547,
+  "originalDiffSha256": "9120d2ef2ce5e26de6dadefd871ec829c40355d122718b2e1f7a2431daa222e0",
+  "boundedDiffSha256": "abc3c4bed026fb19373ce58e7d6f85e47d56aaa84f1064862f3c844941819fb9",
+  "sourceAttributesSha256": "96a5c9b04d587111242f658335316e94bf660528b58f8f0c8f84981dfd4fe838",
+  "operatorAttributesSha256": "b1a24069d19a30ec9383966f98bbcb97629504309885b90460742ea9ac3b9835",
+  "semantics": "Only independently reviewed generated data/page-text/result artifacts omit textual diff; all complete source and raw artifacts remain present. Authored curation, PDF checks, implementation and tests stay textual."
+}

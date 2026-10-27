@@ -1,0 +1,11 @@
+{
+  "head": "bbd8ce41c92dfcbc33eb39d1f3783245b7e57eb9",
+  "files": {
+    "data/curated.dev.jsonl": "af8ea62ff182e9e0358b9faa157080a41af5189ef24da6f8e664cfd3b53d8e76",
+    "data/curated.holdout.jsonl": "64f8efed9e6730f450210b047ac1faf00c5a821fec35bad7b120dc9b2855195a",
+    "data/bulk.dev.jsonl": "ef71beb42f48d34254d8aab364101f86066a88c3f3dc869243edffafe36c4018",
+    "data/bulk.holdout.jsonl": "0cd1dcb715376fd65eb180102eb7e61600dc06b2b561ddf5674ae6a1c68b659b",
+    "data/rows.json": "1c81cd5f40487795e30637ebc284523c43e6796551646668af4aa01b495e4172",
+    "holdout.sha256": "1dd45cbb7392a62f3502c26291565b0baa36f63cd4ae70684bacb9564b12ea58"
+  }
+}

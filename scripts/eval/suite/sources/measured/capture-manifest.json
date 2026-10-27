@@ -1,0 +1,10 @@
+{
+  "sourceHead": "3e8f13afb05f8aba0fc10744484c5d1d023fc6ce",
+  "branch": "data/pdf-match-scope",
+  "files": {
+    "measurement.json.gz": "15f67bdbc593336a933e7bf1fd876922319d247287478ca0d8dfcec340c8432a",
+    "wahoos.retry.json.gz": "dc7de6f76b60a01a519ccb7c7cf1fdf47e20f3d7a17a57d999cdce9d239006fb",
+    "claim-jumper.retry.json.gz": "fa307dfaa9365c083682da5f26cd3212bd48182d064b1e053259250674df8ac6",
+    "old-spaghetti-factory.retry.json.gz": "6446b405fcd9594f6fb51ba6390603863363d6d96ebcce8fc703622824d7b228"
+  }
+}

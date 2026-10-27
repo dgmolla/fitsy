@@ -1,0 +1,64 @@
+{
+  "receipt": {
+    "head": "e975cd684b48d9f1cc38c865f7b6b4cbb13c1e0c",
+    "base": "0dbb0b4feab236be9f49542c92d4a4e280d96e6b",
+    "model": "gpt-6.1-sol",
+    "domains": [
+      "correctness",
+      "workflow-security"
+    ],
+    "windowSeconds": 300,
+    "elapsedSeconds": 210.91,
+    "code": 0,
+    "authority": "User requested local independent review; permanent global review execution exception retained."
+  },
+  "verdict": {
+    "domains": {
+      "correctness": "fail",
+      "workflow-security": "pass"
+    },
+    "verdict": "fail",
+    "findings": [
+      {
+        "domains": [
+          "correctness"
+        ],
+        "severity": "CONFIRMED",
+        "priority": "P2",
+        "impact": "The split hashes section-specific row IDs independently, allowing identical servings into dev and holdout. Yoshinoya's 290 g Japanese Udon Noodles appears in bulk.dev.jsonl:99 and bulk.holdout.jsonl:78 with identical macros; the 113 g Mixed Veggies repeats this at lines 101 and 79. This violates the accepted serving-grouped holdout contract and compromises later generalization measurements. Impact is bounded to the offline evaluation, but the population needs correction before baseline tuning.",
+        "file": "scripts/eval/suite/build.ts",
+        "line": 87,
+        "summary": "Group equivalent published servings before assigning splits.",
+        "scenario": "The same Yoshinoya component is published under Regular Combo and Combo XL headings -> different IDs place its identical serving and labels in both splits.",
+        "fix": "Define reviewed serving-equivalence groups and assign one split per group while retaining contextual row IDs. Reuse that identity throughout build.ts split assignment, candidate filtering and case grouping; version and review affected frozen artifacts. Do not equate unrelated dishes merely because their macro vectors match."
+      },
+      {
+        "domains": [
+          "correctness"
+        ],
+        "severity": "CONFIRMED",
+        "priority": "P2",
+        "impact": "The modifier generator interprets 'Bowls' anywhere in the section as evidence that the reference contains rice. curated:match:094 consequently expects NO MATCH for a 250 g chicken-only component with 'no rice', while offering that unchanged component as a candidate. sources/curation.json:471 explicitly identifies this row as a component, and its false negative is visible in docs/engineering/pipeline/eval-suite-cases.md:115. This corrupts one curated label and rewards rejecting a valid serving; the effect is bounded and repairable.",
+        "file": "scripts/eval/suite/build.ts",
+        "line": 139,
+        "summary": "Choose modifier challenges from the actual recipe rather than section-name keywords.",
+        "scenario": "Grilled Teriyaki Chicken under 'Combo XL Bowls / Select Two Large Proteins' receives 'no rice' -> removing an absent ingredient is labeled as a changed recipe requiring NO MATCH.",
+        "fix": "Specify the concrete modifier in sources/curation.json, following its explicit scenario-plan approach, and use a modification that actually changes this component or select a rice-containing meal. Remove the section-keyword inference and review the regenerated label."
+      },
+      {
+        "domains": [
+          "correctness"
+        ],
+        "severity": "CONFIRMED",
+        "priority": "P2",
+        "impact": "A transient append or fsync failure after a provider response leaves the reservation unsettled because accounting and stop-state updates occur after both journal writes. run.ts:43 swallows the exception as an adapter failure, and run.ts:96 permits subsequent requests because stopped remains null. Restarting detects the pending reservation, but the current collector continues with understated spend, violating the durable-reservation stop contract. This is an uncommon, recoverable collection failure rather than production payment harm.",
+        "file": "scripts/eval/suite/budget.ts",
+        "line": 92,
+        "summary": "Stop collection when any request-journaling operation fails.",
+        "scenario": "A billed response arrives, then its exchange append or settlement fsync throws a transient I/O error while later writes succeed -> the runner sends more requests despite an unsettled reservation and records no cost for the failed item.",
+        "fix": "Latch stopped and unresolved accounting on any exceptional exit after reservation, preventing further sends until reconciliation. Preserve pending receipts and propagate journal failures as collector failures. Follow the abort-on-journal-write-error boundary in scripts/eval/lib/jev-experiment.ts:205 and cover response and settlement write failures."
+      }
+    ],
+    "blocking": false
+  }
+}

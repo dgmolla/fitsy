@@ -1,0 +1,19 @@
+{
+  "receipt": {
+    "schema": "fitsy.eval-review-control-review.v1",
+    "head": "7798fce7154d5e332736f5704e1f5934e6e4b5b5",
+    "windowSeconds": 120,
+    "actualSeconds": 99.411,
+    "code": 0,
+    "authority": "User AGENTS.md permanent review exception; independently review controls before installation."
+  },
+  "verdict": {
+    "domains": {
+      "correctness": "pass",
+      "workflow-security": "pass"
+    },
+    "verdict": "pass",
+    "findings": [],
+    "blocking": false
+  }
+}

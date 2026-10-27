@@ -1,0 +1,14 @@
+{
+  "runId": "2026-10-27T00-23-50-752Z-9c1ee9d3",
+  "head": "7798fce7154d5e332736f5704e1f5934e6e4b5b5",
+  "config": {
+    "split": "dev",
+    "tier": "curated",
+    "methods": [
+      "jev-v3"
+    ],
+    "live": true
+  },
+  "failure": "TYPESAFE_API_KEY is missing; a legacy Jev variable named jev is present. Export it as TYPESAFE_API_KEY in the invoking shell; no requests were sent.",
+  "at": "2026-10-27T00:23:50.776Z"
+}

@@ -1,0 +1,1114 @@
+{
+  "version": 2,
+  "seed": "suite-v1",
+  "splitPolicy": "Original v1 cases, candidates and splits remain byte-identical. New captured-serving collision families use chain/category strata (35% holdout), anchored to existing splits when applicable; Claim Jumper stays wholly holdout. Unknown-target negatives group by captured chain/name.",
+  "holdoutOnlyChains": [
+    "Claim Jumper"
+  ],
+  "servingGroups": {
+    "claim-jumper:appetizers/bbq-chicken-sliders": "claim-jumper:appetizers/bbq-chicken-sliders",
+    "claim-jumper:appetizers/beef-sliders-with-cheese": "claim-jumper:appetizers/beef-sliders-with-cheese",
+    "claim-jumper:appetizers/bonanza-platter": "claim-jumper:appetizers/bonanza-platter",
+    "claim-jumper:appetizers/buffalo-chicken-wings-share-size": "claim-jumper:appetizers/buffalo-chicken-wings-share-size",
+    "claim-jumper:appetizers/buffalo-chicken-wings-snack-size": "claim-jumper:appetizers/buffalo-chicken-wings-snack-size",
+    "claim-jumper:appetizers/calamari-share-size": "claim-jumper:appetizers/calamari-share-size",
+    "claim-jumper:appetizers/calamari-snack-size": "claim-jumper:appetizers/calamari-snack-size",
+    "claim-jumper:appetizers/pub-pretzel-snack-size": "claim-jumper:appetizers/pub-pretzel-snack-size",
+    "claim-jumper:appetizers/pub-pretzel-snack-size-with-cheese-sauce": "claim-jumper:appetizers/pub-pretzel-snack-size-with-cheese-sauce",
+    "claim-jumper:appetizers/pub-pretzels-share-size": "claim-jumper:appetizers/pub-pretzels-share-size",
+    "claim-jumper:appetizers/pub-pretzels-share-size-with-cheese-sauce": "claim-jumper:appetizers/pub-pretzels-share-size-with-cheese-sauce",
+    "claim-jumper:garden-salad-platters/bbq-chicken-salad-platter-4-6-6-servings": "claim-jumper:garden-salad-platters/bbq-chicken-salad-platter-4-6-6-servings",
+    "claim-jumper:garden-salad-platters/bbq-chicken-salad-platter-8-10-10-servings": "claim-jumper:garden-salad-platters/bbq-chicken-salad-platter-8-10-10-servings",
+    "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings": "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings",
+    "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings-with-broiled-chicken": "claim-jumper:garden-salad-platters/caesar-salad-platter-4-6-6-servings-with-broiled-chicken",
+    "claim-jumper:garden-salad-platters/caesar-salad-platter-8-10-10-servings": "claim-jumper:garden-salad-platters/caesar-salad-platter-8-10-10-servings",
+    "claim-jumper:garden-salad-platters/caesar-salad-platter-8-10-10-servings-with-broiled-chicken": "claim-jumper:garden-salad-platters/caesar-salad-platter-8-10-10-servings-with-broiled-chicken",
+    "claim-jumper:garden-salad-platters/chinese-salad-platter-4-6-6-servings": "claim-jumper:garden-salad-platters/chinese-salad-platter-4-6-6-servings",
+    "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-bbq-chicken": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-bbq-chicken",
+    "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-black-olives": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-black-olives",
+    "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-italian-sausage": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-italian-sausage",
+    "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-marinara-sauce": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-marinara-sauce",
+    "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-mozzarella-cheese": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-mozzarella-cheese",
+    "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-onions": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-onions",
+    "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-pepperoni": "claim-jumper:kid-s-menu/kids-build-your-own-pizza-1-slice-with-pepperoni",
+    "claim-jumper:lunch/chives": "claim-jumper:lunch/chives",
+    "claim-jumper:lunch/sliced-avocado-2-ounces-add": "claim-jumper:lunch/sliced-avocado-2-ounces-add",
+    "claim-jumper:non-alcoholic-beverages/coffee": "claim-jumper:non-alcoholic-beverages/coffee",
+    "claim-jumper:non-alcoholic-beverages/coke": "claim-jumper:non-alcoholic-beverages/coke",
+    "claim-jumper:non-alcoholic-beverages/diet-coke": "claim-jumper:non-alcoholic-beverages/diet-coke",
+    "claim-jumper:non-alcoholic-beverages/diet-sprite": "claim-jumper:non-alcoholic-beverages/diet-sprite",
+    "claim-jumper:non-alcoholic-beverages/hot-tea": "claim-jumper:non-alcoholic-beverages/hot-tea",
+    "claim-jumper:non-alcoholic-beverages/iced-tea": "claim-jumper:non-alcoholic-beverages/iced-tea",
+    "claim-jumper:non-alcoholic-beverages/kids-coke": "claim-jumper:non-alcoholic-beverages/kids-coke",
+    "claim-jumper:non-alcoholic-beverages/kids-diet-coke": "claim-jumper:non-alcoholic-beverages/kids-diet-coke",
+    "claim-jumper:non-alcoholic-beverages/red-bull-sugar-free": "claim-jumper:non-alcoholic-beverages/red-bull-sugar-free",
+    "waba-grill:bowls/organic-tofu": "waba-grill:bowls/organic-tofu",
+    "waba-grill:bowls/plantspired-steak": "waba-grill:bowls/plantspired-steak",
+    "waba-grill:bowls/rib-eye-steak": "waba-grill:bowls/rib-eye-steak",
+    "waba-grill:bowls/sweet-spicy-chicken": "waba-grill:bowls/sweet-spicy-chicken",
+    "waba-grill:bowls/waba-chicken-steak": "waba-grill:bowls/waba-chicken-steak",
+    "waba-grill:bowls/waba-wm-chicken-steak": "waba-grill:bowls/waba-wm-chicken-steak",
+    "waba-grill:bowls/wild-caught-salmon": "waba-grill:bowls/wild-caught-salmon",
+    "waba-grill:bowls/wm-chicken": "waba-grill:bowls/wm-chicken",
+    "waba-grill:chicken-bowl": "waba-grill:chicken-bowl",
+    "waba-grill:chicken-plate": "waba-grill:chicken-plate",
+    "waba-grill:chicken-veggie-bowl": "waba-grill:chicken-veggie-bowl",
+    "waba-grill:family-a-la-carte/all-broccoli": "waba-grill:family-a-la-carte/all-broccoli",
+    "waba-grill:family-a-la-carte/broccoli-carrots": "waba-grill:family-a-la-carte/broccoli-carrots",
+    "waba-grill:family-a-la-carte/brown-rice-2-servings": "waba-grill:family-a-la-carte/brown-rice-2-servings",
+    "waba-grill:family-a-la-carte/chicken": "waba-grill:family-a-la-carte/chicken",
+    "waba-grill:family-a-la-carte/mixed-veggies": "waba-grill:family-a-la-carte/mixed-veggies",
+    "waba-grill:family-a-la-carte/organic-tofu": "waba-grill:family-a-la-carte/organic-tofu",
+    "waba-grill:family-a-la-carte/rib-eye-steak": "waba-grill:family-a-la-carte/rib-eye-steak",
+    "waba-grill:family-a-la-carte/sweet-spicy-chicken": "waba-grill:family-a-la-carte/sweet-spicy-chicken",
+    "waba-grill:family-a-la-carte/waba-chicken-steak": "waba-grill:family-a-la-carte/waba-chicken-steak",
+    "waba-grill:family-a-la-carte/waba-wm-chicken-steak": "waba-grill:family-a-la-carte/waba-wm-chicken-steak",
+    "waba-grill:family-a-la-carte/white-rice-2-servings": "waba-grill:family-a-la-carte/white-rice-2-servings",
+    "waba-grill:family-a-la-carte/wm-chicken": "waba-grill:family-a-la-carte/wm-chicken",
+    "waba-grill:mini-bowls/organic-tofu": "waba-grill:mini-bowls/organic-tofu",
+    "waba-grill:mini-bowls/organic-tofu-veggies": "waba-grill:mini-bowls/organic-tofu-veggies",
+    "waba-grill:mini-bowls/plantspired-steak": "waba-grill:mini-bowls/plantspired-steak",
+    "waba-grill:mini-bowls/sweet-spicy": "waba-grill:mini-bowls/sweet-spicy",
+    "waba-grill:mini-bowls/sweet-spicy-chicken-veggies": "waba-grill:mini-bowls/sweet-spicy-chicken-veggies",
+    "waba-grill:mini-bowls/wm-chicken": "waba-grill:mini-bowls/wm-chicken",
+    "waba-grill:mini-bowls/wm-chicken-veggies": "waba-grill:mini-bowls/wm-chicken-veggies",
+    "waba-grill:mini-chicken-bowl": "waba-grill:mini-chicken-bowl",
+    "waba-grill:mini-chicken-bowl-veggies": "waba-grill:mini-chicken-bowl-veggies",
+    "waba-grill:miso-soup": "waba-grill:miso-soup",
+    "waba-grill:packaged/dole/apple-100-percent/15-2-fl-oz": "waba-grill:packaged/dole/apple-100-percent/15-2-fl-oz",
+    "waba-grill:packaged/gatorade/cool-blue/20-fl-oz": "waba-grill:packaged/gatorade/cool-blue/20-fl-oz",
+    "waba-grill:packaged/gatorade/fruit-punch/20-fl-oz": "waba-grill:packaged/gatorade/fruit-punch/20-fl-oz",
+    "waba-grill:packaged/pepsi/original/20-fl-oz": "waba-grill:packaged/pepsi/original/20-fl-oz",
+    "waba-grill:packaged/poppi/raspberry-rose/12-fl-oz": "waba-grill:packaged/poppi/raspberry-rose/12-fl-oz",
+    "waba-grill:packaged/poppi/strawberry-lemon/12-fl-oz": "waba-grill:packaged/poppi/strawberry-lemon/12-fl-oz",
+    "waba-grill:packaged/pure-leaf/raspberry/16-9-fl-oz": "waba-grill:packaged/pure-leaf/raspberry/16-9-fl-oz",
+    "waba-grill:packaged/pure-leaf/unsweetened/16-9-fl-oz": "waba-grill:packaged/pure-leaf/unsweetened/16-9-fl-oz",
+    "waba-grill:plates/organic-tofu": "waba-grill:plates/organic-tofu",
+    "waba-grill:plates/plantspired-steak": "waba-grill:plates/plantspired-steak",
+    "waba-grill:plates/sweet-spicy-chicken": "waba-grill:plates/sweet-spicy-chicken",
+    "waba-grill:plates/waba-chicken-steak": "waba-grill:plates/waba-chicken-steak",
+    "waba-grill:plates/waba-wm-chicken-steak": "waba-grill:plates/waba-wm-chicken-steak",
+    "waba-grill:plates/wild-caught-salmon": "waba-grill:plates/wild-caught-salmon",
+    "waba-grill:plates/wm-chicken": "waba-grill:plates/wm-chicken",
+    "waba-grill:salad-entrees/signature-house-served-w-wm-chicken": "waba-grill:salad-entrees/signature-house-served-w-wm-chicken",
+    "waba-grill:salad-entrees/spicy-asian-served-w-wm-chicken": "waba-grill:salad-entrees/spicy-asian-served-w-wm-chicken",
+    "waba-grill:sauce-dressing/boom-boom-sauce-1-fluid-oz": "waba-grill:sauce-dressing/boom-boom-sauce-1-fluid-oz",
+    "waba-grill:sauce-dressing/garlic-serrano-sauce-1-fluid-oz": "waba-grill:sauce-dressing/garlic-serrano-sauce-1-fluid-oz",
+    "waba-grill:sauce-dressing/ranch-dressing-1-5-fluid-oz": "waba-grill:sauce-dressing/ranch-dressing-1-5-fluid-oz",
+    "waba-grill:sauce-dressing/spicy-sesame-dressing-1-fluid-oz": "waba-grill:sauce-dressing/spicy-sesame-dressing-1-fluid-oz",
+    "waba-grill:sauce-dressing/spicy-waba-sauce-1-fluid-oz": "waba-grill:sauce-dressing/spicy-waba-sauce-1-fluid-oz",
+    "waba-grill:sauce-dressing/sweet-chili-sauce-1-fluid-oz": "waba-grill:sauce-dressing/sweet-chili-sauce-1-fluid-oz",
+    "waba-grill:sauce-dressing/waba-hot-sauce-packet": "waba-grill:sauce-dressing/waba-hot-sauce-packet",
+    "waba-grill:sauce-dressing/waba-sauce-packet": "waba-grill:sauce-dressing/waba-sauce-packet",
+    "waba-grill:sauce-dressing/waba-sesame-dressing-1-fluid-oz": "waba-grill:sauce-dressing/waba-sesame-dressing-1-fluid-oz",
+    "waba-grill:sides/brown-rice-10-oz": "waba-grill:sides/brown-rice-10-oz",
+    "waba-grill:sides/chicken-4-5-oz": "waba-grill:sides/chicken-4-5-oz",
+    "waba-grill:sides/half-ocado": "waba-grill:sides/half-ocado",
+    "waba-grill:sides/loaded-miso-soup-w-chicken": "waba-grill:sides/loaded-miso-soup-w-chicken",
+    "waba-grill:sides/loaded-miso-soup-w-tofu": "waba-grill:sides/loaded-miso-soup-w-tofu",
+    "waba-grill:sides/loaded-miso-soup-w-wm-chicken": "waba-grill:sides/loaded-miso-soup-w-wm-chicken",
+    "waba-grill:sides/salad": "waba-grill:sides/salad",
+    "waba-grill:sides/salmon-4-oz": "waba-grill:sides/salmon-4-oz",
+    "waba-grill:sides/shrimp-4-pc": "waba-grill:sides/shrimp-4-pc",
+    "waba-grill:sides/steak-3-5-oz": "waba-grill:sides/steak-3-5-oz",
+    "waba-grill:sides/steamed-veggies": "waba-grill:sides/steamed-veggies",
+    "waba-grill:sides/sweet-spicy-chicken-4-5-oz": "waba-grill:sides/sweet-spicy-chicken-4-5-oz",
+    "waba-grill:sides/tofu-6-oz": "waba-grill:sides/tofu-6-oz",
+    "waba-grill:sides/white-rice-10-oz": "waba-grill:sides/white-rice-10-oz",
+    "waba-grill:sides/wm-chicken-4-5-oz": "waba-grill:sides/wm-chicken-4-5-oz",
+    "waba-grill:steak-plate": "waba-grill:steak-plate",
+    "waba-grill:tacos/chicken": "waba-grill:tacos/chicken",
+    "waba-grill:tacos/organic-tofu": "waba-grill:tacos/organic-tofu",
+    "waba-grill:tacos/plantspired-steak": "waba-grill:tacos/plantspired-steak",
+    "waba-grill:tacos/shrimp": "waba-grill:tacos/shrimp",
+    "waba-grill:tacos/steak": "waba-grill:tacos/steak",
+    "waba-grill:veggie-bowls/organic-tofu": "waba-grill:veggie-bowls/organic-tofu",
+    "waba-grill:veggie-bowls/plantspired-steak": "waba-grill:veggie-bowls/plantspired-steak",
+    "waba-grill:veggie-bowls/rib-eye-steak": "waba-grill:veggie-bowls/rib-eye-steak",
+    "waba-grill:veggie-bowls/sweet-spicy-chicken": "waba-grill:veggie-bowls/sweet-spicy-chicken",
+    "waba-grill:veggie-bowls/waba-chicken-steak": "waba-grill:veggie-bowls/waba-chicken-steak",
+    "waba-grill:veggie-bowls/waba-wm-chicken-steak": "waba-grill:veggie-bowls/waba-wm-chicken-steak",
+    "waba-grill:veggie-bowls/wild-caught-salmon": "waba-grill:veggie-bowls/wild-caught-salmon",
+    "waba-grill:veggie-bowls/wm-chicken": "waba-grill:veggie-bowls/wm-chicken",
+    "wahoo-s-fish-taco:sides/6-oz-black-beans": "wahoo-s-fish-taco:sides/6-oz-black-beans",
+    "wahoo-s-fish-taco:sides/6-oz-brown-rice": "wahoo-s-fish-taco:sides/6-oz-brown-rice",
+    "wahoo-s-fish-taco:sides/6-oz-white-beans": "wahoo-s-fish-taco:sides/6-oz-white-beans",
+    "wahoo-s-fish-taco:sides/6-oz-white-rice": "wahoo-s-fish-taco:sides/6-oz-white-rice",
+    "wahoo-s-fish-taco:sides/large-side-1-2-1-2-brown-rice-black-beans": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-brown-rice-black-beans",
+    "wahoo-s-fish-taco:sides/large-side-1-2-1-2-brown-rice-white-beans": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-brown-rice-white-beans",
+    "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-black-beans": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-black-beans",
+    "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-white-beans": "wahoo-s-fish-taco:sides/large-side-1-2-1-2-white-rice-white-beans",
+    "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-black-beans": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-black-beans",
+    "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-white-beans": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-white-beans",
+    "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-black-beans": "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-black-beans",
+    "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-white-beans": "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-white-beans",
+    "wahoo-s-fish-taco:sides/side-citrus-slaw-large-6oz": "wahoo-s-fish-taco:sides/side-citrus-slaw-large-6oz",
+    "wahoo-s-fish-taco:sides/side-citrus-slaw-small-3oz": "wahoo-s-fish-taco:sides/side-citrus-slaw-small-3oz",
+    "wahoo-s-fish-taco:sides/side-guac-12-oz": "wahoo-s-fish-taco:sides/side-guac-12-oz",
+    "wahoo-s-fish-taco:sides/side-guac-3-oz": "wahoo-s-fish-taco:sides/side-guac-3-oz",
+    "wahoo-s-fish-taco:sides/side-of-cauliflower-rice-7oz": "wahoo-s-fish-taco:sides/side-of-cauliflower-rice-7oz",
+    "wahoo-s-fish-taco:sides/side-pico-de-gallo-salsa-12-oz": "wahoo-s-fish-taco:sides/side-pico-de-gallo-salsa-12-oz",
+    "wahoo-s-fish-taco:sides/side-pico-de-gallo-salsa-3-oz": "wahoo-s-fish-taco:sides/side-pico-de-gallo-salsa-3-oz",
+    "wahoo-s-fish-taco:sides/side-roasted-tomato-salsa-large-12oz": "wahoo-s-fish-taco:sides/side-roasted-tomato-salsa-large-12oz",
+    "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carne-asada-white-rice-white-beans": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carne-asada-white-rice-white-beans",
+    "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-brown-rice-black-beans": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-brown-rice-black-beans",
+    "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-brown-rice-white-beans": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-brown-rice-white-beans",
+    "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-black-beans": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-black-beans",
+    "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-white-beans": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-carnitas-white-rice-white-beans",
+    "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-black-beans": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-black-beans",
+    "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-white-beans": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-brown-rice-white-beans",
+    "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-white-rice-black-beans": "wahoo-s-fish-taco:wahoo-s-fresno/fajita-veggie-bowl-charbroiled-chicken-white-rice-black-beans",
+    "wahoo-s-fish-taco:wahoo-s-las-vegas/power-chopper-vegetarian-white-rice-white-beans": "wahoo-s-fish-taco:wahoo-s-las-vegas/power-chopper-vegetarian-white-rice-white-beans",
+    "wahoo-s-fish-taco:wahoos-new-jersey/wahoo-s-nj-8-wings": "wahoo-s-fish-taco:wahoos-new-jersey/wahoo-s-nj-8-wings",
+    "wahoo-s-fish-taco:wahoos-new-jersey/wahoos-nj-16-wings": "wahoo-s-fish-taco:wahoos-new-jersey/wahoos-nj-16-wings",
+    "wahoo-s-fish-taco:wahoos-new-jersey/wahoos-nj-32-wings": "wahoo-s-fish-taco:wahoos-new-jersey/wahoos-nj-32-wings",
+    "yoshinoya:appetizers/edamame-salted": "yoshinoya:appetizers/edamame-salted",
+    "yoshinoya:appetizers/shrimp-tempura-2-pc-1-sauce": "yoshinoya:appetizers/shrimp-tempura-2-pc-1-sauce",
+    "yoshinoya:appetizers/shrimp-tempura-8-pc-2-sauce": "yoshinoya:appetizers/shrimp-tempura-8-pc-2-sauce",
+    "yoshinoya:appetizers/spring-rolls-4-pc": "yoshinoya:appetizers/spring-rolls-4-pc",
+    "yoshinoya:appetizers/springs-rolls-2-pc": "yoshinoya:appetizers/springs-rolls-2-pc",
+    "yoshinoya:appetizers/sweet-and-spicy-edamame": "yoshinoya:appetizers/sweet-and-spicy-edamame",
+    "yoshinoya:appetizers/tfc-blended-sauce-3-for-3pc-promo": "yoshinoya:appetizers/tfc-blended-sauce-3-for-3pc-promo",
+    "yoshinoya:appetizers/tfc-blended-sauce-side-addon-same-portion-as-reg": "yoshinoya:appetizers/tfc-blended-sauce-side-addon-same-portion-as-reg",
+    "yoshinoya:blount-clam-chowder": "yoshinoya:blount-clam-chowder",
+    "yoshinoya:combo-xl-bowls-select-one-base/brown-rice": "yoshinoya:combo-xl-bowls-select-one-base/brown-rice",
+    "yoshinoya:combo-xl-bowls-select-one-base/japanese-udon-noodles": "yoshinoya:combo-xl-bowls-select-one-base/japanese-udon-noodles",
+    "yoshinoya:combo-xl-bowls-select-one-base/white-rice": "yoshinoya:combo-xl-bowls-select-one-base/white-rice",
+    "yoshinoya:combo-xl-bowls-select-one-vegetable/coleslaw": "yoshinoya:combo-xl-bowls-select-one-vegetable/coleslaw",
+    "yoshinoya:combo-xl-bowls-select-one-vegetable/mixed-veggies": "yoshinoya:combo-xl-bowls-select-one-vegetable/mixed-veggies",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-habanero-chicken": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-habanero-chicken",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-ribeye-steak": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-ribeye-steak",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-teriyaki-chicken": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-teriyaki-chicken",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-teriyaki-salmon": "yoshinoya:combo-xl-bowls-select-two-large-proteins/grilled-teriyaki-salmon",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/gyudon-beef": "yoshinoya:combo-xl-bowls-select-two-large-proteins/gyudon-beef",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/gyudon-beef-with-yellow-onion-beef-broth": "yoshinoya:combo-xl-bowls-select-two-large-proteins/gyudon-beef-with-yellow-onion-beef-broth",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-hot-grilled-chicken": "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-hot-grilled-chicken",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-hot-gyudon-beef": "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-hot-gyudon-beef",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-ribeye-steak": "yoshinoya:combo-xl-bowls-select-two-large-proteins/hanabi-ribeye-steak",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/sweet-chili-shrimp": "yoshinoya:combo-xl-bowls-select-two-large-proteins/sweet-chili-shrimp",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/tempura-orange-chicken": "yoshinoya:combo-xl-bowls-select-two-large-proteins/tempura-orange-chicken",
+    "yoshinoya:combo-xl-bowls-select-two-large-proteins/tfc-blended-sauce": "yoshinoya:combo-xl-bowls-select-two-large-proteins/tfc-blended-sauce",
+    "yoshinoya:desserts/chocolate-chip-cookie-1": "yoshinoya:desserts/chocolate-chip-cookie-1",
+    "yoshinoya:desserts/junior-s-double-chocolate-devil-s-food-cheesecake": "yoshinoya:desserts/junior-s-double-chocolate-devil-s-food-cheesecake",
+    "yoshinoya:desserts/junior-s-original-cheesecake": "yoshinoya:desserts/junior-s-original-cheesecake",
+    "yoshinoya:desserts/junior-s-strawberry-swirl-cheesecake": "yoshinoya:desserts/junior-s-strawberry-swirl-cheesecake",
+    "yoshinoya:gyudon-beef-side": "yoshinoya:gyudon-beef-side",
+    "yoshinoya:habanero-chicken-side": "yoshinoya:habanero-chicken-side",
+    "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken",
+    "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-ribeye-steak": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-ribeye-steak",
+    "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-chicken": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-chicken",
+    "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-salmon": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-salmon",
+    "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/gyudon-beef-w-o-veg": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/gyudon-beef-w-o-veg",
+    "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce": "yoshinoya:large-bowls-on-white-rice-w-mixed-veggies/tfc-large-blended-sauce",
+    "yoshinoya:packaged/gatorade/lime-cucumber/20-fl-oz": "yoshinoya:packaged/gatorade/lime-cucumber/20-fl-oz",
+    "yoshinoya:packets/ginger-packet": "yoshinoya:packets/ginger-packet",
+    "yoshinoya:packets/gyoza-sauce-2-packs": "yoshinoya:packets/gyoza-sauce-2-packs",
+    "yoshinoya:packets/shichimi-seasoning": "yoshinoya:packets/shichimi-seasoning",
+    "yoshinoya:packets/soy-sauce-packet": "yoshinoya:packets/soy-sauce-packet",
+    "yoshinoya:packets/sriracha-sauce-packet": "yoshinoya:packets/sriracha-sauce-packet",
+    "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-habanero-chicken",
+    "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-ribeye-steak": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-ribeye-steak",
+    "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-chicken": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-chicken",
+    "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-salmon": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/grilled-teriyaki-salmon",
+    "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/gyudon-beef-w-o-veg": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/gyudon-beef-w-o-veg",
+    "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/regular-veggie-bowl": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/regular-veggie-bowl",
+    "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/tfc-regular-blended-sauce": "yoshinoya:regular-bowls-on-white-rice-w-mixed-veggies/tfc-regular-blended-sauce",
+    "yoshinoya:regular-combo-bowls-select-one-base/brown-rice": "yoshinoya:combo-xl-bowls-select-one-base/brown-rice",
+    "yoshinoya:regular-combo-bowls-select-one-base/japanese-udon-noodles": "yoshinoya:combo-xl-bowls-select-one-base/japanese-udon-noodles",
+    "yoshinoya:regular-combo-bowls-select-one-base/white-rice": "yoshinoya:combo-xl-bowls-select-one-base/white-rice",
+    "yoshinoya:regular-combo-bowls-select-one-vegetable/mixed-veggies": "yoshinoya:combo-xl-bowls-select-one-vegetable/mixed-veggies",
+    "yoshinoya:regular-combo-bowls-select-two-regular-proteins/grilled-habanero-chicken": "yoshinoya:habanero-chicken-side",
+    "yoshinoya:regular-combo-bowls-select-two-regular-proteins/grilled-ribeye-steak": "yoshinoya:regular-combo-bowls-select-two-regular-proteins/grilled-ribeye-steak",
+    "yoshinoya:regular-combo-bowls-select-two-regular-proteins/grilled-teriyaki-chicken": "yoshinoya:sides/teriyaki-chicken",
+    "yoshinoya:regular-combo-bowls-select-two-regular-proteins/grilled-teriyaki-salmon": "yoshinoya:sides/teriyaki-salmon",
+    "yoshinoya:regular-combo-bowls-select-two-regular-proteins/gyudon-beef": "yoshinoya:regular-combo-bowls-select-two-regular-proteins/gyudon-beef",
+    "yoshinoya:regular-combo-bowls-select-two-regular-proteins/tempura-orange-chicken": "yoshinoya:regular-combo-bowls-select-two-regular-proteins/tempura-orange-chicken",
+    "yoshinoya:side-sauces/beef-broth": "yoshinoya:side-sauces/beef-broth",
+    "yoshinoya:side-sauces/habanero-sauce": "yoshinoya:side-sauces/habanero-sauce",
+    "yoshinoya:side-sauces/hanabi-mayo": "yoshinoya:side-sauces/hanabi-mayo",
+    "yoshinoya:side-sauces/sweet-spicy-sauce": "yoshinoya:side-sauces/sweet-spicy-sauce",
+    "yoshinoya:side-sauces/tempura-sauce": "yoshinoya:side-sauces/tempura-sauce",
+    "yoshinoya:side-sauces/teriyaki-sauce": "yoshinoya:side-sauces/teriyaki-sauce",
+    "yoshinoya:sides/teriyaki-chicken": "yoshinoya:sides/teriyaki-chicken",
+    "yoshinoya:sides/teriyaki-ribeye": "yoshinoya:sides/teriyaki-ribeye",
+    "yoshinoya:sides/teriyaki-salmon": "yoshinoya:sides/teriyaki-salmon",
+    "yoshinoya:sides/veggies": "yoshinoya:sides/veggies",
+    "claim-jumper:land-sea-entrees/bbq-baby-back-ribs-full-rack": "claim-jumper:land-sea-entrees/bbq-baby-back-ribs-full-rack",
+    "claim-jumper:single-and-share-sides-cont/french-fries": "claim-jumper:single-and-share-sides-cont/french-fries",
+    "the-old-spaghetti-factory:appetizers/olive-tapenade": "the-old-spaghetti-factory:appetizers/olive-tapenade",
+    "the-old-spaghetti-factory:appetizers/sicilian-garlic-cheese-bread": "the-old-spaghetti-factory:appetizers/sicilian-garlic-cheese-bread",
+    "the-old-spaghetti-factory:bread-garlic-spread/bread-only": "the-old-spaghetti-factory:bread-garlic-spread/bread-only",
+    "the-old-spaghetti-factory:bread-garlic-spread/garlic-spread-only": "the-old-spaghetti-factory:bread-garlic-spread/garlic-spread-only",
+    "the-old-spaghetti-factory:gluten-sensitive/marinara-sauce": "the-old-spaghetti-factory:gluten-sensitive/marinara-sauce",
+    "the-old-spaghetti-factory:gluten-sensitive/meat-sauce": "the-old-spaghetti-factory:gluten-sensitive/meat-sauce",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/baked-lasagna": "the-old-spaghetti-factory:guss-sally-s-favorites/baked-lasagna",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/breast-of-chicken-fettuccine": "the-old-spaghetti-factory:guss-sally-s-favorites/breast-of-chicken-fettuccine",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-marsala": "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-marsala",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-parmigiana": "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-parmigiana",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-piccata": "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-piccata",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/fettuccine-alfredo": "the-old-spaghetti-factory:guss-sally-s-favorites/fettuccine-alfredo",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/garlic-mizithra": "the-old-spaghetti-factory:guss-sally-s-favorites/garlic-mizithra",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/garlic-shrimp-fettuccine": "the-old-spaghetti-factory:guss-sally-s-favorites/garlic-shrimp-fettuccine",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/italian-sausage-with-meat-sauce": "the-old-spaghetti-factory:guss-sally-s-favorites/italian-sausage-with-meat-sauce",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/meat-lovers-treat": "the-old-spaghetti-factory:guss-sally-s-favorites/meat-lovers-treat",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/sicilian-meatballs": "the-old-spaghetti-factory:guss-sally-s-favorites/sicilian-meatballs",
+    "the-old-spaghetti-factory:guss-sally-s-favorites/spinach-meat-tortellini": "the-old-spaghetti-factory:guss-sally-s-favorites/spinach-meat-tortellini",
+    "the-old-spaghetti-factory:house-salad/house-salad-with-creamy-pesto": "the-old-spaghetti-factory:house-salad/house-salad-with-creamy-pesto",
+    "the-old-spaghetti-factory:house-salad/house-salad-with-ranch": "the-old-spaghetti-factory:house-salad/house-salad-with-ranch",
+    "the-old-spaghetti-factory:kids-and-senior-entrees/fettuccine-alfredo": "the-old-spaghetti-factory:kids-and-senior-entrees/fettuccine-alfredo",
+    "the-old-spaghetti-factory:kids-and-senior-entrees/kid-s-macaroni-and-cheese": "the-old-spaghetti-factory:kids-and-senior-entrees/kid-s-macaroni-and-cheese",
+    "the-old-spaghetti-factory:kids-and-senior-entrees/marinara-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/marinara-sauce",
+    "the-old-spaghetti-factory:kids-and-senior-entrees/mushroom-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/mushroom-sauce",
+    "the-old-spaghetti-factory:kids-and-senior-entrees/rich-meat-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/rich-meat-sauce",
+    "the-old-spaghetti-factory:kids-and-senior-entrees/spinach-meat-tortellini-with-alfredo-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/spinach-meat-tortellini-with-alfredo-sauce",
+    "the-old-spaghetti-factory:kids-and-senior-entrees/white-clam-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/white-clam-sauce",
+    "the-old-spaghetti-factory:lunch-pasta-classic-entrees/marinara-sauce": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/marinara-sauce",
+    "the-old-spaghetti-factory:lunch-pasta-classic-entrees/mizithra-cheese-browned-butter": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/mizithra-cheese-browned-butter",
+    "the-old-spaghetti-factory:lunch-pasta-classic-entrees/mushroom-sauce": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/mushroom-sauce",
+    "the-old-spaghetti-factory:lunch-pasta-classic-entrees/pot-pourri": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/pot-pourri",
+    "the-old-spaghetti-factory:lunch-pasta-classic-entrees/rich-meat-sauce": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/rich-meat-sauce",
+    "the-old-spaghetti-factory:lunch-pasta-classic-entrees/spicy-spaghetti-vesuvius": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/spicy-spaghetti-vesuvius",
+    "the-old-spaghetti-factory:lunch-pasta-classic-entrees/white-clam-sauce": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/white-clam-sauce",
+    "the-old-spaghetti-factory:manager-favorite-entrees/marinara-meat-sauce": "the-old-spaghetti-factory:manager-favorite-entrees/marinara-meat-sauce",
+    "the-old-spaghetti-factory:manager-favorite-entrees/marinara-mushroom-sauce": "the-old-spaghetti-factory:manager-favorite-entrees/marinara-mushroom-sauce",
+    "the-old-spaghetti-factory:pasta-classic-entrees/marinara-sauce": "the-old-spaghetti-factory:pasta-classic-entrees/marinara-sauce",
+    "the-old-spaghetti-factory:pasta-classic-entrees/mizithra-cheese-and-brown-butter": "the-old-spaghetti-factory:pasta-classic-entrees/mizithra-cheese-and-brown-butter",
+    "the-old-spaghetti-factory:pasta-classic-entrees/mushroom-sauce": "the-old-spaghetti-factory:pasta-classic-entrees/mushroom-sauce",
+    "the-old-spaghetti-factory:pasta-classic-entrees/pot-pourri": "the-old-spaghetti-factory:pasta-classic-entrees/pot-pourri",
+    "the-old-spaghetti-factory:pasta-classic-entrees/rich-meat-sauce": "the-old-spaghetti-factory:pasta-classic-entrees/rich-meat-sauce",
+    "the-old-spaghetti-factory:pasta-classic-entrees/spicy-spaghetti-vesuvius": "the-old-spaghetti-factory:pasta-classic-entrees/spicy-spaghetti-vesuvius",
+    "the-old-spaghetti-factory:pasta-classic-entrees/white-clam-sauce": "the-old-spaghetti-factory:pasta-classic-entrees/white-clam-sauce",
+    "the-old-spaghetti-factory:pasta-only/gluten-free": "the-old-spaghetti-factory:pasta-only/gluten-free",
+    "the-old-spaghetti-factory:ravioli/jumbo-lobster-and-crab-ravioli": "the-old-spaghetti-factory:ravioli/jumbo-lobster-and-crab-ravioli",
+    "the-old-spaghetti-factory:salads/caesar-salad": "the-old-spaghetti-factory:salads/caesar-salad",
+    "the-old-spaghetti-factory:sides/chicken-parmigiana-breast": "the-old-spaghetti-factory:sides/chicken-parmigiana-breast",
+    "the-old-spaghetti-factory:sides/seasoned-chicken-breast": "the-old-spaghetti-factory:sides/seasoned-chicken-breast",
+    "the-old-spaghetti-factory:sides/side-of-alfredo-sauce": "the-old-spaghetti-factory:sides/side-of-alfredo-sauce",
+    "the-old-spaghetti-factory:sides/side-of-creamy-pesto-dressing": "the-old-spaghetti-factory:sides/side-of-creamy-pesto-dressing",
+    "the-old-spaghetti-factory:sides/side-of-meat-sauce": "the-old-spaghetti-factory:sides/side-of-meat-sauce",
+    "the-old-spaghetti-factory:sides/side-of-ranch-dressing": "the-old-spaghetti-factory:sides/side-of-ranch-dressing",
+    "the-old-spaghetti-factory:sides/side-of-sicilian-meatballs-1-each": "the-old-spaghetti-factory:sides/side-of-sicilian-meatballs-1-each",
+    "the-old-spaghetti-factory:soups/minestrone": "the-old-spaghetti-factory:soups/minestrone",
+    "wahoo-s-fish-taco:bowls/banzai-bowl-brown-rice-black-beans-carne-asada": "wahoo-s-fish-taco:bowls/banzai-bowl-brown-rice-black-beans-carne-asada",
+    "wahoo-s-fish-taco:bowls/banzai-bowl-brown-rice-black-beans-chicken": "wahoo-s-fish-taco:bowls/banzai-bowl-brown-rice-black-beans-chicken",
+    "wahoo-s-fish-taco:bowls/maui-steak-bowl-brown-rice-black-beans": "wahoo-s-fish-taco:bowls/maui-steak-bowl-brown-rice-black-beans",
+    "wahoo-s-fish-taco:bowls/maui-steak-bowl-white-rice-white-beans": "wahoo-s-fish-taco:bowls/maui-steak-bowl-white-rice-white-beans",
+    "wahoo-s-fish-taco:bowls/protein-bowl-blackened-chicken-shrimp": "wahoo-s-fish-taco:bowls/protein-bowl-blackened-chicken-shrimp",
+    "wahoo-s-fish-taco:bowls/protein-bowl-carne-asada-only": "wahoo-s-fish-taco:bowls/protein-bowl-carne-asada-only",
+    "wahoo-s-fish-taco:bowls/wahoo-s-bowl-white-rice-white-beans-fish": "wahoo-s-fish-taco:bowls/wahoo-s-bowl-white-rice-white-beans-fish",
+    "wahoo-s-fish-taco:burritos/1988-burrito-carne-asada": "wahoo-s-fish-taco:burritos/1988-burrito-carne-asada",
+    "wahoo-s-fish-taco:burritos/1988-burrito-carnitas": "wahoo-s-fish-taco:burritos/1988-burrito-carnitas",
+    "wahoo-s-fish-taco:burritos/banzai-burrito-crispy-fish-brown-rice-black-beans": "wahoo-s-fish-taco:burritos/banzai-burrito-crispy-fish-brown-rice-black-beans",
+    "wahoo-s-fish-taco:burritos/banzai-burrito-crispy-fish-white-rice-white-beans": "wahoo-s-fish-taco:burritos/banzai-burrito-crispy-fish-white-rice-white-beans",
+    "wahoo-s-fish-taco:burritos/citrus-slaw-blackened-chicken-burrito-white-rice-white-beans": "wahoo-s-fish-taco:burritos/citrus-slaw-blackened-chicken-burrito-white-rice-white-beans",
+    "wahoo-s-fish-taco:burritos/citrus-slaw-carne-asada-burrito-brown-rice-black-beans": "wahoo-s-fish-taco:burritos/citrus-slaw-carne-asada-burrito-brown-rice-black-beans",
+    "wahoo-s-fish-taco:burritos/outer-reef-burrito-carne-asada-brown-rice-black-beans": "wahoo-s-fish-taco:burritos/outer-reef-burrito-carne-asada-brown-rice-black-beans",
+    "wahoo-s-fish-taco:burritos/outer-reef-burrito-carne-asada-white-rice-white-beans": "wahoo-s-fish-taco:burritos/outer-reef-burrito-carne-asada-white-rice-white-beans",
+    "wahoo-s-fish-taco:burritos/screamm-n-burrito-brown-rice": "wahoo-s-fish-taco:burritos/screamm-n-burrito-brown-rice",
+    "wahoo-s-fish-taco:burritos/screamm-n-burrito-white-rice": "wahoo-s-fish-taco:burritos/screamm-n-burrito-white-rice",
+    "wahoo-s-fish-taco:dessert/churro-chips": "wahoo-s-fish-taco:dessert/churro-chips",
+    "wahoo-s-fish-taco:enchiladas/1-green-enchilada-cheese-side-brown-rice-black-beans": "wahoo-s-fish-taco:enchiladas/1-green-enchilada-cheese-side-brown-rice-black-beans",
+    "wahoo-s-fish-taco:just-for-kids/kid-bowl-blackened-mushroom-black-beans-brown-rice": "wahoo-s-fish-taco:just-for-kids/kid-bowl-blackened-mushroom-black-beans-brown-rice",
+    "wahoo-s-fish-taco:just-for-kids/kid-bowl-blackened-mushroom-white-beans-white-rice": "wahoo-s-fish-taco:just-for-kids/kid-bowl-blackened-mushroom-white-beans-white-rice",
+    "wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice": "wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice",
+    "wahoo-s-fish-taco:plates/ensenada-fish-taco-with-brown-rice-black-beans": "wahoo-s-fish-taco:plates/ensenada-fish-taco-with-brown-rice-black-beans",
+    "wahoo-s-fish-taco:plates/ensenada-tacos-with-white-rice-black-beans": "wahoo-s-fish-taco:plates/ensenada-tacos-with-white-rice-black-beans",
+    "wahoo-s-fish-taco:salads/sunset-chopped-salad-w-carnitas": "wahoo-s-fish-taco:salads/sunset-chopped-salad-w-carnitas",
+    "wahoo-s-fish-taco:salads/sunset-chopped-salad-w-charbroiled-chicken": "wahoo-s-fish-taco:salads/sunset-chopped-salad-w-charbroiled-chicken",
+    "wahoo-s-fish-taco:salads/wahoo-s-chipotle-salad-carnitas": "wahoo-s-fish-taco:salads/wahoo-s-chipotle-salad-carnitas",
+    "wahoo-s-fish-taco:salads/wahoo-s-chipotle-salad-chicken": "wahoo-s-fish-taco:salads/wahoo-s-chipotle-salad-chicken",
+    "wahoo-s-fish-taco:salads/wahoo-salad-carnitas": "wahoo-s-fish-taco:salads/wahoo-salad-carnitas",
+    "wahoo-s-fish-taco:salads/wahoo-salad-chicken-blackened": "wahoo-s-fish-taco:salads/wahoo-salad-chicken-blackened",
+    "wahoo-s-fish-taco:shared-plates/chips-basket": "wahoo-s-fish-taco:shared-plates/chips-basket",
+    "wahoo-s-fish-taco:shared-plates/loaded-nachos-carne-asada-black-beans": "wahoo-s-fish-taco:shared-plates/loaded-nachos-carne-asada-black-beans",
+    "wahoo-s-fish-taco:shared-plates/loaded-nachos-carnitas-white-beans": "wahoo-s-fish-taco:shared-plates/loaded-nachos-carnitas-white-beans",
+    "wahoo-s-fish-taco:shared-plates/loaded-quesadilla-vegetarian-brown-rice-and-black-beans": "wahoo-s-fish-taco:shared-plates/loaded-quesadilla-vegetarian-brown-rice-and-black-beans",
+    "wahoo-s-fish-taco:shared-plates/quesadilla-blackened-chicken": "wahoo-s-fish-taco:shared-plates/quesadilla-blackened-chicken",
+    "wahoo-s-fish-taco:shared-plates/tacos-de-papa": "wahoo-s-fish-taco:shared-plates/tacos-de-papa",
+    "wahoo-s-fish-taco:shared-plates/taquitos-carne-asada": "wahoo-s-fish-taco:shared-plates/taquitos-carne-asada",
+    "wahoo-s-fish-taco:shared-plates/taquitos-chicken": "wahoo-s-fish-taco:shared-plates/taquitos-chicken",
+    "wahoo-s-fish-taco:sides/roasted-tomato-salsa": "wahoo-s-fish-taco:sides/roasted-tomato-salsa",
+    "wahoo-s-fish-taco:sides/side-beans-black": "wahoo-s-fish-taco:sides/side-beans-black",
+    "wahoo-s-fish-taco:sides/side-beans-white": "wahoo-s-fish-taco:sides/side-beans-white",
+    "wahoo-s-fish-taco:sides/side-rice-brown": "wahoo-s-fish-taco:sides/side-rice-brown",
+    "wahoo-s-fish-taco:sides/side-rice-white": "wahoo-s-fish-taco:sides/side-rice-white",
+    "wahoo-s-fish-taco:sides/side-sour-cream-3-oz": "wahoo-s-fish-taco:sides/side-sour-cream-3-oz",
+    "wahoo-s-fish-taco:sides/side-tortilla-corn-3-ea": "wahoo-s-fish-taco:sides/side-tortilla-corn-3-ea",
+    "wahoo-s-fish-taco:sides/side-tortilla-flour-1-ea": "wahoo-s-fish-taco:sides/side-tortilla-flour-1-ea",
+    "wahoo-s-fish-taco:soup/chicken-tortilla-soup": "wahoo-s-fish-taco:soup/chicken-tortilla-soup",
+    "wahoo-s-fish-taco:tacos/1988-taco-carne-asada": "wahoo-s-fish-taco:tacos/1988-taco-carne-asada",
+    "wahoo-s-fish-taco:tacos/1988-taco-carnitas": "wahoo-s-fish-taco:tacos/1988-taco-carnitas",
+    "wahoo-s-fish-taco:tacos/citrus-slaw-taco-carne-asada": "wahoo-s-fish-taco:tacos/citrus-slaw-taco-carne-asada",
+    "wahoo-s-fish-taco:tacos/citrus-slaw-taco-chicken-blackened": "wahoo-s-fish-taco:tacos/citrus-slaw-taco-chicken-blackened",
+    "wahoo-s-fish-taco:tacos/crispy-fish-taco": "wahoo-s-fish-taco:tacos/crispy-fish-taco",
+    "wahoo-s-fish-taco:tacos/ensenada-fish-taco": "wahoo-s-fish-taco:tacos/ensenada-fish-taco",
+    "wahoo-s-fish-taco:tacos/wahoo-s-street-taco-carne-asada": "wahoo-s-fish-taco:tacos/wahoo-s-street-taco-carne-asada",
+    "wahoo-s-fish-taco:tacos/wahoo-s-street-taco-chicken": "wahoo-s-fish-taco:tacos/wahoo-s-street-taco-chicken"
+  },
+  "extension": {
+    "addedRows": 111,
+    "admitted": 176,
+    "excluded": 83,
+    "version": "measured-2026-10-26",
+    "sourceHead": "3e8f13afb05f8aba0fc10744484c5d1d023fc6ce",
+    "splitFamilies": {
+      "wahoo-s-fish-taco:bowls/banzai-bowl-brown-rice-black-beans-carne-asada": "wahoo-s-fish-taco:bowls/banzai-bowl-brown-rice-black-beans-carne-asada",
+      "wahoo-s-fish-taco:bowls/banzai-bowl-brown-rice-black-beans-chicken": "wahoo-s-fish-taco:bowls/banzai-bowl-brown-rice-black-beans-carne-asada",
+      "wahoo-s-fish-taco:bowls/maui-steak-bowl-brown-rice-black-beans": "wahoo-s-fish-taco:bowls/maui-steak-bowl-brown-rice-black-beans",
+      "wahoo-s-fish-taco:bowls/maui-steak-bowl-white-rice-white-beans": "wahoo-s-fish-taco:bowls/maui-steak-bowl-brown-rice-black-beans",
+      "wahoo-s-fish-taco:bowls/protein-bowl-blackened-chicken-shrimp": "wahoo-s-fish-taco:bowls/protein-bowl-blackened-chicken-shrimp",
+      "wahoo-s-fish-taco:bowls/protein-bowl-carne-asada-only": "wahoo-s-fish-taco:bowls/protein-bowl-blackened-chicken-shrimp",
+      "wahoo-s-fish-taco:bowls/wahoo-s-bowl-white-rice-white-beans-fish": "wahoo-s-fish-taco:bowls/wahoo-s-bowl-white-rice-white-beans-fish",
+      "wahoo-s-fish-taco:burritos/1988-burrito-carne-asada": "wahoo-s-fish-taco:burritos/1988-burrito-carne-asada",
+      "wahoo-s-fish-taco:burritos/1988-burrito-carnitas": "wahoo-s-fish-taco:burritos/1988-burrito-carne-asada",
+      "wahoo-s-fish-taco:burritos/banzai-burrito-crispy-fish-brown-rice-black-beans": "wahoo-s-fish-taco:burritos/banzai-burrito-crispy-fish-brown-rice-black-beans",
+      "wahoo-s-fish-taco:burritos/banzai-burrito-crispy-fish-white-rice-white-beans": "wahoo-s-fish-taco:burritos/banzai-burrito-crispy-fish-brown-rice-black-beans",
+      "wahoo-s-fish-taco:burritos/citrus-slaw-blackened-chicken-burrito-white-rice-white-beans": "wahoo-s-fish-taco:burritos/citrus-slaw-blackened-chicken-burrito-white-rice-white-beans",
+      "wahoo-s-fish-taco:burritos/citrus-slaw-carne-asada-burrito-brown-rice-black-beans": "wahoo-s-fish-taco:burritos/citrus-slaw-blackened-chicken-burrito-white-rice-white-beans",
+      "wahoo-s-fish-taco:burritos/outer-reef-burrito-carne-asada-brown-rice-black-beans": "wahoo-s-fish-taco:burritos/outer-reef-burrito-carne-asada-brown-rice-black-beans",
+      "wahoo-s-fish-taco:burritos/outer-reef-burrito-carne-asada-white-rice-white-beans": "wahoo-s-fish-taco:burritos/outer-reef-burrito-carne-asada-brown-rice-black-beans",
+      "wahoo-s-fish-taco:burritos/screamm-n-burrito-brown-rice": "wahoo-s-fish-taco:burritos/screamm-n-burrito-brown-rice",
+      "wahoo-s-fish-taco:burritos/screamm-n-burrito-white-rice": "wahoo-s-fish-taco:burritos/screamm-n-burrito-brown-rice",
+      "wahoo-s-fish-taco:dessert/churro-chips": "wahoo-s-fish-taco:dessert/churro-chips",
+      "wahoo-s-fish-taco:enchiladas/1-green-enchilada-cheese-side-brown-rice-black-beans": "wahoo-s-fish-taco:enchiladas/1-green-enchilada-cheese-side-brown-rice-black-beans",
+      "wahoo-s-fish-taco:just-for-kids/kid-bowl-blackened-mushroom-black-beans-brown-rice": "wahoo-s-fish-taco:just-for-kids/kid-bowl-blackened-mushroom-black-beans-brown-rice",
+      "wahoo-s-fish-taco:just-for-kids/kid-bowl-blackened-mushroom-white-beans-white-rice": "wahoo-s-fish-taco:just-for-kids/kid-bowl-blackened-mushroom-black-beans-brown-rice",
+      "wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice": "wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice",
+      "wahoo-s-fish-taco:plates/ensenada-fish-taco-with-brown-rice-black-beans": "wahoo-s-fish-taco:plates/ensenada-fish-taco-with-brown-rice-black-beans",
+      "wahoo-s-fish-taco:plates/ensenada-tacos-with-white-rice-black-beans": "wahoo-s-fish-taco:plates/ensenada-fish-taco-with-brown-rice-black-beans",
+      "wahoo-s-fish-taco:salads/sunset-chopped-salad-w-carnitas": "wahoo-s-fish-taco:salads/sunset-chopped-salad-w-carnitas",
+      "wahoo-s-fish-taco:salads/sunset-chopped-salad-w-charbroiled-chicken": "wahoo-s-fish-taco:salads/sunset-chopped-salad-w-carnitas",
+      "wahoo-s-fish-taco:salads/wahoo-s-chipotle-salad-carnitas": "wahoo-s-fish-taco:salads/wahoo-s-chipotle-salad-carnitas",
+      "wahoo-s-fish-taco:salads/wahoo-s-chipotle-salad-chicken": "wahoo-s-fish-taco:salads/wahoo-s-chipotle-salad-carnitas",
+      "wahoo-s-fish-taco:salads/wahoo-salad-carnitas": "wahoo-s-fish-taco:salads/wahoo-salad-carnitas",
+      "wahoo-s-fish-taco:salads/wahoo-salad-chicken-blackened": "wahoo-s-fish-taco:salads/wahoo-salad-carnitas",
+      "wahoo-s-fish-taco:shared-plates/chips-basket": "wahoo-s-fish-taco:sides/side-guac-3-oz",
+      "wahoo-s-fish-taco:shared-plates/loaded-nachos-carne-asada-black-beans": "wahoo-s-fish-taco:shared-plates/loaded-nachos-carne-asada-black-beans",
+      "wahoo-s-fish-taco:shared-plates/loaded-nachos-carnitas-white-beans": "wahoo-s-fish-taco:shared-plates/loaded-nachos-carne-asada-black-beans",
+      "wahoo-s-fish-taco:shared-plates/loaded-quesadilla-vegetarian-brown-rice-and-black-beans": "wahoo-s-fish-taco:shared-plates/loaded-quesadilla-vegetarian-brown-rice-and-black-beans",
+      "wahoo-s-fish-taco:shared-plates/quesadilla-blackened-chicken": "wahoo-s-fish-taco:shared-plates/loaded-quesadilla-vegetarian-brown-rice-and-black-beans",
+      "wahoo-s-fish-taco:shared-plates/tacos-de-papa": "wahoo-s-fish-taco:shared-plates/tacos-de-papa",
+      "wahoo-s-fish-taco:shared-plates/taquitos-carne-asada": "wahoo-s-fish-taco:shared-plates/taquitos-carne-asada",
+      "wahoo-s-fish-taco:shared-plates/taquitos-chicken": "wahoo-s-fish-taco:shared-plates/taquitos-carne-asada",
+      "wahoo-s-fish-taco:sides/roasted-tomato-salsa": "wahoo-s-fish-taco:sides/side-guac-3-oz",
+      "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-black-beans": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-black-beans",
+      "wahoo-s-fish-taco:sides/side-1-2-1-2-white-rice-white-beans": "wahoo-s-fish-taco:sides/side-1-2-1-2-brown-rice-black-beans",
+      "wahoo-s-fish-taco:sides/side-beans-black": "wahoo-s-fish-taco:sides/side-beans-black",
+      "wahoo-s-fish-taco:sides/side-beans-white": "wahoo-s-fish-taco:sides/side-beans-black",
+      "wahoo-s-fish-taco:sides/side-guac-3-oz": "wahoo-s-fish-taco:sides/side-guac-3-oz",
+      "wahoo-s-fish-taco:sides/side-rice-brown": "wahoo-s-fish-taco:sides/side-rice-brown",
+      "wahoo-s-fish-taco:sides/side-rice-white": "wahoo-s-fish-taco:sides/side-rice-brown",
+      "wahoo-s-fish-taco:sides/side-sour-cream-3-oz": "wahoo-s-fish-taco:sides/side-guac-3-oz",
+      "wahoo-s-fish-taco:sides/side-tortilla-corn-3-ea": "wahoo-s-fish-taco:sides/side-tortilla-corn-3-ea",
+      "wahoo-s-fish-taco:sides/side-tortilla-flour-1-ea": "wahoo-s-fish-taco:sides/side-tortilla-corn-3-ea",
+      "wahoo-s-fish-taco:soup/chicken-tortilla-soup": "wahoo-s-fish-taco:soup/chicken-tortilla-soup",
+      "wahoo-s-fish-taco:tacos/1988-taco-carne-asada": "wahoo-s-fish-taco:tacos/1988-taco-carne-asada",
+      "wahoo-s-fish-taco:tacos/1988-taco-carnitas": "wahoo-s-fish-taco:tacos/1988-taco-carne-asada",
+      "wahoo-s-fish-taco:tacos/citrus-slaw-taco-carne-asada": "wahoo-s-fish-taco:tacos/citrus-slaw-taco-carne-asada",
+      "wahoo-s-fish-taco:tacos/citrus-slaw-taco-chicken-blackened": "wahoo-s-fish-taco:tacos/citrus-slaw-taco-carne-asada",
+      "wahoo-s-fish-taco:tacos/crispy-fish-taco": "wahoo-s-fish-taco:tacos/crispy-fish-taco",
+      "wahoo-s-fish-taco:tacos/ensenada-fish-taco": "wahoo-s-fish-taco:plates/combo-1-1988-taco-veggie-black-beans-brown-rice-black-beans-brown-rice",
+      "wahoo-s-fish-taco:tacos/wahoo-s-street-taco-carne-asada": "wahoo-s-fish-taco:tacos/wahoo-s-street-taco-carne-asada",
+      "wahoo-s-fish-taco:tacos/wahoo-s-street-taco-chicken": "wahoo-s-fish-taco:tacos/wahoo-s-street-taco-carne-asada",
+      "claim-jumper:appetizers/bbq-chicken-sliders": "claim-jumper:appetizers/bbq-chicken-sliders",
+      "claim-jumper:appetizers/bonanza-platter": "claim-jumper:appetizers/bonanza-platter",
+      "claim-jumper:appetizers/buffalo-chicken-wings-share-size": "claim-jumper:appetizers/buffalo-chicken-wings-share-size",
+      "claim-jumper:appetizers/calamari-share-size": "claim-jumper:appetizers/calamari-share-size",
+      "claim-jumper:land-sea-entrees/bbq-baby-back-ribs-full-rack": "claim-jumper:appetizers/buffalo-chicken-wings-share-size",
+      "claim-jumper:single-and-share-sides-cont/french-fries": "claim-jumper:appetizers/buffalo-chicken-wings-share-size",
+      "the-old-spaghetti-factory:appetizers/olive-tapenade": "the-old-spaghetti-factory:appetizers/olive-tapenade",
+      "the-old-spaghetti-factory:appetizers/sicilian-garlic-cheese-bread": "the-old-spaghetti-factory:appetizers/sicilian-garlic-cheese-bread",
+      "the-old-spaghetti-factory:bread-garlic-spread/bread-only": "the-old-spaghetti-factory:bread-garlic-spread/bread-only",
+      "the-old-spaghetti-factory:bread-garlic-spread/garlic-spread-only": "the-old-spaghetti-factory:bread-garlic-spread/bread-only",
+      "the-old-spaghetti-factory:gluten-sensitive/marinara-sauce": "the-old-spaghetti-factory:gluten-sensitive/marinara-sauce",
+      "the-old-spaghetti-factory:gluten-sensitive/meat-sauce": "the-old-spaghetti-factory:gluten-sensitive/meat-sauce",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/baked-lasagna": "the-old-spaghetti-factory:guss-sally-s-favorites/baked-lasagna",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/breast-of-chicken-fettuccine": "the-old-spaghetti-factory:guss-sally-s-favorites/breast-of-chicken-fettuccine",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-marsala": "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-marsala",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-parmigiana": "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-parmigiana",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-piccata": "the-old-spaghetti-factory:guss-sally-s-favorites/chicken-piccata",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/fettuccine-alfredo": "the-old-spaghetti-factory:guss-sally-s-favorites/fettuccine-alfredo",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/garlic-mizithra": "the-old-spaghetti-factory:guss-sally-s-favorites/garlic-mizithra",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/garlic-shrimp-fettuccine": "the-old-spaghetti-factory:guss-sally-s-favorites/garlic-shrimp-fettuccine",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/italian-sausage-with-meat-sauce": "the-old-spaghetti-factory:guss-sally-s-favorites/italian-sausage-with-meat-sauce",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/meat-lovers-treat": "the-old-spaghetti-factory:guss-sally-s-favorites/meat-lovers-treat",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/sicilian-meatballs": "the-old-spaghetti-factory:guss-sally-s-favorites/sicilian-meatballs",
+      "the-old-spaghetti-factory:guss-sally-s-favorites/spinach-meat-tortellini": "the-old-spaghetti-factory:guss-sally-s-favorites/spinach-meat-tortellini",
+      "the-old-spaghetti-factory:house-salad/house-salad-with-creamy-pesto": "the-old-spaghetti-factory:house-salad/house-salad-with-creamy-pesto",
+      "the-old-spaghetti-factory:house-salad/house-salad-with-ranch": "the-old-spaghetti-factory:house-salad/house-salad-with-creamy-pesto",
+      "the-old-spaghetti-factory:kids-and-senior-entrees/fettuccine-alfredo": "the-old-spaghetti-factory:guss-sally-s-favorites/fettuccine-alfredo",
+      "the-old-spaghetti-factory:kids-and-senior-entrees/kid-s-macaroni-and-cheese": "the-old-spaghetti-factory:kids-and-senior-entrees/kid-s-macaroni-and-cheese",
+      "the-old-spaghetti-factory:kids-and-senior-entrees/marinara-sauce": "the-old-spaghetti-factory:gluten-sensitive/marinara-sauce",
+      "the-old-spaghetti-factory:kids-and-senior-entrees/mushroom-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/mushroom-sauce",
+      "the-old-spaghetti-factory:kids-and-senior-entrees/rich-meat-sauce": "the-old-spaghetti-factory:gluten-sensitive/meat-sauce",
+      "the-old-spaghetti-factory:kids-and-senior-entrees/spinach-meat-tortellini-with-alfredo-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/spinach-meat-tortellini-with-alfredo-sauce",
+      "the-old-spaghetti-factory:kids-and-senior-entrees/white-clam-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/white-clam-sauce",
+      "the-old-spaghetti-factory:lunch-pasta-classic-entrees/marinara-sauce": "the-old-spaghetti-factory:gluten-sensitive/marinara-sauce",
+      "the-old-spaghetti-factory:lunch-pasta-classic-entrees/mizithra-cheese-browned-butter": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/mizithra-cheese-browned-butter",
+      "the-old-spaghetti-factory:lunch-pasta-classic-entrees/mushroom-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/mushroom-sauce",
+      "the-old-spaghetti-factory:lunch-pasta-classic-entrees/pot-pourri": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/pot-pourri",
+      "the-old-spaghetti-factory:lunch-pasta-classic-entrees/rich-meat-sauce": "the-old-spaghetti-factory:gluten-sensitive/meat-sauce",
+      "the-old-spaghetti-factory:lunch-pasta-classic-entrees/spicy-spaghetti-vesuvius": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/spicy-spaghetti-vesuvius",
+      "the-old-spaghetti-factory:lunch-pasta-classic-entrees/white-clam-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/white-clam-sauce",
+      "the-old-spaghetti-factory:manager-favorite-entrees/marinara-meat-sauce": "the-old-spaghetti-factory:manager-favorite-entrees/marinara-meat-sauce",
+      "the-old-spaghetti-factory:manager-favorite-entrees/marinara-mushroom-sauce": "the-old-spaghetti-factory:manager-favorite-entrees/marinara-meat-sauce",
+      "the-old-spaghetti-factory:pasta-classic-entrees/marinara-sauce": "the-old-spaghetti-factory:gluten-sensitive/marinara-sauce",
+      "the-old-spaghetti-factory:pasta-classic-entrees/mizithra-cheese-and-brown-butter": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/mizithra-cheese-browned-butter",
+      "the-old-spaghetti-factory:pasta-classic-entrees/mushroom-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/mushroom-sauce",
+      "the-old-spaghetti-factory:pasta-classic-entrees/pot-pourri": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/pot-pourri",
+      "the-old-spaghetti-factory:pasta-classic-entrees/rich-meat-sauce": "the-old-spaghetti-factory:gluten-sensitive/meat-sauce",
+      "the-old-spaghetti-factory:pasta-classic-entrees/spicy-spaghetti-vesuvius": "the-old-spaghetti-factory:lunch-pasta-classic-entrees/spicy-spaghetti-vesuvius",
+      "the-old-spaghetti-factory:pasta-classic-entrees/white-clam-sauce": "the-old-spaghetti-factory:kids-and-senior-entrees/white-clam-sauce",
+      "the-old-spaghetti-factory:pasta-only/gluten-free": "the-old-spaghetti-factory:pasta-only/gluten-free",
+      "the-old-spaghetti-factory:ravioli/jumbo-lobster-and-crab-ravioli": "the-old-spaghetti-factory:ravioli/jumbo-lobster-and-crab-ravioli",
+      "the-old-spaghetti-factory:salads/caesar-salad": "the-old-spaghetti-factory:salads/caesar-salad",
+      "the-old-spaghetti-factory:sides/chicken-parmigiana-breast": "the-old-spaghetti-factory:sides/chicken-parmigiana-breast",
+      "the-old-spaghetti-factory:sides/seasoned-chicken-breast": "the-old-spaghetti-factory:sides/seasoned-chicken-breast",
+      "the-old-spaghetti-factory:sides/side-of-alfredo-sauce": "the-old-spaghetti-factory:sides/side-of-alfredo-sauce",
+      "the-old-spaghetti-factory:sides/side-of-creamy-pesto-dressing": "the-old-spaghetti-factory:sides/side-of-creamy-pesto-dressing",
+      "the-old-spaghetti-factory:sides/side-of-meat-sauce": "the-old-spaghetti-factory:sides/side-of-alfredo-sauce",
+      "the-old-spaghetti-factory:sides/side-of-ranch-dressing": "the-old-spaghetti-factory:sides/side-of-creamy-pesto-dressing",
+      "the-old-spaghetti-factory:sides/side-of-sicilian-meatballs-1-each": "the-old-spaghetti-factory:sides/side-of-sicilian-meatballs-1-each",
+      "the-old-spaghetti-factory:soups/minestrone": "the-old-spaghetti-factory:house-salad/house-salad-with-creamy-pesto"
+    },
+    "originalHead": "bbd8ce41c92dfcbc33eb39d1f3783245b7e57eb9"
+  },
+  "sources": [
+    {
+      "file": "scripts/eval/jev-macro/truth.json",
+      "sha256": "7fad98db5a79e246a6ae3afc3e4b5953e33c99ee76994701fe010ed35a13c521"
+    },
+    {
+      "file": "apps/api/services/chainCatalogs/waba-yoshinoya-2026-09.json",
+      "sha256": "8804dcd034f2945802d1e6f036aa430cad82b265672d2dfacf06bdd2a6d2b633"
+    },
+    {
+      "file": "apps/api/tests/fixtures/__snapshots__/chain-batch-source-extraction.json",
+      "sha256": "4ace3cac7c008bec2fb4d501dd6fd9f48e46c58981767af0628206a06d14cf6a"
+    },
+    {
+      "file": "apps/api/tests/fixtures/__snapshots__/chain-batch-observations.json",
+      "sha256": "b8c8d7dd5a2381213a644b39891f3cf84f27a13c7c1a6f3f5abf3428a4d84c4f"
+    },
+    {
+      "file": "scripts/eval/suite/sources/pdf-checks.json",
+      "sha256": "8dd62cc3b7b7850b2058a9fcb8189aaf076f4d56c0788776937330813b4a110d"
+    },
+    {
+      "file": "apps/api/tests/fixtures/chain-batch-truth.ts",
+      "sha256": "287277e8c6557c0a744b830c764d6fc2ac0b66b9780074e34a6f48fcf2824f24"
+    },
+    {
+      "file": "scripts/eval/suite/sources/pdf-pages.json",
+      "sha256": "00bc9fdec6ac6bb73ea4fd9b8dfa544170c9fbd52808de30678580871091b008"
+    },
+    {
+      "file": "scripts/eval/suite/sources/curation.json",
+      "sha256": "9af902889a5484c6521132340652107fb176daeedded365fdf43fdee43006867"
+    },
+    {
+      "file": "scripts/eval/suite/sources/serving-groups.json",
+      "sha256": "572c31b595adf7aafe53a3ba02e3e4f8f3c5aebbf330dc7548fba0a1ab096f0d"
+    },
+    {
+      "file": "scripts/eval/suite/sources/measured/capture-manifest.json",
+      "sha256": "f4a7cc569e79a99194792efe4d35034e8aa3921bd7d06e1256bdefa2814ad5e8"
+    },
+    {
+      "file": "scripts/eval/suite/sources/measured/plan.json",
+      "sha256": "9513aeb54463d4f42e098a66e364218284a55d1318cac14cf6518914d346d8ba"
+    },
+    {
+      "file": "scripts/eval/suite/sources/measured/v1-lock.json",
+      "sha256": "ae3440e8c40a63e30c4cda999dde684930c0dd1f084e2099fcba31057366ec2b"
+    },
+    {
+      "file": "scripts/eval/suite/sources/measured/row-checks.jsonl",
+      "sha256": "a7bb6160c626a96955c9d6791b65d3975a1c314a834c72f83630cacd537f865a"
+    },
+    {
+      "file": "scripts/eval/suite/sources/measured/pdf-pages.json.gz",
+      "sha256": "38915d8b66d8be70ecbdc37aff23a7ec0920a3857fc8745a182de0acd41d2e9f"
+    },
+    {
+      "file": "scripts/eval/suite/sources/measured/official-osf.html.gz",
+      "sha256": "4f3509931d56810c21d732dd96a5279c0c0fef031632f1faaea6b9db4e75d629"
+    },
+    {
+      "file": "scripts/eval/suite/sources/measured/measurement.json.gz",
+      "sha256": "15f67bdbc593336a933e7bf1fd876922319d247287478ca0d8dfcec340c8432a"
+    },
+    {
+      "file": "scripts/eval/suite/sources/measured/wahoos.retry.json.gz",
+      "sha256": "dc7de6f76b60a01a519ccb7c7cf1fdf47e20f3d7a17a57d999cdce9d239006fb"
+    },
+    {
+      "file": "scripts/eval/suite/sources/measured/claim-jumper.retry.json.gz",
+      "sha256": "fa307dfaa9365c083682da5f26cd3212bd48182d064b1e053259250674df8ac6"
+    },
+    {
+      "file": "scripts/eval/suite/sources/measured/old-spaghetti-factory.retry.json.gz",
+      "sha256": "6446b405fcd9594f6fb51ba6390603863363d6d96ebcce8fc703622824d7b228"
+    }
+  ],
+  "exclusions": [
+    {
+      "id": "waba-grill:bowls/shrimp",
+      "reason": "Official PDF and webpage disagree on shrimp macros; UE labels also differ"
+    },
+    {
+      "id": "waba-grill:family-a-la-carte/20pc-pork-veggie-dumplings",
+      "reason": "Dumpling quantities show inconsistent calorie/macro arithmetic across the 5/10/20-piece rows"
+    },
+    {
+      "id": "waba-grill:family-a-la-carte/salad",
+      "reason": "Published energy/macros fail catalog sanity check"
+    },
+    {
+      "id": "waba-grill:plates/k-ribs",
+      "reason": "Published trans fat exceeds total fat; unresolved source-table inconsistency"
+    },
+    {
+      "id": "waba-grill:plates/shrimp",
+      "reason": "Official PDF and webpage disagree on shrimp macros; UE labels also differ"
+    },
+    {
+      "id": "waba-grill:sides/10pc-pork-veggie-dumplings",
+      "reason": "Dumpling quantities show inconsistent calorie/macro arithmetic across the 5/10/20-piece rows"
+    },
+    {
+      "id": "waba-grill:sides/5pc-pork-veggie-dumplings",
+      "reason": "Dumpling quantities show inconsistent calorie/macro arithmetic across the 5/10/20-piece rows"
+    },
+    {
+      "id": "waba-grill:sides/k-ribs-1-strip",
+      "reason": "Published trans fat exceeds total fat; unresolved source-table inconsistency"
+    },
+    {
+      "id": "waba-grill:veggie-bowls/shrimp",
+      "reason": "Official PDF and webpage disagree on shrimp macros; UE labels also differ"
+    },
+    {
+      "id": "yoshinoya:appetizers/gyoza-crispy-10-pc",
+      "reason": "Published saturated fat exceeds total fat; unresolved source-table inconsistency"
+    },
+    {
+      "id": "yoshinoya:appetizers/gyoza-crispy-3-pc",
+      "reason": "Published saturated fat exceeds total fat; unresolved source-table inconsistency"
+    },
+    {
+      "id": "yoshinoya:appetizers/gyoza-crispy-5pc",
+      "reason": "Published saturated fat exceeds total fat; unresolved source-table inconsistency"
+    },
+    {
+      "id": "yoshinoya:desserts/chocolate-chip-cookies-2",
+      "reason": "Derived serving absent from the direct published extraction (two-cookie multiplication); do not duplicate the published one-cookie row."
+    },
+    {
+      "id": "yoshinoya:kids-meal-on-white-rice-w-mixed-veggies/grilled-teriyaki-chicken",
+      "reason": "Rice meal heading conflicts with only 4/8 g carbohydrate; cannot establish complete-meal facts"
+    },
+    {
+      "id": "yoshinoya:kids-meal-on-white-rice-w-mixed-veggies/gyudon-beef",
+      "reason": "Rice meal heading conflicts with only 4/8 g carbohydrate; cannot establish complete-meal facts"
+    },
+    {
+      "id": "yoshinoya:regular-combo-bowls-select-two-regular-proteins/tfc-blended-sauce",
+      "reason": "Published energy/macros fail catalog sanity check"
+    },
+    {
+      "id": "yoshinoya:side-sauces/sweet-sour-sauce",
+      "reason": "Published sugar (13 g) exceeds total carbohydrate (1 g)"
+    },
+    {
+      "id": "yoshinoya:drinks/14-oz-dragonfruit-lemonade",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/14-oz-lemonade-black-tea",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/14-oz-mango-black-tea",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/14-oz-mango-lemonade",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/14-oz-strawberry-black-tea",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/14-oz-strawberry-lemonade",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/14-oz-thai-tea",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/14-oz-yoshi-milk-tea",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/14-oz-yoshi-punch",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/aquafina-bottled-water",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/brisk-raspberry-sweetened-iced-tea-large",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/brisk-raspberry-sweetened-iced-tea-regular",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/diet-pepsi-bottle",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/diet-pepsi-large",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/diet-pepsi-regular",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/dole-strawberry-lemonade-bottle",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/mountain-dew-large",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/mountain-dew-regular",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/pepsi-bottle",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/pepsi-large",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/pepsi-regular",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/sierra-mist-bottle",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/sierra-mist-large",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/sierra-mist-regular",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/tropicana-apple-juice-bottle",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/tropicana-fruit-punch-large",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/tropicana-fruit-punch-regular",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/tropicana-pink-lemonade-large",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/tropicana-pink-lemonade-regular",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/wild-cherry-pepsi-large",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "yoshinoya:drinks/wild-cherry-pepsi-regular",
+      "reason": "Audit drink-unit uncertainty: no inferred oz/g conversion; excluded pending direct unit review."
+    },
+    {
+      "id": "pdf-finder:unselected",
+      "reason": "Rows outside the original 68 inspected PDF rows and measured-extension source checks remain unverified and unused; unresolved duplicates are not inferred."
+    },
+    {
+      "id": "old-spaghetti-factory:unchecked",
+      "reason": "Only explicitly checked labelled official HTML cards are admitted in the versioned measured extension; malformed or unchecked labels remain excluded."
+    },
+    {
+      "id": "estimated:*",
+      "reason": "No DB, estimated, FatSecret, historical third-party, inferred scaling, or derived modifier nutrition is ground truth."
+    },
+    {
+      "id": "measured:wahoos:fdd0f9dc-1254-5b9d-9ea6-ae08c0f804ee",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:4e0c449e-7009-505b-9263-0434ce6a3d67",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:cc1fa7eb-8952-5abe-9db4-ccd1cbc8872e",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:dfea84d4-cd41-563e-839d-071fcda06f16",
+      "reason": "Excluded: the UE quesadilla includes an unselected rice-and-beans or fries side, and the source title alone does not establish whether its serving includes those sides."
+    },
+    {
+      "id": "measured:wahoos:fb3cda52-79a2-50d2-ad02-fe1f3ef2766f",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:4e68fe81-470f-5b61-8fe0-1d4e3679696f",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:42e12e2b-8e58-5f99-bb6e-0f69912777a5",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:e00c28c8-4092-597b-baec-90027466d886",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:9db0fcb5-61da-57a4-b256-fcae7cbb8ad9",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:81abb0e6-9f76-5b1a-988c-b337c81a2f2f",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:f27d3084-858e-58c4-8de0-647b565bae25",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:f0320171-6612-50fc-8761-cbd0d794e5af",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:6420b402-fe79-5afe-9a7f-6361d28a4b43",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:d4c5a368-0557-5172-8276-f795f8003952",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:cd7f3627-8cdb-567d-86af-b0022c306331",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:b1553ee3-d803-5874-ab1b-da84cf449ac6",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:503e9f8c-abb6-58bf-acde-f621cd70009f",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:wahoos:bd9f3c48-1551-59da-b87d-cbbffdf96b73",
+      "reason": "Recipe, portion, dressing or additive equivalence is unresolved; quotation/name similarity and mechanical miss tags alone cannot establish a binding."
+    },
+    {
+      "id": "measured:claim-jumper:3c088d15-bcd9-5a19-98e3-502bc89d8293",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:f736b21b-2b73-53aa-a320-1d1936097c5e",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:ba209409-b0f8-5ca1-8e8c-673b851f1e06",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:e2faf0dc-d525-5131-adce-d77853f8f3c2",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:43b96c69-92a7-5a63-8052-ece5a3eaa63a",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:526ad37a-e5a6-50fa-bc63-6c94620c681c",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:ca5b73b7-b666-5efd-ab15-60bfaf646646",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:4395e2a4-8a19-531a-bd3d-2ddfec2637ab",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:5217c1a9-1518-5b87-8e0b-56d6357002ba",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:8e23e4f6-5e55-5444-b874-ba83ca3bdd33",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:4d55408b-7221-5391-9c20-4cc3331f2f50",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:5f8f4829-2b40-50ec-af8d-ad8dd5bcd0fe",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:f9785408-ffe2-56cb-b5bf-46c14833bbd9",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:dc6a3bb8-f6d1-530b-a6d9-18391189990a",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:97c4c87e-38ba-5414-845c-9849f312c7b8",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:6dbbeae1-bf4d-50f5-9bf1-fe5ef39efa18",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:8faeba24-2580-5245-a63d-f5540d5a6d1f",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:1a136f33-473c-5e03-9556-38cbacb3a7b1",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:41a84987-2fb0-55fd-a43f-1cb2cbb15f0d",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:faac94c3-ed19-5e23-a82f-6254c262cdfe",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:aee730d7-fb11-57a3-9428-649d0fa7eb7e",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:32949a59-b69f-5146-840d-50e1d2c62655",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:c01507e8-9fc9-51f6-bb47-5c12014fc680",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:2936ace2-bc42-5fd5-be81-cba2b0fe062e",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:eda94a45-aa88-5a07-9ab9-541a04094af2",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:350b3f60-baaa-5b77-87b8-3e90a57c4d0c",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:f97e9e02-a07d-5eea-b2b2-a1c6d2b744fe",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:5d1ca28f-50d2-5c56-be10-f45a1da9ebdd",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:922be2bf-2b54-5aae-aecc-9526f2040dba",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:c4cf6829-edc2-5af8-9e4d-82b6d2305798",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:2f96b6d3-ae12-52ba-9868-070a7703ad74",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:07d1b8c8-54a1-5066-8834-d1cb5e2847b6",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:dabde745-cdec-5799-a945-cba723f82973",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:0ddef8d5-cbb8-5a6b-83b1-609241bf8408",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:0b7c01ad-5380-5608-92d5-ca08b18222a7",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:4f47f421-4f58-52c1-8c85-2ee96ad77833",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:4e97e8e0-6d80-559e-be21-2b9b53d61638",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:6195b24b-e077-5090-bafb-d597f7d369bd",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:64f30238-3991-5869-9526-ace41a7a04d4",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:117d4d7c-c18d-5a99-908a-422f0566f0fc",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:3e53f851-0948-521d-ab94-f372b1b0c913",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:472bbda0-38a8-5d99-b737-69b89ab8b6c3",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:208a949c-e7bc-51dc-b4d6-629f7bbbfd18",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:0e14796c-9a3f-580d-8200-7503d58253af",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:ded55eab-c29b-5360-b924-ffa46503ff89",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:73c00631-7333-55f3-a95b-ea25619c8ca1",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:dbd01558-82db-50f2-9607-a9c461e8b2c0",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:36c9b91b-afff-5c16-b408-66e2a5ec0b02",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:8f7e0b16-fb65-56ed-9438-8785594fbc5c",
+      "reason": "Excluded: the PDF has a plain side, a lunch potato including indented butter/chives/sour cream, and a plain lunch subrow. The UE dressed potato does not identify the lunch versus ordinary side serving safely."
+    },
+    {
+      "id": "measured:claim-jumper:fa5eeb17-a456-551e-a04a-88b759520043",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:f548402a-8bd1-5612-9f42-947c35b13947",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:ee5bfe1a-114a-54ee-9cc9-56eb63f1b18e",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:6f58ebe1-9f21-51a8-a5b1-1f778d540dd2",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:claim-jumper:0997e532-4202-5dc2-8b85-ed4c921d7351",
+      "reason": "Current UE recipe/side configuration or portion cannot be bound safely to the older official PDF; no inferred small/snack, large/share or dish-name equivalence."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:c0dadc94-4463-5131-9ef5-c3cb5fc1c1e5",
+      "reason": "Serving, recipe, regional applicability or a malformed label remains unresolved; no inference from equal calories, source typo, missing quantity or section alone."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:310fa65d-de09-501e-a73e-e5292acc44ca",
+      "reason": "Excluded: captured regular Olive Tapenade and official appetizer have materially different published calorie claims; recipe/portion correspondence is unresolved."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:dea105b4-9b49-54a5-bc85-efe18e6f1710",
+      "reason": "Excluded: captured regular Caesar Salad and official salad have materially different published calorie claims; recipe/portion correspondence is unresolved."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:26c530e5-0582-5fe3-af68-dc8db9024386",
+      "reason": "Excluded: the captured chicken salad and official salad have materially different calorie claims; a name-order alias is insufficient."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:e6d70bd6-21f0-51cc-89f7-f40a5a8c0f08",
+      "reason": "Serving, recipe, regional applicability or a malformed label remains unresolved; no inference from equal calories, source typo, missing quantity or section alone."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:97be9628-906b-542a-8a2d-3a44579eb4ab",
+      "reason": "Serving, recipe, regional applicability or a malformed label remains unresolved; no inference from equal calories, source typo, missing quantity or section alone."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:37497718-9144-5bc3-86a3-e050924064a2",
+      "reason": "Serving, recipe, regional applicability or a malformed label remains unresolved; no inference from equal calories, source typo, missing quantity or section alone."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:a7b1c4c5-be6f-563f-a023-fe87dfc6b247",
+      "reason": "Serving, recipe, regional applicability or a malformed label remains unresolved; no inference from equal calories, source typo, missing quantity or section alone."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:5caa405c-4f9e-5d4a-81e4-222b1585c0c9",
+      "reason": "Serving, recipe, regional applicability or a malformed label remains unresolved; no inference from equal calories, source typo, missing quantity or section alone."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:f91a7aa8-8e11-5ba3-b7e5-bd34ff735d28",
+      "reason": "Excluded: catering garlic bread has the same displayed calories as the appetizer and no verified independent serving distinction; section alone cannot establish a negative."
+    },
+    {
+      "id": "measured:old-spaghetti-factory:f47475c5-d787-518a-b680-16bf6e4883e8",
+      "reason": "Serving, recipe, regional applicability or a malformed label remains unresolved; no inference from equal calories, source typo, missing quantity or section alone."
+    }
+  ],
+  "counts": {
+    "curated": {
+      "dev": {
+        "matching": 143,
+        "macro": 112
+      },
+      "holdout": {
+        "matching": 81,
+        "macro": 66
+      }
+    },
+    "bulk": {
+      "dev": {
+        "matching": 2538,
+        "macro": 214
+      },
+      "holdout": {
+        "matching": 1164,
+        "macro": 124
+      }
+    }
+  }
+}
