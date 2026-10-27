@@ -41,7 +41,8 @@ export default function ResubscribeScreen() {
   const focused = useIsFocused();
   const variants = usePreviewAccess();
   const { offering, refreshOffering, purchase, restore, entitled, introEligibility, ready, isLapsed, isUnknown } = usePurchases();
-  const [identity, setIdentity] = useState<'loading' | 'anonymous' | 'signed-in'>('loading');
+  const [identity, setIdentity] = useState<'loading' | 'anonymous' | { userId: string }>('loading');
+  const userId = typeof identity === 'object' ? identity.userId : null;
   const [identityUnavailable, setIdentityUnavailable] = useState(false);
   const [identityAttempt, setIdentityAttempt] = useState(0);
   useEffect(() => {
@@ -53,14 +54,14 @@ export default function ResubscribeScreen() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       authEventReceived = true;
       if (current) {
-        setIdentity(session ? 'signed-in' : 'anonymous');
+        setIdentity(session && !session.user.is_anonymous ? { userId: session.user.id } : 'anonymous');
         setIdentityUnavailable(false);
       }
     });
     const sessionRead = supabase.auth.getSession();
     const resolveIdentity = (session: Awaited<typeof sessionRead>['data']['session']) => {
       if (current && !authEventReceived) {
-        setIdentity(session ? 'signed-in' : 'anonymous');
+        setIdentity(session && !session.user.is_anonymous ? { userId: session.user.id } : 'anonymous');
         setIdentityUnavailable(false);
       }
     };
@@ -82,22 +83,28 @@ export default function ResubscribeScreen() {
   // answer, a resubscribe made on another device) lets the user through
   // without a relaunch. See useRedirectOnceEntitled.
   const { claim } = useRedirectOnceEntitled({
-    entitled: identity === 'signed-in' ? entitled : null,
+    entitled: userId ? entitled : null,
     busy: loading || restoring || !focused || !ready,
     onEntitled: () => { void openPurchasedDestination(navigation, { requireTargets: true }); },
   });
   // A locked teaser of what resubscribing unlocks, same cards + fetch as the
   // onboarding teaser (welcome/results.tsx). A fetch failure just hides the
   // section - this is illustrative, not required to resubscribe.
-  const [restaurants, setRestaurants] = useState<PreviewRestaurant[]>([]);
-  const [teaserLoading, setTeaserLoading] = useState(true);
+  const [teaser, setTeaser] = useState<{ userId: string; restaurants: PreviewRestaurant[]; loading: boolean } | null>(null);
+  const restaurants = focused && teaser?.userId === userId ? teaser.restaurants : [];
+  const teaserLoading = focused && teaser?.userId === userId && teaser.loading;
 
   useEffect(() => {
-    fetchPreviewRestaurants()
-      .then(setRestaurants)
-      .catch(() => setRestaurants([]))
-      .finally(() => setTeaserLoading(false));
-  }, []);
+    setTeaser(null);
+    if (!focused || !userId) return;
+    const controller = new AbortController();
+    setTeaser({ userId, restaurants: [], loading: true });
+    // The optional teaser must not replace win-back sign-in or expire a newer session.
+    void fetchPreviewRestaurants(undefined, { signal: controller.signal, expectedUserId: userId })
+      .then(restaurants => { if (!controller.signal.aborted) setTeaser({ userId, restaurants, loading: false }); })
+      .catch(() => { if (!controller.signal.aborted) setTeaser({ userId, restaurants: [], loading: false }); });
+    return () => controller.abort();
+  }, [focused, userId]);
 
   // Retry the boot-time offering fetch when arriving without one (see payment.tsx).
   useEffect(() => {
@@ -119,7 +126,7 @@ export default function ResubscribeScreen() {
   useOwnedHardwareBack(() => { void exitPlans(); });
 
   async function handleResubscribe() {
-    if (identity !== 'signed-in' || !ready || !isLapsed) return;
+    if (!userId || !ready || !isLapsed) return;
     const annual = offering?.annual ?? (await refreshOffering())?.annual;
     if (!annual) {
       Alert.alert('Just a moment', 'Plans are still loading, please try again.');
@@ -139,7 +146,7 @@ export default function ResubscribeScreen() {
   }
 
   async function handleRestore() {
-    if (identity !== 'signed-in' || !ready || !isLapsed) return;
+    if (!userId || !ready || !isLapsed) return;
     if (!(await ensureSessionForPurchase('resubscribe'))) return;
     setRestoring(true);
     try {
@@ -161,7 +168,7 @@ export default function ResubscribeScreen() {
   // account verdict before a win-back purchase surface can render.
   if (identity === 'loading') return identityUnavailable
     ? <PurchaseIdentityRecovery onRetry={() => setIdentityAttempt(attempt => attempt + 1)} /> : null;
-  if (identity === 'signed-in' && !ready) return null;
+  if (userId && !ready) return null;
   if (identity === 'anonymous') return <Redirect href="/welcome/signin?returnTo=resubscribe" />;
   if (isUnknown) return <Redirect href="/welcome/subscription-check" />;
   if (entitled === true) return null;

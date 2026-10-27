@@ -10,6 +10,8 @@
   });
   output.dataApiUnauthStatus = http.get(base + paths[0]).status;
   output.dataApiInvalidStatus = http.get(base + paths[0], { headers: { Authorization: 'Bearer invalid.jwt.signature' } }).status;
+  // The stable dev domain tracks main. A PR preview alone cannot satisfy
+  // these assertions; coordinate the dev backend before rerunning native UI.
   if (output.dataApiUnauthStatus !== 401 || output.dataApiInvalidStatus !== 401) {
     throw new Error('Data API auth preflight requires the candidate backend to be deployed to dev.fitsy.org: ' +
       'missing/invalid-token requests must return 401 (got ' + output.dataApiUnauthStatus + '/' + output.dataApiInvalidStatus + ').');

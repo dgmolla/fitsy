@@ -100,6 +100,8 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 ## Native helper checks
 
 Deploy the candidate API to `dev.fitsy.org` through the existing coordinated preview procedure before running journeys that use `helpers/data-api.mjs`.
+The stable dev domain follows `main`; a successful feature-branch Vercel preview does not update that domain.
+The host runner owner must verify the candidate dev deployment before native replay; do not merge early or remove the 401 assertions to satisfy Simulator.
 The helper requires missing-token and invalid-token 401s before login; an anonymous 200 means the deployed backend still lacks the candidate auth behavior.
 Retain that failure and correct the deployment through the existing host owner before replaying the selected journeys.
 
@@ -227,6 +229,7 @@ Use the same Sign in with Apple identity, including its private-relay address wh
 The flow retains receipt and login state, restores through the visible control, checks Welcome back, and repeats the routing check after cold launch.
 `subscription-restore-empty` is the negative control for a signed-in never-subscribed account whose store account has no Fitsy receipt.
 `subscription-expired-routing` starts with an already expired subscription linked to the current Fitsy account and covers inactive Restore from Welcome back plus cold launch.
+It also leaves win-back for sign-in and returns with the same expired account, retaining win-back routing while optional restaurant requests are cancelled.
 That same-account journey can use RevenueCat Test Store without requiring history transfer.
 All flows require their documented starting state and fail if that state is absent.
 Run simulator automation through the canonical procedure in the shipping contract; none of these flows resets billing state or fabricates receipts.

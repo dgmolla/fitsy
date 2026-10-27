@@ -32,3 +32,19 @@ tags: [billing, onboarding, changed-journey, 'fixture:expired-subscription', 'st
 - assertNotVisible:
     id: paywall-logo
 - takeScreenshot: subscription-expired-relaunch
+# Leaving win-back cancels its optional restaurant teaser. Signing the same
+# expired account back in must return to win-back, without discovery recovery.
+- openLink: com.fitsy.mobile://welcome/signin?returnTo=resubscribe
+- tapOn:
+    text: "^Open$"
+    optional: true
+- runFlow:
+    file: ../helpers/discovery-signin.yaml
+    env:
+      DESTINATION: resubscribe-restore
+- assertVisible: "Welcome back."
+- assertNotVisible:
+    id: paywall-logo
+- assertNotVisible:
+    id: preview-guide
+- takeScreenshot: subscription-expired-signin-return
