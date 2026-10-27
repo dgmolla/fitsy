@@ -11,15 +11,25 @@
   output.shuffleApiHasDish = false;
   output.shuffleApiHasMacros = false;
   output.shuffleApiVerified = false;
+  output.shuffleApiListChanged = false;
   if (login.status !== 200) return;
   var token = json(login.body).token;
   if (!token) return;
   var config = { headers: { Authorization: 'Bearer ' + token } };
-  var response = http.get(base + '/api/restaurants?lat=34.0407&lng=-118.2468&calories=280&protein=28&carbs=34&fat=5', config);
+  var searchPath = base + '/api/restaurants?lat=34.0407&lng=-118.2468&calories=600&protein=40&carbs=60&fat=20';
+  var normal = http.get(searchPath, config);
+  output.shuffleSearchStatus = normal.status;
+  if (normal.status !== 200) return;
+  var shown = json(normal.body).data;
+  if (!Array.isArray(shown) || !shown.length) return;
+  var shownIds = shown.map(function (row) { return row.id; });
+  var response = http.get(searchPath + '&shuffle=1&seed=maestro-before-mobile&excludeRestaurantIds=' + encodeURIComponent(shownIds.join(',')), config);
   output.shuffleApiStatus = response.status;
   if (response.status !== 200) return;
   var search = json(response.body);
   output.shuffleApiUnlocked = search.meta.locked === false;
+  output.shuffleApiListChanged = Array.isArray(search.data) && search.data.length > 0 &&
+    search.data.some(function (row) { return shownIds.indexOf(row.id) === -1; });
   output.shuffleApiHasDish = Array.isArray(search.data) && search.data.some(function (row) {
     return !!(row.bestMatch && row.bestMatch.menuItemId);
   });

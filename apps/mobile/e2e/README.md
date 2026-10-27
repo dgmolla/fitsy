@@ -131,18 +131,19 @@ Do not restore after an intermediate group or failed attempt while that owner st
 Retain the failed run and the recovered run separately; changing deployment configuration does not require a product-code workaround or establish a passing native journey.
 
 `shuffle` requires a populated dev backend, `entitled-dev` and a Debug Test Store build.
-It signs the entitled fixture into the dev API and checks normal search results and persisted RevenueCat proof before mobile launch can synchronize the subscription.
+It signs the entitled fixture into the dev API and checks normal and shuffled search pages, a changed restaurant set and persisted RevenueCat proof before mobile launch can synchronize the subscription.
 Its `helpers/shuffle-subscriber.mjs` helper keeps tokens and credentials out of Maestro output, uses only `dev.fitsy.org`, and rejects a demo bypass without actual subscription proof.
-It chooses DTLA and independent targets of 280 kcal, 28 g protein, 34 g carbs and 5 g fat, then taps the small Shuffle icon in the main search field twice.
-The button reorders the loaded results locally while preserving the query, targets, area, pagination, and access rules.
-The flow checks for any normal result card after each tap, without expecting a specific dish, and captures `shuffle-search` showing the button and results for Slack evidence.
+It chooses DTLA and independent targets of 600 kcal, 40 g protein, 60 g carbs and 20 g fat, then taps the small Shuffle icon in the main search field twice.
+The button fetches and replaces the restaurant page through the same search endpoint, preserving query, targets, area and access rules.
+Pagination continues in the returned seeded order.
+The flow compares the actual hero card text before and after each completed request, without expecting a specific restaurant or dish, and captures `shuffle-search` showing the button and results for Slack evidence.
 The Debug-only `shuffleDebug=1` search parameter explicitly enables the icon without changing PostHog flags or entitlement.
 Production builds ignore that parameter and require the PostHog boolean flag `shuffle` to be `true`.
 There is no separate pick panel, Shuffle again, View menu, or Shuffle-specific loading, error, or empty state.
-The button is disabled while search is pending or refreshing, or when fewer than two results can be reordered.
+The button is disabled while search is pending or refreshing, or when the current list is empty.
 `components/DiscoveryShuffle.test.tsx` exercises the real search screen and the saved flow's result assertions, including repeated taps, query-only search, rollout, empty results, and locked cards.
-`components/DiscoveryRequests.test.tsx` covers reordering during pagination and replacement by a new search.
-`lib/shuffleSubscriberFlow.test.ts` exercises the saved search preflight, its flow assertions, inactive or missing proof, authentication failure, and credential-output boundaries.
+`components/DiscoveryRequests.test.tsx` covers cancellation of old pagination, seeded pagination, recent restaurant exclusions, retry after network failure or timeout, and replacement by a new search.
+`lib/shuffleSubscriberFlow.test.ts` exercises the saved search and shuffle preflight, its flow assertions, inactive or missing proof, authentication failure, and credential-output boundaries.
 Run it through `node scripts/sim/ci.mjs --scope=flow --flows=shuffle --udid=<UDID>` with the local fixture configuration.
 The planner expands this request when the candidate also affects shared UI or other journeys.
 

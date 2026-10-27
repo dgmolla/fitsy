@@ -39,6 +39,8 @@ afterEach(() => {
 });
 
 beforeEach(async () => {
+  let seed = 0;
+  jest.spyOn(require('expo-crypto') as typeof import('expo-crypto'), 'randomUUID').mockImplementation(() => `shuffle-${++seed}`);
   await installPurchasedAccount();
   await saveDiscoveryMacroTargets(values, 'search');
   await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify({ name: 'DTLA', lat: 34.04, lng: -118.24 }));
@@ -61,13 +63,14 @@ beforeEach(async () => {
   }));
 });
 
-it('reshuffles the existing search cards in place with one tiny button and no request or extra panel', async () => {
+it('replaces search cards through the same endpoint with one tiny button and no extra panel', async () => {
   const screen = renderJourney('/search?query=meal', { ...routes, '(tabs)/search': () => <Search /> });
   await screen.findByTestId('discovery-hero');
   const first = screen.getByTestId('discovery-hero').props.accessibilityLabel;
-  const before = requests.length;
+  const before = requests.filter(url => url.pathname === '/api/restaurants').length;
+  rows = restaurants.map(row => ({ ...row, id: row.id + '-fresh', name: row.name + ' fresh' }));
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
-  expect(requests).toHaveLength(before);
+  expect(requests.filter(url => url.pathname === '/api/restaurants')).toHaveLength(before + 1);
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).not.toBe(first);
   expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
   expect(within(screen.getByTestId('discovery-search-bar')).getByTestId('shuffle-button')).toBeTruthy();
@@ -90,15 +93,28 @@ it('reshuffles the existing search cards in place with one tiny button and no re
     if (visible) expect(screen.getByTestId(visible.id)).toBeTruthy();
     if (command.assertNotVisible) expect(screen.queryByTestId(command.assertNotVisible.id)).toBeNull();
   }
+  const shuffledRequest = requests.filter(url => url.pathname === '/api/restaurants').at(-1)!;
+  expect(Object.fromEntries(shuffledRequest.searchParams)).toMatchObject({
+    shuffle: '1', q: 'meal', ...values, excludeRestaurantIds: restaurants.map(row => row.id).join(','),
+  });
+  const shuffleParams = Object.fromEntries(shuffledRequest.searchParams);
+  expect(shuffleParams.seed).toBeTruthy();
   const second = screen.getByTestId('discovery-hero').props.accessibilityLabel;
+  rows = restaurants.map(row => ({ ...row, id: row.id + '-again', name: row.name + ' again' }));
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).not.toBe(second);
-  for (const row of restaurants) expect(screen.getByText(row.name)).toBeTruthy();
-  expect(requests).toHaveLength(before);
+  for (const row of rows) expect(screen.getByText(row.name)).toBeTruthy();
+  expect(requests.filter(url => url.pathname === '/api/restaurants')).toHaveLength(before + 2);
+  const again = requests.filter(url => url.pathname === '/api/restaurants').at(-1)!;
+  const againParams = Object.fromEntries(again.searchParams);
+  expect(againParams.seed).not.toBe(shuffleParams.seed);
+  expect(againParams.excludeRestaurantIds.split(',')).toEqual([
+    ...restaurants.map(row => row.id), ...restaurants.map(row => row.id + '-fresh'),
+  ]);
   expect(screen.getByRole('button', { name: 'Location: DTLA' })).toBeTruthy();
   expect(requests.some(url => url.pathname.endsWith('/shuffle'))).toBe(false);
   expect(screen.getPathname()).toBe('/search');
-  const selected = restaurants.find(row => screen.getByTestId('discovery-hero').props.accessibilityLabel.startsWith(row.name))!;
+  const selected = rows.find(row => screen.getByTestId('discovery-hero').props.accessibilityLabel.startsWith(row.name))!;
   await act(async () => fireEvent.press(screen.getByTestId('discovery-hero')));
   expect(screen.getPathname()).toBe(`/restaurant/${selected.id}`);
 });
@@ -110,14 +126,15 @@ it('supports a query without macro targets and keeps search and clear usable', a
   expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
   const before = requests.length;
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
-  expect(requests).toHaveLength(before);
+  expect(requests).toHaveLength(before + 1);
   expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
   await act(async () => fireEvent.press(screen.getByTestId('discovery-clear-search')));
   expect(screen.getByTestId('discovery-search').props.value).toBe('');
   expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
 });
 
-it.each([0, 1])('disables the icon with %s results and adds no Shuffle panel', async count => {
+it('disables the icon with no results and adds no Shuffle panel', async () => {
+  const count = 0;
   rows = restaurants.slice(0, count);
   const screen = renderJourney('/search?query=meal', { ...routes, '(tabs)/search': () => <Search /> });
   if (count) await screen.findByTestId('discovery-hero');
@@ -174,7 +191,7 @@ it('removes the icon on live flag updates without changing the displayed results
   expect(listeners.size).toBe(0);
 });
 
-it('keeps locked results locked and uses the existing subscription entry after reordering', async () => {
+it('keeps locked results locked and uses the existing subscription entry after fetching another page', async () => {
   locked = true;
   rows = restaurants.map(row => ({ ...row, bestMatch: null }));
   const info = { entitlements: { active: {}, all: {} } } as CustomerInfo;
@@ -184,6 +201,7 @@ it('keeps locked results locked and uses the existing subscription entry after r
   await screen.findByTestId('discovery-hero');
   await screen.findByTestId('search-value-cta');
   const first = screen.getByTestId('discovery-hero').props.accessibilityLabel;
+  rows = rows.map(row => ({ ...row, id: row.id + '-locked', name: row.name + ' locked' }));
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).not.toBe(first);
   for (const row of restaurants) expect(screen.queryByText(row.bestMatch!.name)).toBeNull();

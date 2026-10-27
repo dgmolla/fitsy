@@ -25,6 +25,9 @@ export interface FetchRestaurantsParams {
    * previous page (tie-broken by id within equal distances).
    */
   cursor?: string;
+  shuffle?: boolean;
+  seed?: string;
+  excludeRestaurantIds?: string[];
 }
 
 /**
@@ -52,6 +55,9 @@ export async function fetchRestaurantsPage(
   if (params.minRating !== undefined) qs.set('minRating', String(params.minRating));
   if (params.query !== undefined && params.query.trim() !== '') qs.set('q', params.query.trim());
   if (params.cursor !== undefined) qs.set('cursor', params.cursor);
+  if (params.shuffle) qs.set('shuffle', '1');
+  if (params.seed !== undefined) qs.set('seed', params.seed);
+  if (params.excludeRestaurantIds?.length) qs.set('excludeRestaurantIds', params.excludeRestaurantIds.join(','));
   // Targets rank relevant meals. Close-fit count qualification belongs to the paywall only.
 
   const reqId = Math.random().toString(36).slice(2, 8);

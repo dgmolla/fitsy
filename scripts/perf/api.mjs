@@ -13,7 +13,7 @@ export function workloads(restaurantId) {
     { name: 'preview-guided', path: `/api/restaurants/preview?${area}&${targets}&guided=1` },
     { name: 'preview-legacy', path: `/api/restaurants/preview?${area}&${targets}` },
     { name: 'menu', path: `/api/restaurants/${encodeURIComponent(restaurantId)}/menu?${targets}&pageSize=200`, lockedAt: 'data' },
-    { name: 'shuffle', path: `/api/restaurants/shuffle?${area}&${targets}&seed=perf-audit`, lockedAt: 'meta' },
+    { name: 'shuffle', path: `/api/restaurants?shuffle=1&${area}&${targets}&seed=perf-audit`, lockedAt: 'meta' },
     ...['health', 'flags', 'restaurants/stats', 'saved-items', 'subscriptions/status', 'user/profile', 'feedback']
       .map(name => ({ name, path: `/api/${name}` })),
   ];

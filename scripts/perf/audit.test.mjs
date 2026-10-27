@@ -85,7 +85,7 @@ test('new or removed public GET routes cannot silently escape the sampling inven
 });
 test('runtime cost budget follows transitive imports and rejects unresolved local aliases', () => {
   const clean = graph();
-  assert.deepEqual(runtimeAudit(clean), { entrypoints: 11, reachableModules: 11, preloadProviders: [] });
+  assert.deepEqual(runtimeAudit(clean), { entrypoints: 10, reachableModules: 10, preloadProviders: [] });
   clean.modules[0].dependencies.push({ module: '@/lib/helper', resolved: 'apps/api/lib/helper.ts' });
   clean.modules.push({ source: 'apps/api/lib/helper.ts', dependencies: [
     { resolved: clean.modules[0].source }, { resolved: 'apps/api/services/macroEstimationService.ts' },

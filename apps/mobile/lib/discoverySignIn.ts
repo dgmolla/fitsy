@@ -31,6 +31,6 @@ export function discoveryDestinationForApi(path: string): string | null {
   const menu = pathname?.match(/^\/api\/restaurants\/([a-zA-Z0-9_-]{1,128})\/menu$/);
   if (menu) return `/restaurant/${menu[1]}`;
   if (pathname === '/api/restaurants/preview') return '/welcome/preview';
-  if (pathname === '/api/restaurants' || pathname === '/api/restaurants/shuffle') return '/(tabs)/search';
+  if (pathname === '/api/restaurants') return '/(tabs)/search';
   return null;
 }

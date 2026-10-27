@@ -32,7 +32,7 @@ test.each([
 test.each([
   ['apps/mobile/app/restaurant/[id].tsx', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'shuffle']],
   ['apps/mobile/lib/menuFilters.ts', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'shuffle']],
-  ['apps/mobile/lib/shuffle.ts', ['shuffle']],
+  ['apps/api/lib/shuffleSearch.ts', ['shuffle']],
   ['apps/mobile/lib/useShuffleFlag.ts', ['shuffle']],
   ['apps/mobile/e2e/flows/shuffle.yaml', ['shuffle']],
   ['apps/mobile/e2e/helpers/shuffle-subscriber.mjs', ['shuffle']],

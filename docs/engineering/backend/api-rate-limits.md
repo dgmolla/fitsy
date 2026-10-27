@@ -41,7 +41,7 @@ Supporting another proxy requires an authenticated ingress contract and tests be
 | `data-ip` | Trusted IP | 300 | 1 minute, across authenticated data routes |
 | `data-user` | Verified JWT subject | 120 | 1 minute, across authenticated data routes |
 | `preview-ip` | Trusted IP | 30 | 1 minute, guided preview |
-| `shuffle-user` | User principal | 30 | 1 minute, including shuffle cache hits |
+| `shuffle-user` | User principal | 30 | 1 minute, search calls with `shuffle=1`, including repeated seeds and pagination |
 | `feedback-user` | Verified JWT subject | 5 | 5 minutes |
 | `waitlist-ip` | Trusted IP | 5 | 10 minutes, public website form |
 

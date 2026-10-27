@@ -20,7 +20,7 @@ beforeEach(async () => {
 afterEach(() => { global.fetch = originalFetch; });
 
 test.each(['/api/restaurants?lat=34&lng=-118', '/api/restaurants/preview', '/api/restaurants/stats',
-  '/api/restaurants/shuffle', '/api/restaurants/restaurant-id/menu', '/api/flags'])('%s sends the current SDK token by default', async path => {
+  '/api/restaurants/restaurant-id/menu', '/api/flags'])('%s sends the current SDK token by default', async path => {
   await api.get(path);
   expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining(path), expect.objectContaining({
     headers: { Authorization: 'Bearer refreshed-access-token' },

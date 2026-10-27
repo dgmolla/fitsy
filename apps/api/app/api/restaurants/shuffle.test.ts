@@ -16,7 +16,7 @@ jest.mock('@prisma/client', () => ({
 }));
 
 import { NextRequest } from 'next/server';
-import { shuffleResponseSchema } from '@fitsy/shared';
+import { restaurantsResponseSchema } from '@fitsy/shared';
 import { GET } from './route';
 import type { SubscriptionRow } from '@/lib/subscription';
 
@@ -25,14 +25,14 @@ const realFetch = global.fetch;
 let row: SubscriptionRow;
 let serial = 0;
 const request = (authenticated = true) => new NextRequest(
-  `http://localhost/api/restaurants/shuffle?lat=21&lng=-41&calories=600&protein=40&seed=regression-${serial++}`,
+  `http://localhost/api/restaurants?shuffle=1&lat=21&lng=-41&calories=600&protein=40&seed=regression-${serial++}`,
   { headers: authenticated ? { authorization: 'Bearer fixture-token' } : {} },
 );
 const responseBody = async (requestToSend = request()) => {
   const response = await GET(requestToSend);
   expect(response.status).toBe(200);
   expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-  return shuffleResponseSchema.parse(await response.json());
+  return restaurantsResponseSchema.parse(await response.json());
 };
 
 beforeEach(() => {
@@ -47,12 +47,10 @@ beforeEach(() => {
   mockUpdateMany.mockImplementation(async ({ data }: { data: NonNullable<SubscriptionRow> }) => {
     row = { ...row!, ...data }; return { count: 1 };
   });
-  mockQueryRaw.mockImplementation(async (sql: TemplateStringsArray) => sql.join('').includes('SELECT r.*') ? [{
-    id: 'restaurant', name: 'Test bowls', address: 'Fixture', lat: 21, lng: -41, distanceMiles: 0,
-    cuisineTags: [], dietaryOptions: [], chainFlag: false, photoUrl: null, rating: null, priceLevel: null,
-    openingHours: null,
-  }] : [{ id: 'dish', restaurantId: 'restaurant', name: 'Chicken bowl', calories: 600, proteinG: 40,
-    carbsG: 60, fatG: 20, confidence: 'HIGH', source: 'merchant', scoreSum: 0 }]);
+  mockQueryRaw.mockResolvedValue([{ restaurantId: 'restaurant', name: 'Test bowls', address: 'Fixture',
+    lat: 21, lng: -41, distanceMiles: 0, cuisineTags: [], dietaryOptions: [], chainFlag: false,
+    photoUrl: null, rating: null, priceLevel: null, menuItemId: 'dish', itemName: 'Chicken bowl',
+    calories: 600, proteinG: 40, carbsG: 60, fatG: 20, confidence: 'HIGH', source: 'merchant', scoreSum: 0, orderKey: 0 }]);
   global.fetch = jest.fn(async () => new Response(JSON.stringify({
     request_date_ms: Date.now(), subscriber: {
       original_app_user_id: '$RCAnonymousID:before-login',
@@ -70,11 +68,11 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-it('returns a complete dish for a subscriber with fresh proof without a RevenueCat read', async () => {
+it('returns a search page for a subscriber with fresh proof without a RevenueCat read', async () => {
   const result = await responseBody();
   expect(result.meta.locked).toBe(false);
-  expect(result.data?.item).toEqual({ id: 'dish', name: 'Chicken bowl' });
-  expect(result.data?.macros).toMatchObject({ calories: 600, proteinG: 40, confidence: 'HIGH' });
+  expect(result.data[0]?.bestMatch).toMatchObject({ menuItemId: 'dish', name: 'Chicken bowl' });
+  expect(result.data[0]?.bestMatch).toMatchObject({ calories: 600, proteinG: 40, confidence: 'HIGH' });
   expect(global.fetch).not.toHaveBeenCalled();
 });
 
@@ -83,7 +81,7 @@ it.each(['test_fixture', 'appl_fixture'])('reconciles stale subscriber proof bef
   row!.lastEventAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
   const result = await responseBody();
   expect(result.meta.locked).toBe(false);
-  expect(result.data?.item?.id).toBe('dish');
+  expect(result.data[0]?.bestMatch?.menuItemId).toBe('dish');
   expect(global.fetch).toHaveBeenCalledWith('https://api.revenuecat.com/v1/subscribers/subscriber-uuid', expect.objectContaining({
     headers: { authorization: `Bearer ${key}`, 'x-platform': 'ios', ...(key.startsWith('test_') ? { 'x-is-sandbox': 'true' } : {}) },
   }));
@@ -95,7 +93,7 @@ it('recovers missing proof and a renewal whose old period has ended', async () =
     row = previous;
     const result = await responseBody();
     expect(result.meta.locked).toBe(false);
-    expect(result.data?.macros?.proteinG).toBe(40);
+    expect(result.data[0]?.bestMatch?.proteinG).toBe(40);
   }
 });
 
@@ -110,8 +108,7 @@ it('rejects anonymous callers and keeps RevenueCat-confirmed expired users locke
     row!.status = 'expired';
     const result = await responseBody(request(authenticated));
     expect(result.meta.locked).toBe(true);
-    expect(result.data?.item).toBeNull();
-    expect(result.data?.macros).toBeNull();
+    expect(result.data[0]?.bestMatch).toBeNull();
   }
   expect(global.fetch).toHaveBeenCalledTimes(1);
 });
@@ -120,7 +117,7 @@ it('repairs a previously persisted denial when RevenueCat confirms a current ent
   row!.status = 'never_subscribed';
   const result = await responseBody();
   expect(result.meta.locked).toBe(false);
-  expect(result.data?.item?.id).toBe('dish');
+  expect(result.data[0]?.bestMatch?.menuItemId).toBe('dish');
 });
 
 it('does not consult subscriber state for an invalid token', async () => {
@@ -136,21 +133,20 @@ it('fails closed without overwriting proof when RevenueCat is unavailable', asyn
   global.fetch = jest.fn(async () => new Response('{}', { status: 503 })) as typeof fetch;
   const result = await responseBody();
   expect(result.meta.locked).toBe(true);
-  expect(result.data?.item).toBeNull();
+  expect(result.data[0]?.bestMatch).toBeNull();
   expect(row).toEqual(previous);
   expect(mockCreate).not.toHaveBeenCalled();
   expect(mockUpdateMany).not.toHaveBeenCalled();
 });
 
-it('does not return a cached paid dish after RevenueCat confirms expiration', async () => {
+it('does not return a previous paid page after RevenueCat confirms expiration', async () => {
   const sameRequest = request();
   expect((await responseBody(sameRequest)).meta.locked).toBe(false);
   row!.status = 'expired';
   global.fetch = jest.fn(async () => new Response(JSON.stringify({ subscriber: { entitlements: {} } }))) as typeof fetch;
   const result = await responseBody(sameRequest);
   expect(result.meta.locked).toBe(true);
-  expect(result.data?.item).toBeNull();
-  expect(result.data?.macros).toBeNull();
+  expect(result.data[0]?.bestMatch).toBeNull();
 });
 
 it('honors a newer expiration webhook instead of granting the older active REST snapshot', async () => {
@@ -170,7 +166,7 @@ it('does not grant an unpersisted RevenueCat result to a deleted account', async
   expect(mockCreate).not.toHaveBeenCalled();
 });
 
-it('enforces the user rate limit before any RevenueCat reconciliation, including cache hits', async () => {
+it('enforces the user rate limit before any RevenueCat reconciliation, including repeated seeds', async () => {
   mockVerifyToken.mockResolvedValue({ sub: 'rate-limited-uuid', email: 'limited@example.test' });
   row = null;
   global.fetch = jest.fn(async () => new Response(JSON.stringify({ subscriber: { entitlements: {} } }))) as typeof fetch;

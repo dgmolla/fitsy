@@ -24,7 +24,7 @@ export function devOrigin(value) {
 
 export const getRoutes = [
   'health', 'flags', 'restaurants', 'restaurants/preview', 'restaurants/stats',
-  'restaurants/[id]/menu', 'restaurants/shuffle', 'saved-items', 'subscriptions/status', 'user/profile', 'feedback',
+  'restaurants/[id]/menu', 'saved-items', 'subscriptions/status', 'user/profile', 'feedback',
 ];
 
 export function assertRouteCoverage(discovered) {
