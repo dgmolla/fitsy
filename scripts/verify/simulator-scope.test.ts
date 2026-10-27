@@ -35,6 +35,7 @@ test.each([
   ['apps/mobile/lib/shuffle.ts', ['shuffle']],
   ['apps/mobile/lib/useShuffleFlag.ts', ['shuffle']],
   ['apps/mobile/e2e/flows/shuffle.yaml', ['shuffle']],
+  ['apps/mobile/e2e/helpers/shuffle-selectors.mjs', ['shuffle']],
   ['apps/mobile/app/notification-settings.tsx', ['reminders']],
   ['apps/mobile/lib/notificationSchedule.ts', ['reminders']],
   ['apps/mobile/app/macro-setup.tsx', ['onboarding-assisted-targets']],

@@ -130,11 +130,12 @@ env:
     id: shuffle-view-menu
 - copyTextFrom:
     id: shuffle-restaurant
-# Maestro text selectors are regexes; live names can contain parentheses and brackets.
-- evalScript: ${output.restaurant = maestro.copiedText.replace(/[.*+?^$()|[\]{}\\]/g, '\\$&')}
+- evalScript: ${output.restaurant = maestro.copiedText}
 - copyTextFrom:
     id: shuffle-dish
-- evalScript: ${output.dish = maestro.copiedText.replace(/[.*+?^$()|[\]{}\\]/g, '\\$&')}
+- evalScript: ${output.dish = maestro.copiedText}
+# Regex escaping contains dollar signs that Maestro's inline parser skips.
+- runScript: ../helpers/shuffle-selectors.mjs
 - tapOn:
     id: shuffle-view-menu
 - extendedWaitUntil:

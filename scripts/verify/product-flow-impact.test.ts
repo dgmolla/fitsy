@@ -33,6 +33,7 @@ test.each([
   ['apps/api/app/api/restaurants/[id]/menu/route.ts', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'paywall-access', 'shuffle'], ['billing', 'discovery']],
   ['apps/mobile/lib/shuffle.ts', ['shuffle'], ['billing', 'changed-journey', 'discovery']],
   ['apps/mobile/lib/useShuffleFlag.ts', ['shuffle'], ['billing', 'changed-journey', 'discovery']],
+  ['apps/mobile/e2e/helpers/shuffle-selectors.mjs', ['shuffle'], ['billing', 'changed-journey', 'discovery']],
 ])('local, final-run and publication callers share affected journeys for %s', (path, flows, categories) => {
   copyProductFlowControls(directory);
   symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));

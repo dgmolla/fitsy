@@ -49,6 +49,7 @@ interface FlowCommand {
   assertNotVisible?: Selector;
   copyTextFrom?: { id: string };
   evalScript?: string;
+  runScript?: string;
   takeScreenshot?: string;
   setLocation?: { latitude: number; longitude: number };
 }
@@ -75,7 +76,12 @@ function checkSavedAssertions(screen: ReturnType<typeof renderJourney>, commands
     if (visible) expect(find(visible)).toBeTruthy();
     if (command.assertNotVisible) expect(find(command.assertNotVisible)).toBeNull();
     if (command.copyTextFrom) copiedText = screen.getByTestId(command.copyTextFrom.id).props.children as string;
-    if (command.evalScript) new Function('maestro', 'output', command.evalScript.slice(2, -1))({ copiedText }, output);
+    if (command.evalScript) {
+      // Maestro 2.3's Env.evaluateScripts ignores interpolation containing another $.
+      expect(command.evalScript).toMatch(/^\$\{[^$]*\}$/);
+      new Function('maestro', 'output', command.evalScript.slice(2, -1))({ copiedText }, output);
+    }
+    if (command.runScript) new Function('output', readFileSync(resolve(__dirname, '../e2e/flows', command.runScript), 'utf8'))(output);
   }
   return output;
 }
@@ -402,7 +408,7 @@ it.each(['tolerance', 'radius'] as const)('discloses %s fallback and published n
 it.each([
   { name: 'live dev juice', restaurant: "Winchell's Donut House", dish: 'FRESH GREEN JUICE',
     macros: { calories: 90, proteinG: 3, carbsG: 19, fatG: 0 }, nutritionBasis: 'estimated' as const },
-  { name: 'published nutrition and regex punctuation', restaurant: 'Kitchen (DTLA) [A]', dish: 'Bowl (small) + juice [12 oz.]',
+  { name: 'published nutrition and regex punctuation', restaurant: 'Kitchen (DTLA) [A] $5.00', dish: 'Bowl (small) + juice [12 oz.] {combo} $5.00 \\ refill',
     macros: { calories: 280, proteinG: 28, carbsG: 34, fatG: 5 }, nutritionBasis: 'published' as const },
 ])('runs the saved Shuffle card and menu assertions with $name on the real search screen', async fixture => {
   flag = false;
