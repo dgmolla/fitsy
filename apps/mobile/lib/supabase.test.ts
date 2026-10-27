@@ -102,7 +102,7 @@ describe('supabase client', () => {
     warn.mockRestore();
   });
 
-  it.each(['session_not_found', 'weak_password', 'PRIVATE_SENTINEL_575'])(
+  it.each(['session_not_found', 'weak_password', 'PRIVATE_SENTINEL_575'])( // gitleaks:allow - Synthetic error-code sentinel, not a credential.
     'normalizes provider error bodies and preserves required SDK classifications (%s)', async code => {
       const transport = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
         message: 'PRIVATE_SENTINEL_575 account details', code,
