@@ -1,3 +1,67 @@
+**TL;DR:** All 30 failed Haiku macro cases now parse strictly; new spend is $0.093628; review and CI remain.
+
+## Haiku format fix and rerun
+
+This owner uses only `/Users/dawitmolla/fitsy-eval-suite` on `data/eval-suite-haiku-fix`, created from current `origin/main` at `c87dd14` after PR #568 merged.
+The current user supersedes the historical no-retry interpretation below: never resend a byte-identical billed payload, but retry these failed cases using a changed Haiku request.
+Scope is exactly 30 failed macro cases plus three failed matching cases from the frozen 129-case DEV sample.
+Keep the strict decoder primary and report normalization only as a labeled secondary cache-only view.
+No holdout evaluation, database, protected checkout, project board, hook bypass or admin merge is authorized.
+Use the selected standalone ship-branch workflow and existing local AI reviewer; merge only with green CI and no local P0/P1.
+
+The actual cache-only runner reproduced all 465 predictions in `2026-10-27T09-07-25-576Z-d1df9782`, adding zero requests and zero spend.
+The maintained `haiku-format.ts` diagnostic validates original replay/billing provenance and generates `results/haiku-format-preflight/` plus the exact failed-case selection.
+All 33 failed responses are completed JSON, containing 113 questions and 93 invalid question distributions.
+There are 92 invalid totals spanning 0.977 to 1.600, with absolute sum deviations from 0.020 to 0.600, plus one argmax-only violation with a 0.475 gap.
+Secondary normalization uses only the original consumed cache: matching parses all cases; macro parses 24/25 curated and 25/26 bulk.
+Two normalized coarse choices need an uncached refinement and remain explicit cache misses without transport.
+The original strict baseline remains unchanged.
+
+Starting ledger is $0.57796218, SHA-256 `8a405dca7cd8eb51e4b94edfbc3b53f3ed7e921f2bb4e393468aa95cd9f44495`, with no pending reservation or unknown usage.
+The cumulative stop is $2.70 and hard cap is $3, including all historical spend.
+Recovery assessment: ship-branch, existing provider payload/schema, replay, ledger reservation and explicit case-selection entrypoints support the requested recovery.
+The selected correction adds explicit Haiku probability-total and argmax instructions, recognizes both retained payload revisions, and retries only failed original requests while preserving successful cache entries and exact-payload deduplication.
+The suite README and actual runner/provider tests will carry this correction into the consuming entrypoints; external skill edits are excluded by the workspace-only constraint.
+The diagnosis is committed as `5c59769`.
+The provider now adds the Haiku-only probability instruction and recognizes original versus changed payloads with exact serialized payload hashes.
+Only an original format failure is replaced; successful original stages and all changed-payload attempts are reused, including failed changed attempts.
+The budget planner sees original failures as requiring the fixed request and reserves both possible macro stages.
+The comparison consumer now proves payload uniqueness, the preserved starting ledger prefix, failed-case-only spending, and separate before/after output failures versus wrong estimates.
+The suite README documents the actual retry and detached collection entrypoints, while strict decoder tests and secondary normalization tests constrain their behavior.
+The first focused test compile found a Node assert import incompatible with Jest's module settings; its supported named import corrects that without changing scoring.
+Lint/type checks and the real comparison generator preflight pass before paid collection.
+The implementation is frozen at `df5402c`.
+The canonical cheap gate passes the actual runner and 63 focused regressions, but catches one structural CLI `console.log` violation in the new diagnostic.
+The diagnostic now uses the existing `process.stdout.write` convention; retained logs include the first failure and its correction.
+An earlier development runner test correctly refused dirty executing source; the committed-source rerun passes.
+The credential-free live preflight reserves at most $0.452784 across exactly 33 cases, putting worst-case cumulative spend at $1.03074618.
+Its audit is `results/haiku-format-live-preflight/audit.json`; it leaves the ledger byte-identical and makes zero transport calls.
+The repaired canonical cheap gate passes all eight applicable checks and all 63 focused regressions on `0e7333a`.
+Its full logs are under `.evidence/verify/logs/run-jEezdm/`.
+Product acceptance computes `required=false` and simulator scope `none` for this evaluation-only change.
+At `2026-10-27T09:15:49Z`, detached launcher PID 98105 started exactly one `--methods=haiku --cases=haiku-format-failed-dev.json --split=dev --tier=both --live` run from that frozen source.
+The process sources only the authorized secrets file, maps lowercase `anthropic` into `ANTHROPIC_API_KEY` in memory, and retains no credential values in the launch receipt.
+The launch receipt is `results/haiku-format-live-preflight/launch.json`; stdout/stderr and terminal exit code are `.git/haiku-format-live.log` and `.git/haiku-format-live.exit`.
+The durable ledger and `.jev.lock` own all live collection and prevent competing inference.
+The detached run `2026-10-27T09-15-49-943Z-a10eb509` exits zero after all 33 selected cases, with 30 distinct changed-payload requests and 33 reused stages.
+All 30 originally failed macro cases now parse under the unchanged strict decoder: curated 14/14 and bulk 16/16 recovered.
+Matching format failures decline from three to one; `curated:match:122` still returns probabilities totaling 1.02 and stays a strict failure without another identical paid request.
+All collector processes ended, the lock was released, and no unknown usage or reservation remains.
+The completion receipt and complete collection log are retained with the run.
+Actual new spend is $0.09362800 and the cumulative ledger is $0.67159018, far below the $2.70 stop and $3 hard cap.
+
+The final cache-only run `2026-10-27T09-17-50-049Z-7691bbd3` produces all 465 predictions on the original 129 DEV IDs with zero requests, zero new spend and unchanged successful outputs.
+Its comparison report and audit prove the preserved original ledger prefix, zero byte-identical repeated paid payloads, failed-case-only new Haiku spending, no new Jev/Qwen calls, and complete bill reconciliation.
+The combined strict table reports matching pass/wrong/recall as exact 72/78, 0, 41/47; Jev 66/78, 1, 40/47; Haiku 67/78, 7, 46/47; Qwen 69/78, 3, 41/47.
+Macro parsed/all becomes Haiku 51/51, Jev 51/51 and unchanged Qwen 34/51.
+Parsed wrong macro estimates, defined by any field exceeding 25% error, are Jev 46, Haiku 48 and Qwen 32; format recovery does not establish accurate nutrition estimates.
+Qwen retains 15 macro format failures, two macro timeouts and two matching format failures, with no Qwen rerun.
+The original normalized-cache secondary view remains separate: Haiku 49/51 macro parsed, two uncached refinements, zero paid requests, and no replacement of strict results.
+A value-only in-memory scan of 22 new evidence/ledger/log files finds zero credential matches.
+Next: commit completed results, publish through the ordinary pre-push hook, obtain exact-head installed local AI review and green CI, and merge normally only after the gate passes.
+
+## Prior comparison history
+
 **TL;DR:** Re-parsing the completed 129-case DEV comparison without new bills and separating output failures from estimate error.
 
 ## Cached-output diagnosis and scoring continuation

@@ -1,0 +1,37 @@
+**TL;DR:** dev both evaluation completed; 33 selected cases.
+
+| Tier / task / method | N (attempted) | Pass / all four <=25% | Wrong match | Recall | Abstain | Median % error Cal/P/C/F (all) | >50% cal | Zero correct | Parse/format | Timeout | $/1k | p95 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| curated/matching/haiku | 2 (2) | 0.0% | 0 | 0.0% | 2 | - | - | - | 1 | 0 | 1.5365 | 2007.2 |
+| curated/macro/haiku | 14 (14) | 7.1% | - | - | - | 23.1/38.2/38.2/90.0 | 42.9% | 100.0% | 0 | 0 | 3.5730 | 7167.5 |
+| bulk/matching/haiku | 1 (1) | 0.0% | 0 | - | 1 | - | - | - | 0 | 0 | 1.4410 | 1175.7 |
+| bulk/macro/haiku | 16 (16) | 0.0% | - | - | - | 24.0/52.6/41.0/60.8 | 37.5% | 100.0% | 0 | 0 | 2.4433 | 3947.0 |
+
+| Tier / macro / method (parsed only) | Parsed / all | Median % error Cal/P/C/F | >50% cal | Zero correct | All four <=25% |
+| --- | ---: | --- | ---: | ---: | ---: |
+| curated/macro/haiku | 14/14 | 23.1/38.2/38.2/90.0 | 42.9% | 100.0% | 7.1% |
+| bulk/macro/haiku | 16/16 | 24.0/52.6/41.0/60.8 | 37.5% | 100.0% | 0.0% |
+
+| Tier / task / category | curated/matching/haiku | curated/macro/haiku | bulk/matching/haiku | bulk/macro/haiku |
+| --- | ---: | ---: | ---: | ---: |
+| catering_family | - | - | - | 0.0% (0/1) |
+| combo_build_your_own | - | 0.0% (0/2) | 0.0% (0/1) | 0.0% (0/1) |
+| drink_oz | - | 0.0% (0/1) | - | 0.0% (0/1) |
+| high_calorie | - | 50.0% (1/2) | - | 0.0% (0/3) |
+| modifier | - | 0.0% (0/1) | - | 0.0% (0/1) |
+| multiple_pdf_rows | 0.0% (0/1) | - | - | - |
+| near_miss_name | 0.0% (0/1) | 0.0% (0/2) | - | 0.0% (0/3) |
+| regional_variant | - | 0.0% (0/1) | - | 0.0% (0/1) |
+| section_dependent | - | 0.0% (0/2) | - | 0.0% (0/2) |
+| size_variant | - | 0.0% (0/3) | - | 0.0% (0/3) |
+
+Matching pass requires exact ID/NO MATCH; abstentions fail.
+Macro pass requires every macro error <=25%; exact zero is required against zero truth.
+Big miss is strictly >50% calorie error; failures and omissions count as misses and infinite error.
+All-case medians include failures as infinity; parsed-only metrics exclude failed, abstained and missing outputs.
+Parse/format failures and timeouts are counted separately from wrong estimates.
+Cost/1k divides billed attempts by attempted cases, including both estimator stages.
+Repeated UE candidate pairs are correlated; these are case counts, not independent meals.
+Replayed identical paid requests: 33; replay incurs no new charge. Latency includes replay reads.
+Cumulative known provider spend: $0.67159018.
+Run known spend: $0.09362800; unknown usage: false.
