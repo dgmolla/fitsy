@@ -35,6 +35,14 @@ function setup(provider: Provider, fetcher = transport(provider)) {
   const session = new ModelSession('run', directory), client = new ModelClient(provider, session, out, 'fake-secret-never-log', fetcher);
   return { directory, out, session, client, fetcher };
 }
+function appendHistoricalJev(ledger: string, usd: number) {
+  const bills = Array.from({ length: 4000 }, (_, i) => {
+    const prior = { requestId: `historical-jev-${i}`, runId: 'historical', at: 'today' };
+    return [{ ...prior, event: 'reserve', reserveUsd: RESERVATION_USD },
+      { ...prior, event: 'settle', costUsd: usd / 4000, failure: null }];
+  }).flat();
+  writeFileSync(ledger, (existsSync(ledger) ? readFileSync(ledger, 'utf8') : '') + bills.map(b => JSON.stringify(b)).join('\n') + '\n');
+}
 
 test.each<Provider>(['haiku', 'qwen'])('%s uses the identical Jev prompts/state, typed answers and two-stage decoder', async provider => {
   const s = setup(provider), adapter = method(provider, s.client);
@@ -416,9 +424,15 @@ test('real runner consumes both model clients, accounts both estimator stages, a
     expect(report.scores['curated/matching/haiku']!.attempted).toBe(1);
     expect(report.scores['curated/macro/qwen']!.attempted).toBe(1);
     expect(existsSync(join(directory, 'results/.jev.lock'))).toBe(false);
-    const ledger = readFileSync(join(directory, 'results/spend.jsonl'), 'utf8');
-    delete process.env['ANTHROPIC_API_KEY']; delete process.env['OPENROUTER_API_KEY'];
+    const ledgerFile = join(directory, 'results/spend.jsonl');
+    appendHistoricalJev(ledgerFile, 2.6995 - report.accounting.cumulativeKnownUsd!);
     const network = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden during replay')).mockClear();
+    const ledger = readFileSync(ledgerFile, 'utf8');
+    const nearStop = await run(['--methods=haiku', '--tier=curated', '--split=dev', '--live'], directory);
+    expect(nearStop).toMatchObject({ stopReason: null, selected: 2, sampled: false, budget: { reservedUpperBoundUsd: 0 } });
+    expect(nearStop.accounting.requests).toBe(0); expect(nearStop.accounting.reusedRequests).toBe(3);
+    expect(readFileSync(ledgerFile, 'utf8')).toBe(ledger); expect(network).not.toHaveBeenCalled();
+    delete process.env['ANTHROPIC_API_KEY']; delete process.env['OPENROUTER_API_KEY'];
     const replay = await run(['--methods=haiku,qwen', '--tier=curated', '--split=dev', '--live', '--replay-only'], directory);
     expect(replay.stopReason).toBeNull(); expect(replay.accounting.requests).toBe(0);
     expect(replay.accounting.reusedRequests).toBe(6); expect(replay.accounting.runKnownUsd).toBe(0);
@@ -461,12 +475,7 @@ test('provider decoder distinguishes malformed JSON, incomplete bodies and inval
 
 test('historical Jev bills consume the cumulative model stop allowance before any new transport', async () => {
   const s = setup('haiku'); s.client.close(); s.session.close();
-  const bills = Array.from({ length: 4000 }, (_, i) => {
-    const prior = { requestId: `historical-jev-${i}`, runId: 'historical', at: 'today' };
-    return [{ ...prior, event: 'reserve', reserveUsd: RESERVATION_USD },
-      { ...prior, event: 'settle', costUsd: 2.695 / 4000, failure: null }];
-  }).flat();
-  writeFileSync(s.session.ledger, bills.map(b => JSON.stringify(b)).join('\n') + '\n');
+  appendHistoricalJev(s.session.ledger, 2.695);
   const session = new ModelSession('next', s.directory), fetcher = transport('haiku');
   const client = new ModelClient('haiku', session, s.out, 'fake-key', fetcher);
   try {

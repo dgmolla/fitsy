@@ -221,6 +221,11 @@ export class ModelClient implements ChoiceClient {
   get stopped() { return this.session.stopped; }
   get unknown() { return this.session.unknown; }
   hasReplay(request: JevRequest) { return this.replay.has(requestKey(request)); }
+  /** Undefined means unseen; null is a terminal billed failure; valid answers determine the real refinement. */
+  cachedResponse(request: JevRequest): unknown | null | undefined {
+    const cached = this.replay.get(requestKey(request));
+    return cached ? cached.failure ? null : structuredClone(cached.raw) : undefined;
+  }
   async send(request: JevRequest) {
     if (this.stopped) throw new Error('Provider session stopped');
     const key = requestKey(request), cached = this.replay.get(key);

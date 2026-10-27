@@ -46,7 +46,16 @@ The product plan computes `required=false` and simulator scope `none` because th
 A value-only in-memory scan of 130 result files finds zero credential matches; no key is printed or copied into results.
 Inherited original/continuation raw evidence and both cache re-score runs are retained and committed rather than overwriting generated history.
 The supported publication path remains the existing installed local AI reviewer, which supplies the exact-head `AI review` status after PR creation without this task accessing its protected checkout or controls.
-Next: commit the complete evidence, finish canonical cheap checks, publish through the ordinary pre-push hook, open the authorized PR, wait for existing local AI review and trusted CI, then use only `gh pr merge --squash` when every applicable gate is green without P0/P1.
+The complete evidence is committed as `c0de04a` and [PR #568](https://github.com/dgmolla/fitsy/pull/568) is open with the requested title.
+Canonical cheap checks and the ordinary pre-push hook pass all eight applicable checks, including 60 focused regressions.
+The actual product publisher posts computed N/A on that exact head; the Vercel preview and trusted static/build CI are green.
+The existing local review service was idle on its normal five-minute interval, so its supported non-killing launchctl kickstart requested one scan without inspecting or changing protected files, controls or review history.
+Its source-bound `gpt-6.1-sol` review completes with no P0/P1 and one P2 correctness finding at [the retained raw verdict](https://github.com/dgmolla/fitsy/pull/568#issuecomment-6437251639).
+The live planner checks a hypothetical all-b11 fine request rather than the actual cached refinement, so near the cumulative stop it can refuse a fully paid case that requires no inference.
+This does not change the completed sample or its cost, and cache-only replay already provides recovery.
+The current evaluation owner is nevertheless repairing the bounded replay deduction through the existing cache and planner, with an actual runner regression at $2.6995 and no network.
+Paid prompts, schema, decoder, sample, outputs and bills remain unchanged.
+Next: commit and validate that narrow review repair, refresh the exact-head local review/CI and product status, then use only `gh pr merge --squash` when every applicable gate is green without P0/P1.
 
 # Haiku and Qwen sample execution
 

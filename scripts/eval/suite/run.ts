@@ -13,6 +13,7 @@ import { durableAppend, loadCases, root, sha256, stratifiedSample, suite } from 
 import { score, table, type Metrics } from './metrics';
 import { candidate, macrosSchema, type Case, type Method, type Result, type Tier } from './types';
 import type { JevRequest } from '../lib/jev-experiment';
+import { parseChoiceAnswers } from '../lib/jev-experiment';
 
 export class PreflightError extends Error {}
 
@@ -83,12 +84,23 @@ export function affordableSelection(cases: Case[], remainingUsd: number) {
 }
 /** Bound both providers and both estimator stages before choosing an outcome-independent common sample. */
 export function modelSelection(cases: Case[], rows: ReturnType<typeof loadCases>['rows'], remainingUsd: number, selectedProviders: Provider[],
-  replayed: (provider: Provider, request: JevRequest) => boolean = () => false) {
+  replayed: (provider: Provider, request: JevRequest) => boolean = () => false,
+  cachedResponse: (provider: Provider, request: JevRequest) => unknown | null | undefined = () => undefined) {
   const cost = new Map(cases.map(c => {
-    const requests = c.task === 'matching' ? [matchingRequest(c.input, c.candidates.map(id => candidate(rows.find(r => r.id === id)!)))]
-      : [coarseRequest(c.input), refinementRequest(coarseRequest(c.input).state,
-        Object.fromEntries(['calories', 'protein', 'carbs', 'fat'].map(m => [m, { choice: 'b11' }])) )];
-    return [c.id, selectedProviders.reduce((sum, provider) => sum + requests.reduce((n, r) => n + (replayed(provider, r) ? 0 : reservation(provider, r).usd), 0), 0)];
+    const first = c.task === 'matching' ? matchingRequest(c.input, c.candidates.map(id => candidate(rows.find(r => r.id === id)!))) : coarseRequest(c.input);
+    return [c.id, selectedProviders.reduce((sum, provider) => {
+      const requests = [first];
+      if (c.task === 'macro') {
+        const cached = cachedResponse(provider, first);
+        if (cached === null) return sum;
+        const choices = cached === undefined ? Object.fromEntries(['calories', 'protein', 'carbs', 'fat'].map(m => [m, { choice: 'b11' }]))
+          : parseChoiceAnswers(first, cached);
+        if (Object.values(choices).some(a => a.choice === 'overflow')) return sum;
+        const fine = refinementRequest(first.state, choices);
+        if (Object.keys(fine.questions).length) requests.push(fine);
+      }
+      return sum + requests.reduce((n, r) => n + (replayed(provider, r) ? 0 : reservation(provider, r).usd), 0);
+    }, 0)];
   }));
   const bound = (selection: Case[]) => selection.reduce((sum, c) => sum + cost.get(c.id)!, 0);
   if (bound(cases) <= remainingUsd) return { selected: cases, sampled: false, reservedUpperBoundUsd: bound(cases), fullUpperBoundUsd: bound(cases) };
@@ -146,7 +158,11 @@ export async function run(argv: string[], directory = suite) {
         : new JevClient(runId, resultsDirectory, out, process.env['TYPESAFE_API_KEY'] ?? '');
     }
     const selection = modelSession ? modelSelection(requested.cases, fixture.rows, modelSession.remainingUsd, [...modelClients.keys()],
-      (provider, request) => modelClients.get(provider)!.hasReplay(request))
+      (provider, request) => modelClients.get(provider)!.hasReplay(request),
+      (provider, request) => {
+        const c = modelClients.get(provider);
+        return c instanceof ModelClient ? c.cachedResponse(request) : undefined;
+      })
       : client instanceof JevClient ? affordableSelection(requested.cases, client.remainingUsd) : { selected: requested.cases, sampled: false };
     if (modelSession && config.cases && selection.sampled) throw new PreflightError('The fixed paid-model selection does not fit the remaining budget; no cases may be silently dropped.');
     const selected = selection.selected, results: Result[] = [], scores: Record<string, Metrics> = {};
