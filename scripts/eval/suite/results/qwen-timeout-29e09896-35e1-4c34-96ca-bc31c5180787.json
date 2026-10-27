@@ -1,0 +1,30 @@
+{
+  "requestId": "29e09896-35e1-4c34-96ca-bc31c5180787",
+  "runId": "2026-10-27T06-53-51-562Z-3b1ecf75",
+  "before": {
+    "at": "2026-10-27T06:47:15.653Z",
+    "provider": "qwen",
+    "endpoint": "https://openrouter.ai/api/v1/key",
+    "usageUsd": 1.07264875,
+    "byokUsageUsd": 0,
+    "usageDailyUsd": 0
+  },
+  "after": {
+    "at": "2026-10-27T07:11:10.088Z",
+    "provider": "qwen",
+    "endpoint": "https://openrouter.ai/api/v1/key",
+    "usageUsd": 1.08306483,
+    "byokUsageUsd": 0,
+    "usageDailyUsd": 0.01041608,
+    "knownSuiteQwenUsd": 0.00971218,
+    "differenceUsd": 0.0007038999999999986
+  },
+  "confirmed": {
+    "at": "2026-10-27T07:15:59.524Z",
+    "provider": "qwen",
+    "endpoint": "https://openrouter.ai/api/v1/key",
+    "usageUsd": 1.08306483,
+    "byokUsageUsd": 0,
+    "usageDailyUsd": 0.01041608
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-10-27T06:37:11.529Z",
+  "head": "4a917c38e414050789985fff1c42c114f58727f2",
+  "reconciled": {
+    "runId": "2026-10-27T06-25-33-209Z-4cb048df",
+    "requestId": "2daf8641-168a-4f51-a3ac-32b6efc6145f",
+    "responseSha256": "bc43173d9bddf13cc4dc94a317265c862521f8d370653b2247a71023fa3150a8",
+    "costUsd": 0,
+    "basis": "Documented HTTP 400 schema-compilation rejection before model inference",
+    "sources": [
+      "https://platform.claude.com/docs/en/build-with-claude/structured-outputs#schema-complexity-limits",
+      "https://platform.claude.com/docs/en/api/errors"
+    ]
+  },
+  "originalLedgerPrefixPreserved": true,
+  "priorLedgerSha256": "61ee4cce09e57b2d4890691be28cd7b61047549538455b44ba2d9197071d1ef4",
+  "reconciledLedgerSha256": "e7fcf7d38769bfe6ccd7064bf329c583b3977079180370480a125fda119c9781",
+  "macroSchemaExpansionEqualsOriginal": true,
+  "reusedSuccessful": 32,
+  "reusedFailed": 2,
+  "newRequests": 0,
+  "newSpendUsd": 0,
+  "spendState": {
+    "knownUsd": 0.17132253000000028,
+    "modelKnownUsd": 0.047382,
+    "unknown": false,
+    "pending": 0
+  },
+  "selected": 129,
+  "selectionSha256": "3ec69529643a0253f95c4e04f927fe0d157c2d9fef14891af309962015a4fa70",
+  "reservedUpperBoundUsd": 2.03466929
+}

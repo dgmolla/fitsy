@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FailureKind } from './failures';
 
 const text = z.string().min(1);
 const quantity = z.number().finite().nonnegative();
@@ -38,4 +39,4 @@ export interface Matcher { name: string; match(item: Item, rows: Candidate[]): P
 export interface Estimator { name: string; estimate(item: Item): Promise<Macros | null> }
 export interface Method { name: string; matcher?: Matcher; estimator?: Estimator }
 export interface Result { id: string; method: string; output: MatchOutput | Macros | null;
-  failure: string | null; latencyMs: number; costUsd: number | null; knownCostUsd?: number; requests: number; reusedRequests?: number }
+  failure: string | null; failureKind?: FailureKind | null; latencyMs: number; costUsd: number | null; knownCostUsd?: number; requests: number; reusedRequests?: number }
