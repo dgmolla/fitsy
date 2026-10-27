@@ -11,6 +11,7 @@ import { ModelClient, ModelSession, MODEL_STOP_USD, MODEL_HARD_CAP_USD, provider
 import { durableAppend, loadCases, root, sha256, stratifiedSample, suite } from './fixtures';
 import { score, table, type Metrics } from './metrics';
 import { candidate, macrosSchema, type Case, type Method, type Result, type Tier } from './types';
+import type { JevRequest } from '../lib/jev-experiment';
 
 export class PreflightError extends Error {}
 
@@ -40,8 +41,8 @@ export function requestedSelection(cases: Case[], file: string | undefined, dire
   const ids = z.object({ caseIds: z.array(z.string().min(1)).min(1) }).parse(JSON.parse(bytes)).caseIds;
   const allowed = new Set(cases.map(c => c.id));
   if (new Set(ids).size !== ids.length || ids.some(id => !allowed.has(id))) throw new Error('Selected IDs must be unique and belong to the requested dev tier');
-  const wanted = new Set(ids);
-  return { cases: cases.filter(c => wanted.has(c.id)), source: { file, sha256: sha256(bytes) } };
+  const byId = new Map(cases.map(c => [c.id, c]));
+  return { cases: ids.map(id => byId.get(id)!), source: { file, sha256: sha256(bytes) } };
 }
 const matchOutputSchema = z.object({ kind: z.enum(['match', 'none', 'abstain']), matchId: z.string().nullable(), confidence: z.number().finite().min(0).max(1) }).strict();
 export async function evaluateCase(c: Case, adapter: Method, rows: ReturnType<typeof loadCases>['rows'], client?: ChoiceClient): Promise<Result> {
@@ -77,12 +78,13 @@ export function affordableSelection(cases: Case[], remainingUsd: number) {
   return { selected: [...curated, ...stratifiedSample(bulk, count)], sampled: true };
 }
 /** Bound both providers and both estimator stages before choosing an outcome-independent common sample. */
-export function modelSelection(cases: Case[], rows: ReturnType<typeof loadCases>['rows'], remainingUsd: number, selectedProviders: Provider[]) {
+export function modelSelection(cases: Case[], rows: ReturnType<typeof loadCases>['rows'], remainingUsd: number, selectedProviders: Provider[],
+  replayed: (provider: Provider, request: JevRequest) => boolean = () => false) {
   const cost = new Map(cases.map(c => {
     const requests = c.task === 'matching' ? [matchingRequest(c.input, c.candidates.map(id => candidate(rows.find(r => r.id === id)!)))]
       : [coarseRequest(c.input), refinementRequest(coarseRequest(c.input).state,
         Object.fromEntries(['calories', 'protein', 'carbs', 'fat'].map(m => [m, { choice: 'b11' }])) )];
-    return [c.id, selectedProviders.reduce((sum, provider) => sum + requests.reduce((n, r) => n + reservation(provider, r).usd, 0), 0)];
+    return [c.id, selectedProviders.reduce((sum, provider) => sum + requests.reduce((n, r) => n + (replayed(provider, r) ? 0 : reservation(provider, r).usd), 0), 0)];
   }));
   const bound = (selection: Case[]) => selection.reduce((sum, c) => sum + cost.get(c.id)!, 0);
   if (bound(cases) <= remainingUsd) return { selected: cases, sampled: false, reservedUpperBoundUsd: bound(cases), fullUpperBoundUsd: bound(cases) };
@@ -136,8 +138,10 @@ export async function run(argv: string[], directory = suite) {
         ? new ReplayClient(runId, resultsDirectory, join(out, 'jev-exchanges.jsonl'))
         : new JevClient(runId, resultsDirectory, out, process.env['TYPESAFE_API_KEY'] ?? '');
     }
-    const selection = modelSession ? modelSelection(requested.cases, fixture.rows, modelSession.remainingUsd, [...modelClients.keys()])
+    const selection = modelSession ? modelSelection(requested.cases, fixture.rows, modelSession.remainingUsd, [...modelClients.keys()],
+      (provider, request) => modelClients.get(provider)!.hasReplay(request))
       : client instanceof JevClient ? affordableSelection(requested.cases, client.remainingUsd) : { selected: requested.cases, sampled: false };
+    if (modelSession && config.cases && selection.sampled) throw new PreflightError('The fixed paid-model selection does not fit the remaining budget; no cases may be silently dropped.');
     const selected = selection.selected, results: Result[] = [], scores: Record<string, Metrics> = {};
     const metadata = { version: 1, runId, head, config, checksum: fixture.checksum, fixtureSha256: fixture.fixtureSha256,
       protocolSha256: sha256(JSON.stringify(adapterProtocol)), protocol: adapterProtocol, providers: modelClients.size ? providers : null, sampled: selection.sampled,

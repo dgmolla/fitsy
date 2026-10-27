@@ -30,6 +30,25 @@ At entry, disk has 27 GiB free and system memory reports 54% free.
 Use one sequential evaluation/test job with a 2 GiB Node heap, no database, native build or simulator, then release its compute before waiting on remote gates.
 Next: run focused regressions, commit source and this preflight, then execute the frozen paid comparison once.
 
+## Live failure and continuation recovery
+
+Credential recovery and all 43 focused tests passed on committed source `4bf7489`.
+The actual four-method run `2026-10-27T06-17-06-088Z-4ba60377` retained the exact 129-case selection hash and completed all 78 exact matching and 129 Jev cases using 179 cached requests.
+Execution then stopped after four Haiku requests because the fourth answer's probabilities sum to 1.5.
+All four calls are settled for $0.004918, with no unknown usage; Qwen has not started.
+The stopped execution was reported once, with no human action required.
+Recovery assessment: the selected ship-branch workflow, existing replay/billing primitives and supported `--cases` entrypoint permit a source-bound continuation; paid retries, probability normalization, prompt changes, dropped cases and another credential source are excluded.
+The existing model client lacked cross-session replay and treated a billed invalid answer as a global collection stop.
+Repair that consumer to replay successful and failed paid responses durably, count known invalid model answers as case failures while continuing other cases, and retain global stops for billing, identity, reservation and transport failures.
+Freeze the original ordered sample as a source selection and prohibit silent resampling of an explicit paid selection.
+Keep all prompts, schemas, model identities, bins, ground truth and decoder validation unchanged.
+Regressions must prove the observed 1.5 probability failure remains failed across sessions with no new bill, valid cases still run, and missing or altered billing/exchange evidence refuses collection.
+Next: commit and validate this bounded recovery, then resume the same 129 IDs using the four already-paid Haiku responses without new requests for those inputs.
+The offline continuation preflight consumed the actual retained four Haiku exchanges with transport forbidden: three successes and the original invalid answer were replayed, with zero requests and a byte-identical ledger.
+It proves the original ordered selection hash and all 129 cases fit a $2.65188553 remaining reservation within the $2.695082 remaining stop allowance.
+The first recovery regression run found one obsolete budget assertion that expected a cached request to incur a new reservation; it now proves free replay succeeds and an unseen input is denied before transport near the stop.
+The failed budget case and fatal identity/envelope controls pass, and suite lint/type checks pass.
+
 ## Previous adapter task history
 
 **TL;DR:** Adding dev-only Haiku/Qwen adapters with shared Jev prompts, replay-only Jev and a $2.70 stop.

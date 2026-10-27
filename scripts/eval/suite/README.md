@@ -82,6 +82,11 @@ The runner reserves both stages of every macro case and both selected providers 
 When full dev exceeds that conservative envelope, it samples both tiers deterministically by tier/task/chain/category and applies identical case IDs to every compared method.
 The run metadata retains full/selected upper bounds, selected IDs and their hash.
 Sampling is intentionally conservative and may leave substantial money unspent.
+For a continuation, freeze the original ordered IDs in a source selection file and pass `--cases=<file>.json`.
+An explicit paid-model selection must fit in full; it is never silently resampled.
+The durable model replay validates original payloads, model identity, usage and settled bills, and deducts already-paid requests from the remaining reservation.
+Known billed invalid answers remain failed cases and are replayed as failures, while other cases continue without changing prompts or validation.
+Unknown billing, missing paid evidence, unexpected models, reservation overruns and transport failures still stop collection.
 Haiku cost uses returned token counts at $1/M input and $5/M output; Qwen uses returned `usage.cost` with routing price ceilings of $0.09/M input and $0.55/M output, checked October 26, 2026.
 
 No env file is sourced or auto-loaded by the runner.

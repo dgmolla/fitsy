@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { method, matchingRequest, coarseRequest } from './adapters';
@@ -68,7 +68,9 @@ test('the model budget shares the legacy ledger and exclusive lock, survives new
   durableAppend(s.session.ledger, { ...receipt, event: 'settle', costUsd: 2.69 });
   const next = new ModelSession('next', s.directory), fetcher = transport('haiku'), client = new ModelClient('haiku', next, s.out, 'fake-key', fetcher);
   try {
-    await expect(client.send(request)).rejects.toThrow('$2.70'); expect(fetcher).not.toHaveBeenCalled();
+    await expect(client.send(request)).resolves.toMatchObject({ costUsd: 0 });
+    await expect(client.send(matchingRequest({ ...item, name: 'Rice' }, rows))).rejects.toThrow('$2.70');
+    expect(fetcher).not.toHaveBeenCalled();
     expect(readFileSync(s.session.ledger, 'utf8').startsWith(prefix)).toBe(true);
   } finally { client.close(); next.close(); }
 });
@@ -85,7 +87,7 @@ test.each<Provider>(['haiku', 'qwen'])('%s unknown usage stops both providers wi
   expect(() => new ModelSession('later', s.directory)).toThrow('Unknown');
 });
 
-test.each<Provider>(['haiku', 'qwen'])('%s billed invalid probabilities retain cost and stop without free retries', async provider => {
+test.each<Provider>(['haiku', 'qwen'])('%s billed invalid probabilities remain failed cases without paid retries or stopping other cases', async provider => {
   const s = setup(provider, transport(provider, data => {
     const text = JSON.stringify({ answers: { match: { type: 'choice', choice: 'c0', confidence: 1, probabilities: { c0: 0, none: 0, abstain: 0 } } } });
     if (provider === 'haiku') data['content'] = [{ type: 'text', text }];
@@ -93,9 +95,67 @@ test.each<Provider>(['haiku', 'qwen'])('%s billed invalid probabilities retain c
   }));
   try {
     await expect(s.client.send(request)).rejects.toThrow('probability');
-    await expect(s.client.send(request)).rejects.toThrow('stopped');
+    await expect(s.client.send(request)).rejects.toThrow('probability');
     expect(s.fetcher).toHaveBeenCalledTimes(1); expect(spendState(s.session.ledger).modelKnownUsd).toBeGreaterThan(0);
     expect(spendState(s.session.ledger).unknown).toBe(false);
+    expect(s.client.stopped).toBeNull();
+    s.fetcher.mockImplementationOnce(transport(provider));
+    await expect(s.client.send(matchingRequest({ ...item, name: 'Rice' }, rows))).resolves.toBeDefined();
+    expect(s.fetcher).toHaveBeenCalledTimes(2);
+  } finally { s.client.close(); s.session.close(); }
+});
+
+test.each<Provider>(['haiku', 'qwen'])('%s resumes successful and invalid paid outputs across sessions without transport', async provider => {
+  const s = setup(provider), badRequest = matchingRequest(item, [...rows, { ...rows[0]!, id: 'another-id' }]);
+  await s.client.send(request);
+  s.fetcher.mockImplementationOnce(transport(provider, data => {
+    // Observed live Haiku failure: individually valid numbers with a total probability of 1.5.
+    const text = JSON.stringify({ answers: { match: { type: 'choice', choice: 'abstain', confidence: .45,
+      probabilities: { c0: .475, c1: .475, none: .05, abstain: .5 } } } });
+    if (provider === 'haiku') data['content'] = [{ type: 'text', text }];
+    else data['choices'] = [{ message: { content: text }, finish_reason: 'stop' }];
+  }));
+  await expect(s.client.send(badRequest)).rejects.toThrow('probability');
+  s.client.close(); s.session.close();
+  const ledger = readFileSync(s.session.ledger, 'utf8'), out = join(s.directory, 'resumed'); mkdirSync(out);
+  const session = new ModelSession('resumed', s.directory), fetcher = transport(provider);
+  const client = new ModelClient(provider, session, out, 'fake-key', fetcher);
+  try {
+    expect(client.hasReplay(request)).toBe(true); expect(client.hasReplay(badRequest)).toBe(true);
+    expect(await method(provider, client).matcher!.match(item, rows)).toMatchObject({ kind: 'match', matchId: rows[0]!.id });
+    await expect(client.send(badRequest)).rejects.toThrow('probability');
+    expect(fetcher).not.toHaveBeenCalled(); expect(client.reusedRequests).toBe(2); expect(client.knownUsd).toBe(0);
+    expect(client.stopped).toBeNull(); expect(readFileSync(session.ledger, 'utf8')).toBe(ledger);
+  } finally { client.close(); session.close(); }
+});
+
+test.each(['missing', 'cost', 'payload'])('model resume refuses %s paid evidence before another request', async corruption => {
+  const s = setup('haiku'); await s.client.send(request); s.client.close(); s.session.close();
+  if (corruption === 'missing') rmSync(s.client.rawFile);
+  else {
+    const entries = readFileSync(s.client.rawFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    if (corruption === 'cost') entries.find(e => e.event === 'response').costUsd += .001;
+    else entries.find(e => e.event === 'request').payload.messages[0].content = '{}';
+    writeFileSync(s.client.rawFile, entries.map(e => JSON.stringify(e)).join('\n') + '\n');
+  }
+  const session = new ModelSession('next', s.directory), fetcher = transport('haiku');
+  try {
+    expect(() => new ModelClient('haiku', session, s.out, 'fake-key', fetcher)).toThrow(/replay|evidence/);
+    expect(fetcher).not.toHaveBeenCalled();
+  } finally { session.close(); }
+});
+
+test.each(['model identity', 'reserved token/cost envelope'])('a bad answer cannot conceal a fatal %s violation', async violation => {
+  const s = setup('haiku', transport('haiku', data => {
+    if (violation === 'model identity') data['model'] = 'other-model';
+    else data['usage'] = { input_tokens: 500_000, output_tokens: 100 };
+    data['stop_reason'] = 'max_tokens';
+  }));
+  try {
+    await expect(s.client.send(request)).rejects.toThrow(violation);
+    expect(s.client.stopped).toContain(violation);
+    await expect(s.client.send(matchingRequest({ ...item, name: 'Rice' }, rows))).rejects.toThrow('stopped');
+    expect(s.fetcher).toHaveBeenCalledTimes(1);
   } finally { s.client.close(); s.session.close(); }
 });
 
@@ -117,6 +177,7 @@ test('four-method sampling is deterministic, dev-only, outcome-independent and b
   const selected = modelSelection(fixture.cases, fixture.rows, MODEL_STOP_USD, ['haiku', 'qwen']);
   expect(selected.sampled).toBe(true); expect(selected.reservedUpperBoundUsd).toBeLessThanOrEqual(MODEL_STOP_USD);
   expect(selected.fullUpperBoundUsd).toBeGreaterThan(MODEL_STOP_USD);
+  expect(selected.selected).toHaveLength(129);
   const again = modelSelection([...fixture.cases].reverse(), fixture.rows, MODEL_STOP_USD, ['haiku', 'qwen']);
   expect(selected.selected.map(c => c.id)).toEqual(again.selected.map(c => c.id));
   for (const tier of ['curated', 'bulk']) for (const task of ['matching', 'macro']) {
@@ -127,6 +188,10 @@ test('four-method sampling is deterministic, dev-only, outcome-independent and b
   expect(() => options(['--methods=qwen', '--live', '--split=holdout'])).toThrow('dev-only');
   expect(reservation('haiku', coarseRequest(item)).usd).toBeGreaterThan(0);
   expect(providerRequest('qwen', request)).toMatchObject({ provider: { allow_fallbacks: false } });
+  const resumed = modelSelection(selected.selected, fixture.rows, MODEL_STOP_USD - .004918, ['haiku', 'qwen'],
+    provider => provider === 'haiku');
+  expect(resumed.selected.map(c => c.id)).toEqual(selected.selected.map(c => c.id));
+  expect(resumed.sampled).toBe(false);
 });
 
 test.each([false, true])('real four-method entrypoint reports missing keys and legacy-name recovery before transport (aliases=%s)', async aliases => {

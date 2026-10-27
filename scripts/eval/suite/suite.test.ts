@@ -249,6 +249,8 @@ test('explicit selection rejects holdout, unknown IDs, duplicates and traversal 
   const file = join(directory, 'sources/selection.json');
   writeFileSync(file, JSON.stringify({ caseIds: [matchCase.id] }));
   expect(requestedSelection([matchCase, macroCase], 'selection.json', directory).cases).toEqual([matchCase]);
+  writeFileSync(join(directory, 'sources/selection.json'), JSON.stringify({ caseIds: [macroCase.id, matchCase.id] }));
+  expect(requestedSelection([matchCase, macroCase], 'selection.json', directory).cases).toEqual([macroCase, matchCase]);
   writeFileSync(file, JSON.stringify({ caseIds: [matchCase.id, matchCase.id] }));
   expect(() => requestedSelection([matchCase], 'selection.json', directory)).toThrow('unique');
   writeFileSync(file, JSON.stringify({ caseIds: ['unavailable-or-holdout'] }));

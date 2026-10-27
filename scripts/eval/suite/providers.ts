@@ -1,5 +1,5 @@
-import { closeSync, mkdirSync, openSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { z } from 'zod';
@@ -47,6 +47,60 @@ export function reservation(provider: Provider, request: JevRequest) {
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const usageSchema = z.object({ input_tokens: count, output_tokens: count,
   cache_creation_input_tokens: count.optional(), cache_read_input_tokens: count.optional() });
+function billedUsage(provider: Provider, data: Record<string, unknown>) {
+  if (provider === 'qwen') {
+    const u = z.object({ prompt_tokens: count, completion_tokens: count, cost: z.number().finite().nonnegative() }).parse(data['usage']);
+    return { inputTokens: u.prompt_tokens, outputTokens: u.completion_tokens, costUsd: u.cost };
+  }
+  const u = usageSchema.parse(data['usage']);
+  return { inputTokens: u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0), outputTokens: u.output_tokens,
+    costUsd: (u.input_tokens + (u.cache_read_input_tokens ?? 0) * 0.1 + (u.cache_creation_input_tokens ?? 0) * 1.25 + u.output_tokens * providers.haiku.output) / 1e6 };
+}
+const caseFailure = (failure: string | null) => ['Invalid typed answer/probability distribution', 'Incomplete provider output', 'Invalid provider output'].includes(failure ?? '');
+type ModelResponse = PaidResponse & { failure: string | null };
+interface ModelExchange { event: string; requestId: string; runId: string; provider: Provider; request: JevRequest;
+  payload: unknown; status: number; body: string; failure: string | null; costUsd: number; latencyMs: number }
+
+/** Reconcile every paid model input, retaining invalid answers as failures rather than buying a replacement. */
+function modelResponses(directory: string, provider: Provider) {
+  const cache = new Map<string, ModelResponse>(), found = new Set<string>(), ledger = join(directory, 'spend.jsonl');
+  if (!existsSync(ledger)) return cache;
+  const bills = new Map<string, { runId: string; costUsd: number; failure: string | null }>();
+  for (const line of readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean)) {
+    const entry = JSON.parse(line);
+    if (entry.event === 'settle' && entry.provider === provider) bills.set(entry.requestId, entry);
+  }
+  for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const file = join(directory, entry.name, `${provider}-exchanges.jsonl`);
+    if (!entry.isDirectory() || !existsSync(file)) continue;
+    const exchanges: ModelExchange[] = readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+    const responses = new Map(exchanges.filter(e => e.event === 'response').map(e => [e.requestId, e]));
+    for (const request of exchanges.filter(e => e.event === 'request')) {
+      const bill = bills.get(request.requestId), response = responses.get(request.requestId);
+      if (!bill || !response || bill.runId !== request.runId || response.runId !== request.runId || request.provider !== provider
+        || response.provider !== provider || response.costUsd !== bill.costUsd || response.failure !== bill.failure
+        || !Number.isFinite(response.latencyMs) || response.latencyMs < 0 || response.status !== 200
+        || JSON.stringify(request.payload) !== JSON.stringify(providerRequest(provider, request.request))) throw new Error('Model replay lacks matching request, response and settled billing');
+      const data = JSON.parse(response.body), usage = billedUsage(provider, data), bound = reservation(provider, request.request);
+      if (usage.costUsd !== bill.costUsd || usage.inputTokens > bound.inputTokens || usage.outputTokens > MAX_OUTPUT_TOKENS || usage.costUsd > bound.usd
+        || (data.model !== providers[provider].requiredModel && !(provider === 'haiku' && data.model === providers.haiku.model))) throw new Error('Model replay identity or usage differs from billing');
+      const failure = response.failure;
+      if (failure && !caseFailure(failure)) throw new Error('Prior fatal model failure requires reconciliation');
+      let raw: unknown = null;
+      if (!failure) {
+        if (provider === 'haiku' ? data.stop_reason !== 'end_turn' : data.choices?.[0]?.finish_reason !== 'stop') throw new Error('Incomplete model replay');
+        raw = JSON.parse(provider === 'haiku' ? data.content.map((c: { text: string }) => c.text).join('') : data.choices[0].message.content);
+        parseChoiceAnswers(request.request, raw);
+      }
+      const key = requestKey(request.request);
+      if (cache.has(key)) throw new Error('Duplicate paid model input in history');
+      cache.set(key, { requestId: request.requestId, runId: request.runId, raw, failure, latencyMs: response.latencyMs });
+      found.add(request.requestId);
+    }
+  }
+  if ([...bills.keys()].some(id => !found.has(id))) throw new Error('Paid model exchange evidence is missing; refuse duplicate collection');
+  return cache;
+}
 
 /** Owns the existing ledger lock for both paid adapters; prior model spending also consumes this allowance. */
 export class ModelSession {
@@ -97,23 +151,26 @@ export class ModelClient implements ChoiceClient {
   requests = 0;
   reusedRequests = 0;
   context = '';
-  private replay = new Map<string, PaidResponse>();
+  private replay: Map<string, ModelResponse>;
   readonly rawFile: string;
   constructor(readonly provider: Provider, private session: ModelSession, runDirectory: string,
     private apiKey: string, private transport: typeof fetch = fetch) {
     if (!apiKey.trim()) throw new Error(`${providers[provider].key} is missing; no requests were sent`);
     this.rawFile = join(runDirectory, `${provider}-exchanges.jsonl`);
+    this.replay = modelResponses(dirname(session.ledger), provider);
   }
   get stopped() { return this.session.stopped; }
   get unknown() { return this.session.unknown; }
+  hasReplay(request: JevRequest) { return this.replay.has(requestKey(request)); }
   async send(request: JevRequest) {
     if (this.stopped) throw new Error('Provider session stopped');
     const key = requestKey(request), cached = this.replay.get(key);
     if (cached) {
       this.session.record(this.rawFile, { event: 'reuse', runId: this.session.runId, context: this.context,
         requestSha256: key, sourceRunId: cached.runId, sourceRequestId: cached.requestId,
-        originalLatencyMs: cached.latencyMs, costUsd: 0, at: new Date().toISOString() });
+        originalLatencyMs: cached.latencyMs, failure: cached.failure, costUsd: 0, at: new Date().toISOString() });
       this.reusedRequests++;
+      if (cached.failure) throw new Error(cached.failure);
       return { raw: structuredClone(cached.raw), costUsd: 0, latencyMs: cached.latencyMs };
     }
     const config = providers[this.provider], payload = providerRequest(this.provider, request), bound = reservation(this.provider, request);
@@ -129,26 +186,20 @@ export class ModelClient implements ChoiceClient {
       status = response.status; body = await response.text();
       if (body.includes(this.apiKey)) { body = body.replaceAll(this.apiKey, '[REDACTED]'); failure = 'Credential echo redacted'; }
       const data = JSON.parse(body);
-      let inputTokens: number, outputTokens: number, text: string;
+      const usage = billedUsage(this.provider, data);
+      const { inputTokens, outputTokens } = usage; costUsd = usage.costUsd;
+      let text: string;
       if (this.provider === 'haiku') {
-        const usage = usageSchema.parse(data.usage);
-        inputTokens = usage.input_tokens; outputTokens = usage.output_tokens;
-        // No cache controls are sent. Retain exact standard/cache-read/cache-write billing if returned.
-        costUsd = (inputTokens + (usage.cache_read_input_tokens ?? 0) * 0.1
-          + (usage.cache_creation_input_tokens ?? 0) * 1.25 + outputTokens * config.output) / 1e6;
-        inputTokens += (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
         text = z.array(z.object({ type: z.literal('text'), text: z.string() })).parse(data.content).map(c => c.text).join('');
         if (data.stop_reason !== 'end_turn') failure ??= 'Incomplete provider output';
       } else {
-        const usage = z.object({ prompt_tokens: count, completion_tokens: count, cost: z.number().finite().nonnegative() }).parse(data.usage);
-        inputTokens = usage.prompt_tokens; outputTokens = usage.completion_tokens; costUsd = usage.cost;
         const choices = z.array(z.object({ message: z.object({ content: z.string() }), finish_reason: z.string() })).length(1).parse(data.choices);
         text = choices[0]!.message.content;
         if (choices[0]!.finish_reason !== 'stop') failure ??= 'Incomplete provider output';
       }
-      if (status !== 200) failure ??= `HTTP ${status}`;
-      if (data.model !== config.requiredModel && !(this.provider === 'haiku' && data.model === config.model)) failure ??= 'Unexpected provider model identity';
-      if (inputTokens > bound.inputTokens || outputTokens > MAX_OUTPUT_TOKENS || costUsd > bound.usd) failure ??= 'Provider exceeded reserved token/cost envelope';
+      if (status !== 200) failure = `HTTP ${status}`;
+      if (data.model !== config.requiredModel && !(this.provider === 'haiku' && data.model === config.model)) failure = 'Unexpected provider model identity';
+      if (inputTokens > bound.inputTokens || outputTokens > MAX_OUTPUT_TOKENS || costUsd > bound.usd) failure = 'Provider exceeded reserved token/cost envelope';
       raw = JSON.parse(text);
       try { parseChoiceAnswers(request, raw); } catch { failure ??= 'Invalid typed answer/probability distribution'; }
     } catch { failure ??= costUsd === null ? 'Transport/response failure; unknown usage' : 'Invalid provider output'; }
@@ -157,8 +208,9 @@ export class ModelClient implements ChoiceClient {
     // Settle even if response journaling fails, so a known bill is never lost from the ledger.
     try { this.session.record(this.rawFile, { ...receipt, event: 'response', context: this.context, status, body, failure, latencyMs, costUsd }); }
     finally { this.session.settle(receipt, costUsd, failure); }
-    if (failure) return this.session.stop(failure);
-    this.replay.set(key, { ...receipt, raw, latencyMs });
+    if (failure && !caseFailure(failure)) return this.session.stop(failure);
+    this.replay.set(key, { ...receipt, raw, latencyMs, failure });
+    if (failure) throw new Error(failure);
     return { raw, costUsd: costUsd!, latencyMs };
   }
   close() { this.apiKey = ''; }
