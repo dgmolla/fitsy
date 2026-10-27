@@ -232,10 +232,9 @@ Unentitled responses set `bestMatch` to null and `meta.locked` to true.
 **File:** `apps/api/app/api/restaurants/shuffle/route.ts`
 **Executable contract:** `shuffleResponseSchema` and `ShuffleResponse` in `@fitsy/shared`.
 
-The search screen uses this endpoint for Shuffle behind the PostHog boolean flag `shuffle`.
-The mobile client sends its current meal targets and area, rotates the seed, excludes up to five recent dishes, and opens the chosen menu with `selectedItemId`.
-If exclusions exhaust the pool, it retries once without exclusions before showing an empty state.
-The endpoint also supports future iOS widget consumers and preserves the existing search response.
+This endpoint remains available for clients using the original single-pick Shuffle contract.
+The current search screen's small Shuffle button reorders its loaded results locally behind the PostHog boolean flag `shuffle` and does not call this endpoint.
+Search text, meal targets, area, pagination, and access rules stay unchanged by the local reorder.
 An authenticated caller whose stored verdict denies access is reconciled with RevenueCat after rate limiting and before cache lookup.
 The lookup uses the verified JWT subject (the Supabase UUID used by the mobile SDK's `logIn`), then rechecks persisted proof so a newer webhook or account deletion still wins.
 Fresh active proof remains a database-only read; failed reconciliation preserves stored proof and never grants access without an active verdict.

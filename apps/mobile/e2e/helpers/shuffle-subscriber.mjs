@@ -15,13 +15,17 @@
   var token = json(login.body).token;
   if (!token) return;
   var config = { headers: { Authorization: 'Bearer ' + token } };
-  var response = http.get(base + '/api/restaurants/shuffle?lat=34.0407&lng=-118.2468&calories=280&protein=28&carbs=34&fat=5', config);
+  var response = http.get(base + '/api/restaurants?lat=34.0407&lng=-118.2468&calories=280&protein=28&carbs=34&fat=5', config);
   output.shuffleApiStatus = response.status;
   if (response.status !== 200) return;
-  var pick = json(response.body);
-  output.shuffleApiUnlocked = pick.meta.locked === false;
-  output.shuffleApiHasDish = !!(pick.data && pick.data.item && pick.data.item.id);
-  output.shuffleApiHasMacros = !!(pick.data && pick.data.macros && typeof pick.data.macros.calories === 'number');
+  var search = json(response.body);
+  output.shuffleApiUnlocked = search.meta.locked === false;
+  output.shuffleApiHasDish = Array.isArray(search.data) && search.data.some(function (row) {
+    return !!(row.bestMatch && row.bestMatch.menuItemId);
+  });
+  output.shuffleApiHasMacros = Array.isArray(search.data) && search.data.some(function (row) {
+    return !!(row.bestMatch && typeof row.bestMatch.calories === 'number');
+  });
   var status = http.get(base + '/api/subscriptions/status', config);
   if (status.status !== 200) return;
   var proof = json(status.body);

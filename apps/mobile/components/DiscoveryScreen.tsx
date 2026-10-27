@@ -17,7 +17,7 @@ import { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { s } from './DiscoveryScreen.styles';
 import { Masthead, MacroStrip, SearchBar } from './DiscoveryChrome';
 import { HeroCard, RestaurantSection } from './DiscoveryCards';
-import { ShuffleSection } from './ShuffleSection';
+import { ShuffleButton } from './ShuffleButton';
 const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { onboardingPreview?: boolean; onPreviewBack?: () => void }) {
   const { navigation, isOnboardingPreview, tried, inputs, filterMode, query, setQuery, canSearch, hasQuery, location,
@@ -25,7 +25,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible, startTour,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown, cancelTourTyping, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
-    unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached } = useDiscoveryState({ onboardingPreview });
+    unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached, canShuffle, handleShuffle } = useDiscoveryState({ onboardingPreview });
   const listRef = useRef<FlatList<(typeof results)[number]>>(null);
   const scrollOffset = useRef(0);
   const viewportRef = useRef<View>(null);
@@ -55,7 +55,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
         </Pressable>}
       </View>}
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
-      {isOnboardingPreview ? renderSearchBar() : <ShuffleSection values={inputs} lat={location.lat} lng={location.lng} locating={location.loading} onEditTargets={() => setFilterVisible(true)} renderSearchBar={renderSearchBar} />}
+      {renderSearchBar(!isOnboardingPreview && <ShuffleButton disabled={!canShuffle} onPress={handleShuffle} />)}
       {!canSearch && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.greenAccent} />

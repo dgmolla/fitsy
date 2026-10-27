@@ -122,27 +122,18 @@ Do not restore after an intermediate group or failed attempt while that owner st
 Retain the failed run and the recovered run separately; changing deployment configuration does not require a product-code workaround or establish a passing native journey.
 
 `shuffle` requires a populated dev backend, `entitled-dev` and a Debug Test Store build.
-It first signs the entitled fixture into the dev API and checks an unlocked dish and persisted RevenueCat proof before mobile launch can synchronize the subscription.
+It signs the entitled fixture into the dev API and checks normal search results and persisted RevenueCat proof before mobile launch can synchronize the subscription.
 Its `helpers/shuffle-subscriber.mjs` helper keeps tokens and credentials out of Maestro output, uses only `dev.fitsy.org`, and rejects a demo bypass without actual subscription proof.
-It chooses DTLA and independent targets of 280 kcal, 28 g protein, 34 g carbs and 5 g fat, then taps the compact Shuffle icon beside search.
-These targets are remaining budgets, so valid picks can have different macro values.
-The flow requires a nonempty restaurant and dish, all four formatted macros (estimated or published), distance, Shuffle again and View menu, without assuming a local `prisma/seed.ts` meal exists in dev Supabase.
-The flow's `shuffleDebug=1` search parameter explicitly enables Shuffle on Debug builds without changing PostHog flags or entitlement.
-The Debug-only `shuffleSeed=maestro-shuffle` search parameter makes the lottery replayable.
-Production builds ignore both parameters and require the PostHog boolean flag `shuffle` to be `true`.
-After Shuffle again it copies the selected restaurant and dish, escapes them for Maestro's regex text selectors, and verifies both on View menu.
-The menu check requires a `menu-item-*` control containing the literal selected dish name, since iOS groups the dish, match score, price and macros into one accessibility label.
-It waits for that control instead of requiring a standalone title accessibility element.
-Escaping runs in `helpers/shuffle-selectors.mjs` because Maestro's inline `${...}` parser skips expressions containing additional dollar signs, leaving selectors undefined.
-The flow preflights real dev coverage in DTLA and the absence of restaurants near New York, then uses simulator GPS and the normal location picker to exercise the empty state outside coverage.
-It establishes that GPS fix before launch so a cached position cannot point at an earlier test's area, and restores DTLA GPS after recovery.
-Zero fat is not an empty-state fixture because real dev menus include zero-fat drinks.
-It also verifies target editing from the empty state and recovers a new pick by choosing DTLA again.
-`components/ShuffleSection.test.tsx` runs the saved card and menu assertions against rendered search/menu screens with live-style names, varied macros, published nutrition and regex punctuation.
-It executes the flow's saved selector helper and rejects inline expressions the installed Maestro parser would skip.
-Its selector checks model native button grouping and reject the old exact-title selector and a different dish, including the WILDBIRD / GREEN CHICKEN POZOLE failure case.
-It also covers the deep link with PostHog disabled, production override rejection, locked teasers, flag changes, HTTP failures, request cancellation and account transitions against the real client and routing.
-`lib/shuffleSubscriberFlow.test.ts` exercises the saved API preflight, its flow assertions, inactive or missing proof, authentication failure, and credential-output boundaries.
+It chooses DTLA and independent targets of 280 kcal, 28 g protein, 34 g carbs and 5 g fat, then taps the small Shuffle icon in the main search field twice.
+The button reorders the loaded results locally while preserving the query, targets, area, pagination, and access rules.
+The flow checks for any normal result card after each tap, without expecting a specific dish, and captures `shuffle-search` showing the button and results for Slack evidence.
+The Debug-only `shuffleDebug=1` search parameter explicitly enables the icon without changing PostHog flags or entitlement.
+Production builds ignore that parameter and require the PostHog boolean flag `shuffle` to be `true`.
+There is no separate pick panel, Shuffle again, View menu, or Shuffle-specific loading, error, or empty state.
+The button is disabled while search is pending or refreshing, or when fewer than two results can be reordered.
+`components/DiscoveryShuffle.test.tsx` exercises the real search screen and the saved flow's result assertions, including repeated taps, query-only search, rollout, empty results, and locked cards.
+`components/DiscoveryRequests.test.tsx` covers reordering during pagination and replacement by a new search.
+`lib/shuffleSubscriberFlow.test.ts` exercises the saved search preflight, its flow assertions, inactive or missing proof, authentication failure, and credential-output boundaries.
 Run it through `node scripts/sim/ci.mjs --scope=flow --flows=shuffle --udid=<UDID>` with the local fixture configuration.
 The planner expands this request when the candidate also affects shared UI or other journeys.
 

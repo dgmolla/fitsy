@@ -1,6 +1,6 @@
 # Populated dev backend plus an entitled account on a Debug build.
-# Debug-only shuffleDebug opts in locally without changing PostHog flags;
-# shuffleSeed makes each lottery replayable. Entitlement is never overridden.
+# Debug-only shuffleDebug opts in locally without changing PostHog flags.
+# Shuffle reorders the loaded search cards without another API request.
 appId: com.fitsy.mobile
 tags: [billing, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
 env:
@@ -15,22 +15,14 @@ env:
     label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
 - evalScript: ${output.nearby = output.dataApiResponses[0]}
 - assertTrue: ${output.nearby.status === 200 && json(output.nearby.body).data.length > 0}
-# Prove the empty-state location is outside dev coverage before driving the app.
-- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants?lat=40.7128&lng=-74.0060&radius=6']}
-- runScript: ../helpers/data-api.mjs
-- assertTrue:
-    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
-    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
-- evalScript: ${output.outside = output.dataApiResponses[0]}
-- assertTrue: ${output.outside.status === 200 && json(output.outside.body).data.length === 0}
 # Direct API access must work before Dev Login runs its own RevenueCat sync.
 - runScript: ../helpers/shuffle-subscriber.mjs
 - assertTrue: ${output.shuffleApiLoginStatus === 200 && output.shuffleApiStatus === 200}
 - assertTrue: ${output.shuffleApiUnlocked && output.shuffleApiHasDish && output.shuffleApiHasMacros && output.shuffleApiVerified}
-# Establish GPS before launch so a cached fix also points outside coverage.
+# Establish the search area before launch.
 - setLocation:
-    latitude: 40.7128
-    longitude: -74.0060
+    latitude: 34.0407
+    longitude: -118.2468
 - launchApp:
     clearState: true
     clearKeychain: true
@@ -58,7 +50,7 @@ env:
     visible: "Search restaurants or dishes"
     timeout: 30000
 - assertNotVisible: "Dev Login Failed"
-- openLink: com.fitsy.mobile://search?shuffleDebug=1&shuffleSeed=maestro-shuffle
+- openLink: com.fitsy.mobile://search?shuffleDebug=1
 - tapOn:
     text: "^Open$"
     optional: true
@@ -91,132 +83,33 @@ env:
 - inputText: "280"
 - tapOn:
     id: meal-filter-apply
+# Use the existing results, with no fixed dish expectation after either tap.
 - extendedWaitUntil:
     visible:
-      id: shuffle-button
+      id: discovery-hero
     timeout: 30000
+- assertVisible:
+    id: shuffle-button
 - tapOn:
     id: shuffle-button
 - extendedWaitUntil:
     visible:
-      id: shuffle-dish
-      text: ".+"
-    timeout: 20000
+      id: discovery-hero
+    timeout: 10000
 - assertVisible:
+    id: discovery-search-bar
+- assertVisible:
+    id: discovery-macro-strip
+- assertNotVisible:
+    id: shuffle-section
+- assertNotVisible:
     id: shuffle-result
-- assertVisible:
-    id: shuffle-restaurant
-    text: ".+"
-- assertVisible:
-    id: shuffle-macro-calories
-    text: "≈?[0-9]+ kcal"
-- assertVisible:
-    id: shuffle-macro-proteinG
-    text: "≈?[0-9]+ g protein"
-- assertVisible:
-    id: shuffle-macro-carbsG
-    text: "≈?[0-9]+ g carbs"
-- assertVisible:
-    id: shuffle-macro-fatG
-    text: "≈?[0-9]+ g fat"
-- assertVisible:
-    id: shuffle-distance
-    text: '[0-9]+\.[0-9] mi away'
-- assertVisible:
-    id: shuffle-again
-- assertVisible:
-    id: shuffle-view-menu
 - assertNotVisible:
-    id: shuffle-locked
-- takeScreenshot: shuffle-result
-- tapOn:
     id: shuffle-again
-- extendedWaitUntil:
-    visible:
-      id: shuffle-dish
-      text: ".+"
-    timeout: 20000
-- assertVisible:
-    id: shuffle-result
-- assertVisible:
-    id: shuffle-again
-- assertVisible:
+- assertNotVisible:
     id: shuffle-view-menu
-- copyTextFrom:
-    id: shuffle-restaurant
-- evalScript: ${output.restaurant = maestro.copiedText}
-- copyTextFrom:
-    id: shuffle-dish
-- evalScript: ${output.dish = maestro.copiedText}
-# Regex escaping contains dollar signs that Maestro's inline parser skips.
-- runScript: ../helpers/shuffle-selectors.mjs
-- tapOn:
-    id: shuffle-view-menu
-- extendedWaitUntil:
-    visible: ${output.restaurant}
-    timeout: 20000
-- extendedWaitUntil:
-    visible:
-      id: menu-item-.+
-      text: ${output.menuDish}
-    timeout: 20000
-- takeScreenshot: shuffle-selected-menu
-- openLink: com.fitsy.mobile://search?shuffleDebug=1&shuffleSeed=maestro-shuffle
-- tapOn:
-    text: "^Open$"
-    optional: true
-# Real zero-fat drinks exist in dev; use the verified out-of-coverage GPS location.
-- setLocation:
-    latitude: 40.7128
-    longitude: -74.0060
-- tapOn:
-    id: discovery-location
-- tapOn: "Use my current location"
-- extendedWaitUntil:
-    visible: "Location: Near You"
-    timeout: 30000
+- takeScreenshot: shuffle-search
 - tapOn:
     id: shuffle-button
-- extendedWaitUntil:
-    visible:
-      id: shuffle-empty
-    timeout: 20000
-- assertVisible: "Nothing fits nearby"
 - assertVisible:
-    id: shuffle-edit-targets
-- assertNotVisible:
-    id: shuffle-view-menu
-- takeScreenshot: shuffle-empty
-- tapOn:
-    id: shuffle-edit-targets
-- assertVisible:
-    id: meal-filter-apply
-- tapOn:
-    id: meal-filter-apply
-# Recover through the real location picker and prove Shuffle works again.
-- tapOn:
-    id: discovery-location
-- scrollUntilVisible:
-    element: "Search near DTLA"
-    direction: DOWN
-- tapOn: "Search near DTLA"
-- extendedWaitUntil:
-    visible: "Location: DTLA"
-    timeout: 15000
-- tapOn:
-    id: shuffle-button
-- extendedWaitUntil:
-    visible:
-      id: shuffle-dish
-      text: ".+"
-    timeout: 20000
-- assertVisible:
-    id: shuffle-again
-- assertVisible:
-    id: shuffle-view-menu
-- assertNotVisible:
-    id: shuffle-empty
-- takeScreenshot: shuffle-recovered
-- setLocation:
-    latitude: 34.0407
-    longitude: -118.2468
+    id: discovery-hero

@@ -7,6 +7,7 @@ import { buildDiscoveryParams, discoveryTargetFlags } from './discoverySearchPar
 import { fetchGuidedPreview } from './guidedPreview';
 import { saveOnboardingField } from './onboardingStorage';
 import { recordFirstDiscoveryPage } from './discoverySearchTelemetry';
+import { shuffleResults } from './shuffle';
 import { trackSearchPerformed, trackSearchFailed, trackPreviewFetchFailed, trackSearchPageLoaded, trackSearchPaginationEndReached } from './analytics';
 const DEBOUNCE_MS = 600;
 interface DiscoveryInputs {
@@ -271,7 +272,12 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   }, [inputs, location.lat, location.lng, location.loading, location.source, query, canSearch, doFetch, targetsLoaded, previewReady]);
   useEffect(() => () => { requestController.current?.abort(); pageController.current?.abort(); fetchGeneration.current++; }, []);
   const pending = canSearch && completedContext !== contextKey;
+  const canShuffle = !isOnboardingPreview && canSearch && targetsLoaded && !location.loading &&
+    !loading && !pending && !refreshing && !error && !outOfArea && results.length > 1;
+  const handleShuffle = useCallback(() => {
+    if (canShuffle) setResults(current => shuffleResults(current));
+  }, [canShuffle]);
   return { results, nextCursor, loading: canSearch && (loading || pending), loadingMore, refreshing,
     error: pending ? null : error, locked, fetchSeq, outOfArea: !pending && outOfArea,
-    nearbyDishCount: pending ? undefined : nearbyDishCount, doFetch, handleRefresh, handleEndReached };
+    nearbyDishCount: pending ? undefined : nearbyDishCount, doFetch, handleRefresh, handleEndReached, canShuffle, handleShuffle };
 }
