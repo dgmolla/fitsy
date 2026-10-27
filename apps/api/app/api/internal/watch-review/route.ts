@@ -87,10 +87,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true, notified: false, state: chosen?.state ?? "none" });
   }
 
-  // Self-creating KV for once-per-result dedup (no Prisma migration).
-  await prisma.$executeRawUnsafe(
-    `CREATE TABLE IF NOT EXISTS "_review_watch" (key text PRIMARY KEY, value text, updated_at timestamptz DEFAULT now())`,
-  );
+  // The dedup table and its server-only access policy are migration-managed.
   const signature = `${chosen.version}:${chosen.state}`;
   const last = await prisma.$queryRawUnsafe<{ value: string }[]>(
     `SELECT value FROM "_review_watch" WHERE key = 'last_result' LIMIT 1`,

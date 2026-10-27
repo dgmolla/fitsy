@@ -7,6 +7,8 @@ import {
   type SubscriptionRow,
 } from "@/lib/subscription";
 import { persistEvent } from "./persistEvent";
+import { isDevelopmentEnvironment } from "@/services/runtimeEnvironment";
+import { PRO_ENTITLEMENT_ID } from "@/services/revenuecatService";
 
 function activePeriodRecorded(row: SubscriptionRow, expiresAt: Date | null): boolean {
   return row?.status === "active" &&
@@ -75,6 +77,8 @@ const HANDLED_EVENT_TYPES = new Set([
 
 interface RevenueCatEvent {
   type?: string;
+  environment?: string;
+  entitlement_ids?: string[] | null;
   app_user_id?: string;
   /** Every app user id RevenueCat has merged into this customer. */
   aliases?: string[];
@@ -189,6 +193,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const event = (body as { event?: RevenueCatEvent } | null)?.event;
   if (!event || typeof event.type !== "string") {
     return NextResponse.json({ error: "Missing event" }, { status: 400 });
+  }
+
+  // A genuine sandbox purchase must never grant production access. TRANSFER
+  // has no entitlement list and is resolved by the equally scoped REST read.
+  if (!isDevelopmentEnvironment()) {
+    if (event.environment === "SANDBOX") return NextResponse.json({ received: true });
+    if (event.environment !== "PRODUCTION") {
+      return NextResponse.json({ error: "Missing purchase environment" }, { status: 400 });
+    }
+  }
+  if (HANDLED_EVENT_TYPES.has(event.type)) {
+    if (!Array.isArray(event.entitlement_ids)) {
+      return NextResponse.json({ error: "Missing entitlements" }, { status: 400 });
+    }
+    if (!event.entitlement_ids.includes(PRO_ENTITLEMENT_ID)) return NextResponse.json({ received: true });
   }
 
   if (event.type === "TRANSFER") {

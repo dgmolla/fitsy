@@ -26,8 +26,8 @@ RevenueCat validates its configured webhook Authorization secret using constant-
 | `/api/health` | GET | None | Health check + DB probe |
 | `/api/auth/apple` | POST | None | Apple Sign-In |
 | `/api/auth/google` | POST | None | Google Sign-In |
-| `/api/auth/register` | POST | None | Legacy email/password register (deprecated) |
-| `/api/auth/login` | POST | None | Legacy email/password login (deprecated) |
+| `/api/auth/register` | POST | None | Dev fixtures only; production returns 403 (use Apple/Google) |
+| `/api/auth/login` | POST | None | Production demo reviewer only; dev fixtures allowed |
 | `/api/restaurants` | GET | Bearer JWT | Search nearby restaurants |
 | `/api/restaurants/shuffle` | GET | Bearer JWT | One fit-weighted dish, or a locked restaurant teaser |
 | `/api/restaurants/preview` | GET | Bearer JWT | Onboarding teaser |

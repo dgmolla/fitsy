@@ -3,11 +3,15 @@ import { prisma } from "@/lib/restaurantService";
 import { getSupabaseAdmin, getSupabaseClient } from "@/lib/supabase";
 import { sendWelcomeEmail } from "@/services/emailService";
 import { authLimiter } from "@/lib/rateLimit";
+import { canRegisterWithPassword } from "@/lib/reviewerAccess";
 import type { AuthApiResponse } from "@fitsy/shared";
 
 export async function POST(
   request: NextRequest,
 ): Promise<NextResponse<AuthApiResponse>> {
+  if (!canRegisterWithPassword()) {
+    return NextResponse.json({ error: "Use Apple or Google to create an account" } as never, { status: 403 });
+  }
   // ─── Rate limiting ───────────────────────────────────────────────────────────
 
   const ip =
@@ -124,7 +128,9 @@ export async function POST(
   }
 
   // Fire-and-forget: email failure must not break registration
-  sendWelcomeEmail(user.email, user.name ?? undefined).catch(console.error);
+  sendWelcomeEmail(user.email, user.name ?? undefined).catch(() => {
+    console.error("[register] Welcome email delivery failed");
+  });
 
   return NextResponse.json(
     {

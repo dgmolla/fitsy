@@ -87,10 +87,10 @@ export default function RootLayout() {
     let priorSessionUserId: string | null = null;
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'TOKEN_REFRESHED' && session) {
-        trackSessionRefreshed({ user_id: session.user.id });
+        trackSessionRefreshed();
         priorSessionUserId = session.user.id;
       } else if (event === 'SIGNED_OUT' && priorSessionUserId) {
-        trackSessionRefreshFailed({ user_id: priorSessionUserId });
+        trackSessionRefreshFailed();
         priorSessionUserId = null;
       } else if (event === 'SIGNED_IN' && session) {
         priorSessionUserId = session.user.id;
@@ -102,7 +102,7 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <PostHogProvider client={getPostHogClient()}>
+    <PostHogProvider client={getPostHogClient()} autocapture={false}>
       <AppErrorBoundary>
         <SafeAreaProvider>
           <ThemeProvider>

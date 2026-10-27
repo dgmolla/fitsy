@@ -22,6 +22,8 @@ export function event(overrides: Record<string, unknown> = {}) {
   return {
     event: {
       type: "INITIAL_PURCHASE",
+      environment: "PRODUCTION",
+      entitlement_ids: ["pro"],
       app_user_id: "user-1",
       product_id: "fitsy.annual",
       expiration_at_ms: Date.now() + 365 * 24 * 60 * 60 * 1000,

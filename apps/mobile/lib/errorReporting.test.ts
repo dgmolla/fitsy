@@ -24,20 +24,19 @@ describe('trackClientError', () => {
     });
     expect(capture).toHaveBeenCalledWith(
       'client_error',
-      expect.objectContaining({ message: 'boom', source: 'error_boundary' }),
+      { source: 'error_boundary', is_fatal: false },
     );
     expect(flush).toHaveBeenCalled();
   });
 
-  it('truncates very long stacks', () => {
+  it('omits raw messages and stacks, including tokens and personal data', () => {
     trackClientError({
-      message: 'boom',
+      message: 'Bearer secret-fixture alice@example.test',
       stack: 'x'.repeat(10_000),
       source: 'global_handler',
       is_fatal: true,
     });
-    const props = capture.mock.calls[0]?.[1] as { stack: string };
-    expect(props.stack.length).toBeLessThanOrEqual(4000);
+    expect(capture.mock.calls[0]?.[1]).toEqual({ source: 'global_handler', is_fatal: true });
   });
 });
 
@@ -74,7 +73,6 @@ describe('installGlobalErrorReporting', () => {
     expect(capture).toHaveBeenCalledWith(
       'client_error',
       expect.objectContaining({
-        message: 'fatal-crash',
         source: 'global_handler',
         is_fatal: true,
       }),

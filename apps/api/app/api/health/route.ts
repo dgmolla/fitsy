@@ -21,10 +21,9 @@ export async function GET() {
       version: process.env["npm_package_version"] ?? "unknown",
       timestamp: new Date().toISOString(),
     }, { headers: { "Cache-Control": "no-store" } });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+  } catch {
     return NextResponse.json(
-      { status: "error", db: "unreachable", deploymentSha: deployedSha, error: message },
+      { status: "error", db: "unreachable", deploymentSha: deployedSha, error: "Service unavailable" },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }

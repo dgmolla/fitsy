@@ -205,6 +205,8 @@ You are done when CI and deploy are green, not when you push. After pushing, pol
 
 - **Auth** - every data handler requires a Supabase account session, including onboarding samples; see `apps/api/app/api/auth-coverage.test.ts` for exact public exceptions.
   User accounts and session management are security-sensitive.
+- **Database access** - Prisma serves application data; keep default-deny RLS and no direct client grants on every application table, including migration-managed operational tables.
+  Audit live Supabase catalogs with `scripts/security/supabase-audit.sql` in its read-only transaction; see `scripts/verify/security-schema.test.ts` and the real-DB regression.
 - **Data integrity (nutrition estimates)** — LLM-estimated macros are
   approximate; users may make health decisions based on this data.
   Always show confidence ranges, never false precision.

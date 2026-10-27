@@ -27,6 +27,24 @@ export const PUBLISH_ENV_OVERRIDE_VAR = "FITSY_ALLOW_MISSING_PUBLIC_ENV";
 
 export type PublishEnv = Record<string, string | undefined>;
 
+/** Secret rejection also runs on EAS and deliberate keyless exports. */
+export function assertPublicEnvSafety(env: PublishEnv): void {
+  for (const [name, value] of Object.entries(env)) {
+    if (!name.startsWith('EXPO_PUBLIC_') || !value) continue;
+    const forbiddenName = /SERVICE_ROLE|SECRET|PRIVATE_KEY|ACCESS_TOKEN|REFRESH_TOKEN/.test(name) ||
+      (env.NODE_ENV === 'production' && /PASSWORD/.test(name));
+    let serviceRole = false;
+    if (value.startsWith('eyJ')) {
+      try {
+        serviceRole = JSON.parse(Buffer.from(value.split('.')[1] ?? '', 'base64url').toString()).role === 'service_role';
+      } catch { /* Not a JWT; other key formats are checked below. */ }
+    }
+    if (forbiddenName || serviceRole || /^(sb_secret_|sk_(?:live|test)_|sk-ant-|ghp_|github_pat_|-----BEGIN)/.test(value)) {
+      throw new Error(`[fitsy] Refusing to bundle secret public configuration: ${name}`);
+    }
+  }
+}
+
 export function missingPublicEnv(env: PublishEnv): string[] {
   return REQUIRED_PUBLIC_ENV.filter((name) => !env[name]?.trim());
 }
@@ -45,6 +63,7 @@ export function shouldEnforcePublishEnv(env: PublishEnv): boolean {
 }
 
 export function assertPublishEnv(env: PublishEnv): void {
+  assertPublicEnvSafety(env);
   if (!shouldEnforcePublishEnv(env)) return;
   const missing = missingPublicEnv(env);
   if (missing.length === 0) return;

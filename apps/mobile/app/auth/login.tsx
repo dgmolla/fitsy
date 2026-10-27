@@ -10,30 +10,12 @@ import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
 import { requireProfileFromServer } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { BRAND, EDITORIAL, FONTS } from '@/lib/brand';
-import { getMacroTargets } from '@/lib/macroStorage';
-import { getOnboardingData } from '@/lib/onboardingStorage';
-import { identifyUser, trackAuthFailure, trackAuthSuccess } from '@/lib/analytics';
+import { trackAuthFailure, trackAuthSuccess } from '@/lib/analytics';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-
-async function captureIdentity(userId: string, email?: string | null): Promise<void> {
-  const [macroTargets, onboardingData] = await Promise.all([
-    getMacroTargets(),
-    getOnboardingData(),
-  ]);
-  identifyUser(userId, {
-    email: email ?? undefined,
-    goal: onboardingData.goal,
-    activity_level: onboardingData.activity,
-    macro_protein: macroTargets?.protein != null ? Number(macroTargets.protein) : undefined,
-    macro_carbs: macroTargets?.carbs != null ? Number(macroTargets.carbs) : undefined,
-    macro_fat: macroTargets?.fat != null ? Number(macroTargets.fat) : undefined,
-    macro_calories: macroTargets?.calories != null ? Number(macroTargets.calories) : undefined,
-  });
-}
 
 export default function LoginScreen() {
   const { colors } = useTheme();
@@ -52,7 +34,6 @@ export default function LoginScreen() {
       completeGoogleSignIn(idToken)
         .then(async (result) => {
           trackAuthSuccess({ provider: 'google', is_new_user: result.isNewUser });
-          await captureIdentity(result.user.id, result.user.email);
           await requireProfileFromServer();
           setGoogleLoading(false);
           router.replace('/(tabs)/search');
@@ -73,7 +54,6 @@ export default function LoginScreen() {
     try {
       const result = await appleSignIn();
       trackAuthSuccess({ provider: 'apple', is_new_user: result.isNewUser });
-      await captureIdentity(result.user.id, result.user.email);
       await requireProfileFromServer();
       router.replace('/(tabs)/search');
     } catch (err) {
@@ -100,9 +80,8 @@ export default function LoginScreen() {
   async function handleDevLogin() {
     setDevLoading(true);
     try {
-      const r = await devLogin();
+      await devLogin();
       trackAuthSuccess({ provider: 'dev', is_new_user: false });
-      await captureIdentity(r.user.id, r.user.email);
       await requireProfileFromServer();
       router.replace('/(tabs)/search');
     } catch (err) {

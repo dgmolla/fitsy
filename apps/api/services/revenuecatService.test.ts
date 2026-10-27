@@ -22,6 +22,28 @@ afterEach(() => {
 });
 
 describe("fetchProEntitlement", () => {
+  it('never uses a Test Store key in production', async () => {
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['REVENUECAT_PUBLIC_API_KEY'] = 'test_fixture';
+    global.fetch = jest.fn();
+    expect(await fetchProEntitlement('u1')).toBeNull();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([true, undefined, false])('production requires non-sandbox store proof: %s', async sandbox => {
+    process.env['VERCEL_ENV'] = 'production';
+    mockFetch(200, { subscriber: {
+      entitlements: { pro: { product_identifier: 'monthly', expires_date: new Date(Date.now() + 60_000).toISOString() } },
+      subscriptions: { monthly: { is_sandbox: sandbox } },
+    } });
+    const state = await fetchProEntitlement('u1');
+    if (sandbox === false) expect(state?.active).toBe(true);
+    else expect(state).toBeNull();
+    expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      headers: expect.objectContaining({ 'x-is-sandbox': 'false' }),
+    }));
+  });
+
   it("returns null (unknown) when no key is configured, without calling out", async () => {
     delete process.env["REVENUECAT_PUBLIC_API_KEY"];
     global.fetch = jest.fn() as unknown as typeof fetch;

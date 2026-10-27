@@ -12,8 +12,7 @@ import { OnboardingAccountSummary } from '@/components/OnboardingAccountSummary'
 import { WelcomeAuthActions } from '@/components/WelcomeAuthActions';
 import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent, markPurchasedContinuation, type PaywallIntent } from '@/lib/paywallIntent';
 import { getMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
-import { getOnboardingData } from '@/lib/onboardingStorage';
-import { identifyUser, trackAuthFailure, trackAuthSuccess, trackOnboardingScreenView } from '@/lib/analytics';
+import { trackAuthFailure, trackAuthSuccess, trackOnboardingScreenView } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { bindPaymentSignInContinuation, clearPaymentSignInContinuation, hasPaymentSignInContinuation, preparePaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
@@ -33,19 +32,6 @@ const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 async function checkoutVerdict() {
   try { return await withinMs(syncPaywallVerdictForCheckout(), BOOT_VERDICT_CAP_MS) ?? 'unknown'; }
   catch { return 'unknown'; }
-}
-
-async function captureIdentity(userId: string, email?: string | null): Promise<void> {
-  const [mt, od] = await Promise.all([getMacroTargets(), getOnboardingData()]);
-  identifyUser(userId, {
-    email: email ?? undefined,
-    goal: od.goal,
-    activity_level: od.activity,
-    macro_protein: mt?.protein != null ? Number(mt.protein) : undefined,
-    macro_carbs: mt?.carbs != null ? Number(mt.carbs) : undefined,
-    macro_fat: mt?.fat != null ? Number(mt.fat) : undefined,
-    macro_calories: mt?.calories != null ? Number(mt.calories) : undefined,
-  });
 }
 
 export default function SignInScreen() {
@@ -187,7 +173,6 @@ export default function SignInScreen() {
     if (!isCurrent()) return;
     if (outOfArea !== '1' && isCurrent()) await requireProfileFromServer();
     if (!isCurrent()) return;
-    await captureIdentity(r.user.id, r.user.email);
     if (!isCurrent()) return;
     await navigateAfterAuth(r.isNewUser, r.user.id, ownedCheckout, isCurrent);
   }, [navigateAfterAuth, outOfArea, returnTo]);
