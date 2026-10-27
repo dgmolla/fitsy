@@ -2,7 +2,7 @@ import { parseChoiceAnswers, type JevRequest } from '../lib/jev-experiment';
 import { coarseQuestion, HIERARCHICAL_PROTOCOL } from '../jev-macro/hierarchical-bins';
 import { JEV_LIMITS } from '../lib/jev-experiment';
 import { macroNames, type Candidate, type Item, type Macros, type Matcher, type Method } from './types';
-import type { JevClient } from './budget';
+import type { ChoiceClient } from './budget';
 
 const normalize = (text: string) => text.normalize('NFKD').toLowerCase().replace(/[\u0300-\u036f]/g, '')
   .replace(/[’'®™]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9.]+/g, ' ').trim().replace(/\s+/g, ' ');
@@ -35,18 +35,30 @@ export function estimatorState(item: Item) {
     .test([item.name, item.section, item.description, item.serving].join('\n'))) throw new Error('Nutrition target in estimator input');
   return { chain: item.chain, itemName: item.name, description: [item.section, item.description, item.region].filter(Boolean).join('\n'), serving: item.serving };
 }
-export function jevMethod(client: JevClient): Method {
-  return { name: 'jev-v3', matcher: { name: 'jev-matcher-v3', async match(item, rows) {
+export function choiceMethod(name: string, client: ChoiceClient): Method {
+  return { name, matcher: { name: `${name}-matcher-v3`, async match(item, rows) {
     const request = matchingRequest(item, rows), response = await client.send(request);
     const answer = parseChoiceAnswers(request, response.raw)['match']!;
     if (answer.choice === 'none' || answer.choice === 'abstain') return { kind: answer.choice, matchId: null, confidence: answer.confidence };
     return { kind: 'match', matchId: rows[Number(answer.choice.slice(1))]!.id, confidence: answer.confidence };
-  } }, estimator: { name: 'jev-estimator-v3', async estimate(item) {
-    const state = estimatorState(item), request: JevRequest = { model: JEV_LIMITS.model, state,
-      questions: Object.fromEntries(macroNames.map(macro => [macro, coarseQuestion(macro)])) };
+  } }, estimator: { name: `${name}-estimator-v3`, async estimate(item) {
+    const request = coarseRequest(item);
     const coarse = parseChoiceAnswers(request, (await client.send(request)).raw);
     // Original v3 has explicit overflow; never clip family/catering totals into supported bins.
     if (macroNames.some(macro => coarse[macro]!.choice === 'overflow')) return null;
+    const fine = refinementRequest(request.state, coarse);
+    const answers = Object.keys(fine.questions).length ? parseChoiceAnswers(fine, (await client.send(fine)).raw) : {};
+    return Object.fromEntries(macroNames.map(macro => {
+      const choice = coarse[macro]!.choice, width = macro === 'calories' ? 250 : 20;
+      return [macro, choice === 'zero' ? 0 : Number(choice.slice(1)) * width + (Number(answers[macro]!.choice.slice(1)) + 0.5) * width / 10];
+    })) as Macros;
+  } } };
+}
+export function coarseRequest(item: Item): JevRequest {
+  return { model: JEV_LIMITS.model, state: estimatorState(item),
+    questions: Object.fromEntries(macroNames.map(macro => [macro, coarseQuestion(macro)])) };
+}
+export function refinementRequest(state: JevRequest['state'], coarse: Record<string, { choice: string }>): JevRequest {
     const fine: JevRequest = { model: JEV_LIMITS.model, state, questions: {} };
     for (const macro of macroNames) {
       const choice = coarse[macro]!.choice;
@@ -58,18 +70,13 @@ export function jevMethod(client: JevClient): Method {
       criteria: Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`r${i}`,
         `${lower + i * step} ${lower === 0 && i === 0 ? '<' : '<='} total < ${lower + (i + 1) * step}`])) };
     }
-    const answers = Object.keys(fine.questions).length ? parseChoiceAnswers(fine, (await client.send(fine)).raw) : {};
-    return Object.fromEntries(macroNames.map(macro => {
-      const choice = coarse[macro]!.choice, width = macro === 'calories' ? 250 : 20;
-      return [macro, choice === 'zero' ? 0 : Number(choice.slice(1)) * width + (Number(answers[macro]!.choice.slice(1)) + 0.5) * width / 10];
-    })) as Macros;
-  } } };
+    return fine;
 }
-export function method(name: string, client?: JevClient): Method {
+export const jevMethod = (client: ChoiceClient) => choiceMethod('jev-v3', client);
+export function method(name: string, client?: ChoiceClient): Method {
   if (name === 'exact') return { name, matcher: exactMatcher };
-  if (name === 'jev-v3' && client) return jevMethod(client);
-  if (name === 'haiku' || name === 'qwen') throw new Error(`${name} is a documented stub; implement its isolated adapter and explicit budget before use`);
-  throw new Error('Unknown method or Jev live client missing');
+  if (['jev-v3', 'haiku', 'qwen'].includes(name) && client) return choiceMethod(name, client);
+  throw new Error('Unknown method or explicit provider client missing');
 }
 export const adapterProtocol = { matchingVersion: 3, matchingInstructions,
   candidateFields: ['chain', 'name', 'section', 'serving', 'region', 'optional source tags'],
