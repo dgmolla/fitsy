@@ -30,7 +30,13 @@ The comparison consumer now proves payload uniqueness, the preserved starting le
 The suite README documents the actual retry and detached collection entrypoints, while strict decoder tests and secondary normalization tests constrain their behavior.
 The first focused test compile found a Node assert import incompatible with Jest's module settings; its supported named import corrects that without changing scoring.
 Lint/type checks and the real comparison generator preflight pass before paid collection.
-Next: freeze this implementation, complete actual-runner regressions, then run only the 33 selected cases detached with reservations before the cache-only four-method rescore.
+The implementation is frozen at `df5402c`.
+The canonical cheap gate passes the actual runner and 63 focused regressions, but catches one structural CLI `console.log` violation in the new diagnostic.
+The diagnostic now uses the existing `process.stdout.write` convention; retained logs include the first failure and its correction.
+An earlier development runner test correctly refused dirty executing source; the committed-source rerun passes.
+The credential-free live preflight reserves at most $0.452784 across exactly 33 cases, putting worst-case cumulative spend at $1.03074618.
+Its audit is `results/haiku-format-live-preflight/audit.json`; it leaves the ledger byte-identical and makes zero transport calls.
+Next: rerun the repaired cheap gate, then launch exactly one detached collection of the 33 selected cases and retain its PID/log/exit receipt before the cache-only rescore.
 
 ## Prior comparison history
 

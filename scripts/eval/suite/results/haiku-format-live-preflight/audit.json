@@ -1,0 +1,33 @@
+{
+  "sourceHead": "df5402c",
+  "caseCount": 33,
+  "counts": [
+    {
+      "tier": "curated",
+      "task": "matching",
+      "count": 2
+    },
+    {
+      "tier": "curated",
+      "task": "macro",
+      "count": 14
+    },
+    {
+      "tier": "bulk",
+      "task": "matching",
+      "count": 1
+    },
+    {
+      "tier": "bulk",
+      "task": "macro",
+      "count": 16
+    }
+  ],
+  "selectionSha256": "53e8e76c04b682cc526728cc7f3f2210ae893de7e3680bdabe8383b577dc67cd",
+  "reservedUpperBoundUsd": 0.452784,
+  "priorCumulativeUsd": 0.5779621800000001,
+  "maximumCumulativeUsd": 1.0307461800000002,
+  "stopUsd": 2.7,
+  "hardCapUsd": 3,
+  "transportCalls": 0
+}

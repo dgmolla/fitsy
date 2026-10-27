@@ -108,7 +108,7 @@ export async function diagnose(baselineId: string, outputName = 'haiku-format-pr
   writeFileSync(join(out, 'normalized-predictions.jsonl'), normalized.map(r => JSON.stringify(r)).join('\n') + '\n', { flag: 'wx' });
   assert.equal(sha256(readFileSync(join(directory, 'spend.jsonl'))), sha256(ledger));
   write(join(suite, 'sources/haiku-format-failed-dev.json'), { baselineId, caseIds: metadata.selectionIds.filter((id: string) => failed.some(r => r.id === id)) });
-  console.log(JSON.stringify({ outputName, counts, normalizedCacheMisses: misses.length, ledger: state }, null, 2));
+  process.stdout.write(JSON.stringify({ outputName, counts, normalizedCacheMisses: misses.length, ledger: state }, null, 2) + '\n');
 }
 
 if (require.main === module) diagnose(process.argv[2]!).catch(() => { console.error('Haiku cache diagnosis refused; inspect source and baseline evidence.'); process.exitCode = 1; });
