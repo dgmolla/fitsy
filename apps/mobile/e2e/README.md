@@ -115,6 +115,10 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
+For syntax-only checks in a restricted worker, Maestro may fail while changing permissions on its shared `~/.maestro/deps` cache.
+The installed CLI supports `MAESTRO_OPTS="-Duser.home=$PWD/.evidence/maestro-runtime" maestro check-syntax apps/mobile/e2e/flows/shuffle.yaml` to put its Java runtime cache inside the owned checkout without changing `HOME` or shared binaries.
+This validates the saved YAML with Maestro's parser; it does not grant CoreSimulator access or establish native acceptance.
+
 Deploy the candidate API to `dev.fitsy.org` through the existing coordinated preview procedure before running journeys that use `helpers/data-api.mjs`.
 The stable dev domain follows `main`; a successful feature-branch Vercel preview does not update that domain.
 The host runner owner must verify the candidate dev deployment before native replay; do not merge early or remove the 401 assertions to satisfy Simulator.
@@ -133,6 +137,10 @@ Retain the failed run and the recovered run separately; changing deployment conf
 `shuffle` requires a populated dev backend, `entitled-dev` and a Debug Test Store build.
 It signs the entitled fixture into the dev API and checks normal and shuffled search pages, a changed restaurant set and persisted RevenueCat proof before mobile launch can synchronize the subscription.
 Its `helpers/shuffle-subscriber.mjs` helper keeps tokens and credentials out of Maestro output, uses only `dev.fitsy.org`, and rejects a demo bypass without actual subscription proof.
+Before selection it captures the public health deployment SHA and requires an authenticated invalid shuffle option to return 400.
+An older search API can pass the auth probes yet silently ignore shuffle options and return the same ranked page with HTTP 200.
+The saved flow reports that incompatible deployment explicitly and retains each access, nutrition, subscription-proof and changed-list assertion with diagnostic values and result counts.
+Use the coordinated preview test window above to deploy the candidate API; a feature-branch mobile bundle alone cannot establish shuffle behavior.
 It chooses DTLA and independent targets of 600 kcal, 40 g protein, 60 g carbs and 20 g fat, then taps the small Shuffle icon in the main search field twice.
 The button fetches and replaces the restaurant page through the same search endpoint, preserving query, targets, area and access rules.
 Pagination continues in the returned seeded order.
@@ -142,8 +150,8 @@ Production builds ignore that parameter and require the PostHog boolean flag `sh
 There is no separate pick panel, Shuffle again, View menu, or Shuffle-specific loading, error, or empty state.
 The button is disabled while search is pending or refreshing, or when the current list is empty.
 `components/DiscoveryShuffle.test.tsx` exercises the real search screen and the saved flow's result assertions, including repeated taps, query-only search, rollout, empty results, and locked cards.
-`components/DiscoveryRequests.test.tsx` covers cancellation of old pagination, seeded pagination, recent restaurant exclusions, retry after network failure or timeout, and replacement by a new search.
-`lib/shuffleSubscriberFlow.test.ts` exercises the saved search and shuffle preflight, its flow assertions, inactive or missing proof, authentication failure, and credential-output boundaries.
+`components/DiscoveryRequests.test.tsx` covers cancellation of old pagination, seeded pagination, recent restaurant exclusions within the encoded URL budget, retry after network failure or timeout, and replacement by a new search.
+`lib/shuffleSubscriberFlow.test.ts` exercises the saved search and shuffle preflight, stale-deployment diagnostics, its flow assertions, inactive or missing proof, authentication failure, and credential-output boundaries.
 Run it through `node scripts/sim/ci.mjs --scope=flow --flows=shuffle --udid=<UDID>` with the local fixture configuration.
 The planner expands this request when the candidate also affects shared UI or other journeys.
 

@@ -158,7 +158,7 @@ See `docs/engineering/architecture/auth.md` for full flow and request/response s
 | `cursor` | string | No | - | Opaque pagination cursor from previous page |
 | `shuffle` | boolean flag | No | 0 | `1` requests a fresh restaurant page; `0` keeps ranked search |
 | `seed` | string | No | Random | Nonempty, at most 100 characters; requires `shuffle=1` |
-| `excludeRestaurantIds` | string | No | None | Up to 1,000 comma-separated restaurant IDs, at most 128 characters each; requires `shuffle=1` |
+| `excludeRestaurantIds` | string | No | None | Up to 1,000 comma-separated restaurant IDs, at most 128 characters each and 8,000 URL-encoded bytes total; requires `shuffle=1` |
 
 Active macro targets must be finite numbers from 0.01 through 100,000. Zero disables a dimension; blank, negative, or conflicting targets return 400.
 
@@ -242,7 +242,8 @@ Without active targets, all otherwise eligible restaurants participate.
 Ordinary search continues to rank relevant meals by macro fit and distance.
 
 Supply a fresh `seed` and the shown restaurant IDs in `excludeRestaurantIds` for each shuffle.
-The mobile client retains up to 1,000 recently shown restaurant IDs for the current search.
+The mobile client retains recent restaurant IDs within both the 1,000-ID and 8,000-encoded-byte limits, evicting oldest IDs first.
+The byte budget includes encoded comma separators and leaves room for filters, seed and cursor within the hosting URL limit.
 Unseen restaurants appear first in uniform seeded order.
 Previously shown restaurants only fill the page when there are not enough new matches, with no duplicate restaurant within a page.
 Fallback never widens targets, filters or radius.

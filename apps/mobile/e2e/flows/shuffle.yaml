@@ -17,8 +17,15 @@ env:
 - assertTrue: ${output.nearby.status === 200 && json(output.nearby.body).data.length > 0}
 # Direct API access must work before Dev Login runs its own RevenueCat sync.
 - runScript: ../helpers/shuffle-subscriber.mjs
-- assertTrue: ${output.shuffleApiLoginStatus === 200 && output.shuffleSearchStatus === 200 && output.shuffleApiStatus === 200}
-- assertTrue: ${output.shuffleApiUnlocked && output.shuffleApiHasDish && output.shuffleApiHasMacros && output.shuffleApiVerified && output.shuffleApiListChanged}
+- assertTrue:
+    condition: ${output.shuffleApiValidationStatus === 400}
+    label: "dev.fitsy.org backend ${output.shuffleApiDeploymentSha} must support shuffle search (invalid shuffle HTTP ${output.shuffleApiValidationStatus}, expected 400); deploy the candidate API before replaying Simulator"
+- assertTrue:
+    condition: ${output.shuffleApiLoginStatus === 200 && output.shuffleSearchStatus === 200 && output.shuffleApiStatus === 200}
+    label: "Shuffle preflight HTTP statuses: login=${output.shuffleApiLoginStatus}, search=${output.shuffleSearchStatus}, shuffle=${output.shuffleApiStatus}; expected 200/200/200"
+- assertTrue:
+    condition: ${output.shuffleApiUnlocked && output.shuffleApiHasDish && output.shuffleApiHasMacros && output.shuffleApiVerified && output.shuffleApiListChanged}
+    label: "Shuffle preflight: unlocked=${output.shuffleApiUnlocked}, dish=${output.shuffleApiHasDish}, macros=${output.shuffleApiHasMacros}, verified=${output.shuffleApiVerified}, listChanged=${output.shuffleApiListChanged}; search=${output.shuffleSearchCount}, shuffle=${output.shuffleResultCount}, fitting=${output.shuffleTotal}"
 # Establish the search area before launch.
 - setLocation:
     latitude: 34.0407

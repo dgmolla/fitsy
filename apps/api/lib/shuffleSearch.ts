@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
+import { SHUFFLE_EXCLUSION_MAX_ENCODED_LENGTH } from '@fitsy/shared';
 
 export interface SearchShuffle {
   seed: string;
@@ -20,7 +21,10 @@ export function parseSearchShuffle(params: URLSearchParams, cursorSeed?: string)
     return undefined;
   }
   if (seed !== undefined && seed.length > 100) throw Error('seed must be 100 characters or fewer');
-  if (excluded !== undefined && excluded.length > 128_999) throw Error('excludeRestaurantIds is too long');
+  if (excluded !== undefined && (excluded.length > SHUFFLE_EXCLUSION_MAX_ENCODED_LENGTH ||
+      encodeURIComponent(excluded).length > SHUFFLE_EXCLUSION_MAX_ENCODED_LENGTH)) {
+    throw Error(`excludeRestaurantIds must be ${SHUFFLE_EXCLUSION_MAX_ENCODED_LENGTH} encoded characters or fewer`);
+  }
   const excludeRestaurantIds = [...new Set(excluded?.split(',') ?? [])].sort();
   if (excludeRestaurantIds.length > 1000 || excludeRestaurantIds.some(id => !/^[a-zA-Z0-9_-]{1,128}$/.test(id))) {
     throw Error('excludeRestaurantIds must contain at most 1000 comma-separated restaurant ids');

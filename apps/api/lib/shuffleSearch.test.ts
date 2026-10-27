@@ -27,6 +27,12 @@ test('normalizes shown restaurant identities for reproducible cursor context', (
   expect(restaurantCursorContext({ ...context, targets: {} })).not.toBe(hash);
 });
 
+test('bounds encoded UUID exclusions rather than accepting a request too long for deployment', () => {
+  const ids = Array.from({ length: 206 }, (_, i) => `${i.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`);
+  expect(parse(`shuffle=1&excludeRestaurantIds=${ids.slice(0, 205).join(',')}`)!.excludeRestaurantIds).toEqual(ids.slice(0, 205));
+  expect(() => parse(`shuffle=1&excludeRestaurantIds=${ids.join(',')}`)).toThrow('8000 encoded characters');
+});
+
 test.each(['shuffle=true', 'shuffle=', 'shuffle=1&shuffle=1', 'shuffle=1&seed=', 'shuffle=1&seed=a&seed=b',
   'seed=unused', 'excludeRestaurantIds=unused', 'shuffle=1&excludeRestaurantIds=a,,b',
   'shuffle=1&excludeRestaurantIds=a&excludeRestaurantIds=b', 'shuffle=1&excludeRestaurantIds=a%27OR%201=1',

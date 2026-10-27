@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { randomUUID } from 'expo-crypto';
 import type { RestaurantResult } from '@fitsy/shared';
+import { SHUFFLE_EXCLUSION_MAX_ENCODED_LENGTH } from '@fitsy/shared/contracts/search';
 import type { MacroValues } from './macroPresets';
 import type { UseLocationResult, LocationState } from './useLocation';
 import { fetchRestaurantsPage } from './apiClient';
@@ -47,8 +48,14 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
       shownRestaurantIds.current.delete(row.id);
       shownRestaurantIds.current.add(row.id);
     }
-    // Match the API's bounded recent-history contract.
-    while (shownRestaurantIds.current.size > 1000) shownRestaurantIds.current.delete(shownRestaurantIds.current.values().next().value!);
+    // Evict oldest IDs before freezing the shuffle context; never trim later pages differently.
+    const history = shownRestaurantIds.current;
+    let encodedLength = [...history].reduce((length, id) => length + encodeURIComponent(id).length + 3, 0);
+    while (history.size > 1000 || encodedLength - 3 > SHUFFLE_EXCLUSION_MAX_ENCODED_LENGTH) {
+      const oldest = history.values().next().value!;
+      history.delete(oldest);
+      encodedLength -= encodeURIComponent(oldest).length + 3;
+    }
   }, []);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doFetch = useCallback(

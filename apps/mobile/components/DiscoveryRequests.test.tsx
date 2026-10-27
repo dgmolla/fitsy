@@ -74,6 +74,38 @@ it('fetches a fresh shuffle page, cancels old pagination, and keeps later pages 
   expect(result.current.results.map(row => row.id)).toEqual(['new-one', 'new-two']);
 });
 
+it('keeps long-session UUID exclusions within the URL budget and freezes them for shuffled pagination', async () => {
+  const ids = Array.from({ length: 440 }, (_, i) => `${i.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`);
+  const { result } = renderHook(() => useDiscoveryResults({ inputs, query: 'long-session', location, canSearch: true,
+    targetsLoaded: true, previewReady: true, isOnboardingPreview: false }));
+  await act(async () => {});
+  for (let page = 0; page < 20; page++) {
+    if (page) {
+      act(() => { void result.current.handleEndReached(); });
+      await act(async () => {});
+    }
+    await act(async () => respond(page, ids.slice(page * 20, (page + 1) * 20), { locked: false, nextCursor: `page-${page + 1}` }));
+  }
+  expect(result.current.results).toHaveLength(400);
+  act(() => result.current.handleShuffle());
+  await act(async () => {});
+  const shuffled = new URL(requests[20].url);
+  expect(shuffled.href.length).toBeLessThan(12_000);
+  // Inspect query values locally; all network requests still use the real API client.
+  const shuffleParams = Object.fromEntries(shuffled.searchParams);
+  const excluded = shuffleParams.excludeRestaurantIds.split(',');
+  expect(encodeURIComponent(excluded.join(',')).length).toBeLessThanOrEqual(8_000);
+  expect(excluded).toEqual(ids.slice(400 - excluded.length, 400));
+  expect(excluded).toEqual(expect.arrayContaining(ids.slice(380, 400)));
+  await act(async () => respond(20, ids.slice(400, 420), { locked: false, nextCursor: 'seeded-next' }));
+  act(() => { void result.current.handleEndReached(); });
+  await act(async () => {});
+  const next = Object.fromEntries(new URL(requests[21].url).searchParams);
+  for (const key of ['shuffle', 'seed', 'excludeRestaurantIds']) expect(next[key]).toBe(shuffleParams[key]);
+  await act(async () => respond(21, ids.slice(420), { locked: false }));
+  expect(result.current.results).toHaveLength(40);
+});
+
 it.each([true, false])('uses the returned access verdict and disables shuffle during refresh (locked=%s)', async locked => {
   const { result } = renderHook(() => useDiscoveryResults({ inputs, query: `shuffle-access-${locked}`, location, canSearch: true,
     targetsLoaded: true, previewReady: true, isOnboardingPreview: false }));
