@@ -18,7 +18,13 @@ The corrected provisioner saved dev_db_url and dev_db_readonly_url in ~/Desktop/
 Actual credential acceptance passed: SELECT on 18 public tables, zero write-capable tables, read-only default on, and six denied zero-row DML probes including after session read-only was disabled.
 No PROD role, credential change or deployable role migration was introduced.
 Current validation: cheap gates and selected focused tests; the supported planner requires the full native flow set because the existing production migration entrypoint changed.
-Next: freeze the reviewed source, publish normally, obtain current-head local AI review, CI and the required native acceptance before ordinary squash merge.
+PR: https://github.com/dgmolla/fitsy/pull/582 (open).
+Published normally after 85 focused tests and all cheap gates passed, including the actual shared guard through the owned Docker migration/seed caller.
+Current main is an ancestor of the candidate, and both installed local review services are loaded.
+The native planner selects all 22 flows because scripts/deploy/migrate-prod.sh changed; no applicable gate is waived.
+The source/configuration audit and actual DEV credential acceptance are complete; runtime PROD RLS remains unqueried.
+Next: require exact-head trusted CI, independent local AI review without P0/P1 and native acceptance, then ordinary squash merge and verify merged-main CI/deploy.
+Final live PR/deployment state is retained in /tmp/ga/report.md so status reporting does not manufacture code changes after candidate review.
 
 ## Earlier task history retained from main
 
