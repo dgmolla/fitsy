@@ -19,6 +19,9 @@ flowchart LR
 Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` through the existing Vercel environment workflow.
 Use a writable REST token and HTTPS URL, with one database shared by every instance and region of an environment.
 Use separate databases for production and nonproduction, with eviction disabled so live buckets cannot disappear under memory pressure.
+The Vercel build entrypoint runs `node --import tsx apps/api/services/rateLimitStoreConfig.ts` before migrations or the application build.
+It uses the request handler's configuration parser and refuses missing, partial or malformed credentials without logging their values.
+This validates configuration syntax; it does not prove provider availability, writable access or production/nonproduction isolation.
 Do not add a replica, per-instance prefix, caller-controlled namespace or local allow cache.
 Upstash's [REST API](https://upstash.com/docs/redis/features/restapi) supports the single `EVAL` operation used here.
 No PostgreSQL migration or application-table grant is needed.
@@ -70,6 +73,12 @@ Use an invalid-body auth request against an isolated nonproduction deployment to
 Do not run quota probes against production as part of ordinary implementation validation.
 
 ## Verification and recovery
+
+When simulator preflight receives 503, inspect the matching deployment's runtime logs before replaying account journeys.
+If the shared store is unconfigured, restore the dedicated nonproduction URL and writable token through Vercel's environment settings, redeploy the same candidate and verify anonymous/invalid-session 401s plus fixture login 200 before rerunning the complete selected flows.
+An existing deployment retains its original environment until redeployed.
+If provisioning requires accepting new provider terms or granting new integration access, retain that concrete boundary for the authorized account owner; do not substitute production credentials or relax fail-closed quotas.
+The build regression in `scripts/deploy/routine-release.test.py` runs the actual deployment entrypoint with synthetic external CLIs and proves missing configuration cannot reach migrations or the build in either Preview or Production.
 
 The API suite includes deterministic external REST fixtures and independently loaded API worker processes.
 It proves provider-wide auth quotas, cold-start persistence, waitlist quotas, per-user limits across IPs, forged-header resistance, concurrent admission and capacity/expiry behavior.

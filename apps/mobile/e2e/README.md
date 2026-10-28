@@ -130,6 +130,8 @@ The helper also writes one `[data-api]` JSON line containing only numeric HTTP s
 An invalid-session probe or login returning 503 with `Service unavailable` can mean the deployed shared rate-limit store is missing or unavailable, even while health reports a connected database.
 Check the deployment's `[rate-limit] Shared store unavailable` runtime log and the nonproduction `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` configuration through the [shared-quota recovery contract](../../../docs/engineering/backend/api-rate-limits.md#verification-and-recovery).
 The existing host delivery owner must restore the nonproduction store configuration, redeploy the candidate and verify the same preflight before replaying; preserve fail-closed behavior and every journey assertion.
+The Vercel build now validates the same shared-store configuration as request handling before migrations or builds, so missing credentials withhold deployment instead of producing another Ready API that cannot authenticate.
+Retain a required new-provider terms/access grant for the account owner when provisioning is necessary; the existing deployment needs a fresh candidate redeploy after the dedicated nonproduction configuration is restored.
 For a pre-merge test window, the existing host owner can use the `fitsy-api` project's Vercel Domains page to edit `dev.fitsy.org`, keep the Preview environment, and temporarily select the candidate branch.
 Record the original `dev` branch mapping and the candidate's ready deployment and exact commit before saving.
 Verify the saved mapping and anonymous/invalid-token 401s before the existing runner replays; the branch preview URL alone does not prove that the app's configured origin changed.

@@ -311,7 +311,8 @@ class VercelBuildTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='fitsy-vercel-build-')
         self.root = Path(self.temp.name)
-        for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh', 'scripts/lib/db-target-guard.ts'):
+        for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh', 'scripts/lib/db-target-guard.ts',
+                     'apps/api/services/rateLimitStoreConfig.ts'):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
@@ -326,11 +327,12 @@ class VercelBuildTests(unittest.TestCase):
             command.chmod(0o700)
         self.calls = self.root / 'calls'
         self.env = {key: value for key, value in os.environ.items()
-                    if not key.startswith(('VERCEL', 'POSTGRES', 'PROD_', 'FITSY_ALLOW_PROD', 'GITHUB_ACTIONS'))}
+                    if not key.startswith(('VERCEL', 'POSTGRES', 'PROD_', 'FITSY_ALLOW_PROD', 'GITHUB_ACTIONS', 'UPSTASH_'))}
         self.env.update(PATH=str(self.bin) + ':' + os.environ['PATH'], CALLS=str(self.calls),
                         VERCEL='1', VERCEL_ENV='production', VERCEL_PROJECT_ID='prj_z1QTfOgbj4tlm91U2Hf8JXr5k4v4',
                         VERCEL_GIT_PROVIDER='github', VERCEL_GIT_REPO_OWNER='dgmolla', VERCEL_GIT_REPO_SLUG='fitsy',
                         VERCEL_GIT_COMMIT_REF='main', VERCEL_GIT_COMMIT_SHA='a' * 40,
+                        UPSTASH_REDIS_REST_URL='https://quota.example.test', UPSTASH_REDIS_REST_TOKEN='private-fixture-token',
                         POSTGRES_URL_NON_POOLING='postgresql://postgres.zaxkmjqozvmbifiwbxps:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres',
                         POSTGRES_PRISMA_URL='postgresql://postgres.zaxkmjqozvmbifiwbxps:fixture@aws-1-us-east-1.pooler.supabase.com:6543/postgres')
 
@@ -342,6 +344,40 @@ class VercelBuildTests(unittest.TestCase):
         result = subprocess.run(['bash', 'scripts/dev/vercel-build.sh'], cwd=self.root,
                                 env={**self.env, **changes}, text=True, capture_output=True)
         return result, self.calls.read_text().splitlines()
+
+    def test_missing_shared_store_withholds_deployment_before_migrations_or_build(self):
+        for environment in ('production', 'preview'):
+            for missing in ('both', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'):
+                changes = {'VERCEL_ENV': environment}
+                if environment == 'preview':
+                    changes.update(POSTGRES_URL_NON_POOLING='postgresql://fixture:fixture@localhost:5432/dev',
+                                   POSTGRES_PRISMA_URL='postgresql://fixture:fixture@localhost:5432/dev')
+                for key in ('UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'):
+                    if missing in ('both', key):
+                        changes[key] = ''
+                with self.subTest(environment=environment, missing=missing):
+                    result, calls = self.drive(**changes)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(calls, [])
+                    self.assertIn('UPSTASH_REDIS_REST_URL', result.stderr)
+                    self.assertIn('UPSTASH_REDIS_REST_TOKEN', result.stderr)
+                    self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
+
+    def test_invalid_shared_store_configuration_is_private_and_withholds_build(self):
+        invalid = [('UPSTASH_REDIS_REST_URL', value) for value in
+                   ('http://quota.example.test', 'not-a-url-private-value',
+                    'https://user:private-value@quota.example.test',
+                    'https://quota.example.test?token=private-value', 'https://quota.example.test#private-value')]
+        invalid += [('UPSTASH_REDIS_REST_TOKEN', value) for value in (' ', '\n', 'private-value\n')]
+        for environment in ('production', 'preview'):
+            for key, value in invalid:
+                with self.subTest(environment=environment, key=key, value=value):
+                    result, calls = self.drive(VERCEL_ENV=environment, **{key: value})
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(calls, [])
+                    self.assertIn('refusing: configure UPSTASH_REDIS_REST_URL', result.stderr)
+                    self.assertNotIn('private-value', result.stdout + result.stderr)
+                    self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
 
     def test_actual_production_build_migrates_before_build_using_existing_bindings(self):
         direct = 'postgresql://postgres:fixture@db.zaxkmjqozvmbifiwbxps.supabase.co/postgres'
