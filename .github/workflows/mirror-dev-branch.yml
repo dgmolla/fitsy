@@ -21,6 +21,9 @@ on:
       - "package.json"
       - "package-lock.json"
       - "scripts/dev/vercel-build.sh"
+      - "scripts/deploy/migrate-prod.sh"
+      - "scripts/deploy/rate-limit-preflight.ts"
+      - "scripts/lib/db-target-guard.ts"
 permissions:
   contents: write
 jobs:

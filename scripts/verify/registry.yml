@@ -136,7 +136,7 @@ checks:
     layer: 3
     blocking: true
     runs: [local, ci]
-    why: Next.js production build catches what tests miss; asserts no compiled output lands in the tree.
+    why: Offline Next.js production compilation catches what tests miss and asserts no stray compiled output; deployment Redis bindings are checked before migrations by the guarded Vercel Git build.
 
   - name: mobile-bundle
     script: mobile-bundle.sh
