@@ -195,6 +195,8 @@ function sourceVersions(path, range, cwd, env) {
 }
 
 export function verificationScriptsOnly(path, range, cwd, env) {
+  // API Jest setup affects tests, never the served API or native application.
+  if (path === 'apps/api/jest.config.js') return true;
   if (!/^(?:package\.json|apps\/(?:api|mobile)\/package\.json)$/.test(path) || !range || range.unknown) return false;
   try {
     const manifests = sourceVersions(path, range, cwd, env).map(text => {

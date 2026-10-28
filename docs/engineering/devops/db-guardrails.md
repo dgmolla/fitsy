@@ -98,7 +98,7 @@ It recognizes direct Supabase hosts, provider-qualified pooler usernames, percen
 Passwords are never used for target identity.
 Conflicting routes, duplicate/unknown routing parameters, unknown remote hosts and unapproved project references fail closed.
 
-DEV and loopback test databases work normally.
+DEV and loopback databases work normally for these script mutation entrypoints.
 PROD requires all of `FITSY_ALLOW_PROD_WRITE=1`, the separate `--prod` argument, and `GITHUB_ACTIONS=true` or the existing pinned `fitsy-api` Git main production deployment identity.
 The production migration wrapper supplies both explicit intentions only after its existing deploy identity checks.
 The old local `FITSY_ALLOW_PROD=1` operator-migration exception is removed.
@@ -117,7 +117,7 @@ Auth mutations independently require the exact DEV Supabase API origin.
 | `scripts/dev/provision-supabase.sh`, `vercel-build.sh` | Shared DEV-only guard before database migrations |
 | `scripts/deploy/migrate-prod.sh` | Shared guard plus existing exact production deploy identity/URL checks |
 | `scripts/verify/local-db-control.mjs` | Existing exclusive Docker ownership checks plus shared DEV-only preflight before reset/migration/seed |
-| `apps/api/tests/db/goal-preview.performance.ts` | Shared DEV guard plus its existing localhost-only benchmark rule |
+| `apps/api/tests/db/goal-preview.performance.ts` | Shared test guard plus its existing localhost-only benchmark rule |
 
 Library writers such as `hex-persist.ts`, `pipeline-utils.ts` and chain services receive clients from these guarded entries or the owned database test harness.
 The checked script inventory distinguishes the existing proposal/audit scripts that only read the database and rejects new unguarded Prisma clients or mutation growth in those exceptions.
@@ -127,6 +127,17 @@ Database permissions are the enforcing boundary for the audit credential; script
 Before this change, most preload/backfill/chain entries accepted whichever owner URL was in the environment, and DEV helpers offered a local production override.
 The end-user CLI reproduction observed one connection to a loopback-only fake PostgreSQL server carrying a synthetic production username.
 After the guard, the same CLI refused before any connection.
+
+## Database test boundary
+
+API and pipeline Jest configs run `scripts/lib/test-database-guard.ts` before importing suites, including direct workspace test and coverage commands.
+Both configured PostgreSQL URLs must target a disposable loopback database without a Supabase project route.
+Shared DEV, PROD and all other remote targets abort with `DB_TEST_REFUSED`; there is no remote project allowlist or environment override.
+Absent URLs preserve the existing unit-only run and skipped DB suites.
+This test policy is stricter than the script write policy above and does not change production migration permissions.
+The existing worktree-owned PostGIS launcher, locks and inspected container assertions remain required by canonical verification.
+See [verification](../../../scripts/verify/README.md) for direct and owned database commands.
+The guard regressions exercise the real API and scripts Jest configs with synthetic targets and prove rejected targets cannot import the test body.
 
 ## DEV read-only audit access
 

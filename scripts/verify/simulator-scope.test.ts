@@ -21,6 +21,7 @@ function select(files: string[] | null, options: object = {}) {
 test.each([
   ['docs/guide.md'], ['AGENTS.md'], ['apps/mobile/README.md'],
   ['scripts/verify/run.mjs'],
+  ['apps/api/jest.config.js'],
   ['apps/api/app/api/health/route.ts'], ['apps/mobile/lib/menuFilters.test.ts'],
   ['.github/workflows/verify.yml'],
   ['apps/web/lib/cache.ts'], ['apps/web/app/api/health/route.ts'],
@@ -64,6 +65,7 @@ test.each([
   'apps/mobile/app.config.ts', 'apps/mobile/eas.json', 'apps/mobile/package.json',
   'apps/mobile/ios/Fitsy/AppDelegate.swift', 'apps/mobile/android/app/build.gradle',
   'apps/api/lib/auth.ts', 'apps/api/app/api/revenuecat/webhook/route.ts',
+  'apps/api/next.config.ts',
   'prisma/schema.prisma', 'package-lock.json',
   'scripts/deploy/mobile.sh', '.github/workflows/deploy.yml',
   'apps/mobile/components/NewUnmappedScreen.tsx',

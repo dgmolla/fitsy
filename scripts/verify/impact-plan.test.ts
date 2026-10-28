@@ -502,6 +502,37 @@ test('the runner reports missing dependencies without a local admission helper',
   expect(JSON.parse(result.stdout)).toMatchObject({ name: 'dependencies', status: 'fail', fix: 'run npm ci before verification' });
 });
 
+test.each(['expo-blur', 'react-native-reanimated', '@testing-library/react-native'])(
+  'the real runner refuses an incomplete workspace install before checks: %s', missing => {
+    unlinkSync(join(directory, 'node_modules'));
+    mkdirSync(join(directory, 'node_modules'));
+    symlinkSync(join(root, 'node_modules/js-yaml'), join(directory, 'node_modules/js-yaml'));
+    const dependencies = { 'expo-blur': '*', 'react-native-reanimated': '*' };
+    const devDependencies = { '@testing-library/react-native': '*' };
+    write('package-lock.json', JSON.stringify({ packages: {
+      '': {}, 'apps/mobile': { dependencies, devDependencies },
+      // Optional transitive packages may legitimately be absent on this OS.
+      'node_modules/platform-only': { optional: true },
+    } }));
+    const installed = (name: string) => write(`apps/mobile/node_modules/${name}/package.json`,
+      JSON.stringify({ name, version: '1.0.0', exports: { './feature': './feature.js' } }));
+    for (const name of Object.keys({ ...dependencies, ...devDependencies })) if (name !== missing) installed(name);
+    write('scripts/verify/registry.yml', 'checks:\n  - name: fixture\n    script: fixture.sh\n    layer: 1\n    blocking: true\n');
+    write('scripts/verify/fixture.sh', 'echo ran >> .evidence/dependency-checks\n');
+    const run = () => cli('run.mjs', ['--stage=cheap']);
+    const refused = run();
+    expect(refused.status).toBe(1);
+    expect(JSON.parse(refused.stdout)).toMatchObject({ name: 'dependencies', status: 'fail',
+      summary: expect.stringContaining(`apps/mobile: ${missing}`), fix: 'run npm ci before verification' });
+    expect(existsSync(join(directory, '.evidence/dependency-checks'))).toBe(false);
+
+    installed(missing);
+    const restored = run();
+    expect({ status: restored.status, stderr: restored.status === 0 ? '' : restored.stderr })
+      .toEqual({ status: 0, stderr: '' });
+    expect(readFileSync(join(directory, '.evidence/dependency-checks'), 'utf8')).toBe('ran\n');
+  });
+
 test('pre-push accepts an inapplicable domain gate but refuses its real failure', () => {
   hookFixture();
   const hookEnv = hookEnvironment(root, directory, env);
