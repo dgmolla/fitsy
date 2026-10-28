@@ -565,7 +565,8 @@ globalThis.fetch = async (url, init) => {
 
     def test_preview_migrates_only_development_and_development_refuses_either_production_binding(self):
         dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
-        result, calls = self.drive(VERCEL_ENV='preview', POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev.replace('postgres.', 'fitsy_app.'))
+        result, calls = self.drive(VERCEL_ENV='preview', SUPABASE_URL='https://kegycybiruksmrzvniha.supabase.co',
+                                   POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev.replace('postgres.', 'fitsy_app.'))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
         for env in ('preview', 'development', ''):
@@ -574,6 +575,19 @@ globalThis.fetch = async (url, init) => {
                 result, calls = self.drive(VERCEL_ENV=env, **values)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(calls, [])
+
+    def test_runtime_auth_project_mismatch_withholds_build(self):
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        for environment in ('production', 'preview'):
+            bindings = {} if environment == 'production' else {'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev.replace('postgres.', 'fitsy_app.')}
+            wrong_auth = 'https://kegycybiruksmrzvniha.supabase.co' if environment == 'production' else self.env['SUPABASE_URL']
+            for auth in ('', wrong_auth):
+                with self.subTest(environment=environment, auth=auth):
+                    result, calls = self.drive(VERCEL_ENV=environment, SUPABASE_URL=auth, **bindings)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertFalse(any(call.startswith('npm') for call in calls))
+                    self.assertIn('Runtime database role activation failed', result.stderr)
+                    self.assertNotIn('fixture@', result.stdout + result.stderr)
 
     def test_missing_or_unsafe_redis_configuration_withholds_migration_and_build(self):
         dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'

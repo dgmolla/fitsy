@@ -90,9 +90,43 @@ test('Verify retains an API assertion followed by more than 10000 characters of 
   expect(readFileSync(join(root, check.logs.stdout), 'utf8')).toContain('tests failed in: api');
 }, 45000);
 test('missing or skipped focused selections cannot satisfy the cheap gate', () => {
-  expect(cli().status).toBe(1);
+  const missing = cli();
+  expect(missing.status).toBe(1);
+  expect(JSON.parse(missing.stdout).summary).toContain('select meaningful focused reproduction/regression tests');
   expect(cli('--set', 'scripts/fixture.test.ts', '--jest-pattern=absent outcome').status).toBe(0);
   const skipped = cli(); expect(skipped.status).toBe(1); expect(skipped.stdout).toContain('executed no passing tests');
+});
+test('the canonical verifier diagnoses a missing recipe and runs the selected tests after repair', () => {
+  for (const name of ['run.mjs', 'focused-tests.sh']) copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
+  copyFileSync(join(source, 'scripts/verify/registry.yml'), join(root, 'scripts/verify/registry.yml'));
+  const verify = () => spawnSync(process.execPath, ['scripts/verify/run.mjs', '--only=focused-tests', '--scope=changed', '--runs=local'],
+    { cwd: root, env, encoding: 'utf8', timeout: 30000 });
+  const missing = verify();
+  expect(missing.status).toBe(1);
+  expect(JSON.parse(missing.stdout)).toMatchObject({ name: 'focused-tests', status: 'fail', blocking: true,
+    summary: expect.stringContaining('select meaningful focused reproduction/regression tests'),
+    fix: expect.stringContaining('focused-tests.mjs --set <test paths>') });
+  expect(cli('--set', 'scripts/fixture.test.ts').status).toBe(0);
+  const repaired = verify();
+  expect(repaired.status).toBe(0);
+  expect(JSON.parse(repaired.stdout)).toMatchObject({ name: 'focused-tests', status: 'pass', executed_tests: 1 });
+});
+test.each(['', ' \n', '{"version":'])('an invalid focused recipe reports actionable diagnostics: %p', recipe => {
+  mkdirSync(join(root, '.evidence/verify'), { recursive: true });
+  writeFileSync(join(root, '.evidence/verify/focused-tests.json'), recipe);
+  const result = cli();
+  expect(result.status).toBe(1);
+  const check = JSON.parse(result.stdout);
+  expect(check.summary).toContain(recipe.trim() ? 'invalid focused test selection JSON' : 'select meaningful focused reproduction/regression tests');
+  expect(check.fix).toContain('focused-tests.mjs --set <test paths>');
+});
+test('an empty runner recipe cannot fall back to a saved selection', () => {
+  expect(cli('--set', 'scripts/fixture.test.ts').status).toBe(0);
+  const result = spawnSync(process.execPath, ['scripts/verify/focused-tests.mjs'], {
+    cwd: root, env: { ...env, FITSY_VERIFY_FOCUSED_RECIPE: '' }, encoding: 'utf8', timeout: 30000,
+  });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout).summary).toContain('select meaningful focused reproduction/regression tests');
 });
 test('empty and deleted focused selections fail before execution', () => {
   expect(cli('--set').status).toBe(1);
