@@ -1,5 +1,5 @@
 import type { CustomerInfo, PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
-import type { EntitlementSyncReason } from './entitlement';
+import type { EntitlementCheckError, EntitlementSyncReason } from './entitlement';
 
 export interface PurchasesContextValue {
   /** `entitled !== null`: the verdict has settled on this launch. */
@@ -16,6 +16,8 @@ export interface PurchasesContextValue {
   isLapsed: boolean;
   /** The backend could not yet establish this account's subscription history. */
   isUnknown: boolean;
+  /** Latest account-bound subscription check failure; null when no request failure is known. */
+  entitlementError: EntitlementCheckError | null;
   customerInfo: CustomerInfo | null;
   /** Current offering; its `.annual`/`.monthly` packages back the in-app paywall. */
   offering: PurchasesOffering | null;

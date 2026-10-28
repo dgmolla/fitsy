@@ -105,7 +105,7 @@ async function post<T>(path: string, body: unknown, authenticated = true, expect
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(errBody.error ?? `Request failed: ${res.status}`);
+    throw new ApiRequestError(res.status, errBody.error ?? `Request failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }

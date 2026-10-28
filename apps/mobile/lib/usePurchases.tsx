@@ -232,6 +232,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       isPro: isProActive(customerInfo),
       isLapsed: verdict.classification === 'expired',
       isUnknown: verdict.classification === 'unknown',
+      entitlementError: verdict.entitlementError,
       customerInfo,
       offering,
       introEligibility,
@@ -244,7 +245,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
       showManageSubscriptions: () => rcShowManageSubscriptions(customerInfoRef.current),
       restore,
     }),
-    [entitled, verdict.classification, storeConfirmed, customerInfo, offering, introEligibility, introEligibilityReady, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
+    [entitled, verdict.classification, verdict.entitlementError, storeConfirmed, customerInfo, offering, introEligibility, introEligibilityReady, syncEntitlement, refresh, refreshOffering, purchase, presentPaywall, restore],
   );
 
   return <PurchasesContext.Provider value={value}>{children}</PurchasesContext.Provider>;

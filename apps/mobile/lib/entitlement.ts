@@ -10,6 +10,7 @@
  * each testable without React.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ApiRequestError } from './api';
 import { fetchSubscriptionStatus, syncSubscription, type SubscriptionStatusResult, type SubscriptionSyncReason } from './apiClient';
 
 /**
@@ -20,6 +21,11 @@ import { fetchSubscriptionStatus, syncSubscription, type SubscriptionStatusResul
  * reflect yet.
  */
 export type EntitlementSyncReason = 'boot' | SubscriptionSyncReason;
+
+export type EntitlementCheckError = 'network' | 'server' | 'rate_limited' | 'unavailable';
+type ServerEntitlementOutcome =
+  | { data: SubscriptionStatusResult & { synced?: boolean }; error: null }
+  | { data: null; error: EntitlementCheckError };
 
 /** Last server verdict, scoped to the Fitsy user and bounded by its RC proof. */
 export const ENTITLEMENT_CACHE_KEY = '@fitsy/entitlement';
@@ -69,21 +75,25 @@ export async function clearCachedEntitlement(): Promise<void> {
 }
 
 /**
- * Ask the server for its verdict. Resolves to `null` when the request failed
- * (network, HTTP error): the caller keeps whatever it already believed.
+ * Ask the server for its verdict, preserving why a request failed so recovery
+ * copy can distinguish connection problems from HTTP failures.
  * Never throws. Callers must already have checked for a Supabase session:
  * an authenticated 401 is treated as "session expired" by the API client
  * (token wiped, bounced to the problem screen), which is the wrong outcome
  * for an anonymous teaser visitor.
  */
-export async function fetchServerEntitlement(reason: EntitlementSyncReason): Promise<(SubscriptionStatusResult & { synced?: boolean }) | null> {
+export async function fetchServerEntitlement(reason: EntitlementSyncReason): Promise<ServerEntitlementOutcome> {
   try {
     const result = reason === 'boot' ? await fetchSubscriptionStatus() : await syncSubscription(reason);
-    if (result.verdict !== 'active' && result.verdict !== 'expired' &&
-        result.verdict !== 'never_subscribed' && result.verdict !== 'unknown') return null;
-    return result;
-  } catch {
+    if (!result || (result.verdict !== 'active' && result.verdict !== 'expired' &&
+        result.verdict !== 'never_subscribed' && result.verdict !== 'unknown')) return { data: null, error: 'unavailable' };
+    return { data: result, error: null };
+  } catch (error) {
     console.warn('[entitlement] sync failed', reason);
-    return null;
+    if (error instanceof ApiRequestError) {
+      return { data: null, error: error.status === 429 ? 'rate_limited'
+        : error.status >= 500 && error.status < 600 ? 'server' : 'unavailable' };
+    }
+    return { data: null, error: error instanceof SyntaxError ? 'unavailable' : 'network' };
   }
 }

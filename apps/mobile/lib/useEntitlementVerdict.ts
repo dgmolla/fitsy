@@ -17,6 +17,7 @@ import {
   fetchServerEntitlement,
   readCachedEntitlement,
   writeCachedEntitlement,
+  type EntitlementCheckError,
   type EntitlementSyncReason,
 } from './entitlement';
 import { isProActive } from './purchases';
@@ -42,8 +43,11 @@ export function useEntitlementVerdict({
 }): EntitlementVerdict {
   const [entitled, setEntitledState] = useState<boolean | null>(null);
   const [classification, setClassificationState] = useState<SubscriptionVerdict | 'loading'>('loading');
+  const [entitlementError, setEntitlementError] = useState<EntitlementCheckError | null>(null);
+  const entitlementRequestRef = useRef(0);
   const classificationRef = useRef<SubscriptionVerdict | 'loading'>('loading');
   const setClassification = useCallback((next: SubscriptionVerdict | 'loading') => {
+    if (next !== 'unknown') setEntitlementError(null);
     classificationRef.current = next;
     setClassificationState(next);
   }, []);
@@ -70,25 +74,28 @@ export function useEntitlementVerdict({
   const signOutEpochRef = useRef(0);
   const inStoreGrace = useCallback(() => Date.now() - storeConfirmedAtRef.current < STORE_GRACE_MS, []);
 
-  /** Server round trip only: no state. Null = couldn't ask, or the session moved on. */
+  /** Preserve the latest failure for recovery. Null = couldn't ask, or the session moved on. */
   const fetchVerdict = useCallback(async (reason: EntitlementSyncReason, userId: string) => {
+    const request = ++entitlementRequestRef.current;
+    const epoch = signInEpochRef.current;
     // During store grace, use the server's never-downgrade path so a lagging
     // read cannot persist expired and supersede the real purchase webhook.
     const wireReason = reason !== 'boot' && inStoreGrace() ? 'purchase' : reason;
-    const result = await fetchServerEntitlement(wireReason);
+    const { data: result, error } = await fetchServerEntitlement(wireReason);
     if (result === null) {
       trackEntitlementSyncFailed({ reason });
-      return null;
     }
     try {
       // The answer is about the user who was signed in when we asked. If the
       // session changed or ended mid-flight (sign-out, fast re-sign-in as
       // someone else) it must not become the new user's verdict.
       const { data } = await supabase.auth.getSession();
-      if (data.session?.user.id !== userId) return null;
+      if (data.session?.user.id !== userId || signInEpochRef.current !== epoch) return null;
     } catch {
       return null;
     }
+    // An older request must not replace the retry's explanation.
+    if (request === entitlementRequestRef.current) setEntitlementError(error);
     return result;
   }, [inStoreGrace]);
 
@@ -292,6 +299,7 @@ export function useEntitlementVerdict({
   return {
     entitled,
     classification,
+    entitlementError,
     entitledRef,
     inStoreGrace,
     syncEntitlement,
