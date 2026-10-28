@@ -33,7 +33,7 @@ const args = process.argv.slice(2);
 fs.appendFileSync(process.env.CALLS, JSON.stringify({ args,
   allowProd: process.env.FITSY_ALLOW_PROD_WRITE, actions: process.env.GITHUB_ACTIONS,
   databaseUrl: process.env.POSTGRES_PRISMA_URL }) + '\\n');
-console.log('cleanup invoked');
+process.stdout.write('cleanup invoked\\n');
 require(${JSON.stringify(require.resolve('tsx/cjs'))});
 const { databaseTarget } = require(${JSON.stringify(join(root, 'scripts/lib/db-target-guard.ts'))});
 try { databaseTarget(process.env.POSTGRES_PRISMA_URL); }
