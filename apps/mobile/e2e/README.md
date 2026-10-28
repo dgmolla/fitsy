@@ -48,6 +48,8 @@ Prepare an active disposable account through the local fixture adapter before re
 If XCTest reports `kAXErrorInvalidUIElement` while waiting for `welcome-login`, hierarchy inspection failed before Dev Login ran.
 Preserve the command trace and startup screenshot, then recover through the existing simulator owner before rerunning the unchanged journey.
 Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
+For a subscription transport-failure diagnostic, start on the recovery screen with the same failure on status and sync, then run `helpers/subscription-check-retry.yaml` with `SUBSCRIPTION_ERROR_COPY` set to the expected copy.
+`SubscriptionCheckNavigation.test.tsx` replays its saved assertions through the real router, provider and API client for 503, network failure and 429, including a failed retry followed by successful recovery.
 A local scope pass does not replace the source-bound final-candidate product-flow gate.
 Inspect `npm run verify:product-plan` for the same affected journeys and their required MCP categories.
 The final runner includes every selected journey automatically, adds explicitly requested diagnostic flows, and does not append unrelated cold-start or sign-in baselines.
