@@ -20,20 +20,46 @@ suite('shared UE bucket (real PostgreSQL, independent workers, only provider HTT
   afterAll(async () => { http.mockRestore(); await Promise.all(clients.map(client => client.$disconnect())); });
 
   test('N independent workers share the configured cap for all HTTP attempts without accumulating idle bursts', async () => {
-    const starts: number[] = [];
-    http.mockImplementation(async () => { starts.push(performance.now()); return Response.json({ status: 'success' }); });
-    await Promise.all(Array.from({ length: 16 }, (_, i) => fetchStoreV1(`worker-${i}`, { rateLimiter: gates[i % gates.length]!, maxRetries: 0 })));
-    expect(starts).toHaveLength(16);
-    // Each time span admits at most one initial token plus its refills with capacity one.
-    // Allow 20ms only for observing the DB grant across the local client transport.
-    for (let i = 0; i < starts.length; i++) for (let j = i + 1; j < starts.length; j++) {
-      expect(starts[j]! - starts[i]! + 20).toBeGreaterThanOrEqual((j - i) * 200);
+    // Observe committed grants inside PostgreSQL, before client/HTTP scheduling jitter.
+    // Keep this fixture out of the public schema inspected by concurrent security suites.
+    await db.$executeRaw`CREATE SCHEMA ue_rate_limiter_test`;
+    try {
+      await db.$executeRaw`CREATE TABLE ue_rate_limiter_test.grants (request bigint PRIMARY KEY, admitted_at timestamptz NOT NULL)`;
+      await db.$executeRaw`CREATE FUNCTION ue_rate_limiter_test.record_grant() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          INSERT INTO ue_rate_limiter_test.grants VALUES (NEW.requests, NEW.updated_at);
+          -- Delay the first reply beyond the old 20ms allowance, without changing its grant time.
+          IF NEW.requests = 1 THEN PERFORM pg_sleep(0.15); END IF;
+          RETURN NEW;
+        END; $$`;
+      await db.$executeRaw`CREATE TRIGGER record_ue_rate_grant AFTER UPDATE ON public.pipeline_ue_rate_limit
+        FOR EACH ROW WHEN (NEW.requests > OLD.requests) EXECUTE FUNCTION ue_rate_limiter_test.record_grant()`;
+      const grantTimes = () => db.$queryRaw<{ atUs: bigint }[]>`SELECT
+        (EXTRACT(EPOCH FROM admitted_at) * 1000000)::bigint AS "atUs" FROM ue_rate_limiter_test.grants ORDER BY request`;
+      const expectPaced = (grants: { atUs: bigint }[], count: number) => {
+        expect(grants).toHaveLength(count);
+        // Capacity one permits one initial token plus refills, with no timing tolerance.
+        for (let i = 0; i < grants.length; i++) for (let j = i + 1; j < grants.length; j++) {
+          expect(grants[j]!.atUs - grants[i]!.atUs).toBeGreaterThanOrEqual(BigInt(j - i) * 200_000n);
+        }
+      };
+      http.mockImplementation(async () => Response.json({ status: 'success' }));
+      const results = await Promise.all(Array.from({ length: 16 }, (_, i) =>
+        fetchStoreV1(`worker-${i}`, { rateLimiter: gates[i % gates.length]!, maxRetries: 0 })));
+      expect(results).toEqual(Array(16).fill({ status: 'success' }));
+      expect(http).toHaveBeenCalledTimes(16);
+      expectPaced(await grantTimes(), 16);
+      expect(await gates[0]!.state()).toMatchObject({ capRps: 5, requests: 16n });
+      await db.$executeRaw`UPDATE public.pipeline_ue_rate_limit SET next_request_at = clock_timestamp() - interval '1 hour'`;
+      await Promise.all(gates.map(gate => gate.acquire()));
+      const grants = await grantTimes();
+      expect(grants).toHaveLength(20);
+      expectPaced(grants.slice(16), 4);
+      expect((await gates[0]!.state()).requests).toBe(20n);
+    } finally {
+      // Dropping the function also removes its trigger on the singleton.
+      await db.$executeRaw`DROP SCHEMA ue_rate_limiter_test CASCADE`;
     }
-    expect(await gates[0]!.state()).toMatchObject({ capRps: 5, requests: 16n });
-    await db.$executeRaw`UPDATE public.pipeline_ue_rate_limit SET next_request_at = clock_timestamp() - interval '1 hour'`;
-    const before = performance.now();
-    await Promise.all(gates.map(gate => gate.acquire()));
-    expect(performance.now() - before + 20).toBeGreaterThanOrEqual(600);
   }, 15_000);
 
   test('a final-attempt 429 backs off every worker, including one already waiting for a token', async () => {

@@ -156,6 +156,8 @@ Never delete a journal or recreate a job to bypass its cap or accounting stop.
 
 The real-Postgres suite exercises concurrent clients, locked-row skipping, token fencing, heartbeat renewal, expiry reclaim, retry timing, attempt exhaustion, permissions and atomic rollback/completion.
 The UE database suite adds independent-client admission contention, idle burst prevention, global backoff for waiting workers, Retry-After, gradual recovery, shared configuration and singleton permissions.
+It records grant timestamps inside PostgreSQL and checks every grant span at microsecond precision without a timing allowance, while verifying every HTTP attempt consumed a permit.
+A deliberately delayed first database reply covers client scheduling jitter; the test-owned observation schema and trigger are removed after the scenario.
 Its CLI recovery tests SIGKILL a worker after durable paid responses, start a worker with a different output directory and assert that the original paid requests are not repeated.
 A separate in-flight kill scenario proves unknown spend is parked without a second paid call.
 Only provider HTTP is substituted in these real-database CLI scenarios.
