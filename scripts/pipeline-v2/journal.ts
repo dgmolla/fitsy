@@ -8,6 +8,8 @@ import { requestJevDecision } from '../../apps/api/services/jevDecisionService';
 import { JEV_LIMITS, parseChoiceAnswers, type JevRequest } from '../eval/lib/jev-experiment';
 import { adapterProtocol, choiceMethod } from '../eval/suite/adapters';
 import type { ChoiceClient } from '../eval/suite/budget';
+import { DailyBudgetExceeded, type PaidBudget, type PaidService } from './service-budget';
+import { v2Telemetry } from './telemetry';
 
 export const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function canonical(value: unknown): unknown {
@@ -70,6 +72,7 @@ export abstract class V2Ledger implements ChoiceClient {
   requests = 0;
   reusedRequests = 0;
   unknown = false;
+  dailyCap: PaidService | null = null;
   context = '';
   readonly events: JournalEvent[] = [];
   private readonly responses = new Map<string, { status: number; body: string; latencyMs: number }>();
@@ -77,7 +80,7 @@ export abstract class V2Ledger implements ChoiceClient {
   private inFlight = false;
   readonly estimator = choiceMethod('jev-v3', this).estimator!;
 
-  constructor(cap = 5) {
+  constructor(cap = 5, private readonly budget?: PaidBudget) {
     if (!Number.isFinite(cap) || cap < 0 || cap > 5) throw new Error('DEV POC cap must be between $0 and $5');
     this.cap = cap;
   }
@@ -138,14 +141,19 @@ export abstract class V2Ledger implements ChoiceClient {
       if (this.knownUsd + reservationUsd > this.cap) { this.stopped = 'DEV POC spend cap reached'; throw new Error(this.stopped); }
       const apiKey = process.env['TYPESAFE_API_KEY'] ?? '';
       if (!apiKey.trim()) throw new Error('TYPESAFE_API_KEY is required');
-      await this.append({ event: 'jev_request', at: new Date().toISOString(), requestId: randomUUID(), key, request, context: this.context });
+      let permit: string | undefined;
+      try { permit = await this.budget?.reserve('jev', reservationUsd, this.context || key); }
+      catch (error) { if (error instanceof DailyBudgetExceeded) this.dailyCap = error.service; throw error; }
+      await this.append({ event: 'jev_request', at: new Date().toISOString(), requestId: randomUUID(), ...(permit ? { budgetId: permit } : {}), key, request, context: this.context });
       this.requests++;
       const start = performance.now();
       try {
         const result = await requestJevDecision(request, apiKey, this.signal);
         response = { ...result, latencyMs: performance.now() - start };
+        if (response.status === 429) v2Telemetry.throttle('jev', { status: 429 });
         // Never retain a provider echo of the credential.
         if (response.body.includes(apiKey)) response.body = '[credential echo redacted; usage unknown]';
+        if (permit) await this.budget!.settle(permit, usage(response.body), response.status === 429);
         await this.append({ event: 'jev_response', at: new Date().toISOString(), key, ...response });
         this.responses.set(key, response);
       } catch {
@@ -174,8 +182,8 @@ export class V2Journal extends V2Ledger {
   private fd: number | undefined;
   private lockToken: string | undefined;
 
-  constructor(readonly path: string, identity: JournalIdentity, cap = 5) {
-    super(cap);
+  constructor(readonly path: string, identity: JournalIdentity, cap = 5, budget?: PaidBudget) {
+    super(cap, budget);
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.lockToken = claimLock(path + '.lock');
     try {

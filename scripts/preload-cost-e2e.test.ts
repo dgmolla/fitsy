@@ -48,12 +48,12 @@ it('automatic UE-first resume never adopts a DEV POC checkpoint namespace', () =
 });
 
 it('stops between chunks, leaves the hex pending, and retains spend when resumed', () => {
-  const result = run(51, '0.005');
+  const result = run(51, '0.052');
   expect(result.status).toBe(0);
   expect(result.events.filter(e => e.type === 'ai_request')).toHaveLength(1);
   expect(result.events.filter(e => e.type === 'db_checkpoint')).toHaveLength(0);
   expect(result.events.find(e => e.type === 'run')?.status).toBe('spend_cap');
-  const resumed = run(51, '0.005', [], result.dir);
+  const resumed = run(51, '0.052', [], result.dir);
   expect(resumed.status).toBe(0);
   expect(resumed.events.filter(e => e.type === 'ai_request')).toHaveLength(1);
   const raised = run(51, '1', [], result.dir);
@@ -63,16 +63,23 @@ it('stops between chunks, leaves the hex pending, and retains spend when resumed
   expect(raised.events.filter(e => e.type === 'run').at(-1)).toMatchObject({ costTotal: 0.033, status: 'completed', hexesCompleted: 1 });
 });
 
-it('drains concurrent billable responses before stopping and emitting final totals', () => {
-  const result = run(51, '0.005', [], undefined, { PRELOAD_TEST_RESTAURANTS: '3', PRELOAD_TEST_DELAY: '1' });
+it('drains admitted concurrent responses before stopping and emitting final totals', () => {
+  const result = run(51, '0.12', [], undefined, { PRELOAD_TEST_RESTAURANTS: '3', PRELOAD_TEST_DELAY: '1' });
   expect(result.status).toBe(0);
-  expect(result.events.filter(e => e.type === 'ai_request')).toHaveLength(3);
-  expect(result.events.filter(e => e.type === 'ai_usage')).toHaveLength(3);
+  expect(result.events.filter(e => e.type === 'ai_request')).toHaveLength(2);
+  expect(result.events.filter(e => e.type === 'ai_usage')).toHaveLength(2);
   expect(result.events.filter(e => e.type === 'db_checkpoint')).toHaveLength(0);
-  expect(result.events.find(e => e.type === 'run')).toMatchObject({ status: 'spend_cap', costTotal: 0.033, hexesCompleted: 0 });
+  expect(result.events.find(e => e.type === 'run')).toMatchObject({ status: 'spend_cap', costTotal: 0.022, hexesCompleted: 0 });
   const summary = result.events.findIndex(e => e.type === 'run');
   expect(result.events.slice(summary + 1).some(e => e.type === 'ai_usage')).toBe(false);
   expect(result.events.at(-1)?.type).toBe('db_disconnect');
+});
+
+it('reserves concurrent requests before transport so the cumulative cap cannot be overshot', () => {
+  const result = run(51, '0.02', [], undefined, { PRELOAD_TEST_RESTAURANTS: '3', PRELOAD_TEST_DELAY: '1' });
+  expect(result.status).toBe(0);
+  expect(Number(result.events.find(e => e.type === 'run')?.costTotal)).toBeLessThanOrEqual(0.02);
+  expect(result.events.some(e => e.type === 'db_checkpoint')).toBe(false);
 });
 
 it('charges malformed responses and retries instead of reporting only the successful attempt', () => {
@@ -83,7 +90,7 @@ it('charges malformed responses and retries instead of reporting only the succes
 });
 
 it('does not retry a billed malformed response after it consumes the spend cap', () => {
-  const result = run(2, '0.005', [], undefined, { PRELOAD_TEST_MALFORMED_ONCE: '1' });
+  const result = run(2, '0.052', [], undefined, { PRELOAD_TEST_MALFORMED_ONCE: '1' });
   expect(result.status).toBe(0);
   expect(result.events.filter(e => e.type === 'ai_request')).toHaveLength(1);
   expect(result.events.find(e => e.type === 'run')).toMatchObject({ costTotal: 0.011, status: 'spend_cap' });
@@ -116,28 +123,28 @@ it('uses an unbilled credential preflight rather than sending an untracked AI pi
 });
 
 it('restores spend without Axiom and reports an immediate resumed cap stop', () => {
-  const initial = run(51, '0.005', [], undefined, { AXIOM_TOKEN: '' });
+  const initial = run(51, '0.052', [], undefined, { AXIOM_TOKEN: '' });
   expect(initial.status).toBe(0);
   expect(initial.events.some(e => e.type === 'run' || e.type === 'cost_checkpoint')).toBe(false);
-  const resumed = run(51, '0.005', [], initial.dir);
+  const resumed = run(51, '0.052', [], initial.dir);
   expect(resumed.status).toBe(0);
   expect(resumed.events.find(e => e.type === 'run')).toMatchObject({ costTotal: 0.011, status: 'spend_cap', aiUsage: { inputTokens: 1000, outputTokens: 2000 } });
   expect(resumed.events.filter(e => e.type === 'ai_request')).toHaveLength(1);
 });
 
-it('guards retries from the real SDK when another request exhausts the cap during backoff', () => {
-  const result = run(2, '0.005', [], undefined, { PRELOAD_TEST_REAL_SDK: '1', PRELOAD_TEST_RESTAURANTS: '2' });
+it('accounts explicit real-SDK retries while reserving concurrent requests within the cap', () => {
+  const result = run(2, '0.10', [], undefined, { PRELOAD_TEST_REAL_SDK: '1', PRELOAD_TEST_RESTAURANTS: '2' });
   expect(result.status).toBe(0);
-  // One 429 and one paid response. A hidden SDK retry would make a third request.
-  expect(result.events.filter(e => e.type === 'ai_request')).toHaveLength(2);
-  expect(result.events.filter(e => e.type === 'ai_usage')).toHaveLength(1);
-  expect(result.events.find(e => e.type === 'run')).toMatchObject({ status: 'spend_cap', costTotal: 0.011 });
-  expect(result.events.some(e => e.type === 'db_checkpoint')).toBe(false);
+  // The explicit retry is admitted after one known-unbilled 429 releases its envelope.
+  expect(result.events.filter(e => e.type === 'ai_request')).toHaveLength(3);
+  expect(result.events.filter(e => e.type === 'ai_usage')).toHaveLength(2);
+  expect(result.events.find(e => e.type === 'run')).toMatchObject({ status: 'completed', costTotal: 0.022 });
+  expect(result.events.filter(e => e.type === 'db_checkpoint')).toHaveLength(1);
 });
 
 it('preserves an in-flight accounting failure when another worker has already stopped at the cap', () => {
-  const result = run(51, '0.005', [], undefined, {
-    PRELOAD_TEST_RESTAURANTS: '2', PRELOAD_TEST_DELAY: '1', PRELOAD_TEST_INVALID_USAGE_CALL: '2',
+  const result = run(51, '0.12', [], undefined, {
+    PRELOAD_TEST_RESTAURANTS: '3', PRELOAD_TEST_DELAY: '1', PRELOAD_TEST_INVALID_USAGE_CALL: '2',
   });
   expect(result.status).toBe(1);
   expect(result.events.filter(e => e.type === 'ai_request')).toHaveLength(2);
@@ -150,4 +157,34 @@ it('reports actual completed hexes and cost for a single-hex sample of a larger 
   expect(result.status).toBe(0);
   expect(result.events.filter(e => e.type === 'db_checkpoint')).toHaveLength(1);
   expect(result.events.find(e => e.type === 'run')).toMatchObject({ hexesCompleted: 1, hexesTotal: 2, costTotal: 0.011 });
+});
+
+it('Google search and photo consume the same run cap before any Haiku request', () => {
+  const result = run(2, '0.039', [], undefined, { PRELOAD_TEST_GOOGLE: '1', GOOGLE_PLACES_API_KEY: 'fixture-google-key' });
+  expect(result.status).toBe(0);
+  expect(result.events.filter(e => e.type === 'google_request')).toHaveLength(2);
+  expect(result.events.filter(e => e.type === 'service_usage')).toHaveLength(2);
+  expect(result.events.some(e => e.type === 'ai_request' || e.type === 'db_checkpoint')).toBe(false);
+  expect(result.events.find(e => e.type === 'run')).toMatchObject({ status: 'spend_cap', costTotal: 0.039 });
+  const resumed = run(2, '0.039', [], result.dir, { PRELOAD_TEST_GOOGLE: '1', GOOGLE_PLACES_API_KEY: 'fixture-google-key' });
+  expect(resumed.events.filter(e => e.type === 'google_request')).toHaveLength(2);
+});
+
+it('Google daily exhaustion and a cap too small for search prevent Google transport', () => {
+  for (const env of [{}, { PRELOAD_TEST_DAILY_CAP: '1' }]) {
+    const result = run(2, env.PRELOAD_TEST_DAILY_CAP ? '15' : '0.031', [], undefined,
+      { ...env, PRELOAD_TEST_GOOGLE:'1', GOOGLE_PLACES_API_KEY:'fixture-google-key' });
+    expect(result.status).toBe(0);
+    expect(result.events.some(e => e.type==='google_request' || e.type==='ai_request' || e.type==='db_checkpoint')).toBe(false);
+    expect(result.events.find(e => e.type==='run')).toMatchObject({ status:'spend_cap',costTotal:0 });
+    if (env.PRELOAD_TEST_DAILY_CAP) expect(result.stdout).toContain('Daily Google budget exhausted');
+  }
+});
+
+it('an interrupted Haiku reservation stops resumed paid work until its billing is reconciled', () => {
+  const failed = run(2, '15', [], undefined, { PRELOAD_TEST_INVALID_USAGE:'1' });
+  const resumed = run(2,'15',[],failed.dir);
+  expect(resumed.status).toBe(1);
+  expect(resumed.events.filter(e=>e.type==='ai_request')).toHaveLength(1);
+  expect(resumed.events.some(e=>e.type==='db_checkpoint')).toBe(false);
 });

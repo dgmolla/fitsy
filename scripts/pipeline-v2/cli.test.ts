@@ -24,7 +24,7 @@ test('real CLI sources one hex, abstains on unreviewed/independent items, persis
   expect(result.stderr).toBe(''); expect(result.status).toBe(0);
   expect(result.report).toMatchObject({ status: 'completed', environment: 'dev', coverage: { restaurants: 4, officialItems: 1, jevItems: 4,
     uniqueItems: 5, persistedItems: 5, chainsWithPublishedData: 2, chainsWithoutPublishedData: 1, independentRestaurants: 1 },
-    calls: { uberEats: 4, jev: 8, fatSecret: 0, pdfSearch: 0 }, unknownUsage: false });
+    calls: { uberEats: 4, jev: 8, fatSecret: 0, pdfSearch: 0 }, sourceMix: { official:1,jev:4,other:0 }, unknownUsage: false });
   expect(result.report.costUsd).toBeCloseTo(8 * 100 * .042 / 1e6);
   expect(result.report.matches).toMatchObject([{ restaurantId: 'restaurant-0', name: 'Chicken Plate', servingSize: '1 standard chicken plate' }]);
   expect(result.report.pdfJobs).toMatchObject([{ brandId: 'brand-1', status: 'pending' }]);
@@ -125,4 +125,11 @@ test.each([['--phase=both'], [`--hex-id=${hexId}`, '--run-id=poc', '--out=privat
   ['--hex-id=not-a-hex', '--run-id=poc', '--out=private'], [`--hex-id=${latLngToCell(40, -74, 7)}`, '--run-id=poc', '--out=private'],
   [`--hex-id=${hexId}`, '--hex-id=duplicate', '--run-id=poc', '--out=private']].map(args => ({ args })))('invalid POC scope is refused: $args', ({ args }) => {
   expect(() => parseOptions(args)).toThrow();
+});
+
+test('a daily Jev cap stop leaves the hex incomplete without starting a paid request', () => {
+  const result = run({ V2_TEST_DAILY_CAP:'1' });
+  expect(result.status).toBe(1);
+  expect(result.report).toMatchObject({ status:'daily_cap',unknownUsage:false,coverage:{ persistedItems:0 } });
+  expect(result.events.some((e:{ type:string })=>e.type==='jev_call' || e.type==='db_commit')).toBe(false);
 });

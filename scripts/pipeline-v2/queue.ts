@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Prisma, type HexJob, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { journalHeader, V2Ledger, type JournalEvent, type JournalIdentity } from './journal';
+import { journalHeader, reservationUsd, V2Ledger, type JournalEvent, type JournalIdentity } from './journal';
+import { SharedServiceBudget } from './service-budget';
 
 type Database = Pick<PrismaClient, '$queryRaw' | '$executeRaw'>;
 const columns = Prisma.sql`run_id AS "runId", hex_id AS "hexId", status, attempts, max_attempts AS "maxAttempts",
@@ -50,6 +51,7 @@ export class HexJobQueue {
         FROM exhausted e WHERE j.run_id = e.run_id AND j.hex_id = e.hex_id RETURNING j.hex_id
       ), candidate AS (
         SELECT run_id, hex_id FROM public.hex_jobs WHERE run_id = ${runId} AND attempts < max_attempts
+          AND public.pipeline_budget_available('jev', ${reservationUsd}::numeric)
           AND ((status = 'pending' AND next_retry_at <= clock_timestamp())
             OR (status = 'running' AND lease_expires_at <= clock_timestamp()))
         ORDER BY priority DESC, next_retry_at, hex_id FOR UPDATE SKIP LOCKED LIMIT 1
@@ -103,6 +105,14 @@ export class HexJobQueue {
         AND lease_token = ${job.leaseToken}::uuid AND lease_owner = ${job.leaseOwner} AND lease_expires_at > clock_timestamp()`);
   }
 
+  async deferBudget(job: HexJob): Promise<void> {
+    this.owned(await this.db.$executeRaw`UPDATE public.hex_jobs SET status='pending', attempts=GREATEST(attempts-1,0),
+      next_retry_at=((clock_timestamp() AT TIME ZONE 'UTC')::date + 1)::timestamp AT TIME ZONE 'UTC',
+      lease_owner=NULL, lease_expires_at=NULL, last_error='daily service budget exhausted', updated_at=clock_timestamp()
+      WHERE run_id=${job.runId} AND hex_id=${job.hexId} AND status='running' AND lease_token=${job.leaseToken}::uuid
+        AND lease_owner=${job.leaseOwner} AND lease_expires_at>clock_timestamp()`);
+  }
+
   async lockInTx(job: HexJob, tx: Prisma.TransactionClient): Promise<void> {
     const rows = await tx.$queryRaw<{ hex_id: string }[]>`SELECT hex_id FROM public.hex_jobs
       WHERE run_id = ${job.runId} AND hex_id = ${job.hexId} AND status = 'running'
@@ -143,7 +153,7 @@ export class HexJobLease {
 
 export class SharedV2Journal extends V2Ledger {
   private constructor(readonly queue: HexJobQueue, readonly job: HexJob, target: string, private readonly activeSignal: AbortSignal, events: JournalEvent[]) {
-    super(job.capUsd);
+    super(job.capUsd, new SharedServiceBudget(queue.db));
     this.load(events, { runId: job.runId, hexId: job.hexId, target }, job.capUsd);
   }
   static async open(queue: HexJobQueue, job: HexJob, target: string, signal: AbortSignal): Promise<SharedV2Journal> {

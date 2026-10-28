@@ -60,6 +60,23 @@ describe('billable chunk observers', () => {
     expect(observer.onUsage).toHaveBeenCalledWith(ITEMS, { input_tokens: 100, output_tokens: 50 });
   });
 
+  it('disables SDK retries when a request needs spend admission', async () => {
+    mockCreate.mockResolvedValue(makeTextResponse(JSON.stringify(HAIKU_ESTIMATES)));
+    const observer = { beforeRequest: jest.fn(), onUsage: jest.fn() };
+    await estimateMacros(ITEMS, makeAnthropicClient(), undefined, observer);
+    expect(mockCreate.mock.calls[0]![1]).toEqual({ maxRetries: 0 });
+    expect(observer.beforeRequest.mock.calls[0]![0]).toMatchObject({ outputTokens: 8192 });
+    expect(observer.beforeRequest.mock.calls[0]![0].inputTokens).toBeGreaterThan(1000);
+  });
+
+  it('exposes unknown transport billing to the reservation owner before failing', async () => {
+    const error = new Error('response lost'); mockCreate.mockRejectedValue(error);
+    const observer = { beforeRequest: jest.fn(), onUsage: jest.fn(), onRequestError: jest.fn() };
+    await expect(estimateMacros(ITEMS, makeAnthropicClient(), undefined, observer)).rejects.toBe(error);
+    expect(observer.onRequestError).toHaveBeenCalledWith(error);
+    expect(observer.onUsage).not.toHaveBeenCalled();
+  });
+
   it('never starts a request rejected by its spend guard', async () => {
     const observer = { beforeRequest: () => { throw new Error('spend cap'); }, onUsage: jest.fn() };
     await expect(estimateMacros(ITEMS, makeAnthropicClient(), undefined, observer)).rejects.toThrow('spend cap');

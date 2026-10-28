@@ -430,6 +430,44 @@ model PipelinePdfEvent {
   @@map("pipeline_pdf_events")
 }
 
+// Fleet budgets and durable request envelopes, shared by all pipeline workers.
+model PipelineServiceBudget {
+  service    String @id
+  dailyUsd   Decimal @map("daily_usd") @db.Decimal(18,9)
+  dailyCalls BigInt @map("daily_calls")
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  days       PipelineServiceDay[]
+  requests   PipelinePaidRequest[]
+  @@map("pipeline_service_budgets")
+}
+
+model PipelineServiceDay {
+  service     String
+  day         DateTime @db.Date
+  chargedUsd  Decimal @default(0) @map("charged_usd") @db.Decimal(18,9)
+  reservedUsd Decimal @default(0) @map("reserved_usd") @db.Decimal(18,9)
+  calls       BigInt @default(0)
+  throttles   BigInt @default(0)
+  budget      PipelineServiceBudget @relation(fields: [service], references: [service])
+  @@id([service,day])
+  @@map("pipeline_service_days")
+}
+
+model PipelinePaidRequest {
+  id          String @id @db.Uuid
+  service     String
+  day         DateTime @db.Date
+  scope       String
+  reservedUsd Decimal @map("reserved_usd") @db.Decimal(18,9)
+  costUsd     Decimal? @map("cost_usd") @db.Decimal(18,9)
+  throttled   Boolean @default(false)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  settledAt   DateTime? @map("settled_at") @db.Timestamptz(6)
+  budget      PipelineServiceBudget @relation(fields: [service], references: [service])
+  @@index([service, day], map: "pipeline_paid_requests_service_day")
+  @@map("pipeline_paid_requests")
+}
+
 enum GoalType {
   cut
   bulk

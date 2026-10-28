@@ -165,14 +165,16 @@ flowchart TD
    ```
    - FatSecret hit → official macros, skip Haiku (existing Path 1 behavior).
    - UE hit → structured items → `estimateMacros(items, anthropic, undefined, observer)` under `API_SEMAPHORES.haiku`.
-     The observer checks the cumulative spend cap before every chunk and records actual usage before parsing, including failed/retried attempts.
+     The observer reserves each full request envelope against the cumulative spend cap before every chunk, then records actual usage before parsing, including failed/retried attempts.
      See the [runbook's accounting and resume contract](runbook.md#ai-spend-accounting-and-resumable-cap).
 4. Photo resolution — three tiers, write `photoSource` on every tier so Google Places spend is projectable:
    - Tier 1: `restaurant.photoUrl` already populated by Phase 1 → `photoSource='ue_feed_hero'`. No call.
    - Tier 2: UE photo-only lookup via `UberEatsSource.lookupPhoto` if tier 1 missing → `photoSource='ue_photo_lookup'`. No call cost.
-   - Tier 3: `fetchGooglePlacesPhoto(name, lat, lng)` → `photoSource='google_places'`. Costs one Places call per miss.
+   - Tier 3: `fetchGooglePlacesPhoto(name, lat, lng, accounting)` → `photoSource='google_places'`.
+     Search and photo each reserve their price bound against the shared daily Google budget and the cumulative run cap.
 
-   **Spend projection:** Axiom query `sum(count(*)) by photoSource` on the UE-first restaurant events gives Google Places call volume per run. Multiply by current Places unit cost to project monthly spend. Tier-1 hit rate is the lever — if feed hero is present on ~80% of cards, tier-3 volume stays low.
+   **Spend accounting:** The [service budgets and telemetry](pipeline-v2-budgets.md) record each Google search and photo attempt, including failed calls.
+   The successful `photoSource` distribution alone cannot measure this paid call volume.
 5. `validateItems` → `persistHex` → `PipelineCompletedHex` checkpoint. Atomic per-hex.
 
 **Concurrency:** existing `CONFIG.concurrency=10` per hex, clamped by `API_SEMAPHORES.ubereats` (5) and `.haiku` (20). Do **not** introduce a new "workers=5" knob.

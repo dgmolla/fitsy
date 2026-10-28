@@ -126,7 +126,7 @@ npx tsx scripts/preload-ue-first.ts [flags]
 | `--days N` | integer (default: 7) | Skip restaurants scraped within N days (pre-fetch gate) |
 | `--run-id ID` | string | Use this explicit run ID; otherwise auto-resumes or generates `run-ue-first-YYYY-MM-DD` |
 | `--skip-preflight` | flag | Skip UE + Anthropic preflight (useful for offline/unit testing) |
-| `--cost-cap-usd USD` | non-negative dollars (default: `15`) | Cumulative AI cap for this run, including prior attempts; overrides `PRELOAD_COST_CAP_USD` |
+| `--cost-cap-usd USD` | non-negative dollars (default: `15`) | Cumulative Haiku + Google cap for this run, including prior attempts and in-flight reservations; overrides `PRELOAD_COST_CAP_USD` |
 | `--cost-log PATH` | default: `scripts/cache/preload-costs/<encoded-run-id>.jsonl` | Append-only usage ledger; reuse the same file when resuming |
 
 ---
@@ -222,15 +222,17 @@ The summary prints `total_cost` and `cost_per_1k_items`, using submitted AI item
 Official and FatSecret results bypassing Haiku add no AI usage.
 
 The cap is checked before every paid chunk and retry, and before scheduling another restaurant or hex.
-Already active requests drain and are charged, so final spend can exceed the cap by those responses.
+Every request first reserves its full envelope, so concurrently active responses cannot spend beyond the configured cap.
+Google search and photo calls share this run cap and the [fleet daily Google budget](pipeline-v2-budgets.md), using conservative list-price bounds.
+Unknown transport charges retain their reservations until billing is reconciled.
 An incomplete hex receives no menu writes or completion checkpoint and remains pending for resume.
 The run exits cleanly with status `spend_cap`, prints the resume command details, and flushes telemetry.
 
 ```mermaid
 flowchart LR
-    A[Restore run ledger] --> B{Below cap?}
-    B -->|Yes| C[Request Haiku chunk]
-    C --> D[Append measured usage and item shares]
+    A[Restore run ledger] --> B{Can reserve full envelope?}
+    B -->|Yes| C[Reserve then request Haiku or Google]
+    C --> D[Settle usage and retain source cost evidence]
     D --> E[Parse and validate]
     E --> B
     B -->|No| F[Drain active calls and print summary]
