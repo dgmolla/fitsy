@@ -47,14 +47,15 @@ export function environment() {
   assert(!process.env.EXPO_PUBLIC_SUPABASE_URL.includes('zaxkmjqozvmbifiwbxps'), 'Production Supabase is forbidden');
   return { backend: origin, ...publicConfigIdentity(root) };
 }
-export function backend() {
-  const origin = backendOrigin(process.env.EXPO_PUBLIC_API_URL);
+export function backend(value = process.env.EXPO_PUBLIC_API_URL) {
+  const origin = backendOrigin(value);
   const d = JSON.parse(run('vercel', ['api', `/v13/deployments/${new URL(origin).hostname}`, '--raw']));
   const revision = backendRevision(d, origin);
   // A different backend revision is safe only if its API/shared/schema contents match.
   const diff = run('git', ['diff', '--name-only', revision, '--', 'apps/api', 'packages/shared', 'prisma', 'package.json', 'package-lock.json']);
   const untracked = run('git', ['ls-files', '--others', '--exclude-standard', '--', 'apps/api', 'packages/shared', 'prisma']);
-  assert(!diff && !untracked, 'Deploy candidate backend/shared/schema changes to the configured preview before running product flows; keep dev.fitsy.org pinned to dev');
+  if (diff || untracked) throw Object.assign(new Error('Deploy candidate backend/shared/schema changes to the configured preview before running product flows; keep dev.fitsy.org pinned to dev'),
+    { code: 'FITSY_BACKEND_SOURCE_MISMATCH' });
   return { backendRevision: revision, backendDeployment: d.id };
 }
 function device(udid) {

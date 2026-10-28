@@ -124,6 +124,8 @@ For a PR with API, shared-contract or schema changes, configure `EXPO_PUBLIC_API
 The same origin must reach owned Metro, every account fixture, Maestro's `-e EXPO_PUBLIC_API_URL=...`, and the final evidence check.
 The canonical runners pass that Maestro argument explicitly and disable Expo dotenv overrides for owned Metro.
 An external host runner must also set `EXPO_NO_DOTENV=1` when starting Metro so a checkout's `.env.development.local` cannot restore the stable dev URL.
+The external poller's [backend-selection hook](../../../scripts/sim/native-runner-controls.md#host-backend-selection) discovers an exact-head Ready preview when stable dev has different API contents and checks it before native preparation.
+Confirm that this hook is installed and its `backend-identity.json` names the selected origin; repository-only fixes cannot change the host's loaded environment.
 `helpers/data-api.mjs` and `helpers/shuffle-subscriber.mjs` require that configured origin and refuse production, unrelated projects and URLs containing credentials, paths or query strings.
 All saved API request paths are relative, so helpers cannot silently probe stable dev while the app uses a preview.
 The native runner verifies that origin's Ready, nonproduction `fitsy-api` deployment and candidate API/shared/schema contents, then pins its deployment ID through acceptance and publication.
