@@ -79,9 +79,12 @@ it('the saved ranked-search journey replaces generated grams and queries with it
   const saved = await getMacroTargets();
   expect(saved).toEqual({ calories: '502', protein: '50', carbs: '44', fat: '14' });
   expect(await getMacroTargetSource()).toBe('manual');
-  const url = new URL(String(context.output.rankedUrl));
-  expect(url.origin + url.pathname).toBe('https://dev.fitsy.org/api/restaurants/preview');
-  expect(Object.fromEntries(url.searchParams)).toEqual({ guided: '1', lat: '34.0407', lng: '-118.2468', ...saved });
+  // The flow supplies a relative path; data-api binds it to the app's selected backend.
+  for (const origin of ['https://dev.fitsy.org', 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app']) {
+    const url = new URL(String(context.output.rankedUrl), origin);
+    expect(url.origin + url.pathname).toBe(origin + '/api/restaurants/preview');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ guided: '1', lat: '34.0407', lng: '-118.2468', ...saved });
+  }
 });
 
 it.each([
