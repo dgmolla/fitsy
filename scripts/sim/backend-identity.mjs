@@ -2,7 +2,7 @@
 // Local writers are trusted, as with simulator receipts; metadata is not a
 // cryptographic attestation against a repository administrator.
 export function backendOrigin(value) {
-  if (typeof value !== 'string' || !/^https:\/\/(?:dev\.fitsy\.org|fitsy-api-[a-z0-9-]+-dawits-projects-74b6e00f\.vercel\.app)$/.test(value)) {
+  if (typeof value !== 'string' || !/^https:\/\/(?:dev\.fitsy\.org|fitsy-[a-z0-9-]+-dawits-projects-74b6e00f\.vercel\.app)$/.test(value)) {
     throw new Error('Load the dev API or this project\'s Vercel preview; this runner refuses production and unrelated origins');
   }
   return value;

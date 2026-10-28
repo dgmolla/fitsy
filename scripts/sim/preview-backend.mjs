@@ -25,12 +25,14 @@ export function selectBackend(head, value = process.env.EXPO_PUBLIC_API_URL) {
   const listing = JSON.parse(run('vercel', ['list', 'fitsy-api', '--scope', 'dawits-projects-74b6e00f',
     '--environment', 'preview', '--status', 'READY', '--meta', `githubCommitSha=${head}`, '--format', 'json']));
   const candidate = Array.isArray(listing?.deployments) ? listing.deployments.find(d => d.name === 'fitsy-api' && d.state === 'READY' &&
-    d.target !== 'production' && d.meta?.githubCommitSha === head && typeof d.id === 'string' && d.id.startsWith('dpl_')) : null;
+    d.target !== 'production' && d.meta?.githubCommitSha === head) : null;
   if (!candidate) throw new Error('No Ready fitsy-api preview for this PR head; deploy it before Simulator replay');
   // Use the immutable deployment URL, never reassign dev or rely on a moving branch alias.
   const selected = backendOrigin(`https://${candidate.url}`);
   const identity = backend(selected);
-  if (identity.backendRevision !== head || identity.backendDeployment !== candidate.id)
+  // `vercel list --format json` omits deployment ids, so bind to the health-reported revision and id instead.
+  if (identity.backendRevision !== head || !/^dpl_/.test(identity.backendDeployment || '') ||
+      (candidate.id && identity.backendDeployment !== candidate.id))
     throw new Error('Selected preview no longer matches the PR head and deployment identity');
   return { head, backend: selected, ...identity };
 }
