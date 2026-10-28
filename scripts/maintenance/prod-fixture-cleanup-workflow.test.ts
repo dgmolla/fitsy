@@ -145,6 +145,15 @@ test('invalid URLs fail without exposing parser input or invoking cleanup', () =
   expect(result.stderr).toBe('::error::Unable to run cleanup with a sanitized database URL.\n');
 });
 
+test('dropped names remain JSON-readable without triggering legacy workflow commands anywhere in the line', () => {
+  const key = '##[error]injected';
+  const result = run('dry-run', '', false, url + '?' + new URLSearchParams([[key, 'synthetic-secret']]));
+  expect(result.status).toBe(0);
+  const diagnostic = result.stdout.trim().split('\n')[1]!;
+  expect(diagnostic).not.toContain('##[');
+  expect(JSON.parse(diagnostic.slice('Dropped database URL query keys: '.length))).toEqual([key]);
+});
+
 test.each(['#fragment', '?options=reference%3Dabcdefghijklmnopqrst'])(
   'remaining guard refusals still stop apply after sanitization: %s', suffix => {
     const result = run('apply', expected, false, url + suffix);

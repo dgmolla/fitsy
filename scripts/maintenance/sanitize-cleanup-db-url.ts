@@ -25,7 +25,9 @@ function main() {
   // Escape workflow command data and flush masking before starting any consumer.
   const masked = url.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
   writeSync(1, `::add-mask::${masked}\n`);
-  if (droppedKeys.length) writeSync(1, `Dropped database URL query keys: ${JSON.stringify(droppedKeys)}\n`);
+  // Legacy runner commands recognize ##[ anywhere in a line, including inside JSON.
+  const names = JSON.stringify(droppedKeys).replaceAll('#', '\\u0023');
+  if (droppedKeys.length) writeSync(1, `Dropped database URL query keys: ${names}\n`);
   const result = spawnSync('npx', ['tsx', 'scripts/maintenance/cleanup-test-fixtures.ts', ...process.argv.slice(2)], {
     stdio: 'inherit', env: { ...process.env, POSTGRES_PRISMA_URL: url },
   });
