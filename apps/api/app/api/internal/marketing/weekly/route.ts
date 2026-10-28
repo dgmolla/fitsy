@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 /**
  * GET /api/internal/marketing/weekly
  *
@@ -42,7 +43,7 @@ export const maxDuration = 300;
 /** Wall-clock budget for the send loop, under maxDuration with headroom. */
 const BUDGET_MS = 240_000;
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+async function handleGET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
   const provided = req.headers.get("authorization");
   if (!expected || provided !== `Bearer ${expected}`) {
@@ -123,3 +124,5 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ ok: true, edition: slug, eligible, sent, paced, failed, unsent });
 }
+
+export const GET = withApiTelemetry('GET', '/api/internal/marketing/weekly', handleGET);

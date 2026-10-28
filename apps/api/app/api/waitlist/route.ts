@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
@@ -22,7 +23,7 @@ export const runtime = "nodejs";
  * storage - enough to match a city, not a precise fix. See
  * docs/engineering/backend/launch-waitlist.md for the ASC privacy disclosures.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePOST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
@@ -138,3 +139,5 @@ async function providerVerifiedEmail(userId: string, email: string): Promise<boo
     return false;
   }
 }
+
+export const POST = withApiTelemetry('POST', '/api/waitlist', handlePOST);

@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse, after } from "next/server";
 import { findNearbyRestaurants, decodeCursor, type PaginationCursor, type NearbyRestaurantsParams } from "@/lib/restaurantService";
 import { restaurantCursorContext } from '@/lib/restaurantCursorContext';
@@ -12,7 +13,7 @@ const shuffleLimiter = createRateLimiter({ namespace: 'shuffle-user', windowMs: 
 const headers = { 'Cache-Control': 'private, no-store' };
 export const maxDuration = 30;
 
-export async function GET(
+async function handleGET(
   request: NextRequest,
 ): Promise<NextResponse<RestaurantsApiResponse> | NextResponse> {
   const tEntry = Date.now();
@@ -222,3 +223,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withApiTelemetry('GET', '/api/restaurants', handleGET);

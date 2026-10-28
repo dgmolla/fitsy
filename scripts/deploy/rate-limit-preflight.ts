@@ -1,5 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { consumeSharedQuota } from '../../apps/api/services/rateLimitStore.js';
+import { spawnSync } from 'node:child_process';
+
+const environment = process.env['VERCEL_ENV'] ?? 'development';
+// Share one names-only config contract with CI and the external monitor.
+const manifest = spawnSync(process.execPath, ['scripts/deploy/env-manifest.mjs', `--target=${environment}`], { stdio: 'inherit' });
+if (manifest.status !== 0) {
+  if (!process.env['UPSTASH_REDIS_REST_URL']?.trim() || !process.env['UPSTASH_REDIS_REST_TOKEN']?.trim()) {
+    console.error('Shared rate-limit store preflight failed: configure UPSTASH_REDIS_REST_URL and '
+      + 'UPSTASH_REDIS_REST_TOKEN for this Vercel environment. Migration/build withheld.');
+  }
+  process.exit(manifest.status ?? 1);
+}
 
 // Exercise the runtime EVAL, including writes, without consuming user quotas.
 // Concurrent builds use distinct identities; all probe keys expire in one second.

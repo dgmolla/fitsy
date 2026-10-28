@@ -606,7 +606,9 @@ process.stdout.write(JSON.stringify({
         self.root = Path(self.temp.name)
         for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh', 'scripts/lib/db-target-guard.ts',
                      'apps/api/services/rateLimitStoreConfig.ts', 'scripts/deploy/pipeline-roles-approval.mjs',
-                     'scripts/deploy/activate-runtime-role.ts', 'scripts/deploy/runtime-migrations-preflight.ts',
+                     'scripts/deploy/activate-runtime-role.ts', 'scripts/deploy/env-manifest.mjs',
+                     'scripts/deploy/env-manifest.json',
+                     'scripts/deploy/runtime-migrations-preflight.ts',
                      'scripts/deploy/migration-failure-audit.ts', 'scripts/deploy/migration-failure-audit.sql',
                      'prisma/schema.prisma', 'prisma/migrations/migration_lock.toml',
                      'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql',
@@ -753,6 +755,9 @@ exit "${BUILD_EXIT:-0}"
         self.audit = self.incident['migration_failure_audit']
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith(('VERCEL', 'POSTGRES', 'SUPABASE', 'PIPELINE_DATABASE_URL', 'PROD_', 'FITSY_ALLOW_PROD', 'FITSY_PIPELINE_ROLES', 'GITHUB_ACTIONS', 'UPSTASH', 'NODE_OPTIONS'))}
+        manifest = json.loads((ROOT / 'scripts/deploy/env-manifest.json').read_text())
+        self.env.update({name: 'private-fixture-value' for name in manifest['required']['production']
+                         if name not in ('POSTGRES_PRISMA_URL', 'POSTGRES_URL_NON_POOLING', 'SUPABASE_URL')})
         self.env.update(PATH=str(self.bin) + ':' + os.environ['PATH'], CALLS=str(self.calls),
                         MIGRATIONS=str(self.migrations),
                         AUDIT_REPORT=json.dumps(self.audit),
@@ -824,6 +829,29 @@ exit "${BUILD_EXIT:-0}"
         self.assertIn('runtime role activation skipped', result.stderr)
         self.assertIn('fitsy_app is not configured', result.stderr)
         self.assertNotIn('private-fixture-password', result.stdout + result.stderr)
+
+    def test_nonproduction_builds_without_production_operations_bindings(self):
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        missing = {name: None for name in ('REVENUECAT_WEBHOOK_AUTH', 'AXIOM_TOKEN', 'CRON_SECRET', 'SLACK_BOT_TOKEN')}
+        for environment in ('development', 'preview'):
+            with self.subTest(environment=environment):
+                result, calls = self.drive(VERCEL_ENV=environment, SUPABASE_URL='https://kegycybiruksmrzvniha.supabase.co',
+                                           POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev.replace('postgres.', 'fitsy_app.'),
+                                           **missing)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                expected = ['redis EVAL']
+                if environment == 'preview':
+                    expected.extend(['npx prisma migrate deploy --schema prisma/schema.prisma', 'runtime migration preflight'])
+                self.assertEqual(calls, expected + ['npm run build -w apps/api'])
+
+    def test_production_operations_bindings_remain_required_before_migration_or_build(self):
+        for name in ('REVENUECAT_WEBHOOK_AUTH', 'AXIOM_TOKEN', 'CRON_SECRET', 'SLACK_BOT_TOKEN'):
+            with self.subTest(binding=name):
+                result, calls = self.drive(**{name: None})
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(calls, [])
+                self.assertIn(name, result.stderr)
+                self.assertNotIn('private-fixture-value', result.stdout + result.stderr)
 
     def test_unapproved_role_migration_is_held_while_other_migrations_and_build_proceed(self):
         self.assert_unapproved_role_build(626)
@@ -925,10 +953,10 @@ exit "${BUILD_EXIT:-0}"
             self.assertEqual(calls, [])
 
     def test_missing_shared_store_withholds_deployment_before_migrations_or_build(self):
-        for environment in ('production', 'preview'):
+        for environment in ('production', 'preview', 'development'):
             for missing in ('both', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'):
                 changes = {'VERCEL_ENV': environment}
-                if environment == 'preview':
+                if environment != 'production':
                     changes.update(POSTGRES_URL_NON_POOLING='postgresql://fixture:fixture@localhost:5432/dev',
                                    POSTGRES_PRISMA_URL='postgresql://fitsy_app:fixture@localhost:5432/dev')
                 for key in ('UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'):
@@ -1117,7 +1145,7 @@ exit "${BUILD_EXIT:-0}"
                                                    **{**bindings, 'POSTGRES_PRISMA_URL': runtime})
                         self.assertEqual(result.returncode, 1, result.stderr)
                         self.assertFalse(any(call.startswith('npm') for call in calls))
-                        self.assertIn('Runtime database role activation failed', result.stderr)
+                        self.assertIn('Runtime database role activation failed' if auth else 'Missing required environment variable names', result.stderr)
                         self.assertNotIn('activation skipped', result.stderr)
                         self.assertNotIn('fixture@', result.stdout + result.stderr)
 
@@ -1147,13 +1175,14 @@ exit "${BUILD_EXIT:-0}"
                 self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
                 self.assertNotIn('private-fixture-diagnostic', result.stdout + result.stderr)
 
-    def test_undeployed_development_still_builds_without_redis(self):
+    def test_development_build_also_withholds_without_required_redis(self):
         dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
         result, calls = self.drive(VERCEL_ENV='development', VERCEL='', POSTGRES_URL_NON_POOLING=dev,
                                    POSTGRES_PRISMA_URL=dev.replace('postgres.', 'fitsy_app.'), SUPABASE_URL='https://kegycybiruksmrzvniha.supabase.co',
                                    UPSTASH_REDIS_REST_URL='', UPSTASH_REDIS_REST_TOKEN='')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ['npm run build -w apps/api'])
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(calls, [])
+        self.assertIn('UPSTASH_REDIS_REST_URL', result.stderr)
 
     def test_failed_migration_withholds_build_and_build_failure_is_not_success(self):
         for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):

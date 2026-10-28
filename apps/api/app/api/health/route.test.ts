@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server';
 // ─── Mock Prisma ─────────────────────────────────────────────────────────────
 
 const mockQueryRaw = jest.fn();
@@ -30,7 +31,7 @@ describe("GET /api/health — db connected", () => {
   it("returns 200 with ok status when DB responds", async () => {
     mockQueryRaw.mockResolvedValue([{ "?column?": 1 }]);
 
-    const res = await GET();
+    const res = await GET(new NextRequest('http://localhost/api/health'));
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -43,7 +44,7 @@ describe("GET /api/health — db connected", () => {
     process.env.VERCEL_GIT_COMMIT_SHA = "0123456789abcdef0123456789abcdef01234567";
     mockQueryRaw.mockResolvedValue([]);
 
-    const res = await GET();
+    const res = await GET(new NextRequest('http://localhost/api/health'));
     const body = await res.json();
 
     expect(body.deploymentSha).toBe(process.env.VERCEL_GIT_COMMIT_SHA);
@@ -56,7 +57,7 @@ describe("GET /api/health — db connected", () => {
       process.env.VERCEL_GIT_COMMIT_SHA = sha;
       mockQueryRaw.mockResolvedValue([]);
 
-      const res = await GET();
+      const res = await GET(new NextRequest('http://localhost/api/health'));
       const body = await res.json();
 
       expect(body.deploymentSha).toBeNull();
@@ -67,7 +68,7 @@ describe("GET /api/health — db connected", () => {
   it("returns null when the deployment identity is absent", async () => {
     mockQueryRaw.mockResolvedValue([]);
 
-    const res = await GET();
+    const res = await GET(new NextRequest('http://localhost/api/health'));
     const body = await res.json();
 
     expect(body.deploymentSha).toBeNull();
@@ -77,7 +78,7 @@ describe("GET /api/health — db connected", () => {
   it("includes a version field", async () => {
     mockQueryRaw.mockResolvedValue([]);
 
-    const res = await GET();
+    const res = await GET(new NextRequest('http://localhost/api/health'));
     const body = await res.json();
     expect(body).toHaveProperty("version");
   });
@@ -90,7 +91,7 @@ describe("GET /api/health — db unreachable", () => {
     process.env.VERCEL_GIT_COMMIT_SHA = "0123456789abcdef0123456789abcdef01234567";
     mockQueryRaw.mockRejectedValue(new Error("connection refused"));
 
-    const res = await GET();
+    const res = await GET(new NextRequest('http://localhost/api/health'));
 
     expect(res.status).toBe(503);
     const body = await res.json();
@@ -105,7 +106,7 @@ describe("GET /api/health — db unreachable", () => {
     process.env.VERCEL_GIT_COMMIT_SHA = "invalid";
     mockQueryRaw.mockRejectedValue("timeout");
 
-    const res = await GET();
+    const res = await GET(new NextRequest('http://localhost/api/health'));
 
     expect(res.status).toBe(503);
     const body = await res.json();

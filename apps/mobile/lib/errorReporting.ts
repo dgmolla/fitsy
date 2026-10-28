@@ -22,6 +22,7 @@ export function trackClientError(props: ClientErrorProps): void {
     client.capture('client_error', {
       source: props.source,
       is_fatal: props.is_fatal,
+      kind: typeof __DEV__ !== 'undefined' && __DEV__ ? 'development' : 'production',
     });
     // A fatal error may tear the app down before the periodic flush — push
     // the event out now, best-effort.
