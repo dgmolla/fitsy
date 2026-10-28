@@ -146,7 +146,9 @@ The pipeline uses three environments with distinct jobs.
 | **dev** | second Supabase project `fitsy-dev` (own auth, own JWKS, own RevenueCat sandbox, PostHog dev project, Slack alerts to a dev channel) | `scripts/dev/snapshot.ts`: monthly read-only copy of a ~500-restaurant subset from prod, plus the seed's test users; `scripts/dev/reset.ts` nightly restores user-data tables to seed state and keeps the restaurant subset | `prisma migrate deploy` runs in the Vercel preview build command, so every preview carries its PR's schema | L6, L7, local sessions, sim work, routines that reproduce bugs |
 | **prod** | the existing project | real | `deploy.yml` migrates before Vercel promotes (L8) | L9 only, with the review demo account |
 
-Wiring: Vercel `Preview` env vars point at `fitsy-dev` (today they point at prod); `EXPO_PUBLIC_API_URL` for the `development` and `preview` EAS channels points at the PR's preview URL when driven by L7, and at a stable `dev` alias (`fitsy-api-dev.vercel.app`, deployed from `main` alongside prod) for local simulator work.
+Wiring: Vercel `Preview` env vars point at `fitsy-dev`.
+Stable EAS `development` and `preview` configuration uses `https://dev.fitsy.org` and DEV Supabase through the [explicit-source uploader](staging-environment.md#eas-public-configuration).
+Candidate API validation uses the PR's Ready `fitsy-api` preview in Metro, Maestro and fixtures through the native runner; keep `dev.fitsy.org` pinned to `dev`.
 Local `npm run dev:api` defaults to `fitsy-dev`; pointing local at prod requires an explicit `--prod` flag that prints a banner.
 
 Maintenance is scripted, not manual: `snapshot.ts` (monthly, Vercel cron or routine), `reset.ts` (nightly), and a `dev-drift` check that fails when `fitsy-dev`'s applied migrations lag `main` or when a seed table is empty.
@@ -345,7 +347,7 @@ The two memory items about migrations and the OTA trap become checks, not remind
 
 | Step | Status | Notes |
 |---|---|---|
-| prod smoke | **new** | `scripts/verify/api-e2e.sh --base=https://fitsy.org` with the review demo account, immediately after deploy |
+| prod smoke | **new** | `scripts/verify/api-e2e.sh --base=https://fitsy-api.vercel.app` with the review demo account, immediately after deploy |
 | OTA canary watch | **new** | for 30 minutes after an `eas update`: PostHog `client_error` rate for the new update group versus the previous, and search success rate; breach thresholds with minimum sample size (small user base: require 20 sessions before acting, otherwise hold at 10% and extend the window) |
 | promote | **new** | `eas update:edit --rollout-percentage=100` when the window is green |
 | rollback | **new** | `scripts/deploy/rollback.sh {api\|mobile}`: Vercel promote previous deployment, or `eas update:revert-update-rollout`; then open an `incident` issue with the deploy record, the failing check output, and the last 200 lines of `logs api --since=30m` |
