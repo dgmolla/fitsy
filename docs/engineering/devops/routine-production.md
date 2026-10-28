@@ -25,9 +25,11 @@ It runs `scripts/deploy/migrate-prod.sh` before the production API build.
 That caller requires the exact production project, GitHub repository, main branch and source metadata.
 It validates both existing Production `POSTGRES_URL_NON_POOLING` and `POSTGRES_PRISMA_URL` against the known Supabase production host/tenant and database.
 Migration connections must use the direct/session port, not the transaction pooler.
-`POSTGRES_URL_NON_POOLING` uses the deploy administrator; `POSTGRES_PRISMA_URL` uses the separate `fitsy_app` credential and must match `SUPABASE_URL`.
+`POSTGRES_URL_NON_POOLING` uses the deploy administrator; `POSTGRES_PRISMA_URL` accepts the separate `fitsy_app` credential or the existing explicit `postgres` binding pending provisioning, and must match `SUPABASE_URL`.
 The pipeline-role migration additionally requires Dawit's explicit approval recorded as its exact SHA-256 in `FITSY_PIPELINE_ROLES_APPROVED_SHA256`.
-The build activates the app login after migration and withholds promotion if activation fails; pipeline credentials are provisioned separately for pipeline workers.
+Without matching approval, `pipeline-roles-approval.mjs --deploy` excludes that migration from a temporary Prisma input directory while deploying the other migrations; it never marks held SQL applied or edits the original migration.
+With matching approval, it includes the role SQL and checks the staged bytes before running Prisma.
+The build logs an activation skip for a validated legacy binding; configured `fitsy_app` activation failures still withhold promotion, and pipeline credentials are provisioned separately for pipeline workers.
 Names alone do not prove a database target.
 Credentials stay in their existing Vercel bindings; do not copy them into GitHub, files or build arguments.
 After those guards, `scripts/deploy/rate-limit-preflight.ts` exercises the runtime Redis `EVAL` before any migration.
@@ -36,6 +38,10 @@ The preflight uses the same service, URL validation, response validation and one
 Its separate `deployment-readiness` namespace and unique identities leave user quotas untouched; probe keys expire in one second.
 Missing or partial configuration, read-only credentials, unavailable transport, invalid replies or a denied probe withhold migrations and the build without a local fallback.
 Provider errors, tokens and URLs never enter preflight diagnostics.
+The existing release regression suite executes the real build scripts with synthetic signed identity and external transports, checks Prisma's exact migration input and cleanup, and runs the runtime binding guard at the build boundary.
+Run `python3 -B scripts/deploy/routine-release.test.py` to verify approved, held, changed-SQL, legacy preview and fail-closed deployment paths without contacting production.
+Run `node --test scripts/deploy/pipeline-roles-approval.test.mjs` for an installed-Prisma regression against disposable SQLite marker migrations, including delayed approval, unchanged ledger entries and migration failures.
+Already-applied role SQL needs no repeated approval; Prisma's [production deployment contract](https://docs.prisma.io/docs/orm/v6/prisma-migrate/workflows/development-and-production#production-and-testing-environments) permits an applied migration to be absent from the deploy input.
 Wrong identity, missing binding or failed migration also withholds the build; failed API build cannot succeed.
 Preview/development builds refuse either production binding and preview migrations retain the development route.
 Preview runs the same Redis preflight after the DEV database guard and before migrations; undeployed development remains usable without Redis.

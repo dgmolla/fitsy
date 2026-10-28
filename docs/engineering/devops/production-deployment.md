@@ -70,6 +70,7 @@ vercel env add JWT_SECRET production    # openssl rand -base64 32
 # 6. Apply migrations only through the guarded Vercel Git main deploy.
 # The pipeline-role migration requires Dawit's explicit approval and its exact
 # FITSY_PIPELINE_ROLES_APPROVED_SHA256; see db-guardrails.md for credential cutover.
+# Without it, only that migration is held; unrelated migrations/builds proceed.
 ```
 
 ---
