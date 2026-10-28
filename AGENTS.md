@@ -80,11 +80,13 @@ npm run dev:mobile     # Expo dev client
 npm test               # Run tests
 npm run perf:check     # Stable performance invariants (no network timing gate)
 npm run perf:bundle    # Local production iOS JS size budget; never publishes
+npm run verify:dependencies # Live full and production dependency audits with retained evidence
 npx prisma migrate dev # Run migrations
 ```
 
 Environments: ephemeral (CI + `prisma/seed.ts`), **dev** (`fitsy-dev` Supabase: previews, local, simulator), prod. `docs/engineering/devops/staging-environment.md`; `scripts/dev/` refuses prod.
 Database tests require a disposable loopback database and refuse shared DEV and PROD before suites load; the owned setup is documented in [verification](scripts/verify/README.md).
+Dependency upgrades and live audits require registry access; use the existing network-enabled owner when a worker is restricted, following [dependency audit evidence](scripts/verify/README.md#live-dependency-audit-evidence).
 Performance baselines, dev API sampling and native profiling: [performance runbook](docs/engineering/devops/performance.md).
 
 ### Git Hooks Setup (one-time, per clone)
