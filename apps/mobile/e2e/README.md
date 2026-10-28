@@ -225,6 +225,9 @@ Syntax checks and component tests do not establish a passing native journey or d
 ## Mixed-duration trial reminders
 
 `paywall-mixed-trials-visual` covers annual two-day plus monthly seven-day trials and the reverse through the real three-screen onboarding journey.
+Each catalog clears app state and keychain once, then retries only bounded startup observations and conditional local Metro reconnection before requiring `welcome-start`.
+The second catalog can otherwise hit XCTest `kAXErrorInvalidUIElement` while the welcome screen animates in; that is an accessibility read failure before the trial journey starts.
+Permanent hierarchy failures and an incorrect screen still fail, and billing actions and outcome assertions never run inside the startup retry.
 Its shared helper checks the named reminder offer, the schedulable purchase default, live prices and renewal copy, plan switching, unavailable reminders for short trials with and without simulated opt-in, and the visual-only checkout guard.
 Run it with `paywall-eligible-visual` through `scripts/sim/product-flow.mjs run <UDID> ... --mode=development` on an owned development build.
 The `annual-short` and `monthly-short` visual parameters propagate unchanged between screens.
