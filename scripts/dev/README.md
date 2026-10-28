@@ -32,6 +32,10 @@ set -a; source .env.dev; set +a          # produced by write-local-env.sh
 
 `snapshot.ts` additionally needs `PROD_DATABASE_URL` (prod `POSTGRES_URL_NON_POOLING`, pulled with `vercel env pull --environment=production`).
 
+Refreshing local files does not update EAS.
+Use the [explicit-source EAS uploader](../../docs/engineering/devops/staging-environment.md#eas-public-configuration) with one DEV target, review its dry run, and apply only under existing authorization.
+Keep fixture login credentials local; the uploader rejects them.
+
 ## Seed accounts
 
 | Email | Password | Role |
