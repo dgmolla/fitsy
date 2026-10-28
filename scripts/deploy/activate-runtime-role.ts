@@ -1,14 +1,19 @@
-/** Activate the migrated app role from its deployment secret, before promotion. */
+/** Activate a configured app role; retain validated legacy bindings until provisioning. */
 import { PrismaClient } from '@prisma/client';
 import { assertDatabaseWriteAllowed, assertRuntimeDatabase, databaseTarget } from '../lib/db-target-guard';
 
 let stage = 'migration target validation';
 async function main() {
   const url = await assertDatabaseWriteAllowed(process.env['POSTGRES_URL_NON_POOLING']);
-  stage = 'runtime binding validation (POSTGRES_PRISMA_URL must use fitsy_app and match SUPABASE_URL)';
+  stage = 'runtime binding validation (POSTGRES_PRISMA_URL must use fitsy_app or existing postgres and match SUPABASE_URL)';
   const runtime = new URL(assertRuntimeDatabase(process.env['POSTGRES_PRISMA_URL']));
   if (!runtime.password || databaseTarget(runtime.toString()).ref !== databaseTarget(url).ref) {
     throw new Error('Runtime role activation requires a password and the same database project as the migration');
+  }
+  const role = decodeURIComponent(runtime.username).split('.')[0];
+  if (role !== 'fitsy_app') {
+    console.error('runtime role activation skipped: fitsy_app is not configured; existing runtime binding retained, provisioning requires owner approval');
+    return;
   }
   const admin = new PrismaClient({ datasources: { db: { url } }, log: [] });
   stage = 'database login activation';

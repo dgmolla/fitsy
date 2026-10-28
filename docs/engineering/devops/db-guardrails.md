@@ -171,7 +171,9 @@ Migration `20261028120000_pipeline_writer_roles` creates `fitsy_app`, `pipeline_
 Only `pipeline_writer` receives INSERT/UPDATE/DELETE on restaurant, brand, menu, macro, chain-nutrition and pipeline-checkpoint tables; the deploy administrator remains their owner.
 `fitsy_app` reads those tables and retains account, subscription, feedback, saved-item and marketing writes.
 Pipeline commands require `PIPELINE_DATABASE_URL`; runtime or migration credentials never substitute for it.
-`POSTGRES_PRISMA_URL` must use `fitsy_app` and match `SUPABASE_URL`; `POSTGRES_URL_NON_POOLING` remains the deploy administrator's session/direct connection.
+`POSTGRES_PRISMA_URL` must match `SUPABASE_URL`; it accepts `fitsy_app` and the existing explicit `postgres` binding until owner-approved provisioning.
+Pipeline, audit and unknown roles cannot become runtime bindings, and no credential fallback is performed.
+`POSTGRES_URL_NON_POOLING` remains the deploy administrator's session/direct connection.
 
 After the DEV migration, `scripts/dev/provision-audit-role.ts --apply --role=fitsy_app` generates a separate login credential in the existing private `~/Desktop/secrets.env` file.
 The same command accepts `--role=pipeline_writer` or defaults to `fitsy_audit_readonly`.
@@ -180,14 +182,17 @@ It requires the exact DEV project, the completed migration and safe role attribu
 Credentials are never stored in Git, audit evidence or logs.
 The provisioner refuses an existing credential rather than silently rotating it.
 
-Use the DEV `fitsy_app` credential for Vercel Preview and Development `POSTGRES_PRISMA_URL` bindings before accepting the candidate deployment.
-The guarded build activates that login after migrations and withholds the build when activation fails; its diagnostic names the validation stage and allowlisted error code without driver or credential details.
-Never resolve a failed activation by restoring administrator runtime access.
+Use the DEV `fitsy_app` credential for Vercel Preview and Development `POSTGRES_PRISMA_URL` bindings when the owner approves provisioning.
+After validating the migration and runtime targets, builds log an activation skip for the existing legacy binding while provisioning is pending.
+The guarded build activates a configured `fitsy_app` login after migrations and withholds the build when activation fails; its diagnostic names the validation stage and allowlisted error code without driver or credential details.
+An invalid target, DB/Auth mismatch or failed configured login never becomes a skip or credential fallback.
 `scripts/dev/provision-supabase.sh` consumes `DEV_APP_DATABASE_URL` when wiring those environments; the pipeline credential belongs only in the pipeline operator/worker environment.
 Keep `dev.fitsy.org` pinned to `dev`; candidate native acceptance uses the PR's Ready preview URL.
 
 Production migration is owned exclusively by the existing Vercel Git main deploy.
-It requires Dawit's explicit approval via `FITSY_PIPELINE_ROLES_APPROVED_SHA256` matching the migration's SHA-256, in addition to the existing signed deployment and target checks.
+The role migration requires Dawit's explicit approval via `FITSY_PIPELINE_ROLES_APPROVED_SHA256` matching its SHA-256, in addition to the existing signed deployment and target checks.
+Without matching approval, the build gives Prisma a temporary schema/migration copy excluding only that migration so unrelated migrations and builds can proceed.
+It leaves the original SQL and migration ledger untouched; matching approval includes the role migration on the next deploy, while any migration failure still withholds the build.
 Provision separate production credentials and bindings through the approved operator path; the DEV provisioner refuses production.
 Preparing code and tests does not establish owner approval, production application or successful credential cutover.
 

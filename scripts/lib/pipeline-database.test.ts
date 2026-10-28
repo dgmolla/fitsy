@@ -13,7 +13,7 @@ test('runtime, pipeline and audit credentials cannot substitute for one another'
       if (role === required) expect(assertDatabaseRole(value, required)).toBe(value);
       else expect(() => assertDatabaseRole(value, required)).toThrow(/administrator credentials are migration-only/);
     }
-    if (role === 'fitsy_app') expect(assertRuntimeDatabase(value, `https://${DEV_PROJECT_REF}.supabase.co`)).toBe(value);
+    if (role === 'fitsy_app' || role === 'postgres') expect(assertRuntimeDatabase(value, `https://${DEV_PROJECT_REF}.supabase.co`)).toBe(value);
     else expect(() => assertRuntimeDatabase(value, `https://${DEV_PROJECT_REF}.supabase.co`)).toThrow(/must use fitsy_app/);
     if (role === 'pipeline_writer') expect(await assertPipelineDatabase(value)).toBe(value);
     else await expect(assertPipelineDatabase(value)).rejects.toThrow(/must use pipeline_writer/);

@@ -17,8 +17,6 @@ if [ "${VERCEL:-}" = "1" ]; then
 else
   echo "refusing: production migration is owned by the Vercel Git build" >&2; exit 1
 fi
-# Owner approval is separate from the signed deploy identity and target checks.
-node scripts/deploy/pipeline-roles-approval.mjs
 # The verified Git main deployment is the sole routine production migration owner.
 # Supply both explicit intentions here without changing production credentials.
 FITSY_ALLOW_PROD_WRITE=1 node --import tsx scripts/lib/db-target-guard.ts --prod \
@@ -30,18 +28,20 @@ const ref = 'zaxkmjqozvmbifiwbxps';
 for (const name of ['POSTGRES_URL_NON_POOLING', 'POSTGRES_PRISMA_URL']) {
   try {
     const url = new URL(process.env[name]);
-    const role = name === 'POSTGRES_PRISMA_URL' ? 'fitsy_app' : 'postgres';
-    const direct = url.hostname === `db.${ref}.supabase.co` && url.username === role;
+    // Preserve the existing binding until the owner provisions fitsy_app.
+    // Both roles still require the exact production tenant and database.
+    const roles = name === 'POSTGRES_PRISMA_URL' ? ['fitsy_app', 'postgres'] : ['postgres'];
+    const direct = url.hostname === `db.${ref}.supabase.co` && roles.includes(url.username);
     const username = decodeURIComponent(url.username);
     const options = url.searchParams.getAll('options');
     const keys = [...url.searchParams.keys()];
     // Supavisor also routes a bare postgres role through an exact options reference.
-    const optionsRoute = username === role && options.length === 1
+    const optionsRoute = roles.includes(username) && options.length === 1
       && options[0] === `reference=${ref}`
       && new Set(keys).size === keys.length
       && keys.every(key => ['options', 'sslmode', 'pgbouncer'].includes(key));
     const pooler = /^[a-z0-9-]+\.pooler\.supabase\.com$/.test(url.hostname)
-      && ((username === `${role}.${ref}` && options.length === 0) || optionsRoute);
+      && ((roles.some(role => username === `${role}.${ref}`) && options.length === 0) || optionsRoute);
     if (!['postgres:', 'postgresql:'].includes(url.protocol) || (!direct && !pooler)
         || url.pathname !== '/postgres' || !url.password
         || (name === 'POSTGRES_URL_NON_POOLING' && !['', '5432'].includes(url.port))) throw Error();
@@ -53,6 +53,6 @@ for (const name of ['POSTGRES_URL_NON_POOLING', 'POSTGRES_PRISMA_URL']) {
 NODE
 # Refuse an unavailable auth dependency before changing the production schema.
 node --import tsx scripts/deploy/rate-limit-preflight.ts
-npx prisma migrate status --schema prisma/schema.prisma || true
-npx prisma migrate deploy --schema prisma/schema.prisma
+# Owner approval controls which SQL Prisma receives, never unrelated deploys.
+node scripts/deploy/pipeline-roles-approval.mjs --deploy
 FITSY_ALLOW_PROD_WRITE=1 node --import tsx scripts/deploy/activate-runtime-role.ts --prod
