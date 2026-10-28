@@ -61,7 +61,8 @@ graph LR
 Seed users are email/password accounts created through the dev project's admin API; `POST /api/auth/register` and `/login` work unchanged.
 Production rejects legacy registration and restricts password login to the demo reviewer account on the server.
 `ALLOW_STUB_SUBSCRIPTIONS` and additional `DEMO_REVIEW_EMAILS` apply only outside production.
-Production RevenueCat reads reject Test Store keys and require non-sandbox store proof; webhook grants also require the `pro` entitlement and production environment.
+Production RevenueCat reads reject Test Store keys but accept active platform-store sandbox purchases for TestFlight and App Review, logging `revenuecat.sandbox_entitlement_accepted` with only the user ID.
+Webhook grants still require the `pro` entitlement and production environment.
 Apple and Google sign-in are not configured in the dev project; enable them in the dev dashboard only if a flow under test needs them.
 
 ## Operations

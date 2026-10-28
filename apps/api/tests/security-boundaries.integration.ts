@@ -74,7 +74,7 @@ test('reviewer credentials still reach Supabase and an invalid password is rejec
   assert.equal(providerCalls, beforeCalls + 1);
 });
 
-test('sandbox purchases and unrelated entitlements never reach production persistence', async () => {
+test('sandbox webhooks and unrelated entitlements never reach production persistence', async () => {
   process.env['REVENUECAT_WEBHOOK_AUTH'] = 'fixture-webhook-auth';
   for (const overrides of [{ environment: 'SANDBOX' }, { entitlement_ids: ['other-product'] }]) {
     const response = await webhook(new NextRequest('http://localhost/api/revenuecat/webhook', {
@@ -87,7 +87,7 @@ test('sandbox purchases and unrelated entitlements never reach production persis
   }
 });
 
-test('production transfers with an optional environment use scoped REST and retry an unavailable lookup', async () => {
+test('production transfers with an optional environment re-check RevenueCat and retry an unavailable lookup', async () => {
   const savedFetch = global.fetch;
   const savedKey = process.env['REVENUECAT_PUBLIC_API_KEY'];
   const lookups: { url: string; sandbox: string | null }[] = [];
@@ -109,7 +109,7 @@ test('production transfers with an optional environment use scoped REST and retr
       if (status === 500) {
         assert.deepEqual(await response.json(), { error: 'RevenueCat lookup unavailable' });
         assert.deepEqual(lookups.at(-1), {
-          url: 'https://api.revenuecat.com/v1/subscribers/fixture-account', sandbox: 'false',
+          url: 'https://api.revenuecat.com/v1/subscribers/fixture-account', sandbox: null,
         });
       }
       assert.equal(lookups.length - beforeLookups, status === 500 ? 1 : 0);
