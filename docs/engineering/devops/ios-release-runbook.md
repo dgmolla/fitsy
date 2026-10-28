@@ -55,6 +55,8 @@ Run applicable cheap/focused checks, matching independent review and trusted exa
 Document which checks have actually passed and which remain unknown; old-head CI and Test Store fixtures cannot stand in for final-candidate acceptance.
 
 The production build must use the production backend, Supabase project, real iOS RevenueCat app key and `pro` entitlement, not localhost/dev, keyless or `test_` configuration.
+Prepare its EAS public configuration with the [explicit-source uploader](staging-environment.md#eas-public-configuration), using a separate production source and `--env production`.
+Review the default dry run before an authorized `--apply`; never copy local DEV credentials into production EAS configuration.
 Confirm the evaluated configuration and actual embedded IPA, including Google sign-in scheme, signing/team, bundle, version/build, SDK, runtime and production updates channel.
 Do not expose credentials when recording identities.
 Under `runtimeVersion.policy = appVersion`, a marketing-version change also changes OTA runtime; retain [native compatibility and rollback protections](ios-ota-baseline.md).

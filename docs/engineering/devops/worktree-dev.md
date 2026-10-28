@@ -15,6 +15,9 @@ bash scripts/worktree-setup.sh
 It symlinks `node_modules` from the primary clone and copies the `.env*` files.
 Then `npm run dev:mobile` (on a free port) runs the app in the simulator normally.
 
+Copying local dotenv files does not update EAS environments.
+For an authorized EAS configuration change, use the [explicit-source uploader](staging-environment.md#eas-public-configuration) and review its dry run for one target before applying.
+
 ## The gotcha that cost hours: missing `.env*`
 
 A fresh worktree has no `.env.local`.

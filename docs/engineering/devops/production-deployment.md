@@ -140,7 +140,7 @@ psql $DATABASE_URL -c "SELECT COUNT(*) FROM \"Restaurant\";"
 After deploying (Vercel auto-deploys on push to `main`), run the verification script:
 
 ```bash
-bash scripts/verify/api-e2e.sh --base=https://fitsy.org --prod-safe
+bash scripts/verify/api-e2e.sh --base=https://fitsy-api.vercel.app --prod-safe
 ```
 
 Manual smoke tests:
