@@ -1,3 +1,4 @@
+import { assertTestDatabase } from '../../../../scripts/lib/test-database-guard';
 import { isLocalDatabaseHost } from '../fixtures/localDatabaseHost';
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -14,7 +15,7 @@ suite("legacy classifier protection in disposable databases", () => {
     // The code under test can rewrite an entire database if its guard regresses.
     // Never run that writer against the shared test database, even under a fixture lock.
     const database = `fitsy_legacy_${randomUUID().replaceAll("-", "")}`;
-    const admin = new PrismaClient({ datasources: { db: { url: configured! } } });
+    const admin = new PrismaClient({ datasources: { db: { url: assertTestDatabase(configured) } } });
     const url = new URL(configured!); url.pathname = "/" + database;
     const root = resolve(__dirname, "../../../..");
     const env = { ...process.env, POSTGRES_PRISMA_URL: url.toString(), POSTGRES_URL_NON_POOLING: url.toString() };
@@ -22,7 +23,7 @@ suite("legacy classifier protection in disposable databases", () => {
     try {
       await admin.$executeRawUnsafe(`CREATE DATABASE "${database}"`); created = true;
       execFileSync(process.execPath, ["node_modules/prisma/build/index.js", "migrate", "deploy"], { cwd: root, env, stdio: "pipe" });
-      local = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+      local = new PrismaClient({ datasources: { db: { url: assertTestDatabase(url.toString()) } } });
       const [target] = await local.$queryRaw<{ name: string }[]>`SELECT current_database() AS name`;
       expect(target!.name).toBe(database);
       const displayName = "Fixture Reviewed Cafe";

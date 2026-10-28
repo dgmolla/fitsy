@@ -1,3 +1,4 @@
+import { assertTestDatabase } from '../../../../scripts/lib/test-database-guard';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -30,7 +31,7 @@ suite('regional official nutrition through the real writer and served menu', () 
     const restaurant = await p.restaurant.create({ data: { name: scope, storeUuid: `${scope}-observer`, address: 'Lock observer fixture', lat: 34, lng: -118, source: 'test', cuisineTags: [] } });
     const url = new URL(process.env['POSTGRES_PRISMA_URL']!);
     url.searchParams.set('connection_limit', '1');
-    const writer = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+    const writer = new PrismaClient({ datasources: { db: { url: assertTestDatabase(url.toString()) } } });
     let pending: Promise<unknown> | undefined;
     try {
       const [{ pid: writerPid }] = await writer.$queryRaw<[{ pid: number }]>`SELECT pg_backend_pid() AS pid`;
@@ -145,7 +146,7 @@ suite('regional official nutrition through the real writer and served menu', () 
       const saved = await p.menuItem.findFirstOrThrow({ where: { restaurantId: ohio.id } });
       const url = new URL(process.env['POSTGRES_PRISMA_URL']!);
       url.searchParams.set('application_name', scope); url.searchParams.set('connection_limit', '1');
-      const writer = new PrismaClient({ datasources: { db: { url: url.toString() } } });
+      const writer = new PrismaClient({ datasources: { db: { url: assertTestDatabase(url.toString()) } } });
       let pending: Promise<number> | undefined;
       try {
         const [{ pid: writerPid }] = await writer.$queryRaw<[{ pid: number }]>`SELECT pg_backend_pid() AS pid`;

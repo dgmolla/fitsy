@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   // Use the direct (non-pooled) URL so big batch UPDATEs aren't subject
   // to PgBouncer's transaction-mode prepared-statement quirks and
   // shorter statement timeouts. Falls back to default URL otherwise.
-  const directUrl = assertDatabaseWriteAllowed(process.env["POSTGRES_URL_NON_POOLING"] ?? process.env["POSTGRES_PRISMA_URL"]);
+  const directUrl = await assertDatabaseWriteAllowed(process.env["POSTGRES_URL_NON_POOLING"] ?? process.env["POSTGRES_PRISMA_URL"]);
   const prisma = new PrismaClient({ datasources: { db: { url: directUrl } } });
   const startMs = Date.now();
 

@@ -32,7 +32,6 @@ let url: URL;
 try { url = new URL(rawUrl.trim()); } catch { throw new Error("Invalid database URL"); }
 const target = stateHash([url.host, url.pathname, url.username]);
 url.searchParams.set("connection_limit", "1");
-const p = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(url.toString()) } } });
 const report = (data: unknown) => process.stdout.write(JSON.stringify(data) + "\n");
 function save(file: string, data: unknown) {
   const fd = openSync(file, "wx", 0o600);
@@ -41,14 +40,18 @@ function save(file: string, data: unknown) {
 const read = <T>(file: string) => JSON.parse(readFileSync(file, "utf8")) as T;
 interface AprilEntry { before: AprilSnapshot; approved: ApprovedChainRow }
 interface PlanFile { target: string; kind: "catalog" | "april"; hash: string; catalog?: CatalogPlan; rows?: AprilEntry[] }
-async function inventory() {
+async function inventory(p: PrismaClient) {
   const brands = await p.brand.findMany({ where: { slug: { in: slugs } } });
   const catalog = await p.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
   return { brands, catalog };
 }
 async function main() {
+  const p = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(url.toString()) } } });
+  try { await run(p); } finally { await p.$disconnect(); }
+}
+async function run(p: PrismaClient) {
   if (command === "menu-inventory") {
-    const { brands } = await inventory();
+    const { brands } = await inventory(p);
     const items = await p.menuItem.findMany({ where: { retiredAt: null, restaurant: { brandId: { in: brands.map(b => b.id) } } },
       select: { id: true, name: true, sourceItemId: true, section: true, description: true, restaurant: { select: { brandId: true } } }, orderBy: { id: "asc" } });
     const variants = new Map<string, { slug: string; name: string; sourceItemId?: string; section: string; description: string; itemIds: string[] }>();
@@ -61,12 +64,12 @@ async function main() {
     save(path!, { target, variants: [...variants.values()] }); report({ inspected: items.length, uniqueVariants: variants.size }); return;
   }
   if (command === "catalog-plan") {
-    const { brands, catalog } = await inventory(), plan = planChainPilot(brands, catalog, batch);
+    const { brands, catalog } = await inventory(p), plan = planChainPilot(brands, catalog, batch);
     const doc = { target, kind: "catalog" as const, hash: plan.hash, catalog: plan };
     save(path!, doc); report({ changes: plan.changes.length, hash: doc.hash }); return;
   }
   if (command === "april-plan") {
-    const { brands, catalog } = await inventory();
+    const { brands, catalog } = await inventory(p);
     if (planChainPilot(brands, catalog, batch).changes.length) throw new Error("Apply and verify the catalog pilot first (or the selected batch)");
     const verified = await p.brand.findMany({ where: { detectionConf: { in: ["high", "llm-confirmed"] }, menuKind: "restaurant" } });
     const restaurants = await p.restaurant.findMany({ where: { brandId: { in: brands.map(b => b.id) } }, select: { id: true, name: true, brandId: true, lat: true, lng: true } });
@@ -153,4 +156,4 @@ async function main() {
 main().catch(error => {
   console.error(error?.constructor?.name?.startsWith("Prisma") ? JSON.stringify({ error: error.constructor.name, code: error.code }) : error instanceof Error ? error.message : "Pilot operation failed");
   process.exitCode = 1;
-}).finally(() => p.$disconnect());
+});

@@ -83,7 +83,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const prisma = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(process.env["POSTGRES_PRISMA_URL"]) } } });
+  const prisma = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(process.env["POSTGRES_PRISMA_URL"]) } } });
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
   const firecrawlScraper = new FirecrawlScraper();

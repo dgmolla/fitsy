@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { assertRuntimeDatabase } from "../../../scripts/lib/db-target-guard";
 import { hasTargets } from "./macroScoring";
 import { macroScoreSumSql, macroQualificationSql } from "./macroScoreSql";
 import { shuffleSearchOrder } from './shuffleSearch';
@@ -13,13 +14,16 @@ import { getMenuPage, type MenuPageOptions } from "./restaurantMenuService";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  fitsyPrismaDatasourceUrl: string | undefined;
 };
 
+const datasourceUrl = assertRuntimeDatabase(process.env["POSTGRES_PRISMA_URL"]);
 export const prisma: PrismaClient =
-  globalForPrisma.prisma ?? new PrismaClient();
+  (globalForPrisma.fitsyPrismaDatasourceUrl === datasourceUrl ? globalForPrisma.prisma : undefined) ?? new PrismaClient({ datasourceUrl });
 
 if (process.env["NODE_ENV"] !== "production") {
   globalForPrisma.prisma = prisma;
+  globalForPrisma.fitsyPrismaDatasourceUrl = datasourceUrl;
 }
 
 // ─── Ranking config ───────────────────────────────────────────────────────────

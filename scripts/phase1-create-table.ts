@@ -9,7 +9,6 @@
  */
 import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
 import { PrismaClient } from "@prisma/client";
-const p = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(process.env["POSTGRES_PRISMA_URL"]) } } });
 
 const STMTS = [
   `CREATE TABLE IF NOT EXISTS "ChainItem" (
@@ -39,8 +38,12 @@ const STMTS = [
 ];
 
 async function main() {
+  const p = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(process.env["POSTGRES_PRISMA_URL"]) } } });
+  try { await run(p); } finally { await p.$disconnect(); }
+}
+async function run(p: PrismaClient) {
   for (const s of STMTS) { await p.$executeRawUnsafe(s); }
   const r: any[] = await p.$queryRawUnsafe(`SELECT count(*)::int AS n FROM "ChainItem"`);
   console.log(`ChainItem table ready. current rows: ${r[0].n}`);
 }
-main().catch((e) => { console.error("CREATE ERROR:", e.message); process.exit(1); }).finally(() => p.$disconnect());
+main().catch((e) => { console.error("CREATE ERROR:", e.message); process.exit(1); });

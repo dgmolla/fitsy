@@ -44,7 +44,8 @@ async function worker(trusted = true): Promise<Worker> {
     env: { ...process.env, TSX_TSCONFIG_PATH: resolve(__dirname, '../tsconfig.json'),
       NODE_ENV: 'test', VERCEL: trusted ? '1' : '0', VERCEL_ENV: 'preview',
       UPSTASH_REDIS_REST_URL: 'https://quota.example.test', UPSTASH_REDIS_REST_TOKEN: 'fixture-token',
-      SUPABASE_URL: 'https://fixture.supabase.test', POSTGRES_PRISMA_URL: 'invalid-quota-test-sentinel' },
+      // No datasource: the runtime pins an invalid explicit URL, so quota tests cannot query a real DB.
+      SUPABASE_URL: 'https://fixture.supabase.test', POSTGRES_PRISMA_URL: undefined, POSTGRES_URL_NON_POOLING: undefined },
   });
   const requests = new Map<string, { resolve: (value: WorkerResult) => void; reject: (error: Error) => void }>();
   let ready: () => void;

@@ -326,7 +326,23 @@ class VercelBuildTests(unittest.TestCase):
         transport = self.root / 'redis-transport.mjs'
         transport.write_text('''import assert from 'node:assert/strict';
 import { appendFileSync } from 'node:fs';
+import { generateKeyPairSync, sign } from 'node:crypto';
+const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+const now = Math.floor(Date.now() / 1000);
+const owner = 'dawits-projects-74b6e00f';
+const issuer = `https://oidc.vercel.com/${owner}`;
+const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+const data = encode({ alg: 'RS256', kid: 'vercel-fixture' }) + '.' + encode({
+  iss: issuer, aud: `https://vercel.com/${owner}`,
+  sub: `owner:${owner}:project:fitsy-api:environment:production`,
+  owner_id: 'team_VVc52BrZfx5IT2B1mDI5AuPT', project_id: 'prj_z1QTfOgbj4tlm91U2Hf8JXr5k4v4',
+  environment: 'production', iat: now, nbf: now, exp: now + 300,
+});
+process.env.VERCEL_OIDC_TOKEN = data + '.' + sign('RSA-SHA256', Buffer.from(data), privateKey).toString('base64url');
 globalThis.fetch = async (url, init) => {
+  if (String(url) === 'https://oidc.vercel.com/.well-known/jwks') return Response.json({
+    keys: [{ ...publicKey.export({ format: 'jwk' }), kid: 'vercel-fixture', alg: 'RS256', use: 'sig' }],
+  });
   assert.equal(String(url), 'https://quota.example.test/');
   assert.equal(init.headers.Authorization, 'Bearer private-fixture-token');
   assert.equal(init.redirect, 'error');

@@ -47,7 +47,9 @@ Every count must match before any deletion, and every explicit delete count must
 Ambiguities abort apply.
 Apply briefly locks all seven tables against concurrent writes, with a five-second lock timeout, then deletes nutrition, menus, restaurants, catalog rows, brands and checkpoints in one serializable transaction.
 Use a maintenance window for apply on a shared database.
-The existing `db-target-guard.ts` additionally requires `FITSY_ALLOW_PROD_WRITE=1`, `--prod`, and GitHub Actions or the pinned production deployment for production mutation.
+The existing `db-target-guard.ts` additionally requires `FITSY_ALLOW_PROD_WRITE=1`, `--prod`, and a verified signed workload identity for production mutation.
+GitHub writes are pinned to the protected manual cleanup workflow on main; Vercel writes retain the pinned production Git build checks.
+Copied CI/deployment environment markers do not authorize writes.
 Those guard requirements do not grant permission to mutate production or replace production release approval.
 The manual `Production fixture cleanup` GitHub Actions workflow runs only on `main`, behind the `production-release` environment, using its `PROD_DATABASE_URL` secret.
 Its default `dry-run` mode reports fixtures without enabling production writes.

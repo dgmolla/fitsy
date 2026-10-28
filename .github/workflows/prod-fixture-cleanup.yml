@@ -24,6 +24,9 @@ concurrency:
 
 jobs:
   cleanup:
+    permissions:
+      contents: read
+      id-token: write
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production-release

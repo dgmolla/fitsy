@@ -1,10 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { authFetch } from '@fitsy/shared/utils/authTransport';
+import { assertRuntimeSupabase } from '../../../scripts/lib/db-target-guard';
 
 function getSupabaseUrl(): string {
   const url = process.env["SUPABASE_URL"];
   if (!url) throw new Error("SUPABASE_URL environment variable is not set");
-  return url;
+  return assertRuntimeSupabase(url);
 }
 
 /**

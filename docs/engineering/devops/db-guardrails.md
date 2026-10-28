@@ -99,7 +99,14 @@ Passwords are never used for target identity.
 Conflicting routes, duplicate/unknown routing parameters, unknown remote hosts and unapproved project references fail closed.
 
 DEV and loopback databases work normally for these script mutation entrypoints.
-PROD requires all of `FITSY_ALLOW_PROD_WRITE=1`, the separate `--prod` argument, and `GITHUB_ACTIONS=true` or the existing pinned `fitsy-api` Git main production deployment identity.
+PROD requires both `FITSY_ALLOW_PROD_WRITE=1` and the separate `--prod` argument, followed by cryptographic workload identity verification.
+Environment markers alone, including `GITHUB_ACTIONS=true` and copied Vercel deployment markers, cannot authorize writes.
+The guard is asynchronous; every script awaits the guarded URL before constructing its client.
+Vercel builds must retain the existing pinned `fitsy-api` Git main production identity and supply a valid production OIDC token for the pinned team and project.
+GitHub writes require a freshly issued, signed token for `dgmolla/fitsy`, `refs/heads/main`, the manual `prod-fixture-cleanup.yml` workflow, and the existing `production-release` environment on a GitHub-hosted runner.
+Only that cleanup job receives `id-token: write`; its protected environment and explicit apply/count requirements remain unchanged.
+The token audience, issuer, signature, expiration and identity claims are checked against fixed provider JWKS endpoints, and issuance/network failures abort without printing credentials or provider diagnostics.
+See the [Vercel OIDC claims](https://vercel.com/docs/oidc/reference) and [GitHub OIDC reference](https://docs.github.com/en/actions/reference/security/oidc).
 The production migration wrapper supplies both explicit intentions only after its existing deploy identity checks.
 The old local `FITSY_ALLOW_PROD=1` operator-migration exception is removed.
 DEV-only resets, seeds, fixture installation, provisioning and preview migrations forbid PROD unconditionally, including when override variables are present.
@@ -120,13 +127,31 @@ Auth mutations independently require the exact DEV Supabase API origin.
 | `apps/api/tests/db/goal-preview.performance.ts` | Shared test guard plus its existing localhost-only benchmark rule |
 
 Library writers such as `hex-persist.ts`, `pipeline-utils.ts` and chain services receive clients from these guarded entries or the owned database test harness.
-The checked script inventory distinguishes the existing proposal/audit scripts that only read the database and rejects new unguarded Prisma clients or mutation growth in those exceptions.
-The shared guard does not sandbox arbitrary SQL clients, hand-written `npx prisma` commands, malicious source changes, or a credential holder who forges execution environment markers.
+The writer inventory scans tracked and new source files, covering API clients, pipeline clients, SQL, shell/workflow commands, hooks, npm scripts and test clients.
+It follows imported aliases and actual datasource properties, rejecting unrelated guards, shadowed bindings and unawaited production guards.
+Implicit Prisma test clients require the disposable-database Jest setup; explicit datasource overrides must carry their own guard.
+SQL migrations retain their existing guarded deployment owner, DEV role SQL retains its guarded provisioner, and other executable SQL needs a read-only transaction or a reviewed guarded owner.
+Existing proposal/audit exceptions cannot gain database mutations.
+The guard and inventory do not sandbox arbitrary source changes or hand-written commands outside maintained entrypoints.
+The separate DB role lock in issue #588 remains the enforcing boundary for pipeline table writes; this code change does not install roles or authorize production grants.
 Database permissions are the enforcing boundary for the audit credential; script guards prevent accidental writes through maintained entrypoints.
 
 Before this change, most preload/backfill/chain entries accepted whichever owner URL was in the environment, and DEV helpers offered a local production override.
 The end-user CLI reproduction observed one connection to a loopback-only fake PostgreSQL server carrying a synthetic production username.
 After the guard, the same CLI refused before any connection.
+The current regression records external Prisma client construction and verifies the recorder with a positive control.
+It proves the CLI refuses before creating a database client without requiring a listening socket; real database integration retains its separate owned-Docker gate.
+
+## Runtime project consistency
+
+The API singleton and Supabase Auth clients validate that the selected runtime database and `SUPABASE_URL` name the same allowed project.
+DEV Auth with a PROD database, PROD Auth with a DEV database, unknown projects and missing Auth configuration for a remote database abort with `DB/Auth project mismatch` before a client connects.
+Disposable loopback fixtures may use local or DEV Auth.
+An unconfigured unit-only import receives an invalid explicit datasource, preventing Prisma from silently loading credentials from another environment file.
+
+The deployed smoke command's `--write` mode accepts only the complete `https://dev.fitsy.org` origin or HTTP `localhost`/`127.0.0.1` with a valid optional port.
+A trailing slash is normalized; paths, credentials, host suffixes, query strings, fragments and preview/production origins are rejected before HTTP execution.
+Read-only smoke remains available for production and previews.
 
 ## Database test boundary
 

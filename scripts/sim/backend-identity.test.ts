@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import * as capturedCli from './__snapshots__/clean-cli-deployment.json';
@@ -64,23 +64,44 @@ test('preview selection retains ready, nonproduction, project and clean source c
   }
 });
 
-test('the real native backend check queries the configured preview and refuses divergent API source', () => {
+test('the real native backend check queries the preview and refuses divergent or dirty API source', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'fitsy-backend-preview-'));
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
   const root = resolve(__dirname, '../..');
+  const repository = resolve(dir, 'repository');
+  mkdirSync(resolve(repository, 'apps/api'), { recursive: true });
+  const gitBinary = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
+  const git = (...args: string[]) => execFileSync(gitBinary, args, { cwd: repository, env, encoding: 'utf8' }).trim();
+  const source = resolve(repository, 'apps/api/source.ts');
   try {
-    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, env, encoding: 'utf8' }).trim();
+    git('init', '-q');
+    git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.test');
+    writeFileSync(source, 'export const revision = 1;\n');
+    git('add', '.'); git('-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'base fixture');
+    const previous = git('rev-parse', 'HEAD');
+    const candidate = 'export const revision = 2;\n';
+    writeFileSync(source, candidate);
+    git('add', '.'); git('-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'candidate fixture');
+    const head = git('rev-parse', 'HEAD');
+    // Route only the external Git CLI to isolated real history. The native backend
+    // entrypoint and every Git diff/untracked check execute unchanged.
+    writeFileSync(resolve(dir, 'git'), `#!${process.execPath}\nconst {spawnSync}=require('node:child_process');\nconst r=spawnSync(${JSON.stringify(gitBinary)},['-C',${JSON.stringify(repository)},...process.argv.slice(2)],{stdio:'inherit'});\nprocess.exit(r.status??1);\n`, { mode: 0o755 });
     const script = `import {backend} from ${JSON.stringify(resolve(__dirname, 'product-flow.mjs'))}; process.stdout.write(JSON.stringify(backend()));`;
-    for (const revision of [head, 'origin/main']) {
-      writeFileSync(resolve(dir, 'vercel'), `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(resolve(dir, 'args.json'))},JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ ...cli, name: 'fitsy-api', meta: { gitCommitSha: revision === head ? head : execFileSync('git', ['rev-parse', revision], { cwd: root, env, encoding: 'utf8' }).trim() } }))});\n`, { mode: 0o755 });
+    for (const state of ['clean', 'older', 'dirty', 'untracked']) {
+      const revision = state === 'older' ? previous : head;
+      if (state === 'dirty') writeFileSync(source, 'export const revision = 3;\n');
+      const untracked = resolve(repository, 'apps/api/untracked.ts');
+      if (state === 'untracked') writeFileSync(untracked, 'export const untracked = true;\n');
+      writeFileSync(resolve(dir, 'vercel'), `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(resolve(dir, 'args.json'))},JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ ...cli, name: 'fitsy-api', meta: { gitCommitSha: revision } }))});\n`, { mode: 0o755 });
       const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
         cwd: root, env: { ...env, PATH: dir + ':' + env.PATH, EXPO_PUBLIC_API_URL: preview }, encoding: 'utf8',
       });
       expect(JSON.parse(readFileSync(resolve(dir, 'args.json'), 'utf8'))).toEqual(['api',
         '/v13/deployments/' + new URL(preview).hostname, '--raw']);
-      expect(result.status).toBe(revision === head ? 0 : 1);
-      if (revision === head) expect(JSON.parse(result.stdout)).toEqual({ backendRevision: head, backendDeployment: cli.id });
+      expect({ state, status: result.status }).toEqual({ state, status: state === 'clean' ? 0 : 1 });
+      if (state === 'clean') expect(JSON.parse(result.stdout)).toEqual({ backendRevision: head, backendDeployment: cli.id });
       else expect(result.stderr).toContain('Deploy candidate backend/shared/schema changes');
+      writeFileSync(source, candidate); rmSync(untracked, { force: true });
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

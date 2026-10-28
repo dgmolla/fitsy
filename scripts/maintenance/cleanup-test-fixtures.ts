@@ -187,7 +187,7 @@ async function main() {
   const options = parseOptions(process.argv.slice(2));
   // Bind the actual datasource directly to the shared guard so the writer inventory can verify it.
   const url = options.apply
-    ? assertDatabaseWriteAllowed(process.env[options.urlEnv], { args: options.prod ? ['--prod'] : [] })
+    ? await assertDatabaseWriteAllowed(process.env[options.urlEnv], { args: options.prod ? ['--prod'] : [] })
     : cleanupReadTarget(process.env[options.urlEnv]);
   const p = new PrismaClient({ datasources: { db: { url } }, log: [], errorFormat: 'minimal' });
   try { process.stdout.write(JSON.stringify(await cleanupFixtures(p, options), null, 2) + '\n'); }
