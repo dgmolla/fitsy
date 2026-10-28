@@ -41,7 +41,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `rate-limit-store.sh` | 2 | actual Redis Lua and independent API workers enforce shared quotas, trusted-IP selection, atomic admission and key bounds; requires Docker |
 | `media-integration.sh` | 2 (local, blocking when simulator or product-flow controls change) | real decoder and attachment suites plus a source-bound receipt; hosted L2 stays media-tool free |
 | `own-code-mocks.sh` | 2 (shadow) | api tests mock only external services |
-| `build.sh` | 3 | production API build, no stray compiled output |
+| `build.sh` | 3 | offline production API compilation, no stray compiled output; actual store bindings are checked by the guarded Vercel build preflight |
 | `mobile-bundle.sh` | 3 | production iOS minified JS and gzip budgets; offline local export only |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |
 | `api-e2e.sh` | 6 | a deployed API serves health + data-route 401s + authenticated entitlement locks (read-only by default; `--write` adds the register probe) |
