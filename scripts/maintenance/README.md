@@ -48,7 +48,11 @@ Ambiguities abort apply.
 Apply briefly locks all seven tables against concurrent writes, with a five-second lock timeout, then deletes nutrition, menus, restaurants, catalog rows, brands and checkpoints in one serializable transaction.
 Use a maintenance window for apply on a shared database.
 The existing `db-target-guard.ts` additionally requires `FITSY_ALLOW_PROD_WRITE=1`, `--prod`, and GitHub Actions or the pinned production deployment for production mutation.
-Those guard requirements do not grant permission to mutate production; this task authorizes production discovery only with an explicitly read-only credential and never authorizes production apply.
+Those guard requirements do not grant permission to mutate production or replace production release approval.
+The manual `Production fixture cleanup` GitHub Actions workflow runs only on `main`, behind the `production-release` environment, using its `PROD_DATABASE_URL` secret.
+Its default `dry-run` mode reports fixtures without enabling production writes.
+For `apply`, supply the reviewed seven-table counts JSON in the `expect` input; the same job must complete a fresh dry run before enabling the guarded apply command.
+No production URL is printed or passed as a command-line argument.
 
 Run `scripts/maintenance/cleanup-test-fixtures.test.ts` for database-free identity, argument and real CLI production-refusal regressions.
 Keep the existing writer inventory and shared guard regressions in the local focused selection so client-construction changes are checked before publishing:
