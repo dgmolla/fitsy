@@ -18,6 +18,7 @@ function run(items = 2, cap = '15', extra: string[] = [], directory?: string, en
   ], { cwd: root, encoding: 'utf8', timeout: 30_000, env: {
     PATH: process.env.PATH, HOME: process.env.HOME,
     POSTGRES_PRISMA_URL: 'postgresql://test:test@localhost:1/test',
+    PIPELINE_DATABASE_URL: 'postgresql://test:test@localhost:1/test',
     POSTGRES_URL_NON_POOLING: 'postgresql://test:test@localhost:1/test',
     ANTHROPIC_API_KEY: 'test-key', AXIOM_TOKEN: 'test-token',
     UE_LOC_COOKIE: encodeURIComponent(JSON.stringify({ latitude: 34.05, longitude: -118.25 })),

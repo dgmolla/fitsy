@@ -1,4 +1,4 @@
-import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
+import { assertPipelineDatabase } from "./lib/db-target-guard";
 import { computeMenuHash } from '../apps/api/services/menuSources/menuItemIdentity';
 import { validateHexInTx } from "./preload-invariants";
 import { loadChainServing, chainMenuResolver, type ChainServing } from "../apps/api/services/chainServing";
@@ -36,8 +36,7 @@ import { loadChainServing, chainMenuResolver, type ChainServing } from "../apps/
  *   --cost-log PATH                Durable usage JSONL (default scripts/cache/preload-costs/<run-id>.jsonl).
  *
  * Environment:
- *   POSTGRES_PRISMA_URL         required
- *   POSTGRES_URL_NON_POOLING    required (preload uses direct connection)
+ *   PIPELINE_DATABASE_URL       required (pipeline_writer, session/direct connection)
  *   ANTHROPIC_API_KEY           required (Haiku estimation)
  *   UE_LOC_COOKIE               required (URL-encoded uev2.loc cookie)
  *   GOOGLE_PLACES_API_KEY       optional (tier-3 photo fallback)
@@ -131,8 +130,7 @@ const CONFIG = {
 };
 
 const REQUIRED_ENV_VARS = [
-  "POSTGRES_PRISMA_URL",
-  "POSTGRES_URL_NON_POOLING",
+  "PIPELINE_DATABASE_URL",
   "ANTHROPIC_API_KEY",
   "UE_LOC_COOKIE",
 ] as const;
@@ -916,7 +914,7 @@ async function processRestaurant(
 
 async function main(): Promise<void> {
   validateEnv();
-  const directUrl = await assertDatabaseWriteAllowed(process.env["POSTGRES_URL_NON_POOLING"]);
+  const directUrl = await assertPipelineDatabase(process.env["PIPELINE_DATABASE_URL"]);
   await validateApiCredentials();
 
   const startTime = Date.now();

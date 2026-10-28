@@ -9,8 +9,9 @@ import { impactPlan, repository, focusedDatabaseRequired } from './impact-plan.m
 import { passingTests } from './test-results.mjs';
 
 const file = join(repository, '.evidence/verify/focused-tests.json');
+const selectionHelp = 'select meaningful focused reproduction/regression tests with focused-tests.mjs --set <test paths>';
 function selection(paths) {
-  if (!Array.isArray(paths) || !paths.length) throw new Error('select meaningful focused reproduction/regression tests with focused-tests.mjs --set <test paths>');
+  if (!Array.isArray(paths) || !paths.length) throw new Error(selectionHelp);
   return [...new Set(paths)].map(path => {
     if (typeof path !== 'string' || path.startsWith('-') || relative(repository, resolve(repository, path)) !== path ||
         !/\.(?:test\.(?:ts|tsx|mjs|py)|spec\.(?:ts|tsx))$/.test(path) || !existsSync(resolve(repository, path))) {
@@ -78,8 +79,12 @@ if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[
       const plan = impactPlan();
       if (plan.comparison.unknown) throw new Error('focused test selection requires a known source comparison');
       // The canonical runner passes its selected recipe, never a prior result.
-      const config = JSON.parse(process.env.FITSY_VERIFY_FOCUSED_RECIPE ?? readFileSync(file, 'utf8'));
-      if (config.version !== 1) throw new Error('unsupported focused selection version');
+      const recipe = process.env.FITSY_VERIFY_FOCUSED_RECIPE ?? (existsSync(file) ? readFileSync(file, 'utf8') : '');
+      if (!recipe.trim()) throw new Error(selectionHelp);
+      let config;
+      try { config = JSON.parse(recipe); }
+      catch { throw new Error('invalid focused test selection JSON; ' + selectionHelp); }
+      if (config?.version !== 1) throw new Error('unsupported focused selection version');
       const executed = await run(selection(config.tests), config.pattern);
       console.log(JSON.stringify({ name: 'focused-tests', status: 'pass', summary: 'selected reproduction/regression tests pass', executed_tests: executed }));
     }

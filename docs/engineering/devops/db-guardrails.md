@@ -157,7 +157,7 @@ Read-only smoke remains available for production and previews.
 ## Database test boundary
 
 API and pipeline Jest configs run `scripts/lib/test-database-guard.ts` before importing suites, including direct workspace test and coverage commands.
-Both configured PostgreSQL URLs must target a disposable loopback database without a Supabase project route.
+All configured database URLs (`POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `PIPELINE_DATABASE_URL`) must target a disposable loopback database without a Supabase project route.
 Shared DEV, PROD and all other remote targets abort with `DB_TEST_REFUSED`; there is no remote project allowlist or environment override.
 Absent URLs preserve the existing unit-only run and skipped DB suites.
 This test policy is stricter than the script write policy above and does not change production migration permissions.
@@ -165,15 +165,35 @@ The existing worktree-owned PostGIS launcher, locks and inspected container asse
 See [verification](../../../scripts/verify/README.md) for direct and owned database commands.
 The guard regressions exercise the real API and scripts Jest configs with synthetic targets and prove rejected targets cannot import the test body.
 
-## DEV read-only audit access
+## Database roles and credential cutover
 
-`scripts/dev/sql/audit-role.sql` is deliberately outside `prisma/migrations` and cannot run during deployment.
-`scripts/dev/provision-audit-role.ts --apply` checks the exact DEV reference, creates `fitsy_audit_readonly`, generates a cryptographic password, and atomically saves names into the requested private file.
-`dev_db_url` preserves the existing DEV write credential; `dev_db_readonly_url` contains the new role credential.
-Neither value is stored in Git, audit evidence or logs.
-The provisioner refuses an existing audit credential rather than silently rotating it.
+Migration `20261028120000_pipeline_writer_roles` creates `fitsy_app`, `pipeline_writer` and `fitsy_audit_readonly` without login credentials.
+Only `pipeline_writer` receives INSERT/UPDATE/DELETE on restaurant, brand, menu, macro, chain-nutrition and pipeline-checkpoint tables; the deploy administrator remains their owner.
+`fitsy_app` reads those tables and retains account, subscription, feedback, saved-item and marketing writes.
+Pipeline commands require `PIPELINE_DATABASE_URL`; runtime or migration credentials never substitute for it.
+`POSTGRES_PRISMA_URL` must use `fitsy_app` and match `SUPABASE_URL`; `POSTGRES_URL_NON_POOLING` remains the deploy administrator's session/direct connection.
 
-The role has LOGIN, NOINHERIT, no role memberships added, no superuser/role-creation/database-creation/replication/RLS-bypass attributes, schema USAGE and table SELECT grants only.
+After the DEV migration, `scripts/dev/provision-audit-role.ts --apply --role=fitsy_app` generates a separate login credential in the existing private `~/Desktop/secrets.env` file.
+The same command accepts `--role=pipeline_writer` or defaults to `fitsy_audit_readonly`.
+It requires the exact DEV project, the completed migration and safe role attributes.
+`dev_db_url` preserves the DEV administrator connection; `dev_app_database_url`, `dev_pipeline_database_url` and `dev_db_readonly_url` hold the corresponding role connections.
+Credentials are never stored in Git, audit evidence or logs.
+The provisioner refuses an existing credential rather than silently rotating it.
+
+Use the DEV `fitsy_app` credential for Vercel Preview and Development `POSTGRES_PRISMA_URL` bindings before accepting the candidate deployment.
+The guarded build activates that login after migrations and withholds the build when activation fails; its diagnostic names the validation stage and allowlisted error code without driver or credential details.
+Never resolve a failed activation by restoring administrator runtime access.
+`scripts/dev/provision-supabase.sh` consumes `DEV_APP_DATABASE_URL` when wiring those environments; the pipeline credential belongs only in the pipeline operator/worker environment.
+Keep `dev.fitsy.org` pinned to `dev`; candidate native acceptance uses the PR's Ready preview URL.
+
+Production migration is owned exclusively by the existing Vercel Git main deploy.
+It requires Dawit's explicit approval via `FITSY_PIPELINE_ROLES_APPROVED_SHA256` matching the migration's SHA-256, in addition to the existing signed deployment and target checks.
+Provision separate production credentials and bindings through the approved operator path; the DEV provisioner refuses production.
+Preparing code and tests does not establish owner approval, production application or successful credential cutover.
+
+### Read-only auditing
+
+Once provisioned, the audit role has LOGIN, NOINHERIT, no role memberships added, no superuser/role-creation/database-creation/replication/RLS-bypass attributes, schema USAGE and table SELECT grants only.
 It has `default_transaction_read_only=on`, a 15-second statement timeout and a fixed search path.
 Role-specific SELECT policies preserve RLS while enabling DEV auditing; no anon/authenticated policies are added.
 Default SELECT grants apply to future tables created by postgres, but future RLS tables still require a reviewed role-specific policy before their rows become visible.

@@ -81,7 +81,7 @@ test("malformed CLI database configuration does not echo its secret", () => {
   const marker = "synthetic-secret-must-not-appear", root = resolve(__dirname, "../../..");
   try {
     execFileSync(process.execPath, ["--import", "tsx", "scripts/preload-chain-identity.ts", "plan", "unused", "unused"], {
-      cwd: root, env: { ...process.env, POSTGRES_URL_NON_POOLING: `not-a-database-url-${marker}` }, stdio: "pipe" });
+      cwd: root, env: { ...process.env, PIPELINE_DATABASE_URL: `not-a-database-url-${marker}` }, stdio: "pipe" });
     throw new Error("Expected invalid URL rejection");
   } catch (error) {
     const stderr = String((error as { stderr?: Buffer }).stderr ?? "");

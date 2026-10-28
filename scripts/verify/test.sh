@@ -49,6 +49,7 @@ if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   run_node simple-review scripts/review/simple-review.test.mjs
   run_node github scripts/github/*.test.mjs
   run_node performance scripts/perf/*.test.mjs
+  run_node database-roles scripts/deploy/pipeline-roles-approval.test.mjs
   report="$REPORTS/cleanup.json"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/python-focused.py scripts/delivery/cleanup.test.py "$report" >&2 &&
     node scripts/verify/test-results.mjs "$report" python >&2 || FAIL="${FAIL:+$FAIL, }cleanup"

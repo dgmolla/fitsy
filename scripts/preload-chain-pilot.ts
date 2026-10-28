@@ -1,5 +1,5 @@
 /** Offline catalog batches + existing-menu updates. The original seven-serving pilot remains the default. */
-import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
+import { assertPipelineDatabase } from "./lib/db-target-guard";
 import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
@@ -26,8 +26,8 @@ if (!/^\d+$/.test(chunkText) || !Number.isSafeInteger(chunkSize) || chunkSize < 
 const batchPath = options.find(a => a.startsWith("--batch="))?.slice(8);
 const batch = chainCatalogBatchSchema.parse(batchPath === undefined ? chainPilot : JSON.parse(readFileSync(batchPath, "utf8")));
 const slugs = [...new Set([...batch.changes, ...batch.quarantine].map(row => row.slug))];
-const rawUrl = process.env["POSTGRES_URL_NON_POOLING"];
-if (!rawUrl) throw new Error("POSTGRES_URL_NON_POOLING is required; choose the target explicitly");
+const rawUrl = process.env["PIPELINE_DATABASE_URL"];
+if (!rawUrl) throw new Error("PIPELINE_DATABASE_URL is required; choose the target explicitly");
 let url: URL;
 try { url = new URL(rawUrl.trim()); } catch { throw new Error("Invalid database URL"); }
 const target = stateHash([url.host, url.pathname, url.username]);
@@ -46,7 +46,7 @@ async function inventory(p: PrismaClient) {
   return { brands, catalog };
 }
 async function main() {
-  const p = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(url.toString()) } } });
+  const p = new PrismaClient({ datasources: { db: { url: await assertPipelineDatabase(url.toString()) } } });
   try { await run(p); } finally { await p.$disconnect(); }
 }
 async function run(p: PrismaClient) {

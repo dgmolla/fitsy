@@ -24,7 +24,7 @@ suite('catalog batch CLI with arbitrary brands', () => {
     writeFileSync(file, JSON.stringify(batch));
     const run = (command: string, name: string, ...extra: string[]) => JSON.parse(execFileSync(process.execPath,
       [require.resolve('tsx/cli'), '--tsconfig', join(root, 'apps/api/tsconfig.json'), join(root, 'scripts/preload-chain-pilot.ts'), command, join(directory, name), ...extra, '--batch=' + file],
-      { cwd: root, env: { ...process.env, POSTGRES_URL_NON_POOLING: url! }, encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] }).trim().split('\n').at(-1)!);
+      { cwd: root, env: { ...process.env, PIPELINE_DATABASE_URL: url! }, encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] }).trim().split('\n').at(-1)!);
     const query = { where: { restaurant: { brandRef: { slug: { in: slugs } } } }, include: { macroEstimates: { orderBy: { id: 'asc' as const } } }, orderBy: { id: 'asc' as const } };
     try {
       for (const slug of slugs) {

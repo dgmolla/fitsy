@@ -58,7 +58,7 @@ test("auth mutations are pinned to the DEV API and cannot inherit database overr
 
 const root = resolve(__dirname, "../..");
 async function cli(file: string, args: string[], url: string, extra: NodeJS.ProcessEnv = {}): Promise<{ code: number | null; output: string }> {
-  const env: NodeJS.ProcessEnv = { ...process.env, POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url };
+  const env: NodeJS.ProcessEnv = { ...process.env, POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url, PIPELINE_DATABASE_URL: url };
   for (const name of ['GITHUB_ACTIONS', 'VERCEL', 'VERCEL_OIDC_TOKEN',
     'ACTIONS_ID_TOKEN_REQUEST_URL', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN']) delete env[name];
   Object.assign(env, extra);

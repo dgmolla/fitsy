@@ -41,7 +41,7 @@ An explicit alias still passes through the production `verifiedBrand` function; 
 
 ## Apply and verify
 
-Set `POSTGRES_URL_NON_POOLING` explicitly for the intended database.
+Set `PIPELINE_DATABASE_URL` explicitly with the intended database's `pipeline_writer` credential.
 Use an isolated local database for tests; the primary checkout's production environment is not a development target.
 Do not apply identity or catalog changes during an active UE enrichment run.
 The serializable identity check reads all restaurant identities and may otherwise conflict with the pipeline's writes.
@@ -68,7 +68,7 @@ Replay a complete captured UE menu and an existing-menu update before activating
 The UE importer uses the corrected identities through the existing shared matcher; it does not rerun the old menu-kind classifier.
 `phase0-populate-brands.ts --apply` is an initial bootstrap and refuses databases containing any brand identities.
 This also protects identity corrections before their first nutrition catalog is loaded.
-The legacy command requires an explicit `POSTGRES_URL_NON_POOLING` target for dry-run and apply.
+The legacy command requires an explicit `PIPELINE_DATABASE_URL` target for dry-run and apply.
 Its read-only dry-run remains available for candidate discovery; apply reviewed changes through this workflow.
 
 ## Rollback

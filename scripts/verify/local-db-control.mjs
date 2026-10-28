@@ -129,7 +129,7 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       port = pinnedOwned(container);
       if (!container.State?.Running) throw new Error('owned database stopped before reset');
       const url = `postgresql://fitsy_test:fitsy_test@127.0.0.1:${port}/fitsy_verify`;
-      const childEnv = { ...env, POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url,
+      const childEnv = { ...env, POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url, PIPELINE_DATABASE_URL: url,
         FITSY_VERIFY_CALLER_NON_POOLING_URL: env.POSTGRES_URL_NON_POOLING ?? '',
         FITSY_VERIFY_OWNED_DB: container.Id, FITSY_VERIFY_DB_IMAGE: container.Image, FITSY_LOCAL_DB: '1',
         FITSY_VERIFY_DB_HOST: container.NetworkSettings.Ports['5432/tcp'][0].HostIp };

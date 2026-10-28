@@ -9,7 +9,7 @@ const yaml = require('js-yaml') as { load(value: string): unknown };
 let directory: string;
 // Registry fixtures own their inputs and never acquire the outer CI database.
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-  !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$|NODE_OPTIONS$|NODE_PATH$|POSTGRES_PRISMA_URL$|POSTGRES_URL_NON_POOLING$)/.test(key)));
+  !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$|NODE_OPTIONS$|NODE_PATH$|POSTGRES_PRISMA_URL$|POSTGRES_URL_NON_POOLING$|PIPELINE_DATABASE_URL$)/.test(key)));
 const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, encoding: 'utf8', env }).trim();
 const write = (file: string, value: string) => {
   mkdirSync(join(directory, file, '..'), { recursive: true });

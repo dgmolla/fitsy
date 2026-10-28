@@ -11,7 +11,7 @@
  *   set -a && source .env.local && set +a && npx tsx scripts/backfill-menu-item-macros.ts
  */
 
-import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
+import { assertPipelineDatabase } from "./lib/db-target-guard";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { macroWinnerSqlOrder } from "@fitsy/shared";
 
@@ -20,8 +20,8 @@ const CHUNK_SIZE = 10_000;
 async function main(): Promise<void> {
   // Use the direct (non-pooled) URL so big batch UPDATEs aren't subject
   // to PgBouncer's transaction-mode prepared-statement quirks and
-  // shorter statement timeouts. Falls back to default URL otherwise.
-  const directUrl = await assertDatabaseWriteAllowed(process.env["POSTGRES_URL_NON_POOLING"] ?? process.env["POSTGRES_PRISMA_URL"]);
+  // shorter statement timeouts. Requires the dedicated pipeline credential.
+  const directUrl = await assertPipelineDatabase(process.env["PIPELINE_DATABASE_URL"]);
   const prisma = new PrismaClient({ datasources: { db: { url: directUrl } } });
   const startMs = Date.now();
 

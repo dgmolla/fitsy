@@ -21,7 +21,7 @@ suite("actual pilot CLI plan, apply and rollback", () => {
       const brands: Brand[] = [], directory = mkdtempSync(join(tmpdir(), "fitsy-chain-cli-"));
       const run = (command: string, ...args: string[]) => JSON.parse(execFileSync(process.execPath,
         [require.resolve("tsx/cli"), "--tsconfig", join(root, "apps/api/tsconfig.json"), join(root, "scripts/preload-chain-pilot.ts"), command, ...args],
-        { cwd: root, env: { ...process.env, POSTGRES_PRISMA_URL: url!, POSTGRES_URL_NON_POOLING: url! }, encoding: "utf8", timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] }).trim().split("\n").at(-1)!);
+        { cwd: root, env: { ...process.env, POSTGRES_PRISMA_URL: url!, POSTGRES_URL_NON_POOLING: url!, PIPELINE_DATABASE_URL: url! }, encoding: "utf8", timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] }).trim().split("\n").at(-1)!);
       try {
         expect(await p.brand.count({ where: { slug: { in: ["waba-grill", "yoshinoya"] } } })).toBe(0);
         for (const slug of ["waba-grill", "yoshinoya"]) brands.push(await p.brand.create({ data: { slug, displayName: slug === "waba-grill" ? "WaBa Grill" : "Yoshinoya", detectionConf: "high" } }));

@@ -18,7 +18,7 @@ suite("legacy classifier protection in disposable databases", () => {
     const admin = new PrismaClient({ datasources: { db: { url: assertTestDatabase(configured) } } });
     const url = new URL(configured!); url.pathname = "/" + database;
     const root = resolve(__dirname, "../../../..");
-    const env = { ...process.env, POSTGRES_PRISMA_URL: url.toString(), POSTGRES_URL_NON_POOLING: url.toString() };
+    const env = { ...process.env, POSTGRES_PRISMA_URL: url.toString(), POSTGRES_URL_NON_POOLING: url.toString(), PIPELINE_DATABASE_URL: url.toString() };
     let local: PrismaClient | undefined, created = false;
     try {
       await admin.$executeRawUnsafe(`CREATE DATABASE "${database}"`); created = true;

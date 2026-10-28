@@ -5,15 +5,17 @@ import { join, resolve } from "node:path";
 import { DEV_PROJECT_REF, PROD_PROJECT_REF } from "../lib/db-target-guard";
 
 const source = resolve(__dirname, "../..");
-function drive(ref: string | undefined) {
+function drive(ref: string | undefined, runtimeRole = "fitsy_app") {
   const root = mkdtempSync(join(tmpdir(), "fitsy-provision-"));
   try {
-    for (const path of ["scripts/dev/provision-supabase.sh", "scripts/dev/vercel-env-set.sh", "scripts/lib/db-target-guard.ts"]) {
+    for (const path of ["scripts/dev/provision-supabase.sh", "scripts/dev/vercel-env-set.sh", "scripts/lib/db-target-guard.ts", "scripts/deploy/activate-runtime-role.ts"]) {
       mkdirSync(join(root, path, ".."), { recursive: true }); copyFileSync(join(source, path), join(root, path));
     }
     symlinkSync(join(source, "node_modules"), join(root, "node_modules"), "dir");
     mkdirSync(join(root, ".vercel"));
     writeFileSync(join(root, ".vercel/project.json"), JSON.stringify({ projectId: "fixture-project", orgId: "fixture-team" }));
+    writeFileSync(join(root, 'database-transport.cjs'), `const Module=require('module'),original=Module._load;
+Module._load=function(name,...args){if(name==='@prisma/client')return {PrismaClient:class{async $transaction(fn){return fn({$queryRaw:async()=>[], $executeRawUnsafe:async()=>0});}async $disconnect(){}}};return original.call(this,name,...args)};`);
     const bin = join(root, "bin"), calls = join(root, "calls.jsonl"); mkdirSync(bin); writeFileSync(calls, "");
     const realJq = spawnSync("which", ["jq"], { encoding: "utf8" }).stdout.trim();
     const commands: Record<string, string> = {
@@ -47,7 +49,10 @@ else: print('{"envs":[]}')
     const args = ref === undefined ? [] : ["--wire-only", ref, "synthetic-password"];
     const result = spawnSync("bash", ["scripts/dev/provision-supabase.sh", ...args], {
       cwd: root, encoding: "utf8", timeout: 15_000,
-      env: { PATH: bin + ":" + process.env["PATH"], HOME: process.env["HOME"], CALLS: calls, REAL_JQ: realJq, SKIP_LOCAL_ENV: "1" },
+      env: { PATH: bin + ":" + process.env["PATH"], HOME: process.env["HOME"], CALLS: calls, REAL_JQ: realJq, SKIP_LOCAL_ENV: "1",
+        SUPABASE_URL: `https://${DEV_PROJECT_REF}.supabase.co`,
+        DEV_APP_DATABASE_URL: `postgresql://${runtimeRole}.${DEV_PROJECT_REF}:synthetic-runtime@aws-0-us-west-1.pooler.supabase.com:6543/postgres`,
+        NODE_OPTIONS: `--require=${join(root, 'database-transport.cjs')}` },
     });
     return { status: result.status, output: result.stdout + result.stderr,
       calls: readFileSync(calls, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) };
@@ -70,4 +75,11 @@ test("allowlisted DEV provisioning still reaches its guarded migrations and only
   expect(updates.every(call => call.operation === "vercel-POST" && JSON.stringify(call.target) === '["preview","development"]')).toBe(true);
   expect(result.calls.filter(call => call.operation === "prisma")).toHaveLength(2);
   expect(result.output).not.toContain("synthetic-password");
+});
+
+test('DEV provisioning cannot publish administrator credentials as the runtime URL', () => {
+  const result = drive(DEV_PROJECT_REF, 'postgres');
+  expect(result.status).toBe(1);
+  expect(result.calls).toEqual([]);
+  expect(result.output).toContain('must use fitsy_app');
 });

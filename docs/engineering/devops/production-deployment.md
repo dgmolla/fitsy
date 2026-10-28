@@ -67,10 +67,9 @@ vercel env add FIRECRAWL_API_KEY production
 vercel env add ANTHROPIC_API_KEY production
 vercel env add JWT_SECRET production    # openssl rand -base64 32
 
-# 6. Pull and run migrations
-vercel env pull .env.production.local
-DATABASE_URL=$(grep POSTGRES_URL_NON_POOLING .env.production.local | cut -d= -f2) \
-  npx prisma migrate deploy
+# 6. Apply migrations only through the guarded Vercel Git main deploy.
+# The pipeline-role migration requires Dawit's explicit approval and its exact
+# FITSY_PIPELINE_ROLES_APPROVED_SHA256; see db-guardrails.md for credential cutover.
 ```
 
 ---
@@ -85,8 +84,9 @@ The primary script is `scripts/preload-ue-first.ts`. The canonical invocation re
 
 | Variable | Purpose |
 |----------|---------|
-| `POSTGRES_PRISMA_URL` | DB connection (pooled) |
-| `POSTGRES_URL_NON_POOLING` | DB migrations and preload writes (direct) |
+| `POSTGRES_PRISMA_URL` | App queries/account writes (`fitsy_app`, pooled) |
+| `POSTGRES_URL_NON_POOLING` | Deploy migrations only (administrator, session/direct) |
+| `PIPELINE_DATABASE_URL` | Preload writes (`pipeline_writer`, session/direct); provision in the pipeline environment |
 | `ANTHROPIC_API_KEY` | Claude Haiku macro estimation (indie path) |
 | `UE_LOC_COOKIE` | URL-encoded `uev2.loc` cookie (Uber Eats geo auth) |
 | `GOOGLE_PLACES_API_KEY` | Optional — tier-3 photo fallback only |
@@ -111,7 +111,8 @@ The primary script is `scripts/preload-ue-first.ts`. The canonical invocation re
 # Pull prod env vars
 vercel env pull .env.production.local
 set -a && source .env.production.local && set +a
-export DATABASE_URL=$POSTGRES_URL_NON_POOLING
+# Load PIPELINE_DATABASE_URL separately from the private pipeline environment.
+# Vercel's app and migration credentials cannot substitute for pipeline_writer.
 
 # Dry run first — confirm env and preflight pass
 npx tsx scripts/preload-ue-first.ts --phase discover --dry-run

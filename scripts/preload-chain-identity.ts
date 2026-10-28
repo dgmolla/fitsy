@@ -1,5 +1,5 @@
 /** Reviewed identity onboarding. No menu items or nutrition estimates are changed. */
-import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
+import { assertPipelineDatabase } from "./lib/db-target-guard";
 import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
@@ -12,8 +12,8 @@ const [command, path, input] = positional;
 if (!path || !input || positional.length !== 3 || !["plan", "apply", "rollback"].includes(command ?? "")) {
   throw new Error("Usage: preload-chain-identity.ts plan <output> <reviewed-batch> | apply <plan-file> <hash> | rollback <journal-file> <hash>");
 }
-const raw = process.env["POSTGRES_URL_NON_POOLING"];
-if (!raw) throw new Error("POSTGRES_URL_NON_POOLING required; choose the target explicitly");
+const raw = process.env["PIPELINE_DATABASE_URL"];
+if (!raw) throw new Error("PIPELINE_DATABASE_URL required; choose the target explicitly");
 let url: URL;
 try { url = new URL(raw.trim()); } catch { throw new Error("Invalid database URL"); }
 const target = stateHash([url.host, url.pathname, url.username]);
@@ -25,7 +25,7 @@ function save(file: string, value: unknown) {
 const read = <T>(file: string) => JSON.parse(readFileSync(file, "utf8")) as T;
 const report = (value: unknown) => process.stdout.write(JSON.stringify(value) + "\n");
 async function main() {
-  const p = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(url.toString()) } } });
+  const p = new PrismaClient({ datasources: { db: { url: await assertPipelineDatabase(url.toString()) } } });
   try { await run(p); } finally { await p.$disconnect(); }
 }
 async function run(p: PrismaClient) {

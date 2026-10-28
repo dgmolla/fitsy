@@ -7,11 +7,11 @@
  *   --apply   actually write (default is dry-run)
  * Existing brands require preload-chain-identity.ts for reviewed corrections.
  */
-import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
+import { assertPipelineDatabase } from "./lib/db-target-guard";
 import { PrismaClient } from "@prisma/client";
 import { readFileSync, existsSync } from "node:fs";
-const raw = process.env["POSTGRES_URL_NON_POOLING"];
-if (!raw) throw new Error("POSTGRES_URL_NON_POOLING required; choose the target explicitly");
+const raw = process.env["PIPELINE_DATABASE_URL"];
+if (!raw) throw new Error("PIPELINE_DATABASE_URL required; choose the target explicitly");
 let url: URL;
 try { url = new URL(raw.trim()); } catch { throw new Error("Invalid database URL"); }
 const APPLY = process.argv.includes("--apply");
@@ -58,7 +58,7 @@ const containment = (a: Set<string>, b: Set<string>): number => {
 };
 
 async function main() {
-  const p = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(url.toString()) } } });
+  const p = new PrismaClient({ datasources: { db: { url: await assertPipelineDatabase(url.toString()) } } });
   if (APPLY) {
     if (await p.brand.count()) {
       await p.$disconnect();

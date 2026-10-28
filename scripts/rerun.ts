@@ -15,7 +15,7 @@
  *   npx tsx scripts/rerun.ts --restaurants "Sqirl" --force
  */
 
-import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
+import { assertPipelineDatabase } from "./lib/db-target-guard";
 import { PrismaClient } from "@prisma/client";
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -76,14 +76,14 @@ function log(message: string): void {
 async function main(): Promise<void> {
   const { restaurants, placeIds, force } = parseArgs();
 
-  const required = ["POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING", "ANTHROPIC_API_KEY"];
+  const required = ["PIPELINE_DATABASE_URL", "ANTHROPIC_API_KEY"];
   const missing = required.filter((v) => !process.env[v]);
   if (missing.length > 0) {
     console.error(`Missing required env vars: ${missing.join(", ")}`);
     process.exit(1);
   }
 
-  const prisma = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(process.env["POSTGRES_PRISMA_URL"]) } } });
+  const prisma = new PrismaClient({ datasources: { db: { url: await assertPipelineDatabase(process.env["PIPELINE_DATABASE_URL"]) } } });
   const anthropic = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
 
   const firecrawlScraper = new FirecrawlScraper();

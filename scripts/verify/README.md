@@ -197,5 +197,8 @@ CI runs its own required checks independently of local review state.
 
 The saved focused recipe contains test paths and an optional Jest pattern, never a passing result.
 Selected tests execute even for a documentation-only comparison; missing or empty recipes fail.
+The recipe is local to each checkout in `.evidence/verify/focused-tests.json` and is not committed.
+If a fresh checkout or pre-push run reports a missing, empty or malformed selection, use `--set` with the issue's meaningful regressions, then rerun `npm run verify -- --stage=cheap`.
+The canonical runner's selection takes precedence over the saved file, including an empty selection; it cannot fall back to stale tests.
 A cheap stage and a review pass each prove their own stage; full acceptance executes its affected groups afresh.
 Required GitHub checks, applicable product acceptance and release approvals still apply.
