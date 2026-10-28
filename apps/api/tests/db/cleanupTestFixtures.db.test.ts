@@ -117,6 +117,17 @@ suite('fixture cleanup through its real database and CLI', () => {
     }
   });
 
+  test('a same-shape checkpoint without a verified fixture scope is preserved as ambiguous', async () => {
+    const orphan = await p.pipelineCompletedHex.create({ data: { runId: randomUUID(), hexId: 'waba-grill', count: 1 } });
+    checkpointIds.push(orphan.id);
+    const before = await report();
+    expect(before.rows.PipelineCompletedHex.map(row => row.id)).not.toContain(orphan.id);
+    expect(before.ambiguous).toEqual([expect.objectContaining({ table: 'PipelineCompletedHex', row: expect.objectContaining({ id: orphan.id }) })]);
+    await expect(cleanupFixtures(p, { ...parseOptions([]), apply: true, expect: before.counts })).rejects.toThrow(/Ambiguous/);
+    expect(await p.pipelineCompletedHex.findUnique({ where: { id: orphan.id } })).not.toBeNull();
+    expect(await report()).toEqual(before);
+  });
+
   test('actual CLI rejects a synthetic production route before connecting and never prints credentials', async () => {
     const url = new URL(process.env['POSTGRES_PRISMA_URL']!);
     url.username = 'postgres.' + PROD_PROJECT_REF; url.password = 'secret-marker-must-not-leak';

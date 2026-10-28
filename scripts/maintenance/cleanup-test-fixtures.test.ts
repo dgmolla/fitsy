@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
-import { cleanupTarget, parseOptions, restaurantMatches, tables } from './cleanup-test-fixtures';
+import { checkpointMatches, cleanupTarget, parseOptions, restaurantMatches, tables } from './cleanup-test-fixtures';
 import { DEV_PROJECT_REF, PROD_PROJECT_REF } from '../lib/db-target-guard';
 
 const counts = Object.fromEntries(tables.map(table => [table, 0]));
@@ -80,4 +80,16 @@ test('real CLI refuses a synthetic production route before opening a socket, wit
     expect(output.code).toBe(1); expect(output.text).toContain('DB_WRITE_REFUSED');
     expect(output.text).not.toContain('password-marker'); expect(connections).toBe(0);
   } finally { await new Promise<void>(done => server.close(() => done())); }
+});
+
+test('checkpoints require a verified fixture scope and the exact suite-specific hex identity', () => {
+  const scope = 'a32323a0-5c16-46d2-bda7-93c8320ee947';
+  const pilot = { id: 'fixture-brand', scope, chain: 'waba-grill', slug: scope + 'waba-grill', displayName: scope + ' WaBa Grill', suite: 'pilot' as const };
+  const checkpoint = { runId: scope, hexId: scope + 'waba-grill', count: 1 };
+  expect(checkpointMatches(checkpoint, [pilot])).toBe(true);
+  expect(checkpointMatches({ ...checkpoint, hexId: 'waba-grill' }, [{ ...pilot, suite: 'expansion' }])).toBe(true);
+  expect(checkpointMatches(checkpoint, [])).toBe(false);
+  expect(checkpointMatches({ ...checkpoint, hexId: 'waba-grill' }, [pilot])).toBe(false);
+  expect(checkpointMatches({ ...checkpoint, count: 2 }, [pilot])).toBe(false);
+  expect(checkpointMatches(checkpoint, [{ ...pilot, scope: 'b32323a0-5c16-46d2-bda7-93c8320ee947' }])).toBe(false);
 });

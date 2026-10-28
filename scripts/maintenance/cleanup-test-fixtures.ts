@@ -65,6 +65,11 @@ export function cleanupTarget(value: string | undefined, options: Options, env: 
 
 type FixtureBrand = { id: string; slug: string; displayName: string; scope: string; chain: string; suite: 'pilot' | 'expansion' };
 type RestaurantRow = { id: string; name: string; storeUuid: string; address: string; brandId: string | null; source: string; lat: number; lng: number };
+export function checkpointMatches(row: { runId: string; hexId: string; count: number }, brands: FixtureBrand[]): boolean {
+  return uuidPattern.test(row.runId) && row.count === 1 && brands.some(brand =>
+    row.runId === brand.scope && row.hexId === (brand.suite === 'pilot' ? brand.scope + brand.chain : brand.chain));
+}
+
 export function restaurantMatches(row: RestaurantRow, brand: FixtureBrand): boolean {
   if (row.source !== 'ue_feed' || row.lat !== 34 || row.lng !== -118 ||
       (row.brandId !== null && row.brandId !== brand.id)) return false;
@@ -144,9 +149,9 @@ export async function cleanupFixtures(p: PrismaClient, options: Options) {
       SELECT "id", "runId", "hexId", "count" FROM "PipelineCompletedHex"
       WHERE "hexId" IN (${Prisma.join(slugs)}) OR "hexId" ~ ${brandPattern} ORDER BY "id"`;
     for (const row of checkpoints) {
-      if (uuidPattern.test(row.runId) && row.count === 1 && slugs.some(slug => row.hexId === slug || row.hexId === row.runId + slug)) {
+      if (checkpointMatches(row, brands)) {
         rows.PipelineCompletedHex.push(row);
-      } else ambiguous.push({ table: 'PipelineCompletedHex', row, reason: 'Fixture-shaped hex without the exact UUID run, hex identity and count' });
+      } else ambiguous.push({ table: 'PipelineCompletedHex', row, reason: 'Checkpoint lacks a verified fixture brand scope, suite-specific hex identity or count; preserve it' });
     }
     const counts = Object.fromEntries(tables.map(table => [table, rows[table].length])) as Counts;
     if (options.expect && tables.some(table => options.expect![table] !== counts[table])) refuse('Counts differ from --expect; no changes committed');

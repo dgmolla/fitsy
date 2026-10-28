@@ -21,7 +21,7 @@ No address or chain name alone authorizes deletion.
 | Pilot rollback restaurant | `Rollback fixture`; name equals pilot WaBa display name; `storeUuid` equals scope; matching scoped WaBa brand link |
 | Pilot new locations | `New hex fixture`; name equals pilot display name + ` (New Location)`; `storeUuid` is scope + brand ID |
 | Expansion new locations | `New hex fixture`; name equals scoped slug + ` (New Location)`; `storeUuid` is scope + `new-` + chain slug |
-| Checkpoints | UUID v4 `runId`, `count=1`; `hexId` equals `runId` + chain slug (pilot) or the bare chain slug (expansion), including orphan checkpoints |
+| Checkpoints | UUID v4 `runId` equals a verified fixture brand scope, `count=1`; `hexId` equals `runId` + chain slug (pilot) or the bare chain slug (expansion) |
 
 Every restaurant also requires `source=ue_feed`, `lat=34`, `lng=-118`, and the expected brand ID (or an unlinked new location before persistence).
 The 31 captured April restaurant IDs/names and 64 menu IDs/names are in `apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json`; the pilot prefixes those menu IDs with its scope.
@@ -34,6 +34,7 @@ The discovery regex is anchored to the complete UUID v4 plus one of the two lite
 `Restaurant.brandId` is the chain link; there is no separate link table in the schema.
 `SavedItem` references are listed without user identifiers and always block apply because neither suite creates bookmarks.
 No users, subscriptions, targets or unrelated pipeline records are deleted.
+Orphan checkpoints without a verified fixture brand scope remain ambiguous and prevent apply.
 
 To apply, review a fresh dry run and pass its complete seven-table `counts` object as `--expect` alongside `--apply`.
 Every count must match before any deletion, and every explicit delete count must match afterward or the entire transaction rolls back.
