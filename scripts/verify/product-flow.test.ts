@@ -305,6 +305,8 @@ deterministicTest.each([
   [['packages/shared/src/search.ts'], ['discovery']],
   [['apps/mobile/components/UnknownButton.tsx'], ['changed-journey']],
   [['apps/api/next.config.ts'], ['changed-journey']],
+  [['apps/api/jest.config.js'], []],
+  [['apps/api/jest.config.js', 'apps/api/app/api/search/route.ts'], ['discovery']],
   [['apps/api/app/api/health/route.ts', 'apps/api/app/api/health/route.test.ts'], []],
   [['apps/api/app/api/health/route.ts', 'apps/api/app/api/search/route.ts'], ['discovery']],
   [['apps/mobile/eas.json'], ['changed-journey']],

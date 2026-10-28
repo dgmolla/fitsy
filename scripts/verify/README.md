@@ -128,6 +128,9 @@ UI smoke executes locally on the Mac, with no simulator step added to this hook.
 A fresh checkout needs installed dependencies but no issue binding, review daemon or home-directory review state.
 Keep dependencies local to this checkout so workspace links resolve its own packages.
 When the dependency preflight reports `verification dependencies are missing`, run `npm ci` in that checkout before rerunning the unchanged verifier or hook.
+The preflight checks every workspace's direct runtime and development dependencies from the lockfile, including nested mobile packages, and identifies missing packages before running checks.
+When restoring an identical-lockfile dependency tree from another checkout, include each workspace's `node_modules` as well as the root directory.
+Copying only the root directory can omit `expo-blur`, `react-native-reanimated` and `@testing-library/react-native`, producing missing-module and cascading implicit-any errors.
 If network access is unavailable but an existing npm cache contains the lockfile's packages, copy that cache to a writable task-owned directory and run `npm ci --offline --cache <task-cache>`.
 Keep the lockfile and hook unchanged; a cache miss still requires restoring the missing package through supported access.
 In a sandbox where Prisma cannot update its home cache, copy the existing Prisma cache into `<task-cache>/prisma` and set `XDG_CACHE_HOME=<task-cache>` for the normal verification command.
@@ -147,6 +150,18 @@ Temporary engine reports count the current execution and are removed afterward.
 Local and hosted L2 checks use the same worktree-owned PostGIS launcher, including its OS lock, inspected container identity, loopback target checks, migrations and data-only seed.
 The canonical runner creates that disposable database before database-dependent checks; the hosted job does not provision a separate service container.
 An unowned target or caller-supplied ownership markers cannot replace the inspected database assertion.
+
+API and pipeline Jest configurations also run `scripts/lib/test-database-guard.ts` before importing any test suite.
+This covers direct workspace `npm test`, coverage and Jest invocations as well as hooks and hosted verification.
+Both `POSTGRES_PRISMA_URL` and `POSTGRES_URL_NON_POOLING`, when configured, must identify loopback PostgreSQL without a Supabase project route.
+Production, shared DEV, unknown remote hosts, encoded project routes and unsupported routing parameters abort with `DB_TEST_REFUSED` without printing credentials.
+Production write flags, `NODE_ENV=test` and fixture environment markers cannot override this rule.
+Without either URL, existing database suites remain skipped and unit suites run normally.
+Use `npm run verify -- --only=test` to provision, migrate and seed the existing worktree-owned disposable database.
+For a direct DB-suite invocation, supply an already migrated and seeded disposable local database, then run `npm test -w apps/api -- tests/db --runInBand`.
+The synthetic goal-preview benchmark uses the same target guard and retains its stricter localhost requirement.
+The separate read-only `perf:db` diagnostic intentionally retains its DEV-only target contract.
+API Jest configuration is verification tooling in both simulator and product impact plans; runtime API configuration retains its normal journey coverage.
 
 ## Candidate validation order
 
