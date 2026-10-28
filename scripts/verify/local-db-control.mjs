@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { repository } from './impact-plan.mjs';
 
 const image = 'postgis/postgis:16-3.4';
+const dataDirectory = '/var/lib/postgresql/verify-data';
 // The launcher and every admitted ownership assertion share the same limits.
 // Callers can request this stronger contract, but cannot select weaker values.
 const databaseLimits = Object.freeze({ Memory: 768 * 1024 ** 2, MemorySwap: 1536 * 1024 ** 2,
@@ -53,10 +54,10 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       throw new Error('database execution environment does not match this worktree\'s disposable owner');
     }
   }
-  function stop() {
+  function stop(envToCheck = env) {
     assertLock();
-    const pinnedId = env.FITSY_VERIFY_OWNED_DB;
-    const pinnedImage = env.FITSY_VERIFY_DB_IMAGE;
+    const pinnedId = envToCheck.FITSY_VERIFY_OWNED_DB;
+    const pinnedImage = envToCheck.FITSY_VERIFY_DB_IMAGE;
     if (Boolean(pinnedId) !== Boolean(pinnedImage)) throw Error('bound stop requires both acquired ID and image');
     const container = inspect();
     owned(container, pinnedId, false, pinnedImage);
@@ -64,7 +65,7 @@ export function databaseControl({ root = repository, command = runCommand, spawn
   }
   function prepare() {
     assertLock();
-    let createdId, createdImage;
+    let createdId, createdImage, acquired;
     try {
       const space = disk(root);
       if (space.bavail * space.bsize < 2 * 1024 ** 3) throw new Error('local verification needs 2 GiB free before starting its disposable DB');
@@ -72,9 +73,23 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       try { container = inspect(); }
       catch (error) {
         if (error.code !== 'ENOENT' && !/No such (object|container)/i.test(error.stderr?.toString() ?? '')) throw error;
+      }
+      if (container) {
+        owned(container, undefined, false);
+        // Older launchers kept the whole cluster in RAM. Retire that disposable
+        // identity under the existing lock instead of restarting it into an OOM.
+        if (!container.Config?.Env?.includes(`PGDATA=${dataDirectory}`)) {
+          stop({ FITSY_VERIFY_OWNED_DB: container.Id, FITSY_VERIFY_DB_IMAGE: container.Image });
+          container = undefined;
+        }
+      }
+      if (!container) {
         createdId = docker(['run', '-d', '--name', name, '--memory', String(databaseLimits.Memory),
           '--memory-swap', String(databaseLimits.MemorySwap), '--cpus', String(databaseLimits.NanoCpus / 1000000000), '--label', `fitsy.verify.owner=${owner}`,
-          '--publish', '127.0.0.1::5432', '--tmpfs', '/var/lib/postgresql/data',
+          // Mask the image's declared volume without allocating the database in
+          // tmpfs. PGDATA lives in the container layer and leaves with its ID.
+          '--publish', '127.0.0.1::5432', '--tmpfs', '/var/lib/postgresql/data:rw,noexec,nosuid,size=1m',
+          '--env', `PGDATA=${dataDirectory}`,
           '--env', 'POSTGRES_USER=fitsy_test', '--env', 'POSTGRES_PASSWORD=fitsy_test',
           '--env', 'POSTGRES_DB=fitsy_test', image]);
         container = inspect();
@@ -93,9 +108,22 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       }
       let port = pinnedOwned(container);
       if (!container.State?.Running) throw new Error('owned database did not start');
+      acquired = { id: pinnedId, image: pinnedImage };
       // The image's temporary initialization server accepts Unix sockets before
       // the published TCP server is ready for Prisma migrations.
-      docker(['exec', pinnedId, 'bash', '-c', 'for i in {1..45}; do pg_isready -h 127.0.0.1 -U fitsy_test -d fitsy_test >/dev/null && exit 0; sleep 1; done; exit 1']);
+      try {
+        docker(['exec', pinnedId, 'bash', '-c', 'for i in {1..45}; do pg_isready -h 127.0.0.1 -U fitsy_test -d fitsy_test >/dev/null && exit 0; sleep 1; done; exit 1']);
+      } catch (error) {
+        let failed;
+        try {
+          failed = inspect();
+          pinnedOwned(failed, false);
+        } catch { throw error; } // Diagnostics cannot hide the original failure.
+        if (failed.State?.OOMKilled) {
+          throw new Error(`owned verification database was OOM-killed; release unused Docker compute before retrying. ${error.message}`, { cause: error });
+        }
+        throw error;
+      }
       // Recheck the acquired ownership, envelope and network before reset.
       container = inspect();
       port = pinnedOwned(container);
@@ -118,24 +146,41 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       assert(childEnv);
       return childEnv;
     } catch (error) {
-      if (createdId) {
+      const cleanupId = acquired?.id ?? createdId;
+      if (cleanupId) {
         try {
-          owned(inspect(), createdId, false, createdImage);
-          docker(['rm', '-f', createdId]);
+          owned(inspect(), cleanupId, false, acquired?.image ?? createdImage);
+          docker(['rm', '-f', cleanupId]);
         }
         catch { /* Preserve the original error and refuse to remove a changed owner. */ }
       }
       throw error;
     } finally { /* The supervisor releases its flock after this process group exits. */ }
   }
-  function run(args, verify) {
+  async function run(args, verify) {
     assertLock();
     // The CLI keeps one pipeline inside the existing supervised lock. Preparation
     // stays deferred until that pipeline has passed its safety/build phase.
-    if (verify) return verify(args, prepare);
-    const childEnv = prepare();
-    return spawn(process.execPath, ['scripts/verify/run.mjs', ...args], { cwd: root, env: childEnv,
-      stdio: 'inherit' }).status ?? 1;
+    let childEnv, failure;
+    const acquire = () => childEnv ??= prepare();
+    try {
+      if (verify) return await verify(args, acquire);
+      return spawn(process.execPath, ['scripts/verify/run.mjs', ...args], { cwd: root, env: acquire(),
+        stdio: 'inherit' }).status ?? 1;
+    } catch (error) {
+      failure = error;
+      throw error;
+    } finally {
+      // The database is reset on every run, so it has no consumer after this
+      // pipeline ends. Retire its acquired identity while still holding the lock.
+      if (childEnv) {
+        try { stop(childEnv); }
+        catch (error) {
+          if (failure) throw new AggregateError([failure, error], `${failure.message}; database cleanup failed: ${error.message}`);
+          throw error;
+        }
+      }
+    }
   }
   return { assert, run, stop, name, owner };
 }

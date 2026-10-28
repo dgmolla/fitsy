@@ -420,7 +420,9 @@ Replaced the old stubbed `/api/subscriptions/verify` receipt endpoint: clients n
 
 Use the public key from the same RevenueCat project as the mobile SDK.
 For dev Test Store builds, configure its `test_` key; the service sends `X-Is-Sandbox: true`, matching [RevenueCat's SDK routing](https://github.com/RevenueCat/purchases-ios/pull/7624).
-Platform store keys retain the existing request behavior; no client header or query parameter selects sandbox access.
+Platform store keys do not filter out sandbox purchases, so production can confirm active TestFlight and App Review subscriptions through the same server re-check.
+Every active production sandbox entitlement read emits a structured `revenuecat.sandbox_entitlement_accepted` log containing only `event` and `userId`; an expired sandbox entitlement in production returns an unknown result (`null`) without logging acceptance.
+Production still rejects Test Store `test_` keys; no client header or query parameter selects sandbox access.
 
 Pull path for entitlement state: asks RevenueCat for the caller's `pro` entitlement (`services/revenuecatService.ts`) and upserts the `Subscription` row.
 Optional JSON body `{ reason }` with one of `boot` | `purchase` | `restore` | `restore_history` | `sign_in` | `mismatch` (unknown values are ignored).

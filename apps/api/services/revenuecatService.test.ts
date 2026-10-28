@@ -2,6 +2,7 @@ import { fetchProEntitlement, isRevenueCatConfigured } from "./revenuecatService
 
 const ENV = process.env;
 const realFetch = global.fetch;
+let info: jest.SpyInstance;
 
 function mockFetch(status: number, body: unknown) {
   global.fetch = jest.fn().mockResolvedValue({
@@ -14,10 +15,12 @@ function mockFetch(status: number, body: unknown) {
 beforeEach(() => {
   process.env = { ...ENV, REVENUECAT_PUBLIC_API_KEY: "appl_test" };
   jest.spyOn(console, "warn").mockImplementation(() => {});
+  info = jest.spyOn(console, "info").mockImplementation(() => {});
 });
 afterEach(() => {
   process.env = ENV;
   global.fetch = realFetch;
+  jest.useRealTimers();
   jest.restoreAllMocks();
 });
 
@@ -30,18 +33,80 @@ describe("fetchProEntitlement", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it.each([true, undefined, false])('production requires non-sandbox store proof: %s', async sandbox => {
+  it.each([true, undefined, false])('production accepts an active platform-store entitlement with is_sandbox=%s', async sandbox => {
     process.env['VERCEL_ENV'] = 'production';
     mockFetch(200, { subscriber: {
       entitlements: { pro: { product_identifier: 'monthly', expires_date: new Date(Date.now() + 60_000).toISOString() } },
       subscriptions: { monthly: { is_sandbox: sandbox } },
     } });
     const state = await fetchProEntitlement('u1');
-    if (sandbox === false) expect(state?.active).toBe(true);
-    else expect(state).toBeNull();
+    expect(state).toMatchObject({ active: true, hadProEntitlement: true, plan: 'monthly' });
     expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-      headers: expect.objectContaining({ 'x-is-sandbox': 'false' }),
+      headers: { authorization: 'Bearer appl_test', 'x-platform': 'ios' },
     }));
+    if (sandbox === true) {
+      expect(info).toHaveBeenCalledTimes(1);
+      expect(info).toHaveBeenCalledWith(JSON.stringify({
+        event: 'revenuecat.sandbox_entitlement_accepted', userId: 'u1',
+      }));
+    } else {
+      expect(info).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each([-60_000, 0])('rejects a production sandbox entitlement expiring %s ms from now without logging acceptance', async offset => {
+    process.env['VERCEL_ENV'] = 'production';
+    jest.spyOn(Date, 'now').mockReturnValue(Date.now());
+    mockFetch(200, { subscriber: {
+      entitlements: { pro: { product_identifier: 'monthly', expires_date: new Date(Date.now() + offset).toISOString() } },
+      subscriptions: { monthly: { is_sandbox: true } },
+    } });
+    expect(await fetchProEntitlement('u1')).toBeNull();
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it.each([false, undefined])('retains the inactive state for an expired production entitlement with is_sandbox=%s', async sandbox => {
+    process.env['VERCEL_ENV'] = 'production';
+    mockFetch(200, { subscriber: {
+      entitlements: { pro: { product_identifier: 'monthly', expires_date: new Date(Date.now() - 60_000).toISOString() } },
+      subscriptions: { monthly: { is_sandbox: sandbox } },
+    } });
+    expect(await fetchProEntitlement('u1')).toMatchObject({ active: false, hadProEntitlement: true });
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it.each(['preview', 'development'])('does not log sandbox acceptance in %s', async environment => {
+    process.env['VERCEL_ENV'] = environment;
+    mockFetch(200, { subscriber: {
+      entitlements: { pro: { product_identifier: 'monthly', expires_date: null } },
+      subscriptions: { monthly: { is_sandbox: true } },
+    } });
+    expect(await fetchProEntitlement('u1')).toMatchObject({ active: true });
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it('logs every production sandbox acceptance, including a non-expiring grant', async () => {
+    process.env['VERCEL_ENV'] = 'production';
+    mockFetch(200, { subscriber: {
+      entitlements: { pro: { product_identifier: 'monthly', expires_date: null } },
+      subscriptions: { monthly: { is_sandbox: true } },
+    } });
+    for (let read = 0; read < 2; read++) {
+      expect(await fetchProEntitlement('u1')).toMatchObject({ active: true, expiresAt: null });
+    }
+    expect(info).toHaveBeenCalledTimes(2);
+    expect(info).toHaveBeenNthCalledWith(1, JSON.stringify({ event: 'revenuecat.sandbox_entitlement_accepted', userId: 'u1' }));
+    expect(info).toHaveBeenNthCalledWith(2, JSON.stringify({ event: 'revenuecat.sandbox_entitlement_accepted', userId: 'u1' }));
+  });
+
+  it('does not accept or log a production sandbox entitlement with a malformed expiry', async () => {
+    process.env['VERCEL_ENV'] = 'production';
+    mockFetch(200, { subscriber: {
+      entitlements: { pro: { product_identifier: 'monthly', expires_date: 'not-a-date' } },
+      subscriptions: { monthly: { is_sandbox: true } },
+    } });
+    expect(await fetchProEntitlement('u1')).toBeNull();
+    expect(info).not.toHaveBeenCalled();
   });
 
   it("returns null (unknown) when no key is configured, without calling out", async () => {
@@ -145,6 +210,23 @@ describe("fetchProEntitlement", () => {
   it("returns null on a network error", async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error("boom")) as unknown as typeof fetch;
     expect(await fetchProEntitlement("u1")).toBeNull();
+  });
+
+  it('aborts a subscriber lookup after eight seconds without accepting an entitlement', async () => {
+    jest.useFakeTimers();
+    global.fetch = jest.fn((_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('timeout')), { once: true });
+      }),
+    ) as typeof fetch;
+    const lookup = fetchProEntitlement('u1');
+    const init = (global.fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    jest.advanceTimersByTime(7_999);
+    expect(init.signal?.aborted).toBe(false);
+    jest.advanceTimersByTime(1);
+    expect(init.signal?.aborted).toBe(true);
+    expect(await lookup).toBeNull();
+    expect(info).not.toHaveBeenCalled();
   });
 
   it("returns null on a malformed body", async () => {
