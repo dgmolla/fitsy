@@ -45,12 +45,14 @@ test('canonical media caller fails unavailable process inspection or decoders be
       const path = join(dir, 'scripts/verify', name); mkdirSync(dirname(path), { recursive: true });
       copyFileSync(join(root, 'scripts/verify', name), path);
     }
+    mkdirSync(join(dir, 'scripts/sim'));
+    copyFileSync(join(root, 'scripts/sim/backend-identity.mjs'), join(dir, 'scripts/sim/backend-identity.mjs'));
     symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'));
     writeFileSync(join(dir, '.gitignore'), 'node_modules\n');
     git('init', '-q'); git('config', 'user.name', 'Media fixture'); git('config', 'user.email', 'media@example.test');
     git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'baseline');
     git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-    mkdirSync(join(dir, 'scripts/sim')); writeFileSync(join(dir, 'scripts/sim/changed.mjs'), 'export {};\n');
+    writeFileSync(join(dir, 'scripts/sim/changed.mjs'), 'export {};\n');
     const bin = join(dir, 'bin'); mkdirSync(bin);
     symlinkSync(process.execPath, join(bin, 'node'));
     writeFileSync(join(bin, 'npm'), '#!/bin/sh\ntouch fixtures-started\nexit 99\n', { mode: 0o755 });

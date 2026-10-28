@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { impactPlan, repository, simulatorFlows, gitEnv, isMain } from '../verify/impact-plan.mjs';
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
 import { withSlackVideo } from './slack-video.mjs';
+import { maestroApiArgs } from './backend-identity.mjs';
 
 export function renderSmoke(documents, selector) {
   const [header, commands] = documents;
@@ -114,7 +115,7 @@ export async function runLocal(args = process.argv.slice(2)) {
             return process.env[key] ? ['-e', `${key}=${process.env[key]}`] : [];
           });
           const result = await withSlackVideo({ enabled: options['record-video'] || process.env.FITSY_SIM_RECORD_VIDEO === '1',
-            udid, dir, signal: controller.signal }, () => runOwnedMaestro(maestro, ['--device', udid, 'test', ...loginArgs, '--format', 'junit',
+            udid, dir, signal: controller.signal }, () => runOwnedMaestro(maestro, ['--device', udid, 'test', ...maestroApiArgs(), ...loginArgs, '--format', 'junit',
             '--output', resolve(dir, 'report.xml'), '--debug-output', dir, '--test-output-dir', dir, path], {
             cwd: repository, dir, timeline: resolve(out, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'),
             signal: controller.signal, env: { ...gitEnv(),

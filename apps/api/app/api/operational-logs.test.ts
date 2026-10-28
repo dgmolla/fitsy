@@ -25,7 +25,6 @@ jest.mock('jose', () => ({
 
 import { GET as search } from './restaurants/route';
 import { GET as preview } from './restaurants/preview/route';
-import { GET as shuffle } from './restaurants/shuffle/route';
 import { DELETE as deleteAccount } from './user/route';
 import { POST as pushToken } from './user/push-token/route';
 
@@ -64,7 +63,7 @@ function request(path: string, method = 'GET', body?: unknown) {
 it.each([
   ['restaurants?lat=34&lng=-118', search],
   ['restaurants/preview?lat=34&lng=-118', preview],
-  ['restaurants/shuffle?lat=34&lng=-118&calories=600&protein=40', shuffle],
+  ['restaurants?shuffle=1&lat=34&lng=-118&calories=600&protein=40', search],
 ] as const)('%s contains Prisma failures through the actual request and query path', async (path, handler) => {
   const response = await handler(request(path));
   expect(response.status).toBe(500);

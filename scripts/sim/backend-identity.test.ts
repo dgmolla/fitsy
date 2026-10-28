@@ -1,4 +1,6 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import * as capturedCli from './__snapshots__/clean-cli-deployment.json';
 import * as dirtyCli from './__snapshots__/dirty-cli-deployment.json';
@@ -29,3 +31,56 @@ test.each([
   { ...cli, meta: { gitCommitSha: 'HEAD' } },
   { ...cli, gitSource: { sha: 'invalid' } },
 ])('rejects an unverified deployment', deployment => expect(run(deployment).status).not.toBe(0));
+
+const preview = 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app';
+test.each(['https://dev.fitsy.org', preview,
+  'https://fitsy-api-abc123-dawits-projects-74b6e00f.vercel.app',
+  'https://fitsy-immutable123-dawits-projects-74b6e00f.vercel.app'])('shares a guarded backend with Maestro: %s', origin => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {backendOrigin,maestroApiArgs} from ${JSON.stringify(modulePath)};
+     process.stdout.write(JSON.stringify([backendOrigin(${JSON.stringify(origin)}),maestroApiArgs({EXPO_PUBLIC_API_URL:${JSON.stringify(origin)}})]));`], { encoding: 'utf8' });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toEqual([origin, ['-e', `EXPO_PUBLIC_API_URL=${origin}`]]);
+});
+
+test.each(['', 'https://api.fitsy.org', 'https://fitsy.org', 'http://dev.fitsy.org',
+  'https://dev.fitsy.org@evil.test', 'https://dev.fitsy.org.evil.test', 'https://dev.fitsy.org:443',
+  'https://unrelated.vercel.app', 'https://fitsy-api-branch-other-team.vercel.app',
+  'https://fitsy-api-branch-dawits-projects-74b6e00f.vercel.app.evil.test',
+  preview + '/api', preview + '?token=secret', preview + '#fragment'])('rejects unsafe backend origins: %s', origin => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {backendOrigin} from ${JSON.stringify(modulePath)}; backendOrigin(${JSON.stringify(origin)});`], { encoding: 'utf8' });
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toContain('refuses production');
+});
+
+test('preview selection retains ready, nonproduction, project and clean source checks', () => {
+  for (const changes of [{ name: 'other-project' }, { target: 'production' }, { readyState: 'BUILDING' },
+    { meta: { ...cli.meta, gitDirty: 'true' } }]) {
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import {backendRevision} from ${JSON.stringify(modulePath)};
+       backendRevision(${JSON.stringify({ ...cli, name: 'fitsy-api', ...changes })}, ${JSON.stringify(preview)});`], { encoding: 'utf8' });
+    expect(result.status).not.toBe(0);
+  }
+});
+
+test('the real native backend check queries the configured preview and refuses divergent API source', () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'fitsy-backend-preview-'));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+  const root = resolve(__dirname, '../..');
+  try {
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, env, encoding: 'utf8' }).trim();
+    const script = `import {backend} from ${JSON.stringify(resolve(__dirname, 'product-flow.mjs'))}; process.stdout.write(JSON.stringify(backend()));`;
+    for (const revision of [head, 'origin/main']) {
+      writeFileSync(resolve(dir, 'vercel'), `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(resolve(dir, 'args.json'))},JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ ...cli, name: 'fitsy-api', meta: { gitCommitSha: revision === head ? head : execFileSync('git', ['rev-parse', revision], { cwd: root, env, encoding: 'utf8' }).trim() } }))});\n`, { mode: 0o755 });
+      const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+        cwd: root, env: { ...env, PATH: dir + ':' + env.PATH, EXPO_PUBLIC_API_URL: preview }, encoding: 'utf8',
+      });
+      expect(JSON.parse(readFileSync(resolve(dir, 'args.json'), 'utf8'))).toEqual(['api',
+        '/v13/deployments/' + new URL(preview).hostname, '--raw']);
+      expect(result.status).toBe(revision === head ? 0 : 1);
+      if (revision === head) expect(JSON.parse(result.stdout)).toEqual({ backendRevision: head, backendDeployment: cli.id });
+      else expect(result.stderr).toContain('Deploy candidate backend/shared/schema changes');
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Optional merge evidence. This must never participate in simulator acceptance.
 import { execFile, spawn } from 'node:child_process';
-import { closeSync, mkdirSync, mkdtempSync, openSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdirSync, mkdtempSync, openSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { constants } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -143,7 +143,7 @@ export async function main(args = process.argv.slice(2)) {
   } finally { process.removeListener('SIGINT', onInt); process.removeListener('SIGTERM', onTerm); }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { process.exitCode = await main(); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

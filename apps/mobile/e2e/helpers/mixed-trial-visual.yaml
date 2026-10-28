@@ -4,10 +4,22 @@ appId: com.fitsy.mobile
 - launchApp:
     clearState: true
     clearKeychain: true
-- extendedWaitUntil:
-    visible:
-      id: welcome-start
-    timeout: 30000
+# A fresh catalog restarts native accessibility while Welcome animates in.
+# Retry only startup observations and local Metro reconnection, never billing actions.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
 - waitForAnimationToEnd:
     timeout: 3000
 - tapOn:

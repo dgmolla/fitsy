@@ -31,43 +31,89 @@ beforeEach(() => {
   global.fetch = jest.fn((url, init) => new Promise(resolve => requests.push({ url: String(url), signal: init?.signal ?? undefined, resolve }))) as typeof fetch;
 });
 
-it('keeps shuffled results and pagination together, then replaces them for a new query', async () => {
+it('fetches a fresh shuffle page, cancels old pagination, and keeps later pages in the seeded context', async () => {
   const { result, rerender } = renderHook(({ query }) => useDiscoveryResults({ inputs, query, location, canSearch: true,
     targetsLoaded: true, previewReady: true, isOnboardingPreview: false }), { initialProps: { query: 'shuffle-pages' } });
   await act(async () => {});
   expect(result.current.canShuffle).toBe(false);
-  await act(async () => respond(0, ['one', 'two', 'three'], { locked: false, nextCursor: 'page-two' }));
-  const original = result.current.results;
-  act(() => result.current.handleShuffle());
-  expect(result.current.results[0]).not.toBe(original[0]);
-  expect(new Set(result.current.results)).toEqual(new Set(original));
-  expect(result.current.nextCursor).toBe('page-two');
-  expect(requests).toHaveLength(1);
+  await act(async () => respond(0, ['one', 'two', 'three'], { locked: false, nextCursor: 'old-page-two' }));
   act(() => { void result.current.handleEndReached(); });
   await act(async () => {});
-  expect(Object.fromEntries(new URL(requests[1].url).searchParams)).toMatchObject({ cursor: 'page-two' });
-  act(() => result.current.handleShuffle());
-  const reorderedPage = result.current.results;
-  await act(async () => respond(1, ['two', 'four'], { locked: false, nextCursor: null }));
-  expect(result.current.results.slice(0, 3)).toEqual(reorderedPage);
-  expect(result.current.results.map(item => item.id).sort()).toEqual(['four', 'one', 'three', 'two']);
-  expect(result.current.nextCursor).toBeNull();
-  rerender({ query: 'new-after-shuffle' });
+  act(() => { result.current.handleShuffle(); result.current.handleShuffle(); });
+  await act(async () => {});
+  expect(requests).toHaveLength(3);
+  expect(requests[1].signal?.aborted).toBe(true);
   expect(result.current.canShuffle).toBe(false);
+  expect(result.current.results.map(row => row.id)).toEqual(['one', 'two', 'three']);
+  const shuffle = Object.fromEntries(new URL(requests[2].url).searchParams);
+  expect(shuffle).toMatchObject({ shuffle: '1', calories: '600', q: 'shuffle-pages', excludeRestaurantIds: 'one,two,three' });
+  expect(shuffle.seed).toBeTruthy();
+  await act(async () => respond(1, ['late-old-page'], { locked: false }));
+  await act(async () => respond(2, ['four', 'five'], { locked: false, nextCursor: 'shuffle-page-two' }));
+  expect(result.current.results.map(row => row.id)).toEqual(['four', 'five']);
+  act(() => { void result.current.handleEndReached(); });
+  await act(async () => {});
+  const page = Object.fromEntries(new URL(requests[3].url).searchParams);
+  expect(page.cursor).toBe('shuffle-page-two');
+  for (const key of ['shuffle', 'seed', 'excludeRestaurantIds']) expect(page[key]).toBe(shuffle[key]);
+  await act(async () => respond(3, ['five', 'six'], { locked: false, nextCursor: null }));
+  expect(result.current.results.map(row => row.id)).toEqual(['four', 'five', 'six']);
   act(() => result.current.handleShuffle());
-  expect(result.current.results.slice(0, 3)).toEqual(reorderedPage);
+  await act(async () => {});
+  expect(Object.fromEntries(new URL(requests[4].url).searchParams).excludeRestaurantIds.split(',').sort()).toEqual(['five', 'four', 'one', 'six', 'three', 'two']);
+  rerender({ query: 'new-after-shuffle' });
+  expect(requests[4].signal?.aborted).toBe(true);
+  expect(result.current.canShuffle).toBe(false);
+  await act(async () => respond(4, ['stale-shuffle']));
   await act(async () => jest.advanceTimersByTime(600));
-  await act(async () => respond(2, ['new-one', 'new-two'], { locked: false }));
-  expect(result.current.results.map(item => item.id)).toEqual(['new-one', 'new-two']);
-  expect(result.current.canShuffle).toBe(true);
+  const fresh = new URL(requests[5].url).searchParams;
+  expect(fresh.has('shuffle')).toBe(false);
+  expect(fresh.has('seed')).toBe(false);
+  expect(fresh.has('excludeRestaurantIds')).toBe(false);
+  await act(async () => respond(5, ['new-one', 'new-two'], { locked: false }));
+  expect(result.current.results.map(row => row.id)).toEqual(['new-one', 'new-two']);
 });
 
-it.each([true, false])('preserves access while shuffling and disables it during refresh (locked=%s)', async locked => {
+it('keeps long-session UUID exclusions within the URL budget and freezes them for shuffled pagination', async () => {
+  const ids = Array.from({ length: 440 }, (_, i) => `${i.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`);
+  const { result } = renderHook(() => useDiscoveryResults({ inputs, query: 'long-session', location, canSearch: true,
+    targetsLoaded: true, previewReady: true, isOnboardingPreview: false }));
+  await act(async () => {});
+  for (let page = 0; page < 20; page++) {
+    if (page) {
+      act(() => { void result.current.handleEndReached(); });
+      await act(async () => {});
+    }
+    await act(async () => respond(page, ids.slice(page * 20, (page + 1) * 20), { locked: false, nextCursor: `page-${page + 1}` }));
+  }
+  expect(result.current.results).toHaveLength(400);
+  act(() => result.current.handleShuffle());
+  await act(async () => {});
+  const shuffled = new URL(requests[20].url);
+  expect(shuffled.href.length).toBeLessThan(12_000);
+  // Inspect query values locally; all network requests still use the real API client.
+  const shuffleParams = Object.fromEntries(shuffled.searchParams);
+  const excluded = shuffleParams.excludeRestaurantIds.split(',');
+  expect(encodeURIComponent(excluded.join(',')).length).toBeLessThanOrEqual(8_000);
+  expect(excluded).toEqual(ids.slice(400 - excluded.length, 400));
+  expect(excluded).toEqual(expect.arrayContaining(ids.slice(380, 400)));
+  await act(async () => respond(20, ids.slice(400, 420), { locked: false, nextCursor: 'seeded-next' }));
+  act(() => { void result.current.handleEndReached(); });
+  await act(async () => {});
+  const next = Object.fromEntries(new URL(requests[21].url).searchParams);
+  for (const key of ['shuffle', 'seed', 'excludeRestaurantIds']) expect(next[key]).toBe(shuffleParams[key]);
+  await act(async () => respond(21, ids.slice(420), { locked: false }));
+  expect(result.current.results).toHaveLength(40);
+});
+
+it.each([true, false])('uses the returned access verdict and disables shuffle during refresh (locked=%s)', async locked => {
   const { result } = renderHook(() => useDiscoveryResults({ inputs, query: `shuffle-access-${locked}`, location, canSearch: true,
     targetsLoaded: true, previewReady: true, isOnboardingPreview: false }));
   await act(async () => {});
   await act(async () => respond(0, ['one', 'two'], { locked }));
   act(() => result.current.handleShuffle());
+  await act(async () => {});
+  await act(async () => respond(1, ['fresh-one', 'fresh-two'], { locked }));
   expect(result.current.locked).toBe(locked);
   const shuffled = result.current.results;
   act(() => { void result.current.handleRefresh(); });
@@ -75,9 +121,33 @@ it.each([true, false])('preserves access while shuffling and disables it during 
   expect(result.current.canShuffle).toBe(false);
   act(() => result.current.handleShuffle());
   expect(result.current.results).toBe(shuffled);
-  await act(async () => respond(1, ['refreshed-one', 'refreshed-two'], { locked }));
+  await act(async () => respond(2, ['refreshed-one', 'refreshed-two'], { locked }));
   expect(result.current.results.map(item => item.id)).toEqual(['refreshed-one', 'refreshed-two']);
   expect(result.current.canShuffle).toBe(true);
+});
+
+it.each(['network', 'timeout'])('keeps the existing page on shuffle %s failure and can retry', async failure => {
+  const { result } = renderHook(() => useDiscoveryResults({ inputs, query: 'shuffle-retry', location, canSearch: true,
+    targetsLoaded: true, previewReady: true, isOnboardingPreview: false }));
+  await act(async () => {});
+  await act(async () => respond(0, 'one', { locked: false, nextCursor: 'original-next' }));
+  expect(result.current.canShuffle).toBe(true);
+  act(() => result.current.handleShuffle());
+  await act(async () => {});
+  if (failure === 'network') await act(async () => requests[1].resolve({ ok: false, status: 503 } as Response));
+  else await act(async () => jest.advanceTimersByTime(15_000));
+  expect(result.current.results.map(row => row.id)).toEqual(['one']);
+  expect(result.current.nextCursor).toBe('original-next');
+  expect(result.current.error).toBeTruthy();
+  expect(result.current.canShuffle).toBe(true);
+  act(() => result.current.handleShuffle());
+  await act(async () => {});
+  await act(async () => respond(2, 'replacement', { locked: true }));
+  await act(async () => respond(1, 'late', { locked: false }));
+  expect(result.current.results.map(row => row.id)).toEqual(['replacement']);
+  expect(result.current.locked).toBe(true);
+  expect(result.current.nextCursor).toBeNull();
+  expect(result.current.error).toBeNull();
 });
 afterEach(() => { global.fetch = originalFetch; jest.useRealTimers(); });
 

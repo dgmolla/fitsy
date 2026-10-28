@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { rateLimitStoreConfig } from './rateLimitStoreConfig';
 
 export const STORE_TIMEOUT_MS = 1_000;
 
@@ -40,13 +41,7 @@ export interface SharedQuota {
 export async function consumeSharedQuota(quota: SharedQuota, key: string): Promise<{
   ok: boolean; remaining: number; retryAfterMs: number;
 }> {
-  const url = process.env['UPSTASH_REDIS_REST_URL'];
-  const token = process.env['UPSTASH_REDIS_REST_TOKEN'];
-  if (!url || !token) throw new Error('rate limit store is not configured');
-  const endpoint = new URL(url);
-  if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
-    throw new Error('invalid rate limit store URL');
-  }
+  const { endpoint, token } = rateLimitStoreConfig();
   const identity = createHash('sha256').update(key).digest('hex');
   const prefix = `fitsy:rate-limit:v1:{${quota.namespace}}`;
   const controller = new AbortController();

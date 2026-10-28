@@ -311,7 +311,8 @@ class VercelBuildTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='fitsy-vercel-build-')
         self.root = Path(self.temp.name)
-        for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh', 'scripts/lib/db-target-guard.ts'):
+        for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh', 'scripts/lib/db-target-guard.ts',
+                     'apps/api/services/rateLimitStoreConfig.ts'):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
@@ -375,6 +376,42 @@ globalThis.fetch = async (url, init) => {
         result = subprocess.run(['bash', 'scripts/dev/vercel-build.sh'], cwd=self.root,
                                 env={**self.env, **changes}, text=True, capture_output=True)
         return result, self.calls.read_text().splitlines()
+
+    def test_missing_shared_store_withholds_deployment_before_migrations_or_build(self):
+        for environment in ('production', 'preview'):
+            for missing in ('both', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'):
+                changes = {'VERCEL_ENV': environment}
+                if environment == 'preview':
+                    changes.update(POSTGRES_URL_NON_POOLING='postgresql://fixture:fixture@localhost:5432/dev',
+                                   POSTGRES_PRISMA_URL='postgresql://fixture:fixture@localhost:5432/dev')
+                for key in ('UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'):
+                    if missing in ('both', key):
+                        changes[key] = ''
+                with self.subTest(environment=environment, missing=missing):
+                    result, calls = self.drive(**changes)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(calls, [])
+                    self.assertIn('UPSTASH_REDIS_REST_URL', result.stderr)
+                    self.assertIn('UPSTASH_REDIS_REST_TOKEN', result.stderr)
+                    self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
+
+    def test_invalid_shared_store_configuration_is_private_and_withholds_build(self):
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        invalid = [('UPSTASH_REDIS_REST_URL', value) for value in
+                   ('http://quota.example.test', 'not-a-url-private-value',
+                    'https://user:private-value@quota.example.test',
+                    'https://quota.example.test?token=private-value', 'https://quota.example.test#private-value')]
+        invalid += [('UPSTASH_REDIS_REST_TOKEN', value) for value in (' ', '\n', 'private-value\n')]
+        for environment in ('production', 'preview'):
+            bindings = {} if environment == 'production' else {'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev}
+            for key, value in invalid:
+                with self.subTest(environment=environment, key=key, value=value):
+                    result, calls = self.drive(VERCEL_ENV=environment, **bindings, **{key: value})
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(calls, [])
+                    self.assertIn('rate-limit store preflight failed', result.stderr)
+                    self.assertNotIn('private-value', result.stdout + result.stderr)
+                    self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
 
     def test_vercel_and_dev_mirror_consume_guarded_build_inputs(self):
         config = json.loads((ROOT / 'vercel.json').read_text())

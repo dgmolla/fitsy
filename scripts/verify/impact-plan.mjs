@@ -71,9 +71,9 @@ const documentationPath = path => /^[^/]+\.md$/.test(path) ||
 
 // Flow names are the existing Maestro sources, not another scenario registry.
 const screenFlows = [
-  [/^apps\/mobile\/(components\/ShuffleButton\.|lib\/(shuffle|useShuffleFlag)\.|e2e\/helpers\/shuffle-subscriber\.mjs$)/,
+  [/^apps\/mobile\/(components\/ShuffleButton\.|lib\/useShuffleFlag\.|e2e\/helpers\/shuffle-subscriber\.mjs$)/,
     /^shuffle$/, ['billing', 'discovery', 'changed-journey']],
-  [/^apps\/api\/(app\/api\/restaurants\/shuffle\/|lib\/shuffle)/,
+  [/^apps\/api\/lib\/shuffleSearch\./,
     /^shuffle$/, ['billing', 'discovery', 'changed-journey']],
   [/^apps\/mobile\/(app\/\(tabs\)\/saved\.|lib\/menuBookmarks\.)/, /^log-meal$/, ['discovery']],
   [/^apps\/mobile\/(app\/restaurant\/|components\/MenuItemCard\.|lib\/(menuFilters|menuLoadState)\.)/,

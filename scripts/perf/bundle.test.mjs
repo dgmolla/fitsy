@@ -41,7 +41,7 @@ test('bundle budget measures the actual Metro entry, excludes maps and fails ove
 
 test('the real entrypoint resolves the current API and enforces the zero-provider budget', () => {
   const result = checkPerformance();
-  assert.equal(result.entrypoints, 11);
+  assert.equal(result.entrypoints, 10);
   assert.ok(result.reachableModules > result.entrypoints);
   assert.deepEqual(result.preloadProviders, []);
 });

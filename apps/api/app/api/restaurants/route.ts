@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { findNearbyRestaurants, decodeCursor, type PaginationCursor, type NearbyRestaurantsParams } from "@/lib/restaurantService";
 import { restaurantCursorContext } from '@/lib/restaurantCursorContext';
-import { optionalSubscription } from "@/lib/subscription";
+import { getEntitlementStatus, optionalSubscription, syncSubscriptionFromRevenueCat } from "@/lib/subscription";
+import { parseSearchShuffle } from '@/lib/shuffleSearch';
+import { createRateLimiter, rateLimitResponse } from '@/lib/rateLimit';
 import { getApiEmitter } from "@/lib/apiEmitter";
 import type { RestaurantsApiResponse } from "@fitsy/shared";
 import { parseMacroTargetParams } from "@/lib/macroTargetParams";
+
+const shuffleLimiter = createRateLimiter({ namespace: 'shuffle-user', windowMs: 60_000, max: 30 });
+const headers = { 'Cache-Control': 'private, no-store' };
+export const maxDuration = 30;
 
 export async function GET(
   request: NextRequest,
@@ -13,7 +19,7 @@ export async function GET(
   // A session is mandatory, including for the signed-in free/lapsed teaser.
   const subscription = await optionalSubscription(request);
   if (subscription instanceof NextResponse) return subscription;
-  const { entitled } = subscription;
+  let { entitled } = subscription;
   const tAfterAuth = Date.now();
 
   const { searchParams } = request.nextUrl;
@@ -138,11 +144,30 @@ export async function GET(
   if ((goalMatchedRaw !== null && !["0", "1"].includes(goalMatchedRaw)) || searchParams.getAll("goalMatched").length > 1) {
     return NextResponse.json({ error: "Invalid goalMatched flag" } as never, { status: 400 });
   }
+  let shuffle: ReturnType<typeof parseSearchShuffle>;
+  try { shuffle = parseSearchShuffle(searchParams, decodedCursor?.shuffleSeed); }
+  catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 400, headers }); }
+  if (shuffle) {
+    try {
+      const limited = await shuffleLimiter.check(`user:${subscription.payload.sub}`);
+      if (!limited.ok) return rateLimitResponse(limited);
+      if (!entitled) {
+        // Keep direct callers safe from purchase/webhook races, including the future widget.
+        await syncSubscriptionFromRevenueCat(subscription.payload.sub);
+        entitled = (await getEntitlementStatus(subscription.payload.sub, subscription.payload.email)).active;
+      }
+    } catch {
+      console.error('[GET /api/restaurants] Subscription reconciliation failed:'); // eslint-disable-line no-console
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers });
+    }
+  }
   const options: NearbyRestaurantsParams = {
     lat,
     lng,
     radiusMiles,
-    targets,
+    // Locked shuffle membership must not reveal paid nutrition matches.
+    targets: shuffle && !entitled ? {} : targets,
+    ...(shuffle ? { shuffle } : {}),
     // Filtering locked rows by nutrition would reveal match membership despite redacting bestMatch.
     goalMatched: entitled && goalMatchedRaw === "1",
     ...(cuisineTypeRaw !== null ? { cuisineType: cuisineTypeRaw } : {}),
@@ -187,7 +212,7 @@ export async function GET(
 
     return NextResponse.json(
       { data: responseData, meta: { total, limit, nextCursor, locked: !entitled } },
-      { status: 200 },
+      { status: 200, headers },
     );
   } catch {
     console.error("[GET /api/restaurants] Error:");

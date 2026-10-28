@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { randomUUID } from 'expo-crypto';
 import type { RestaurantResult } from '@fitsy/shared';
+import { SHUFFLE_EXCLUSION_MAX_ENCODED_LENGTH } from '@fitsy/shared/contracts/search';
 import type { MacroValues } from './macroPresets';
 import type { UseLocationResult, LocationState } from './useLocation';
 import { fetchRestaurantsPage } from './apiClient';
@@ -7,9 +9,9 @@ import { buildDiscoveryParams, discoveryTargetFlags } from './discoverySearchPar
 import { fetchGuidedPreview } from './guidedPreview';
 import { saveOnboardingField } from './onboardingStorage';
 import { recordFirstDiscoveryPage } from './discoverySearchTelemetry';
-import { shuffleResults } from './shuffle';
 import { trackSearchPerformed, trackSearchFailed, trackPreviewFetchFailed, trackSearchPageLoaded, trackSearchPaginationEndReached } from './analytics';
 const DEBOUNCE_MS = 600;
+type ShufflePage = { shuffle: true; seed: string; excludeRestaurantIds: string[] };
 interface DiscoveryInputs {
   inputs: MacroValues; query: string; location: UseLocationResult;
   canSearch: boolean; targetsLoaded: boolean; previewReady: boolean; isOnboardingPreview: boolean;
@@ -38,6 +40,23 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   const isLoadingMoreRef = useRef(false);
   const endReachedFiredRef = useRef(false);
   const initialFetch = useRef(true);
+  const activeShuffle = useRef<ShufflePage | undefined>(undefined);
+  const shownRestaurantIds = useRef(new Set<string>());
+  const shuffleInFlight = useRef(false);
+  const rememberShown = useCallback((data: RestaurantResult[]) => {
+    for (const row of data) {
+      shownRestaurantIds.current.delete(row.id);
+      shownRestaurantIds.current.add(row.id);
+    }
+    // Evict oldest IDs before freezing the shuffle context; never trim later pages differently.
+    const history = shownRestaurantIds.current;
+    let encodedLength = [...history].reduce((length, id) => length + encodeURIComponent(id).length + 3, 0);
+    while (history.size > 1000 || encodedLength - 3 > SHUFFLE_EXCLUSION_MAX_ENCODED_LENGTH) {
+      const oldest = history.values().next().value!;
+      history.delete(oldest);
+      encodedLength -= encodeURIComponent(oldest).length + 3;
+    }
+  }, []);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doFetch = useCallback(
     async (
@@ -47,8 +66,10 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
       q: string,
       locationSource: LocationState['source'],
       isRefresh = false,
+      shuffle?: ShufflePage,
     ) => {
       const generation = ++fetchGeneration.current;
+      shuffleInFlight.current = !!shuffle;
       const requestContext = currentContext.current;
       requestController.current?.abort();
       pageController.current?.abort();
@@ -60,22 +81,23 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
       setError(null);
       setNearbyDishCount(undefined);
       setOutOfArea(false);
-      pagesLoadedRef.current = 0;
+      if (!shuffle) pagesLoadedRef.current = 0;
       isLoadingMoreRef.current = false;
       setLoadingMore(false);
       endReachedFiredRef.current = false;
-      setNextCursor(null);
-      const params = buildDiscoveryParams(current, lat, lng, q);
+      if (!shuffle) setNextCursor(null);
+      const params = { ...buildDiscoveryParams(current, lat, lng, q), ...shuffle };
       const targetFlags = discoveryTargetFlags(current);
       // A stalled native transport must not hold the search or tour indefinitely.
       const timeout = setTimeout(() => {
         if (!isCurrent()) return;
         controller.abort();
-        setResults([]);
+        if (!shuffle) setResults([]);
         setError('Search took too long. Check your connection and try again.');
         setCompletedContext(requestContext);
         setRefreshing(false);
         setLoading(false);
+        shuffleInFlight.current = false;
       }, 15_000);
       try {
         const previewResponse = isOnboardingPreview ? await fetchGuidedPreview({ lat, lng }, q, current, { signal: controller.signal, refresh: isRefresh }) : null;
@@ -88,8 +110,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
           void saveOnboardingField('previewArea', `${lat}:${lng}`).then(() => saveOnboardingField('previewCraving', q.trim())).catch(() => undefined);
         }
         if (networkError) {
-          setResults([]);
-          setNextCursor(null);
+          if (!shuffle) { setResults([]); setNextCursor(null); }
           setError('Network problem - check your connection and try again.');
           trackSearchPerformed({
             ...targetFlags,
@@ -110,6 +131,9 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
           return;
         }
         setResults(data);
+        activeShuffle.current = shuffle;
+        if (!shuffle) shownRestaurantIds.current.clear();
+        rememberShown(data);
         setNextCursor(cursor);
         setLocked(isLocked);
         setFetchSeq((n) => n + 1);
@@ -118,8 +142,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         recordFirstDiscoveryPage(data.length, cursor, isLocked, targetFlags, q, locationSource);
       } catch (err) {
         if (!isCurrent()) return;
-        setResults([]);
-        setNextCursor(null);
+        if (!shuffle) { setResults([]); setNextCursor(null); }
         setError('Network problem - check your connection and try again.');
         trackSearchPerformed({
           ...targetFlags,
@@ -140,9 +163,10 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         setCompletedContext(requestContext);
         setRefreshing(false);
         setLoading(false);
+        shuffleInFlight.current = false;
       }
     },
-    [isOnboardingPreview],
+    [isOnboardingPreview, rememberShown],
   );
   const handleRefresh = useCallback(async () => {
     if (!canSearch) return;
@@ -175,7 +199,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     query,
   ]);
   const handleEndReached = useCallback(async () => {
-    if (!canSearch || loading || completedContext !== currentContext.current) return;
+    if (!canSearch || loading || refreshing || shuffleInFlight.current || completedContext !== currentContext.current) return;
     if (locked) return;
     if (nextCursor === null) return;
     if (isLoadingMoreRef.current) return;
@@ -187,7 +211,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     const pageContext = currentContext.current;
     const cursorBeingFetched = nextCursor;
     const pageIndex = pagesLoadedRef.current;
-    const params = buildDiscoveryParams(inputs, location.lat, location.lng, query);
+    const params = { ...buildDiscoveryParams(inputs, location.lat, location.lng, query), ...activeShuffle.current };
     params.cursor = cursorBeingFetched;
     try {
       const { data, nextCursor: cursor, locked: isLocked, networkError, restartRequired } = await fetchRestaurantsPage(params, { signal: controller.signal });
@@ -199,6 +223,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         return;
       }
       if (networkError) throw new Error('Next page unavailable');
+      rememberShown(data);
       setResults((prev) => {
         const seen = new Set(prev.map((r) => r.id));
         const merged = [...prev];
@@ -246,8 +271,10 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     nextCursor,
     locked,
     loading,
+    refreshing,
     completedContext,
     doFetch,
+    rememberShown,
   ]);
   useEffect(() => {
     requestController.current?.abort();
@@ -256,6 +283,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     isLoadingMoreRef.current = false;
     setLoadingMore(false);
     setRefreshing(false);
+    shuffleInFlight.current = false;
     if (!targetsLoaded || location.loading || !previewReady) return;
     if (!canSearch) { setResults([]); setNextCursor(null); setLoading(false); return; }
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -273,10 +301,13 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   useEffect(() => () => { requestController.current?.abort(); pageController.current?.abort(); fetchGeneration.current++; }, []);
   const pending = canSearch && completedContext !== contextKey;
   const canShuffle = !isOnboardingPreview && canSearch && targetsLoaded && !location.loading &&
-    !loading && !pending && !refreshing && !error && !outOfArea && results.length > 1;
+    !loading && !pending && !refreshing && !outOfArea && results.length > 0;
   const handleShuffle = useCallback(() => {
-    if (canShuffle) setResults(current => shuffleResults(current));
-  }, [canShuffle]);
+    if (!canShuffle || shuffleInFlight.current) return;
+    void doFetch(inputs, location.lat, location.lng, query, location.source, true, {
+      shuffle: true, seed: randomUUID(), excludeRestaurantIds: [...shownRestaurantIds.current],
+    });
+  }, [canShuffle, doFetch, inputs, location.lat, location.lng, location.source, query]);
   return { results, nextCursor, loading: canSearch && (loading || pending), loadingMore, refreshing,
     error: pending ? null : error, locked, fetchSeq, outOfArea: !pending && outOfArea,
     nearbyDishCount: pending ? undefined : nearbyDishCount, doFetch, handleRefresh, handleEndReached, canShuffle, handleShuffle };

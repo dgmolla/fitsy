@@ -223,7 +223,7 @@ node scripts/sim/publish-product-flow.mjs <PR_NUMBER>
 ```
 
 The publisher requires a clean checkout matching the PR head and current main.
-Deploy candidate backend changes to dev before testing.
+Use the PR's Ready Vercel preview for candidate backend changes and keep `dev.fitsy.org` pinned to `dev`.
 The publisher rechecks source, app/configuration and backend identity, validates evidence no more than 24 hours old, and attaches verified commands, screenshots and traces to a **private draft** GitHub release.
 Keep drafts unpublished.
 Non-product PRs publish N/A without a simulator; `--include-baseline` optionally attaches a baseline validation run.
@@ -235,7 +235,10 @@ This trusts repository writers like the existing local reviews; it is not an att
 Preserve existing required checks when configuring protection.
 The local scope run cannot substitute for this separate source-bound acceptance gate.
 
-For a backend change before its first push, deploy a clean committed checkout with `vercel deploy --target=preview`, then assign the ready preview to dev during a coordinated test window.
+For a backend change before its first push, deploy a clean committed checkout with `vercel deploy --target=preview`, then set `EXPO_PUBLIC_API_URL` to that Ready `fitsy-api` preview for build, run, finish, check and publication.
+Keep `dev.fitsy.org` pinned to the `dev` branch.
+Use the same origin for every fixture and pass it explicitly to Maestro; owned Metro disables dotenv overrides.
+See [native helper checks](../../../apps/mobile/e2e/README.md#native-helper-checks) for the supported origin and external host-runner setup.
 The gate accepts Vercel's CLI `meta.gitCommitSha` identity as well as a Git deployment's `gitSource.sha`, rejects dirty CLI uploads, and still compares candidate backend contents and pins the deployment across the test and publication.
 
 ## Independent review

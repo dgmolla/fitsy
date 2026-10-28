@@ -23,8 +23,10 @@ Do not add a replica, per-instance prefix, caller-controlled namespace or local 
 Upstash's [REST API](https://upstash.com/docs/redis/features/restapi) supports the single `EVAL` operation used here.
 No PostgreSQL migration or application-table grant is needed.
 The guarded Vercel production and preview build paths run `scripts/deploy/rate-limit-preflight.ts` before migrations and compilation.
+The probe uses the request handler's configuration parser and never logs credential values.
 It exercises the runtime `EVAL` with a separate `deployment-readiness` namespace, a unique identity and one-second TTLs, without consuming user quotas.
 Missing, unsafe or partial configuration, read-only tokens, provider failures, invalid responses and timeouts stop the build.
+Ordinary local development builds do not require Redis; the probe does not establish production/nonproduction isolation.
 See [routine production recovery](../devops/routine-production.md) for credential restoration and exact-source release verification.
 
 Only `VERCEL=1` together with deployment-provided `VERCEL_ENV=production` or `preview` establishes the supported proxy boundary.
@@ -45,7 +47,7 @@ Supporting another proxy requires an authenticated ingress contract and tests be
 | `data-ip` | Trusted IP | 300 | 1 minute, across authenticated data routes |
 | `data-user` | Verified JWT subject | 120 | 1 minute, across authenticated data routes |
 | `preview-ip` | Trusted IP | 30 | 1 minute, guided preview |
-| `shuffle-user` | User principal | 30 | 1 minute, including shuffle cache hits |
+| `shuffle-user` | User principal | 30 | 1 minute, search calls with `shuffle=1`, including repeated seeds and pagination |
 | `feedback-user` | Verified JWT subject | 5 | 5 minutes |
 | `waitlist-ip` | Trusted IP | 5 | 10 minutes, public website form |
 
@@ -74,6 +76,12 @@ Use an invalid-body auth request against an isolated nonproduction deployment to
 Do not run quota probes against production as part of ordinary implementation validation.
 
 ## Verification and recovery
+
+When simulator preflight receives 503, inspect the matching deployment's runtime logs before replaying account journeys.
+If the shared store is unconfigured, restore the dedicated nonproduction URL and writable token through Vercel's environment settings, redeploy the same candidate and verify anonymous/invalid-session 401s plus fixture login 200 before rerunning the complete selected flows.
+An existing deployment retains its original environment until redeployed.
+If provisioning requires accepting new provider terms or granting new integration access, retain that concrete boundary for the authorized account owner; do not substitute production credentials or relax fail-closed quotas.
+The build regression in `scripts/deploy/routine-release.test.py` runs the actual deployment entrypoint with synthetic external CLIs and proves missing configuration cannot reach migrations or the build in either Preview or Production.
 
 The API suite includes deterministic external REST fixtures and independently loaded API worker processes.
 It proves provider-wide auth quotas, cold-start persistence, waitlist quotas, per-user limits across IPs, forged-header resistance, concurrent admission and capacity/expiry behavior.
