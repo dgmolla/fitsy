@@ -1,7 +1,10 @@
 // Check direct API access before the mobile SDK can synchronize the fixture.
 // Keep credentials and response bodies local, outside Maestro's persisted output.
 (function () {
-  var base = 'https://dev.fitsy.org';
+  var base = typeof EXPO_PUBLIC_API_URL === 'string' ? EXPO_PUBLIC_API_URL : '';
+  if (!/^https:\/\/(?:dev\.fitsy\.org|fitsy-api-[a-z0-9-]+-dawits-projects-74b6e00f\.vercel\.app)$/.test(base)) {
+    throw new Error('Maestro refuses production and unrelated API origins; pass the app EXPO_PUBLIC_API_URL');
+  }
   var login = http.post(base + '/api/auth/login', {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: LOGIN_EMAIL, password: LOGIN_PASSWORD }),
@@ -31,6 +34,8 @@
   // Fail with deployment diagnostics instead of misclassifying it as a broken Shuffle button.
   var validation = http.get(searchPath + '&shuffle=invalid', config);
   output.shuffleApiValidationStatus = validation.status;
+  console.log('[shuffle-api] ' + JSON.stringify({ backend: base, deploymentSha: output.shuffleApiDeploymentSha,
+    validationStatus: validation.status }));
   if (validation.status !== 400) return;
   var normal = http.get(searchPath, config);
   output.shuffleSearchStatus = normal.status;

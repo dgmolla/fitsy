@@ -246,6 +246,19 @@ test.each([
   expect(result.stderr).toContain(error);
 });
 
+test.each(['https://dev.fitsy.org', 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app'])
+('the real native entrypoint accepts configured nonproduction backend %s', origin => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import { environment } from ${JSON.stringify(resolve(__dirname, 'product-flow.mjs'))};
+     process.stdout.write(JSON.stringify(environment()));`], {
+    env: { ...cleanEnv, EXPO_PUBLIC_API_URL: origin, EXPO_PUBLIC_SUPABASE_URL: 'https://dev-fixture.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: 'fixture-anon-key' }, encoding: 'utf8',
+  });
+  expect(result.stderr).toBe('');
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout).backend).toBe(origin);
+});
+
 test.each([
   ['--scope=none'], ['--scope=flow', '--flows=signin-options'],
   ['--scope=smoke', '--flows=reminders'],

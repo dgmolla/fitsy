@@ -1,6 +1,9 @@
 // Maestro executes this file as a script. Keep tokens and credentials local.
 (function () {
-  var base = 'https://dev.fitsy.org';
+  var base = typeof EXPO_PUBLIC_API_URL === 'string' ? EXPO_PUBLIC_API_URL : '';
+  if (!/^https:\/\/(?:dev\.fitsy\.org|fitsy-api-[a-z0-9-]+-dawits-projects-74b6e00f\.vercel\.app)$/.test(base)) {
+    throw new Error('Maestro refuses production and unrelated API origins; pass the app EXPO_PUBLIC_API_URL');
+  }
   output.dataApiResponses = [];
   output.dataApiLoginStatus = 0;
   function reportPreflight() {
@@ -13,8 +16,7 @@
     }));
   }
   var paths = output.apiPaths.map(function (path) {
-    if (path.indexOf(base + '/api/') === 0) path = path.slice(base.length);
-    if (path.indexOf('/api/restaurants') !== 0) throw new Error('Expected a dev restaurant API path');
+    if (!/^\/api\/restaurants(?:[/?]|$)/.test(path)) throw new Error('Expected a relative restaurant API path');
     return path;
   });
   output.dataApiUnauthStatus = http.get(base + paths[0]).status;

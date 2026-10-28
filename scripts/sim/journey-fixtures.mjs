@@ -38,6 +38,9 @@ export function journeyFixture(header, file = process.env.FITSY_E2E_FIXTURES) {
 
 export async function withFixtureEnvironment(fixture, action) {
   const previous = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('EXPO_PUBLIC_')));
+  if (previous.EXPO_PUBLIC_API_URL && fixture.env.EXPO_PUBLIC_API_URL &&
+      previous.EXPO_PUBLIC_API_URL !== fixture.env.EXPO_PUBLIC_API_URL)
+    throw new Error('Fixture API origin differs from the selected run; keep EXPO_PUBLIC_API_URL consistent across accounts');
   Object.assign(process.env, fixture.env);
   try { return await action(); }
   finally {

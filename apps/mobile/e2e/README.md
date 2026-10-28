@@ -119,9 +119,17 @@ For syntax-only checks in a restricted worker, Maestro may fail while changing p
 The installed CLI supports `MAESTRO_OPTS="-Duser.home=$PWD/.evidence/maestro-runtime" maestro check-syntax apps/mobile/e2e/flows/shuffle.yaml` to put its Java runtime cache inside the owned checkout without changing `HOME` or shared binaries.
 This validates the saved YAML with Maestro's parser; it does not grant CoreSimulator access or establish native acceptance.
 
-Deploy the candidate API to `dev.fitsy.org` through the existing coordinated preview procedure before running journeys that use `helpers/data-api.mjs`.
-The stable dev domain follows `main`; a successful feature-branch Vercel preview does not update that domain.
-The host runner owner must verify the candidate dev deployment before native replay; do not merge early or remove the 401 assertions to satisfy Simulator.
+Keep `dev.fitsy.org` pinned to the `dev` branch, which mirrors `main`.
+For a PR with API, shared-contract or schema changes, configure `EXPO_PUBLIC_API_URL` to that PR's Ready `fitsy-api` Vercel preview in the `dawits-projects-74b6e00f` team.
+The same origin must reach owned Metro, every account fixture, Maestro's `-e EXPO_PUBLIC_API_URL=...`, and the final evidence check.
+The canonical runners pass that Maestro argument explicitly and disable Expo dotenv overrides for owned Metro.
+An external host runner must also set `EXPO_NO_DOTENV=1` when starting Metro so a checkout's `.env.development.local` cannot restore the stable dev URL.
+`helpers/data-api.mjs` and `helpers/shuffle-subscriber.mjs` require that configured origin and refuse production, unrelated projects and URLs containing credentials, paths or query strings.
+All saved API request paths are relative, so helpers cannot silently probe stable dev while the app uses a preview.
+The native runner verifies that origin's Ready, nonproduction `fitsy-api` deployment and candidate API/shared/schema contents, then pins its deployment ID through acceptance and publication.
+Account fixtures cannot override the run's selected origin; omit `EXPO_PUBLIC_API_URL` from fixture environment files or give every fixture the same value.
+For a direct Maestro diagnostic, pass the same `-e EXPO_PUBLIC_API_URL=...` explicitly; a shell variable alone does not establish Maestro's script variable.
+Do not merge early, reassign the stable dev domain or remove assertions to satisfy Simulator.
 The helper probes missing-token and invalid-token requests before login; an anonymous 200 means the deployed backend still lacks the candidate auth behavior.
 Every caller immediately requires 401/401 and successful fixture login through a labelled assertion that reports all three HTTP statuses.
 The helper returns without logging in when either auth probe fails, leaving that assertion to fail normally instead of throwing a Graal exception that Maestro truncates into invalid command JSON and an unknown JUnit error.
@@ -132,21 +140,15 @@ Check the deployment's `[rate-limit] Shared store unavailable` runtime log and t
 The existing host delivery owner must restore the nonproduction store configuration, redeploy the candidate and verify the same preflight before replaying; preserve fail-closed behavior and every journey assertion.
 The Vercel build now validates the same shared-store configuration as request handling before migrations or builds, so missing credentials withhold deployment instead of producing another Ready API that cannot authenticate.
 Retain a required new-provider terms/access grant for the account owner when provisioning is necessary; the existing deployment needs a fresh candidate redeploy after the dedicated nonproduction configuration is restored.
-For a pre-merge test window, the existing host owner can use the `fitsy-api` project's Vercel Domains page to edit `dev.fitsy.org`, keep the Preview environment, and temporarily select the candidate branch.
-Record the original `dev` branch mapping and the candidate's ready deployment and exact commit before saving.
-Verify the saved mapping and anonymous/invalid-token 401s before the existing runner replays; the branch preview URL alone does not prove that the app's configured origin changed.
-Keep that deployment assigned for the complete selected run, including automatic retries and source-only follow-ups that still need the candidate API.
-The existing host runner owner closes the test window after terminal native verification or explicit cancellation, then restores the original Preview branch mapping and verifies the restoration.
-Do not restore after an intermediate group or failed attempt while that owner still has a required replay pending; doing so recreates the stale-backend failure on the next head.
 Retain the failed run and the recovered run separately; changing deployment configuration does not require a product-code workaround or establish a passing native journey.
 
 `shuffle` requires a populated dev backend, `entitled-dev` and a Debug Test Store build.
 It signs the entitled fixture into the dev API and checks normal and shuffled search pages, a changed restaurant set and persisted RevenueCat proof before mobile launch can synchronize the subscription.
-Its `helpers/shuffle-subscriber.mjs` helper keeps tokens and credentials out of Maestro output, uses only `dev.fitsy.org`, and rejects a demo bypass without actual subscription proof.
+Its `helpers/shuffle-subscriber.mjs` helper keeps tokens and credentials out of Maestro output, uses the app's configured nonproduction origin, and rejects a demo bypass without actual subscription proof.
 Before selection it captures the public health deployment SHA and requires an authenticated invalid shuffle option to return 400.
 An older search API can pass the auth probes yet silently ignore shuffle options and return the same ranked page with HTTP 200.
 The saved flow reports that incompatible deployment explicitly and retains each access, nutrition, subscription-proof and changed-list assertion with diagnostic values and result counts.
-Use the coordinated preview test window above to deploy the candidate API; a feature-branch mobile bundle alone cannot establish shuffle behavior.
+Use the PR preview configuration above; a feature-branch mobile bundle alone cannot establish shuffle behavior.
 It chooses DTLA and independent targets of 600 kcal, 40 g protein, 60 g carbs and 20 g fat, then taps the small Shuffle icon in the main search field twice.
 The button fetches and replaces the restaurant page through the same search endpoint, preserving query, targets, area and access rules.
 Pagination continues in the returned seeded order.

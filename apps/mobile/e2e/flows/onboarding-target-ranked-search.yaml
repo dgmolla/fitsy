@@ -154,12 +154,12 @@ env:
 - assertTrue: ${output.targets.calories === 502 && output.targets.protein === 50 && output.targets.carbs === 44 && output.targets.fat === 14}
 - assertTrue: ${output.targets.calories === 4 * output.targets.protein + 4 * output.targets.carbs + 9 * output.targets.fat}
 # Compare native results with the live ranked query while all four targets remain set.
-- evalScript: ${output.rankedUrl = 'https://dev.fitsy.org/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=' + output.targets.calories + '&protein=' + output.targets.protein + '&carbs=' + output.targets.carbs + '&fat=' + output.targets.fat}
+- evalScript: ${output.rankedUrl = '/api/restaurants/preview?guided=1&lat=34.0407&lng=-118.2468&calories=' + output.targets.calories + '&protein=' + output.targets.protein + '&carbs=' + output.targets.carbs + '&fat=' + output.targets.fat}
 - evalScript: ${output.apiPaths = [output.rankedUrl]}
 - runScript: ../helpers/data-api.mjs
 - assertTrue:
     condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
-    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+    label: "Candidate at ${EXPO_PUBLIC_API_URL} must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
 - evalScript: ${output.baseResponse = output.dataApiResponses[0]}
 - assertTrue: ${output.baseResponse.status === 200}
 - evalScript: ${output.base = json(output.baseResponse.body)}
@@ -168,7 +168,7 @@ env:
 - runScript: ../helpers/data-api.mjs
 - assertTrue:
     condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
-    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+    label: "Candidate at ${EXPO_PUBLIC_API_URL} must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
 - evalScript: ${output.pizzaResponse = output.dataApiResponses[0]}
 - assertTrue: ${output.pizzaResponse.status === 200}
 - evalScript: ${output.pizza = json(output.pizzaResponse.body)}

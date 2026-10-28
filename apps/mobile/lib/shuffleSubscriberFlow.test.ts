@@ -10,16 +10,33 @@ const reply = (body: unknown, status = 200) => ({ status, body: JSON.stringify(b
 const deployedSha = 'a'.repeat(40);
 
 function execute({ login = reply({ token: 'private-token' }), validation = reply({ error: 'Invalid shuffle flag' }, 400),
-  search = reply(pick), shuffle = reply({ ...pick, data: [{ ...pick.data[0], id: 'fresh-restaurant' }] }), proof = reply(verified) } = {}) {
+  search = reply(pick), shuffle = reply({ ...pick, data: [{ ...pick.data[0], id: 'fresh-restaurant' }] }), proof = reply(verified),
+  origin = 'https://dev.fitsy.org' } = {}) {
   const output: Record<string, unknown> = {};
   const http = {
-    post: jest.fn(() => login),
+    post: jest.fn((_url: string, _config: unknown) => login),
     get: jest.fn((url: string) => url.endsWith('/api/health') ? reply({ deploymentSha: deployedSha })
       : url.includes('shuffle=invalid') ? validation : url.includes('/api/restaurants?') ? url.includes('shuffle=1') ? shuffle : search : proof),
   };
-  runInNewContext(source, { http, output, json: JSON.parse, LOGIN_EMAIL: 'subscriber@example.test', LOGIN_PASSWORD: 'private-password' });
+  runInNewContext(source, { http, output, console: { log: jest.fn() }, json: JSON.parse, EXPO_PUBLIC_API_URL: origin,
+    LOGIN_EMAIL: 'subscriber@example.test', LOGIN_PASSWORD: 'private-password' });
   return { output, http };
 }
+
+it('checks shuffle capability, changed results and RevenueCat proof at the app PR preview', () => {
+  const origin = 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app';
+  const { http, output } = execute({ origin });
+  expect(http.post.mock.calls[0][0]).toBe(origin + '/api/auth/login');
+  expect(http.get.mock.calls.every(([url]) => url.startsWith(origin + '/api/'))).toBe(true);
+  expect(output.shuffleApiListChanged).toBe(true);
+  expect(output.shuffleApiVerified).toBe(true);
+});
+
+it.each(['https://api.fitsy.org', 'https://unrelated.vercel.app', 'https://dev.fitsy.org@evil.test',
+  'https://fitsy-api-branch-other-team.vercel.app', 'https://dev.fitsy.org/api', ''])
+('refuses an unapproved shuffle origin before login: %s', origin => {
+  expect(() => execute({ origin })).toThrow(/refuses production/);
+});
 
 it('checks authenticated search and fresh shuffle before mobile launch without an explicit subscription sync or exposed credentials', () => {
   const { loadAll } = require('js-yaml') as { loadAll(text: string): unknown[] };
@@ -62,7 +79,7 @@ it.each([200, 503])('rejects an incompatible or unavailable backend (HTTP %s) wi
   const helperIndex = commands.findIndex(command => command.runScript === helper);
   const assertion = commands[helperIndex + 1].assertTrue as { condition: string; label: string; optional?: boolean };
   expect(assertion.optional).not.toBe(true);
-  expect(assertion.label).toMatch(/dev\.fitsy\.org.*shuffleApiDeploymentSha.*candidate API/);
+  expect(assertion.label).toMatch(/EXPO_PUBLIC_API_URL.*shuffleApiDeploymentSha.*candidate API/);
   expect(runInNewContext(assertion.condition.slice(2, -1), { output })).toBe(false);
   for (const key of ['shuffleApiUnlocked', 'shuffleApiHasDish', 'shuffleApiHasMacros', 'shuffleApiVerified', 'shuffleApiListChanged']) {
     expect((commands[helperIndex + 3].assertTrue as { label: string }).label).toContain(key);

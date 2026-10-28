@@ -105,3 +105,24 @@ test('failed preparation restores the caller environment and cannot continue to 
   }));
   assert.equal(continued, false); assert.equal(process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL, previous);
 });
+
+test('account fixtures cannot silently switch a PR preview back to stable dev', async () => {
+  const previous = process.env.EXPO_PUBLIC_API_URL;
+  const preview = 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app';
+  process.env.EXPO_PUBLIC_API_URL = preview;
+  let executed = false;
+  try {
+    await assert.rejects(withFixtureEnvironment({ env: { EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org' } }, async () => {
+      executed = true;
+    }), /Fixture API origin differs/);
+    assert.equal(executed, false);
+    assert.equal(process.env.EXPO_PUBLIC_API_URL, preview);
+    for (const env of [{}, { EXPO_PUBLIC_API_URL: preview }]) {
+      await withFixtureEnvironment({ env }, async () => assert.equal(process.env.EXPO_PUBLIC_API_URL, preview));
+      assert.equal(process.env.EXPO_PUBLIC_API_URL, preview);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.EXPO_PUBLIC_API_URL;
+    else process.env.EXPO_PUBLIC_API_URL = previous;
+  }
+});

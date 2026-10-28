@@ -11,21 +11,21 @@ env:
   LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
   LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
-- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co']}
+- evalScript: ${output.apiPaths = ['/api/restaurants?lat=34.0522&lng=-118.2437&radius=5&q=Seed%20Bowl%20Co']}
 - runScript: ../helpers/data-api.mjs
 - assertTrue:
     condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
-    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+    label: "Candidate at ${EXPO_PUBLIC_API_URL} must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
 - evalScript: ${output.search = output.dataApiResponses[0]}
 - assertTrue: ${output.search.status === 200}
 - evalScript: >-
     ${output.seed = json(output.search.body).data.filter(function (r) { return r.name === 'Seed Bowl Co #01'; })[0]}
 - assertTrue: ${!!output.seed}
-- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants/' + output.seed.id + '/menu']}
+- evalScript: ${output.apiPaths = ['/api/restaurants/' + output.seed.id + '/menu']}
 - runScript: ../helpers/data-api.mjs
 - assertTrue:
     condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
-    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+    label: "Candidate at ${EXPO_PUBLIC_API_URL} must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
 - evalScript: ${output.response = output.dataApiResponses[0]}
 - assertTrue: ${output.response.status === 200}
 - evalScript: ${output.menu = json(output.response.body).data}
