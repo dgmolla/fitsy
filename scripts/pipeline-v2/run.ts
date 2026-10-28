@@ -4,16 +4,27 @@ import { approvedChainRow, buildChainMatcher } from '../../apps/api/services/cha
 import { buildBrandIdentityMatcher, officialMacro } from '../../apps/api/services/chainServing';
 import { UeApiDirectSource } from '../../apps/api/services/menuSources/ueApiDirectSource';
 import { computeMenuHash, menuItemIdentity } from '../../apps/api/services/menuSources/menuItemIdentity';
-import type { MacroData } from '../../apps/api/services/menuSources/types';
+import type { MacroData, MenuSourceResult } from '../../apps/api/services/menuSources/types';
 import { databaseTarget } from '../lib/db-target-guard';
-import { persistHex, isHexComplete, type HexRestaurantData } from '../hex-persist';
+import { persistHex, isHexComplete, type HexRestaurantData, type PersistHexOpts } from '../hex-persist';
 import { DEV_POC_RUN_PREFIX } from '../hex-resume';
 import { validateHexInTx } from '../preload-invariants';
 import { validateItems } from '../pipeline-utils';
 import { JEV_LIMITS } from '../eval/lib/jev-experiment';
-import { digest, protocolHash, V2Journal } from './journal';
+import { digest, protocolHash, type V2Ledger } from './journal';
 
 export interface V2Options { hexId: string; runId: string; out: string; capUsd: number }
+export function validateV2Hex(hexId: string): void {
+  if (!isValidCell(hexId) || getResolution(hexId) !== 7) throw new Error('An explicit resolution-7 LA hex is required');
+  const [lat, lng] = cellToLatLng(hexId);
+  if (lat < 33.95 || lat > 34.15 || lng < -118.50 || lng > -118.15) throw new Error('POC hex must be inside the LA discovery boundary');
+}
+export function validateV2RunId(runId: string): void {
+  if (!/^[a-zA-Z0-9_-]{1,80}$/.test(runId)) throw new Error('An explicit run-id is required');
+}
+export function validateV2Cap(capUsd: number): void {
+  if (!Number.isFinite(capUsd) || capUsd < 0 || capUsd > 5) throw new Error('DEV POC cap must be between $0 and $5');
+}
 export function parseOptions(args: string[]): V2Options {
   const values = new Map<string, string>();
   for (const arg of args) {
@@ -22,12 +33,10 @@ export function parseOptions(args: string[]): V2Options {
     values.set(match[1]!, match[2]!);
   }
   const hexId = values.get('hex-id') ?? '', runId = values.get('run-id') ?? '', out = values.get('out') ?? '';
-  if (!isValidCell(hexId) || getResolution(hexId) !== 7) throw new Error('An explicit resolution-7 LA hex is required');
-  const [lat, lng] = cellToLatLng(hexId);
-  if (lat < 33.95 || lat > 34.15 || lng < -118.50 || lng > -118.15) throw new Error('POC hex must be inside the LA discovery boundary');
-  if (!/^[a-zA-Z0-9_-]{1,80}$/.test(runId) || !out) throw new Error('An explicit run-id and private output directory are required');
+  validateV2Hex(hexId); validateV2RunId(runId);
+  if (!out) throw new Error('An explicit run-id and private output directory are required');
   const capUsd = Number(values.get('cost-cap-usd') ?? '5');
-  if (!Number.isFinite(capUsd) || capUsd < 0 || capUsd > 5) throw new Error('DEV POC cap must be between $0 and $5');
+  validateV2Cap(capUsd);
   return { hexId, runId: `${DEV_POC_RUN_PREFIX}${runId}`, out, capUsd };
 }
 
@@ -51,7 +60,8 @@ export interface HexCoverage {
   officialItems: number; jevItems: number; rejectedItems: number; persistedItems: number;
   chainsWithPublishedData: number; chainsWithoutPublishedData: number; independentRestaurants: number;
 }
-export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal: V2Journal) {
+export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal: V2Ledger,
+  persistence: PersistHexOpts & { beforePersist?: () => Promise<void> } = {}) {
   const start = performance.now();
   // Honor the explicit hex's checkpoint too. --hex-id never overrides resume.
   if (await isHexComplete(options.runId, options.hexId, prisma)) {
@@ -67,7 +77,7 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
   const matches: Record<string, unknown>[] = [], rejections: Record<string, unknown>[] = [];
   const previousWallMs = journal.events.filter(e => e.event === 'attempt_end').reduce((sum, e) => sum + Number(e.wallMs), 0);
   const interruptedAttempts = journal.events.filter(e => e.event === 'attempt_start').length - journal.events.filter(e => e.event === 'attempt_end').length;
-  journal.append({ event: 'attempt_start', at: new Date().toISOString() });
+  await journal.append({ event: 'attempt_start', at: new Date().toISOString() });
   const report = (status: string) => ({ version: 2, environment: 'dev', runId: options.runId, hexId: options.hexId, status,
     source: [...journal.events].reverse().find(e => e.event === 'source') ?? null,
     model: JEV_LIMITS.requiredModel, protocolHash, pricing: JEV_LIMITS.pricing,
@@ -89,12 +99,16 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
     coverage.restaurants = restaurants.length;
     const results: HexRestaurantData[] = [];
     for (const restaurant of restaurants) {
+      journal.signal?.throwIfAborted();
       const brandId = catalog.identity(restaurant), hasPublished = brandId !== undefined && catalog.published.has(brandId);
       if (hasPublished) coverage.chainsWithPublishedData++;
-      else if (brandId) { coverage.chainsWithoutPublishedData++; journal.enqueuePdf(catalog.brands.find(b => b.id === brandId)!); }
+      else if (brandId) { coverage.chainsWithoutPublishedData++; await journal.enqueuePdf(catalog.brands.find(b => b.id === brandId)!); }
       else coverage.independentRestaurants++;
-      const menu = await new UeApiDirectSource(restaurant.storeUuid!, { maxRetries: 0,
+      const savedMenu = journal.events.find(e => e.event === 'ue_menu' && e.restaurantId === restaurant.id && e.storeUuid === restaurant.storeUuid);
+      const menu = savedMenu ? savedMenu.menu as MenuSourceResult : await new UeApiDirectSource(restaurant.storeUuid!, { maxRetries: 0,
+        ...(journal.signal ? { signal: journal.signal } : {}),
         onRequest: () => journal.append({ event: 'ue_request', at: new Date().toISOString(), restaurantId: restaurant.id }) }).lookup(restaurant.name, restaurant.address);
+      if (!savedMenu) await journal.append({ event: 'ue_menu', restaurantId: restaurant.id, storeUuid: restaurant.storeUuid, menu });
       if (!menu.found) { coverage.emptyMenus++; continue; }
       coverage.menus++; coverage.rawItems += menu.items.length;
       const items = [...new Map(menu.items.map(item => [menuItemIdentity(item), item])).values()];
@@ -128,10 +142,11 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
     coverage.persistedItems = results.reduce((sum, r) => sum + r.items.length, 0);
     // Prepare before commit: a process dying just after the atomic checkpoint can still recover its report.
     const prepared = { ...report('prepared'), catalog: { brands: catalog.brands.length, publishedBrands: catalog.published.size, reviewedBrands: catalog.reviewedBrands } };
-    journal.append({ event: 'prepared', at: new Date().toISOString(), report: prepared });
-    await persistHex(options.runId, options.hexId, results, prisma, { validateInTx: validateHexInTx });
+    await journal.append({ event: 'prepared', at: new Date().toISOString(), report: prepared });
+    await persistence.beforePersist?.();
+    await persistHex(options.runId, options.hexId, results, prisma, { ...persistence, validateInTx: validateHexInTx });
     const complete = { ...prepared, ...report('completed') };
-    journal.append({ event: 'completed', at: new Date().toISOString(), report: complete });
+    await journal.append({ event: 'completed', at: new Date().toISOString(), report: complete });
     return complete;
   } catch (error) {
     coverage.persistedItems = 0;
@@ -143,7 +158,7 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
         : error instanceof Error && error.name === 'UeUnexpectedError' ? 'UE menu fetch or parsing failed'
           : 'Execution or database failure; inspect the private command diagnostics before resuming');
     const failed = { ...report(journal.stopped?.includes('spend cap') ? 'spend_cap' : 'failed'), failure: error instanceof Error ? error.name : 'UnknownError', failureReason };
-    journal.append({ event: 'failed', at: new Date().toISOString(), report: failed });
+    await journal.append({ event: 'failed', at: new Date().toISOString(), report: failed });
     return failed;
-  } finally { journal.append({ event: 'attempt_end', at: new Date().toISOString(), wallMs: performance.now() - start }); }
+  } finally { await journal.append({ event: 'attempt_end', at: new Date().toISOString(), wallMs: performance.now() - start }); }
 }

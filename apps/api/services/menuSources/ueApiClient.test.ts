@@ -61,6 +61,21 @@ describe("decodeStoreUuid", () => {
 // ─── fetchStoreV1 ────────────────────────────────────────────────────────────
 
 describe("fetchStoreV1", () => {
+  it('awaits durable accounting before beginning transport', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ status: 'success' }) });
+    const result = fetchStoreV1('fixture-store', { maxRetries: 0, onRequest: () => pending });
+    expect(mockFetch).not.toHaveBeenCalled(); release(); await result;
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not begin a request after its lease was aborted during accounting', async () => {
+    const controller = new AbortController();
+    const result = await fetchStoreV1('fixture-store', { signal: controller.signal, onRequest: async () => { controller.abort(); } });
+    expect(result).toBeNull(); expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('accounts each actual HTTP attempt, including retries', async () => {
     const onRequest = jest.fn();
     mockFetch.mockResolvedValueOnce({ ok: false, status: 503, text: async () => 'Unavailable' })

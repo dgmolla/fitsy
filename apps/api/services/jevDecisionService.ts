@@ -30,11 +30,12 @@ export function parseJevDecision(body: string) {
 }
 
 /** One bounded request, no hidden retries, redirects, logging or credential-file discovery. */
-export async function requestJevDecision(request: JevChoiceRequest, apiKey: string) {
+export async function requestJevDecision(request: JevChoiceRequest, apiKey: string, signal?: AbortSignal) {
   if (!apiKey.trim()) throw new Error('TYPESAFE_API_KEY is required');
   if (Buffer.byteLength(JSON.stringify(request)) > 12_000) throw new Error('Jev evaluation request exceeds 12KB');
+  signal?.throwIfAborted();
   const response = await fetch('https://api.typesafe.ai/v1/systemone', {
-    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5_000),
+    method: 'POST', redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5_000)]) : AbortSignal.timeout(5_000),
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   });

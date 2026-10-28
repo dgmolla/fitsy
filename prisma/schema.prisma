@@ -344,6 +344,43 @@ model PipelineCompletedHex {
   @@index([runId])
 }
 
+// Shared offline pipeline work. Only pipeline_writer can mutate this ledger.
+model HexJob {
+  runId          String   @map("run_id")
+  hexId          String   @map("hex_id")
+  status         String   @default("pending")
+  attempts       Int      @default(0)
+  maxAttempts    Int      @default(3) @map("max_attempts")
+  nextRetryAt    DateTime @default(now()) @map("next_retry_at") @db.Timestamptz(3)
+  checkpoint     Json     @default("{\"version\":1,\"sequence\":0}")
+  leaseOwner     String?  @map("lease_owner")
+  leaseToken     String?  @map("lease_token") @db.Uuid
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz(3)
+  priority       Int      @default(0)
+  capUsd         Float    @default(5) @map("cap_usd")
+  lastError      String?  @map("last_error")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  events         HexJobEvent[]
+
+  @@id([runId, hexId])
+  @@index([runId, status, priority(sort: Desc), nextRetryAt])
+  @@index([status, leaseExpiresAt])
+  @@map("hex_jobs")
+}
+
+// Append-only paid-call reservations/responses; avoid rewriting a growing JSON journal per event.
+model HexJobEvent {
+  runId    String @map("run_id")
+  hexId    String @map("hex_id")
+  sequence Int
+  event    Json
+  job      HexJob @relation(fields: [runId, hexId], references: [runId, hexId], onDelete: Cascade)
+
+  @@id([runId, hexId, sequence])
+  @@map("hex_job_events")
+}
+
 enum GoalType {
   cut
   bulk

@@ -40,6 +40,10 @@ export interface HexRestaurantData {
 }
 
 export interface PersistHexOpts {
+  /** Fence shared job ownership before any menu writes, holding its row until commit. */
+  guardInTx?: (tx: TxClient) => Promise<void>;
+  /** Complete a shared job in the same transaction as its hex checkpoint. */
+  checkpointInTx?: (tx: TxClient) => Promise<void>;
   /** Timing hook (invoked after tx commits). */
   onTiming?: (timing: { bulkMs: number; checkpointMs: number; totalMs: number }) => void;
   /**
@@ -62,6 +66,7 @@ export async function persistHex(
 
   const result = await chainTransaction(prisma,
     async (tx) => {
+      await opts.guardInTx?.(tx);
       const t1 = Date.now();
       const totalItems = await persistHexBulkInTx(restaurants, tx);
       const bindings = restaurants.filter(r => r.brandId);
@@ -79,6 +84,7 @@ export async function persistHex(
       await tx.pipelineCompletedHex.create({
         data: { runId, hexId, count: restaurants.length },
       });
+      await opts.checkpointInTx?.(tx);
       checkpointMs = Date.now() - t2;
 
       return totalItems;

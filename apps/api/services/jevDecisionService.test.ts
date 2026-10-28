@@ -29,6 +29,18 @@ test('transport errors propagate once without exposing credentials or retrying',
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 
+test('a lost lease aborts an in-flight provider call without retrying', async () => {
+  const controller = new AbortController();
+  const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) =>
+    new Promise((_resolve, reject) => options!.signal!.addEventListener('abort', () => reject(new Error('lease lost')), { once: true })));
+  const result = requestJevDecision(request, 'test', controller.signal);
+  controller.abort();
+  await expect(result).rejects.toThrow('lease lost');
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  await expect(requestJevDecision(request, 'test', controller.signal)).rejects.toThrow();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
 test('valid responses retain the resolved model and billable usage', () => {
   expect(parseJevDecision(JSON.stringify(good()))).toEqual(good());
 });
