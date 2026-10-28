@@ -504,6 +504,29 @@ exit "${BUILD_EXIT:-0}"
         self.assertIn('fitsy_app is not configured', result.stderr)
         self.assertNotIn('private-fixture-password', result.stdout + result.stderr)
 
+    def test_nonproduction_builds_without_production_operations_bindings(self):
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        missing = {name: None for name in ('REVENUECAT_WEBHOOK_AUTH', 'AXIOM_TOKEN', 'CRON_SECRET', 'SLACK_BOT_TOKEN')}
+        for environment in ('development', 'preview'):
+            with self.subTest(environment=environment):
+                result, calls = self.drive(VERCEL_ENV=environment, SUPABASE_URL='https://kegycybiruksmrzvniha.supabase.co',
+                                           POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev.replace('postgres.', 'fitsy_app.'),
+                                           **missing)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                expected = ['redis EVAL']
+                if environment == 'preview':
+                    expected.append('npx prisma migrate deploy --schema prisma/schema.prisma')
+                self.assertEqual(calls, expected + ['npm run build -w apps/api'])
+
+    def test_production_operations_bindings_remain_required_before_migration_or_build(self):
+        for name in ('REVENUECAT_WEBHOOK_AUTH', 'AXIOM_TOKEN', 'CRON_SECRET', 'SLACK_BOT_TOKEN'):
+            with self.subTest(binding=name):
+                result, calls = self.drive(**{name: None})
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(calls, [])
+                self.assertIn(name, result.stderr)
+                self.assertNotIn('private-fixture-value', result.stdout + result.stderr)
+
     def test_unapproved_role_migration_is_held_while_other_migrations_and_build_proceed(self):
         role = '20261028120000_pipeline_writer_roles'
         original = (self.root / 'prisma/migrations' / role / 'migration.sql').read_bytes()
@@ -549,10 +572,10 @@ exit "${BUILD_EXIT:-0}"
             self.assertEqual(calls, [])
 
     def test_missing_shared_store_withholds_deployment_before_migrations_or_build(self):
-        for environment in ('production', 'preview'):
+        for environment in ('production', 'preview', 'development'):
             for missing in ('both', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'):
                 changes = {'VERCEL_ENV': environment}
-                if environment == 'preview':
+                if environment != 'production':
                     changes.update(POSTGRES_URL_NON_POOLING='postgresql://fixture:fixture@localhost:5432/dev',
                                    POSTGRES_PRISMA_URL='postgresql://fitsy_app:fixture@localhost:5432/dev')
                 for key in ('UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'):

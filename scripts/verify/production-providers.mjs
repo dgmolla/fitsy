@@ -160,7 +160,10 @@ export async function collectObservations({ env, fetchImpl, now, event, state })
   if (event?.workflow_run) {
     const run = event.workflow_run;
     const scope = `workflow:${run.name}`;
-    if (['Deploy', 'EAS Build + TestFlight', 'Dev maintenance'].includes(run.name)) {
+    // A skipped, neutral or missing conclusion does not verify recovery.
+    // Omit its scope so existing failures and reminder state remain active.
+    if (['Deploy', 'EAS Build + TestFlight', 'Dev maintenance'].includes(run.name) &&
+        ['success', 'failure', 'timed_out', 'action_required', 'cancelled'].includes(run.conclusion)) {
       observations.push({ scope, alerts: state.recoveredReleaseRunId !== Number(run.id) && ['failure', 'timed_out', 'action_required', 'cancelled'].includes(run.conclusion)
         ? [alert(scope, scope, run.name === 'Dev maintenance' ? 'P2' : 'P1', `${run.name} failed; inspect Actions run ${Number(run.id)}.`)] : [] });
       if (run.name === 'Deploy' && run.conclusion === 'success') observations.push({ scope: 'release-smoke', alerts: [] });
