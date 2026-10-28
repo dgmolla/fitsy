@@ -12,11 +12,14 @@ const include = { macroEstimates: { orderBy: { id: "asc" as const } } };
 const nutritionKeys = ["calories", "proteinG", "carbsG", "fatG"] as const;
 
 /** Validate every input before any mutation; a chunk commits completely or aborts. */
-export async function applyAprilChainBatch(prisma: PrismaClient, entries: AprilBatchEntry[]): Promise<AprilSnapshot[]> {
+export async function applyAprilChainBatch(prisma: PrismaClient, entries: AprilBatchEntry[], options: {
+  guardInTx?: (tx: Prisma.TransactionClient) => Promise<void>; preserveExistingOfficial?: boolean;
+} = {}): Promise<AprilSnapshot[]> {
   if (!entries.length || entries.length > MAX_APRIL_CHUNK || new Set(entries.map(e => e.before.id)).size !== entries.length) throw new Error("Invalid April chunk size or duplicate item");
   const ids = entries.map(e => e.before.id).sort();
   const approvedIds = [...new Set(entries.map(e => e.approved.id))].sort();
   return chainTransaction(prisma, async tx => {
+    await options.guardInTx?.(tx);
     await tx.$queryRaw`SELECT id FROM "ChainItem" WHERE id IN (${Prisma.join(approvedIds)}) ORDER BY id FOR SHARE`;
     const catalog = await tx.chainItem.findMany({ where: { brandId: { in: [...new Set(entries.map(e => e.approved.brandId))] } } });
     const catalogById = new Map(catalog.map(r => [r.id, r]));
@@ -40,6 +43,8 @@ export async function applyAprilChainBatch(prisma: PrismaClient, entries: AprilB
       const item = aprilMenuIdentity(actual), result = match(approved.brandId, item, restaurant);
       if (result.status !== "matched" || result.row.id !== approved.id || result.row.review.dataHash !== approved.review.dataHash) throw new AprilPlanChangedError("April item has no current reviewed binding");
       const macro = officialMacro(result.row, item), existing = actual.macroEstimates.find(e => e.source === "official");
+      // Background enrichment never replaces an existing official correction, including a concurrent one.
+      if (options.preserveExistingOfficial && existing) continue;
       if (existing?.reasoning === macro.reasoning && existing.confidence === "HIGH" && !existing.hadPhoto && existing.ingredientBreakdown === null && nutritionKeys.every(k => existing[k] === macro[k])) continue;
       const data = { calories: macro.calories, proteinG: macro.proteinG, carbsG: macro.carbsG, fatG: macro.fatG, reasoning: macro.reasoning };
       if (existing) updates.push({ id: existing.id, ...data });

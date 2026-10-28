@@ -185,6 +185,7 @@ model Brand {
   updatedAt     DateTime     @updatedAt
   restaurants   Restaurant[]
   chainItems    ChainItem[]
+  pdfJob        PipelinePdfJob?
 }
 
 // Canonical per-brand macro table (Phase 1). Macros resolved once per (brand, item) from the
@@ -397,6 +398,36 @@ model PipelineUeRateLimit {
   updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@map("pipeline_ue_rate_limit")
+}
+
+// Chain-wide background research, fenced independently of hex ingestion.
+model PipelinePdfJob {
+  brandId        String   @id @map("brand_id")
+  status         String   @default("pending")
+  attempts       Int      @default(0)
+  maxAttempts    Int      @default(3) @map("max_attempts")
+  nextRetryAt    DateTime @default(now()) @map("next_retry_at") @db.Timestamptz(3)
+  leaseOwner     String?  @map("lease_owner")
+  leaseToken     String?  @map("lease_token") @db.Uuid
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  brand          Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  events         PipelinePdfEvent[]
+
+  @@index([status, nextRetryAt])
+  @@map("pipeline_pdf_jobs")
+}
+
+model PipelinePdfEvent {
+  brandId String @map("brand_id")
+  attempt Int
+  event   String
+  payload Json
+  job     PipelinePdfJob @relation(fields: [brandId], references: [brandId], onDelete: Cascade)
+
+  @@id([brandId, attempt, event])
+  @@map("pipeline_pdf_events")
 }
 
 enum GoalType {
