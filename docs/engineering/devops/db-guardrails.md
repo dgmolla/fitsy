@@ -106,6 +106,7 @@ Vercel builds must retain the existing pinned `fitsy-api` Git main production id
 GitHub writes require a freshly issued, signed token for `dgmolla/fitsy`, `refs/heads/main`, the manual `prod-fixture-cleanup.yml` workflow, and the existing `production-release` environment on a GitHub-hosted runner.
 Only that cleanup job receives `id-token: write`; its protected environment and explicit apply/count requirements remain unchanged.
 The token audience, issuer, signature, expiration and identity claims are checked against fixed provider JWKS endpoints, and issuance/network failures abort without printing credentials or provider diagnostics.
+Vercel team and global issuer modes use their corresponding JWKS endpoints; an unverified issuer only selects between those two exact trusted locations before signature verification.
 See the [Vercel OIDC claims](https://vercel.com/docs/oidc/reference) and [GitHub OIDC reference](https://docs.github.com/en/actions/reference/security/oidc).
 The production migration wrapper supplies both explicit intentions only after its existing deploy identity checks.
 The old local `FITSY_ALLOW_PROD=1` operator-migration exception is removed.

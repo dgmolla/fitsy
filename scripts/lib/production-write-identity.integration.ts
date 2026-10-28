@@ -8,19 +8,24 @@ import { assertDatabaseWriteAllowed, PROD_PROJECT_REF } from './db-target-guard'
 const url = `postgresql://postgres.${PROD_PROJECT_REF}:synthetic@localhost:1/postgres`;
 const owner = 'dawits-projects-74b6e00f';
 const vercelIssuer = `https://oidc.vercel.com/${owner}`;
+const globalVercelIssuer = 'https://oidc.vercel.com';
 const githubIssuer = 'https://token.actions.githubusercontent.com';
 const requestUrl = 'https://run-actions-1.services.actions.githubusercontent.com/fixture/token';
 const originalFetch = global.fetch;
 let keys: Awaited<ReturnType<typeof generateKeyPair>>;
+let globalVercelKeys: Awaited<ReturnType<typeof generateKeyPair>>;
 let issued = '', requests: string[] = [];
 before(async () => {
   keys = await generateKeyPair('RS256');
+  globalVercelKeys = await generateKeyPair('RS256');
   const jwk = { ...await exportJWK(keys.publicKey), kid: 'identity-fixture', alg: 'RS256', use: 'sig' };
+  const globalJwk = { ...await exportJWK(globalVercelKeys.publicKey), kid: 'identity-fixture', alg: 'RS256', use: 'sig' };
   global.fetch = async input => {
     const address = String(input); requests.push(address);
     if (address.startsWith(requestUrl + '?')) return Response.json({ value: issued });
-    assert.ok(['https://oidc.vercel.com/.well-known/jwks', `${githubIssuer}/.well-known/jwks`].includes(address));
-    return Response.json({ keys: [jwk] });
+    if ([`${vercelIssuer}/.well-known/jwks`, `${githubIssuer}/.well-known/jwks`].includes(address)) return Response.json({ keys: [jwk] });
+    assert.equal(address, `${globalVercelIssuer}/.well-known/jwks`);
+    return Response.json({ keys: [globalJwk] });
   };
 });
 after(() => { global.fetch = originalFetch; });
@@ -51,11 +56,29 @@ const github = {
 
 test('valid signed Vercel production and protected GitHub workflow identities preserve explicit intent', async () => {
   issued = await token(githubClaims);
-  for (const env of [{ ...vercel, VERCEL_OIDC_TOKEN: await token(vercelClaims) },
-    { ...vercel, VERCEL_OIDC_TOKEN: await token(vercelClaims, { iss: 'https://oidc.vercel.com' }) }, github]) {
+  for (const { env, issuer } of [
+    { env: { ...vercel, VERCEL_OIDC_TOKEN: await token(vercelClaims) }, issuer: vercelIssuer },
+    { env: { ...vercel, VERCEL_OIDC_TOKEN: await token(vercelClaims, { iss: globalVercelIssuer }, globalVercelKeys.privateKey) }, issuer: globalVercelIssuer },
+    { env: github, issuer: githubIssuer },
+  ]) {
+    requests = [];
     assert.equal(await assertDatabaseWriteAllowed(url, { env, args: ['--prod'] }), url);
+    assert.deepEqual(requests.filter(address => address.endsWith('/.well-known/jwks')), [`${issuer}/.well-known/jwks`]);
     await assert.rejects(assertDatabaseWriteAllowed(url, { env, args: [] }), /DB_WRITE_REFUSED/);
     await assert.rejects(assertDatabaseWriteAllowed(url, { env: { ...env, FITSY_ALLOW_PROD_WRITE: '' }, args: ['--prod'] }), /DB_WRITE_REFUSED/);
+  }
+});
+
+test('untrusted Vercel issuers cannot select a JWKS endpoint or borrow another issuer signing key', async () => {
+  for (const iss of ['https://attacker.invalid', `${globalVercelIssuer}/other-team`, `${vercelIssuer}.attacker.invalid`, `${vercelIssuer}/`]) {
+    requests = [];
+    await assert.rejects(assertDatabaseWriteAllowed(url, { env: { ...vercel, VERCEL_OIDC_TOKEN: await token(vercelClaims, { iss }) }, args: ['--prod'] }), /signed.*identity/);
+    assert.deepEqual(requests, []);
+  }
+  for (const [iss, key] of [[vercelIssuer, globalVercelKeys.privateKey], [globalVercelIssuer, keys.privateKey]] as const) {
+    requests = [];
+    await assert.rejects(assertDatabaseWriteAllowed(url, { env: { ...vercel, VERCEL_OIDC_TOKEN: await token(vercelClaims, { iss }, key) }, args: ['--prod'] }), /signed.*identity/);
+    assert.deepEqual(requests, [`${iss}/.well-known/jwks`]);
   }
 });
 

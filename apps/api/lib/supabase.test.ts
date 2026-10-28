@@ -9,13 +9,16 @@ jest.mock("@supabase/supabase-js", () => ({
 import { getSupabaseAdmin, getSupabaseClient } from "./supabase";
 
 const ORIGINAL_ENV = process.env;
+const AUTH_URL = "http://localhost:54321"; // loopback test fixture
 
 beforeEach(() => {
   jest.resetModules();
   mockCreateClient.mockClear();
   process.env = {
     ...ORIGINAL_ENV,
-    SUPABASE_URL: "https://test.supabase.co",
+    // Exercise CI's DB/Auth binding even without a running local database.
+    POSTGRES_PRISMA_URL: "postgresql://fixture:synthetic@localhost:1/fitsy_verify", // loopback test fixture
+    SUPABASE_URL: AUTH_URL,
     SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
     SUPABASE_ANON_KEY: "test-anon-key",
   };
@@ -31,7 +34,7 @@ describe("getSupabaseAdmin", () => {
   it("creates a client with the service role key", () => {
     getSupabaseAdmin();
     expect(mockCreateClient).toHaveBeenCalledWith(
-      "https://test.supabase.co",
+      AUTH_URL,
       "test-service-role-key",
       { auth: { autoRefreshToken: false, persistSession: false }, global: { fetch: expect.any(Function) } },
     );
@@ -58,7 +61,7 @@ describe("getSupabaseClient", () => {
   it("creates a client with the anon key", () => {
     getSupabaseClient();
     expect(mockCreateClient).toHaveBeenCalledWith(
-      "https://test.supabase.co",
+      AUTH_URL,
       "test-anon-key",
       { auth: { autoRefreshToken: false, persistSession: false }, global: { fetch: expect.any(Function) } },
     );
@@ -77,4 +80,10 @@ describe("getSupabaseClient", () => {
       "SUPABASE_ANON_KEY environment variable is not set",
     );
   });
+});
+
+it.each([getSupabaseAdmin, getSupabaseClient])("rejects foreign Auth before constructing a client (%#)", create => {
+  process.env["SUPABASE_URL"] = "https://foreign.supabase.co";
+  expect(() => create()).toThrow("DB/Auth project mismatch");
+  expect(mockCreateClient).not.toHaveBeenCalled();
 });

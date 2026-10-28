@@ -61,6 +61,7 @@ Passing, failing, shadow-failing and skipped checks all retain their output, and
 Failed checks print the last 10,000 bytes of each stream and the full log paths, followed by the concise failure summary.
 The `test` check names every failing workspace or test engine even when later suites pass.
 Use the retained stderr log to recover an early API assertion hidden by later mobile output.
+If a sandbox cannot reach GitHub through `gh`, read the run and download its complete diagnostic artifact through the authenticated browser, then match the archive's SHA-256 to the digest displayed by GitHub before inspecting it locally.
 
 Verify's Static, Tests and Build jobs upload only `.evidence/verify/logs/` with `always()`, including hidden directories, even after a check fails.
 Artifacts are named `verify-l0-l1-logs-attempt-N`, `verify-l2-logs-attempt-N` and `verify-l3-logs-attempt-N`, with seven-day retention and separate names for retries.
@@ -168,6 +169,8 @@ Both `POSTGRES_PRISMA_URL` and `POSTGRES_URL_NON_POOLING`, when configured, must
 Production, shared DEV, unknown remote hosts, encoded project routes and unsupported routing parameters abort with `DB_TEST_REFUSED` without printing credentials.
 Production write flags, `NODE_ENV=test` and fixture environment markers cannot override this rule.
 Without either URL, existing database suites remain skipped and unit suites run normally.
+External Supabase SDK fixtures must use a loopback Auth origin when inheriting the disposable database URLs, so the real DB/Auth project guard runs before the substituted provider transport.
+Keep a loopback database URL in direct client-construction fixtures even during database-free unit runs to catch incompatible Auth origins locally.
 Use `npm run verify -- --only=test` to provision, migrate and seed the existing worktree-owned disposable database.
 For a direct DB-suite invocation, supply an already migrated and seeded disposable local database, then run `npm test -w apps/api -- tests/db --runInBand`.
 The synthetic goal-preview benchmark uses the same target guard and retains its stricter localhost requirement.

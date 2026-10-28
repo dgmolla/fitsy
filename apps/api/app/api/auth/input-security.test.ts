@@ -26,7 +26,7 @@ let logs: jest.SpyInstance[];
 beforeEach(() => {
   jest.clearAllMocks();
   process.env['VERCEL_ENV'] = 'preview';
-  process.env['SUPABASE_URL'] = 'https://auth.example.test';
+  process.env['SUPABASE_URL'] = 'http://localhost:54321'; // loopback test fixture
   process.env['SUPABASE_ANON_KEY'] = 'fixture-anon-key';
   process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'fixture-admin-key';
   logs = ['error', 'warn', 'info', 'log'].map(level =>

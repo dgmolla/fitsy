@@ -36,12 +36,15 @@ export function databaseTarget(value: string | undefined): { url: string; ref: s
 /** Environment flags express intent; only the provider's signature establishes identity. */
 async function assertProductionIdentity(env: NodeJS.ProcessEnv): Promise<void> {
   try {
-    const { createRemoteJWKSet, jwtVerify } = await import("jose");
+    const { createRemoteJWKSet, decodeJwt, jwtVerify } = await import("jose");
     if (env["VERCEL"] === "1") {
-      const owner = "dawits-projects-74b6e00f", issuer = `https://oidc.vercel.com/${owner}`;
-      const { payload } = await jwtVerify(env["VERCEL_OIDC_TOKEN"] ?? "", createRemoteJWKSet(
-        new URL('https://oidc.vercel.com/.well-known/jwks'), { timeoutDuration: 5000 }), {
-        issuer: [issuer, "https://oidc.vercel.com"], audience: `https://vercel.com/${owner}`,
+      const owner = "dawits-projects-74b6e00f", token = env["VERCEL_OIDC_TOKEN"] ?? "";
+      const issuer = decodeJwt(token).iss;
+      // Decode only to select a fixed trusted endpoint; jwtVerify authenticates it.
+      if (issuer !== `https://oidc.vercel.com/${owner}` && issuer !== "https://oidc.vercel.com") throw new Error();
+      const { payload } = await jwtVerify(token, createRemoteJWKSet(
+        new URL(`${issuer}/.well-known/jwks`), { timeoutDuration: 5000 }), {
+        issuer, audience: `https://vercel.com/${owner}`,
         subject: `owner:${owner}:project:fitsy-api:environment:production`,
         algorithms: ["RS256"], requiredClaims: ["exp", "iat", "nbf"], maxTokenAge: "1h",
       });
