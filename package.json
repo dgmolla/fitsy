@@ -29,6 +29,8 @@
     "preload:v2:dev": "node --import tsx scripts/preload-v2.ts",
     "preload:v2:enqueue": "node --import tsx scripts/preload-v2.ts enqueue",
     "preload:v2:worker": "node --import tsx scripts/preload-v2.ts worker",
+    "preload:v2:pdf-enqueue": "node --import tsx scripts/preload-v2.ts pdf-enqueue",
+    "preload:v2:pdf-worker": "node --import tsx scripts/preload-v2.ts pdf-worker",
     "perf:check": "bash scripts/verify/performance.sh",
     "perf:bundle": "node scripts/perf/bundle.mjs --build",
     "perf:api": "node scripts/perf/api.mjs",
