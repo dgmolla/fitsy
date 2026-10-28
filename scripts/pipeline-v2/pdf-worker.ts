@@ -38,7 +38,7 @@ export function parsePdfOptions(args: string[]): PdfOptions {
 }
 
 /** Uses the existing bounded finder/parser; its inferred domains never grant landing authority. */
-async function researchPdf(brand: Brand, out: string, signal: AbortSignal): Promise<{ evidence: PdfEvidence; extraction: Awaited<ReturnType<typeof extract>> }> {
+export async function researchPdf(brand: Brand, out: string, signal: AbortSignal): Promise<{ evidence: PdfEvidence; extraction: Awaited<ReturnType<typeof extract>> }> {
   const domain = brand.officialUrl ? researchUrl(brand.officialUrl).hostname.replace(/^www\./, '') : null;
   mkdirSync(join(out, 'search'), { recursive: true, mode: 0o700 });
   mkdirSync(join(out, 'downloads'), { recursive: true, mode: 0o700 });
@@ -49,7 +49,9 @@ async function researchPdf(brand: Brand, out: string, signal: AbortSignal): Prom
     const origin = candidate.discoveredFrom.find(from => from.kind === 'official-link' && domain && onDomain(from.url, domain));
     if (!origin || !domain || !onDomain(candidate.url, domain)) continue;
     try {
-      const source = await session.download(candidate.url), page = session.cache.get(origin.url);
+      const source = await session.download(candidate.url);
+      // Discovery records link origins after redirects; downloads retain their requested cache key.
+      const page = session.cache.get(origin.url) ?? [...session.cache.values()].find(saved => saved.url === origin.url);
       if (!page || !onDomain(source.url, domain) || !onDomain(page.url, domain)) continue;
       const extraction = await extract(join(out, source.file));
       if (!extraction.items.length) continue;

@@ -1,7 +1,7 @@
 import type { Brand, ChainItem, MenuItem, Restaurant } from '@prisma/client';
 import { z } from 'zod';
 import { chainCatalogBatchSchema, type ChainCatalogBatch } from '../../apps/api/services/chainCatalogBatch';
-import { buildChainMatcher, chainMenuFingerprint } from '../../apps/api/services/chainCatalog';
+import { buildChainMatcher, chainBindingFingerprint, chainMenuFingerprint } from '../../apps/api/services/chainCatalog';
 import { aprilMenuIdentity, brandName, buildBrandIdentityMatcher } from '../../apps/api/services/chainServing';
 import { planChainPilot, stateHash } from '../../apps/api/services/chainPilotPlan';
 import { researchUrl } from '../../apps/api/services/pipelinePdfSource';
@@ -50,13 +50,16 @@ export function verifyPdf(brand: Brand, brands: Brand[], catalog: ChainItem[], m
   extraction.items.forEach(item => names.set(brandName(item.name), (names.get(brandName(item.name)) ?? 0) + 1));
   for (const item of extraction.items) {
     // A duplicate name in another section/size is ambiguous until explicitly reviewed.
-    if (names.get(brandName(item.name)) !== 1 || !item.servingSize?.trim() || !Number.isInteger(item.calories)
+    if (names.get(brandName(item.name)) !== 1 || !item.section.trim() || !item.servingSize?.trim() || !Number.isInteger(item.calories)
       || item.notes.some(note => !/^Original HTML lines \d+-\d+\.$/.test(note))) continue;
+    // Automatic aliases require the same source name/section and an explicit matching portion.
+    // Missing portions or extra configuration need an explicitly reviewed binding, as in chainPilotData.
+    const sourceAlias = { name: item.name, section: item.section, description: item.servingSize };
     const aliases = new Map<string, ReturnType<typeof aprilMenuIdentity>>();
     for (const menu of current) for (const menuItem of menu.items) {
       const alias = aprilMenuIdentity(menuItem);
-      if (!menuItem.retiredAt && brandName(item.name) === brandName(alias.name)
-        && existing(brand.id, alias, menu.restaurant).status === 'unmatched') aliases.set(chainMenuFingerprint(alias), alias);
+      if (!menuItem.retiredAt && chainMenuFingerprint(sourceAlias) === chainMenuFingerprint(alias)
+        && existing(brand.id, alias, menu.restaurant).status === 'unmatched') aliases.set(chainBindingFingerprint(alias), alias);
     }
     if (!aliases.size) continue;
     const canonicalKey = `pdf/${slugify(item.section || 'menu')}/${slugify(item.name)}`;
@@ -73,23 +76,26 @@ export function verifyPdf(brand: Brand, brands: Brand[], catalog: ChainItem[], m
       aliases: [...aliases.values()], usStates: ['CA'] });
   }
   requireProof(changes.length, 'No unambiguous current-menu nutrition rows passed verification');
-  const batch = chainCatalogBatchSchema.parse({ version: 1, reviewedBy: 'pipeline-v2-pdf-v1 (source, region, menu and row checks)', changes, quarantine: [] });
+  const batch = chainCatalogBatchSchema.parse({ version: 1, reviewedBy: 'pipeline-v2-pdf-v2 (source, region, serving, menu and row checks)', changes, quarantine: [] });
   try { planChainPilot(brands, catalog, batch); }
   catch { throw new PdfVerificationError('Catalog approval or alias validation failed'); }
   return batch;
 }
 
 const evidenceSchema = z.object({ sourceUrl: z.string(), sourceBase64: z.string(), pageUrl: z.string(), pageBase64: z.string(), fetchedAt: z.string() }).strict();
-export const verifiedPdfSchema = z.object({ version: z.literal(1), brandId: z.string(), brandHash: z.string(),
+// Older packets approved names without serving equivalence and must never authorize a resumed write.
+export const verifiedPdfSchema = z.object({ version: z.literal(2), brandId: z.string(), brandHash: z.string(),
   evidence: evidenceSchema, batch: chainCatalogBatchSchema, hash: z.string() }).strict();
 export type VerifiedPdf = z.infer<typeof verifiedPdfSchema>;
 export const pdfBrandHash = (brand: Brand) => stateHash([brand.id, brand.slug, brand.displayName, brand.aliases, brand.detectionConf, brand.menuKind, brand.officialUrl]);
 export function sealPdf(brand: Brand, evidence: PdfEvidence, batch: ChainCatalogBatch): VerifiedPdf {
-  const value = { version: 1 as const, brandId: brand.id, brandHash: pdfBrandHash(brand), evidence, batch };
+  const value = { version: 2 as const, brandId: brand.id, brandHash: pdfBrandHash(brand), evidence, batch };
   return { ...value, hash: stateHash(value) };
 }
 export function readVerifiedPdf(input: unknown, brand: Brand): VerifiedPdf {
-  const packet = verifiedPdfSchema.parse(input), { hash, ...value } = packet;
+  const parsed = verifiedPdfSchema.safeParse(input);
+  if (!parsed.success) throw new PdfVerificationError('Saved verification protocol is obsolete or invalid');
+  const packet = parsed.data, { hash, ...value } = packet;
   requireProof(packet.brandId === brand.id && packet.brandHash === pdfBrandHash(brand) && hash === stateHash(value), 'Saved verification identity changed');
   requireProof(packet.batch.quarantine.length === 0 && packet.batch.changes.every(change => change.slug === brand.slug && change.expected === null
     && change.source.sha256 === sha256(Buffer.from(packet.evidence.sourceBase64, 'base64'))), 'Saved verification is not additive source-bound data');

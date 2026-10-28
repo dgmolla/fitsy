@@ -1,12 +1,17 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import type { LookupAddress, LookupAllOptions } from 'node:dns';
+import * as dns from 'node:dns/promises';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import type { Brand, ChainItem, MenuItem, Restaurant } from '@prisma/client';
 import { parseHtml } from '../eval/pdf-finder/parse';
-import { parsePdfOptions } from './pdf-worker';
+import { parsePdfOptions, researchPdf } from './pdf-worker';
 import { pdfRetryMs } from './pdf-queue';
 import { verifyPdf, sealPdf, readVerifiedPdf, type PdfEvidence, type PdfMenu } from './pdf-verify';
-import { planChainPilot } from '../../apps/api/services/chainPilotPlan';
+import { planChainPilot, stateHash } from '../../apps/api/services/chainPilotPlan';
+import { buildChainMatcher } from '../../apps/api/services/chainCatalog';
+import { aprilMenuIdentity, resolveChainMacros } from '../../apps/api/services/chainServing';
 import { publicResearchAddress, researchUrl } from '../../apps/api/services/pipelinePdfSource';
 
 const now = new Date('2026-10-28T12:00:00Z');
@@ -20,15 +25,99 @@ const evidence = (): PdfEvidence => ({ sourceUrl: 'https://novelchain.com/nutrit
 const restaurant = { id: 'pdf-location', name: 'Novel Chain', brandId: brand.id, lat: 34.05, lng: -118.25,
   lastScrapedAt: now } as Restaurant;
 const menus = (): PdfMenu[] => [{ restaurant, items: [{ id: 'dish-1', restaurantId: restaurant.id, name: 'Rice & Chicken', section: 'Lunch',
-  description: null, sourceItemId: 'ubereats:chicken', retiredAt: null } as MenuItem] }];
+  description: '250 g', sourceItemId: 'ubereats:chicken', retiredAt: null } as MenuItem] }];
 const verify = (proof = evidence(), parsed = extraction(), locations = menus(), catalog: ChainItem[] = [], b = brand) => verifyPdf(b, [b], catalog, locations, proof, parsed, now);
 
 test('partial nutrition sources approve only exact current-menu rows, with explicit California scope and source proof', () => {
   const batch = verify();
   expect(batch.changes).toHaveLength(1);
   expect(batch.changes[0]).toMatchObject({ expected: null, facts: { calories: 410, proteinG: 35, carbsG: 45, fatG: 10, servingSize: '250 g' },
-    aliases: [{ name: 'Rice & Chicken', section: 'Lunch', sourceItemId: 'ubereats:chicken' }], usStates: ['CA'] });
+    aliases: [{ name: 'Rice & Chicken', section: 'Lunch', description: '250 g', sourceItemId: 'ubereats:chicken' }], usStates: ['CA'] });
   expect(planChainPilot([brand], [], batch).changes).toHaveLength(1);
+});
+
+test('the source-to-serving path keeps differently sized and configured meals on Jev', async () => {
+  const locations = menus(), standard = { ...locations[0]!.items[0]!, description: '250 g' };
+  const family = { ...standard, id: 'family', sourceItemId: 'ubereats:family', section: 'Family Meals', description: '1000 g; serves four' };
+  const extra = { ...standard, id: 'extra', sourceItemId: 'ubereats:extra', description: '250 g with extra chicken' };
+  const unknown = { ...standard, id: 'unknown', sourceItemId: 'ubereats:unknown', description: null };
+  locations[0]!.items = [standard, family, extra, unknown];
+  const batch = verify(evidence(), extraction(), locations);
+  const catalog = planChainPilot([brand], [], batch).changes.map(change => ({ ...change.desired, id: change.desired.canonicalKey }));
+  const estimates = [family, extra, unknown].map(() => ({ calories: 1640, proteinG: 140, carbsG: 180, fatG: 40,
+    confidence: 'MEDIUM' as const, source: 'jev', dietaryTags: [] }));
+  const unresolved: string[] = [];
+  const served = await resolveChainMacros(locations[0]!.items.map(aprilMenuIdentity), brand.id, buildChainMatcher(catalog), async items => {
+    unresolved.push(...items.map(item => item.sourceItemId!));
+    return estimates.slice(0, items.length);
+  }, restaurant);
+  expect(served[0]).toMatchObject({ calories: 410, source: 'official', confidence: 'HIGH' });
+  expect(served.slice(1)).toEqual(estimates);
+  expect(unresolved).toEqual(['ubereats:family', 'ubereats:extra', 'ubereats:unknown']);
+  expect(batch.changes[0]!.aliases).toEqual([aprilMenuIdentity(standard)]);
+});
+
+test.each([
+  ['same-domain redirects', 'https://novelchain.com/', 'https://novelchain.com/nutrition.html', true],
+  ['off-domain homepage redirects', 'https://unrelated.com/', 'https://novelchain.com/nutrition.html', false],
+  ['off-domain document redirects', 'https://novelchain.com/', 'https://unrelated.com/nutrition.html', false],
+])('research retains official links after %s without granting new domain authority', async (_scenario, pageUrl, sourceUrl, accepted) => {
+  const out = mkdtempSync(join(tmpdir(), 'fitsy-pdf-research-'));
+  const researchedAt = new Date(), sourceHtml = html.replace('2026', String(researchedAt.getUTCFullYear()));
+  const requested: string[] = [];
+  const allAddresses: { lookup(hostname: string, options: LookupAllOptions): Promise<LookupAddress[]> } = dns;
+  const lookup = jest.spyOn(allAddresses, 'lookup');
+  lookup.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
+  const http = jest.spyOn(global, 'fetch').mockImplementation(async input => {
+    const url = String(input); requested.push(url);
+    if (/^https:\/\/(?:html|lite)\.duckduckgo\.com\/|^https:\/\/www\.bing\.com\//.test(url)) return new Response('<html>No results</html>');
+    if (url === 'https://www.novelchain.com/') return new Response(null, { status: 301, headers: { location: pageUrl } });
+    if (url === pageUrl) return new Response(Buffer.from(evidence().pageBase64, 'base64').toString());
+    if (url === evidence().sourceUrl && sourceUrl !== url) return new Response(null, { status: 302, headers: { location: sourceUrl } });
+    if (url === sourceUrl) return new Response(sourceHtml);
+    throw new Error(`Unexpected fixture request: ${url}`);
+  });
+  try {
+    if (!accepted) {
+      await expect(researchPdf(brand, out, new AbortController().signal)).rejects.toThrow('No current official nutrition document');
+      expect(requested).toContain(pageUrl === 'https://novelchain.com/' ? sourceUrl : pageUrl);
+      return;
+    }
+    const result = await researchPdf(brand, out, new AbortController().signal);
+    expect(result.evidence).toMatchObject({ pageUrl: 'https://novelchain.com/', sourceUrl: evidence().sourceUrl });
+    const locations = menus(); locations[0]!.restaurant = { ...restaurant, lastScrapedAt: researchedAt };
+    expect(verifyPdf(brand, [brand], [], locations, result.evidence, result.extraction).changes).toHaveLength(1);
+    expect(requested.filter(url => url === 'https://www.novelchain.com/')).toHaveLength(1);
+    expect(requested).toContain(evidence().sourceUrl);
+  } finally { http.mockRestore(); lookup.mockRestore(); rmSync(out, { recursive: true, force: true }); }
+});
+
+test.each([
+  { section: 'Family Meals', description: '250 g' },
+  { section: 'Lunch', description: '1000 g; serves four' },
+  { section: 'Lunch', description: '250 g with extra chicken' },
+  { section: 'Lunch', description: null },
+  { section: 'Lunch', description: '' },
+  { section: null, description: '250 g' },
+  { name: 'Rice Chicken', section: 'Lunch', description: '250 g' },
+])('unproven serving or configuration cannot produce any write approval: %j', context => {
+  const locations = menus(); Object.assign(locations[0]!.items[0]!, context);
+  expect(() => verify(evidence(), extraction(), locations)).toThrow('No unambiguous');
+});
+
+test('case and whitespace preserve an explicit source-backed serving', () => {
+  const locations = menus();
+  Object.assign(locations[0]!.items[0]!, { name: ' RICE &  CHICKEN ', section: ' LUNCH ', description: ' 250   G ' });
+  expect(verify(evidence(), extraction(), locations).changes).toHaveLength(1);
+});
+
+test('one source retains the explicit provider binding for each corroborated chain location', () => {
+  const locations = menus(), other = { ...restaurant, id: 'pdf-location-2' };
+  locations.push({ restaurant: other, items: [{ ...locations[0]!.items[0]!, id: 'dish-2', restaurantId: other.id, sourceItemId: 'ubereats:other-location' }] });
+  const batch = verify(evidence(), extraction(), locations);
+  const catalog = planChainPilot([brand], [], batch).changes.map(change => ({ ...change.desired, id: change.desired.canonicalKey }));
+  const match = buildChainMatcher(catalog);
+  for (const menu of locations) expect(match(brand.id, aprilMenuIdentity(menu.items[0]!), menu.restaurant).status).toBe('matched');
 });
 
 test.each([
@@ -69,6 +158,8 @@ test('reviewed catalog facts are preserved and sealed recovery data rejects iden
   expect(readVerifiedPdf(JSON.parse(JSON.stringify(packet)), brand)).toEqual(packet);
   expect(() => readVerifiedPdf({ ...packet, batch: { ...batch, reviewedBy: 'tampered' } }, brand)).toThrow('identity changed');
   expect(() => readVerifiedPdf(packet, { ...brand, officialUrl: 'https://different.com' })).toThrow('identity changed');
+  const legacy = { version: 1, brandId: packet.brandId, brandHash: packet.brandHash, evidence: packet.evidence, batch: packet.batch };
+  expect(() => readVerifiedPdf({ ...legacy, hash: stateHash(legacy) }, brand)).toThrow('protocol is obsolete or invalid');
 });
 
 test('PDF command bounds and chain-wide backoff cannot be overridden by a worker', () => {
