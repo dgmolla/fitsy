@@ -4,7 +4,7 @@ export const PROD_PROJECT_REF = "zaxkmjqozvmbifiwbxps";
 export const DEV_PROJECT_REF = "kegycybiruksmrzvniha";
 
 type Context = { env?: NodeJS.ProcessEnv; args?: readonly string[] };
-const allowedParameters = new Set([
+export const allowedParameters: ReadonlySet<string> = new Set([
   "schema", "sslmode", "pgbouncer", "connection_limit", "pool_timeout",
   "connect_timeout", "statement_cache_size", "socket_timeout", "application_name", "options",
 ]);

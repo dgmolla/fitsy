@@ -24,7 +24,7 @@ test.each([
   ['scripts/new.test.ts', guard + prisma + 'new Database({ datasourceUrl: checked(process.env.URL) });'],
   ['scripts/new.ts', "import {assertRuntimeDatabase} from './lib/db-target-guard';\n" + prisma + 'new Database({ datasourceUrl: assertRuntimeDatabase(process.env.URL) });'],
   ['scripts/new.ts', "import * as db from '@prisma/client'; new db.PrismaClient();"],
-  ['scripts/new.ts', "const {PrismaClient: DB} = require('@prisma/client'); new (DB as any)();"],
+  ['scripts/new.ts', "const {PrismaClient: DB} = require('@prisma/client'); new (DB as typeof DB)();"],
   ['scripts/new.ts', "const {PrismaClient: DB} = await import('@prisma/client'); new DB();"],
   ['scripts/new.ts', "import { Pool as DB } from 'pg'; new DB({connectionString: process.env.URL});"],
   ['scripts/new.ts', "import pg from 'pg'; new pg.Client();"],

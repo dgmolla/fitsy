@@ -60,9 +60,9 @@ jobs:
               ;;
           esac
 
-          npx tsx scripts/maintenance/cleanup-test-fixtures.ts --dry-run --prod
+          node --import tsx scripts/maintenance/sanitize-cleanup-db-url.ts --dry-run --prod
 
           if [ "$CLEANUP_MODE" = apply ]; then
-            FITSY_ALLOW_PROD_WRITE=1 npx tsx scripts/maintenance/cleanup-test-fixtures.ts \
+            FITSY_ALLOW_PROD_WRITE=1 node --import tsx scripts/maintenance/sanitize-cleanup-db-url.ts \
               --apply --prod --expect="$CLEANUP_EXPECT"
           fi

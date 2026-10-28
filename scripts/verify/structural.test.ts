@@ -27,12 +27,38 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
-function verify() {
-  git("add", "."); git("commit", "-qm", "candidate");
-  return spawnSync(process.execPath, [join(directory, "scripts/verify/run.mjs"), "--only=structural", "--stage=cheap", "--runs=ci", "--scope=changed"], {
-    cwd: directory, env: environment, encoding: "utf8", timeout: 10000,
+function verify({ commitCandidate = true, runs = "ci" } = {}) {
+  if (commitCandidate) { git("add", "."); git("commit", "-qm", "candidate"); }
+  return spawnSync(process.execPath, [join(directory, "scripts/verify/run.mjs"), "--only=structural", "--stage=cheap", "--runs=" + runs, "--scope=changed"], {
+    cwd: directory, env: { ...environment, CI: runs === "ci" ? "true" : "", GITHUB_EVENT_NAME: "" }, encoding: "utf8", timeout: 10000,
   });
 }
+
+test.each([{ runs: "local", status: 0 }, { runs: "ci", status: 1 }])(
+  "$runs checks the intended source when a forbidden cast is corrected before committing", ({ runs, status }) => {
+    const source = join(directory, "apps/api/lib/catalog.ts");
+    writeFileSync(source, "export const value = input as " + "any;\n");
+    git("add", "."); git("commit", "-qm", "unsafe fixture");
+    writeFileSync(source, "export const value: unknown = 1;\n");
+    const result = verify({ commitCandidate: false, runs });
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(status);
+    expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: status === 0 ? "pass" : "fail" });
+    if (status !== 0) expect(result.stderr).toContain("types added in this branch");
+  },
+);
+
+test.each([false, true])("local checks refuse a newly added forbidden cast before commit (staged=%s)", staged => {
+  const source = join(directory, "apps/api/lib/catalog.ts");
+  git("add", "."); git("commit", "-qm", "safe catalog");
+  writeFileSync(source, "export const value = input as " + "any;\n");
+  if (staged) git("add", ".");
+  const result = verify({ commitCandidate: false, runs: "local" });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: "fail" });
+  expect(result.stderr).toContain("types added in this branch");
+});
 
 test("a cohesive source module passes the canonical structural caller regardless of file length", () => {
   const result = verify();
