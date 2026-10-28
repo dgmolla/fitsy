@@ -101,6 +101,21 @@ export async function assertDatabaseWriteAllowed(value: string | undefined, cont
   return target.url;
 }
 
+/** Credential separation complements PostgreSQL grants; local test owners remain usable. */
+export function assertDatabaseRole(value: string, role: 'fitsy_app' | 'pipeline_writer' | 'fitsy_audit_readonly'): string {
+  const target = databaseTarget(value);
+  const username = decodeURIComponent(new URL(value).username);
+  if (!(target.local && !target.ref) && username !== role && username !== `${role}.${target.ref}`) {
+    return refuse(`database credential must use ${role}; administrator credentials are migration-only`);
+  }
+  return value;
+}
+
+/** No fallback to runtime or migration credentials, even for a missing pipeline secret. */
+export async function assertPipelineDatabase(value = process.env['PIPELINE_DATABASE_URL'], context: Context = {}): Promise<string> {
+  return assertDatabaseRole(await assertDatabaseWriteAllowed(value, context), 'pipeline_writer');
+}
+
 /** Runtime account writes must use the same project whose Auth sessions we accept. */
 export function assertRuntimeDatabase(value: string | undefined, authUrl = process.env["SUPABASE_URL"]): string {
   // Unit-only imports may lack a DB. Pin an invalid datasource so Prisma cannot
@@ -116,7 +131,7 @@ export function assertRuntimeDatabase(value: string | undefined, authUrl = proce
           ["http:", "https:"].includes(auth.protocol))) &&
         auth.pathname === "/" && !auth.username && !auth.password && !auth.search && !auth.hash) return target.url;
   } else if ([DEV_PROJECT_REF, PROD_PROJECT_REF].includes(target.ref ?? "")) {
-    if (authUrl === `https://${target.ref}.supabase.co` || authUrl === `https://${target.ref}.supabase.co/`) return target.url;
+    if (authUrl === `https://${target.ref}.supabase.co` || authUrl === `https://${target.ref}.supabase.co/`) return assertDatabaseRole(target.url, 'fitsy_app');
   }
   return refuse("DB/Auth project mismatch: POSTGRES_PRISMA_URL and SUPABASE_URL must identify the same project (local fixtures may use DEV Auth)");
 }

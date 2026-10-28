@@ -7,14 +7,14 @@ import { loadChainServing, resolveChainMacros, applyAprilChainMatch, aprilMenuId
 import { parseStoreV1Response } from '../apps/api/services/menuSources/ueApiClient';
 import { persistHex } from './hex-persist';
 import { validateHexInTx } from './preload-invariants';
-import { assertDevDatabase } from './lib/db-target-guard';
+import { assertDevDatabase, assertPipelineDatabase } from './lib/db-target-guard';
 
 const scope = 'e2e-chain-quality-';
-const url = assertDevDatabase(process.env['POSTGRES_PRISMA_URL']);
+const url = assertDevDatabase(process.env['PIPELINE_DATABASE_URL']);
 const command = process.argv[2];
 if (!['seed', 'clean'].includes(command ?? '')) throw new Error('Use seed or clean');
 if (command === 'seed' && !process.argv[3]) throw new Error('Pass the captured WaBa UE fixture JSON path');
-const p = new PrismaClient({ datasources: { db: { url } } });
+let p: PrismaClient;
 const estimate = { calories: 400, proteinG: 20, carbsG: 50, fatG: 13, confidence: 'MEDIUM' as const, source: 'haiku', dietaryTags: [] };
 async function clean() {
   await p.restaurant.deleteMany({ where: { id: { startsWith: scope }, storeUuid: { startsWith: scope }, source: scope } });
@@ -58,6 +58,7 @@ async function seed() {
   process.stdout.write(JSON.stringify({ fixture: scope, rows }) + '\n');
 }
 async function main() {
+  p = new PrismaClient({ datasources: { db: { url: await assertPipelineDatabase(url) } } });
   try { await clean(); if (command === 'seed') await seed(); }
   catch (error) { await clean(); throw error; } finally { await p.$disconnect(); }
 }

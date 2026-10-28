@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { assertRuntimeDatabase, DEV_PROJECT_REF, PROD_PROJECT_REF } from '../lib/db-target-guard';
 
-const url = (ref: string) => `postgresql://postgres.${ref}:synthetic@localhost:1/postgres`;
+const url = (ref: string) => `postgresql://fitsy_app.${ref}:synthetic@localhost:1/postgres`;
 const auth = (ref: string) => `https://${ref}.supabase.co`;
 
 test.each([DEV_PROJECT_REF, PROD_PROJECT_REF])('runtime accepts the same DB/Auth project: %s', ref => {

@@ -9,7 +9,7 @@ const readOnly = new Set([
   'scripts/ghost-sample.ts', 'scripts/ghost-coords.ts', 'scripts/chain-coverage-audit.ts',
 ]);
 const guardModules: Record<string, string[]> = {
-  'scripts/lib/db-target-guard': ['assertDatabaseWriteAllowed', 'assertDevDatabase', 'assertRuntimeDatabase', 'assertDevSupabase', 'assertRuntimeSupabase'],
+  'scripts/lib/db-target-guard': ['assertDatabaseWriteAllowed', 'assertPipelineDatabase', 'assertDevDatabase', 'assertRuntimeDatabase', 'assertDevSupabase', 'assertRuntimeSupabase'],
   'scripts/lib/test-database-guard': ['assertTestDatabase'],
   'scripts/dev/lib/guard': ['assertNotProd', 'prodReadOnlyUrl'],
 };
@@ -48,7 +48,7 @@ function clientErrors(path: string, text: string, sources: ReadonlyMap<string, s
       if (ts.isIdentifier(node.expression) && imported(node.expression).some(({ from, name }) => guardModules[from]?.includes(name) &&
           (!testFile || name === 'assertTestDatabase') &&
           (!name.startsWith('assertRuntime') || path.startsWith('apps/api/')) &&
-          (name !== 'assertDatabaseWriteAllowed' || awaited) && (name !== 'prodReadOnlyUrl' || path === 'scripts/dev/snapshot.ts'))) return true;
+          (!['assertDatabaseWriteAllowed', 'assertPipelineDatabase'].includes(name) || awaited) && (name !== 'prodReadOnlyUrl' || path === 'scripts/dev/snapshot.ts'))) return true;
       // The alternative cleanup path is an enforced READ ONLY transaction.
       if (path === 'scripts/maintenance/cleanup-test-fixtures.ts' && node.expression.getText(source) === 'cleanupReadTarget') return true;
       if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'toString') return guarded(node.expression.expression, seen);
@@ -186,7 +186,6 @@ export function unguardedDatabaseWriters(sources: ReadonlyMap<string, string>): 
       if (/^prisma\/migrations\/[^/]+\/(?:migration|down)\.sql$/.test(path)) continue;
       // Historical proposal removed from migration discovery; never an executable owner.
       if (path === 'docs/engineering/backend/rls-policies-parked.sql' && text.includes('DO NOT APPLY')) continue;
-      if (path === 'scripts/dev/sql/audit-role.sql' && sources.get('scripts/dev/provision-audit-role.ts')?.includes('assertDevDatabase')) continue;
       if (!/^\s*BEGIN\s+READ\s+ONLY\s*;/i.test(sql) || !/\b(?:ROLLBACK|COMMIT)\s*;\s*$/i.test(sql) ||
           mutation.test(sql) || (sql.match(/\b(?:COMMIT|ROLLBACK|BEGIN)\b/gi)?.length !== 2)) errors.push(`${path}: SQL needs a guarded owner or one read-only transaction`);
     }

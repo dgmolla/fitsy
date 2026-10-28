@@ -45,6 +45,8 @@ POOLED_URL="postgresql://postgres.${REF}:${DB_PASS}@${POOLER_HOST}:6543/postgres
 export POSTGRES_PRISMA_URL="$POOLED_URL" POSTGRES_URL_NON_POOLING="$DIRECT_URL"
 node --import tsx scripts/lib/db-target-guard.ts --dev-only \
   --env=POSTGRES_URL_NON_POOLING --env=POSTGRES_PRISMA_URL
+# Runtime uses a distinct preselected login, never the administrator password.
+node --import tsx -e 'const {assertDevDatabase,assertDatabaseRole}=require("./scripts/lib/db-target-guard"); assertDatabaseRole(assertDevDatabase(process.env.DEV_APP_DATABASE_URL),"fitsy_app")'
 KEYS_JSON="$(sb projects api-keys --project-ref "$REF" -o json)"
 ANON_KEY="$(echo "$KEYS_JSON" | jq -r '.[] | select(.name=="anon") | .api_key')"
 SERVICE_KEY="$(echo "$KEYS_JSON" | jq -r '.[] | select(.name=="service_role") | .api_key')"
@@ -59,11 +61,10 @@ POSTGRES_URL_NON_POOLING="$DIRECT_URL" npx prisma migrate status --schema prisma
 push() { # KEY VALUE  (REST API; never touches Production, see vercel-env-set.sh)
   bash "$REPO_ROOT/scripts/dev/vercel-env-set.sh" "$1" "$2"
 }
-push POSTGRES_PRISMA_URL "$POOLED_URL"
-push POSTGRES_URL "$POOLED_URL"
+push POSTGRES_PRISMA_URL "$DEV_APP_DATABASE_URL"
+push POSTGRES_URL "$DEV_APP_DATABASE_URL"
 push POSTGRES_URL_NON_POOLING "$DIRECT_URL"
 push POSTGRES_HOST "$POOLER_HOST"
-push POSTGRES_PASSWORD "$DB_PASS"
 push SUPABASE_URL "$SUPABASE_URL"
 push NEXT_PUBLIC_SUPABASE_URL "$SUPABASE_URL"
 push SUPABASE_ANON_KEY "$ANON_KEY"
@@ -78,6 +79,7 @@ push FITSY_ENV "dev"
 export SUPABASE_URL="$SUPABASE_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_KEY"
 log "prisma migrate deploy"
 npx prisma migrate deploy --schema prisma/schema.prisma
+POSTGRES_PRISMA_URL="$DEV_APP_DATABASE_URL" node --import tsx scripts/deploy/activate-runtime-role.ts
 log "seed"
 npx tsx prisma/seed.ts
 if [ -n "${PROD_DATABASE_URL:-}" ]; then

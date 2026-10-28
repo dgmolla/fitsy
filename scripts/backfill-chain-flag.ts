@@ -6,15 +6,15 @@
  *   npx tsx scripts/backfill-chain-flag.ts [--dry-run]
  */
 
-import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
+import { assertPipelineDatabase } from "./lib/db-target-guard";
 import { PrismaClient } from "@prisma/client";
 
 async function main(): Promise<void> {
   const dryRun = process.argv.includes("--dry-run");
-  const directUrl = process.env["POSTGRES_URL_NON_POOLING"];
-  if (!directUrl) throw new Error("POSTGRES_URL_NON_POOLING is required");
+  const directUrl = process.env["PIPELINE_DATABASE_URL"];
+  if (!directUrl) throw new Error("PIPELINE_DATABASE_URL is required");
 
-  const prisma = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(directUrl) } } });
+  const prisma = new PrismaClient({ datasources: { db: { url: await assertPipelineDatabase(directUrl) } } });
 
   try {
     // Preview: count how many restaurants will be flipped.

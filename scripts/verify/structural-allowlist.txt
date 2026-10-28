@@ -39,7 +39,6 @@ console-log scripts/phase0-llm-tiebreak.ts
 console-log scripts/phase0-populate-brands.ts
 console-log scripts/phase1-align.ts
 console-log scripts/phase1-coverage-report.ts
-console-log scripts/phase1-create-table.ts
 console-log scripts/phase1-discover-official.ts
 console-log scripts/phase1-extract.ts
 console-log scripts/phase1-land.ts

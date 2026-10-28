@@ -15,7 +15,7 @@ export function assertTestDatabase(value: string | undefined): string {
 
 /** Jest runs this before importing any suite, including direct workspace runs. */
 export default function guardTestDatabases(): void {
-  for (const name of ["POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING"] as const) {
+  for (const name of ["POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING", "PIPELINE_DATABASE_URL"] as const) {
     const value = process.env[name];
     // With no database configured, existing DB suites remain skipped.
     if (value !== undefined && value !== "") {

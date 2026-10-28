@@ -31,7 +31,8 @@ describe("guard", () => {
   });
 
   it("forces prod source connections read-only", () => {
-    expect(prodReadOnlyUrl(PROD)).toContain("connection_limit=1");
+    expect(prodReadOnlyUrl(PROD.replace("postgres:", "fitsy_audit_readonly:"))).toContain("connection_limit=1");
+    expect(() => prodReadOnlyUrl(PROD)).toThrow(/fitsy_audit_readonly/);
     expect(() => prodReadOnlyUrl(DEV)).toThrow(/prod project/);
   });
 });

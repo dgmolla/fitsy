@@ -60,7 +60,7 @@ export function changedFiles(options = {}) {
 
 // Focused recipes share one database admission rule across runner and direct CLI.
 export function focusedDatabaseRequired(paths, env = process.env) {
-  return Boolean(env.POSTGRES_PRISMA_URL || env.POSTGRES_URL_NON_POOLING) ||
+  return Boolean(env.POSTGRES_PRISMA_URL || env.POSTGRES_URL_NON_POOLING || env.PIPELINE_DATABASE_URL) ||
     paths.some(path => typeof path === 'string' && (path.startsWith('apps/api/') ||
       /^scripts\/(?:hex-resume|hex-persist|pipeline-completed-hex|mini-hex-e2e)\.test\.ts$/.test(path)));
 }

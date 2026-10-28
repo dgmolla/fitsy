@@ -155,7 +155,7 @@ export async function verify(argv, prepareDatabase) {
       if (withoutDatabase) {
         for (const key of ['FITSY_VERIFY_DB_LOCKED', 'FITSY_VERIFY_OWNED_DB', 'FITSY_VERIFY_DB_IMAGE',
           'FITSY_VERIFY_DB_HOST', 'FITSY_VERIFY_CALLER_NON_POOLING_URL', 'FITSY_LOCAL_DB',
-          'POSTGRES_PRISMA_URL', 'POSTGRES_URL_NON_POOLING']) delete checkEnv[key];
+          'POSTGRES_PRISMA_URL', 'POSTGRES_URL_NON_POOLING', 'PIPELINE_DATABASE_URL']) delete checkEnv[key];
       }
       if (c.name === 'dev-drift' && process.env.FITSY_VERIFY_OWNED_DB) {
         checkEnv.POSTGRES_URL_NON_POOLING = process.env.FITSY_VERIFY_CALLER_NON_POOLING_URL ?? '';

@@ -24,7 +24,7 @@
  *   --limit N   Process at most N restaurants (default: all)
  */
 
-import { assertDatabaseWriteAllowed } from "./lib/db-target-guard";
+import { assertPipelineDatabase } from "./lib/db-target-guard";
 import { PrismaClient } from "@prisma/client";
 import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.js";
 import { fetchGooglePlacesPhoto } from "../apps/api/services/googlePlacesPhoto.js";
@@ -61,7 +61,7 @@ const results: RowResult[] = [];
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const prisma = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(process.env["POSTGRES_PRISMA_URL"]) } } });
+  const prisma = new PrismaClient({ datasources: { db: { url: await assertPipelineDatabase(process.env["PIPELINE_DATABASE_URL"]) } } });
 
   try {
     const missing = await prisma.restaurant.findMany({

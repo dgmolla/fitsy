@@ -164,7 +164,7 @@ suite("reviewed chain identities through existing menu and new-hex serving", () 
       expected: null, addAliases: [], evidence }], links: [{ brandId: id, expected: r }] };
     const batchFile = join(dir, "batch.json"), planFile = join(dir, "plan.json"); writeFileSync(batchFile, JSON.stringify(batch));
     const cli = (...args: string[]) => execFileSync(process.execPath, ["--import", "tsx", "scripts/preload-chain-identity.ts", ...args], {
-      cwd: root, env: { ...process.env, POSTGRES_URL_NON_POOLING: process.env["POSTGRES_PRISMA_URL"] }, stdio: "pipe" }).toString();
+      cwd: root, env: { ...process.env, PIPELINE_DATABASE_URL: process.env["POSTGRES_PRISMA_URL"] }, stdio: "pipe" }).toString();
     try {
       const report = JSON.parse(cli("plan", planFile, batchFile));
       expect(report).toMatchObject({ brands: 1, restaurantLinks: 1 });

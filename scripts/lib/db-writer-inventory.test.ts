@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { unguardedDatabaseWriters } from './db-writer-inventory';
 
@@ -11,7 +11,8 @@ const check = (path: string, text: string, extra: [string, string][] = []) => un
 
 test('every API, script, SQL, shell and test client uses its actual guarded datasource', () => {
   const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
-  const sources = new Map(files.filter(path => /\.(?:[cm]?[jt]sx?|sh|sql|ya?ml)$/.test(path) || path.endsWith('package.json') || path.startsWith('.githooks/'))
+  const sources = new Map(files.filter(path => existsSync(resolve(root, path)))
+    .filter(path => /\.(?:[cm]?[jt]sx?|sh|sql|ya?ml)$/.test(path) || path.endsWith('package.json') || path.startsWith('.githooks/'))
     .map(path => [path, readFileSync(resolve(root, path), 'utf8')]));
   expect(unguardedDatabaseWriters(sources)).toEqual([]);
 });

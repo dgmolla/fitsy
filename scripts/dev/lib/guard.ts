@@ -10,7 +10,7 @@
  * which appends a session-level read-only flag so a bug cannot write.
  */
 
-import { assertDevDatabase, databaseTarget, PROD_PROJECT_REF } from "../../lib/db-target-guard";
+import { assertDatabaseRole, assertDevDatabase, databaseTarget, PROD_PROJECT_REF } from "../../lib/db-target-guard";
 export { PROD_PROJECT_REF } from "../../lib/db-target-guard";
 
 export function isProdUrl(url: string): boolean {
@@ -40,12 +40,13 @@ export function prodReadOnlyUrl(url: string | undefined): string {
   if (!url) {
     throw new Error(
       "PROD_DATABASE_URL is not set. Run: vercel env pull --environment=production .env.prod.local " +
-        "and export PROD_DATABASE_URL=<POSTGRES_URL_NON_POOLING from that file>",
+        "and export PROD_DATABASE_URL=<fitsy_audit_readonly credential>",
     );
   }
   if (!isProdUrl(url)) {
     throw new Error(`PROD_DATABASE_URL does not look like the prod project (${PROD_PROJECT_REF}).`);
   }
+  assertDatabaseRole(url, 'fitsy_audit_readonly');
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}connection_limit=1`;
 }

@@ -55,7 +55,7 @@ test('the test body executes', () => expect(2 + 2).toBe(4));
   function jest(env: NodeJS.ProcessEnv = {}) {
     const environment = { ...process.env };
     // Do not inherit a real datasource or an unrelated parent Jest selection.
-    for (const key of ["POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING", "NODE_OPTIONS"]) delete environment[key];
+    for (const key of ["POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING", "PIPELINE_DATABASE_URL", "NODE_OPTIONS"]) delete environment[key];
     return spawnSync(process.execPath, [join(root, "node_modules/jest/bin/jest.js"),
       "--config", join(root, workspace, "jest.config.js"), "--runInBand",
       "--roots", directory, "--runTestsByPath", fixture],
@@ -63,6 +63,8 @@ test('the test body executes', () => expect(2 + 2).toBe(4));
   }
 
   test.each([
+    { PIPELINE_DATABASE_URL: direct(PROD_PROJECT_REF) },
+    { PIPELINE_DATABASE_URL: pooled(DEV_PROJECT_REF) },
     { POSTGRES_PRISMA_URL: direct(PROD_PROJECT_REF) },
     { POSTGRES_PRISMA_URL: pooled(DEV_PROJECT_REF) },
     { POSTGRES_PRISMA_URL: local.replace("fitsy_test:", `postgres.${PROD_PROJECT_REF}:`) },
@@ -75,7 +77,7 @@ test('the test body executes', () => expect(2 + 2).toBe(4));
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("DB_TEST_REFUSED");
-    expect(result.stderr).toContain(env.POSTGRES_URL_NON_POOLING ? "POSTGRES_URL_NON_POOLING" : "POSTGRES_PRISMA_URL");
+    expect(result.stderr).toContain(env.PIPELINE_DATABASE_URL ? "PIPELINE_DATABASE_URL" : env.POSTGRES_URL_NON_POOLING ? "POSTGRES_URL_NON_POOLING" : "POSTGRES_PRISMA_URL");
     expect(result.stderr).not.toContain("synthetic");
     expect(existsSync(marker)).toBe(false);
   });
