@@ -45,28 +45,28 @@ describe('fetchServerEntitlement', () => {
   it('boot reads the stored row (cheap) instead of re-reading RevenueCat', async () => {
     const status = { active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: '2026-09-29T06:00:00Z', stale: false };
     mockFetchSubscriptionStatus.mockResolvedValue(status);
-    expect(await fetchServerEntitlement('boot')).toEqual(status);
+    expect(await fetchServerEntitlement('boot')).toEqual({ data: status, error: null });
     expect(mockSyncSubscription).not.toHaveBeenCalled();
   });
 
   it.each(['purchase', 'restore', 'sign_in', 'mismatch'] as const)('%s re-reads RevenueCat via sync, telling the server why', async (reason) => {
     const status = { active: false, synced: true, verdict: 'expired', lastRcVerifiedAt: '2026-09-29T06:00:00Z', stale: false };
     mockSyncSubscription.mockResolvedValue(status);
-    expect(await fetchServerEntitlement(reason)).toEqual(status);
+    expect(await fetchServerEntitlement(reason)).toEqual({ data: status, error: null });
     expect(mockSyncSubscription).toHaveBeenCalledWith(reason);
     expect(mockFetchSubscriptionStatus).not.toHaveBeenCalled();
   });
 
-  it('never throws - a failed request resolves to null so the caller keeps its current verdict', async () => {
+  it('never throws - a failed request preserves the connection failure without a verdict', async () => {
     mockFetchSubscriptionStatus.mockRejectedValue(new Error('boom'));
     mockSyncSubscription.mockRejectedValue(new Error('boom'));
-    expect(await fetchServerEntitlement('boot')).toBeNull();
-    expect(await fetchServerEntitlement('mismatch')).toBeNull();
+    expect(await fetchServerEntitlement('boot')).toEqual({ data: null, error: 'network' });
+    expect(await fetchServerEntitlement('mismatch')).toEqual({ data: null, error: 'network' });
   });
 
   it('rejects a status without the shared verdict instead of treating it as never subscribed', async () => {
     mockFetchSubscriptionStatus.mockResolvedValue({ active: false, status: null });
-    expect(await fetchServerEntitlement('boot')).toBeNull();
+    expect(await fetchServerEntitlement('boot')).toEqual({ data: null, error: 'unavailable' });
   });
 });
 

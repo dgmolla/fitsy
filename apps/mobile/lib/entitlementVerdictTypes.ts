@@ -1,12 +1,13 @@
 import type { MutableRefObject } from 'react';
 import type { CustomerInfo } from 'react-native-purchases';
-import type { EntitlementSyncReason } from './entitlement';
+import type { EntitlementCheckError, EntitlementSyncReason } from './entitlement';
 import type { SubscriptionVerdict } from './apiClient';
 
 export interface EntitlementVerdict {
   /** The server's verdict; null until settled on this launch. Gates screens. */
   entitled: boolean | null;
   classification: SubscriptionVerdict | 'loading';
+  entitlementError: EntitlementCheckError | null;
   /** Same value, readable from async callbacks. */
   entitledRef: MutableRefObject<boolean | null>;
   /** True inside STORE_GRACE_MS after the store confirmed a purchase/restore. */

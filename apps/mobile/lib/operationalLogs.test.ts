@@ -80,7 +80,7 @@ it.each(['presentPaywall', 'presentPaywallIfNeeded'] as const)('contains %s SDK 
 it('keeps account sync and search failures private at the real HTTP transport boundary', async () => {
   expect(await fetchProfile()).toBeNull();
   expect(await pushProfileToServer('fixture-user', { name: SENTINEL })).toBe(false);
-  expect(await fetchServerEntitlement('boot')).toBeNull();
+  expect(await fetchServerEntitlement('boot')).toEqual({ data: null, error: 'network' });
   expect(await fetchRestaurantsPage({ lat: 34, lng: -118 })).toMatchObject({ networkError: true });
   await AsyncStorage.setItem('@fitsy/pending_profile_sync:fixture-user', '{invalid');
   await replayPendingProfileSync();
