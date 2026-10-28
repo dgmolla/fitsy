@@ -22,6 +22,7 @@ function scenario(name: string) {
       calls.push(args);
       if (args[0] === 'inspect') {
         if (!container) { const error = new Error('missing'); error.code = 'ENOENT'; throw error; }
+        if (mode === 'legacy_replaced' && calls.filter(call => call[0] === 'inspect').length === 2) container.Id = 'replacement-id';
         return JSON.stringify([container]);
       }
       if (args[0] === 'run') { container = makeContainer(control.owner);
@@ -45,6 +46,7 @@ function scenario(name: string) {
     };
     function makeContainer(owner) {
       return { Id: 'owned-container-id', Image: 'sha256:image', Config: { Image: 'postgis/postgis:16-3.4',
+        Env: ['PGDATA=/var/lib/postgresql/verify-data'],
         Labels: { 'fitsy.verify.owner': owner } }, State: { Running: true },
         HostConfig: { Memory: 805306368, MemorySwap: 1610612736, NanoCpus: 2000000000, Binds: null }, Mounts: [],
         NetworkSettings: { Ports: { '5432/tcp': [{ HostIp: loopback, HostPort: '55432' }] } } };
@@ -67,6 +69,12 @@ function scenario(name: string) {
     if (mode === 'restart_stopped') { container.State.Running = false; container.NetworkSettings.Ports = null; }
     if (mode === 'stop_stopped') { container.State.Running = false; container.NetworkSettings.Ports = null; }
     if (mode === 'existing_failure') container.NetworkSettings.Ports['5432/tcp'][0].HostIp = '0.0.0.0';
+    if (mode.startsWith('legacy_')) {
+      container = makeContainer(control.owner);
+      container.Id = 'legacy-container-id';
+      container.Config.Env = ['PGDATA=/var/lib/postgresql/data'];
+      container.State.Running = mode !== 'legacy_stopped';
+    }
     let error = '', status;
     try {
       if (mode === 'forged_loopback_url') control.assert({ FITSY_LOCAL_DB: '1', FITSY_VERIFY_DB_LOCKED: '1',
@@ -92,7 +100,8 @@ function scenario(name: string) {
         return mode === 'pipeline_failure' ? 1 : 0;
       } : undefined);
     } catch (cause) { error = cause.message; }
-    const result = { error, status, resetCalls: calls.filter(args => args[0] === 'exec' && args.includes('psql')),
+    const result = { error, status, launchArgs: calls.find(args => args[0] === 'run'),
+      resetCalls: calls.filter(args => args[0] === 'exec' && args.includes('psql')),
       calls: calls.map(args => ['exec', 'rm'].includes(args[0]) ? args.slice(0, 3) : args.slice(0, 2)),
       spawned: spawned.map(item => ({ args: item.args, url: item.env.POSTGRES_PRISMA_URL,
         direct: item.env.POSTGRES_URL_NON_POOLING, id: item.env.FITSY_VERIFY_OWNED_DB,
@@ -105,7 +114,7 @@ function scenario(name: string) {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 10000 });
   expect(result.status).toBe(0);
   return JSON.parse(result.stdout) as {
-    error: string; status?: number; calls: string[][]; resetCalls: string[][];
+    error: string; status?: number; launchArgs?: string[]; calls: string[][]; resetCalls: string[][];
     spawned: { args: string[]; url: string; direct: string; id: string; host: string; resetBeforeSpawn: boolean }[];
     lockExists: boolean; containerExists: boolean;
   };
@@ -264,6 +273,42 @@ test('controlled flow overrides configured external URLs and checks ownership be
   expect(result.spawned[0]!.resetBeforeSpawn).toBe(false);
   expect(result.spawned.slice(1).every(child => child.resetBeforeSpawn)).toBe(true);
   expect(result.lockExists).toBe(false);
+});
+test('launches the database cluster outside RAM mounts without persistent volumes or increased limits', () => {
+  const result = scenario('success');
+  expect(result.error).toBe('');
+  const args = result.launchArgs!;
+  const values = (flag: string) => args.flatMap((arg, index) => arg === flag ? [args[index + 1]!] : []);
+  const data = values('--env').find(value => value.startsWith('PGDATA='))?.slice('PGDATA='.length);
+  expect(data).toBe('/var/lib/postgresql/verify-data');
+  // Cover the image-declared volume so Docker cannot leave an anonymous volume.
+  expect(values('--tmpfs')).toEqual(['/var/lib/postgresql/data:rw,noexec,nosuid,size=1m']);
+  for (const mount of values('--tmpfs')) {
+    const target = mount.split(':')[0]!;
+    expect(data === target || data!.startsWith(target + '/')).toBe(false);
+  }
+  expect(args.filter(arg => ['--mount', '--volume', '-v'].includes(arg))).toEqual([]);
+  expect(values('--memory')).toEqual(['805306368']);
+  expect(values('--memory-swap')).toEqual(['1610612736']);
+  expect(values('--cpus')).toEqual(['2']);
+  expect(result.containerExists).toBe(false);
+});
+test.each(['legacy_running', 'legacy_stopped'])('%s is replaced before readiness, reset or migration', mode => {
+  const result = scenario(mode);
+  expect(result.error).toBe('');
+  expect(result.launchArgs).toBeDefined();
+  expect(result.calls.filter(call => call[0] === 'rm')).toEqual([
+    ['rm', '-f', 'legacy-container-id'], ['rm', '-f', 'owned-container-id'],
+  ]);
+  expect(result.calls.filter(call => call[0] === 'exec').every(call => call[1] === 'owned-container-id')).toBe(true);
+  expect(result.spawned).toHaveLength(4);
+});
+test('legacy retirement refuses a replacement container before removing or launching anything', () => {
+  const result = scenario('legacy_replaced');
+  expect(result.error).toMatch(/ownership or image/);
+  expect(result.launchArgs).toBeUndefined();
+  expect(result.calls.some(call => ['rm', 'start', 'exec'].includes(call[0]!))).toBe(false);
+  expect(result.spawned).toEqual([]);
 });
 test('explicit stop rejects a foreign container', () => {
   const result = scenario('stop_wrong_owner');

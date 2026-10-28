@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { repository } from './impact-plan.mjs';
 
 const image = 'postgis/postgis:16-3.4';
+const dataDirectory = '/var/lib/postgresql/verify-data';
 // The launcher and every admitted ownership assertion share the same limits.
 // Callers can request this stronger contract, but cannot select weaker values.
 const databaseLimits = Object.freeze({ Memory: 768 * 1024 ** 2, MemorySwap: 1536 * 1024 ** 2,
@@ -72,9 +73,23 @@ export function databaseControl({ root = repository, command = runCommand, spawn
       try { container = inspect(); }
       catch (error) {
         if (error.code !== 'ENOENT' && !/No such (object|container)/i.test(error.stderr?.toString() ?? '')) throw error;
+      }
+      if (container) {
+        owned(container, undefined, false);
+        // Older launchers kept the whole cluster in RAM. Retire that disposable
+        // identity under the existing lock instead of restarting it into an OOM.
+        if (!container.Config?.Env?.includes(`PGDATA=${dataDirectory}`)) {
+          stop({ FITSY_VERIFY_OWNED_DB: container.Id, FITSY_VERIFY_DB_IMAGE: container.Image });
+          container = undefined;
+        }
+      }
+      if (!container) {
         createdId = docker(['run', '-d', '--name', name, '--memory', String(databaseLimits.Memory),
           '--memory-swap', String(databaseLimits.MemorySwap), '--cpus', String(databaseLimits.NanoCpus / 1000000000), '--label', `fitsy.verify.owner=${owner}`,
-          '--publish', '127.0.0.1::5432', '--tmpfs', '/var/lib/postgresql/data',
+          // Mask the image's declared volume without allocating the database in
+          // tmpfs. PGDATA lives in the container layer and leaves with its ID.
+          '--publish', '127.0.0.1::5432', '--tmpfs', '/var/lib/postgresql/data:rw,noexec,nosuid,size=1m',
+          '--env', `PGDATA=${dataDirectory}`,
           '--env', 'POSTGRES_USER=fitsy_test', '--env', 'POSTGRES_PASSWORD=fitsy_test',
           '--env', 'POSTGRES_DB=fitsy_test', image]);
         container = inspect();

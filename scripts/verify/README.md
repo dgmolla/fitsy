@@ -150,6 +150,10 @@ Temporary engine reports count the current execution and are removed afterward.
 Local and hosted L2 checks use the same worktree-owned PostGIS launcher, including its OS lock, inspected container identity, loopback target checks, migrations and data-only seed.
 The canonical runner creates that disposable database before database-dependent checks; the hosted job does not provision a separate service container.
 An unowned target or caller-supplied ownership markers cannot replace the inspected database assertion.
+The database cluster and WAL use `PGDATA=/var/lib/postgresql/verify-data` in the disposable container's disk layer, so growing database files do not consume the container's RAM allowance as tmpfs data.
+A separate 1 MiB tmpfs covers the image's unused `/var/lib/postgresql/data` volume declaration to avoid leaving anonymous volumes.
+The existing memory, swap, CPU, disk, ownership and database target protections remain in place.
+Under the same exclusive lock, the launcher replaces an owned container from the old RAM-backed layout before readiness or database writes, rechecking its acquired ID and image before removal.
 After the verification pipeline returns or throws, the launcher retires the acquired container under the same lock, checking its owner, immutable ID and image again.
 This also applies when a run acquires a previously existing owned container, since each run resets and reseeds its database.
 Preparation failures after acquisition retire that same checked identity, including a failed migration or seed.
