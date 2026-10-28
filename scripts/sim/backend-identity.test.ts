@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import * as capturedCli from './__snapshots__/clean-cli-deployment.json';
@@ -67,19 +67,32 @@ test('preview selection retains ready, nonproduction, project and clean source c
 test('the real native backend check queries the configured preview and refuses divergent API source', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'fitsy-backend-preview-'));
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
-  const root = resolve(__dirname, '../..');
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, env, encoding: 'utf8', timeout: 10000 }).trim();
   try {
-    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, env, encoding: 'utf8' }).trim();
+    // Own the history: origin/main may already have exactly the candidate's API contents.
+    git('init', '-q'); git('config', 'user.name', 'Backend fixture'); git('config', 'user.email', 'fixture@example.test');
+    mkdirSync(resolve(dir, 'apps/api'), { recursive: true });
+    writeFileSync(resolve(dir, 'apps/api/source.ts'), 'export const version = 1;\n');
+    git('add', '.'); git('commit', '-qm', 'previous API');
+    const divergent = git('rev-parse', 'HEAD');
+    writeFileSync(resolve(dir, 'apps/api/source.ts'), 'export const version = 2;\n');
+    git('add', '.'); git('commit', '-qm', 'candidate API');
+    const equivalent = git('rev-parse', 'HEAD');
+    writeFileSync(resolve(dir, 'notes.txt'), 'non-API change\n');
+    git('add', '.'); git('commit', '-qm', 'candidate notes');
+    const head = git('rev-parse', 'HEAD');
     const script = `import {backend} from ${JSON.stringify(resolve(__dirname, 'product-flow.mjs'))}; process.stdout.write(JSON.stringify(backend()));`;
-    for (const revision of [head, 'origin/main']) {
-      writeFileSync(resolve(dir, 'vercel'), `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(resolve(dir, 'args.json'))},JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ ...cli, name: 'fitsy-api', meta: { gitCommitSha: revision === head ? head : execFileSync('git', ['rev-parse', revision], { cwd: root, env, encoding: 'utf8' }).trim() } }))});\n`, { mode: 0o755 });
+    for (const revision of [head, equivalent, divergent]) {
+      writeFileSync(resolve(dir, 'vercel'), `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(resolve(dir, 'args.json'))},JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ ...cli, name: 'fitsy-api', meta: { gitCommitSha: revision } }))});\n`, { mode: 0o755 });
       const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-        cwd: root, env: { ...env, PATH: dir + ':' + env.PATH, EXPO_PUBLIC_API_URL: preview }, encoding: 'utf8',
+        cwd: dir, env: { ...env, PATH: dir + ':' + env.PATH, FITSY_PRODUCT_ROOT: dir, EXPO_PUBLIC_API_URL: preview },
+        encoding: 'utf8', timeout: 10000,
       });
+      expect(result.error).toBeUndefined();
       expect(JSON.parse(readFileSync(resolve(dir, 'args.json'), 'utf8'))).toEqual(['api',
         '/v13/deployments/' + new URL(preview).hostname, '--raw']);
-      expect(result.status).toBe(revision === head ? 0 : 1);
-      if (revision === head) expect(JSON.parse(result.stdout)).toEqual({ backendRevision: head, backendDeployment: cli.id });
+      expect(result.status).toBe(revision === divergent ? 1 : 0);
+      if (revision !== divergent) expect(JSON.parse(result.stdout)).toEqual({ backendRevision: revision, backendDeployment: cli.id });
       else expect(result.stderr).toContain('Deploy candidate backend/shared/schema changes');
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
