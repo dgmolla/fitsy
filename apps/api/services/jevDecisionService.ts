@@ -1,10 +1,15 @@
-/** Offline evaluation only. No production pipeline caller. */
+/** Offline evaluation and the DEV-only pipeline POC. No runtime API caller. */
 import { z } from 'zod';
 
 export interface JevDecisionRequest {
   model: 'jev-latest';
   state: Record<string, unknown>;
   questions: { chain_item_match: { type: 'choice'; instructions: string; criteria: { match: string; no_match: string } } };
+}
+export interface JevChoiceRequest {
+  model: 'jev-latest';
+  state: Record<string, unknown>;
+  questions: Record<string, { type: 'choice'; instructions: string; criteria: Record<string, string> }>;
 }
 
 const probability = z.number().finite().min(0).max(1);
@@ -25,7 +30,7 @@ export function parseJevDecision(body: string) {
 }
 
 /** One bounded request, no hidden retries, redirects, logging or credential-file discovery. */
-export async function requestJevDecision(request: JevDecisionRequest, apiKey: string) {
+export async function requestJevDecision(request: JevChoiceRequest, apiKey: string) {
   if (!apiKey.trim()) throw new Error('TYPESAFE_API_KEY is required');
   if (Buffer.byteLength(JSON.stringify(request)) > 12_000) throw new Error('Jev evaluation request exceeds 12KB');
   const response = await fetch('https://api.typesafe.ai/v1/systemone', {

@@ -13,10 +13,18 @@ const restaurants = Array.from({ length: Number(process.env.PRELOAD_TEST_RESTAUR
   photoUrl: 'https://example.test/hero.jpg', photoSource: 'ue_feed_hero', lastScrapedAt: null, menuHash: null,
 }));
 class Database {
+  macroEstimate = { findMany: async () => [] };
   brand = { findMany: async () => [] };
   chainItem = { findMany: async () => [] };
   pipelineCompletedHex = {
-    findMany: async () => [], findFirst: async () => null, count: async () => 0,
+    findMany: async () => [],
+    findFirst: async ({ where } = {}) => {
+      if (!process.env.PRELOAD_TEST_AUTO_RESUME) return null;
+      const runs = [{ runId: 'pipeline-v2-dev:issue-591' }, { runId: 'legacy-resume' }];
+      const excluded = where?.NOT?.runId?.startsWith;
+      return runs.find(run => !excluded || !run.runId.startsWith(excluded));
+    },
+    count: async () => process.env.PRELOAD_TEST_AUTO_RESUME ? 1 : 0,
     create: async ({ data }) => { record({ type: 'db_checkpoint', ...data }); return data; },
   };
   async $queryRaw(strings, ...values) {

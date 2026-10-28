@@ -145,6 +145,14 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     const changed = { ...ue, description: "Different size and ingredients" };
     for (const bulk of [false, true]) {
       await persistItems(newRestaurant.id, pairs, p);
+      const retained = await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: added.id, source: "official" } } });
+      // An estimator fallback for the SAME serving must retain its official link and winner.
+      const estimatedPairs = pairs.map(pair => ({ item: pair.item, macro: { ...macros[1]!, source: "jev" } }));
+      if (bulk) await persistHex(scope, fixture.slug + "-estimate", [{ restaurantId: newRestaurant.id, items: estimatedPairs, menuHash: "estimate" }], p, { validateInTx: validateHexInTx });
+      else await persistItems(newRestaurant.id, estimatedPairs, p);
+      expect(await p.macroEstimate.findUniqueOrThrow({ where: { id: retained.id } })).toEqual(retained);
+      expect(await p.menuItem.findUniqueOrThrow({ where: { id: added.id } })).toMatchObject(facts);
+      expect(await p.macroEstimate.count({ where: { menuItemId: added.id, source: "jev" } })).toBe(1);
       await p.macroEstimate.updateMany({ where: { menuItemId: added.id, source: "official" }, data: { ingredientBreakdown: [{ name: "Old component" }], reasoning: JSON.stringify({ ...JSON.parse(persisted.reasoning!), reviewHash: "0".repeat(64), sourceHash: "0".repeat(64) }) } });
       if (bulk) await persistHex(scope, fixture.slug + "-metadata", [{ restaurantId: newRestaurant.id, items: pairs, menuHash: "pilot" }], p, { validateInTx: validateHexInTx });
       else await persistItems(newRestaurant.id, pairs, p);

@@ -40,6 +40,7 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 - [macro-accuracy-recommendations-2026-08-16.md](engineering/pipeline/macro-accuracy-recommendations-2026-08-16.md) — accuracy/model decisions (latest)
 - [open-model-spike-2026-07-20.md](engineering/pipeline/open-model-spike-2026-07-20.md) — eval evidence log
 - [jev-chain-match-eval.md](engineering/pipeline/jev-chain-match-eval.md) - frozen offline Jev decision benchmark and result
+- [pipeline-v2-dev-poc.md](engineering/pipeline/pipeline-v2-dev-poc.md) - single LA hex in DEV, official/Jev sources, $5 accounting and checkpoint recovery
 - [canonical-chain-macros.md](engineering/pipeline/canonical-chain-macros.md) — Brand/ChainItem canonical design
 - Superseded (in `engineering/archive/`): data-pipeline-v3, status, baseline-v6, macro-accuracy-handoff-2026-08-16, phase1-extraction-execution
 

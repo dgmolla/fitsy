@@ -11,6 +11,9 @@
 
 import type { PrismaClient } from "@prisma/client";
 
+/** Single-hex DEV proofs must never become the ordinary pipeline's automatically resumed run. */
+export const DEV_POC_RUN_PREFIX = 'pipeline-v2-dev:';
+
 /**
  * Get the set of hex IDs already completed for a given run.
  * Returns an empty set if no hexes have been completed (fresh run).
@@ -66,6 +69,7 @@ export async function findIncompleteRunId(
 ): Promise<string | null> {
   // Find the most recent runId
   const latest = await prisma.pipelineCompletedHex.findFirst({
+    where: { NOT: { runId: { startsWith: DEV_POC_RUN_PREFIX } } },
     orderBy: { createdAt: "desc" },
     select: { runId: true },
   });
