@@ -9,8 +9,10 @@ export const dashboard = {
       query: { apl: `${latestBudgets} | project service, day, costUsd, reservedUsd, capUsd, calls, capCalls, throttles` } },
     { id: 'coverage', type: 'Table', name: 'Coverage per hex (latest attempt)',
       query: { apl: `${latestHexes} | project runId, hexId, status, restaurants, menus, uniqueItems, persistedItems, officialCoverage, persistedCoverage` } },
+    // Axiom's default ingestion flattens nested JSON into literal dotted fields.
+    // https://axiom.co/docs/apl/data-types/map-fields#map-fields-and-flattened-fields
     { id: 'sources', type: 'Table', name: 'Persisted items by estimate source and run',
-      query: { apl: `${latestHexes} | where status == "completed" | summarize official=sum(toint(sourceMix.official)), jev=sum(toint(sourceMix.jev)), other=sum(toint(sourceMix.other)) by runId` } },
+      query: { apl: `${latestHexes} | where status == "completed" | summarize official=sum(toint(['sourceMix.official'])), jev=sum(toint(['sourceMix.jev'])), other=sum(toint(['sourceMix.other'])) by runId` } },
     { id: 'throttles', type: 'Table', name: 'Provider throttles',
       query: { apl: `['fitsy-pipeline'] | where type == "v2_throttle" and environment == "dev" | summarize throttles=count() by service, reason, status, bin(_time, 1h)` } },
   ],

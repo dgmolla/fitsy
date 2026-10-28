@@ -12,7 +12,11 @@ suite('fleet budgets with real PostgreSQL and independent workers', () => {
   // Keep eight independent worker sessions within the disposable database's connection budget.
   const workerUrl = databaseUrl ? new URL(assertTestDatabase(databaseUrl)) : undefined;
   workerUrl?.searchParams.set('connection_limit', '1');
-  const clients = Array.from({ length: 8 }, () => new PrismaClient(workerUrl ? { datasources: { db: { url: workerUrl.toString() } } } : undefined));
+  const clients = Array.from({ length: 8 }, () => {
+    if (!workerUrl) return new PrismaClient();
+    // Validate the final datasource override after adding the pool limit.
+    return new PrismaClient({ datasources: { db: { url: assertTestDatabase(workerUrl.toString()) } } });
+  });
   const db = clients[0]!, budgets = clients.map(client => new SharedServiceBudget(client));
   const runId = 'pipeline-v2-dev:queue:budget-regression', brandId = 'budget-pdf-brand';
   beforeAll(async () => { await Promise.all(clients.map(client => client.$connect())); }, 15_000);

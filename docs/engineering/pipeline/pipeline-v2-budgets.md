@@ -92,6 +92,7 @@ It has four panels: cost and reservations per service/day, coverage per hex, com
 Service snapshots use `(service, day)` and coverage snapshots use `(runId, hexId)` with `arg_max(_time, *)`, so resume and retry snapshots do not double-count totals.
 Settling an older unknown charge updates the snapshot for its original accounting day.
 Source mix counts validated items prepared for the successful atomic hex commit, with explicit official, Jev and other buckets.
+The source-mix panel quotes the literal dotted fields created by [Axiom's default nested-JSON ingestion](https://axiom.co/docs/apl/data-types/map-fields#map-fields-and-flattened-fields), such as `['sourceMix.official']`.
 Failed attempts publish zero committed items and no source mix.
 UE 403/429, Google 403/429, Jev 429 and daily budget admission stops emit structured throttle events without bodies, credentials or raw menu data.
 
@@ -100,12 +101,14 @@ UE 403/429, Google 403/429, Jev 429 and daily budget admission stops emit struct
 Budget admission must run against the migrated disposable PostgreSQL database because PL/pgSQL resolves column references when the function executes.
 The concurrency regression preconnects eight independent worker sessions with one connection each and a bounded startup timeout.
 This keeps cold connection setup outside the reservation assertions and avoids host-sized pools exhausting the disposable database.
+Each explicit worker datasource is checked with `assertTestDatabase` at client construction, after the connection limit is set.
 
 ```sh
 npm test -w scripts -- --runInBand --runTestsByPath \
   preload-cost.test.ts preload-cost-e2e.test.ts \
   pipeline-v2/cli.test.ts pipeline-v2/journal.test.ts \
-  pipeline-v2/service-budget.test.ts pipeline-v2/telemetry.test.ts
+  pipeline-v2/service-budget.test.ts pipeline-v2/telemetry.test.ts \
+  lib/db-writer-inventory.test.ts
 
 # The canonical runner provisions the owned disposable loopback database.
 node scripts/verify/focused-tests.mjs --set scripts/pipeline-v2/service-budget.db.test.ts

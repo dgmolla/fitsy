@@ -38,7 +38,10 @@ test('the dashboard installer sends the maintained definition without alerts or 
   const queries = dashboard.charts.map(chart=>chart.query.apl);
   expect(queries[0]).toContain('arg_max(_time, *) by service, day');
   expect(queries[1]).toContain('arg_max(_time, *) by runId, hexId');
-  expect(queries[2]).toContain('sourceMix.official'); expect(queries[2]).toContain('status == "completed"');
+  for (const source of ['official', 'jev', 'other']) {
+    expect(queries[2]).toContain(`${source}=sum(toint(['sourceMix.${source}']))`);
+  }
+  expect(queries[2]).toContain('status == "completed"');
 });
 
 test('installation fails with safe diagnostics for denied API access and requires the existing token', async () => {
