@@ -22,11 +22,14 @@ Use separate databases for production and nonproduction, with eviction disabled 
 Do not add a replica, per-instance prefix, caller-controlled namespace or local allow cache.
 Upstash's [REST API](https://upstash.com/docs/redis/features/restapi) supports the single `EVAL` operation used here.
 No PostgreSQL migration or application-table grant is needed.
-The guarded Vercel production and preview build paths run `scripts/deploy/rate-limit-preflight.ts` before migrations and compilation.
+Guarded Vercel development, preview, and production builds run `scripts/deploy/rate-limit-preflight.ts` before migrations and compilation.
+The shared environment manifest first checks required bindings by name, without logging values.
 The probe uses the request handler's configuration parser and never logs credential values.
 It exercises the runtime `EVAL` with a separate `deployment-readiness` namespace, a unique identity and one-second TTLs, without consuming user quotas.
 Missing, unsafe or partial configuration, read-only tokens, provider failures, invalid responses and timeouts stop the build.
-Ordinary local development builds do not require Redis; the probe does not establish production/nonproduction isolation.
+Ordinary `next dev` requests can still use local quotas without Redis; guarded deployment builds require configured bindings.
+Request quota namespaces include stable `prod:`, `preview:`, or `dev:` prefixes so a shared provider store cannot mix their counters.
+Operational readiness keys use their own expiring namespaces and never consume user quotas.
 See [routine production recovery](../devops/routine-production.md) for credential restoration and exact-source release verification.
 
 Only `VERCEL=1` together with deployment-provided `VERCEL_ENV=production` or `preview` establishes the supported proxy boundary.
@@ -67,11 +70,11 @@ They never fall back to process-local enforcement.
 Genuine quota exhaustion and identity-cap exhaustion return 429 with an integer `Retry-After` rounded up to seconds.
 Every limiter denial uses `Cache-Control: private, no-store`.
 Outage logs contain only the policy name and are bounded to once per minute per policy per worker; provider bodies, credentials and identities are omitted.
-Alert on sustained 503s and the `[rate-limit] Shared store unavailable` log through existing runtime monitoring.
+Every route emits handled 503 status/latency through the [production monitoring path](../devops/monitoring-alerting.md).
 
 Undeployed development/tests may use the bounded local sliding window only when both store variables are absent.
 Setting either variable enables shared-store enforcement, including fail-closed behavior, even in development.
-Health remains a public database probe; it does not establish Redis readiness.
+Public shallow health remains a database probe; authenticated `?deep=1` exercises Redis readiness separately.
 Use an invalid-body auth request against an isolated nonproduction deployment to exercise the limiter without creating an account.
 Do not run quota probes against production as part of ordinary implementation validation.
 
@@ -98,7 +101,7 @@ It creates a named, labeled, network-isolated `redis:7.4-alpine` container with 
 It reuses the same independent-worker journeys, executing the actual script through Redis rather than the reference REST fixture.
 The pre-push hook retains cheap checks; `run.mjs` and Verify's existing L2 job discover this check from the registry.
 The existing `scripts/deploy/routine-release.test.ts` suite also drives the actual Vercel build and migration callers through a substituted external Redis transport.
-It proves missing/unwritable store bindings stop migrations and builds, guards run before Redis, healthy stores proceed in order, and undeployed development still builds offline.
+It proves missing/unwritable store bindings stop migrations and builds, guards run before Redis, healthy stores proceed in order, and guarded development also requires the manifest bindings.
 These tests run in the existing scripts group through `run.mjs`, the pre-push focused selection and Verify; no new credential-bearing CI check is needed.
 Docker startup, socket permissions or image-pull failures are environment failures, never passing shared-store evidence.
 Inspect retained verifier diagnostics, restore supported Docker access in the existing worker environment, and rerun this entrypoint without weakening the check or using production credentials.

@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
@@ -12,7 +13,7 @@ interface StatsResponse {
  *
  * Authenticated aggregate stats for the onboarding data-scale screen.
  */
-export async function GET(request: NextRequest): Promise<NextResponse<StatsResponse> | NextResponse> {
+async function handleGET(request: NextRequest): Promise<NextResponse<StatsResponse> | NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
   const [totalDishes, totalRestaurants, chainCount] = await Promise.all([
@@ -36,3 +37,5 @@ export async function GET(request: NextRequest): Promise<NextResponse<StatsRespo
     },
   );
 }
+
+export const GET = withApiTelemetry('GET', '/api/restaurants/stats', handleGET);

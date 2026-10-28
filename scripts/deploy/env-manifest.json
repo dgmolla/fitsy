@@ -1,0 +1,233 @@
+{
+  "required": {
+    "development": [
+      "POSTGRES_PRISMA_URL",
+      "POSTGRES_URL_NON_POOLING",
+      "SUPABASE_URL",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "REVENUECAT_PUBLIC_API_KEY",
+      "REVENUECAT_WEBHOOK_AUTH",
+      "UPSTASH_REDIS_REST_URL",
+      "UPSTASH_REDIS_REST_TOKEN",
+      "AXIOM_TOKEN",
+      "CRON_SECRET",
+      "SLACK_BOT_TOKEN"
+    ],
+    "preview": [
+      "POSTGRES_PRISMA_URL",
+      "POSTGRES_URL_NON_POOLING",
+      "SUPABASE_URL",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "REVENUECAT_PUBLIC_API_KEY",
+      "REVENUECAT_WEBHOOK_AUTH",
+      "UPSTASH_REDIS_REST_URL",
+      "UPSTASH_REDIS_REST_TOKEN",
+      "AXIOM_TOKEN",
+      "CRON_SECRET",
+      "SLACK_BOT_TOKEN"
+    ],
+    "production": [
+      "POSTGRES_PRISMA_URL",
+      "POSTGRES_URL_NON_POOLING",
+      "SUPABASE_URL",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "REVENUECAT_PUBLIC_API_KEY",
+      "REVENUECAT_WEBHOOK_AUTH",
+      "UPSTASH_REDIS_REST_URL",
+      "UPSTASH_REDIS_REST_TOKEN",
+      "AXIOM_TOKEN",
+      "CRON_SECRET",
+      "SLACK_BOT_TOKEN"
+    ],
+    "monitor": [
+      "GITHUB_TOKEN",
+      "AXIOM_TOKEN",
+      "CRON_SECRET",
+      "SLACK_BOT_TOKEN",
+      "SLACK_ALERT_USER_ID",
+      "VERCEL_TOKEN",
+      "POSTHOG_PERSONAL_API_KEY",
+      "POSTHOG_PROJECT_ID"
+    ],
+    "recovery": [
+      "GITHUB_TOKEN",
+      "SLACK_BOT_TOKEN",
+      "SLACK_ALERT_USER_ID",
+      "VERCEL_TOKEN",
+      "RELEASE_SHA",
+      "SMOKE_OUTCOME"
+    ]
+  },
+  "providerManaged": [
+    "NODE_ENV",
+    "VERCEL",
+    "VERCEL_ENV",
+    "VERCEL_GIT_COMMIT_SHA",
+    "VERCEL_GIT_COMMIT_REF",
+    "CI",
+    "GITHUB_ACTIONS",
+    "GITHUB_EVENT_NAME",
+    "GITHUB_EVENT_PATH",
+    "GITHUB_REF",
+    "GITHUB_REF_NAME",
+    "GITHUB_HEAD_REF",
+    "GITHUB_BASE_REF",
+    "GITHUB_SHA",
+    "GITHUB_WORKSPACE",
+    "GITHUB_REPOSITORY",
+    "GITHUB_RUN_ID",
+    "GITHUB_RUN_ATTEMPT",
+    "GITHUB_OUTPUT",
+    "RUNNER_TEMP",
+    "npm_package_version",
+    "PATH",
+    "HOME",
+    "TMPDIR"
+  ],
+  "optional": [
+    "ALLOW_STUB_SUBSCRIPTIONS",
+    "ANTHROPIC_API_KEY",
+    "APP_URL",
+    "ASC_APP_ID",
+    "ASC_ISSUER_ID",
+    "ASC_KEY_ID",
+    "ASC_P8_BASE64",
+    "BRAVE_SEARCH_API_KEY",
+    "DEMO_REVIEW_EMAILS",
+    "EXPO_PUBLIC_API_URL",
+    "EXPO_PUBLIC_DEV_LOGIN_EMAIL",
+    "EXPO_PUBLIC_DEV_LOGIN_PASSWORD",
+    "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID",
+    "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID",
+    "EXPO_PUBLIC_POSTHOG_API_KEY",
+    "EXPO_PUBLIC_POSTHOG_HOST",
+    "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY",
+    "EXPO_PUBLIC_REVENUECAT_IOS_KEY",
+    "EXPO_PUBLIC_REVENUECAT_TEST_KEY",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+    "EXPO_PUBLIC_SUPABASE_URL",
+    "FIRECRAWL_API_KEY",
+    "FITSY_DIAGNOSIS_CHECKPOINT",
+    "FITSY_DIFF_BASE",
+    "FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS",
+    "FITSY_E2E_FIXTURES",
+    "FITSY_FIXTURE",
+    "FITSY_FROM_EMAIL",
+    "FITSY_PERF_ORIGIN",
+    "FITSY_PERF_TOKEN",
+    "FITSY_POSTAL_ADDRESS",
+    "FITSY_PRODUCT_FLOW_TEST_FIXTURE",
+    "FITSY_PRODUCT_ROOT",
+    "FITSY_RUNS",
+    "FITSY_SHUFFLE_EVIDENCE_DIR",
+    "FITSY_SIM_OWNER",
+    "FITSY_SIM_RECORD_VIDEO",
+    "FITSY_SIM_RESET_KEYCHAIN",
+    "FITSY_TEST_DB_CLIENT_LOG",
+    "FITSY_TEST_REAL_REDIS",
+    "FITSY_VERIFY_CALLER_NON_POOLING_URL",
+    "FITSY_VERIFY_FOCUSED_RECIPE",
+    "FITSY_VERIFY_OWNED_DB",
+    "FITSY_XCTEST_SIM_UDID",
+    "GOAL_BENCH_RESTAURANTS",
+    "GOAL_BENCH_TOKEN",
+    "GOOGLE_PLACES_API_KEY",
+    "JINA_API_KEY",
+    "MAESTRO_BIN",
+    "OVERTURE_RELEASE",
+    "PIPELINE_DATABASE_URL",
+    "POSTHOG_HOST",
+    "PRELOAD_COST_CAP_USD",
+    "PRELOAD_TEST_AUTO_RESUME",
+    "PRELOAD_TEST_DELAY",
+    "PRELOAD_TEST_EVENTS",
+    "PRELOAD_TEST_INVALID_USAGE",
+    "PRELOAD_TEST_INVALID_USAGE_CALL",
+    "PRELOAD_TEST_ITEMS",
+    "PRELOAD_TEST_MALFORMED_ONCE",
+    "PRELOAD_TEST_QUERIES",
+    "PRELOAD_TEST_REAL_SDK",
+    "PRELOAD_TEST_RESTAURANTS",
+    "PRELOAD_TEST_SETUP",
+    "PRELOAD_TEST_SPLIT_HEXES",
+    "PROD_DATABASE_URL",
+    "RESEND_API_KEY",
+    "SEARCH_DISTANCE_WEIGHT",
+    "SEARCH_TS_CONFIG",
+    "SLACK_ALERT_CHANNEL",
+    "SLACK_WEBHOOK_URL",
+    "TYPESAFE_API_KEY",
+    "UE_API_MODE",
+    "UE_LOC_COOKIE",
+    "UNSUBSCRIBE_SECRET",
+    "UPSTASH_API_KEY",
+    "UPSTASH_DAILY_COMMAND_LIMIT",
+    "UPSTASH_DATABASE_ID",
+    "UPSTASH_EMAIL",
+    "V2_TEST_EVENTS",
+    "V2_TEST_EXIT_AFTER_COMMIT",
+    "V2_TEST_EXIT_BETWEEN_RESTAURANTS",
+    "V2_TEST_FAIL_CHECKPOINT",
+    "V2_TEST_OVERFLOW",
+    "V2_TEST_PAUSE_JEV",
+    "V2_TEST_PAUSE_STORE",
+    "V2_TEST_REAL_DATABASE",
+    "V2_TEST_UE_FAIL",
+    "V2_TEST_UNKNOWN_USAGE",
+    "dev_db_readonly_url",
+    "jev"
+  ],
+  "dynamicReads": [
+    {
+      "file": "apps/api/lib/flags.ts",
+      "expression": "`FLAG_${name}`"
+    },
+    {
+      "file": "scripts/eval/suite/run.ts",
+      "expression": "key"
+    },
+    {
+      "file": "scripts/eval/suite/run.ts",
+      "expression": "aliases[key]!"
+    },
+    {
+      "file": "scripts/eval/suite/run.ts",
+      "expression": "providers[provider].key"
+    },
+    {
+      "file": "scripts/lib/db-target-guard.ts",
+      "expression": "name"
+    },
+    {
+      "file": "scripts/lib/test-database-guard.ts",
+      "expression": "name"
+    },
+    {
+      "file": "scripts/maintenance/cleanup-test-fixtures.ts",
+      "expression": "options.urlEnv"
+    },
+    {
+      "file": "scripts/preload-ue-first.ts",
+      "expression": "v"
+    },
+    {
+      "file": "scripts/rerun.ts",
+      "expression": "v"
+    },
+    {
+      "file": "scripts/sim/ci.mjs",
+      "expression": "key"
+    },
+    {
+      "file": "scripts/sim/journey-fixtures.mjs",
+      "expression": "key"
+    },
+    {
+      "file": "scripts/verify/run.mjs",
+      "expression": "key"
+    }
+  ]
+}

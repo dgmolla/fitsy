@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { reportServerError } from "@/lib/errorAlert";
 
@@ -12,8 +13,10 @@ export const dynamic = "force-dynamic";
  *     Slack path works.
  *   ?mode=throw — throws, so the alert must arrive via the instrumentation
  *     onRequestError hook; proves uncaught route errors reach Slack.
+ *   ?mode=handled - returns a deliberate 503 through the production telemetry
+ *     wrapper, without changing a user route or dependency configuration.
  */
-export async function GET(req: NextRequest): Promise<NextResponse> {
+async function handleGET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
   const provided = req.headers.get("authorization");
   if (!expected || provided !== `Bearer ${expected}`) {
@@ -21,6 +24,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const mode = req.nextUrl.searchParams.get("mode") ?? "report";
+  if (mode === 'handled') {
+    return NextResponse.json({ error: 'Deliberate monitoring test' }, { status: 503 });
+  }
   if (mode === "throw") {
     throw new Error(`alert-test: deliberate uncaught error (${Date.now()})`);
   }
@@ -31,3 +37,5 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   );
   return NextResponse.json({ ok: true, mode: "report" });
 }
+
+export const GET = withApiTelemetry('GET', '/api/internal/alert-test', handleGET);

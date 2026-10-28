@@ -15,7 +15,7 @@ The retired `FITSY_ALLOW_PROD=1` override has no effect.
 | `../../prisma/seed.ts` (`npx prisma db seed`) | deterministic fixture: 3 users, 50 restaurants, 400 items | on a fresh DB; safe to re-run |
 | `snapshot.ts` | copy ~500 real LA restaurants (no user data) from prod read-only into dev | monthly, or when search needs fresher data |
 | `reset.ts` | reset user data to seed state (admin mode with a service key; sql-only mode otherwise preserves seed auth users) | nightly (CI, sql-only); before E2E |
-| `vercel-build.sh` | Vercel build entrypoint; validates database targets and Redis readiness, holds unapproved production role SQL, and skips activation for validated legacy bindings pending provisioning | every Vercel build |
+| `vercel-build.sh` | Vercel build entrypoint; validates database targets, required environment bindings and Redis readiness in every deployment environment, holds unapproved production role SQL, and skips activation for validated legacy bindings pending provisioning | every Vercel build |
 | `../verify/dev-drift.sh` | dev has every migration on `main` and seed data present | scheduled + before E2E |
 
 Automatic Supabase project creation is retired.

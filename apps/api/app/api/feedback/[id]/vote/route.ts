@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/restaurantService";
@@ -14,7 +15,7 @@ import type { FeedbackVoteApiResponse } from "@fitsy/shared";
 // double-tap that races past the findUnique below will still fail on create
 // with P2002, handled as a no-op below.
 
-export async function POST(
+async function handlePOST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse<FeedbackVoteApiResponse>> {
@@ -84,3 +85,5 @@ export async function POST(
     );
   }
 }
+
+export const POST = withApiTelemetry('POST', '/api/feedback/[id]/vote', handlePOST);

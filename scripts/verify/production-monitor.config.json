@@ -1,0 +1,39 @@
+{
+  "baseUrl": "https://fitsy.org",
+  "repository": "dgmolla/fitsy",
+  "dataset": "fitsy-pipeline",
+  "channel": "C0ASM3865AA",
+  "vercelProject": "prj_z1QTfOgbj4tlm91U2Hf8JXr5k4v4",
+  "vercelTeam": "team_VVc52BrZfx5IT2B1mDI5AuPT",
+  "windowMinutes": 5,
+  "baselineMinutes": 60,
+  "telemetryMaxAgeMinutes": 15,
+  "errorRate": 0.02,
+  "errorCount": 10,
+  "latencyP95Ms": 2000,
+  "latencyBaselineMultiplier": 2,
+  "latencyMinimumRequests": 20,
+  "mobileUnknownRate": 0.05,
+  "mobileBaselineMultiplier": 2,
+  "mobileMinimumChecks": 10,
+  "staleDeploymentMinutes": 30,
+  "reminderMinutes": 30,
+  "quotaWarning": 0.8,
+  "quotaCritical": 0.95,
+  "expiryWarningDays": 14,
+  "expiryCriticalDays": 3,
+  "probes": [
+    { "path": "/api/health", "status": 200 },
+    { "path": "/api/user/profile", "status": 401 },
+    { "path": "/api/subscriptions/status", "status": 401 },
+    { "path": "/api/restaurants", "status": 401 }
+  ],
+  "cronMaxAgeHours": {
+    "/api/internal/audit-macro-drift": 49,
+    "/api/internal/feedback-digest": 49,
+    "/api/internal/watch-review": 9,
+    "/api/internal/marketing/weekly": 337,
+    "/api/internal/weekly-scoreboard": 337,
+    "/api/internal/waitlist/launch-day": 49
+  }
+}

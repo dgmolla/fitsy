@@ -62,7 +62,7 @@ Primary script: `scripts/preload-ue-first.ts`. Runs as a batch script (not a pro
 | FatSecret / FoodFacts (FFN) | Chain restaurant macro lookup (accurate, pre-verified) | No — preload only |
 | Brave Search + Uber Eats JSON-LD | Independent restaurant menus | No — preload only |
 | Claude Haiku | Macro estimation from indie menu text | No — preload only |
-| Axiom (`fitsy-pipeline` dataset) | Pipeline telemetry and run logging | No — preload only |
+| Axiom (`fitsy-pipeline` dataset) | Pipeline run logging plus API route/status/latency telemetry | Yes; safe async flush after the API response |
 | Google Places API | Optional tier-3 photo fallback only | No — removed from discovery |
 
 **Google Places was removed from restaurant discovery.** It is only retained as an optional photo-quality fallback (tier 3). The pipeline moved from Google Places → Overture Maps → UE-first. Current state is UE-first.
@@ -103,7 +103,7 @@ See `docs/engineering/architecture/api-reference.md` for the full route referenc
 | FatSecret / FoodFacts | Preload script | Offline batch — chain macros |
 | Brave Search | Preload script | Offline batch — indie menu URLs |
 | Claude Haiku | Preload script | Offline batch — macro estimation |
-| Axiom | Preload script | Offline batch — telemetry |
+| Axiom | Preload script and API | Batch run events and asynchronous route telemetry |
 | Google Places API | Preload script (optional) | Tier-3 photo fallback only |
 | Supabase | API backend + mobile | Auth (signInWithIdToken + JWKS) |
 | RevenueCat | API backend + mobile | Subscription management |
@@ -352,10 +352,12 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 - The API backend verifies JWTs via the Supabase JWKS endpoint (`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`)
 - No local JWT signing — Supabase is the trust anchor
 
-### 4.8 Axiom (Preload — Telemetry)
+### 4.8 Axiom (Pipeline and API telemetry)
 - Dataset: `fitsy-pipeline`
 - All pipeline run events (hex start/end, restaurant counts, errors) ship to Axiom
 - Slack alerts for errors go to `C0ASM3865AA` via `SLACK_BOT_TOKEN`
+- Every API handler emits static route, status, latency, environment, and source identity, including handled failures.
+- The external production monitor evaluates checked-in thresholds and shared incident transitions; see [monitoring and activation](../devops/monitoring-alerting.md).
 
 ---
 

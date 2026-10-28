@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { getEntitlementStatus } from "@/lib/subscription";
@@ -20,7 +21,7 @@ import { getEntitlementStatus } from "@/lib/subscription";
  * endpoint - clients no longer send receipts; RevenueCat validates and notifies
  * the webhook, and this endpoint reports the resulting state.
  */
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGET(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
   const { active, status, expiresAt, verdict, lastRcVerifiedAt, stale } = await getEntitlementStatus(auth.sub, auth.email);
@@ -33,3 +34,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     stale,
   });
 }
+
+export const GET = withApiTelemetry('GET', '/api/subscriptions/status', handleGET);

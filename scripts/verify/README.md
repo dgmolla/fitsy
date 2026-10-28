@@ -29,6 +29,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `secrets.sh` | 0 | no hardcoded keys, committed .env, or build output in the diff |
 | `lint.sh` | 1 | eslint clean across workspaces |
 | `typecheck.sh` | 1 | workspace type-check scripts pass; API generates the current Prisma client before tsc |
+| `env-manifest.sh` | 1 | source environment reads are declared; the same names-only manifest checks required deployment bindings before migration/build |
 | `performance.sh` | 1 | no routed prototypes or resolved runtime preload/LLM dependencies |
 | `product-flow.sh` | 1 (local, blocking) | fresh candidate-bound simulator and affected-journey evidence; see `docs/engineering/devops/shipping.md` |
 | `boundaries.sh` | 1 | imports respect the layer graph in `.dependency-cruiser.cjs` (T3) |
@@ -41,7 +42,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `rate-limit-store.sh` | 2 | actual Redis Lua and independent API workers enforce shared quotas, trusted-IP selection, atomic admission and key bounds; requires Docker |
 | `media-integration.sh` | 2 (local, blocking when simulator or product-flow controls change) | real decoder and attachment suites plus a source-bound receipt; hosted L2 stays media-tool free |
 | `own-code-mocks.sh` | 2 (shadow) | api tests mock only external services |
-| `build.sh` | 3 | offline production API compilation, no stray compiled output; actual store bindings are checked by the guarded Vercel build preflight |
+| `build.sh` | 3 | offline production API compilation and before/after JavaScript content comparison, preserving existing source edits while rejecting emitted or changed files; actual store bindings are checked by the guarded Vercel build preflight |
 | `mobile-bundle.sh` | 3 | production iOS minified JS and gzip budgets; offline local export only |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |
 | `api-e2e.sh` | 6 | a deployed API serves health + data-route 401s + authenticated entitlement locks (read-only by default; `--write` adds registration only on the exact dev origin or loopback HTTP) |

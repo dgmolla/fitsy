@@ -1,6 +1,7 @@
 import { FeedbackBoardPost, FeedbackBoardResponse, FeedbackVoteResponse, MenuApiResponse, MenuResponse, RestaurantResult, RestaurantsApiResponse, SavedItemResponse, SavedItemsResponse } from '@fitsy/shared';
 import { api, ApiRequestError } from './api';
 import { getDiscoveryMacroTargets } from './macroStorage';
+import { trackSubscriptionCheck } from './analytics';
 
 export interface FetchRestaurantsParams {
   protein?: number;
@@ -252,7 +253,7 @@ export type SubscriptionSyncReason = 'purchase' | 'restore' | 'restore_history' 
  * network/HTTP failure - the provider treats it as best-effort.
  */
 export async function syncSubscription(reason: SubscriptionSyncReason): Promise<SubscriptionSyncResult> {
-  return api.post<SubscriptionSyncResult>('/api/subscriptions/sync', { reason }, true);
+  return monitoredSubscriptionCheck('sync', () => api.post<SubscriptionSyncResult>('/api/subscriptions/sync', { reason }, true));
 }
 
 export interface SubscriptionStatusResult {
@@ -271,5 +272,20 @@ export interface SubscriptionStatusResult {
  * missing. Throws on network/HTTP failure.
  */
 export async function fetchSubscriptionStatus(): Promise<SubscriptionStatusResult> {
-  return api.get<SubscriptionStatusResult>('/api/subscriptions/status', true);
+  return monitoredSubscriptionCheck('status', () => api.get<SubscriptionStatusResult>('/api/subscriptions/status', true));
+}
+
+async function monitoredSubscriptionCheck<T extends SubscriptionStatusResult>(source: 'status' | 'sync', check: () => Promise<T>): Promise<T> {
+  const start = Date.now();
+  try {
+    const result = await check();
+    trackSubscriptionCheck({ source, outcome: result.verdict === 'unknown' ? 'unknown' : 'known',
+      status_code: 200, duration_ms: Math.max(0, Date.now() - start) });
+    return result;
+  } catch (error) {
+    const status = error instanceof ApiRequestError ? error.status : 0;
+    trackSubscriptionCheck({ source, outcome: status >= 500 ? 'server_error' : status ? 'client_error' : 'network_error',
+      status_code: status, duration_ms: Math.max(0, Date.now() - start) });
+    throw error;
+  }
 }

@@ -45,6 +45,8 @@ jobs:
     needs: changes
     if: needs.changes.result == 'success'
     runs-on: ubuntu-latest
+    outputs:
+      smoke_outcome: ${{ steps.api_smoke.outcome }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,6 +65,7 @@ jobs:
           python3 scripts/deploy/routine-release.py observe "$RELEASE_SHA" > "$RUNNER_TEMP/vercel-deployment.json"
           cat "$RUNNER_TEMP/vercel-deployment.json"
       - name: Prod-safe API smoke
+        id: api_smoke
         env:
           PROD_SMOKE_EMAIL: ${{ secrets.PROD_SMOKE_EMAIL }}
           PROD_SMOKE_PASSWORD: ${{ secrets.PROD_SMOKE_PASSWORD }}
@@ -80,6 +83,43 @@ jobs:
         run: |
           gh issue create --label incident --title "incident: prod release failed at ${RELEASE_SHA:0:7}" \
             --body "**TL;DR:** Production verification stopped. Inspect Vercel's Git deployment, migration/build logs and actual fitsy.org serving source before resuming. If needed, use the retained known-good URL: scripts/deploy/rollback.sh api https://KNOWN_GOOD_URL. Source $RELEASE_SHA; see Deploy logs."
+
+  recover-api:
+    needs: [changes, smoke]
+    if: always() && needs.smoke.outputs.smoke_outcome == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: fitsy-production-monitor
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the existing supported Vercel CLI for recovery
+        run: npm install --prefix "$RUNNER_TEMP/fitsy-rollback-cli" --ignore-scripts --no-audit --no-fund vercel@50.37.0
+      - name: Page and recover the still-serving failed candidate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
+          SMOKE_OUTCOME: ${{ needs.smoke.outputs.smoke_outcome }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_ALERT_USER_ID: ${{ vars.SLACK_ALERT_USER_ID }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/fitsy-rollback-bin"
+          cat > "$RUNNER_TEMP/fitsy-rollback-bin/vercel" <<'SH'
+          #!/usr/bin/env bash
+          exec "$FITSY_VERCEL_CLI" "$@" --token "$VERCEL_TOKEN"
+          SH
+          chmod +x "$RUNNER_TEMP/fitsy-rollback-bin/vercel"
+          export FITSY_VERCEL_CLI="$RUNNER_TEMP/fitsy-rollback-cli/node_modules/.bin/vercel"
+          export PATH="$RUNNER_TEMP/fitsy-rollback-bin:$PATH"
+          node scripts/deploy/production-recovery.mjs
 
   ota:
     # Trusted main release jobs coordinate with local rollback through a Git ref.

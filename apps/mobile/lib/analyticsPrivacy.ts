@@ -4,7 +4,7 @@ import type { CaptureEvent, JsonType } from '@posthog/core';
 // objects, error strings, identity, location and nutrition values are denied.
 const allowed = new Set([
   'screen_name', 'screen', 'cuisine_filter', 'location_source', 'restaurant_id', 'menu_item_id', 'feedback_id',
-  'action', 'entry_point', 'provider', 'tab', 'field', 'link', 'source', 'outcome', 'reason', 'kind',
+  'action', 'entry_point', 'provider', 'tab', 'field', 'link', 'source', 'outcome', 'reason', 'kind', 'status_code', 'duration_ms',
   'offering_id', 'access_variant', 'image_variant', 'layout_variant', 'paywall_variant', 'paywall_config_version',
   'product_id', 'actual_period', 'query_length', 'result_count', 'page_index', 'total_results', 'pages_loaded',
   'position', 'message_length', 'session_count', 'save_count', 'search_count', 'actual_days', 'desired_days',

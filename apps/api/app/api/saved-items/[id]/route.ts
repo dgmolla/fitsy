@@ -1,10 +1,11 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/restaurantService";
 
 // ─── DELETE /api/saved-items/[id] ────────────────────────────────────────────
 
-export async function DELETE(
+async function handleDELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
@@ -41,3 +42,5 @@ export async function DELETE(
     );
   }
 }
+
+export const DELETE = withApiTelemetry('DELETE', '/api/saved-items/[id]', handleDELETE);

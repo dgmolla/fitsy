@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { postSlackMessage } from "@fitsy/shared";
 import { prisma } from "@/lib/restaurantService";
@@ -126,7 +127,7 @@ async function loadPostHogResult(): Promise<PostHogResult> {
   }
 }
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+async function handleGET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
   const provided = req.headers.get("authorization");
   if (!expected || provided !== `Bearer ${expected}`) {
@@ -147,3 +148,5 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const posted = await postSlackMessage(text);
   return NextResponse.json({ ok: true, posted });
 }
+
+export const GET = withApiTelemetry('GET', '/api/internal/weekly-scoreboard', handleGET);

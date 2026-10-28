@@ -97,6 +97,7 @@ it.each(['purchase', 'restore', 'sign_in'])('confirms a production sandbox %s th
   expect(row).toMatchObject({ status: 'active', expiresAt: new Date(expires), lastEventAt: expect.any(Date) });
   expect(mockCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: 'subscriber-uuid', appleTransactionId: 'fixture-transaction' }) });
   expect(info).toHaveBeenCalledWith(JSON.stringify({ event: 'revenuecat.sandbox_entitlement_accepted', userId: 'subscriber-uuid' }));
+  expect(info).toHaveBeenCalledWith(expect.stringContaining('"type":"api_request"'));
 });
 
 it('does not confirm an expired production sandbox purchase or write new proof', async () => {
@@ -106,14 +107,14 @@ it('does not confirm an expired production sandbox purchase or write new proof',
   expect(await response.json()).toMatchObject({ active: false, verdict: 'unknown', synced: false });
   expect(row).toBeNull();
   expect(mockCreate).not.toHaveBeenCalled();
-  expect(info).not.toHaveBeenCalled();
+  expect(info).not.toHaveBeenCalledWith(expect.stringContaining('revenuecat.sandbox_entitlement_accepted'));
 });
 
 it('accepts a production store purchase without a sandbox acceptance log', async () => {
   sandbox = false;
   const response = await POST(request());
   expect(await response.json()).toMatchObject({ active: true, verdict: 'active', synced: true });
-  expect(info).toHaveBeenCalledTimes(1); // Existing subscription status-change log only.
+  expect(info).not.toHaveBeenCalledWith(expect.stringContaining('revenuecat.sandbox_entitlement_accepted'));
   expect(info).toHaveBeenCalledWith('[subscription] status none -> active (sync)');
 });
 
@@ -121,7 +122,7 @@ it('keeps the purchase unconfirmed when the RevenueCat server re-check fails', a
   revenueCatStatus = 503;
   expect(await (await POST(request())).json()).toMatchObject({ active: false, verdict: 'unknown', synced: false });
   expect(mockCreate).not.toHaveBeenCalled();
-  expect(info).not.toHaveBeenCalled();
+  expect(info).not.toHaveBeenCalledWith(expect.stringContaining('revenuecat.sandbox_entitlement_accepted'));
 });
 
 it('requires authentication before consulting RevenueCat', async () => {

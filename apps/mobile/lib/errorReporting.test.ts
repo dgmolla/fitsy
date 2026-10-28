@@ -24,7 +24,7 @@ describe('trackClientError', () => {
     });
     expect(capture).toHaveBeenCalledWith(
       'client_error',
-      { source: 'error_boundary', is_fatal: false },
+      { source: 'error_boundary', is_fatal: false, kind: 'production' },
     );
     expect(flush).toHaveBeenCalled();
   });
@@ -36,7 +36,7 @@ describe('trackClientError', () => {
       source: 'global_handler',
       is_fatal: true,
     });
-    expect(capture.mock.calls[0]?.[1]).toEqual({ source: 'global_handler', is_fatal: true });
+    expect(capture.mock.calls[0]?.[1]).toEqual({ source: 'global_handler', is_fatal: true, kind: 'production' });
   });
 });
 

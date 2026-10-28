@@ -75,3 +75,28 @@ describe("createRateLimiter", () => {
     expect((await limiter.check('first')).ok).toBe(true);
   });
 });
+
+test('the same identity has independent shared quotas in development, preview and production', async () => {
+  const originalEnv = process.env;
+  const originalFetch = global.fetch;
+  const consumed = new Set<string>();
+  process.env = { ...originalEnv, UPSTASH_REDIS_REST_URL: 'https://quota.example.test', UPSTASH_REDIS_REST_TOKEN: 'fixture' };
+  global.fetch = jest.fn(async (_url, options) => {
+    const command = JSON.parse(options!.body as string) as string[];
+    const key = command[4]!;
+    const allowed = !consumed.has(key);
+    consumed.add(key);
+    return Response.json({ result: allowed ? [1, 0, 0] : [0, 0, 60_000] });
+  }) as typeof fetch;
+  try {
+    const limiter = createRateLimiter({ namespace: 'environment-proof', max: 1, windowMs: 60_000 });
+    for (const environment of ['development', 'preview', 'production']) {
+      process.env['VERCEL_ENV'] = environment;
+      expect((await limiter.check('same-private-ip')).ok).toBe(true);
+      expect((await limiter.check('same-private-ip')).ok).toBe(false);
+    }
+    expect(consumed.size).toBe(3);
+    expect([...consumed].join(' ')).toMatch(/prod:environment-proof/);
+    expect([...consumed].join(' ')).not.toContain('same-private-ip');
+  } finally { process.env = originalEnv; global.fetch = originalFetch; }
+});

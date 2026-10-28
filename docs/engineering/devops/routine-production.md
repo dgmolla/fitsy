@@ -33,6 +33,7 @@ The build logs an activation skip for a validated legacy binding; configured `fi
 Names alone do not prove a database target.
 Credentials stay in their existing Vercel bindings; do not copy them into GitHub, files or build arguments.
 After those guards, `scripts/deploy/rate-limit-preflight.ts` exercises the runtime Redis `EVAL` before any migration.
+It first checks required names from `scripts/deploy/env-manifest.json`, which also drives CI source-read validation.
 Production and preview require `UPSTASH_REDIS_REST_URL` and a writable `UPSTASH_REDIS_REST_TOKEN` in their respective Vercel environments, with separate stores for production and nonproduction.
 The preflight uses the same service, URL validation, response validation and one-second deadline as runtime quotas.
 Its separate `deployment-readiness` namespace and unique identities leave user quotas untouched; probe keys expire in one second.
@@ -44,7 +45,8 @@ Run `node --test scripts/deploy/pipeline-roles-approval.test.mjs` for an install
 Already-applied role SQL needs no repeated approval; Prisma's [production deployment contract](https://docs.prisma.io/docs/orm/v6/prisma-migrate/workflows/development-and-production#production-and-testing-environments) permits an applied migration to be absent from the deploy input.
 Wrong identity, missing binding or failed migration also withholds the build; failed API build cannot succeed.
 Preview/development builds refuse either production binding and preview migrations retain the development route.
-Preview runs the same Redis preflight after the DEV database guard and before migrations; undeployed development remains usable without Redis.
+Preview and guarded development builds run the same manifest and Redis preflight after the DEV database guard and before migrations.
+Ordinary `next dev` requests retain local enforcement when both Redis bindings are absent.
 The existing dev mirror watches the preflight and database guard inputs so changes reach the stable dev deployment.
 Environment checks select the guarded caller; they do not authorize candidate access to production credentials.
 Migrations must remain additive under existing structural SQL checks and independent migration review so the prior API remains compatible during a build.
@@ -59,7 +61,8 @@ The smoke job observes GitHub's actual Vercel bot deployment/status for the exac
 It checks the trusted bot identity and immutable deployment URL, then requires that deployment and `https://fitsy.org/api/health` to report the exact source and connected database.
 It waits boundedly for Git deployment/domain readiness, fails on a failed newest deployment, runs the existing production-safe API smoke, then rechecks public serving identity.
 The health endpoint already consumes Vercel's system `VERCEL_GIT_COMMIT_SHA`.
-No custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval is required.
+Normal Git deployment and smoke observation need no custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval.
+Failure recovery is a separate path: [production monitoring](monitoring-alerting.md) describes its existing-owner Vercel credential, explicit verified previous target, and unchanged rollback helper.
 Keep the existing repository Expo/smoke credential route.
 Sensitive maintenance retains `production-release`; native/Apple release decisions retain `production-native`.
 This revision does not migrate unrelated secret custody.

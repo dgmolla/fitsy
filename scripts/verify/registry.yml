@@ -7,6 +7,13 @@
 # paths: advisory (shadow) checks only; select when --scope=changed matches a glob.
 # Blocking checks always run within their layer/context; path filters cannot hide them.
 checks:
+  - name: env-manifest
+    script: env-manifest.sh
+    layer: 1
+    blocking: true
+    runs: [local, ci]
+    why: Every environment read is declared; the same manifest checks target bindings before guarded migrations/builds.
+
   - name: focused-tests
     script: focused-tests.sh
     layer: 1

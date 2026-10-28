@@ -62,6 +62,18 @@ export function resetAnalyticsSession(): void {
   }
 }
 
+/** One event per completed request, including successful checks for the denominator. */
+export function trackSubscriptionCheck(props: {
+  source: 'status' | 'sync';
+  outcome: 'known' | 'unknown' | 'server_error' | 'client_error' | 'network_error';
+  status_code: number;
+  duration_ms: number;
+}): void {
+  try {
+    getPostHogClient().capture('subscription_check', { ...props, kind: typeof __DEV__ !== 'undefined' && __DEV__ ? 'development' : 'production' });
+  } catch (err) { logCaptureError('subscription_check', err); }
+}
+
 // ─── Onboarding screen views ─────────────────────────────────────────────────
 // Add `useTrackOnboardingScreenView('screen_name')` to each welcome/* screen
 // to measure per-step drop-off. Without this we only see onboarding_completed

@@ -37,7 +37,7 @@ const request = (path: string, email: string) => new NextRequest(`http://localho
 });
 
 test('the public health response never exposes Prisma configuration errors', async () => {
-  const response = await health();
+  const response = await health(new NextRequest('http://localhost/api/health'));
   assert.equal(response.status, 503);
   const body = await response.json();
   assert.equal(body.error, 'Service unavailable');

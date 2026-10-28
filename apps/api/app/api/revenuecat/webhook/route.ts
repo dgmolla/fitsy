@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
@@ -147,7 +148,7 @@ function sameInstant(a: Date | null, b: Date | null): boolean {
 // writes - give it headroom over Vercel's 10s default.
 export const maxDuration = 30;
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePOST(request: NextRequest): Promise<NextResponse> {
   // ─── Auth ──────────────────────────────────────────────────────────────────
   const expected = process.env["REVENUECAT_WEBHOOK_AUTH"];
   if (!expected) {
@@ -268,3 +269,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withApiTelemetry('POST', '/api/revenuecat/webhook', handlePOST);
