@@ -328,10 +328,16 @@ process.stdout.write(JSON.stringify({
         for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh', 'scripts/lib/db-target-guard.ts',
                      'apps/api/services/rateLimitStoreConfig.ts', 'scripts/deploy/pipeline-roles-approval.mjs',
                      'scripts/deploy/activate-runtime-role.ts',
+                     'prisma/schema.prisma', 'prisma/migrations/migration_lock.toml',
                      'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql'):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
+        # Migrations on either side of the held role change must still deploy.
+        for name in ('20261028110000_unrelated_before', '20261028130000_unrelated_after'):
+            target = self.root / 'prisma/migrations' / name
+            target.mkdir()
+            (target / 'migration.sql').write_text('SELECT 1;\n')
         # The deployment preflight and shared quota service execute unchanged;
         # substitute only the external Redis REST transport, never its caller.
         for name in ('scripts/deploy/rate-limit-preflight.ts', 'apps/api/services/rateLimitStore.ts'):
@@ -396,16 +402,36 @@ globalThis.fetch = async (url, init) => {
 ''')
         self.bin = self.root / 'bin'
         self.bin.mkdir()
-        for name in ('npx', 'npm'):
-            command = self.bin / name
-            command.write_text('#!/bin/bash\nset -eu\nprintf "%s %s\\n" "' + name + '" "$*" >> "$CALLS"\n'
-                               + ('if [[ "$*" == *"migrate deploy"* ]]; then exit "${MIGRATE_EXIT:-0}"; fi\n'
-                                  if name == 'npx' else 'exit "${BUILD_EXIT:-0}"\n'))
-            command.chmod(0o700)
+        command = self.bin / 'npx'
+        command.write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+with open(os.environ['CALLS'], 'a') as log:
+    log.write('npx ' + ' '.join(args) + '\\n')
+if args[:3] == ['prisma', 'migrate', 'deploy']:
+    schema = Path(args[args.index('--schema') + 1])
+    migrations = sorted(path.parent.name for path in (schema.parent / 'migrations').glob('*/migration.sql'))
+    Path(os.environ['MIGRATIONS']).write_text(json.dumps(migrations))
+    sys.exit(int(os.environ.get('MIGRATE_EXIT', '0')))
+''')
+        command.chmod(0o700)
+        command = self.bin / 'npm'
+        # Execute the same runtime validation used at API module load. A no-op
+        # build boundary previously hid the second legacy-credential failure.
+        command.write_text('''#!/bin/bash
+set -eu
+printf 'npm %s\\n' "$*" >> "$CALLS"
+node --import tsx -e 'require("./scripts/lib/db-target-guard").assertRuntimeDatabase(process.env.POSTGRES_PRISMA_URL)'
+exit "${BUILD_EXIT:-0}"
+''')
+        command.chmod(0o700)
         self.calls = self.root / 'calls'
+        self.migrations = self.root / 'migrations.json'
         self.env = {key: value for key, value in os.environ.items()
-                    if not key.startswith(('VERCEL', 'POSTGRES', 'PIPELINE_DATABASE_URL', 'PROD_', 'FITSY_ALLOW_PROD', 'GITHUB_ACTIONS', 'UPSTASH', 'NODE_OPTIONS'))}
+                    if not key.startswith(('VERCEL', 'POSTGRES', 'SUPABASE', 'PIPELINE_DATABASE_URL', 'PROD_', 'FITSY_ALLOW_PROD', 'FITSY_PIPELINE_ROLES', 'GITHUB_ACTIONS', 'UPSTASH', 'NODE_OPTIONS'))}
         self.env.update(PATH=str(self.bin) + ':' + os.environ['PATH'], CALLS=str(self.calls),
+                        MIGRATIONS=str(self.migrations),
                         NODE_OPTIONS=f'--require={database_transport} --import={transport}', REDIS_RESULT='ok',
                         UPSTASH_REDIS_REST_URL='https://quota.example.test',
                         UPSTASH_REDIS_REST_TOKEN='private-fixture-token',
@@ -422,38 +448,101 @@ globalThis.fetch = async (url, init) => {
 
     def drive(self, **changes):
         self.calls.write_text('')
+        self.migrations.unlink(missing_ok=True)
+        env = {**self.env, **changes}
+        env = {key: value for key, value in env.items() if value is not None}
         result = subprocess.run(['bash', 'scripts/dev/vercel-build.sh'], cwd=self.root,
-                                env={**self.env, **changes}, text=True, capture_output=True)
-        return result, self.calls.read_text().splitlines()
+                                env=env, text=True, capture_output=True)
+        calls = self.calls.read_text().splitlines()
+        # Production uses a disposable filtered schema. Keep existing order
+        # assertions while also proving the actual CLI input was removed.
+        for index, call in enumerate(calls):
+            if call.startswith('npx prisma migrate ') and '--schema ' in call:
+                schema = call.split('--schema ', 1)[1]
+                if schema != 'prisma/schema.prisma':
+                    self.assertFalse(Path(schema).parent.exists(), 'temporary migration input leaked')
+                    calls[index] = call.replace(schema, 'prisma/schema.prisma')
+        return result, calls
 
     def test_failed_runtime_activation_withholds_build_and_private_driver_errors(self):
-        result, calls = self.drive(ROLE_ACTIVATION_EXIT='1')
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(any(call.startswith('npm') for call in calls))
-        self.assertIn('Runtime database role activation failed', result.stderr)
-        self.assertIn('database login activation', result.stderr)
-        self.assertNotIn('private-fixture-password', result.stderr)
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        for environment in ('production', 'preview'):
+            bindings = {} if environment == 'production' else {
+                'SUPABASE_URL': 'https://kegycybiruksmrzvniha.supabase.co',
+                'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev.replace('postgres.', 'fitsy_app.')}
+            result, calls = self.drive(VERCEL_ENV=environment, ROLE_ACTIVATION_EXIT='1', **bindings)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(any(call.startswith('npm') for call in calls))
+            self.assertIn('Runtime database role activation failed', result.stderr)
+            self.assertIn('database login activation', result.stderr)
+            self.assertNotIn('activation skipped', result.stderr)
+            self.assertNotIn('private-fixture-password', result.stderr)
 
-    def test_preview_admin_runtime_binding_reports_configuration_failure_privately(self):
+    def test_preview_invalid_runtime_bindings_fail_instead_of_skipping(self):
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:private-fixture-password@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        for runtime in (dev.replace(':private-fixture-password@', '@'),
+                        dev.replace('postgres.', 'pipeline_writer.'), dev.replace('postgres.', 'fitsy_audit_readonly.')):
+            result, calls = self.drive(VERCEL_ENV='preview', SUPABASE_URL='https://kegycybiruksmrzvniha.supabase.co',
+                                       POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=runtime)
+            self.assertEqual(result.returncode, 1)
+            self.assertFalse(any(call.startswith('npm') for call in calls))
+            self.assertIn('Runtime database role activation failed', result.stderr)
+            self.assertNotIn('activation skipped', result.stderr)
+            self.assertNotIn('private-fixture-password', result.stderr)
+
+    def test_preview_legacy_runtime_binding_skips_activation_and_builds_privately(self):
         dev = 'postgresql://postgres.kegycybiruksmrzvniha:private-fixture-password@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
         result, calls = self.drive(VERCEL_ENV='preview', SUPABASE_URL='https://kegycybiruksmrzvniha.supabase.co',
-                                   POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev)
-        self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertFalse(any(call.startswith('npm') for call in calls))
-        self.assertIn('POSTGRES_PRISMA_URL must use fitsy_app and match SUPABASE_URL', result.stderr)
+                                   POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev, ROLE_ACTIVATION_EXIT='1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls[-1], 'npm run build -w apps/api')
+        self.assertIn('runtime role activation skipped', result.stderr)
+        self.assertIn('fitsy_app is not configured', result.stderr)
         self.assertNotIn('private-fixture-password', result.stdout + result.stderr)
 
-    def test_role_migration_requires_explicit_matching_owner_approval(self):
-        for approval in ('', 'a' * 64, 'true'):
+    def test_unapproved_role_migration_is_held_while_other_migrations_and_build_proceed(self):
+        role = '20261028120000_pipeline_writer_roles'
+        original = (self.root / 'prisma/migrations' / role / 'migration.sql').read_bytes()
+        for approval in (None, '', 'a' * 64, 'true'):
+            for runtime in (self.env['POSTGRES_PRISMA_URL'], self.env['POSTGRES_PRISMA_URL'].replace('fitsy_app.', 'postgres.')):
+                with self.subTest(approval=approval, role='legacy' if 'postgres.' in runtime else 'fitsy_app'):
+                    result, calls = self.drive(FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval, POSTGRES_PRISMA_URL=runtime,
+                                               ROLE_ACTIVATION_EXIT='1' if 'postgres.' in runtime else '0')
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(calls[-1], 'npm run build -w apps/api')
+                    self.assertEqual(json.loads(self.migrations.read_text()),
+                                     ['20261028110000_unrelated_before', '20261028130000_unrelated_after'])
+                    self.assertIn('holding ' + role, result.stderr)
+                    self.assertEqual((self.root / 'prisma/migrations' / role / 'migration.sql').read_bytes(), original)
+
+    def test_matching_approval_includes_exact_role_migration(self):
+        result, calls = self.drive()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls[-1], 'npm run build -w apps/api')
+        self.assertIn('20261028120000_pipeline_writer_roles', json.loads(self.migrations.read_text()))
+        self.assertNotIn('holding ', result.stderr)
+
+    def test_changed_role_sql_is_held_until_the_new_bytes_are_approved(self):
+        sql = self.root / 'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql'
+        sql.write_bytes(sql.read_bytes() + b'\n-- changed after approval\n')
+        result, calls = self.drive()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls[-1], 'npm run build -w apps/api')
+        self.assertNotIn(sql.parent.name, json.loads(self.migrations.read_text()))
+
+    def test_missing_role_sql_fails_closed_without_an_unfiltered_retry(self):
+        (self.root / 'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql').unlink()
+        for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
             result, calls = self.drive(FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
             self.assertNotEqual(result.returncode, 0)
-            self.assertEqual(calls, [])
-            self.assertIn('requires Dawit approval', result.stderr)
+            self.assertEqual(calls, ['redis EVAL'])
+            self.assertFalse(self.migrations.exists())
 
-    def test_admin_credentials_cannot_become_the_app_runtime_binding(self):
-        result, calls = self.drive(POSTGRES_PRISMA_URL=self.env['POSTGRES_URL_NON_POOLING'])
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(calls, [])
+    def test_pipeline_and_audit_credentials_cannot_become_the_app_runtime_binding(self):
+        for role in ('pipeline_writer', 'fitsy_audit_readonly', 'unknown'):
+            result, calls = self.drive(POSTGRES_PRISMA_URL=self.env['POSTGRES_PRISMA_URL'].replace('fitsy_app.', role + '.'))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(calls, [])
 
     def test_missing_shared_store_withholds_deployment_before_migrations_or_build(self):
         for environment in ('production', 'preview'):
@@ -591,13 +680,17 @@ globalThis.fetch = async (url, init) => {
         for environment in ('production', 'preview'):
             bindings = {} if environment == 'production' else {'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev.replace('postgres.', 'fitsy_app.')}
             wrong_auth = 'https://kegycybiruksmrzvniha.supabase.co' if environment == 'production' else self.env['SUPABASE_URL']
-            for auth in ('', wrong_auth):
-                with self.subTest(environment=environment, auth=auth):
-                    result, calls = self.drive(VERCEL_ENV=environment, SUPABASE_URL=auth, **bindings)
-                    self.assertEqual(result.returncode, 1, result.stderr)
-                    self.assertFalse(any(call.startswith('npm') for call in calls))
-                    self.assertIn('Runtime database role activation failed', result.stderr)
-                    self.assertNotIn('fixture@', result.stdout + result.stderr)
+            for role in ('fitsy_app', 'postgres'):
+                for auth in ('', wrong_auth):
+                    with self.subTest(environment=environment, auth=auth, role=role):
+                        runtime = bindings.get('POSTGRES_PRISMA_URL', self.env['POSTGRES_PRISMA_URL']).replace('fitsy_app.', role + '.')
+                        result, calls = self.drive(VERCEL_ENV=environment, SUPABASE_URL=auth,
+                                                   **{**bindings, 'POSTGRES_PRISMA_URL': runtime})
+                        self.assertEqual(result.returncode, 1, result.stderr)
+                        self.assertFalse(any(call.startswith('npm') for call in calls))
+                        self.assertIn('Runtime database role activation failed', result.stderr)
+                        self.assertNotIn('activation skipped', result.stderr)
+                        self.assertNotIn('fixture@', result.stdout + result.stderr)
 
     def test_missing_or_unsafe_redis_configuration_withholds_migration_and_build(self):
         dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
@@ -628,14 +721,17 @@ globalThis.fetch = async (url, init) => {
     def test_undeployed_development_still_builds_without_redis(self):
         dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
         result, calls = self.drive(VERCEL_ENV='development', VERCEL='', POSTGRES_URL_NON_POOLING=dev,
-                                   POSTGRES_PRISMA_URL=dev.replace('postgres.', 'fitsy_app.'), UPSTASH_REDIS_REST_URL='', UPSTASH_REDIS_REST_TOKEN='')
+                                   POSTGRES_PRISMA_URL=dev.replace('postgres.', 'fitsy_app.'), SUPABASE_URL='https://kegycybiruksmrzvniha.supabase.co',
+                                   UPSTASH_REDIS_REST_URL='', UPSTASH_REDIS_REST_TOKEN='')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, ['npm run build -w apps/api'])
 
     def test_failed_migration_withholds_build_and_build_failure_is_not_success(self):
-        result, calls = self.drive(MIGRATE_EXIT='7')
-        self.assertEqual(result.returncode, 7)
-        self.assertFalse(any(call.startswith('npm') for call in calls))
+        for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
+            result, calls = self.drive(MIGRATE_EXIT='7', FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
+            self.assertEqual(result.returncode, 7)
+            self.assertFalse(any(call.startswith('npm') for call in calls))
+            self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
         result, calls = self.drive(BUILD_EXIT='9')
         self.assertEqual(result.returncode, 9)
         self.assertEqual(calls[-1], 'npm run build -w apps/api')

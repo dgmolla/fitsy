@@ -131,7 +131,13 @@ export function assertRuntimeDatabase(value: string | undefined, authUrl = proce
           ["http:", "https:"].includes(auth.protocol))) &&
         auth.pathname === "/" && !auth.username && !auth.password && !auth.search && !auth.hash) return target.url;
   } else if ([DEV_PROJECT_REF, PROD_PROJECT_REF].includes(target.ref ?? "")) {
-    if (authUrl === `https://${target.ref}.supabase.co` || authUrl === `https://${target.ref}.supabase.co/`) return assertDatabaseRole(target.url, 'fitsy_app');
+    if (authUrl === `https://${target.ref}.supabase.co` || authUrl === `https://${target.ref}.supabase.co/`) {
+      // Existing environments retain their explicit postgres binding until the
+      // owner provisions fitsy_app. Never substitute a different credential.
+      const username = decodeURIComponent(new URL(target.url).username);
+      if (username === 'postgres' || username === `postgres.${target.ref}`) return target.url;
+      return assertDatabaseRole(target.url, 'fitsy_app');
+    }
   }
   return refuse("DB/Auth project mismatch: POSTGRES_PRISMA_URL and SUPABASE_URL must identify the same project (local fixtures may use DEV Auth)");
 }
