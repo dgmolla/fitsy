@@ -40,6 +40,9 @@ test("every script Prisma client binds its actual datasource to a shared guard o
       if (ts.isCallExpression(node) && guards.has(node.expression.getText(source))) return true;
       // Snapshot's separately pinned source session is explicitly made read-only before queries.
       if (path === "scripts/dev/snapshot.ts" && ts.isCallExpression(node) && node.expression.getText(source) === "prodReadOnlyUrl") return true;
+      // This operator-only entrypoint pins PROD and checks the typed project ref.
+      // Its CLI tests also require --prod and a TTY before either client exists.
+      if (path === "scripts/maintenance/provision-prod-readonly-role.ts" && ts.isCallExpression(node) && node.expression.getText(source) === "confirmedProdAuditUrl") return true;
       if (ts.isIdentifier(node) && !seen.has(node.text) && bindings.has(node.text)) return guarded(bindings.get(node.text)!, new Set([...seen, node.text]));
       return ts.forEachChild(node, child => guarded(child, seen) || undefined) === true;
     };

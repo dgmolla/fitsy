@@ -5,7 +5,8 @@
   "scripts": {
     "test": "jest",
     "type-check": "tsc --noEmit",
-    "lint": "eslint --config eval/jev-macro/eslint.config.mjs eval/jev-macro eval/chain-match eval/lib/jev-experiment.ts && npm run lint:pdf-finder && npm run lint:suite",
+    "db:provision-prod-readonly": "tsx maintenance/provision-prod-readonly-role.ts",
+    "lint": "eslint --config eval/jev-macro/eslint.config.mjs eval/jev-macro eval/chain-match eval/lib/jev-experiment.ts maintenance lib/audit-role.ts dev/provision-audit-role.ts && npm run lint:pdf-finder && npm run lint:suite",
     "eval:pdf-finder": "node --import tsx eval/pdf-finder/run.ts",
     "test:pdf-finder": "jest --runInBand eval/pdf-finder",
     "lint:pdf-finder": "eslint --config eval/jev-macro/eslint.config.mjs eval/pdf-finder",

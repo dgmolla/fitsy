@@ -5,8 +5,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { assertDevDatabase, databaseTarget, DEV_PROJECT_REF } from "../lib/db-target-guard";
+import { AUDIT_ROLE, auditRoleStatements } from "../lib/audit-role";
 
-const role = "fitsy_audit_readonly";
+const role = AUDIT_ROLE;
 async function main() {
   if (process.argv.slice(2).join(" ") !== "--apply") throw new Error("Use provision-audit-role.ts --apply with the DEV environment loaded");
   const url = assertDevDatabase(process.env["POSTGRES_URL_NON_POOLING"]);
@@ -40,16 +41,10 @@ async function main() {
         (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls OR rolinherit) AS safe
         FROM pg_roles WHERE rolname = '${role}'`);
       if (!attributes?.safe) throw new Error("New audit role has unexpected privileges");
-      const sql = readFileSync(join(__dirname, "sql/audit-role.sql"), "utf8");
-      // Preserve the DO block as one statement, then split ordinary utility statements.
-      const [prefix, block] = sql.split("DO $audit$");
-      for (const [index, statement] of prefix!.replace(/^--.*$/gm, "").split(";").filter(part => part.trim()).entries()) {
+      for (const [index, statement] of auditRoleStatements().entries()) {
         stage = `grant-statement-${index + 1}`;
         await tx.$executeRawUnsafe(statement);
       }
-      if (!block) throw new Error("DEV audit SQL is incomplete");
-      stage = "select-policies";
-      await tx.$executeRawUnsafe("DO $audit$" + block);
     }, { timeout: 30_000 });
     applied = true;
     if (readFileSync(file, "utf8") !== original) throw new Error("Secrets file changed concurrently; recover the private pending file before continuing");

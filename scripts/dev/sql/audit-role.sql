@@ -1,4 +1,4 @@
--- DEV only, outside prisma/migrations. Apply through provision-audit-role.ts.
+-- Shared DEV/PROD grants, outside prisma/migrations; use the guarded provisioners.
 -- The caller creates a fresh LOGIN NOINHERIT role and verifies unprivileged defaults.
 -- Supabase postgres cannot ALTER superuser/replication attributes, even to false.
 ALTER ROLE fitsy_audit_readonly SET default_transaction_read_only = on;
