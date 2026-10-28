@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // Read-only host preflight. Resolve one backend before building or starting Metro.
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isMain } from '../verify/impact-plan.mjs';
 import { root, repoEnv } from '../verify/product-flow.mjs';
 import { backend } from './product-flow.mjs';
 import { backendOrigin } from './backend-identity.mjs';
@@ -30,14 +29,14 @@ export function selectBackend(head, value = process.env.EXPO_PUBLIC_API_URL) {
   // Use the immutable deployment URL, never reassign dev or rely on a moving branch alias.
   const selected = backendOrigin(`https://${candidate.url}`);
   const identity = backend(selected);
-  // `vercel list --format json` omits deployment ids, so bind to the health-reported revision and id instead.
+  // `vercel list --format json` omits deployment ids; inspect the immutable URL to bind its revision and id.
   if (identity.backendRevision !== head || !/^dpl_/.test(identity.backendDeployment || '') ||
       (candidate.id && identity.backendDeployment !== candidate.id))
     throw new Error('Selected preview no longer matches the PR head and deployment identity');
   return { head, backend: selected, ...identity };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   try {
     if (process.argv.length !== 3) throw new Error('Usage: preview-backend.mjs <full-checkout-head-sha>');
     console.log(JSON.stringify(selectBackend(process.argv[2])));

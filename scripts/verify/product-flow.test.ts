@@ -114,6 +114,7 @@ deterministicTest('final candidate accepts complete native proof without video w
 
 deterministicTest.each([
   ['https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app', true],
+  ['https://fitsy-immutable123-dawits-projects-74b6e00f.vercel.app', true],
   ['https://api.fitsy.org', false], ['https://unrelated.vercel.app', false],
 ] as const)('final publication validates backend origin %s', (backend, accepted) => {
   const report = fixture();

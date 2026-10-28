@@ -34,16 +34,19 @@ test.each([
   expect(JSON.stringify(log.mock.calls)).not.toMatch(/private-access-token|private-password|fixture@example|Unauthorized/);
 });
 
-test('preflights and authenticates against the same PR preview configured for the app', () => {
-  const origin = 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app';
-  const { http, output } = execute(200, 'private-access-token', 401, 401, origin);
-  expect(http.post.mock.calls[0][0]).toBe(origin + '/api/auth/login');
-  expect(http.get.mock.calls.every(([url]) => url.startsWith(origin + '/api/'))).toBe(true);
-  expect(output.dataApiResponses).toHaveLength(2);
-});
+test.each(['https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app',
+  'https://fitsy-immutable123-dawits-projects-74b6e00f.vercel.app'])(
+  'preflights and authenticates against the app preview %s', origin => {
+    const { http, output } = execute(200, 'private-access-token', 401, 401, origin);
+    expect(http.post.mock.calls[0][0]).toBe(origin + '/api/auth/login');
+    expect(http.get.mock.calls.every(([url]) => url.startsWith(origin + '/api/'))).toBe(true);
+    expect(output.dataApiResponses).toHaveLength(2);
+  },
+);
 
 test.each([undefined, '', 'https://api.fitsy.org', 'https://fitsy.org', 'http://dev.fitsy.org',
   'https://dev.fitsy.org@evil.test', 'https://dev.fitsy.org.evil.test', 'https://unrelated.vercel.app',
+  'https://fitsy-immutable123-other-team.vercel.app',
   'https://fitsy-api-branch-other-team.vercel.app', 'https://dev.fitsy.org/api', 'https://dev.fitsy.org?key=secret'])
 ('refuses an unapproved API origin before sending fixture credentials: %s', origin => {
   // undefined is an explicit missing Maestro variable, not execute's default.

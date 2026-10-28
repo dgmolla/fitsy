@@ -38,6 +38,9 @@ Keep the selected deployment pinned through acceptance and retain the original f
 This does not change `dev.fitsy.org`, publish a deployment, grant access or replace any flow assertion.
 The helper's subprocess regressions run with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath sim/preview-backend.test.ts sim/backend-identity.test.ts`.
 Changing this repository helper alone does not install the external poller hook; verify that the installed owner consumes it before another native replay.
+On macOS, the poller's temporary worktree can have a `/var/...` pathname that Node resolves to `/private/var/...`.
+Native CLI entrypoint guards must compare real paths so that selection, builds and acceptance actually execute through that alias; a zero exit with empty output is a setup failure.
+The selector regressions launch the real CLIs through an aliased checkout and cover Vercel listings without deployment IDs and immutable `fitsy-<hash>` preview URLs.
 
 ## Optional Slack previews
 

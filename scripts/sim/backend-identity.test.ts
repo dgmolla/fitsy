@@ -34,7 +34,8 @@ test.each([
 
 const preview = 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app';
 test.each(['https://dev.fitsy.org', preview,
-  'https://fitsy-api-abc123-dawits-projects-74b6e00f.vercel.app'])('shares a guarded backend with Maestro: %s', origin => {
+  'https://fitsy-api-abc123-dawits-projects-74b6e00f.vercel.app',
+  'https://fitsy-immutable123-dawits-projects-74b6e00f.vercel.app'])('shares a guarded backend with Maestro: %s', origin => {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e',
     `import {backendOrigin,maestroApiArgs} from ${JSON.stringify(modulePath)};
      process.stdout.write(JSON.stringify([backendOrigin(${JSON.stringify(origin)}),maestroApiArgs({EXPO_PUBLIC_API_URL:${JSON.stringify(origin)}})]));`], { encoding: 'utf8' });

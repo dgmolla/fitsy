@@ -2,7 +2,8 @@
 // Keep credentials and response bodies local, outside Maestro's persisted output.
 (function () {
   var base = typeof EXPO_PUBLIC_API_URL === 'string' ? EXPO_PUBLIC_API_URL : '';
-  if (!/^https:\/\/(?:dev\.fitsy\.org|fitsy-api-[a-z0-9-]+-dawits-projects-74b6e00f\.vercel\.app)$/.test(base)) {
+  // Match the host guard, including verified fitsy-<hash> immutable deployment URLs.
+  if (!/^https:\/\/(?:dev\.fitsy\.org|fitsy-[a-z0-9-]+-dawits-projects-74b6e00f\.vercel\.app)$/.test(base)) {
     throw new Error('Maestro refuses production and unrelated API origins; pass the app EXPO_PUBLIC_API_URL');
   }
   var login = http.post(base + '/api/auth/login', {

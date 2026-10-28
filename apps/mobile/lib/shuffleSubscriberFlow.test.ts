@@ -23,16 +23,19 @@ function execute({ login = reply({ token: 'private-token' }), validation = reply
   return { output, http };
 }
 
-it('checks shuffle capability, changed results and RevenueCat proof at the app PR preview', () => {
-  const origin = 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app';
-  const { http, output } = execute({ origin });
-  expect(http.post.mock.calls[0][0]).toBe(origin + '/api/auth/login');
-  expect(http.get.mock.calls.every(([url]) => url.startsWith(origin + '/api/'))).toBe(true);
-  expect(output.shuffleApiListChanged).toBe(true);
-  expect(output.shuffleApiVerified).toBe(true);
-});
+it.each(['https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app',
+  'https://fitsy-immutable123-dawits-projects-74b6e00f.vercel.app'])(
+  'checks shuffle capability, changed results and RevenueCat proof at app preview %s', origin => {
+    const { http, output } = execute({ origin });
+    expect(http.post.mock.calls[0][0]).toBe(origin + '/api/auth/login');
+    expect(http.get.mock.calls.every(([url]) => url.startsWith(origin + '/api/'))).toBe(true);
+    expect(output.shuffleApiListChanged).toBe(true);
+    expect(output.shuffleApiVerified).toBe(true);
+  },
+);
 
 it.each(['https://api.fitsy.org', 'https://unrelated.vercel.app', 'https://dev.fitsy.org@evil.test',
+  'https://fitsy-immutable123-other-team.vercel.app',
   'https://fitsy-api-branch-other-team.vercel.app', 'https://dev.fitsy.org/api', ''])
 ('refuses an unapproved shuffle origin before login: %s', origin => {
   expect(() => execute({ origin })).toThrow(/refuses production/);

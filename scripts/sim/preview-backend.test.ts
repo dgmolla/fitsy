@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -19,14 +19,16 @@ beforeAll(() => {
   git('add', '.'); git('commit', '-qm', 'candidate fixture'); head = git('rev-parse', 'HEAD');
 });
 afterAll(() => rmSync(root, { recursive: true, force: true }));
-const hostname = 'fitsy-api-immutable-candidate-dawits-projects-74b6e00f.vercel.app';
+const hostname = 'fitsy-immutable123-dawits-projects-74b6e00f.vercel.app';
 const preview = 'https://' + hostname;
 const deployment = (sha: string) => ({ id: 'dpl_fixture', name: 'fitsy-api', readyState: 'READY', target: null as string | null,
   source: 'git', gitSource: { sha }, meta: { githubCommitSha: sha } });
 
 function execute({ stable = deployment(previous), detail = deployment(head),
   listed = [{ id: 'dpl_fixture', url: hostname, name: 'fitsy-api', state: 'READY', target: null,
-    meta: { githubCommitSha: head } }], origin = 'https://dev.fitsy.org', sha = head, unavailable = false, dirty = false } = {}) {
+    meta: { githubCommitSha: head } }] as { id?: string; url: string; name: string; state: string; target: string | null;
+      meta: { githubCommitSha: string } }[], origin = 'https://dev.fitsy.org', sha = head, unavailable = false, dirty = false,
+  aliasedCheckout = false } = {}) {
   const dir = mkdtempSync(resolve(tmpdir(), 'fitsy-preview-selection-'));
   const trace = resolve(dir, 'trace.jsonl');
   try {
@@ -39,7 +41,9 @@ const result = args[0] === 'list' ? ${JSON.stringify({ deployments: listed })}
   : args[1].endsWith('dev.fitsy.org') ? ${JSON.stringify(stable)} : ${JSON.stringify(detail)};
 process.stdout.write(JSON.stringify(result));
 `, { mode: 0o755 });
-    const result = spawnSync(process.execPath, [cli, sha], { cwd: root, encoding: 'utf8',
+    const alias = resolve(dir, 'checkout');
+    if (aliasedCheckout) symlinkSync(resolve(__dirname, '../..'), alias, 'dir');
+    const result = spawnSync(process.execPath, [aliasedCheckout ? resolve(alias, 'scripts/sim/preview-backend.mjs') : cli, sha], { cwd: root, encoding: 'utf8',
       env: { ...cleanEnv, PATH: dir + ':' + cleanEnv.PATH, FITSY_PRODUCT_ROOT: root, EXPO_PUBLIC_API_URL: origin } });
     let calls: string[][] = [];
     try { calls = readFileSync(trace, 'utf8').trim().split('\n').map(line => JSON.parse(line)); } catch { /* Refused before calling Vercel. */ }
@@ -62,6 +66,40 @@ test('stale stable dev selects the exact Ready PR preview before native work', (
   ]);
   expect(result.calls.every(args => ['api', 'list'].includes(args[0]!))).toBe(true);
 });
+
+test('the host temporary checkout alias still emits a verified preview identity', () => {
+  // On macOS the poller launches /var/... while Node resolves the module to /private/var/....
+  const result = execute({ aliasedCheckout: true });
+  expect(result.status).toBe(0);
+  expect(result.stdout.trim()).not.toBe('');
+  expect(JSON.parse(result.stdout)).toEqual({ head, backend: preview, backendRevision: head, backendDeployment: 'dpl_fixture' });
+  expect(result.calls).toHaveLength(3);
+});
+
+test('accepts the real Vercel listing shape without a deployment ID', () => {
+  const result = execute({ listed: [{ url: hostname, name: 'fitsy-api', state: 'READY', target: null,
+    meta: { githubCommitSha: head } }] });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toEqual({ head, backend: preview, backendRevision: head, backendDeployment: 'dpl_fixture' });
+});
+
+test.each(['sim/product-flow.mjs', 'verify/product-flow.mjs', 'verify/media-integration.mjs', 'sim/slack-video.mjs'])(
+  'native acceptance CLI %s also runs through an aliased checkout', entrypoint => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'fitsy-native-entrypoint-'));
+    try {
+      const alias = resolve(dir, 'checkout');
+      symlinkSync(resolve(__dirname, '../..'), alias, 'dir');
+      const planning = entrypoint === 'verify/product-flow.mjs';
+      const result = spawnSync(process.execPath, [resolve(alias, 'scripts', entrypoint), planning ? '--plan' : 'invalid'], {
+        cwd: root, encoding: 'utf8', env: { ...cleanEnv, FITSY_PRODUCT_ROOT: root, CI: '1', FITSY_DIFF_BASE: '' },
+      });
+      expect(result.status).toBe(1);
+      if (planning) expect(JSON.parse(result.stdout)).toMatchObject({ name: 'product-flow', status: 'fail',
+        summary: 'CI must supply the candidate diff base' });
+      else expect(result.stderr.trim()).not.toBe('');
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  },
+);
 
 test.each(['https://dev.fitsy.org', preview])('a matching configured backend stays selected: %s', origin => {
   const result = execute({ stable: deployment(head), origin });

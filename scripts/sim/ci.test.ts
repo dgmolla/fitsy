@@ -246,7 +246,8 @@ test.each([
   expect(result.stderr).toContain(error);
 });
 
-test.each(['https://dev.fitsy.org', 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app'])
+test.each(['https://dev.fitsy.org', 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app',
+  'https://fitsy-immutable123-dawits-projects-74b6e00f.vercel.app'])
 ('the real native entrypoint accepts configured nonproduction backend %s', origin => {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e',
     `import { environment } from ${JSON.stringify(resolve(__dirname, 'product-flow.mjs'))};

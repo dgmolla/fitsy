@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { isMain } from '../verify/impact-plan.mjs';
 import { root, inputHash, candidatePlan, selectedFlows, digest, validate, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance } from '../verify/product-flow.mjs';
 import { backendOrigin, backendRevision, maestroApiArgs } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
@@ -677,7 +678,7 @@ async function check() {
   validate(report, candidatePlan(requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
 try {
   const [command, ...args] = process.argv.slice(2);
   if (['build', 'run'].includes(command) && process.platform === 'darwin') {
