@@ -62,7 +62,8 @@ export function changedFiles(options = {}) {
 export function focusedDatabaseRequired(paths, env = process.env) {
   return Boolean(env.POSTGRES_PRISMA_URL || env.POSTGRES_URL_NON_POOLING || env.PIPELINE_DATABASE_URL) ||
     paths.some(path => typeof path === 'string' && (path.startsWith('apps/api/') ||
-      /^scripts\/(?:hex-resume|hex-persist|pipeline-completed-hex|mini-hex-e2e)\.test\.ts$/.test(path)));
+      /^scripts\/(?:hex-resume|hex-persist|pipeline-completed-hex|mini-hex-e2e)\.test\.ts$/.test(path) ||
+      /^scripts\/pipeline-v2\/.*\.db\.test\.ts$/.test(path)));
 }
 
 export const allTestGroups = ['api', 'scripts', 'mobile'];

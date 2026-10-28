@@ -29,6 +29,7 @@ test('real CLI sources one hex, abstains on unreviewed/independent items, persis
   expect(result.report.matches).toMatchObject([{ restaurantId: 'restaurant-0', name: 'Chicken Plate', servingSize: '1 standard chicken plate' }]);
   expect(result.report.pdfJobs).toMatchObject([{ brandId: 'brand-1', status: 'pending' }]);
   expect(result.events.filter((e: { type: string }) => e.type === 'db_commit')).toHaveLength(1);
+  expect(result.events.filter((e: { type: string }) => e.type === 'ue_rate_admission')).toHaveLength(4);
   const estimates = result.events.find((e: { type: string }) => e.type === 'db_estimates');
   expect(estimates.sources.filter((s: string) => s === 'official')).toHaveLength(1);
   expect(estimates.sources.filter((s: string) => s === 'jev')).toHaveLength(4);
@@ -92,6 +93,21 @@ test('the supported root npm command invokes the guarded single-hex entrypoint',
   const result = spawnSync('npm', ['run', 'preload:v2:dev', '--', `--hex-id=${hexId}`, '--run-id=test', '--out=unused', '--cost-cap-usd=6'],
     { cwd: root, encoding: 'utf8', timeout: 30_000, env: { PATH: process.env.PATH, HOME: process.env.HOME } });
   expect(result.status).toBe(1); expect(result.stderr).toContain('DEV POC cap must be between $0 and $5');
+});
+test('the guarded CLI inspects and configures the global UE cap with lossless counter output', () => {
+  const out = mkdtempSync(join(tmpdir(), 'v2-rate-cli-')); dirs.push(out);
+  for (const args of [[], ['--requests-per-second=0.5']]) {
+    const result = spawnSync(process.execPath, ['--require', join(root, 'scripts/test-fixtures/pipeline-v2-runtime.cjs'), '--import', 'tsx',
+      'scripts/preload-v2.ts', 'ue-rate', ...args], { cwd: root, encoding: 'utf8', timeout: 30_000,
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, PIPELINE_DATABASE_URL: 'postgresql://test:test@localhost:1/test', V2_TEST_EVENTS: join(out, 'events') } });
+    expect(result.stderr).toBe(''); expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ capRps: args.length ? 0.5 : 1, requests: '0', waits: '0', throttles: '0' });
+  }
+});
+test('the rate command rejects invalid caps before any database or provider access', () => {
+  const result = spawnSync('npm', ['run', 'preload:v2:dev', '--', 'ue-rate', '--requests-per-second=11'],
+    { cwd: root, encoding: 'utf8', timeout: 30_000, env: { PATH: process.env.PATH, HOME: process.env.HOME } });
+  expect(result.status).toBe(1); expect(result.stderr).toContain('UE rate must be 0.01-10');
 });
 test('overflow is a failed sourced item, never a clipped estimate or completed hex', () => {
   const result = run({ V2_TEST_OVERFLOW: '1' }); expect(result.status).toBe(1);

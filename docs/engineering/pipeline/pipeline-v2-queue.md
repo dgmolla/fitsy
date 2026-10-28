@@ -1,10 +1,10 @@
 # Pipeline v2 shared hex queue
 
-**TL;DR:** DEV workers share leased hex jobs, durable paid-call replay, bounded retries and atomic hex completion.
+**TL;DR:** DEV workers share leased hex jobs, paid-call replay, UE throttling, bounded retries and atomic hex completion.
 
 The queue runs the [existing v2 hex implementation](pipeline-v2-dev-poc.md) against explicitly enqueued resolution-7 LA cells.
 It retains the DEV-only target guard, dedicated `pipeline_writer` credentials, reviewed official matcher, Jev protocol and cumulative $5 per-hex cap.
-Cloud hosting, shared UE throttling, PDF execution and fleet-wide budgets remain the later #593-#596 work.
+Cloud hosting, PDF execution and fleet-wide budgets remain the later #594-#596 work.
 No mobile journey changes or App Store actions are involved.
 
 ```mermaid
@@ -12,6 +12,9 @@ flowchart TD
   Enqueue[Explicit run and hexes] --> Pending[Pending hex_jobs]
   Pending --> Claim[Atomic claim with SKIP LOCKED]
   Claim --> Work[Worker with token and heartbeat]
+  Work --> UE[Shared PostgreSQL UE bucket]
+  UE -->|429 or 403| Cooldown[Global cooldown and half rate]
+  Cooldown --> UE
   Work --> Journal[Append-only reservations, responses and menu snapshots]
   Journal --> Tx[Lock owned job in existing hex transaction]
   Tx --> Complete[Menus + PipelineCompletedHex + completed job commit together]
@@ -62,6 +65,52 @@ A worker exits when no eligible job exists, the bound is reached or a job does n
 This command does not install a daemon or scheduler.
 Private per-attempt exports under `--out` are optional recovery evidence; the database journal remains authoritative even on another host.
 
+## Shared Uber Eats rate and backoff
+
+The additive `20261028140000_pipeline_ue_rate_limit` migration installs one bucket per database.
+Every Pipeline v2 worker and the single-hex command use it through the shared UE transport.
+Store requests, feed pagination and transport retries each require admission; saved menu replay does not consume a token.
+The bucket has capacity one and defaults to one request per second, so additional workers and idle time cannot accumulate a burst.
+It has no worker, run, hex or cookie namespace and no process-local fallback.
+Keep legacy ingestion commands stopped while operating the v2 fleet because those separate commands do not use this v2 bucket.
+
+Inspect or configure the shared cap through the existing guarded DEV entrypoint:
+
+```sh
+npm run preload:v2:dev -- ue-rate
+npm run preload:v2:dev -- ue-rate --requests-per-second=0.5
+```
+
+The supported cap is 0.01-10 requests per second.
+This is a fleet-wide upper bound, not a per-worker rate or a claim that UE permits that traffic.
+Only this explicit configuration command changes the cap; worker startup never resets it.
+Lowering it immediately lowers the effective rate and postpones the next admission as needed.
+Raising it preserves any reduced rate and active cooldown, then uses the same gradual recovery.
+No new required environment variables or deployment preflight credentials are introduced.
+
+PostgreSQL row locks serialize token consumption, configuration and throttle signals.
+Database time is sampled after acquiring the row lock; worker clock skew cannot grant extra tokens.
+Workers never reserve future tokens and must recheck the shared state after waking.
+Waiting releases the database connection and does not consume the HTTP timeout; losing a job lease cancels it.
+Missing state, database failures and failed throttle writes withhold further UE transport.
+Already admitted requests can still be in flight when another worker reports a throttle.
+
+Every HTTP 429 halves the global effective rate and blocks admission for at least 30 seconds.
+HTTP 403 does the same with a five-minute minimum because it signals a block.
+`Retry-After` seconds and HTTP dates can extend either minimum, including on the last transport attempt.
+The effective rate has a floor of 0.01 requests per second.
+After cooldown plus one quiet minute, admission can add 5% of the configured cap, at most once per minute and never beyond the cap.
+Idle time earns only one recovery step on the next admission; repeated throttles halve the current reduced rate again.
+The existing process-level soft-block circuit breaker remains an additional stop.
+
+The rate command returns durable cumulative `requests`, `waits` and `throttles` counters, plus the cap, effective rate, next admission and cooldown times.
+`requests` counts consumed permits, including permits abandoned after cancellation; `waits` counts each acquisition that waited, not each polling query.
+Counters are returned as decimal strings so JSON cannot lose bigint precision.
+Each throttle emits a structured `ue_throttle` log with status, cap, effective rate, cooldown and cumulative throttle count.
+The same event is retained in the current hex journal and contributes to its `ueThrottles` report count.
+Structured logs and v2 HTTP failure logs omit provider bodies and cookies.
+The pipeline role can read and update the singleton, the audit role can only read it, and application/client roles have no access.
+
 ## Ownership, checkpoints and retries
 
 `hex_jobs` stores status, attempts, a fixed maximum, database retry time, priority, cap, lease owner, fresh lease UUID and expiry.
@@ -106,6 +155,9 @@ Never delete a journal or recreate a job to bypass its cap or accounting stop.
 ## Verification
 
 The real-Postgres suite exercises concurrent clients, locked-row skipping, token fencing, heartbeat renewal, expiry reclaim, retry timing, attempt exhaustion, permissions and atomic rollback/completion.
+The UE database suite adds independent-client admission contention, idle burst prevention, global backoff for waiting workers, Retry-After, gradual recovery, shared configuration and singleton permissions.
+It records grant timestamps inside PostgreSQL and checks every grant span at microsecond precision without a timing allowance, while verifying every HTTP attempt consumed a permit.
+A deliberately delayed first database reply covers client scheduling jitter; the test-owned observation schema and trigger are removed after the scenario.
 Its CLI recovery tests SIGKILL a worker after durable paid responses, start a worker with a different output directory and assert that the original paid requests are not repeated.
 A separate in-flight kill scenario proves unknown spend is parked without a second paid call.
 Only provider HTTP is substituted in these real-database CLI scenarios.
@@ -114,9 +166,11 @@ Database-free unit tests cover argument bounds, canonical and legacy request rep
 ```sh
 npm test -w scripts -- --runInBand --runTestsByPath \
   pipeline-v2/queue.test.ts pipeline-v2/journal.test.ts pipeline-v2/cli.test.ts \
+  pipeline-v2/ue-rate-limiter.test.ts pipeline-v2/ue-transport.test.ts \
   verify/security-schema.test.ts lib/db-writer-inventory.test.ts
 node scripts/verify/focused-tests.mjs --set \
   apps/api/tests/db/hexJobs.db.test.ts \
+  scripts/pipeline-v2/ue-rate-limiter.db.test.ts \
   apps/api/tests/db/security.db.test.ts \
   apps/api/tests/db/pipelineRoles.db.test.ts
 npm run verify -- --only=focused-tests

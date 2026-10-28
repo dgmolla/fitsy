@@ -381,6 +381,24 @@ model HexJobEvent {
   @@map("hex_job_events")
 }
 
+// A single shared UE bucket, including its reduced rate and durable throttle counters.
+model PipelineUeRateLimit {
+  singleton          Boolean   @id @default(true)
+  capRps             Float     @default(1) @map("cap_rps")
+  effectiveRps       Float     @default(1) @map("effective_rps")
+  nextRequestAt      DateTime  @default(now()) @map("next_request_at") @db.Timestamptz(6)
+  blockedUntil       DateTime  @default(now()) @map("blocked_until") @db.Timestamptz(6)
+  recoverAfter       DateTime  @default(now()) @map("recover_after") @db.Timestamptz(6)
+  requests           BigInt    @default(0)
+  waits              BigInt    @default(0)
+  throttles          BigInt    @default(0)
+  lastThrottleStatus Int?      @map("last_throttle_status")
+  lastThrottleAt     DateTime? @map("last_throttle_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("pipeline_ue_rate_limit")
+}
+
 enum GoalType {
   cut
   bulk

@@ -169,10 +169,11 @@ test.each(["import unittest\nclass Outcome(unittest.TestCase):\n @unittest.expec
   expect(cli('--set', 'scripts/fixture.test.py').status).toBe(0);
   expect(cli().status).toBe(1);
 });
-test.each([undefined, 'postgresql://external.example/prod'])('direct API focused selection rejects unowned database %s', url => {
-  mkdirSync(join(root, 'apps/api'), { recursive: true });
-  writeFileSync(join(root, 'apps/api/fixture.test.ts'), "throw new Error('must not execute');\n");
-  expect(cli('--set', 'apps/api/fixture.test.ts').status).toBe(0);
+test.each(['apps/api/fixture.test.ts', 'scripts/pipeline-v2/fixture.db.test.ts'].flatMap(path =>
+  [undefined, 'postgresql://external.example/prod'].map(url => ({ path, url }))))('direct $path rejects unowned database $url', ({ path, url }) => {
+  mkdirSync(join(root, path, '..'), { recursive: true });
+  writeFileSync(join(root, path), "throw new Error('must not execute');\n");
+  expect(cli('--set', path).status).toBe(0);
   const result = spawnSync(process.execPath, ['scripts/verify/focused-tests.mjs'], { cwd: root, encoding: 'utf8', env: { ...env, FITSY_VERIFY_OWNED_DB: '', POSTGRES_PRISMA_URL: url, POSTGRES_URL_NON_POOLING: url } });
   expect(result.status).toBe(1);
   expect(result.stderr).not.toContain('must not execute');

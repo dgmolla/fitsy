@@ -6,6 +6,7 @@ import { assertDevDatabase, assertPipelineDatabase } from './lib/db-target-guard
 import { digest, V2Journal } from './pipeline-v2/journal';
 import { parseOptions, runV2Hex, targetIdentity } from './pipeline-v2/run';
 import { parseQueueOptions, runQueueCommand } from './pipeline-v2/queue-worker';
+import { parseUeRateOptions, SharedUeRateLimiter } from './pipeline-v2/ue-rate-limiter';
 
 /** Keep the guarded datasource at the connection entrypoint for the writer inventory to verify. */
 export async function v2Database(value = process.env['PIPELINE_DATABASE_URL']): Promise<string> {
@@ -14,18 +15,26 @@ export async function v2Database(value = process.env['PIPELINE_DATABASE_URL']): 
 
 async function main() {
   const args = process.argv.slice(2);
+  const rateCommand = args[0] === 'ue-rate';
+  const capRps = rateCommand ? parseUeRateOptions(args) : undefined;
   const queued = args[0] === 'enqueue' || args[0] === 'worker' ? parseQueueOptions(args) : undefined;
-  const options = queued ? undefined : parseOptions(args), url = await v2Database();
+  const options = queued || rateCommand ? undefined : parseOptions(args), url = await v2Database();
   let prisma: PrismaClient | undefined;
   let journal: V2Journal | undefined;
   try {
     prisma = new PrismaClient({ datasources: { db: { url } } });
+    if (rateCommand) {
+      const limiter = new SharedUeRateLimiter(prisma);
+      const state = capRps === undefined ? await limiter.state() : await limiter.configure(capRps);
+      process.stdout.write(JSON.stringify(state, (_key, value: unknown) => typeof value === 'bigint' ? String(value) : value) + '\n');
+      return;
+    }
     const git = (args: string[]) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
     const files = git(['ls-files', '--cached', '--others', '--exclude-standard', '--', 'package.json', 'scripts/package.json',
       'scripts/preload-v2.ts', 'scripts/pipeline-v2', 'scripts/hex-persist.ts', 'scripts/hex-resume.ts', 'scripts/pipeline-utils.ts', 'scripts/menu-item-identity.ts',
       'scripts/preload-invariants.ts', 'scripts/lib/db-target-guard.ts', 'scripts/eval/lib/jev-experiment.ts', 'scripts/eval/suite/adapters.ts',
       'scripts/eval/suite/types.ts', 'scripts/eval/jev-macro/*.ts', 'apps/api/services', 'packages/shared/src', 'prisma/schema.prisma',
-      'prisma/migrations/20261028130000_hex_jobs']).split('\n').sort();
+      'prisma/migrations/20261028130000_hex_jobs', 'prisma/migrations/20261028140000_pipeline_ue_rate_limit']).split('\n').sort();
     const source = { event: 'source', at: new Date().toISOString(), head: git(['rev-parse', 'HEAD']),
       sourceHash: digest(files.map(file => [file, digest(readFileSync(file).toString('base64'))])),
       dirty: Boolean(git(['status', '--porcelain'])) };

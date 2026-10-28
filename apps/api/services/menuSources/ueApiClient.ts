@@ -161,12 +161,23 @@ function jitteredBackoffMs(attempt: number, baseMs: number): number {
 
 // ─── Shared POST helper ──────────────────────────────────────────────────────
 
+/** Pipeline-owned admission applies to each HTTP attempt, across endpoints and retries. */
+export interface UeRequestLimiter {
+  acquire(signal?: AbortSignal): Promise<void>;
+  throttle(status: 403 | 429, retryAfter: string | null): Promise<void>;
+}
+
+export class UeRateLimitError extends Error {
+  constructor() { super('Shared UE limiter unavailable; request withheld'); this.name = 'UeRateLimitError'; }
+}
+
 interface PostUeOpts {
   timeoutMs?: number;
   signal?: AbortSignal;
   maxRetries?: number;
   baseBackoffMs?: number;
   onRequest?: () => void | Promise<void>;
+  rateLimiter?: UeRequestLimiter;
   /** Extra Cookie header value (e.g. for getFeedV1's uev2.loc). */
   cookieHeader?: string;
   /** Label for log lines (e.g. storeUuid or "feed:34.05,-118.24"). */
@@ -182,6 +193,18 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
     // Short-circuit once the breaker is tripped — propagates up through the
     // resolver so Guard 2 catches it and skips the hex checkpoint.
     checkBreaker();
+
+    // Admission and durable accounting can wait longer than an HTTP timeout.
+    // Keep them outside the network retry handler: a failed gate must fail closed.
+    if (opts.signal?.aborted) return null;
+    try {
+      await opts.onRequest?.();
+      await opts.rateLimiter?.acquire(opts.signal);
+    } catch (error) {
+      if (opts.signal?.aborted) return null;
+      throw error;
+    }
+    if (opts.signal?.aborted) return null;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -209,8 +232,6 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
 
     try {
       signal.throwIfAborted();
-      await opts.onRequest?.();
-      signal.throwIfAborted();
       const response = await fetch(endpoint, {
         method: "POST",
         headers,
@@ -218,13 +239,19 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
         signal,
       });
 
+      if (opts.rateLimiter && (response.status === 403 || response.status === 429)) {
+        try { await opts.rateLimiter.throttle(response.status, response.headers.get('retry-after')); }
+        catch { throw new UeRateLimitError(); }
+      }
+
       if (response.ok) return (await response.json()) as T;
 
       // 403 is UE's soft-block signal — count it whether we retry or give up.
       // Threshold + window are tuned conservatively; see CB constants above.
       if (response.status === 403) recordBlockSignal();
 
-      const preview = await readBodyPreview(response);
+      const preview = opts.rateLimiter ? '<body omitted>' : await readBodyPreview(response);
+      if (opts.rateLimiter) await response.body?.cancel().catch(() => {});
       const retriable = RETRY_STATUSES.has(response.status) && attempt < maxRetries;
       if (retriable) {
         console.warn(`[ue-api] HTTP ${response.status} for ${opts.logLabel} (${tag}, retrying): ${preview}`);
@@ -233,6 +260,7 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
         return null;
       }
     } catch (err) {
+      if (err instanceof UeRateLimitError) throw err;
       if (opts.signal?.aborted) return null;
       const msg = err instanceof Error ? err.message : String(err);
       if (attempt >= maxRetries) {
@@ -339,6 +367,8 @@ export interface FetchStoreV1Opts {
   baseBackoffMs?: number;
   /** Called immediately before each HTTP attempt, including retries, for durable accounting. */
   onRequest?: () => void | Promise<void>;
+  /** Required by Pipeline v2; the caller supplies its shared database gate. */
+  rateLimiter?: UeRequestLimiter;
 }
 
 /**

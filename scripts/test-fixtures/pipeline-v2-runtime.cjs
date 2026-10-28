@@ -18,6 +18,8 @@ function catalog() {
 }
 class Database {
   constructor() {
+    this.ueRate = { capRps: 1, effectiveRps: 1, requests: 0n, waits: 0n, throttles: 0n,
+      nextRequestAt: new Date(), blockedUntil: new Date() };
     this.checkpoint = fs.existsSync(checkpointPath) ? JSON.parse(fs.readFileSync(checkpointPath, 'utf8')) : null;
     this.brand = { findMany: async () => names.slice(0, 3).map((name, i) => ({ id: `brand-${i}`, displayName: name, slug: name.toLowerCase(),
       aliases: [], detectionConf: 'high', menuKind: 'restaurant', macroSource: 'official', officialUrl: 'https://example.test/nutrition' })) };
@@ -29,6 +31,14 @@ class Database {
   }
   async $queryRaw(strings, ...values) {
     const sql = strings.join('?');
+    if (sql.includes('pipeline_ue_rate_limit')) {
+      if (sql.includes('RETURNING p.allowed')) {
+        record({ type: 'ue_rate_admission' });
+        return [{ allowed: true, waitMs: 0 }];
+      }
+      if (sql.includes('SET cap_rps')) this.ueRate.capRps = values[0];
+      return [this.ueRate];
+    }
     if (sql.includes('COUNT(DISTINCT mi.id)')) return restaurants.map(r => ({ restaurantId: r.id, itemCount: 1n, macroCount: 1n }));
     if (sql.includes('INSERT INTO "MenuItem"')) return values[0].map(id => ({ id }));
     return [];
