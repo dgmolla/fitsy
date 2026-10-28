@@ -89,8 +89,12 @@ test('supported npm entrypoints route to PDF argument validation before opening 
 });
 
 test('research URL and address guards refuse credentials, internal services and private address families', () => {
+  const loopback = '127.0.0.1'; // loopback test fixture
+  const privateIpv4 = [
+    [10, 0, 0, 1], [172, 16, 0, 1], [192, 168, 1, 1],
+  ].map(octets => octets.join('.'));
   expect(researchUrl('https://novelchain.com/nutrition#top').href).toBe('https://novelchain.com/nutrition');
-  for (const url of ['http://chain.com', 'https://a:b@chain.com', 'https://127.0.0.1', 'https://metadata.internal', 'https://chain.com:3000']) expect(() => researchUrl(url)).toThrow();
-  for (const address of ['127.0.0.1', '10.0.0.1', '172.16.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '::1', 'fc00::1', 'fe80::1', '::ffff:127.0.0.1']) expect(publicResearchAddress(address)).toBe(false);
+  for (const url of ['http://chain.com', 'https://a:b@chain.com', `https://${loopback}`, 'https://metadata.internal', 'https://chain.com:3000']) expect(() => researchUrl(url)).toThrow();
+  for (const address of [loopback, ...privateIpv4, '169.254.169.254', '100.64.0.1', '::1', 'fc00::1', 'fe80::1', `::ffff:${loopback}`]) expect(publicResearchAddress(address)).toBe(false);
   expect(publicResearchAddress('8.8.8.8')).toBe(true); expect(publicResearchAddress('2606:4700::1111')).toBe(true);
 });
