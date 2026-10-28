@@ -4,10 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { NextRequest } from 'next/server';
-import { assertDevDatabase } from '../../../../scripts/lib/db-target-guard';
+import { assertTestDatabase } from '../../../../scripts/lib/test-database-guard';
 
 async function main() {
-  const datasourceUrl = assertDevDatabase(process.env['POSTGRES_PRISMA_URL']);
+  const datasourceUrl = assertTestDatabase(process.env['POSTGRES_PRISMA_URL']);
   const url = new URL(datasourceUrl);
   assert.equal(url.hostname, 'localhost', 'Synthetic benchmark requires an explicitly local database');
   const token = process.env['GOAL_BENCH_TOKEN'];

@@ -2,6 +2,7 @@
 const config = {
   preset: "ts-jest",
   testEnvironment: "node",
+  globalSetup: "<rootDir>/../../scripts/lib/test-database-guard.ts",
   moduleNameMapper: {
     "^(\\.\\.?/.*)\\.js$": "$1",
     "^@fitsy/shared$":

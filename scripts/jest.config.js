@@ -2,6 +2,7 @@
 const config = {
   preset: "ts-jest",
   testEnvironment: "node",
+  globalSetup: "<rootDir>/lib/test-database-guard.ts",
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",

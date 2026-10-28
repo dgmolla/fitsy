@@ -3,8 +3,9 @@
  *
  * Runs only when POSTGRES_PRISMA_URL is set: the CI test job provides the
  * seeded PostGIS container (verify.yml runs `prisma db seed --data-only`);
- * locally, `scripts/dev/db.sh`-style containers or the dev DB work the same
- * way. Skipped silently otherwise, like the other describeIfDb suites.
+ * locally, use a disposable loopback database. Jest refuses shared DEV,
+ * production and other remote databases before importing any suite.
+ * Skipped silently without a URL, like the other describeIfDb suites.
  *
  * Nothing here is mocked - this exercises the LATERAL search query, the
  * denormalized macro columns, cursor pagination, and the response contract
@@ -12,7 +13,7 @@
  */
 import { restaurantResultSchema } from "@fitsy/shared";
 
-jest.setTimeout(30_000); // remote dev DBs are slower than the CI container
+jest.setTimeout(30_000);
 
 const hasDb = !!process.env["POSTGRES_PRISMA_URL"];
 const describeIfDb = hasDb ? describe : describe.skip;

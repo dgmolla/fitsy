@@ -7,7 +7,7 @@ Authentication and subscription reconciliation call their providers through `ser
 ```bash
 npm run dev:api                          # dev server (dev DB by default)
 npm run test:coverage -w apps/api        # unit tests + coverage gate
-npx jest tests/db -w apps/api            # real-DB tests (needs POSTGRES_PRISMA_URL)
+npm test -w @fitsy/api -- tests/db       # real-DB tests (disposable loopback DB only)
 scripts/gen/route.sh <path> --auth=...   # scaffold a route the correct shape
 ```
 
@@ -23,6 +23,8 @@ that talks to the outside world; never import upward.
 - Response shapes get a zod twin in `packages/shared/src/contracts/` (T4).
 - Mock only the external boundary (`services/*`, `lib/supabase`); own-code
   mocks are counted by the `own-code-mocks` check - prefer `tests/db/`.
+- Jest validates both PostgreSQL URLs before importing suites and refuses shared DEV, PROD and other remote targets.
+  Use `npm run verify -- --only=test` for the owned disposable PostGIS database; see `scripts/verify/README.md`.
 - Errors: `{ "error": "message" }` + proper status. Multi-record mutations in
   transactions.
 

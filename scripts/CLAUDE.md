@@ -20,3 +20,5 @@
 - Checks follow the contract in `verify/README.md`: JSON line out, exit 0/1/2,
   a `fix:` hint on failure, and a registry entry (T11).
 - Preserve full check output; the verifier retains logs and CI uploads them even after failure.
+- Pipeline Jest tests share the API's loopback-only database guard, including direct `npm test` runs.
+  Never load shared DEV or PROD credentials for tests; use the verifier's owned disposable database.

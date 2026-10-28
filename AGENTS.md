@@ -83,6 +83,7 @@ npx prisma migrate dev # Run migrations
 ```
 
 Environments: ephemeral (CI + `prisma/seed.ts`), **dev** (`fitsy-dev` Supabase: previews, local, simulator), prod. `docs/engineering/devops/staging-environment.md`; `scripts/dev/` refuses prod.
+Database tests require a disposable loopback database and refuse shared DEV and PROD before suites load; the owned setup is documented in [verification](scripts/verify/README.md).
 Performance baselines, dev API sampling and native profiling: [performance runbook](docs/engineering/devops/performance.md).
 
 ### Git Hooks Setup (one-time, per clone)
