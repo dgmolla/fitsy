@@ -103,8 +103,9 @@ vercel env add KEY prod    # Add/update a secret
 ```
 | Variable | Purpose | Source |
 |----------|---------|--------|
-| `POSTGRES_PRISMA_URL` | DB connection (pooled) | Supabase integration |
+| `POSTGRES_PRISMA_URL` | App queries and account writes (`fitsy_app`, pooled) | Vercel role binding |
 | `POSTGRES_URL_NON_POOLING` | DB migrations (direct) | Supabase integration |
+| `PIPELINE_DATABASE_URL` | Pipeline writes (`pipeline_writer`, session/direct) | Private pipeline environment |
 | `ANTHROPIC_API_KEY` | Macro estimation (Haiku) | console.anthropic.com |
 | `UE_LOC_COOKIE` | Uber Eats discovery (preload) | captured cookie |
 | `BRAVE_API_KEY` | Indie menu URL discovery (preload) | brave.com/search/api |

@@ -76,8 +76,7 @@ export $(grep -v '^#' .env.local | xargs)
 
 | Variable | Purpose |
 |---|---|
-| `POSTGRES_PRISMA_URL` | Prisma pooled connection (runtime queries) |
-| `POSTGRES_URL_NON_POOLING` | Prisma direct connection (used by preload script) |
+| `PIPELINE_DATABASE_URL` | Dedicated `pipeline_writer` credential (session/direct); provision separately from Vercel runtime credentials |
 | `ANTHROPIC_API_KEY` | Claude Haiku for macro estimation |
 | `UE_LOC_COOKIE` | URL-encoded `uev2.loc` cookie — authoritative lat/lng for UE feed probes |
 
@@ -354,12 +353,12 @@ Cost levers:
 npx prisma studio
 
 # Or direct SQL via psql
-psql $POSTGRES_URL_NON_POOLING -c "SELECT COUNT(*) FROM \"Restaurant\";"
-psql $POSTGRES_URL_NON_POOLING -c "SELECT COUNT(*) FROM \"MenuItem\";"
-psql $POSTGRES_URL_NON_POOLING -c "SELECT COUNT(*) FROM \"MacroEstimate\";"
+psql "$PIPELINE_DATABASE_URL" -c "SELECT COUNT(*) FROM \"Restaurant\";"
+psql "$PIPELINE_DATABASE_URL" -c "SELECT COUNT(*) FROM \"MenuItem\";"
+psql "$PIPELINE_DATABASE_URL" -c "SELECT COUNT(*) FROM \"MacroEstimate\";"
 
 # Spot-check: restaurants with item counts
-psql $POSTGRES_URL_NON_POOLING -c "
+psql "$PIPELINE_DATABASE_URL" -c "
   SELECT r.name, COUNT(mi.id) as items
   FROM \"Restaurant\" r
   LEFT JOIN \"MenuItem\" mi ON mi.\"restaurantId\" = r.id

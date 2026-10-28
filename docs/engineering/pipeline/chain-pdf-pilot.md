@@ -47,7 +47,9 @@ flowchart LR
   A --> V[Two-row canary, verify, then remaining rows]
 ```
 
-Run `npx tsx --tsconfig apps/api/tsconfig.json scripts/preload-chain-pilot.ts` with an explicitly selected `POSTGRES_URL_NON_POOLING`. Commands below take a local artifact path. Plan commands only read the DB; each apply requires the printed plan hash and validates the target and current rows.
+Run `npx tsx --tsconfig apps/api/tsconfig.json scripts/preload-chain-pilot.ts` with `PIPELINE_DATABASE_URL` explicitly set to the intended database's `pipeline_writer` credential.
+Commands below take a local artifact path.
+Plan commands only read the DB; each apply requires the printed plan hash and validates the target and current rows.
 
 1. `catalog-plan <catalog.json>`; inspect twelve changes, then `catalog-apply <catalog.json> <hash>`.
 2. `april-plan <april.json>`; inspect matches and reported unresolved restaurants, then `april-apply <april.json> <hash> --limit=2`. Planning uses the same verified brand identity as the writer. The first two rows exercise Chicken Plate and Gyudon Beef side when present.

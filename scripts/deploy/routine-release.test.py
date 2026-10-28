@@ -404,7 +404,7 @@ globalThis.fetch = async (url, init) => {
             command.chmod(0o700)
         self.calls = self.root / 'calls'
         self.env = {key: value for key, value in os.environ.items()
-                    if not key.startswith(('VERCEL', 'POSTGRES', 'PROD_', 'FITSY_ALLOW_PROD', 'GITHUB_ACTIONS', 'UPSTASH', 'NODE_OPTIONS'))}
+                    if not key.startswith(('VERCEL', 'POSTGRES', 'PIPELINE_DATABASE_URL', 'PROD_', 'FITSY_ALLOW_PROD', 'GITHUB_ACTIONS', 'UPSTASH', 'NODE_OPTIONS'))}
         self.env.update(PATH=str(self.bin) + ':' + os.environ['PATH'], CALLS=str(self.calls),
                         NODE_OPTIONS=f'--require={database_transport} --import={transport}', REDIS_RESULT='ok',
                         UPSTASH_REDIS_REST_URL='https://quota.example.test',
@@ -431,7 +431,17 @@ globalThis.fetch = async (url, init) => {
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(call.startswith('npm') for call in calls))
         self.assertIn('Runtime database role activation failed', result.stderr)
+        self.assertIn('database login activation', result.stderr)
         self.assertNotIn('private-fixture-password', result.stderr)
+
+    def test_preview_admin_runtime_binding_reports_configuration_failure_privately(self):
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:private-fixture-password@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        result, calls = self.drive(VERCEL_ENV='preview', SUPABASE_URL='https://kegycybiruksmrzvniha.supabase.co',
+                                   POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertFalse(any(call.startswith('npm') for call in calls))
+        self.assertIn('POSTGRES_PRISMA_URL must use fitsy_app and match SUPABASE_URL', result.stderr)
+        self.assertNotIn('private-fixture-password', result.stdout + result.stderr)
 
     def test_role_migration_requires_explicit_matching_owner_approval(self):
         for approval in ('', 'a' * 64, 'true'):

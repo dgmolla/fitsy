@@ -30,7 +30,7 @@ test.each(["local", "ci"])("%s builds before acquiring the modeled owned databas
     runs: [local, ci]
 `);
   writeFileSync(join(verify, "build.sh"), `#!/bin/bash
-test -z "$FITSY_VERIFY_DB_LOCKED$FITSY_VERIFY_OWNED_DB$POSTGRES_PRISMA_URL$POSTGRES_URL_NON_POOLING" || exit 1
+test -z "$FITSY_VERIFY_DB_LOCKED$FITSY_VERIFY_OWNED_DB$POSTGRES_PRISMA_URL$POSTGRES_URL_NON_POOLING$PIPELINE_DATABASE_URL" || exit 1
 printf 'build\\n' >> order.log
 printf '%s\\n' '{"summary":"build checked"}'
 exit "\${FAIL_BUILD:-0}"
@@ -69,7 +69,7 @@ export async function runWithLocalDatabase(args) {
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
     !/^(GIT_|GITHUB_|FITSY_DIFF_|FITSY_RUNS$|CI$|PR_NUMBER$)/.test(key) &&
     !key.startsWith("FITSY_VERIFY_") && !key.startsWith("FITSY_SHIPPING_") &&
-    !["FITSY_LOCAL_DB", "POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING"].includes(key)));
+    !["FITSY_LOCAL_DB", "POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING", "PIPELINE_DATABASE_URL"].includes(key)));
   const run = (extra: NodeJS.ProcessEnv = {}, extraArgs: string[] = []) => spawnSync(process.execPath, [...command, ...extraArgs],
     { cwd: directory, encoding: "utf8", timeout: 10000, env: { ...environment, ...extra } });
   const names = (stdout: string) => stdout.trim().split("\n").map(line => JSON.parse(line).name);

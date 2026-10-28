@@ -25,6 +25,9 @@ It runs `scripts/deploy/migrate-prod.sh` before the production API build.
 That caller requires the exact production project, GitHub repository, main branch and source metadata.
 It validates both existing Production `POSTGRES_URL_NON_POOLING` and `POSTGRES_PRISMA_URL` against the known Supabase production host/tenant and database.
 Migration connections must use the direct/session port, not the transaction pooler.
+`POSTGRES_URL_NON_POOLING` uses the deploy administrator; `POSTGRES_PRISMA_URL` uses the separate `fitsy_app` credential and must match `SUPABASE_URL`.
+The pipeline-role migration additionally requires Dawit's explicit approval recorded as its exact SHA-256 in `FITSY_PIPELINE_ROLES_APPROVED_SHA256`.
+The build activates the app login after migration and withholds promotion if activation fails; pipeline credentials are provisioned separately for pipeline workers.
 Names alone do not prove a database target.
 Credentials stay in their existing Vercel bindings; do not copy them into GitHub, files or build arguments.
 After those guards, `scripts/deploy/rate-limit-preflight.ts` exercises the runtime Redis `EVAL` before any migration.
