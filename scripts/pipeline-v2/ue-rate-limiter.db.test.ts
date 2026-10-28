@@ -24,7 +24,7 @@ suite('shared UE bucket (real PostgreSQL, independent workers, only provider HTT
     http.mockImplementation(async () => { starts.push(performance.now()); return Response.json({ status: 'success' }); });
     await Promise.all(Array.from({ length: 16 }, (_, i) => fetchStoreV1(`worker-${i}`, { rateLimiter: gates[i % gates.length]!, maxRetries: 0 })));
     expect(starts).toHaveLength(16);
-    // Capacity one: any span admits at most one initial token plus its refills.
+    // Each time span admits at most one initial token plus its refills with capacity one.
     // Allow 20ms only for observing the DB grant across the local client transport.
     for (let i = 0; i < starts.length; i++) for (let j = i + 1; j < starts.length; j++) {
       expect(starts[j]! - starts[i]! + 20).toBeGreaterThanOrEqual((j - i) * 200);
