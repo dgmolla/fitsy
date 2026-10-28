@@ -12,6 +12,7 @@ import { validateHexInTx } from '../preload-invariants';
 import { validateItems } from '../pipeline-utils';
 import { JEV_LIMITS } from '../eval/lib/jev-experiment';
 import { digest, protocolHash, type V2Ledger } from './journal';
+import { SharedUeRateLimiter } from './ue-rate-limiter';
 
 export interface V2Options { hexId: string; runId: string; out: string; capUsd: number }
 export function validateV2Hex(hexId: string): void {
@@ -63,6 +64,7 @@ export interface HexCoverage {
 export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal: V2Ledger,
   persistence: PersistHexOpts & { beforePersist?: () => Promise<void> } = {}) {
   const start = performance.now();
+  const rateLimiter = new SharedUeRateLimiter(prisma, event => Promise.resolve(journal.append({ ...event })));
   // Honor the explicit hex's checkpoint too. --hex-id never overrides resume.
   if (await isHexComplete(options.runId, options.hexId, prisma)) {
     const completed = [...journal.events].reverse().find(e => e.event === 'completed');
@@ -85,6 +87,7 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
     persistedCoverage: coverage.uniqueItems ? coverage.persistedItems / coverage.uniqueItems : 0,
     calls: { uberEats: journal.events.filter(e => e.event === 'ue_request').length, jev: journal.requests,
       fatSecret: 0, pdfSearch: 0, reusedJev: journal.reusedRequests },
+    ueThrottles: journal.events.filter(e => e.event === 'ue_throttle').length,
     costUsd: journal.unknown ? null : journal.knownUsd, knownCostUsd: journal.knownUsd,
     unknownUsage: journal.unknown, capUsd: options.capUsd, wallMs: previousWallMs + performance.now() - start,
     wallTimeComplete: interruptedAttempts === 0, interruptedAttempts,
@@ -106,6 +109,7 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
       else coverage.independentRestaurants++;
       const savedMenu = journal.events.find(e => e.event === 'ue_menu' && e.restaurantId === restaurant.id && e.storeUuid === restaurant.storeUuid);
       const menu = savedMenu ? savedMenu.menu as MenuSourceResult : await new UeApiDirectSource(restaurant.storeUuid!, { maxRetries: 0,
+        rateLimiter,
         ...(journal.signal ? { signal: journal.signal } : {}),
         onRequest: () => journal.append({ event: 'ue_request', at: new Date().toISOString(), restaurantId: restaurant.id }) }).lookup(restaurant.name, restaurant.address);
       if (!savedMenu) await journal.append({ event: 'ue_menu', restaurantId: restaurant.id, storeUuid: restaurant.storeUuid, menu });
