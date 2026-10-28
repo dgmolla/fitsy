@@ -1,0 +1,65 @@
+name: Production fixture cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Inventory fixtures or apply the reviewed cleanup
+        type: choice
+        options:
+          - dry-run
+          - apply
+        default: dry-run
+      expect:
+        description: Complete seven-table counts JSON from a reviewed dry run (required for apply)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-fixture-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production-release
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Inventory fixtures and apply only when requested
+        env:
+          POSTGRES_PRISMA_URL: ${{ secrets.PROD_DATABASE_URL }}
+          CLEANUP_MODE: ${{ inputs.mode }}
+          CLEANUP_EXPECT: ${{ inputs.expect }}
+        run: |
+          case "$CLEANUP_MODE" in
+            dry-run) ;;
+            apply)
+              if [ -z "$CLEANUP_EXPECT" ]; then
+                echo '::error::Apply requires expect JSON from a reviewed dry run.'
+                exit 1
+              fi
+              ;;
+            *)
+              echo '::error::Unknown cleanup mode.'
+              exit 1
+              ;;
+          esac
+
+          npx tsx scripts/maintenance/cleanup-test-fixtures.ts --dry-run --prod
+
+          if [ "$CLEANUP_MODE" = apply ]; then
+            FITSY_ALLOW_PROD_WRITE=1 npx tsx scripts/maintenance/cleanup-test-fixtures.ts \
+              --apply --prod --expect="$CLEANUP_EXPECT"
+          fi
