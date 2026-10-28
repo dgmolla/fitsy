@@ -75,6 +75,34 @@ Replay the real failing-API-then-passing-mobile regression and output retention 
 npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/focused-tests.test.ts verify/run-output.test.ts
 ```
 
+## Live dependency audit evidence
+
+Run `npm run verify:dependencies` from a worker with access to the public npm registry.
+This explicit evidence collector runs full and production lockfile audits for all workspaces against the live advisory service, including optional and peer dependencies.
+It does not install packages or change the lockfile.
+Ordinary Verify and the pre-push hook remain offline-capable; this command is separate from registry checks.
+
+Each invocation retains the original JSON and stderr from both scans, the exact lockfile, its SHA-256, source SHA, Node/npm versions, commands, timing and exit statuses in a fresh `.evidence/dependency-audit/` directory.
+Exit 0 means both scans completed without findings; exit 1 means complete reports contain findings requiring applicability review; exit 2 means coverage is incomplete.
+Registry errors, malformed or partial reports, inconsistent counts, abnormal exits and lockfile drift cannot establish a complete audit.
+The production scan still runs if the full scan fails.
+
+Retain the complete reports with the originating security issue, such as [#562](https://github.com/dgmolla/fitsy/issues/562), rather than only the vulnerability counts.
+For every finding, record the advisory, exact installed/locked version, workspace and dependency chain, runtime or tooling caller, attacker-controlled input, deployment conditions, P0-P3 app impact and supporting evidence.
+Repair confirmed P0/P1 findings and retain lower-priority findings and unresolved applicability in linked issues.
+Vendor severity alone does not establish reachable app impact.
+
+If registry access is denied, preserve the incomplete run and resume this command through the existing network-enabled execution owner.
+An offline installation or cached metadata cannot replace a live advisory scan.
+Upgrade packages with supported npm commands and regenerate the lockfile through npm; never hand-edit versions or integrity fields.
+After an upgrade, run `npm ci`, applicable tests, lint/types, production build and affected app smoke before claiming completion.
+
+Replay the audit capture regressions with:
+
+```sh
+npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/dependency-audit.test.ts
+```
+
 ## Simulator coverage
 
 `npm run verify:sim-plan` prints the simulator scope, reason and exact existing Maestro flow names.
