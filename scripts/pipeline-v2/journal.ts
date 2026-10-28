@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { hostname } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { requestJevDecision } from '../../apps/api/services/jevDecisionService';
 import { JEV_LIMITS, parseChoiceAnswers, type JevRequest } from '../eval/lib/jev-experiment';
@@ -21,7 +22,11 @@ function canonical(value: unknown): unknown {
 // JSONB reorders object keys. Request identity must survive storage and another worker's parse.
 export const requestKey = (request: JevRequest): string => digest(canonical(request));
 export const protocolHash = digest({ limits: JEV_LIMITS, adapter: adapterProtocol });
-export const reservationUsd = JEV_LIMITS.reservedInputTokens * JEV_LIMITS.pricing.inputUsdPerMillion / 1_000_000;
+// Convert to a number only after decimal billing arithmetic, preserving equality
+// between queue admission, reservations and PostgreSQL's stored USD cap.
+const jevInputUsd = (tokens: number): number => new Prisma.Decimal(tokens)
+  .mul(JEV_LIMITS.pricing.inputUsdPerMillion).div(1_000_000).toNumber();
+export const reservationUsd = jevInputUsd(JEV_LIMITS.reservedInputTokens);
 const usageSchema = z.object({ usage: z.object({ input_tokens: z.number().int().positive().safe(), output_tokens: z.number().int().nonnegative().safe() }) });
 export type JournalEvent = { event: string; at?: string; [key: string]: unknown };
 export interface JournalIdentity { runId: string; hexId: string; target: string }
@@ -31,7 +36,7 @@ export const journalHeader = (identity: JournalIdentity, capUsd: number): Journa
 function usage(body: string): number | null {
   try {
     const parsed = usageSchema.safeParse(JSON.parse(body));
-    return parsed.success ? parsed.data.usage.input_tokens * JEV_LIMITS.pricing.inputUsdPerMillion / 1_000_000 : null;
+    return parsed.success ? jevInputUsd(parsed.data.usage.input_tokens) : null;
   } catch { return null; }
 }
 function validateResponse(request: JevRequest, response: { status: number; body: string }) {

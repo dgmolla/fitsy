@@ -74,6 +74,19 @@ test('a cap stop never persists a partial hex or writes a completion checkpoint'
   expect(result.report).toMatchObject({ status: 'spend_cap', coverage: { persistedItems: 0 }, costUsd: 0 });
   expect(result.events.some((e: { type: string }) => e.type === 'jev_call' || e.type === 'db_transaction')).toBe(false);
 });
+test('the real CLI admits one exact Jev envelope before stopping the next paid request', () => {
+  const result = run({}, undefined, '0.000688128');
+  expect(result.stderr).toBe(''); expect(result.status).toBe(1);
+  expect(result.report).toMatchObject({ status: 'spend_cap', coverage: { persistedItems: 0 }, costUsd: 0.0000042 });
+  expect(result.events.filter((e: { type: string }) => e.type === 'budget_reservation')).toEqual([
+    { type: 'budget_reservation', service: 'jev', usd: 0.000688128 },
+  ]);
+  expect(result.events.filter((e: { type: string }) => e.type === 'budget_settlement')).toEqual([
+    { type: 'budget_settlement', usd: 0.0000042 },
+  ]);
+  expect(result.events.filter((e: { type: string }) => e.type === 'jev_call')).toHaveLength(1);
+  expect(result.events.some((e: { type: string }) => e.type === 'db_transaction')).toBe(false);
+});
 test('unknown spend remains unknown on resume and cannot produce a checkpoint', () => {
   const first = run({ V2_TEST_UNKNOWN_USAGE: '1' }), second = run({}, first.out);
   expect(second.status).toBe(1); expect(second.report.costUsd).toBeNull(); expect(second.report.unknownUsage).toBe(true);

@@ -67,9 +67,14 @@ suite('fleet budgets with real PostgreSQL and independent workers', () => {
     await queue.enqueue({ runId, hexId:hex, target:'fixture' });
     await budgets[0]!.configure('jev',0,100);
     expect(await queue.claim(runId,'worker')).toBeNull();
-    await budgets[0]!.configure('jev',reservationUsd,100);
+    await budgets[0]!.configure('jev',0.000688127,100);
+    expect(await queue.claim(runId,'worker')).toBeNull();
+    await expect(budgets[0]!.reserve('jev',reservationUsd,'insufficient-envelope')).rejects.toBeInstanceOf(DailyBudgetExceeded);
+    await budgets[0]!.configure('jev',0.000688128,100);
     const job = (await queue.claim(runId,'worker'))!;
+    expect(job).not.toBeNull();
     const permit = await budgets[1]!.reserve('jev',reservationUsd,'competing-worker');
+    expect((await budgets[0]!.state()).find(row => row.service==='jev')).toMatchObject({ reservedUsd:0.000688128,calls:'1' });
     expect(await new HexJobQueue(clients[2]!).claim(runId,'another')).toBeNull();
     await expect(budgets[0]!.reserve('jev',reservationUsd,'current-job')).rejects.toBeInstanceOf(DailyBudgetExceeded);
     await queue.deferBudget(job);

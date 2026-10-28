@@ -43,6 +43,8 @@ npm run preload:v2:dev -- budgets --service=pdf_finder --daily-usd=0 --daily-cal
 
 PostgreSQL locks the service row before sampling the UTC day and checking committed spend plus every unresolved envelope.
 Reservation and daily counter updates are atomic, using exact decimal arithmetic.
+Jev token pricing uses decimal arithmetic before converting to USD numbers, so its $0.000688128 envelope matches the stored cap during queue admission and request settlement.
+Exact-cap regressions exercise the real CLI, journal replay and PostgreSQL queue, including refusal when the cap is one nanodollar short.
 Daily aggregates keep admission independent of the number of request receipts already written that day.
 Independent workers cannot admit another request when the remaining capacity cannot cover its full envelope.
 A queue claim is an eligibility check, and every actual provider call must still reserve before transport because capacity can change after claiming.
@@ -102,7 +104,8 @@ This keeps cold connection setup outside the reservation assertions and avoids h
 ```sh
 npm test -w scripts -- --runInBand --runTestsByPath \
   preload-cost.test.ts preload-cost-e2e.test.ts \
-  pipeline-v2/cli.test.ts pipeline-v2/service-budget.test.ts pipeline-v2/telemetry.test.ts
+  pipeline-v2/cli.test.ts pipeline-v2/journal.test.ts \
+  pipeline-v2/service-budget.test.ts pipeline-v2/telemetry.test.ts
 
 # The canonical runner provisions the owned disposable loopback database.
 node scripts/verify/focused-tests.mjs --set scripts/pipeline-v2/service-budget.db.test.ts
