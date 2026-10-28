@@ -19,12 +19,15 @@ flowchart LR
 Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` through the existing Vercel environment workflow.
 Use a writable REST token and HTTPS URL, with one database shared by every instance and region of an environment.
 Use separate databases for production and nonproduction, with eviction disabled so live buckets cannot disappear under memory pressure.
-The Vercel build entrypoint runs `node --import tsx apps/api/services/rateLimitStoreConfig.ts` before migrations or the application build.
-It uses the request handler's configuration parser and refuses missing, partial or malformed credentials without logging their values.
-This validates configuration syntax; it does not prove provider availability, writable access or production/nonproduction isolation.
 Do not add a replica, per-instance prefix, caller-controlled namespace or local allow cache.
 Upstash's [REST API](https://upstash.com/docs/redis/features/restapi) supports the single `EVAL` operation used here.
 No PostgreSQL migration or application-table grant is needed.
+The guarded Vercel production and preview build paths run `scripts/deploy/rate-limit-preflight.ts` before migrations and compilation.
+The probe uses the request handler's configuration parser and never logs credential values.
+It exercises the runtime `EVAL` with a separate `deployment-readiness` namespace, a unique identity and one-second TTLs, without consuming user quotas.
+Missing, unsafe or partial configuration, read-only tokens, provider failures, invalid responses and timeouts stop the build.
+Ordinary local development builds do not require Redis; the probe does not establish production/nonproduction isolation.
+See [routine production recovery](../devops/routine-production.md) for credential restoration and exact-source release verification.
 
 Only `VERCEL=1` together with deployment-provided `VERCEL_ENV=production` or `preview` establishes the supported proxy boundary.
 Within that boundary, accept only one valid IP from `x-vercel-forwarded-for`, which [Vercel supplies at ingress](https://vercel.com/docs/headers/request-headers#x-vercel-forwarded-for).
@@ -94,6 +97,9 @@ The blocking `rate-limit-store` registry check runs through existing local and C
 It creates a named, labeled, network-isolated `redis:7.4-alpine` container with no persistence or host ports and removes only the returned owned container ID.
 It reuses the same independent-worker journeys, executing the actual script through Redis rather than the reference REST fixture.
 The pre-push hook retains cheap checks; `run.mjs` and Verify's existing L2 job discover this check from the registry.
+The existing `scripts/deploy/routine-release.test.ts` suite also drives the actual Vercel build and migration callers through a substituted external Redis transport.
+It proves missing/unwritable store bindings stop migrations and builds, guards run before Redis, healthy stores proceed in order, and undeployed development still builds offline.
+These tests run in the existing scripts group through `run.mjs`, the pre-push focused selection and Verify; no new credential-bearing CI check is needed.
 Docker startup, socket permissions or image-pull failures are environment failures, never passing shared-store evidence.
 Inspect retained verifier diagnostics, restore supported Docker access in the existing worker environment, and rerun this entrypoint without weakening the check or using production credentials.
 Simulator journeys and Maestro flows are unchanged because this change adds no mobile navigation or interaction.

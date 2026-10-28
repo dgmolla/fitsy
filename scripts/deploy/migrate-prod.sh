@@ -48,5 +48,7 @@ for (const name of ['POSTGRES_URL_NON_POOLING', 'POSTGRES_PRISMA_URL']) {
   }
 }
 NODE
+# Refuse an unavailable auth dependency before changing the production schema.
+node --import tsx scripts/deploy/rate-limit-preflight.ts
 npx prisma migrate status --schema prisma/schema.prisma || true
 npx prisma migrate deploy --schema prisma/schema.prisma

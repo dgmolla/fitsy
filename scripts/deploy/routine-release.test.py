@@ -316,7 +316,37 @@ class VercelBuildTests(unittest.TestCase):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
+        # The deployment preflight and shared quota service execute unchanged;
+        # substitute only the external Redis REST transport, never its caller.
+        for name in ('scripts/deploy/rate-limit-preflight.ts', 'apps/api/services/rateLimitStore.ts'):
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, target)
         (self.root / 'node_modules').symlink_to(ROOT / 'node_modules', target_is_directory=True)
+        transport = self.root / 'redis-transport.mjs'
+        transport.write_text('''import assert from 'node:assert/strict';
+import { appendFileSync } from 'node:fs';
+globalThis.fetch = async (url, init) => {
+  assert.equal(String(url), 'https://quota.example.test/');
+  assert.equal(init.headers.Authorization, 'Bearer private-fixture-token');
+  assert.equal(init.redirect, 'error');
+  assert.equal(init.cache, 'no-store');
+  const args = JSON.parse(init.body);
+  assert.equal(args[0], 'EVAL');
+  assert.equal(args[3], 'fitsy:rate-limit:v1:{deployment-readiness}:identities');
+  assert.match(args[4], /^fitsy:rate-limit:v1:\\{deployment-readiness\\}:[a-f0-9]{64}$/);
+  assert.deepEqual(args.slice(5, 8), ['1000', '1', '1000']);
+  appendFileSync(process.env.CALLS, 'redis EVAL\\n');
+  switch (process.env.REDIS_RESULT) {
+    case 'http': return new Response('private-fixture-diagnostic', { status: 503 });
+    case 'readonly': return Response.json({ error: 'private-fixture-diagnostic' });
+    case 'invalid': return Response.json({ result: [1] });
+    case 'denied': return Response.json({ result: [0, 0, 1000] });
+    case 'timeout': return new Promise(() => {});
+    default: return Response.json({ result: [1, 0, 0] });
+  }
+};
+''')
         self.bin = self.root / 'bin'
         self.bin.mkdir()
         for name in ('npx', 'npm'):
@@ -327,12 +357,14 @@ class VercelBuildTests(unittest.TestCase):
             command.chmod(0o700)
         self.calls = self.root / 'calls'
         self.env = {key: value for key, value in os.environ.items()
-                    if not key.startswith(('VERCEL', 'POSTGRES', 'PROD_', 'FITSY_ALLOW_PROD', 'GITHUB_ACTIONS', 'UPSTASH_'))}
+                    if not key.startswith(('VERCEL', 'POSTGRES', 'PROD_', 'FITSY_ALLOW_PROD', 'GITHUB_ACTIONS', 'UPSTASH', 'NODE_OPTIONS'))}
         self.env.update(PATH=str(self.bin) + ':' + os.environ['PATH'], CALLS=str(self.calls),
+                        NODE_OPTIONS=f'--import={transport}', REDIS_RESULT='ok',
+                        UPSTASH_REDIS_REST_URL='https://quota.example.test',
+                        UPSTASH_REDIS_REST_TOKEN='private-fixture-token',
                         VERCEL='1', VERCEL_ENV='production', VERCEL_PROJECT_ID='prj_z1QTfOgbj4tlm91U2Hf8JXr5k4v4',
                         VERCEL_GIT_PROVIDER='github', VERCEL_GIT_REPO_OWNER='dgmolla', VERCEL_GIT_REPO_SLUG='fitsy',
                         VERCEL_GIT_COMMIT_REF='main', VERCEL_GIT_COMMIT_SHA='a' * 40,
-                        UPSTASH_REDIS_REST_URL='https://quota.example.test', UPSTASH_REDIS_REST_TOKEN='private-fixture-token',
                         POSTGRES_URL_NON_POOLING='postgresql://postgres.zaxkmjqozvmbifiwbxps:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres',
                         POSTGRES_PRISMA_URL='postgresql://postgres.zaxkmjqozvmbifiwbxps:fixture@aws-1-us-east-1.pooler.supabase.com:6543/postgres')
 
@@ -364,20 +396,33 @@ class VercelBuildTests(unittest.TestCase):
                     self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
 
     def test_invalid_shared_store_configuration_is_private_and_withholds_build(self):
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
         invalid = [('UPSTASH_REDIS_REST_URL', value) for value in
                    ('http://quota.example.test', 'not-a-url-private-value',
                     'https://user:private-value@quota.example.test',
                     'https://quota.example.test?token=private-value', 'https://quota.example.test#private-value')]
         invalid += [('UPSTASH_REDIS_REST_TOKEN', value) for value in (' ', '\n', 'private-value\n')]
         for environment in ('production', 'preview'):
+            bindings = {} if environment == 'production' else {'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev}
             for key, value in invalid:
                 with self.subTest(environment=environment, key=key, value=value):
-                    result, calls = self.drive(VERCEL_ENV=environment, **{key: value})
+                    result, calls = self.drive(VERCEL_ENV=environment, **bindings, **{key: value})
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(calls, [])
-                    self.assertIn('refusing: configure UPSTASH_REDIS_REST_URL', result.stderr)
+                    self.assertIn('rate-limit store preflight failed', result.stderr)
                     self.assertNotIn('private-value', result.stdout + result.stderr)
                     self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
+
+    def test_vercel_and_dev_mirror_consume_guarded_build_inputs(self):
+        config = json.loads((ROOT / 'vercel.json').read_text())
+        self.assertEqual(config['buildCommand'], 'bash scripts/dev/vercel-build.sh')
+        command = "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))"
+        workflow = json.loads(subprocess.check_output(['node', '-e', command,
+                              str(ROOT / '.github/workflows/mirror-dev-branch.yml')], cwd=ROOT, text=True))
+        paths = workflow['on']['push']['paths']
+        for path in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh',
+                     'scripts/deploy/rate-limit-preflight.ts', 'scripts/lib/db-target-guard.ts'):
+            self.assertIn(path, paths)
 
     def test_actual_production_build_migrates_before_build_using_existing_bindings(self):
         direct = 'postgresql://postgres:fixture@db.zaxkmjqozvmbifiwbxps.supabase.co/postgres'
@@ -385,7 +430,7 @@ class VercelBuildTests(unittest.TestCase):
             with self.subTest(route='direct' if bindings else 'qualified pooler'):
                 result, calls = self.drive(**bindings)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(calls, ['npx prisma migrate status --schema prisma/schema.prisma',
+                self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate status --schema prisma/schema.prisma',
                                          'npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
 
     def test_actual_production_build_accepts_supavisor_options_reference_route(self):
@@ -394,7 +439,7 @@ class VercelBuildTests(unittest.TestCase):
         result, calls = self.drive(POSTGRES_URL_NON_POOLING=route.format(port=5432),
                                    POSTGRES_PRISMA_URL=route.format(port=6543) + '&pgbouncer=true')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ['npx prisma migrate status --schema prisma/schema.prisma',
+        self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate status --schema prisma/schema.prisma',
                                  'npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
 
     def test_supavisor_options_route_rejects_ambiguous_or_overridden_targets(self):
@@ -453,13 +498,46 @@ class VercelBuildTests(unittest.TestCase):
         dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
         result, calls = self.drive(VERCEL_ENV='preview', POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ['npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
+        self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
         for env in ('preview', 'development', ''):
             for name in ('POSTGRES_URL_NON_POOLING', 'POSTGRES_PRISMA_URL'):
                 values = {'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev, name: self.env[name]}
                 result, calls = self.drive(VERCEL_ENV=env, **values)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(calls, [])
+
+    def test_missing_or_unsafe_redis_configuration_withholds_migration_and_build(self):
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        for environment in ('production', 'preview'):
+            bindings = {} if environment == 'production' else {'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev}
+            for missing in ({'UPSTASH_REDIS_REST_URL': '', 'UPSTASH_REDIS_REST_TOKEN': ''},
+                            {'UPSTASH_REDIS_REST_URL': ''}, {'UPSTASH_REDIS_REST_TOKEN': ''},
+                            {'UPSTASH_REDIS_REST_URL': 'http://quota.example.test'},
+                            {'UPSTASH_REDIS_REST_URL': 'https://private-fixture-token@quota.example.test'},
+                            {'UPSTASH_REDIS_REST_URL': 'https://quota.example.test?token=private-fixture-token'}):
+                with self.subTest(environment=environment, configuration=list(missing)):
+                    result, calls = self.drive(VERCEL_ENV=environment, **bindings, **missing)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(calls, [])
+                    self.assertIn('rate-limit store preflight failed', result.stderr)
+                    self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
+
+    def test_unwritable_unavailable_or_invalid_redis_withholds_migration_and_build(self):
+        for response in ('http', 'readonly', 'invalid', 'denied', 'timeout'):
+            with self.subTest(response=response):
+                result, calls = self.drive(REDIS_RESULT=response)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(calls, ['redis EVAL'])
+                self.assertIn('rate-limit store preflight failed', result.stderr)
+                self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
+                self.assertNotIn('private-fixture-diagnostic', result.stdout + result.stderr)
+
+    def test_undeployed_development_still_builds_without_redis(self):
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        result, calls = self.drive(VERCEL_ENV='development', VERCEL='', POSTGRES_URL_NON_POOLING=dev,
+                                   POSTGRES_PRISMA_URL=dev, UPSTASH_REDIS_REST_URL='', UPSTASH_REDIS_REST_TOKEN='')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, ['npm run build -w apps/api'])
 
     def test_failed_migration_withholds_build_and_build_failure_is_not_success(self):
         result, calls = self.drive(MIGRATE_EXIT='7')
