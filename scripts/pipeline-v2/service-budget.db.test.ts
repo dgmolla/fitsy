@@ -4,12 +4,18 @@ import { DailyBudgetExceeded, SharedServiceBudget } from './service-budget';
 import { HexJobQueue } from './queue';
 import { PdfJobQueue } from './pdf-queue';
 import { reservationUsd } from './journal';
+import { assertTestDatabase } from '../lib/test-database-guard';
 
-const suite = process.env['POSTGRES_PRISMA_URL'] ? describe : describe.skip;
+const databaseUrl = process.env['POSTGRES_PRISMA_URL'];
+const suite = databaseUrl ? describe : describe.skip;
 suite('fleet budgets with real PostgreSQL and independent workers', () => {
-  const clients = Array.from({ length: 8 }, () => new PrismaClient());
+  // Keep eight independent worker sessions within the disposable database's connection budget.
+  const workerUrl = databaseUrl ? new URL(assertTestDatabase(databaseUrl)) : undefined;
+  workerUrl?.searchParams.set('connection_limit', '1');
+  const clients = Array.from({ length: 8 }, () => new PrismaClient(workerUrl ? { datasources: { db: { url: workerUrl.toString() } } } : undefined));
   const db = clients[0]!, budgets = clients.map(client => new SharedServiceBudget(client));
   const runId = 'pipeline-v2-dev:queue:budget-regression', brandId = 'budget-pdf-brand';
+  beforeAll(async () => { await Promise.all(clients.map(client => client.$connect())); }, 15_000);
   beforeEach(async () => {
     await db.$executeRaw`DELETE FROM public.pipeline_paid_requests`;
     await db.$executeRaw`DELETE FROM public.pipeline_service_days`;
@@ -19,13 +25,14 @@ suite('fleet budgets with real PostgreSQL and independent workers', () => {
     await budgets[0]!.configure('jev', 5, 100000); await budgets[0]!.configure('google',5,1000); await budgets[0]!.configure('pdf_finder',0,10);
   });
   afterAll(async () => {
-    await db.$executeRaw`DELETE FROM public.pipeline_paid_requests`;
-    await db.$executeRaw`DELETE FROM public.pipeline_service_days`;
-    await db.$executeRaw`DELETE FROM public.hex_jobs WHERE run_id=${runId}`;
-    await db.brand.delete({ where: { id: brandId } });
-    await budgets[0]!.configure('jev',5,100000); await budgets[0]!.configure('google',5,1000); await budgets[0]!.configure('pdf_finder',0,10);
-    await Promise.all(clients.map(client => client.$disconnect()));
-  });
+    try {
+      await db.$executeRaw`DELETE FROM public.pipeline_paid_requests`;
+      await db.$executeRaw`DELETE FROM public.pipeline_service_days`;
+      await db.$executeRaw`DELETE FROM public.hex_jobs WHERE run_id=${runId}`;
+      await db.brand.deleteMany({ where: { id: brandId } });
+      await budgets[0]!.configure('jev',5,100000); await budgets[0]!.configure('google',5,1000); await budgets[0]!.configure('pdf_finder',0,10);
+    } finally { await Promise.all(clients.map(client => client.$disconnect())); }
+  }, 15_000);
 
   test.each(['jev','google'] as const)('%s in-flight calls cannot overshoot the daily cap across workers', async service => {
     await budgets[0]!.configure(service, 0.03, 100);
@@ -38,7 +45,7 @@ suite('fleet budgets with real PostgreSQL and independent workers', () => {
     expect((await budgets[1]!.state()).find(state => state.service===service)).toMatchObject({ costUsd: 0, reservedUsd: 0.03, calls: '3' });
     await Promise.all(accepted.map(result => budgets[2]!.settle(result.value,0.01)));
     await expect(budgets[3]!.reserve(service,0.01,'after-settlement')).rejects.toBeInstanceOf(DailyBudgetExceeded);
-  });
+  }, 15_000);
 
   test('partial settlement releases only unused capacity; uncertain charges survive restart and UTC rollover', async () => {
     await budgets[0]!.configure('google',0.04,100);

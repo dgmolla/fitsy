@@ -38,15 +38,15 @@ CREATE INDEX pipeline_paid_requests_unsettled ON public.pipeline_paid_requests(s
 -- Sample UTC date after acquiring that lock, including when waiting across midnight.
 CREATE FUNCTION public.pipeline_budget_available(p_service TEXT, p_usd NUMERIC) RETURNS BOOLEAN
 LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path = pg_catalog, public AS $$
-DECLARE budget public.pipeline_service_budgets; today DATE; charged NUMERIC; calls BIGINT;
+DECLARE budget public.pipeline_service_budgets; today DATE; charged NUMERIC; total_calls BIGINT;
 BEGIN
   IF p_usd IS NULL OR p_usd < 0 THEN RAISE EXCEPTION 'Invalid budget reservation'; END IF;
   SELECT * INTO STRICT budget FROM public.pipeline_service_budgets WHERE service = p_service FOR UPDATE;
   today := (clock_timestamp() AT TIME ZONE 'UTC')::date;
-  SELECT COALESCE(SUM(CASE WHEN day=today THEN charged_usd ELSE reserved_usd END),0),
-    COALESCE(SUM(calls) FILTER (WHERE day=today),0) INTO charged,calls
-    FROM public.pipeline_service_days WHERE service=p_service AND (day=today OR reserved_usd>0);
-  RETURN charged + p_usd <= budget.daily_usd AND calls < budget.daily_calls;
+  SELECT COALESCE(SUM(CASE WHEN d.day=today THEN d.charged_usd ELSE d.reserved_usd END),0),
+    COALESCE(SUM(d.calls) FILTER (WHERE d.day=today),0) INTO charged,total_calls
+    FROM public.pipeline_service_days d WHERE d.service=p_service AND (d.day=today OR d.reserved_usd>0);
+  RETURN charged + p_usd <= budget.daily_usd AND total_calls < budget.daily_calls;
 END $$;
 
 CREATE FUNCTION public.pipeline_budget_reserve(p_id UUID, p_service TEXT, p_usd NUMERIC, p_scope TEXT) RETURNS UUID

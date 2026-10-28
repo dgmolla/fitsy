@@ -95,6 +95,10 @@ UE 403/429, Google 403/429, Jev 429 and daily budget admission stops emit struct
 
 ## Verification and recovery
 
+Budget admission must run against the migrated disposable PostgreSQL database because PL/pgSQL resolves column references when the function executes.
+The concurrency regression preconnects eight independent worker sessions with one connection each and a bounded startup timeout.
+This keeps cold connection setup outside the reservation assertions and avoids host-sized pools exhausting the disposable database.
+
 ```sh
 npm test -w scripts -- --runInBand --runTestsByPath \
   preload-cost.test.ts preload-cost-e2e.test.ts \
