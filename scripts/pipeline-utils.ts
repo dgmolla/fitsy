@@ -12,7 +12,7 @@ import type {
 import { aggregateDietaryOptions, DIETARY_TAG_THRESHOLD } from "./constants.js";
 // Keep offline persistence independent of the shared barrel's environment initialization.
 import { macroWinnerSqlOrder } from "../packages/shared/src/utils/macroProvenance";
-import { validateReviewedChainWrites } from '../apps/api/services/chainWriteGuard';
+import { invalidateStaleChainBindings, validateReviewedChainWrites } from '../apps/api/services/chainWriteGuard';
 import { chainTransaction } from '../apps/api/services/chainTransaction';
 import { decodeMenuText, menuItemIdentity, sourceItemId } from '../apps/api/services/menuSources/menuItemIdentity';
 import { resolveMenuItemIds, retireMissingMenuItems } from './menu-item-identity';
@@ -285,9 +285,7 @@ export async function persistItemsInTx(
   if (menuItemRows.length !== candidateIds.length) throw new Error('Menu product write count mismatch');
   const menuItemIds = candidateIds;
 
-  // A changed/unmatched serving must not keep an older official binding as its winner.
-  await tx.$executeRaw`DELETE FROM "MacroEstimate" e USING UNNEST(${menuItemIds}::text[], ${sources}::text[]) incoming(id, source)
-    WHERE e."menuItemId" = incoming.id AND e.source = 'official' AND e.reasoning LIKE '{"kind":"reviewed-chain-v1",%' AND incoming.source <> 'official'`;
+  await invalidateStaleChainBindings(tx, menuItemIds.map((id, i) => ({ id, restaurantId, item: validPairs[i]!.item, source: sources[i]! })));
 
   // Query 3: UPSERT MacroEstimate by (menuItemId, source). Each source gets
   // its own row; re-running the pipeline for the same source updates macros.
@@ -518,8 +516,7 @@ export async function persistHexBulkInTx(
   // Q3: UPSERT MacroEstimate by (menuItemId, source). Each source gets its own
   // row; re-running the pipeline for the same source updates macros in-place.
   if (flatMenuItemIds.length > 0) {
-    await tx.$executeRaw`DELETE FROM "MacroEstimate" e USING UNNEST(${flatMenuItemIds}::text[], ${flatSources}::text[]) incoming(id, source)
-      WHERE e."menuItemId" = incoming.id AND e.source = 'official' AND e.reasoning LIKE '{"kind":"reviewed-chain-v1",%' AND incoming.source <> 'official'`;
+    await invalidateStaleChainBindings(tx, flatMenuItemIds.map((id, i) => ({ id, ...flatItems[i]!, source: flatSources[i]! })));
     await tx.$executeRaw`
       INSERT INTO "MacroEstimate" (
         "id", "menuItemId", "calories", "proteinG", "carbsG", "fatG",

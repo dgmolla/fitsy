@@ -19,7 +19,9 @@ flowchart LR
 - **New hex:** resolve a unique verified brand, fetch its UE menu, match once against the run's catalog index, estimate only unmatched items, and persist the brand with the menu and checkpoint. The catalog never creates menu membership. Existing dietary tags survive official nutrition replacement; new official rows have no inferred dietary tags. Per-location logs count reviewed matches so alias drift is visible.
 - **Unmatched items:** reviewed brands use Haiku for unreviewed UE items. FatSecret values need a separate serving match before reuse; a higher source rank does not establish the right serving. A verified chain can legitimately have zero matches in this partial pilot, so brand identity still persists and the per-location match count remains visible in logs.
 - **Serving guard:** preserve exact UE calorie labels, ranges and customization flags. Ranges, malformed labels and calorie conflicts abstain. A named standard serving is not a claim about every optional customization.
-- **Provenance:** official estimates store the catalog row, approval digest, PDF digest/URL, serving and menu fingerprint. Re-enriching a changed/unmatched item removes its prior reviewed-chain estimate; other legacy official sources are not deleted by that rule.
+- **Provenance:** official estimates store the catalog row, approval digest, PDF digest/URL, serving and menu fingerprint.
+  A non-official write preserves a still-valid reviewed binding; a changed serving, approval, identity or fact invalidates that stale estimate.
+  Other legacy official sources are not deleted by that rule.
 - **Integrity:** several estimates per item are valid. The hex invariant counts items with an estimate, not estimate rows. Missing estimates or a conflicting brand assignment abort the entire hex. Verified brand handoff sets the chain flag, and a later run preserves an existing bound chain identity; an official estimate alone does not classify an unbound restaurant as a chain.
 
 ## Proof

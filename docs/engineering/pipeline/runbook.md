@@ -6,6 +6,9 @@
 
 **Primary script:** `scripts/preload-ue-first.ts`
 
+The separate [single-hex Pipeline v2 DEV proof](pipeline-v2-dev-poc.md) uses `npm run preload:v2:dev` with an explicit LA hex and a cumulative $5 cap.
+It uses official reviewed serving matches plus Jev estimates and a durable PDF-search outbox.
+
 ## Source identity cutover and collision audit
 
 Issue #498 is currently proposals only.

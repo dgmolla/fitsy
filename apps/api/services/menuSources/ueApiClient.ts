@@ -166,6 +166,7 @@ interface PostUeOpts {
   signal?: AbortSignal;
   maxRetries?: number;
   baseBackoffMs?: number;
+  onRequest?: () => void;
   /** Extra Cookie header value (e.g. for getFeedV1's uev2.loc). */
   cookieHeader?: string;
   /** Label for log lines (e.g. storeUuid or "feed:34.05,-118.24"). */
@@ -210,6 +211,7 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
     if (opts.cookieHeader) headers["Cookie"] = opts.cookieHeader;
 
     try {
+      opts.onRequest?.();
       const response = await fetch(endpoint, {
         method: "POST",
         headers,
@@ -335,6 +337,8 @@ export interface FetchStoreV1Opts {
   maxRetries?: number;
   /** Base ms for exp backoff (1s → 2s → 4s). 0 disables delay (tests). Default 1000. */
   baseBackoffMs?: number;
+  /** Called immediately before each HTTP attempt, including retries, for durable accounting. */
+  onRequest?: () => void;
 }
 
 /**

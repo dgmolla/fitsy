@@ -61,6 +61,17 @@ describe("decodeStoreUuid", () => {
 // ─── fetchStoreV1 ────────────────────────────────────────────────────────────
 
 describe("fetchStoreV1", () => {
+  it('accounts each actual HTTP attempt, including retries', async () => {
+    const onRequest = jest.fn();
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 503, text: async () => 'Unavailable' })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'success', data: { title: 'Test' } }) });
+    await fetchStoreV1('fixture-store', { maxRetries: 1, baseBackoffMs: 0, onRequest });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(onRequest).toHaveBeenCalledTimes(2);
+    expect(onRequest.mock.invocationCallOrder[0]).toBeLessThan(mockFetch.mock.invocationCallOrder[0]!);
+    expect(onRequest.mock.invocationCallOrder[1]).toBeLessThan(mockFetch.mock.invocationCallOrder[1]!);
+  });
+
   it("POSTs storeUuid as JSON and returns parsed response", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

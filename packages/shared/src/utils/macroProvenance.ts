@@ -8,7 +8,7 @@
  * onto MenuItem.{calories,proteinG,carbsG,fatG} and surfaced to users.
  *
  * Trust order (most → least): merchant-verified > reviewed official > FatSecret (structured
- * chain data) > FFN > Haiku (LLM estimate) > anything else / legacy NULL.
+ * chain data) > FFN > Haiku/Jev (model estimates) > anything else / legacy NULL.
  *
  * Two consumers, one ranking:
  *   - TS read paths (getRestaurantMenu, saved-items) call `pickWinningEstimate`.
@@ -25,6 +25,7 @@ export const MACRO_SOURCE_RANK: Readonly<Record<string, number>> = {
   fatsecret: 2,
   ffn: 3,
   haiku: 4,
+  jev: 4,
 };
 
 /** Fallback rank for unknown or legacy-NULL sources — always loses. */

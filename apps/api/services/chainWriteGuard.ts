@@ -1,10 +1,33 @@
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { buildChainMatcher } from './chainCatalog';
-import { buildBrandIdentityMatcher, officialMacro } from './chainServing';
+import { buildBrandIdentityMatcher, loadChainServing, officialMacro } from './chainServing';
 import type { MacroData, StructuredMenuItem } from './menuSources/types';
 
 interface RestaurantWrite { restaurantId: string; brandId?: string; items: { item: StructuredMenuItem; macro: MacroData }[] }
+
+/** Estimation is not revocation. Only invalidate a reviewed link when its current binding or facts changed. */
+export async function invalidateStaleChainBindings(tx: Prisma.TransactionClient,
+  inputs: { id: string; restaurantId: string; item: StructuredMenuItem; source: string }[]): Promise<void> {
+  const incoming = new Map(inputs.filter(i => i.source !== 'official').map(i => [i.id, i]));
+  if (!incoming.size) return;
+  const estimates = await tx.macroEstimate.findMany({ where: { menuItemId: { in: [...incoming.keys()] }, source: 'official',
+    reasoning: { startsWith: '{"kind":"reviewed-chain-v1",' } } });
+  if (!estimates.length) return;
+  const runtime = await loadChainServing(tx);
+  const restaurants = new Map((await tx.restaurant.findMany({ where: { id: { in: [...new Set(inputs.map(i => i.restaurantId))] } } })).map(r => [r.id, r]));
+  const stale = estimates.filter(estimate => {
+    const input = incoming.get(estimate.menuItemId)!, restaurant = restaurants.get(input.restaurantId);
+    if (!restaurant) throw new Error('Restaurant missing during chain binding validation');
+    const match = runtime.match(runtime.brandId(restaurant), input.item, restaurant);
+    if (match.status !== 'matched') return true;
+    const expected = officialMacro(match.row, input.item);
+    return estimate.reasoning !== expected.reasoning || estimate.confidence !== expected.confidence
+      || ['calories', 'proteinG', 'carbsG', 'fatG'].some(key => estimate[key as 'calories'] !== expected[key as 'calories']);
+  });
+  if (stale.length) await tx.macroEstimate.deleteMany({ where: { id: { in: stale.map(e => e.id) } } });
+}
+
 const proof = z.object({ kind: z.literal('reviewed-chain-v1'), chainItemId: z.string().min(1) });
 /** Revalidate reviewed facts against locked current location/identity before either menu writer mutates rows. */
 export async function validateReviewedChainWrites(tx: Prisma.TransactionClient, inputs: RestaurantWrite[]): Promise<void> {

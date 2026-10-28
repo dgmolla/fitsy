@@ -64,6 +64,7 @@ fitsy/
 | System | Location | What it does |
 |--------|----------|-------------|
 | Preload pipeline (UE-first) | `scripts/preload-ue-first.ts` | Uber Eats discovery → FatSecret/Brave menus → Claude Haiku macros → PostgreSQL (H3 hex checkpoints, Axiom telemetry) |
+| Pipeline v2 DEV proof | `scripts/preload-v2.ts` | Explicit single LA hex, reviewed exact official matches + Jev, $5 journal cap; [runbook](docs/engineering/pipeline/pipeline-v2-dev-poc.md) |
 | API backend | `apps/api/` | Query + filter preloaded data; only auth/subscription provider lookups at request time |
 
 Architecture: `docs/engineering/architecture/system-design.md` (+ `auth.md`, `api-reference.md`). Pipeline: `docs/engineering/pipeline/` (runbook, ue-first-pipeline, macro-accuracy-recommendations-2026-08-16).

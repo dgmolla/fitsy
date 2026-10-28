@@ -27,7 +27,7 @@ export interface MacroData {
   fatG: number;
   confidence: "HIGH" | "MEDIUM" | "LOW";
   reasoning?: string; // durable source/binding provenance for reviewed chain estimates
-  source: string; // "ffn" | "fatsecret" | "haiku"
+  source: string; // "official" | "ffn" | "fatsecret" | "haiku" | "jev"
   dietaryTags: string[]; // e.g. ["vegan", "gluten-free"]
 }
 

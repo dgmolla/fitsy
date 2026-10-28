@@ -13,7 +13,8 @@ function run(items = 2, cap = '15', extra: string[] = [], directory?: string, en
   const eventsFile = join(dir, 'events.jsonl');
   const result = spawnSync(process.execPath, [
     '--require', join(__dirname, 'test-fixtures/preload-cost-runtime.cjs'), '--import', 'tsx',
-    'scripts/preload-ue-first.ts', '--phase=enrich', ...(env.PRELOAD_TEST_PREFLIGHT ? [] : ['--skip-preflight']), '--run-id=test-cost',
+    'scripts/preload-ue-first.ts', '--phase=enrich', ...(env.PRELOAD_TEST_PREFLIGHT ? [] : ['--skip-preflight']),
+    ...(env.PRELOAD_TEST_AUTO_RESUME ? [] : ['--run-id=test-cost']),
     '--cost-cap-usd', cap, '--cost-log', join(dir, 'cost.jsonl'), ...extra,
   ], { cwd: root, encoding: 'utf8', timeout: 30_000, env: {
     PATH: process.env.PATH, HOME: process.env.HOME,
@@ -39,6 +40,11 @@ it('reports actual usage from the CLI through the hex checkpoint and run summary
   expect(result.events.find(e => e.type === 'cost_checkpoint')?.hexUsage).toMatchObject({ inputTokens: 1000, outputTokens: 2000, costUsd: 0.011 });
   expect(result.events.filter(e => e.type === 'db_checkpoint')).toHaveLength(1);
   expect(result.stdout).toContain('cost_per_1k_items=$5.500000');
+});
+it('automatic UE-first resume never adopts a DEV POC checkpoint namespace', () => {
+  const result = run(2, '15', [], undefined, { PRELOAD_TEST_AUTO_RESUME: '1', PRELOAD_TEST_RESTAURANTS: '2', PRELOAD_TEST_SPLIT_HEXES: '1' });
+  expect(result.status).toBe(0);
+  expect(result.events.find(e => e.type === 'run')).toMatchObject({ runId: 'legacy-resume', status: 'completed' });
 });
 
 it('stops between chunks, leaves the hex pending, and retains spend when resumed', () => {
