@@ -2,6 +2,7 @@ import { appendFileSync, closeSync, fsyncSync, mkdirSync, openSync, readFileSync
 import { dirname, join } from 'node:path';
 import { hostname } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { requestJevDecision } from '../../apps/api/services/jevDecisionService';
 import { JEV_LIMITS, parseChoiceAnswers, type JevRequest } from '../eval/lib/jev-experiment';
@@ -9,10 +10,21 @@ import { adapterProtocol, choiceMethod } from '../eval/suite/adapters';
 import type { ChoiceClient } from '../eval/suite/budget';
 
 export const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort()
+    .map(key => [key, canonical((value as Record<string, unknown>)[key])]));
+  return value;
+}
+// JSONB reorders object keys. Request identity must survive storage and another worker's parse.
+export const requestKey = (request: JevRequest): string => digest(canonical(request));
 export const protocolHash = digest({ limits: JEV_LIMITS, adapter: adapterProtocol });
 export const reservationUsd = JEV_LIMITS.reservedInputTokens * JEV_LIMITS.pricing.inputUsdPerMillion / 1_000_000;
 const usageSchema = z.object({ usage: z.object({ input_tokens: z.number().int().positive().safe(), output_tokens: z.number().int().nonnegative().safe() }) });
 export type JournalEvent = { event: string; at?: string; [key: string]: unknown };
+export interface JournalIdentity { runId: string; hexId: string; target: string }
+export const journalHeader = (identity: JournalIdentity, capUsd: number): JournalEvent =>
+  ({ event: 'identity', ...identity, protocolHash, capUsd });
 
 function usage(body: string): number | null {
   try {
@@ -51,8 +63,8 @@ function claimLock(directory: string): string {
   return token;
 }
 
-/** One private, exclusively held ledger binds resume, spend, request replay and the PDF outbox to this hex. */
-export class V2Journal implements ChoiceClient {
+/** Both local and shared storage use the same spend reservation and replay rules. */
+export abstract class V2Ledger implements ChoiceClient {
   knownUsd = 0;
   stopped: string | null = null;
   requests = 0;
@@ -60,61 +72,52 @@ export class V2Journal implements ChoiceClient {
   unknown = false;
   context = '';
   readonly events: JournalEvent[] = [];
-  private fd: number | undefined;
-  private lockToken: string | undefined;
   private readonly responses = new Map<string, { status: number; body: string; latencyMs: number }>();
   private readonly cap: number;
   private inFlight = false;
   readonly estimator = choiceMethod('jev-v3', this).estimator!;
 
-  constructor(readonly path: string, identity: { runId: string; hexId: string; target: string }, cap = 5) {
+  constructor(cap = 5) {
     if (!Number.isFinite(cap) || cap < 0 || cap > 5) throw new Error('DEV POC cap must be between $0 and $5');
     this.cap = cap;
-    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    this.lockToken = claimLock(path + '.lock');
-    try {
-      this.fd = openSync(path, 'a+', 0o600);
-      const bytes = readFileSync(path, 'utf8');
-      // Fail closed on a torn record: an interrupted reservation may have incurred spend.
-      if (bytes && !bytes.endsWith('\n')) throw new Error('Incomplete POC journal; spend requires reconciliation');
-      const events: JournalEvent[] = bytes.trim() ? bytes.trim().split('\n').map(line => JSON.parse(line)) : [];
-      const header = { event: 'identity', ...identity, protocolHash, capUsd: cap };
-      if (events.length && JSON.stringify(events[0]) !== JSON.stringify(header)) throw new Error('POC journal identity, protocol or cap changed');
-      if (!events.length) this.append(header);
-      else this.events.push(...events);
-      const pending = new Set<string>(), requests = new Map<string, JevRequest>();
-      for (const event of events.slice(1)) {
-        if (event.event === 'jev_request') {
-          const key = digest(event.request);
-          if (event.key !== key || requests.has(key)) throw new Error('Invalid or duplicated POC request record');
-          pending.add(key); requests.set(key, event.request as JevRequest); this.requests++;
-        } else if (event.event === 'jev_response') {
-          const key = String(event.key);
-          if (!pending.delete(key) || typeof event.body !== 'string' || !Number.isInteger(event.status)
-            || !Number.isFinite(event.latencyMs) || Number(event.latencyMs) < 0) throw new Error('Invalid POC response record');
-          const cost = usage(event.body);
-          if (cost === null) this.unknown = true;
-          else this.knownUsd += cost;
-          this.responses.set(key, { status: Number(event.status), body: event.body, latencyMs: Number(event.latencyMs) });
-          // Usage exceeding the reservation remains accounted, but never permits more paid work.
-          if (cost !== null && cost > reservationUsd) this.stopped = 'Jev usage exceeded the reserved envelope';
-          try { validateResponse(requests.get(key)!, { status: Number(event.status), body: event.body }); }
-          catch { this.stopped ??= 'Invalid prior Jev response; inspect the retained response before resuming'; }
-        }
+  }
+
+  protected load(events: JournalEvent[], identity: JournalIdentity, cap: number): JournalEvent {
+    const header = journalHeader(identity, cap);
+    if (events.length && !isDeepStrictEqual(events[0], header)) throw new Error('POC journal identity, protocol or cap changed');
+    this.events.push(...events);
+    const pending = new Set<string>(), requests = new Map<string, JevRequest>(), canonicalKeys = new Set<string>();
+    for (const event of events.slice(1)) {
+      if (event.event === 'jev_request') {
+        const request = event.request as JevRequest, key = String(event.key), stableKey = requestKey(request);
+        // Existing local #591 ledgers used insertion-order hashes. Read them without rewriting history.
+        if ((key !== stableKey && key !== digest(request)) || requests.has(key) || canonicalKeys.has(stableKey)) throw new Error('Invalid or duplicated POC request record');
+        pending.add(key); requests.set(key, request); canonicalKeys.add(stableKey); this.requests++;
+      } else if (event.event === 'jev_response') {
+        const key = String(event.key);
+        if (!pending.delete(key) || typeof event.body !== 'string' || !Number.isInteger(event.status)
+          || !Number.isFinite(event.latencyMs) || Number(event.latencyMs) < 0) throw new Error('Invalid POC response record');
+        const cost = usage(event.body);
+        if (cost === null) this.unknown = true;
+        else this.knownUsd += cost;
+        this.responses.set(requestKey(requests.get(key)!), { status: Number(event.status), body: event.body, latencyMs: Number(event.latencyMs) });
+        // Usage exceeding the reservation remains accounted, but never permits more paid work.
+        if (cost !== null && cost > reservationUsd) this.stopped = 'Jev usage exceeded the reserved envelope';
+        try { validateResponse(requests.get(key)!, { status: Number(event.status), body: event.body }); }
+        catch { this.stopped ??= 'Invalid prior Jev response; inspect the retained response before resuming'; }
       }
-      if (pending.size) this.unknown = true;
-    } catch (error) { this.close(); throw error; }
+    }
+    if (pending.size) this.unknown = true;
+    return header;
   }
 
-  append(event: JournalEvent): void {
-    if (this.fd === undefined) throw new Error('POC journal is closed');
-    appendFileSync(this.fd, JSON.stringify(event) + '\n'); fsyncSync(this.fd);
-    this.events.push(event);
-  }
+  abstract append(event: JournalEvent): void | Promise<void>;
+  abstract close(): void;
+  get signal(): AbortSignal | undefined { return undefined; }
 
-  enqueuePdf(brand: { id: string; displayName: string }): void {
+  async enqueuePdf(brand: { id: string; displayName: string }): Promise<void> {
     if (this.events.some(event => event.event === 'pdf_search_enqueued' && event.brandId === brand.id)) return;
-    this.append({ event: 'pdf_search_enqueued', at: new Date().toISOString(), jobId: digest(['pdf-search', brand.id]),
+    await this.append({ event: 'pdf_search_enqueued', at: new Date().toISOString(), jobId: digest(['pdf-search', brand.id]),
       brandId: brand.id, name: brand.displayName, status: 'pending', reason: 'no-published-nutrition' });
   }
 
@@ -127,7 +130,7 @@ export class V2Journal implements ChoiceClient {
 
   private async sendOne(request: JevRequest): Promise<{ raw: unknown; costUsd: number; latencyMs: number }> {
     if (Buffer.byteLength(JSON.stringify(request)) > JEV_LIMITS.maxRequestBytes) throw new Error('Jev request exceeds 12KB');
-    const key = digest(request);
+    const key = requestKey(request);
     let response = this.responses.get(key);
     if (this.unknown || this.stopped) throw new Error(this.stopped ?? 'Unknown Jev usage; reconcile before resuming');
     if (response) this.reusedRequests++;
@@ -135,19 +138,19 @@ export class V2Journal implements ChoiceClient {
       if (this.knownUsd + reservationUsd > this.cap) { this.stopped = 'DEV POC spend cap reached'; throw new Error(this.stopped); }
       const apiKey = process.env['TYPESAFE_API_KEY'] ?? '';
       if (!apiKey.trim()) throw new Error('TYPESAFE_API_KEY is required');
-      this.append({ event: 'jev_request', at: new Date().toISOString(), requestId: randomUUID(), key, request, context: this.context });
+      await this.append({ event: 'jev_request', at: new Date().toISOString(), requestId: randomUUID(), key, request, context: this.context });
       this.requests++;
       const start = performance.now();
       try {
-        const result = await requestJevDecision(request, apiKey);
+        const result = await requestJevDecision(request, apiKey, this.signal);
         response = { ...result, latencyMs: performance.now() - start };
         // Never retain a provider echo of the credential.
         if (response.body.includes(apiKey)) response.body = '[credential echo redacted; usage unknown]';
-        this.append({ event: 'jev_response', at: new Date().toISOString(), key, ...response });
+        await this.append({ event: 'jev_response', at: new Date().toISOString(), key, ...response });
         this.responses.set(key, response);
       } catch {
         this.unknown = true;
-        this.append({ event: 'transport_error', at: new Date().toISOString(), key, reason: 'Jev request failed; usage unknown' });
+        await this.append({ event: 'transport_error', at: new Date().toISOString(), key, reason: 'Jev request failed; usage unknown' });
         throw new Error('Jev transport failed; usage unknown');
       }
       const cost = usage(response.body);
@@ -162,6 +165,33 @@ export class V2Journal implements ChoiceClient {
       this.stopped = 'Invalid Jev response; inspect the retained response before resuming';
       throw error;
     }
+  }
+
+}
+
+/** Private single-host POC storage. Shared workers use the database-backed ledger. */
+export class V2Journal extends V2Ledger {
+  private fd: number | undefined;
+  private lockToken: string | undefined;
+
+  constructor(readonly path: string, identity: JournalIdentity, cap = 5) {
+    super(cap);
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+    this.lockToken = claimLock(path + '.lock');
+    try {
+      this.fd = openSync(path, 'a+', 0o600);
+      const bytes = readFileSync(path, 'utf8');
+      if (bytes && !bytes.endsWith('\n')) throw new Error('Incomplete POC journal; spend requires reconciliation');
+      const events: JournalEvent[] = bytes.trim() ? bytes.trim().split('\n').map(line => JSON.parse(line)) : [];
+      const header = this.load(events, identity, cap);
+      if (!events.length) this.append(header);
+    } catch (error) { this.close(); throw error; }
+  }
+
+  append(event: JournalEvent): void {
+    if (this.fd === undefined) throw new Error('POC journal is closed');
+    appendFileSync(this.fd, JSON.stringify(event) + '\n'); fsyncSync(this.fd);
+    this.events.push(event);
   }
 
   close(): void {
