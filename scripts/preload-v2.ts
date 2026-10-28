@@ -7,6 +7,7 @@ import { digest, V2Journal } from './pipeline-v2/journal';
 import { parseOptions, runV2Hex, targetIdentity } from './pipeline-v2/run';
 import { parseQueueOptions, runQueueCommand } from './pipeline-v2/queue-worker';
 import { parseUeRateOptions, SharedUeRateLimiter } from './pipeline-v2/ue-rate-limiter';
+import { parsePdfOptions, runPdfCommand } from './pipeline-v2/pdf-worker';
 
 /** Keep the guarded datasource at the connection entrypoint for the writer inventory to verify. */
 export async function v2Database(value = process.env['PIPELINE_DATABASE_URL']): Promise<string> {
@@ -18,7 +19,8 @@ async function main() {
   const rateCommand = args[0] === 'ue-rate';
   const capRps = rateCommand ? parseUeRateOptions(args) : undefined;
   const queued = args[0] === 'enqueue' || args[0] === 'worker' ? parseQueueOptions(args) : undefined;
-  const options = queued || rateCommand ? undefined : parseOptions(args), url = await v2Database();
+  const pdf = args[0] === 'pdf-enqueue' || args[0] === 'pdf-worker' ? parsePdfOptions(args) : undefined;
+  const options = queued || rateCommand || pdf ? undefined : parseOptions(args), url = await v2Database();
   let prisma: PrismaClient | undefined;
   let journal: V2Journal | undefined;
   try {
@@ -33,11 +35,19 @@ async function main() {
     const files = git(['ls-files', '--cached', '--others', '--exclude-standard', '--', 'package.json', 'scripts/package.json',
       'scripts/preload-v2.ts', 'scripts/pipeline-v2', 'scripts/hex-persist.ts', 'scripts/hex-resume.ts', 'scripts/pipeline-utils.ts', 'scripts/menu-item-identity.ts',
       'scripts/preload-invariants.ts', 'scripts/lib/db-target-guard.ts', 'scripts/eval/lib/jev-experiment.ts', 'scripts/eval/suite/adapters.ts',
+      'scripts/eval/pdf-finder',
       'scripts/eval/suite/types.ts', 'scripts/eval/jev-macro/*.ts', 'apps/api/services', 'packages/shared/src', 'prisma/schema.prisma',
-      'prisma/migrations/20261028130000_hex_jobs', 'prisma/migrations/20261028140000_pipeline_ue_rate_limit']).split('\n').sort();
+      'prisma/migrations/20261028130000_hex_jobs', 'prisma/migrations/20261028140000_pipeline_ue_rate_limit',
+      'prisma/migrations/20261028150000_pipeline_pdf_jobs']).split('\n').sort();
     const source = { event: 'source', at: new Date().toISOString(), head: git(['rev-parse', 'HEAD']),
       sourceHash: digest(files.map(file => [file, digest(readFileSync(file).toString('base64'))])),
       dirty: Boolean(git(['status', '--porcelain'])) };
+    if (pdf) {
+      const result = await runPdfCommand(prisma, pdf, source);
+      process.stdout.write(JSON.stringify(result) + '\n');
+      if ('status' in result && !['completed', 'idle'].includes(result.status)) process.exitCode = 1;
+      return;
+    }
     if (queued) {
       const result = await runQueueCommand(prisma, queued, targetIdentity(url), source);
       process.stdout.write(JSON.stringify(result) + '\n');

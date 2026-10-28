@@ -13,6 +13,7 @@ import { validateItems } from '../pipeline-utils';
 import { JEV_LIMITS } from '../eval/lib/jev-experiment';
 import { digest, protocolHash, type V2Ledger } from './journal';
 import { SharedUeRateLimiter } from './ue-rate-limiter';
+import { PdfJobQueue } from './pdf-queue';
 
 export interface V2Options { hexId: string; runId: string; out: string; capUsd: number }
 export function validateV2Hex(hexId: string): void {
@@ -93,7 +94,7 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
     wallTimeComplete: interruptedAttempts === 0, interruptedAttempts,
     matches, rejections, wrongMatches: null, matchAudit: 'Inspect the retained official serving evidence before claiming zero wrong matches',
     pdfJobs: journal.events.filter(e => e.event === 'pdf_search_enqueued'),
-    notes: 'PDF jobs are a durable local outbox for the async worker; no PDF search or FatSecret calls run in this POC.' });
+    notes: 'Verified chains without published data enter the shared async PDF queue; no PDF search or FatSecret calls run in the hex worker.' });
   try {
     if (journal.unknown || journal.stopped) throw new Error('Prior Jev accounting failure requires reconciliation');
     const catalog = await loadV2Catalog(prisma);
@@ -105,7 +106,11 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
       journal.signal?.throwIfAborted();
       const brandId = catalog.identity(restaurant), hasPublished = brandId !== undefined && catalog.published.has(brandId);
       if (hasPublished) coverage.chainsWithPublishedData++;
-      else if (brandId) { coverage.chainsWithoutPublishedData++; await journal.enqueuePdf(catalog.brands.find(b => b.id === brandId)!); }
+      else if (brandId) {
+        coverage.chainsWithoutPublishedData++;
+        await new PdfJobQueue(prisma).enqueue(brandId);
+        await journal.enqueuePdf(catalog.brands.find(b => b.id === brandId)!);
+      }
       else coverage.independentRestaurants++;
       const savedMenu = journal.events.find(e => e.event === 'ue_menu' && e.restaurantId === restaurant.id && e.storeUuid === restaurant.storeUuid);
       const menu = savedMenu ? savedMenu.menu as MenuSourceResult : await new UeApiDirectSource(restaurant.storeUuid!, { maxRetries: 0,

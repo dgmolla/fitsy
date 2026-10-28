@@ -4,7 +4,7 @@
 
 The queue runs the [existing v2 hex implementation](pipeline-v2-dev-poc.md) against explicitly enqueued resolution-7 LA cells.
 It retains the DEV-only target guard, dedicated `pipeline_writer` credentials, reviewed official matcher, Jev protocol and cumulative $5 per-hex cap.
-Cloud hosting, PDF execution and fleet-wide budgets remain the later #594-#596 work.
+Cloud hosting and fleet-wide budgets remain the later #594 and #596 work.
 No mobile journey changes or App Store actions are involved.
 
 ```mermaid
@@ -64,6 +64,37 @@ A worker exits when no eligible job exists, the bound is reached or a job does n
 `idle` means no job is currently claimable; pending backoff, another live lease and exhausted work can all produce it.
 This command does not install a daemon or scheduler.
 Private per-attempt exports under `--out` are optional recovery evidence; the database journal remains authoritative even on another host.
+
+## Background chain nutrition
+
+Verified restaurant brands without published data enter one shared PDF job per chain before menu estimation.
+Discovery runs only in the background worker, after the database claim reserves that chain's retry window.
+The fixed three-attempt limit and hourly exponential backoff apply across every worker and location.
+
+```sh
+npm run preload:v2:pdf-enqueue -- --brand-id=VERIFIED_BRAND_ID
+npm run preload:v2:pdf-worker -- \
+  --worker-id=pdf-worker-a \
+  --out=.evidence/pipeline-v2/pdf-worker-a \
+  --max-jobs=1
+```
+
+Automatic approvals require a current official-domain nutrition link, brand and US/California evidence, fresh LA menu evidence, and source-row macro checks.
+An alias must match the source name and section, with the exact published serving in its menu description; only case and whitespace are cosmetic.
+Missing portions, other sections, and additional configuration abstain and retain their estimates.
+Broader serving-to-alias mappings require the existing [explicit chain review path](chain-pdf-pilot.md).
+Each corroborated provider item ID retains its own binding, even when several locations share identical menu text.
+Same-domain homepage redirects retain the original download as link evidence; page and document final URLs still require the established brand domain.
+
+Landing uses the reviewed catalog and chain rematch writers, adds official estimates, and preserves existing official corrections and unmatched estimates.
+Saved verification packets use version 2; version 1 packets lack serving equivalence and fail closed before any resumed catalog write.
+Do not rewrite old packets or reset queue history to bypass this check.
+Database-free regressions exercise real discovery, extraction, approval planning, and serving with only DNS/HTTP and estimation boundaries substituted.
+
+```sh
+npm test -w scripts -- --runInBand --runTestsByPath \
+  pipeline-v2/pdf.test.ts eval/pdf-finder/discover.test.ts
+```
 
 ## Shared Uber Eats rate and backoff
 

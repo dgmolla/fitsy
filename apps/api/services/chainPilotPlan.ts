@@ -72,9 +72,11 @@ export function planChainPilot(brands: Brand[], catalog: ChainItem[], input: Cha
 }
 
 /** Atomic catalog apply. The caller must durably save the plan before invoking this. */
-export async function applyCatalogPlan(prisma: PrismaClient, plan: CatalogPlan, pilot: ChainCatalogBatch = chainPilot): Promise<ChainItem[]> {
+export async function applyCatalogPlan(prisma: PrismaClient, plan: CatalogPlan, pilot: ChainCatalogBatch = chainPilot,
+  guardInTx?: (tx: Prisma.TransactionClient) => Promise<void>): Promise<ChainItem[]> {
   if (stateHash(plan.changes) !== plan.hash) throw new Error("Plan digest mismatch");
   return chainTransaction(prisma, async tx => {
+    await guardInTx?.(tx);
     const brands = await tx.brand.findMany({ where: { slug: { in: [...new Set([...pilot.changes, ...pilot.quarantine].map(d => d.slug))] } } });
     const currentCatalog = await tx.chainItem.findMany({ where: { brandId: { in: brands.map(b => b.id) } } });
     if (planChainPilot(brands, currentCatalog, pilot).hash !== plan.hash) throw new Error("Catalog or curated definition changed after planning");
