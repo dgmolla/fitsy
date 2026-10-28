@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { hasTargets } from "./macroScoring";
-import { macroScoreSumSql } from "./macroScoreSql";
+import { macroScoreSumSql, macroQualificationSql } from "./macroScoreSql";
+import { shuffleSearchOrder } from './shuffleSearch';
 import { nearbyBoundarySql, nearbyDistanceSql, restaurantQuerySql } from "./restaurantQuerySql";
 import { restaurantCursorContext, type RestaurantSearchContext } from './restaurantCursorContext';
 import { macroWinnerSqlOrder } from "@fitsy/shared";
@@ -61,13 +62,14 @@ export interface NearbyRestaurantsParams extends RestaurantSearchContext {
 
 export interface PaginationCursor {
   id: string;
-  /** The active sort key for the row (composite or distance, depending on mode). */
+  /** The active sort key for the row: seeded shuffle, composite score, or distance. */
   orderKey: number;
   /** Exact PostgreSQL float representation, preserved across Prisma's JSON transport. */
   orderKeyText?: string;
   /** Kept for backward compat with cursors encoded before composite ranking. */
   distanceMiles?: number;
   context?: string;
+  shuffleSeed?: string;
 }
 
 export function encodeCursor(cursor: PaginationCursor): string {
@@ -83,7 +85,7 @@ export function decodeCursor(raw: string): PaginationCursor | null {
       parsed !== null &&
       typeof (parsed as { id?: unknown }).id === "string"
     ) {
-      const obj = parsed as { id: string; orderKey?: unknown; orderKeyText?: unknown; distanceMiles?: unknown; context?: unknown };
+      const obj = parsed as { id: string; orderKey?: unknown; orderKeyText?: unknown; distanceMiles?: unknown; context?: unknown; shuffleSeed?: unknown };
       // Prefer `orderKey`; fall back to legacy `distanceMiles`.
       const rawKey =
         typeof obj.orderKey === "number" && isFinite(obj.orderKey)
@@ -93,6 +95,10 @@ export function decodeCursor(raw: string): PaginationCursor | null {
             : null;
       if (rawKey === null) return null;
       const out: PaginationCursor = { id: obj.id, orderKey: rawKey };
+      if (obj.shuffleSeed !== undefined) {
+        if (typeof obj.shuffleSeed !== 'string' || !obj.shuffleSeed.trim() || obj.shuffleSeed.length > 100) return null;
+        out.shuffleSeed = obj.shuffleSeed;
+      }
       if (obj.context !== undefined) {
         if (typeof obj.context !== 'string' || !/^[a-f0-9]{64}$/.test(obj.context)) return null;
         out.context = obj.context;
@@ -174,6 +180,7 @@ export async function findNearbyRestaurants(
     query,
     limit,
     cursor,
+    shuffle,
   } = params;
 
   const startMs = Date.now();
@@ -223,7 +230,7 @@ export async function findNearbyRestaurants(
   // `scoreSum + DISTANCE_WEIGHT * distance` so good macro matches a bit
   // farther away beat poor matches next door. With no active targets, falls
   // back to distance so we don't tie every row on scoreSum=0.
-  const orderKeyExpr: Prisma.Sql = Prisma.sql`(CASE WHEN ${targetsActive}::boolean
+  const orderKeyExpr: Prisma.Sql = shuffle ? shuffleSearchOrder(shuffle) : Prisma.sql`(CASE WHEN ${targetsActive}::boolean
         THEN best."scoreSum" + ${DISTANCE_WEIGHT}::double precision * ${distanceExpr}
         ELSE ${distanceExpr}
       END)`;
@@ -290,6 +297,7 @@ export async function findNearbyRestaurants(
         AND m.calories IS NOT NULL AND m."proteinG" IS NOT NULL
         AND m."carbsG" IS NOT NULL AND m."fatG" IS NOT NULL
         ${menuQueryFilter}
+        ${shuffle ? Prisma.sql`AND ${macroQualificationSql(targets)}` : Prisma.empty}
       ORDER BY "scoreSum" ASC, m.id ASC
       LIMIT 1
     ) AS best
@@ -324,6 +332,7 @@ export async function findNearbyRestaurants(
           ...(lastRow.orderKeyText ? { orderKeyText: lastRow.orderKeyText } : {}),
           distanceMiles: lastRow.distanceMiles,
           ...(cursorContext ? { context: cursorContext } : {}),
+          ...(shuffle ? { shuffleSeed: shuffle.seed } : {}),
         })
       : null;
 

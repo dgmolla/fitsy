@@ -62,7 +62,7 @@ npm run --silent perf:db > .evidence/performance/dev-database.json
 The API sampler accepts only `https://dev.fitsy.org` or an explicit HTTP loopback origin.
 Redirects are forbidden so credentials cannot follow a redirect to another host.
 It performs GET requests only and stops on HTTP/auth/entitlement errors, throttling, invalid JSON or transport failure.
-It samples 13 workloads covering all 11 public GET routes: health, flags, main search, text search, guided and legacy previews, menu, Shuffle, restaurant stats, saved items, subscription status, profile and feedback.
+It samples 13 workloads covering all 10 public GET routes: health, flags, main search, text search, guided and legacy previews, menu, Shuffle, restaurant stats, saved items, subscription status, profile and feedback.
 The first search supplies the menu's restaurant ID; a fixture with no nearby restaurants is rejected.
 Each workload retains its first observed request separately and collects 20 warm samples for nearest-rank p50/p95.
 Each request waits at least 650 ms after the preceding request, below the shared 120/user/minute cap.
@@ -122,7 +122,7 @@ Source inspection shows one application SQL statement for main search and guided
 These are implementation counts, excluding auth, subscription and connection health checks, not measured request query counts.
 Current search uses preloaded denormalized MenuItem macros and page-bounded estimate metadata joins.
 Existing Restaurant location, MenuItem restaurant, and MacroEstimate item/source indexes are declared; their deployed presence and effectiveness require the database report.
-The mobile guided-preview cache is account/context keyed, lasts 30 seconds and holds at most 10 contexts; server Shuffle caches last at most 10 seconds and recheck entitlement before lookup.
+The mobile guided-preview cache is account/context keyed, lasts 30 seconds and holds at most 10 contexts; shuffle search has no response cache and reconciles denied entitlement before selection.
 There is no new response cache or index in this change.
 
 Macro estimates are persisted by item/source in the preload pipeline.

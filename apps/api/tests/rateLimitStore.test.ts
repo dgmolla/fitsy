@@ -86,9 +86,16 @@ test.each(['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'])('partial confi
   } finally { log.mockRestore(); }
 });
 
-test.each(['http://quota.example.test', 'https://user:password@quota.example.test', 'https://quota.example.test?token=secret'])('rejects unsafe store URL %s before transmission', async url => {
+test.each(['http://quota.example.test', 'not-a-url-private-value', 'https://user:password@quota.example.test',
+  'https://quota.example.test?token=secret', 'https://quota.example.test#private-value'])('rejects unsafe store URL %s before transmission', async url => {
   process.env['UPSTASH_REDIS_REST_URL'] = url;
   await expect(consumeSharedQuota(policy, 'user')).rejects.toThrow('invalid rate limit store URL');
+  expect(transport).not.toHaveBeenCalled();
+});
+
+test.each([' ', '\n', 'fixture-token\n'])('invalid store tokens fail closed before transmission %#', async token => {
+  process.env['UPSTASH_REDIS_REST_TOKEN'] = token;
+  await expect(consumeSharedQuota(policy, 'user')).rejects.toThrow('rate limit store is not configured');
   expect(transport).not.toHaveBeenCalled();
 });
 

@@ -4,7 +4,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isMain } from './impact-plan.mjs';
 import { changedPaths, inputHash, repoEnv, root } from './product-flow.mjs';
 
 const receiptFile = resolve(root, '.evidence/verify/media-integration.json');
@@ -36,7 +36,7 @@ export function validateMediaReceipt(paths, sourceSha, sourceHash, file = receip
   return { required: true, finishedAt: receipt.finished_at };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   try {
     const action = process.argv[2];
     if (action === '--required') process.exitCode = mediaIntegrationRequired(changedPaths(process.env.FITSY_DIFF_BASE)) ? 0 : 2;

@@ -7,7 +7,8 @@ import { resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { parseEnv } from 'node:util';
-import { comparison, mappedCategories, simulatorContext, simulatorSelection, verificationScriptsOnly } from './impact-plan.mjs';
+import { comparison, isMain, mappedCategories, simulatorContext, simulatorSelection, verificationScriptsOnly } from './impact-plan.mjs';
+import { backendOrigin } from '../sim/backend-identity.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 
 export const root = resolve(process.env.FITSY_PRODUCT_ROOT || fileURLToPath(new URL('../..', import.meta.url)));
@@ -226,7 +227,7 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     'missing JavaScript identity');
   if (nativeHash) insist((report.nativeIdentity?.hash || report.nativeSourceHash) === nativeHash, 'native build was not produced from these inputs');
   insist(!plan.categories.includes('billing') || report.storeMode !== 'unconfigured', 'billing requires a configured store');
-  insist(/^https:\/\/dev\.fitsy\.org\/?$|^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(report.backend), 'product tests require an identified dev backend');
+  if (!/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(report.backend)) backendOrigin(report.backend);
   insist(Array.isArray(report.flows) && report.flows.length > 0, 'no flows executed');
   insist(report.videoRequested === undefined || typeof report.videoRequested === 'boolean', 'invalid recording selection');
   const videoRequested = report.videoRequested ?? report.flows.every(flow => Boolean(flow.video && flow.videoHash));
@@ -303,7 +304,7 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
   return { status: 'pass', summary: `${report.flows.length} flows and ${plan.categories.length} changed-journey walkthroughs verified` };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   try {
     insist(!process.env.CI || process.env.FITSY_DIFF_BASE, 'CI must supply the candidate diff base');
     const reportFile = resolve(root, '.evidence/product-flow/report.json');

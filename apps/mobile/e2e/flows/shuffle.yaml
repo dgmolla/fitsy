@@ -1,6 +1,6 @@
 # Populated dev backend plus an entitled account on a Debug build.
 # Debug-only shuffleDebug opts in locally without changing PostHog flags.
-# Shuffle reorders the loaded search cards without another API request.
+# Shuffle fetches a fresh search page, retaining targets, area and access rules.
 appId: com.fitsy.mobile
 tags: [billing, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
 env:
@@ -8,17 +8,24 @@ env:
   LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
 ---
 - assertTrue: ${!!LOGIN_EMAIL && !!LOGIN_PASSWORD}
-- evalScript: ${output.apiPaths = ['https://dev.fitsy.org/api/restaurants?lat=34.0407&lng=-118.2468']}
+- evalScript: ${output.apiPaths = ['/api/restaurants?lat=34.0407&lng=-118.2468']}
 - runScript: ../helpers/data-api.mjs
 - assertTrue:
     condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
-    label: "Candidate at dev.fitsy.org must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+    label: "Candidate at ${EXPO_PUBLIC_API_URL} must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
 - evalScript: ${output.nearby = output.dataApiResponses[0]}
 - assertTrue: ${output.nearby.status === 200 && json(output.nearby.body).data.length > 0}
 # Direct API access must work before Dev Login runs its own RevenueCat sync.
 - runScript: ../helpers/shuffle-subscriber.mjs
-- assertTrue: ${output.shuffleApiLoginStatus === 200 && output.shuffleApiStatus === 200}
-- assertTrue: ${output.shuffleApiUnlocked && output.shuffleApiHasDish && output.shuffleApiHasMacros && output.shuffleApiVerified}
+- assertTrue:
+    condition: ${output.shuffleApiValidationStatus === 400}
+    label: "Backend ${EXPO_PUBLIC_API_URL} deployment ${output.shuffleApiDeploymentSha} must support shuffle search (invalid shuffle HTTP ${output.shuffleApiValidationStatus}, expected 400); deploy the candidate API before replaying Simulator"
+- assertTrue:
+    condition: ${output.shuffleApiLoginStatus === 200 && output.shuffleSearchStatus === 200 && output.shuffleApiStatus === 200}
+    label: "Shuffle preflight HTTP statuses: login=${output.shuffleApiLoginStatus}, search=${output.shuffleSearchStatus}, shuffle=${output.shuffleApiStatus}; expected 200/200/200"
+- assertTrue:
+    condition: ${output.shuffleApiUnlocked && output.shuffleApiHasDish && output.shuffleApiHasMacros && output.shuffleApiVerified && output.shuffleApiListChanged}
+    label: "Shuffle preflight: unlocked=${output.shuffleApiUnlocked}, dish=${output.shuffleApiHasDish}, macros=${output.shuffleApiHasMacros}, verified=${output.shuffleApiVerified}, listChanged=${output.shuffleApiListChanged}; search=${output.shuffleSearchCount}, shuffle=${output.shuffleResultCount}, fitting=${output.shuffleTotal}"
 # Establish the search area before launch.
 - setLocation:
     latitude: 34.0407
@@ -71,19 +78,19 @@ env:
           id: meal-filter-unlink
 - tapOn: "Protein grams"
 - eraseText: 7
-- inputText: "28"
+- inputText: "40"
 - tapOn: "Carbs grams"
 - eraseText: 7
-- inputText: "34"
+- inputText: "60"
 - tapOn: "Fat grams"
 - eraseText: 7
-- inputText: "5"
+- inputText: "20"
 - tapOn: "Calories per meal"
 - eraseText: 7
-- inputText: "280"
+- inputText: "600"
 - tapOn:
     id: meal-filter-apply
-# Use the existing results, with no fixed dish expectation after either tap.
+# Capture actual card text; neither shuffle relies on a fixed restaurant or dish.
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -115,6 +122,9 @@ env:
     element:
       id: discovery-hero
     direction: UP
+- copyTextFrom:
+    id: discovery-hero
+- evalScript: ${output.beforeShuffleHero = maestro.copiedText}
 - tapOn:
     id: shuffle-button
 - extendedWaitUntil:
@@ -133,8 +143,25 @@ env:
     id: shuffle-again
 - assertNotVisible:
     id: shuffle-view-menu
+- extendedWaitUntil:
+    visible:
+      id: shuffle-button
+      enabled: true
+    timeout: 30000
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText !== output.beforeShuffleHero}
+- evalScript: ${output.beforeSecondShuffleHero = maestro.copiedText}
 - takeScreenshot: shuffle-search
 - tapOn:
     id: shuffle-button
+- extendedWaitUntil:
+    visible:
+      id: shuffle-button
+      enabled: true
+    timeout: 30000
 - assertVisible:
     id: discovery-hero
+- copyTextFrom:
+    id: discovery-hero
+- assertTrue: ${maestro.copiedText !== output.beforeSecondShuffleHero}

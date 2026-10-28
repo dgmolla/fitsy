@@ -57,8 +57,9 @@ test('menu startup retries only observations and authenticates once before readi
 
 test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-energy-sync', 'menu-load-recovery',
   'menu-macro-serving', 'onboarding-assisted-targets', 'onboarding-guided-preview', 'onboarding-out-of-area',
-  'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight', 'paywall-access', 'paywall-live-terms', 'shuffle'])('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
-  const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, {
+  'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight', 'paywall-access', 'paywall-live-terms', 'shuffle']
+  .map(flow => `flows/${flow}`).concat('helpers/mixed-trial-visual'))('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/${flow}.yaml`), 'utf8')) as [unknown, {
     launchApp?: object;
     retry?: { maxRetries: number; commands: {
       runFlow?: { when: { visible: string }; commands: { tapOn: string }[] };
@@ -69,7 +70,7 @@ test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-
   }[]];
   const launch = commands.findIndex(step => step.launchApp);
   expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true,
-    ...(['onboarding-search-highlight', 'onboarding-guided-preview'].includes(flow) ? { permissions: { notifications: 'deny' } } : {}) });
+    ...(['flows/onboarding-search-highlight', 'flows/onboarding-guided-preview'].includes(flow) ? { permissions: { notifications: 'deny' } } : {}) });
   const startup = commands[launch + 1]?.retry;
   expect(startup).toBeDefined();
   expect(startup!.maxRetries).toBeLessThanOrEqual(2);
@@ -82,16 +83,23 @@ test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-
   expect(commands.findIndex(step => step.openLink || step.tapOn?.id === 'welcome-start')).toBeGreaterThan(launch + 1);
 });
 
-test.each(['waitlist-join', 'goal-performance'])('out-of-area cold resume observes %s despite a transient XCTest read', checkpoint => {
+test.each([
+  ['flows/onboarding-out-of-area', 'waitlist-join', 0],
+  ['flows/onboarding-out-of-area', 'goal-performance', 1],
+  ['helpers/mixed-trial-visual', 'welcome-start', 0],
+] as const)('%s observes %s despite a transient XCTest read', (flow, checkpoint, index) => {
   type Step = string | {
+    launchApp?: object;
+    runFlow?: { when: { visible: string }; commands: Step[] };
     retry?: { maxRetries: number; commands: Step[] };
     waitForAnimationToEnd?: { timeout: number };
     extendedWaitUntil?: { visible: { id: string; optional?: boolean }; timeout: number };
   };
-  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/onboarding-out-of-area.yaml'), 'utf8')) as [unknown, Step[]];
-  const resumes = commands.flatMap((step, index) => step === 'launchApp' ? [commands[index + 1]] : []);
-  expect(resumes).toHaveLength(2);
-  const readiness = resumes[checkpoint === 'waitlist-join' ? 0 : 1];
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/${flow}.yaml`), 'utf8')) as [unknown, Step[]];
+  const resumes = commands.flatMap((step, position) =>
+    (checkpoint === 'welcome-start' ? typeof step === 'object' && step.launchApp : step === 'launchApp') ? [commands[position + 1]] : []);
+  expect(resumes).toHaveLength(checkpoint === 'welcome-start' ? 1 : 2);
+  const readiness = resumes[index];
   if (!readiness) throw new Error('Missing cold-resume readiness check');
 
   function run(visible: string, transient: 'animation' | 'hierarchy' | null, unavailable = false) {
@@ -114,6 +122,10 @@ test.each(['waitlist-join', 'goal-performance'])('out-of-area cold resume observ
             try { replay(step.retry.commands); break; }
             catch (error) { if (attempt >= step.retry.maxRetries) throw error; }
           }
+        } else if (step.runFlow) {
+          read('hierarchy');
+          // These scenarios already show an app screen, so Metro reconnection is unnecessary.
+          expect(step.runFlow.when.visible).toBe('Development Build');
         } else if (step.waitForAnimationToEnd) {
           read('animation');
         } else if (step.extendedWaitUntil) {
@@ -232,6 +244,20 @@ test.each([
   });
   expect(result.status).toBe(1);
   expect(result.stderr).toContain(error);
+});
+
+test.each(['https://dev.fitsy.org', 'https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app',
+  'https://fitsy-immutable123-dawits-projects-74b6e00f.vercel.app'])
+('the real native entrypoint accepts configured nonproduction backend %s', origin => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import { environment } from ${JSON.stringify(resolve(__dirname, 'product-flow.mjs'))};
+     process.stdout.write(JSON.stringify(environment()));`], {
+    env: { ...cleanEnv, EXPO_PUBLIC_API_URL: origin, EXPO_PUBLIC_SUPABASE_URL: 'https://dev-fixture.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: 'fixture-anon-key' }, encoding: 'utf8',
+  });
+  expect(result.stderr).toBe('');
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout).backend).toBe(origin);
 });
 
 test.each([

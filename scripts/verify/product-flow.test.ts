@@ -111,6 +111,28 @@ deterministicTest('final candidate accepts complete native proof without video w
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout).status).toBe('pass');
 });
+
+deterministicTest.each([
+  ['https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app', true],
+  ['https://fitsy-immutable123-dawits-projects-74b6e00f.vercel.app', true],
+  ['https://api.fitsy.org', false], ['https://unrelated.vercel.app', false],
+] as const)('final publication validates backend origin %s', (backend, accepted) => {
+  const report = fixture();
+  report.backend = backend;
+  report.videoRequested = false;
+  for (const flow of report.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
+  expect(validate(report).status).toBe(accepted ? 0 : 1);
+  if (accepted) {
+    const commands = JSON.parse(readFileSync(join(dir, report.flows[2]!.commands), 'utf8'));
+    commands.pop();
+    const raw = JSON.stringify(commands);
+    writeFileSync(join(dir, report.flows[2]!.commands), raw);
+    report.flows[2]!.sha256 = sha(raw);
+    const incomplete = validate(report);
+    expect(incomplete.status).toBe(1);
+    expect(incomplete.stderr).toContain('missing/skipped/failed assertions');
+  }
+});
 deterministicTest('non-video proof does not invoke video tooling', () => {
   const report = fixture();
   report.videoRequested = false;

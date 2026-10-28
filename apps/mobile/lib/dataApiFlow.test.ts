@@ -3,18 +3,59 @@ import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(resolve(__dirname, '../e2e/helpers/data-api.mjs'), 'utf8');
-function execute(loginStatus = 200, token: string | undefined = 'private-access-token', unauthStatus = 401, invalidStatus = unauthStatus) {
+function execute(loginStatus = 200, token: string | undefined = 'private-access-token', unauthStatus = 401, invalidStatus = unauthStatus,
+  origin: string | undefined = 'https://dev.fitsy.org') {
   const output: Record<string, unknown> = { apiPaths: ['/api/restaurants?lat=34&lng=-118', '/api/restaurants/fixture/menu'] };
   const http = {
-    post: jest.fn(() => ({ status: loginStatus, body: JSON.stringify({ token }) })),
+    post: jest.fn((_url: string, _config: unknown) => ({ status: loginStatus, body: JSON.stringify({ token }) })),
     get: jest.fn((_url: string, config?: { headers: { Authorization: string } }) => ({
       status: config?.headers.Authorization === 'Bearer private-access-token' ? 200 : config ? invalidStatus : unauthStatus,
       body: JSON.stringify(config?.headers.Authorization === 'Bearer private-access-token' ? { data: [] } : { error: 'Unauthorized' }),
     })),
   };
-  runInNewContext(source, { output, http, json: JSON.parse, LOGIN_EMAIL: 'fixture@example.test', LOGIN_PASSWORD: 'private-password' });
-  return { output, http };
+  const log = jest.fn();
+  runInNewContext(source, { output, http, console: { log }, json: JSON.parse, EXPO_PUBLIC_API_URL: origin,
+    LOGIN_EMAIL: 'fixture@example.test', LOGIN_PASSWORD: 'private-password' });
+  return { output, http, log };
 }
+
+test.each([
+  [401, 503, 200, 0], // The shared store can fail before invalid-session verification or login.
+  [401, 401, 503, 503],
+  [401, 401, 401, 401],
+  [200, 200, 200, 0],
+  [401, 401, 200, 200],
+])('retains safe numeric diagnostics for preflight HTTP %s/%s and login %s', (missing, invalid, login, expectedLogin) => {
+  const { log } = execute(login, 'private-access-token', missing, invalid);
+  expect(log).toHaveBeenCalledTimes(1);
+  expect(log).toHaveBeenCalledWith('[data-api] ' + JSON.stringify({
+    unauthStatus: missing, invalidStatus: invalid, loginStatus: expectedLogin,
+  }));
+  expect(JSON.stringify(log.mock.calls)).not.toMatch(/private-access-token|private-password|fixture@example|Unauthorized/);
+});
+
+test.each(['https://fitsy-api-git-codex-issue-583-dawits-projects-74b6e00f.vercel.app',
+  'https://fitsy-immutable123-dawits-projects-74b6e00f.vercel.app'])(
+  'preflights and authenticates against the app preview %s', origin => {
+    const { http, output } = execute(200, 'private-access-token', 401, 401, origin);
+    expect(http.post.mock.calls[0][0]).toBe(origin + '/api/auth/login');
+    expect(http.get.mock.calls.every(([url]) => url.startsWith(origin + '/api/'))).toBe(true);
+    expect(output.dataApiResponses).toHaveLength(2);
+  },
+);
+
+test.each([undefined, '', 'https://api.fitsy.org', 'https://fitsy.org', 'http://dev.fitsy.org',
+  'https://dev.fitsy.org@evil.test', 'https://dev.fitsy.org.evil.test', 'https://unrelated.vercel.app',
+  'https://fitsy-immutable123-other-team.vercel.app',
+  'https://fitsy-api-branch-other-team.vercel.app', 'https://dev.fitsy.org/api', 'https://dev.fitsy.org?key=secret'])
+('refuses an unapproved API origin before sending fixture credentials: %s', origin => {
+  // undefined is an explicit missing Maestro variable, not execute's default.
+  const http = { get: jest.fn(), post: jest.fn() };
+  expect(() => runInNewContext(source, { http, output: { apiPaths: ['/api/restaurants'] }, EXPO_PUBLIC_API_URL: origin }))
+    .toThrow(/refuses production/);
+  expect(http.get).not.toHaveBeenCalled();
+  expect(http.post).not.toHaveBeenCalled();
+});
 
 test('the saved helper captures anonymous 401s and authenticated JSON without persisting credentials', () => {
   const { http, output } = execute();
@@ -54,7 +95,7 @@ test('every helper caller fails with deployment diagnostics before using a faile
       callers++;
       const assertion = commands[index + 1]?.assertTrue as { condition: string; label: string; optional?: boolean };
       expect(assertion.optional).not.toBe(true);
-      expect(assertion.label).toMatch(/candidate.*dev\.fitsy\.org/i);
+      expect(assertion.label).toMatch(/candidate.*EXPO_PUBLIC_API_URL/i);
       for (const key of ['dataApiUnauthStatus', 'dataApiInvalidStatus', 'dataApiLoginStatus']) expect(assertion.label).toContain(key);
       const condition = assertion.condition.slice(2, -1);
       const accepted = execute().output;

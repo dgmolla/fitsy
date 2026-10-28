@@ -31,7 +31,6 @@ RevenueCat validates its configured webhook Authorization secret using constant-
 | `/api/auth/register` | POST | None | Dev fixtures only; production returns 403 (use Apple/Google) |
 | `/api/auth/login` | POST | None | Production demo reviewer only; dev fixtures allowed |
 | `/api/restaurants` | GET | Bearer JWT | Search nearby restaurants |
-| `/api/restaurants/shuffle` | GET | Bearer JWT | One fit-weighted dish, or a locked restaurant teaser |
 | `/api/restaurants/preview` | GET | Bearer JWT | Onboarding teaser |
 | `/api/restaurants/stats` | GET | Bearer JWT | Onboarding aggregate stats |
 | `/api/restaurants/[id]/menu` | GET | Bearer JWT | Restaurant detail + menu |
@@ -133,7 +132,7 @@ See `docs/engineering/architecture/auth.md` for full flow and request/response s
 
 ### GET /api/restaurants
 
-**Auth:** Optional JWT; macro matches require an entitled account.
+**Auth:** Bearer JWT; macro matches require an entitled account.
 
 **File:** `apps/api/app/api/restaurants/route.ts`
 
@@ -156,7 +155,10 @@ See `docs/engineering/architecture/auth.md` for full flow and request/response s
 | `minRating` | float | No | — | 0–5 |
 | `q` | string | No | — | Free-text menu search (capped length) |
 | `limit` | int | No | 20 | 1–50 |
-| `cursor` | string | No | — | Opaque pagination cursor from previous page |
+| `cursor` | string | No | - | Opaque pagination cursor from previous page |
+| `shuffle` | boolean flag | No | 0 | `1` requests a fresh restaurant page; `0` keeps ranked search |
+| `seed` | string | No | Random | Nonempty, at most 100 characters; requires `shuffle=1` |
+| `excludeRestaurantIds` | string | No | None | Up to 1,000 comma-separated restaurant IDs, at most 128 characters each and 8,000 URL-encoded bytes total; requires `shuffle=1` |
 
 Active macro targets must be finite numbers from 0.01 through 100,000. Zero disables a dimension; blank, negative, or conflicting targets return 400.
 
@@ -228,85 +230,56 @@ Unentitled responses set `bestMatch` to null and `meta.locked` to true.
 
 ---
 
-### GET /api/restaurants/shuffle
+### Shuffle search mode
 
-**Auth:** Bearer JWT, using the same server-trusted subscription verdict as search.
-**File:** `apps/api/app/api/restaurants/shuffle/route.ts`
-**Executable contract:** `shuffleResponseSchema` and `ShuffleResponse` in `@fitsy/shared`.
+Use `GET /api/restaurants?shuffle=1` with the same location, targets, text query, filters and limit as ordinary search.
+The response is the existing `RestaurantsApiResponse`: a `data` array and `meta` containing `total`, `limit`, `nextCursor` and `locked`.
+The default page contains up to 20 restaurants, each with its best eligible dish.
+For entitled shuffle calls, every active macro dimension must be within the shared 20% close-fit tolerance.
+Zero disables a dimension, just as in ordinary search.
+Incomplete, retired, negative and non-finite dish nutrition is excluded.
+Without active targets, all otherwise eligible restaurants participate.
+Ordinary search continues to rank relevant meals by macro fit and distance.
 
-This endpoint remains available for clients using the original single-pick Shuffle contract.
-The current search screen's small Shuffle button reorders its loaded results locally behind the PostHog boolean flag `shuffle` and does not call this endpoint.
-Search text, meal targets, area, pagination, and access rules stay unchanged by the local reorder.
-An authenticated caller whose stored verdict denies access is reconciled with RevenueCat after rate limiting and before cache lookup.
-The lookup uses the verified JWT subject (the Supabase UUID used by the mobile SDK's `logIn`), then rechecks persisted proof so a newer webhook or account deletion still wins.
-Fresh active proof remains a database-only read; failed reconciliation preserves stored proof and never grants access without an active verdict.
-This lets direct callers recover missing or stale proof and missed renewals without first running the mobile sign-in synchronization.
+Supply a fresh `seed` and the shown restaurant IDs in `excludeRestaurantIds` for each shuffle.
+The mobile client retains recent restaurant IDs within both the 1,000-ID and 8,000-encoded-byte limits, evicting oldest IDs first.
+The byte budget includes encoded comma separators and leaves room for filters, seed and cursor within the hosting URL limit.
+Unseen restaurants appear first in uniform seeded order.
+Previously shown restaurants only fill the page when there are not enough new matches, with no duplicate restaurant within a page.
+Fallback never widens targets, filters or radius.
+A fixed seed produces a stable order for an unchanged eligible pool.
+Continue pagination with the same seed, exclusions and search inputs plus `cursor`.
+If the first call omits the seed, the cursor carries the generated seed for later pages.
+A cursor from a different mode, seed, exclusions, targets or filter context returns 400.
+An empty pool uses the ordinary search empty shape, `data: []` with `nextCursor: null`.
 
-| Parameter | Required | Default | Constraints |
-|---|---|---|---|
-| `lat`, `lng` | Yes | - | Finite coordinates within latitude/longitude bounds |
-| `radius` | No | 3 | Miles, greater than zero and at most 50 |
-| `calories`, `protein`, `carbs`, `fat` | At least one | - | Remaining budgets; same aliases and validation as search |
-| `proteinG`, `carbsG`, `fatG` | No | - | Canonical aliases; duplicate values must agree |
-| `dietary` | No | - | Exact dietary tag on the dish, such as `vegan` |
-| `cuisineType` | No | - | Exact restaurant cuisine tag |
-| `maxCalories` | No | - | Hard calorie cap, zero through 100,000 |
-| `excludeRecent` | No | - | At most 100 comma-separated stable menu-item ids, 128 characters each |
-| `seed` | No | Random | Nonempty string, at most 100 characters, for deterministic selection |
+Shuffle requires a verified account session and uses the same paywall rules as search.
+For a caller whose stored entitlement denies access, search retains the live RevenueCat reconciliation before selecting shuffle results.
+The reconciliation uses the verified JWT subject and rechecks persisted proof so a newer webhook or account deletion wins.
+Fresh active proof stays a database-only read; provider failure preserves stored proof and grants nothing without an active verdict.
+Locked shuffle selection ignores nutrition targets and strips every `bestMatch`, preventing target-membership probes.
+The shared `shuffle-user` limiter allows 30 shuffle requests per user per minute before RevenueCat work, including repeated seeds and pagination.
+429 responses include `Retry-After` in seconds.
+Successful search responses use `Cache-Control: private, no-store`.
+There is no shuffle response cache or weighted dish lottery.
 
-Example: `/api/restaurants/shuffle?lat=34.05&lng=-118.25&calories=600&protein=40&carbs=60&fat=20&dietary=vegan&seed=demo`.
-Unlike search, an explicitly supplied zero is an exhausted remaining budget and never disables that dimension.
-Unspecified dimensions impose no cap.
-Meals below the budgets remain eligible; closer fits receive greater weight.
-
-The first attempt caps each supplied dimension at 110% of its budget within the requested radius.
-If empty, the second attempt raises that tolerance to 125% within the same radius.
-The final attempt doubles the radius, capped at 50 miles, retaining the 125% tolerance.
-Neither `maxCalories`, exclusions, dietary tags, cuisine, nor zero budgets widen during fallback.
-Retired dishes and incomplete, negative or non-finite nutrition are ineligible.
-
-The score is `fitScore = 1 / (1 + sum(normalized squared macro differences))`.
-Higher scores mean better fit, and each dish receives lottery weight `fitScore^4`.
-Every qualifying dish participates, including multiple dishes at the same restaurant.
-Seeded selection is stable for an unchanged candidate pool and availability state, regardless of database row order.
+The small search-field button replaces the list through this endpoint behind the existing PostHog boolean `shuffle` flag.
+The Debug-only `shuffleDebug=1` override enables the button locally.
+The future widget in #547 uses the same endpoint and displays `data[0]`, respecting `meta.locked`; widget implementation follows this rework.
+The retired `/api/restaurants/shuffle` single-dish route has no remaining runtime callers.
 
 ```mermaid
 flowchart LR
-    A[Validate remaining budgets] --> B[Current subscription and user rate limit]
-    B --> C[Private short cache]
-    C --> D[Nearby restaurants and availability]
-    D --> E[Eligible dishes within 10 percent]
-    E -->|Empty| F[25 percent tolerance]
-    F -->|Empty| G[Double radius up to 50 miles]
-    E --> H[Fit-weighted choice]
-    F --> H
-    G --> H
-    H --> I[Paid dish or locked restaurant teaser]
-    G -->|Empty| J[data null and no_matches]
+    A[Same search inputs plus shuffle and shown IDs] --> B[Session and shuffle rate limit]
+    B --> C[Current entitlement with live recovery when denied]
+    C --> D[Search filters and eligible dishes]
+    D --> E[Unseen restaurants in seeded random order]
+    E --> F[Fill shortages from seen restaurants]
+    F --> G[Search page with the same locked rules]
+    G --> H[App replaces list or widget takes first result]
 ```
 
-Successful responses contain `data.restaurant`, `data.item`, `data.macros`, `data.fitScore`, `data.distanceMiles`, and `data.availability`.
-Nutrition includes confidence and a published/estimated basis; these values remain estimates where the source is estimated.
-`meta` contains `locked`, `fallback` (`none`, `tolerance`, or `radius`), the applied `radiusMiles`, `tolerance`, and `emptyReason`.
-Empty results return HTTP 200 with `data: null` and `meta.emptyReason: "no_matches"`.
-Invalid input returns 400; unexpected failures return 500 with `{ "error": "Internal server error" }`.
-
-Anonymous, invalid-token, expired, and unsubscribed callers receive restaurant identity with `item`, `macros`, and `fitScore` set to null.
-Their selection ignores macro targets, calorie caps and item exclusions, and hides tolerance/fallback metadata, preventing membership probes from revealing the paid macro match.
-Entitlement is reread before every cache lookup, so an expired subscription cannot reuse a paid response.
-
-Availability uses optional `Restaurant.openingHours` JSON: `{ "timeZone": "America/Los_Angeles", "periods": [{ "day": 1, "opens": 600, "closes": 1200 }] }`.
-Sunday is day zero, times are local minutes after midnight, closing is exclusive, and a closing minute before opening crosses midnight.
-`opens: 0, closes: 1440` represents a full day.
-Known closed or malformed schedules are excluded.
-Existing preload data has no hours, so those restaurants return `availability: "unknown"`; the endpoint does not claim they are open.
-Verified business-hour ingestion is still needed to establish availability for that legacy data; the read-only API makes no external availability calls.
-
-The shared Redis limiter allows 30 requests per user per minute, including cache hits.
-429 responses include `Retry-After` in seconds.
-The instance-local cache lasts at most ten seconds, expires at a minute boundary, holds at most 256 responses, and separates user, entitlement and input contexts.
-All responses use `Cache-Control: private, no-store` so shared HTTP caches cannot serve subscription data.
-Quota state persists across cold starts and is shared by API instances.
+---
 
 ### GET /api/restaurants/preview
 

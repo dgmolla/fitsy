@@ -11,7 +11,7 @@ export function ShuffleButton({ disabled, onPress }: { disabled: boolean; onPres
   if (!enabled) return null;
   return <Pressable onPress={onPress} disabled={disabled} hitSlop={10}
     accessibilityRole="button" accessibilityLabel="Shuffle results"
-    accessibilityHint="Reorder the current search results"
+    accessibilityHint="Find a fresh set of restaurants for this search"
     accessibilityState={{ disabled }} testID="shuffle-button"
     style={({ pressed }) => [s.button, (disabled || pressed) && s.dimmed]}>
     <Ionicons name="shuffle" size={16} color={EDITORIAL.greenAccent} />

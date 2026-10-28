@@ -7,8 +7,9 @@ import { randomUUID } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { isMain } from '../verify/impact-plan.mjs';
 import { root, inputHash, candidatePlan, selectedFlows, digest, validate, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance } from '../verify/product-flow.mjs';
-import { backendRevision } from './backend-identity.mjs';
+import { backendOrigin, backendRevision, maestroApiArgs } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
 import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
@@ -42,18 +43,20 @@ function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]).sort();
 }
 export function environment() {
-  assert(process.env.EXPO_PUBLIC_API_URL === 'https://dev.fitsy.org', 'Load the mobile dev environment; this runner refuses production');
+  const origin = backendOrigin(process.env.EXPO_PUBLIC_API_URL);
   assert(process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY, 'Dev Supabase configuration is required');
   assert(!process.env.EXPO_PUBLIC_SUPABASE_URL.includes('zaxkmjqozvmbifiwbxps'), 'Production Supabase is forbidden');
-  return { backend: process.env.EXPO_PUBLIC_API_URL, ...publicConfigIdentity(root) };
+  return { backend: origin, ...publicConfigIdentity(root) };
 }
-function backend() {
-  const d = JSON.parse(run('vercel', ['api', '/v13/deployments/dev.fitsy.org', '--raw']));
-  const revision = backendRevision(d);
+export function backend(value = process.env.EXPO_PUBLIC_API_URL) {
+  const origin = backendOrigin(value);
+  const d = JSON.parse(run('vercel', ['api', `/v13/deployments/${new URL(origin).hostname}`, '--raw']));
+  const revision = backendRevision(d, origin);
   // A different backend revision is safe only if its API/shared/schema contents match.
   const diff = run('git', ['diff', '--name-only', revision, '--', 'apps/api', 'packages/shared', 'prisma', 'package.json', 'package-lock.json']);
   const untracked = run('git', ['ls-files', '--others', '--exclude-standard', '--', 'apps/api', 'packages/shared', 'prisma']);
-  assert(!diff && !untracked, 'Deploy candidate backend/shared/schema changes to dev before running product flows');
+  if (diff || untracked) throw Object.assign(new Error('Deploy candidate backend/shared/schema changes to the configured preview before running product flows; keep dev.fitsy.org pinned to dev'),
+    { code: 'FITSY_BACKEND_SOURCE_MISMATCH' });
   return { backendRevision: revision, backendDeployment: d.id };
 }
 function device(udid) {
@@ -565,7 +568,7 @@ async function execute(udid, names, mode) {
       let recorded, attachment;
       try { recorded = await runFlow({
         maestroCommand: process.env.MAESTRO_BIN || 'maestro',
-        maestroArgs: ['test', '--udid', udid, join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
+        maestroArgs: ['test', '--udid', udid, ...maestroApiArgs(), join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
         udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,
         env: { ...repoEnv(), PATH: `${join(root, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
           FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },
@@ -675,7 +678,7 @@ async function check() {
   validate(report, candidatePlan(requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
 try {
   const [command, ...args] = process.argv.slice(2);
   if (['build', 'run'].includes(command) && process.platform === 'darwin') {

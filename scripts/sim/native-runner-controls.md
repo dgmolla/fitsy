@@ -24,6 +24,24 @@ Retire owned Metro, drivers and idle simulator resources through the existing li
 The build and run phases enforce an 8 GiB free-space floor.
 If the free-space check fails, clear only proven task-owned disposable data at an idle boundary and retry.
 
+## Host backend selection
+
+The external Mac poller must select the backend before native preparation, Metro or account fixtures.
+Run `node scripts/sim/preview-backend.mjs <full-checkout-head-sha>` from its candidate checkout with the local public environment loaded.
+The read-only helper retains the configured backend when its API/shared/schema contents match.
+When stable dev has different contents, it discovers a Ready `fitsy-api` preview in the existing team for that exact head and verifies its immutable URL, project, revision, deployment ID and clean source through the ordinary native backend check.
+An explicit mismatched preview, missing deployment or failed inspection stops execution; stable dev is never a fallback for incompatible source.
+
+The existing host owner must apply the returned `backend` to both its fixture/Maestro environment and its native/Metro environment, set `EXPO_NO_DOTENV=1`, and retain the returned JSON in the run's evidence directory.
+Apply this once before starting children so all accounts and saved helpers use the same origin.
+Keep the selected deployment pinned through acceptance and retain the original failed run separately.
+This does not change `dev.fitsy.org`, publish a deployment, grant access or replace any flow assertion.
+The helper's subprocess regressions run with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath sim/preview-backend.test.ts sim/backend-identity.test.ts`.
+Changing this repository helper alone does not install the external poller hook; verify that the installed owner consumes it before another native replay.
+On macOS, the poller's temporary worktree can have a `/var/...` pathname that Node resolves to `/private/var/...`.
+Native CLI entrypoint guards must compare real paths so that selection, builds and acceptance actually execute through that alias; a zero exit with empty output is a setup failure.
+The selector regressions launch the real CLIs through an aliased checkout and cover Vercel listings without deployment IDs and immutable `fitsy-<hash>` preview URLs.
+
 ## Optional Slack previews
 
 The local scripted gate accepts `--record-video` or `FITSY_SIM_RECORD_VIDEO=1` to add best-effort preview evidence around each selected Maestro invocation.

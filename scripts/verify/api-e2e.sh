@@ -29,7 +29,7 @@ code() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$@"; }
 H="$(code "$BASE/api/health")"; say health "$H"; [ "$H" = "200" ] || FAILS="$FAILS health=$H"
 # All data surfaces must reject missing sessions, even before input validation.
 for route in 'restaurants?lat=34.0522&lng=-118.2437&radius=3' \
-  restaurants/preview restaurants/stats restaurants/shuffle restaurants/fixture/menu \
+  restaurants/preview restaurants/stats 'restaurants?shuffle=1' restaurants/fixture/menu \
   flags saved-items feedback user/profile subscriptions/status; do
   U="$(code "$BASE/api/$route")"; say "unauth $route (expect 401)" "$U"
   [ "$U" = "401" ] || FAILS="$FAILS unauth-$route=$U"

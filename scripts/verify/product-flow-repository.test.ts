@@ -50,6 +50,8 @@ test('the canonical product-flow check blocks missing evidence but permits expli
   for (const name of ['run.mjs', 'impact-plan.mjs', 'product-flow.mjs', 'product-flow.sh', 'registry.yml']) {
     copyFileSync(join(__dirname, name), join(verify, name));
   }
+  mkdirSync(join(dir, 'scripts/sim'), { recursive: true });
+  copyFileSync(resolve(__dirname, '../sim/backend-identity.mjs'), join(dir, 'scripts/sim/backend-identity.mjs'));
   symlinkSync(resolve(__dirname, '../../node_modules'), join(dir, 'node_modules'));
   writeFileSync(join(dir, '.gitignore'), 'node_modules\n.evidence/\n');
   fixtureGit(['init', '-q', dir]);
