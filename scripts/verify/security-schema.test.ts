@@ -5,7 +5,8 @@ const root = resolve(__dirname, '../..');
 const schema = readFileSync(join(root, 'prisma/schema.prisma'), 'utf8');
 const migrations = readdirSync(join(root, 'prisma/migrations')).sort().filter(name => name !== 'migration_lock.toml')
   .map(name => readFileSync(join(root, 'prisma/migrations', name, 'migration.sql'), 'utf8')).join('\n');
-const models = [...schema.matchAll(/^model (\w+) \{/gm)].map(match => match[1]!);
+const models = [...schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)]
+  .map(match => /@@map\("([^"]+)"\)/.exec(match[2]!)?.[1] ?? match[1]!);
 
 test.each(models)('%s has versioned default-deny RLS', model => {
   expect(migrations).toContain(`ALTER TABLE public."${model}" ENABLE ROW LEVEL SECURITY;`);

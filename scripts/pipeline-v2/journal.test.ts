@@ -1,7 +1,7 @@
-import { appendFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { V2Journal, reservationUsd } from './journal';
+import { digest, V2Journal, reservationUsd } from './journal';
 import { coarseRequest } from '../eval/suite/adapters';
 import type { JevRequest } from '../eval/lib/jev-experiment';
 
@@ -28,6 +28,22 @@ test('charges reported usage once and replays identical paid requests across res
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect(fetcher).toHaveBeenCalledWith('https://api.typesafe.ai/v1/systemone', expect.objectContaining({ redirect: 'error', method: 'POST' }));
   expect(readFileSync(path, 'utf8')).not.toContain(process.env['TYPESAFE_API_KEY']);
+});
+test('request replay survives JSONB-style object key reordering at every nesting level', async () => {
+  const fetcher = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(body(request)));
+  const j = open(); await j.send(request); j.close();
+  const reorder = (value: unknown): unknown => Array.isArray(value) ? value.map(reorder)
+    : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => b.localeCompare(a)).map(([k, v]) => [k, reorder(v)])) : value;
+  writeFileSync(j.path, j.events.map(event => JSON.stringify(reorder(event))).join('\n') + '\n');
+  const resumed = open(j.path); await resumed.send(request);
+  expect(resumed.reusedRequests).toBe(1); expect(fetcher).toHaveBeenCalledTimes(1);
+});
+test('existing insertion-order request hashes retain their paid responses without rewriting the ledger', async () => {
+  const fetcher = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(body(request)));
+  const j = open(); await j.send(request); j.close();
+  writeFileSync(j.path, j.events.map(event => JSON.stringify(event.key ? { ...event, key: digest(request) } : event)).join('\n') + '\n');
+  const retained = readFileSync(j.path, 'utf8'), resumed = open(j.path); await resumed.send(request);
+  expect(readFileSync(j.path, 'utf8')).toBe(retained); expect(fetcher).toHaveBeenCalledTimes(1);
 });
 test('reserves the worst-case request before spending and cannot reset the cap on resume', async () => {
   const fetcher = jest.spyOn(global, 'fetch'), j = open(undefined, reservationUsd / 2);
@@ -75,8 +91,8 @@ test('torn journals and concurrent owners fail closed', () => {
   const j = open(); expect(() => open(j.path)).toThrow(); const path = j.path; j.close();
   appendFileSync(path, '{"event":"jev_request"'); expect(() => open(path)).toThrow('Incomplete POC journal');
 });
-test('PDF search is enqueued once per missing-data brand and survives resume', () => {
-  const j = open(); j.enqueuePdf({ id: 'brand', displayName: 'Chain without nutrition' }); const path = j.path; j.close();
-  const resumed = open(path); resumed.enqueuePdf({ id: 'brand', displayName: 'Chain without nutrition' });
+test('PDF search is enqueued once per missing-data brand and survives resume', async () => {
+  const j = open(); await j.enqueuePdf({ id: 'brand', displayName: 'Chain without nutrition' }); const path = j.path; j.close();
+  const resumed = open(path); await resumed.enqueuePdf({ id: 'brand', displayName: 'Chain without nutrition' });
   expect(resumed.events.filter(e => e.event === 'pdf_search_enqueued')).toHaveLength(1);
 });

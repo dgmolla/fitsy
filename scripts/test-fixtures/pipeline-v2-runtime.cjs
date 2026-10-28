@@ -52,13 +52,17 @@ class Database {
   }
   async $disconnect() { record({ type: 'db_disconnect' }); }
 }
-Module._load = function (id, parent, isMain) {
+if (!process.env.V2_TEST_REAL_DATABASE) Module._load = function (id, parent, isMain) {
   const real = load.call(this, id, parent, isMain);
   return id === '@prisma/client' ? { ...real, PrismaClient: Database } : real;
 };
 global.fetch = async (url, options) => {
   if (String(url).includes('getStoreV1')) {
     const { storeUuid } = JSON.parse(options.body); record({ type: 'ue_call', storeUuid });
+    if (storeUuid === process.env.V2_TEST_PAUSE_STORE) {
+      record({ type: 'paused' });
+      return new Promise(() => setInterval(() => {}, 1000));
+    }
     if (process.env.V2_TEST_EXIT_BETWEEN_RESTAURANTS && storeUuid === 'store-1') process.exit(0);
     if (process.env.V2_TEST_UE_FAIL) throw Error('Simulated unavailable menu');
     const captured = require('../../apps/api/tests/fixtures/chain-pilot.ts').capturedChainPilot[0].ue;
@@ -72,6 +76,10 @@ global.fetch = async (url, options) => {
   }
   if (String(url) === 'https://api.typesafe.ai/v1/systemone') {
     const request = JSON.parse(options.body); record({ type: 'jev_call', request });
+    if (process.env.V2_TEST_PAUSE_JEV) {
+      record({ type: 'paused' });
+      return new Promise(() => setInterval(() => {}, 1000));
+    }
     const answers = Object.fromEntries(Object.entries(request.questions).map(([macro, question]) => {
       const choice = Object.hasOwn(question.criteria, 'b0') ? (process.env.V2_TEST_OVERFLOW ? 'overflow'
         : macro === 'calories' ? 'b2' : macro === 'carbs' ? 'b2' : macro === 'fat' ? 'b0' : 'b1') : 'r5';

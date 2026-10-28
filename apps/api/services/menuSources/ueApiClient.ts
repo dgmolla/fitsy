@@ -166,7 +166,7 @@ interface PostUeOpts {
   signal?: AbortSignal;
   maxRetries?: number;
   baseBackoffMs?: number;
-  onRequest?: () => void;
+  onRequest?: () => void | Promise<void>;
   /** Extra Cookie header value (e.g. for getFeedV1's uev2.loc). */
   cookieHeader?: string;
   /** Label for log lines (e.g. storeUuid or "feed:34.05,-118.24"). */
@@ -185,10 +185,7 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    if (opts.signal) {
-      if (opts.signal.aborted) controller.abort();
-      else opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
-    }
+    const signal = opts.signal ? AbortSignal.any([opts.signal, controller.signal]) : controller.signal;
 
     const tag = `attempt ${attempt + 1}/${maxRetries + 1}`;
     const profile = pickChromeProfile();
@@ -211,12 +208,14 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
     if (opts.cookieHeader) headers["Cookie"] = opts.cookieHeader;
 
     try {
-      opts.onRequest?.();
+      signal.throwIfAborted();
+      await opts.onRequest?.();
+      signal.throwIfAborted();
       const response = await fetch(endpoint, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal,
       });
 
       if (response.ok) return (await response.json()) as T;
@@ -234,6 +233,7 @@ async function postUe<T>(endpoint: string, body: unknown, opts: PostUeOpts): Pro
         return null;
       }
     } catch (err) {
+      if (opts.signal?.aborted) return null;
       const msg = err instanceof Error ? err.message : String(err);
       if (attempt >= maxRetries) {
         console.warn(`[ue-api] network error for ${opts.logLabel} (${tag}, giving up): ${msg}`);
@@ -338,7 +338,7 @@ export interface FetchStoreV1Opts {
   /** Base ms for exp backoff (1s → 2s → 4s). 0 disables delay (tests). Default 1000. */
   baseBackoffMs?: number;
   /** Called immediately before each HTTP attempt, including retries, for durable accounting. */
-  onRequest?: () => void;
+  onRequest?: () => void | Promise<void>;
 }
 
 /**

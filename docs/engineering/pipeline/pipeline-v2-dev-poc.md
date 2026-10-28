@@ -5,6 +5,7 @@
 This command enriches one explicitly selected resolution-7 LA hex already discovered by the UE-first pipeline.
 It does not change the ordinary preload command or deploy either application.
 No migration, DB write-lock rollout, PDF worker, shared job queue or App Store action is part of this proof.
+The separate [shared hex queue](pipeline-v2-queue.md) uses this hex implementation with database-backed replay and leased workers.
 
 ```mermaid
 flowchart TD
