@@ -12,9 +12,25 @@ function execute(loginStatus = 200, token: string | undefined = 'private-access-
       body: JSON.stringify(config?.headers.Authorization === 'Bearer private-access-token' ? { data: [] } : { error: 'Unauthorized' }),
     })),
   };
-  runInNewContext(source, { output, http, json: JSON.parse, LOGIN_EMAIL: 'fixture@example.test', LOGIN_PASSWORD: 'private-password' });
-  return { output, http };
+  const log = jest.fn();
+  runInNewContext(source, { output, http, console: { log }, json: JSON.parse, LOGIN_EMAIL: 'fixture@example.test', LOGIN_PASSWORD: 'private-password' });
+  return { output, http, log };
 }
+
+test.each([
+  [401, 503, 200, 0], // The shared store can fail before invalid-session verification or login.
+  [401, 401, 503, 503],
+  [401, 401, 401, 401],
+  [200, 200, 200, 0],
+  [401, 401, 200, 200],
+])('retains safe numeric diagnostics for preflight HTTP %s/%s and login %s', (missing, invalid, login, expectedLogin) => {
+  const { log } = execute(login, 'private-access-token', missing, invalid);
+  expect(log).toHaveBeenCalledTimes(1);
+  expect(log).toHaveBeenCalledWith('[data-api] ' + JSON.stringify({
+    unauthStatus: missing, invalidStatus: invalid, loginStatus: expectedLogin,
+  }));
+  expect(JSON.stringify(log.mock.calls)).not.toMatch(/private-access-token|private-password|fixture@example|Unauthorized/);
+});
 
 test('the saved helper captures anonymous 401s and authenticated JSON without persisting credentials', () => {
   const { http, output } = execute();

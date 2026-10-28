@@ -126,6 +126,10 @@ The helper probes missing-token and invalid-token requests before login; an anon
 Every caller immediately requires 401/401 and successful fixture login through a labelled assertion that reports all three HTTP statuses.
 The helper returns without logging in when either auth probe fails, leaving that assertion to fail normally instead of throwing a Graal exception that Maestro truncates into invalid command JSON and an unknown JUnit error.
 Retain that failure and correct the deployment through the existing host owner before replaying the selected journeys.
+The helper also writes one `[data-api]` JSON line containing only numeric HTTP statuses because Maestro's command/JUnit artifacts can retain unresolved assertion labels.
+An invalid-session probe or login returning 503 with `Service unavailable` can mean the deployed shared rate-limit store is missing or unavailable, even while health reports a connected database.
+Check the deployment's `[rate-limit] Shared store unavailable` runtime log and the nonproduction `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` configuration through the [shared-quota recovery contract](../../../docs/engineering/backend/api-rate-limits.md#verification-and-recovery).
+The existing host delivery owner must restore the nonproduction store configuration, redeploy the candidate and verify the same preflight before replaying; preserve fail-closed behavior and every journey assertion.
 For a pre-merge test window, the existing host owner can use the `fitsy-api` project's Vercel Domains page to edit `dev.fitsy.org`, keep the Preview environment, and temporarily select the candidate branch.
 Record the original `dev` branch mapping and the candidate's ready deployment and exact commit before saving.
 Verify the saved mapping and anonymous/invalid-token 401s before the existing runner replays; the branch preview URL alone does not prove that the app's configured origin changed.
