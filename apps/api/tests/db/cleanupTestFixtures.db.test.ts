@@ -4,6 +4,9 @@ import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { PrismaClient } from '@prisma/client';
 import april from '../fixtures/__snapshots__/chain-pilot-april.json';
+import qualityInput from '../../services/chainCatalogs/chain-quality-2026-09-input.json';
+import { compileChainProductBatch } from '../../services/chainProductBatch';
+import { applyCatalogPlan, planChainPilot } from '../../services/chainPilotPlan';
 import { cleanupFixtures, parseOptions, type Counts } from '../../../../scripts/maintenance/cleanup-test-fixtures';
 import { PROD_PROJECT_REF } from '../../../../scripts/lib/db-target-guard';
 
@@ -75,6 +78,56 @@ suite('fixture cleanup through its real database and CLI', () => {
       await p.$executeRawUnsafe(`DROP OWNED BY "${role}"`);
       await p.$executeRawUnsafe(`DROP ROLE "${role}"`);
     }
+  });
+
+  test('packaged catalog fixtures from the real writer are recognized by the dry-run CLI without changing rows', async () => {
+    const yoshinoya = await p.brand.create({ data: {
+      slug: scopes[1] + 'yoshinoya', displayName: scopes[1] + 'yoshinoya', detectionConf: 'high',
+    } });
+    brandIds.push(yoshinoya.id);
+    const brands = await p.brand.findMany({ where: { id: { in: [brandIds[1]!, yoshinoya.id] } } });
+    const batch = compileChainProductBatch(qualityInput);
+    // chainDefaults.db.test.ts compiles this input and prefixes each chain with its UUID scope.
+    batch.changes = batch.changes.filter(change => change.expected === null);
+    for (const change of batch.changes) change.slug = scopes[1] + change.slug;
+    const created = await applyCatalogPlan(p, planChainPilot(brands, [], batch), batch);
+    expect(created).toHaveLength(9);
+    expect(created.filter(row => row.brandId === brandIds[1])).toHaveLength(8);
+    expect(created.find(row => row.brandId === yoshinoya.id)?.canonicalKey).toBe('packaged/gatorade/lime-cucumber/20-fl-oz');
+    const { stdout } = await cli([]);
+    const result = JSON.parse(stdout);
+    expect(result.transactionReadOnly).toBe(true);
+    expect(result.ambiguous).toEqual([]);
+    expect(result.counts.ChainItem).toBe(10);
+    expect(result.rows.ChainItem.map((row: { id: string }) => row.id)).toEqual(expect.arrayContaining(created.map(row => row.id)));
+    expect(await p.chainItem.findMany({ where: { id: { in: created.map(row => row.id) } }, orderBy: { id: 'asc' } }))
+      .toEqual([...created].sort((a, b) => a.id.localeCompare(b.id)));
+  });
+
+  test('packaged near misses stay ambiguous and unverified brands never authorize catalog cleanup', async () => {
+    const pepsi = qualityInput.bindings[0]!.canonicalKey;
+    const collision = await p.brand.create({ data: { slug: randomUUID() + 'waba-grill', displayName: 'WaBa Grill', detectionConf: 'high' } });
+    const live = await p.brand.create({ data: { slug: 'live-' + randomUUID(), displayName: 'WaBa Grill', detectionConf: 'high' } });
+    brandIds.push(collision.id, live.id);
+    const ambiguousItems = [];
+    for (const data of [
+      { brandId: brandIds[1]!, canonicalKey: 'packaged/gatorade/lime-cucumber/20-fl-oz' },
+      { brandId: brandIds[1]!, canonicalKey: 'packaged/pepsi/original/12-fl-oz' },
+      { brandId: brandIds[0]!, canonicalKey: pepsi },
+    ]) ambiguousItems.push(await p.chainItem.create({ data: { ...data, source: 'official', confidence: 'HIGH' } }));
+    const excluded = [];
+    for (const brand of [collision, live]) {
+      excluded.push(await p.chainItem.create({ data: { brandId: brand.id, canonicalKey: pepsi, source: 'official', confidence: 'HIGH' } }));
+    }
+    const { stdout } = await cli([]);
+    const result = JSON.parse(stdout);
+    expect(result.transactionReadOnly).toBe(true);
+    expect(result.ambiguous.filter((row: { table: string }) => row.table === 'ChainItem').map((row: { row: { id: string } }) => row.row.id).sort())
+      .toEqual(ambiguousItems.map(row => row.id).sort());
+    expect(result.ambiguous).toContainEqual(expect.objectContaining({ table: 'Brand', row: expect.objectContaining({ id: collision.id }) }));
+    expect(result.rows.Brand.map((row: { id: string }) => row.id)).not.toContain(collision.id);
+    for (const row of [...ambiguousItems, ...excluded]) expect(await p.chainItem.findUnique({ where: { id: row.id } })).toEqual(row);
+    for (const row of excluded) expect(result.rows.ChainItem.map((item: { id: string }) => item.id)).not.toContain(row.id);
   });
 
   test('count mismatch aborts; exact apply deletes only the complete fixture closure', async () => {

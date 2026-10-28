@@ -1,6 +1,6 @@
 # Fixture cleanup
 
-`cleanup-test-fixtures.ts` inventories the exact fixture families created by `apps/api/tests/db/chainPilot.db.test.ts` and `chainCatalogExpansion.db.test.ts`.
+`cleanup-test-fixtures.ts` inventories the exact fixture families created by `apps/api/tests/db/chainPilot.db.test.ts` and `chainCatalogExpansion.db.test.ts`, plus catalog entries created by `chainDefaults.db.test.ts` under the same expansion brand identity.
 It loads no environment files and never includes connection strings in output or errors.
 Supply a database URL through an environment variable, using a read-only credential for shared-database discovery.
 
@@ -28,11 +28,17 @@ The 31 captured April restaurant IDs/names and 64 menu IDs/names are in `apps/ap
 The 168 positive-count expansion observation variants are in `chain-batch-observations.json`; their restaurant and menu UUIDs are generated at execution.
 New-location menus come from `chain-pilot-ue.json` (seven dishes) and `chain-batch-ue-{waba-grill,yoshinoya}.json` (82 and 80 items); persisted provider IDs remain in `MenuItem.sourceItemId`.
 Catalog keys are allowlisted per suite and chain from `chainPilotData.ts` (changes and quarantine) and `chainCatalogs/waba-yoshinoya-2026-09.json` (expected baseline and additions).
+`chainDefaults.db.test.ts` compiles `chainCatalogs/chain-quality-2026-09-input.json` with `compileChainProductBatch`, prefixes each change's chain slug with its UUID v4 scope, and calls `planChainPilot` / `applyCatalogPlan` to create the catalog rows under the corresponding verified brand.
+Cleanup uses that same compiled manifest's exact `(chain slug, canonicalKey)` pairs only for verified expansion/default brands.
+Its nine packaged bindings contain eight WaBa entries (Pepsi, Cool Blue and Fruit Punch Gatorade, both Pure Leaf teas, Dole apple juice, and both Poppi flavors) and one Yoshinoya entry (Lime Cucumber Gatorade).
+Lime Cucumber under a WaBa brand remains ambiguous because that chain/key pair has no fixture provenance.
+Unknown packaged keys, different sizes, cross-chain placements and pilot placements remain ambiguous; ordinary or unverified brands do not authorize catalog deletion.
+The default suite's `April variant` and `UE capture` restaurant shapes retain the existing ambiguity checks.
 The discovery regex is anchored to the complete UUID v4 plus one of the two literal chain slugs; deletion uses only the discovered exact primary keys, with no `LIKE` predicates.
 
 `MenuItem` and `MacroEstimate` are owned through exact fixture parent IDs.
 `Restaurant.brandId` is the chain link; there is no separate link table in the schema.
-`SavedItem` references are listed without user identifiers and always block apply because neither suite creates bookmarks.
+`SavedItem` references are listed without user identifiers and always block apply because these suites do not create bookmarks.
 No users, subscriptions, targets or unrelated pipeline records are deleted.
 Orphan checkpoints without a verified fixture brand scope remain ambiguous and prevent apply.
 
@@ -52,8 +58,11 @@ node scripts/verify/focused-tests.mjs --set scripts/maintenance/cleanup-test-fix
 ```
 
 `apps/api/tests/db/cleanupTestFixtures.db.test.ts` exercises the SELECT-only dry run, count refusal, exact deletion, ambiguity refusal and rollback against the verifier's owned disposable database.
+Its packaged regressions use the real catalog compiler/writer and dry-run CLI, checking all nine exact bindings and preservation of cross-chain keys, unknown sizes, pilot rows and unverified brands.
 If that database cannot start, preserve the startup diagnostics (including Docker `OOMKilled` when relevant), keep its resource and target guards intact, and select the database-free regressions locally through `scripts/verify/focused-tests.mjs`.
+When startup has already removed the failed container, its exact-ID Docker event history can retain the `oom` / exit evidence; an unchanged retry does not establish recovery.
 The normal hook consumes that selection; required database coverage remains pending until trusted PR Verify runs it successfully.
+For a task that prohibits any cleanup CLI `--apply` invocation, exclude the synthetic CLI-apply refusal case locally with `--jest-pattern='^(?!.*real CLI refuses).*'`; the identity, guard and inventory regressions still run, and trusted CI retains the complete test selection.
 
 ```mermaid
 flowchart LR

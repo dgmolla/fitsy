@@ -1,13 +1,15 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
-import { checkpointMatches, cleanupReadTarget, parseOptions, restaurantMatches, tables } from './cleanup-test-fixtures';
+import { chainItemMatches, checkpointMatches, cleanupReadTarget, parseOptions, restaurantMatches, tables } from './cleanup-test-fixtures';
 import { DEV_PROJECT_REF, PROD_PROJECT_REF } from '../lib/db-target-guard';
+import { compileChainProductBatch } from '../../apps/api/services/chainProductBatch';
 
 const counts = Object.fromEntries(tables.map(table => [table, 0]));
 const prod = `postgresql://readonly:synthetic@db.${PROD_PROJECT_REF}.supabase.co/postgres`;
 const dev = `postgresql://readonly:synthetic@db.${DEV_PROJECT_REF}.supabase.co/postgres`;
 const april: typeof import('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json') = require('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json');
+const qualityInput: typeof import('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json') = require('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json');
 
 test('defaults to dry run and requires a complete, exact count manifest for apply', () => {
   expect(parseOptions([]).apply).toBe(false);
@@ -85,4 +87,32 @@ test('checkpoints require a verified fixture scope and the exact suite-specific 
   expect(checkpointMatches({ ...checkpoint, hexId: 'waba-grill' }, [pilot])).toBe(false);
   expect(checkpointMatches({ ...checkpoint, count: 2 }, [pilot])).toBe(false);
   expect(checkpointMatches(checkpoint, [{ ...pilot, scope: 'b32323a0-5c16-46d2-bda7-93c8320ee947' }])).toBe(false);
+});
+
+test('packaged fixture identities require the exact compiled catalog key, chain, suite and parent brand', () => {
+  const scope = 'a32323a0-5c16-46d2-bda7-93c8320ee947';
+  const products = compileChainProductBatch(qualityInput).changes.filter(change => change.expected === null);
+  expect(products.map(product => [product.slug, product.canonicalKey])).toEqual([
+    ['waba-grill', 'packaged/pepsi/original/20-fl-oz'],
+    ['waba-grill', 'packaged/gatorade/cool-blue/20-fl-oz'],
+    ['waba-grill', 'packaged/gatorade/fruit-punch/20-fl-oz'],
+    ['yoshinoya', 'packaged/gatorade/lime-cucumber/20-fl-oz'],
+    ['waba-grill', 'packaged/pure-leaf/raspberry/16-9-fl-oz'],
+    ['waba-grill', 'packaged/pure-leaf/unsweetened/16-9-fl-oz'],
+    ['waba-grill', 'packaged/dole/apple-100-percent/15-2-fl-oz'],
+    ['waba-grill', 'packaged/poppi/raspberry-rose/12-fl-oz'],
+    ['waba-grill', 'packaged/poppi/strawberry-lemon/12-fl-oz'],
+  ]);
+  for (const product of products) {
+    const brand = { id: 'fixture-' + product.slug, scope, chain: product.slug, slug: scope + product.slug,
+      displayName: scope + product.slug, suite: 'expansion' as const };
+    const row = { brandId: brand.id, canonicalKey: product.canonicalKey };
+    expect(chainItemMatches(row, brand)).toBe(true);
+    expect(chainItemMatches(row, { ...brand, chain: product.slug === 'waba-grill' ? 'yoshinoya' : 'waba-grill' })).toBe(false);
+    expect(chainItemMatches(row, { ...brand, suite: 'pilot' })).toBe(false);
+    expect(chainItemMatches({ ...row, brandId: 'live-brand' }, brand)).toBe(false);
+    for (const key of [row.canonicalKey + '-other', row.canonicalKey.toUpperCase(), row.canonicalKey.replace('-fl-oz', '-oz')]) {
+      expect(chainItemMatches({ ...row, canonicalKey: key }, brand)).toBe(false);
+    }
+  }
 });

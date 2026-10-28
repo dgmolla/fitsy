@@ -1,13 +1,17 @@
-/** Exact identities from chainPilot.db.test.ts and chainCatalogExpansion.db.test.ts.
+/** Exact identities from chainPilot.db.test.ts, chainCatalogExpansion.db.test.ts and chainDefaults.db.test.ts.
  * No environment files are loaded, and connection strings never enter the report.
  */
 import { Prisma, PrismaClient } from '@prisma/client';
 import { realpathSync } from 'node:fs';
 import { chainPilot } from '../../apps/api/services/chainPilotData';
+import { compileChainProductBatch } from '../../apps/api/services/chainProductBatch';
 import { assertDatabaseWriteAllowed, databaseTarget, DEV_PROJECT_REF, PROD_PROJECT_REF } from '../lib/db-target-guard';
 
 const batch: typeof import('../../apps/api/services/chainCatalogs/waba-yoshinoya-2026-09.json') = require('../../apps/api/services/chainCatalogs/waba-yoshinoya-2026-09.json');
 const april: typeof import('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json') = require('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json');
+const qualityInput: typeof import('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json') = require('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json');
+// chainDefaults uses the expansion brand identity and the same compiler, preserving each binding's chain.
+const expansionCatalog = [...batch.changes, ...compileChainProductBatch(qualityInput).changes];
 
 export const tables = ['SavedItem', 'MacroEstimate', 'MenuItem', 'Restaurant', 'ChainItem', 'Brand', 'PipelineCompletedHex'] as const;
 type Table = typeof tables[number];
@@ -84,6 +88,12 @@ export function restaurantMatches(row: RestaurantRow, brand: FixtureBrand): bool
     row.storeUuid === scope + (suite === 'pilot' ? brand.id : 'new-' + chain);
 }
 
+/** Only called with brands whose complete fixture identity was verified during discovery. */
+export function chainItemMatches(row: { brandId: string; canonicalKey: string }, brand: FixtureBrand): boolean {
+  const allowed = brand.suite === 'pilot' ? [...chainPilot.changes, ...chainPilot.quarantine] : expansionCatalog;
+  return row.brandId === brand.id && allowed.some(f => f.slug === brand.chain && f.canonicalKey === row.canonicalKey);
+}
+
 export async function cleanupFixtures(p: PrismaClient, options: Options) {
   if (options.apply && !options.expect) refuse('--apply requires expected counts');
   return p.$transaction(async tx => {
@@ -119,12 +129,12 @@ export async function cleanupFixtures(p: PrismaClient, options: Options) {
       else ambiguous.push({ table: 'Restaurant', row, reason: 'Fixture address or brand link without the complete exact suite identity' });
     }
     const brandIds = brands.map(b => b.id), restaurantIds = rows.Restaurant.map(r => r.id);
-    rows.ChainItem = await tx.chainItem.findMany({ where: { brandId: { in: brandIds } },
+    const chainItems = await tx.chainItem.findMany({ where: { brandId: { in: brandIds } },
       select: { id: true, brandId: true, canonicalKey: true }, orderBy: { id: 'asc' } });
-    for (const row of rows.ChainItem) {
-      const brand = brands.find(b => b.id === row['brandId'])!;
-      const allowed = brand.suite === 'pilot' ? [...chainPilot.changes, ...chainPilot.quarantine] : batch.changes;
-      if (!allowed.some(f => f.slug === brand.chain && f.canonicalKey === row['canonicalKey'])) {
+    rows.ChainItem = chainItems;
+    for (const row of chainItems) {
+      const brand = brands.find(b => b.id === row.brandId)!;
+      if (!chainItemMatches(row, brand)) {
         ambiguous.push({ table: 'ChainItem', row, reason: 'Catalog key is absent from this suite\'s exact manifest' });
       }
     }
@@ -143,7 +153,7 @@ export async function cleanupFixtures(p: PrismaClient, options: Options) {
     rows.SavedItem = await tx.savedItem.findMany({ where: { OR: [
       { restaurantId: { in: restaurantIds } }, { menuItemId: { in: menuIds } },
     ] }, select: { id: true, restaurantId: true, menuItemId: true, itemType: true }, orderBy: { id: 'asc' } });
-    for (const row of rows.SavedItem) ambiguous.push({ table: 'SavedItem', row, reason: 'Neither suite creates bookmarks; preserve user-owned references and refuse apply' });
+    for (const row of rows.SavedItem) ambiguous.push({ table: 'SavedItem', row, reason: 'These suites do not create bookmarks; preserve user-owned references and refuse apply' });
     const checkpoints = await tx.$queryRaw<{ id: string; runId: string; hexId: string; count: number }[]>`
       SELECT "id", "runId", "hexId", "count" FROM "PipelineCompletedHex"
       WHERE "hexId" IN (${Prisma.join(slugs)}) OR "hexId" ~ ${brandPattern} ORDER BY "id"`;
