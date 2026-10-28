@@ -53,9 +53,8 @@ export function parseOptions(args: string[]): Options {
   return options;
 }
 
-/** Both modes validate the route before opening any connection. */
-export function cleanupTarget(value: string | undefined, options: Options, env: NodeJS.ProcessEnv = process.env): string {
-  if (options.apply) return assertDatabaseWriteAllowed(value, { env, args: options.prod ? ['--prod'] : [] });
+/** Read-only discovery validates the route without authorizing mutations. */
+export function cleanupReadTarget(value: string | undefined): string {
   const target = databaseTarget(value);
   if (![DEV_PROJECT_REF, PROD_PROJECT_REF].includes(target.ref ?? '') && !(target.local && !target.ref)) {
     refuse('Read target is outside the DEV/PROD/loopback allowlist');
@@ -176,7 +175,10 @@ export async function cleanupFixtures(p: PrismaClient, options: Options) {
 
 async function main() {
   const options = parseOptions(process.argv.slice(2));
-  const url = cleanupTarget(process.env[options.urlEnv], options);
+  // Bind the actual datasource directly to the shared guard so the writer inventory can verify it.
+  const url = options.apply
+    ? assertDatabaseWriteAllowed(process.env[options.urlEnv], { args: options.prod ? ['--prod'] : [] })
+    : cleanupReadTarget(process.env[options.urlEnv]);
   const p = new PrismaClient({ datasources: { db: { url } }, log: [], errorFormat: 'minimal' });
   try { process.stdout.write(JSON.stringify(await cleanupFixtures(p, options), null, 2) + '\n'); }
   finally { await p.$disconnect(); }

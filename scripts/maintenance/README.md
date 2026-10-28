@@ -45,6 +45,12 @@ The existing `db-target-guard.ts` additionally requires `FITSY_ALLOW_PROD_WRITE=
 Those guard requirements do not grant permission to mutate production; this task authorizes production discovery only with an explicitly read-only credential and never authorizes production apply.
 
 Run `scripts/maintenance/cleanup-test-fixtures.test.ts` for database-free identity, argument and real CLI production-refusal regressions.
+Keep the existing writer inventory and shared guard regressions in the local focused selection so client-construction changes are checked before publishing:
+
+```sh
+node scripts/verify/focused-tests.mjs --set scripts/maintenance/cleanup-test-fixtures.test.ts scripts/lib/db-writer-inventory.test.ts scripts/lib/db-target-guard.test.ts
+```
+
 `apps/api/tests/db/cleanupTestFixtures.db.test.ts` exercises the SELECT-only dry run, count refusal, exact deletion, ambiguity refusal and rollback against the verifier's owned disposable database.
 If that database cannot start, preserve the startup diagnostics (including Docker `OOMKilled` when relevant), keep its resource and target guards intact, and select the database-free regressions locally through `scripts/verify/focused-tests.mjs`.
 The normal hook consumes that selection; required database coverage remains pending until trusted PR Verify runs it successfully.

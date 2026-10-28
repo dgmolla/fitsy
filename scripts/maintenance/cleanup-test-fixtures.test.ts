@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
-import { checkpointMatches, cleanupTarget, parseOptions, restaurantMatches, tables } from './cleanup-test-fixtures';
+import { checkpointMatches, cleanupReadTarget, parseOptions, restaurantMatches, tables } from './cleanup-test-fixtures';
 import { DEV_PROJECT_REF, PROD_PROJECT_REF } from '../lib/db-target-guard';
 
 const counts = Object.fromEntries(tables.map(table => [table, 0]));
@@ -19,17 +19,10 @@ test('defaults to dry run and requires a complete, exact count manifest for appl
     ['--expect={"Restaurant":0}']]) expect(() => parseOptions(args)).toThrow();
 });
 
-test('read-only production discovery does not grant write authority', () => {
-  expect(cleanupTarget(prod, parseOptions([]), {})).toBe(prod);
-  expect(cleanupTarget(dev, parseOptions(['--url-env=dev_db_readonly_url']), {})).toBe(dev);
-  const apply = parseOptions(['--apply', `--expect=${JSON.stringify(counts)}`]);
-  for (const [env, options] of [[{}, apply], [{ FITSY_ALLOW_PROD_WRITE: '1', GITHUB_ACTIONS: 'true' }, apply],
-    [{ FITSY_ALLOW_PROD_WRITE: '1' }, { ...apply, prod: true }]] as const) {
-    expect(() => cleanupTarget(prod, options, env)).toThrow(/DB_WRITE_REFUSED/);
-  }
-  // This only exercises the existing guard with synthetic URLs; it never connects.
-  expect(cleanupTarget(prod, { ...apply, prod: true }, { FITSY_ALLOW_PROD_WRITE: '1', GITHUB_ACTIONS: 'true' })).toBe(prod);
-  expect(() => cleanupTarget('postgresql://readonly:synthetic@db.abcdefghijklmnopqrst.supabase.co/postgres', parseOptions([]))).toThrow(/allowlist/);
+test('read-only discovery accepts only the existing project routes', () => {
+  expect(cleanupReadTarget(prod)).toBe(prod);
+  expect(cleanupReadTarget(dev)).toBe(dev);
+  expect(() => cleanupReadTarget('postgresql://readonly:synthetic@db.abcdefghijklmnopqrst.supabase.co/postgres')).toThrow(/allowlist/);
 });
 
 test('exact compound fixture identities exclude normal locations, address collisions and foreign brand links', () => {
