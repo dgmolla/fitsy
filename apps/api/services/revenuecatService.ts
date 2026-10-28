@@ -102,7 +102,7 @@ export async function fetchProEntitlement(
           authorization: `Bearer ${key}`, "x-platform": "ios",
           // Match RevenueCat's SDK: Test Store requests are always sandboxed.
           // Derive this only from the configured key, never caller input.
-          ...(key.startsWith("test_") ? { "x-is-sandbox": "true" } : production ? { "x-is-sandbox": "false" } : {}),
+          ...(key.startsWith("test_") ? { "x-is-sandbox": "true" } : {}),
         },
         signal: ctrl.signal,
       },
@@ -136,10 +136,14 @@ export async function fetchProEntitlement(
     if (expiresAt && Number.isNaN(expiresAt.getTime())) return null;
     const plan = ent.product_identifier ?? null;
     const sub = plan ? subscriber.subscriptions?.[plan] : undefined;
-    // Fail closed when production store provenance cannot be established.
-    if (production && sub?.is_sandbox !== false) return null;
+    const active = expiresAt ? expiresAt.getTime() > Date.now() : true;
+    // TestFlight and App Review use sandbox purchases with the production API.
+    if (production && sub?.is_sandbox === true) {
+      if (!active) return null;
+      console.info(JSON.stringify({ event: 'revenuecat.sandbox_entitlement_accepted', userId: appUserId })); // eslint-disable-line no-console
+    }
     return {
-      active: expiresAt ? expiresAt.getTime() > Date.now() : true,
+      active,
       hadProEntitlement: true,
       plan,
       expiresAt,

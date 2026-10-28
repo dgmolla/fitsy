@@ -22,6 +22,7 @@ function scenario(name: string) {
       calls.push(args);
       if (args[0] === 'inspect') {
         if (!container) { const error = new Error('missing'); error.code = 'ENOENT'; throw error; }
+        if (mode === 'legacy_replaced' && calls.filter(call => call[0] === 'inspect').length === 2) container.Id = 'replacement-id';
         return JSON.stringify([container]);
       }
       if (args[0] === 'run') { container = makeContainer(control.owner);
@@ -31,13 +32,21 @@ function scenario(name: string) {
         container.State.Running = true;
         container.NetworkSettings.Ports = { '5432/tcp': [{ HostIp: loopback, HostPort: '55432' }] };
       } return container.Id; }
-      if (args[0] === 'rm') { container = undefined; return ''; }
+      if (args[0] === 'rm') {
+        if (mode.endsWith('cleanup_failure')) throw new Error('Docker cleanup refused');
+        container = undefined; return '';
+      }
       if (args[0] === 'exec' && args[2] === 'bash' && mode === 'hijack_before_write') container.Config.Labels['fitsy.verify.owner'] = 'another-owner';
       if (args[0] === 'exec' && args[2] === 'bash' && mode === 'replacement_before_write') container.Id = 'replacement-id';
+      if (args[0] === 'exec' && args[2] === 'bash' && mode.endsWith('readiness_oom')) {
+        container.State = { Running: false, OOMKilled: true };
+        throw new Error('PostgreSQL readiness failed');
+      }
       return '';
     };
     function makeContainer(owner) {
       return { Id: 'owned-container-id', Image: 'sha256:image', Config: { Image: 'postgis/postgis:16-3.4',
+        Env: ['PGDATA=/var/lib/postgresql/verify-data'],
         Labels: { 'fitsy.verify.owner': owner } }, State: { Running: true },
         HostConfig: { Memory: 805306368, MemorySwap: 1610612736, NanoCpus: 2000000000, Binds: null }, Mounts: [],
         NetworkSettings: { Ports: { '5432/tcp': [{ HostIp: loopback, HostPort: '55432' }] } } };
@@ -45,14 +54,14 @@ function scenario(name: string) {
     const spawned = [];
     const control = databaseControl({ root, command, spawn: (_node, args, opts) => {
       spawned.push({ args, env: opts.env, resetBeforeSpawn: calls.some(call => call[0] === 'exec' && call.includes('psql')) });
-      return { status: (mode === 'migration_failure' && args[1] === 'migrate') || (mode === 'guard_failure' && args.includes('scripts/lib/db-target-guard.ts')) ? 1 : 0 };
+      return { status: (mode.endsWith('migration_failure') && args[1] === 'migrate') || (mode === 'guard_failure' && args.includes('scripts/lib/db-target-guard.ts')) ? 1 : 0 };
     }, disk: () => ({ bavail: mode === 'low_disk' ? 1 : 3 * 1024 ** 3, bsize: 1 }),
     assertLock: () => {}, env: {
       ...(mode.startsWith('stop_bound_') ? { FITSY_VERIFY_OWNED_DB: 'owned-container-id',
         FITSY_VERIFY_DB_IMAGE: mode === 'stop_bound_partial' ? '' : 'sha256:image' } : {}),
       POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
       POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' } });
-    if (['wrong_owner', 'external_url', 'forged_loopback_url', 'startup_failure', 'restart_stopped', 'hijack_before_write', 'replacement_before_write', 'existing_failure', 'stop_wrong_owner', 'stop_success', 'stop_stopped', 'stop_bound_valid', 'stop_bound_replaced', 'stop_bound_wrong_image', 'stop_bound_unowned', 'stop_bound_partial'].includes(mode)) container = makeContainer(control.owner);
+    if (['wrong_owner', 'external_url', 'forged_loopback_url', 'startup_failure', 'restart_stopped', 'hijack_before_write', 'replacement_before_write', 'existing_failure', 'existing_readiness_oom', 'existing_migration_failure', 'stop_wrong_owner', 'stop_success', 'stop_stopped', 'stop_bound_valid', 'stop_bound_replaced', 'stop_bound_wrong_image', 'stop_bound_unowned', 'stop_bound_partial'].includes(mode)) container = makeContainer(control.owner);
     if (mode === 'stop_bound_replaced') container.Id = 'replacement-id';
     if (mode === 'stop_bound_wrong_image') container.Image = 'sha256:replacement';
     if (mode === 'wrong_owner' || mode === 'stop_wrong_owner' || mode === 'stop_bound_unowned') container.Config.Labels['fitsy.verify.owner'] = 'another-owner';
@@ -60,7 +69,13 @@ function scenario(name: string) {
     if (mode === 'restart_stopped') { container.State.Running = false; container.NetworkSettings.Ports = null; }
     if (mode === 'stop_stopped') { container.State.Running = false; container.NetworkSettings.Ports = null; }
     if (mode === 'existing_failure') container.NetworkSettings.Ports['5432/tcp'][0].HostIp = '0.0.0.0';
-    let error = '';
+    if (mode.startsWith('legacy_')) {
+      container = makeContainer(control.owner);
+      container.Id = 'legacy-container-id';
+      container.Config.Env = ['PGDATA=/var/lib/postgresql/data'];
+      container.State.Running = mode !== 'legacy_stopped';
+    }
+    let error = '', status;
     try {
       if (mode === 'forged_loopback_url') control.assert({ FITSY_LOCAL_DB: '1', FITSY_VERIFY_DB_LOCKED: '1',
         FITSY_VERIFY_DB_HOST: loopback, FITSY_VERIFY_OWNED_DB: container.Id,
@@ -71,9 +86,22 @@ function scenario(name: string) {
         FITSY_VERIFY_DB_IMAGE: container.Image, POSTGRES_PRISMA_URL: 'postgresql://external.example/prod',
         POSTGRES_URL_NON_POOLING: 'postgresql://external.example/prod' });
       else if (mode.startsWith('stop_')) control.stop();
-      else control.run(['--layer=2']);
+      else status = await control.run(['--layer=2'], mode.startsWith('pipeline_') ? async (args, prepare) => {
+        if (mode === 'pipeline_no_database') return 0;
+        if (mode === 'pipeline_no_database_error') throw new Error('cheap checks threw');
+        const childEnv = prepare();
+        assert.equal(childEnv.FITSY_VERIFY_OWNED_DB, container.Id);
+        assert.deepEqual(args, ['--layer=2']);
+        calls.push(['verification']);
+        if (mode === 'pipeline_replaced') container.Id = 'replacement-id';
+        if (mode === 'pipeline_image_changed') container.Image = 'sha256:replacement';
+        if (mode === 'pipeline_owner_changed') container.Config.Labels['fitsy.verify.owner'] = 'another-owner';
+        if (mode === 'pipeline_error' || mode === 'pipeline_error_cleanup_failure') throw new Error('verification threw');
+        return mode === 'pipeline_failure' ? 1 : 0;
+      } : undefined);
     } catch (cause) { error = cause.message; }
-    const result = { error, resetCalls: calls.filter(args => args[0] === 'exec' && args.includes('psql')),
+    const result = { error, status, launchArgs: calls.find(args => args[0] === 'run'),
+      resetCalls: calls.filter(args => args[0] === 'exec' && args.includes('psql')),
       calls: calls.map(args => ['exec', 'rm'].includes(args[0]) ? args.slice(0, 3) : args.slice(0, 2)),
       spawned: spawned.map(item => ({ args: item.args, url: item.env.POSTGRES_PRISMA_URL,
         direct: item.env.POSTGRES_URL_NON_POOLING, id: item.env.FITSY_VERIFY_OWNED_DB,
@@ -86,7 +114,7 @@ function scenario(name: string) {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 10000 });
   expect(result.status).toBe(0);
   return JSON.parse(result.stdout) as {
-    error: string; calls: string[][]; resetCalls: string[][];
+    error: string; status?: number; launchArgs?: string[]; calls: string[][]; resetCalls: string[][];
     spawned: { args: string[]; url: string; direct: string; id: string; host: string; resetBeforeSpawn: boolean }[];
     lockExists: boolean; containerExists: boolean;
   };
@@ -171,8 +199,49 @@ test('startup failure retires a newly created container by its pinned ID', () =>
   expect(result.calls).toContainEqual(['rm', '-f', 'owned-container-id']);
   expect(result.containerExists).toBe(false);
 });
-test('new container is retired after migration failure', () => {
-  const result = scenario('migration_failure');
+test.each(['created_readiness_oom', 'existing_readiness_oom'])('reports %s before any database reset or migration', mode => {
+  const result = scenario(mode);
+  expect(result.error).toMatch(/OOM-killed/);
+  expect(result.error).toContain('PostgreSQL readiness failed');
+  expect(result.resetCalls).toEqual([]);
+  expect(result.spawned).toEqual([]);
+  expect(result.containerExists).toBe(false);
+});
+
+test.each(['pipeline_success', 'pipeline_failure', 'pipeline_error'])('retires the acquired database after %s', mode => {
+  const result = scenario(mode);
+  expect(result.error).toBe(mode === 'pipeline_error' ? 'verification threw' : '');
+  if (mode !== 'pipeline_error') expect(result.status).toBe(mode === 'pipeline_failure' ? 1 : 0);
+  expect(result.containerExists).toBe(false);
+  expect(result.calls.slice(-3)).toEqual([
+    ['verification'], ['inspect', expect.stringMatching(/^fitsy-verify-/)], ['rm', '-f', 'owned-container-id'],
+  ]);
+});
+
+test.each(['pipeline_replaced', 'pipeline_image_changed', 'pipeline_owner_changed'])('cleanup refuses %s', mode => {
+  const result = scenario(mode);
+  expect(result.error).toMatch(/ownership or image/);
+  expect(result.calls.some(call => call[0] === 'rm')).toBe(false);
+  expect(result.containerExists).toBe(true);
+});
+
+test.each(['pipeline_no_database', 'pipeline_no_database_error'])('%s never acquires or removes a container', mode => {
+  const result = scenario(mode);
+  expect(result.error).toBe(mode.endsWith('error') ? 'cheap checks threw' : '');
+  expect(result.calls).toEqual([]);
+  expect(result.spawned).toEqual([]);
+});
+
+test.each(['pipeline_cleanup_failure', 'pipeline_error_cleanup_failure'])('%s cannot report success or hide verification errors', mode => {
+  const result = scenario(mode);
+  expect(result.error).toContain('Docker cleanup refused');
+  if (mode === 'pipeline_error_cleanup_failure') expect(result.error).toContain('verification threw');
+  expect(result.status).toBeUndefined();
+  expect(result.containerExists).toBe(true);
+});
+
+test.each(['migration_failure', 'existing_migration_failure'])('%s retires the acquired container', mode => {
+  const result = scenario(mode);
   expect(result.error).toMatch(/migration or seed failed/);
   expect(result.calls.some(call => call[0] === 'rm')).toBe(true);
   expect(result.containerExists).toBe(false);
@@ -193,7 +262,9 @@ test('controlled flow overrides configured external URLs and checks ownership be
     expect(child.id).toBe('owned-container-id');
     expect(child.host).toBe(new URL(child.url).hostname);
   }
-  expect(result.calls.filter(call => call[0] === 'inspect')).toHaveLength(7);
+  expect(result.calls.filter(call => call[0] === 'inspect')).toHaveLength(8);
+  expect(result.calls.at(-1)).toEqual(['rm', '-f', 'owned-container-id']);
+  expect(result.containerExists).toBe(false);
   expect(result.calls.some(call => call.includes('psql'))).toBe(true);
   expect(result.resetCalls).toEqual([['exec', 'owned-container-id', 'psql', '-U', 'fitsy_test', '-d', 'postgres',
     '-v', 'ON_ERROR_STOP=1', '-c', 'DROP DATABASE IF EXISTS fitsy_verify WITH (FORCE)',
@@ -202,6 +273,42 @@ test('controlled flow overrides configured external URLs and checks ownership be
   expect(result.spawned[0]!.resetBeforeSpawn).toBe(false);
   expect(result.spawned.slice(1).every(child => child.resetBeforeSpawn)).toBe(true);
   expect(result.lockExists).toBe(false);
+});
+test('launches the database cluster outside RAM mounts without persistent volumes or increased limits', () => {
+  const result = scenario('success');
+  expect(result.error).toBe('');
+  const args = result.launchArgs!;
+  const values = (flag: string) => args.flatMap((arg, index) => arg === flag ? [args[index + 1]!] : []);
+  const data = values('--env').find(value => value.startsWith('PGDATA='))?.slice('PGDATA='.length);
+  expect(data).toBe('/var/lib/postgresql/verify-data');
+  // Cover the image-declared volume so Docker cannot leave an anonymous volume.
+  expect(values('--tmpfs')).toEqual(['/var/lib/postgresql/data:rw,noexec,nosuid,size=1m']);
+  for (const mount of values('--tmpfs')) {
+    const target = mount.split(':')[0]!;
+    expect(data === target || data!.startsWith(target + '/')).toBe(false);
+  }
+  expect(args.filter(arg => ['--mount', '--volume', '-v'].includes(arg))).toEqual([]);
+  expect(values('--memory')).toEqual(['805306368']);
+  expect(values('--memory-swap')).toEqual(['1610612736']);
+  expect(values('--cpus')).toEqual(['2']);
+  expect(result.containerExists).toBe(false);
+});
+test.each(['legacy_running', 'legacy_stopped'])('%s is replaced before readiness, reset or migration', mode => {
+  const result = scenario(mode);
+  expect(result.error).toBe('');
+  expect(result.launchArgs).toBeDefined();
+  expect(result.calls.filter(call => call[0] === 'rm')).toEqual([
+    ['rm', '-f', 'legacy-container-id'], ['rm', '-f', 'owned-container-id'],
+  ]);
+  expect(result.calls.filter(call => call[0] === 'exec').every(call => call[1] === 'owned-container-id')).toBe(true);
+  expect(result.spawned).toHaveLength(4);
+});
+test('legacy retirement refuses a replacement container before removing or launching anything', () => {
+  const result = scenario('legacy_replaced');
+  expect(result.error).toMatch(/ownership or image/);
+  expect(result.launchArgs).toBeUndefined();
+  expect(result.calls.some(call => ['rm', 'start', 'exec'].includes(call[0]!))).toBe(false);
+  expect(result.spawned).toEqual([]);
 });
 test('explicit stop rejects a foreign container', () => {
   const result = scenario('stop_wrong_owner');
