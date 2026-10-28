@@ -88,6 +88,10 @@ Shallow public health remains a database/source check and can remain 200 during 
 ## Configuration and activation
 
 The [environment manifest](../../../scripts/deploy/env-manifest.json) declares required bindings for development, preview, production, monitor, and recovery execution.
+Development and Preview require database, authentication, RevenueCat lookup, and writable Redis bindings for app journeys.
+Production additionally requires `REVENUECAT_WEBHOOK_AUTH`, `AXIOM_TOKEN`, `CRON_SECRET`, and `SLACK_BOT_TOKEN` for its webhook, scheduled work, and alert delivery.
+These production operations bindings are optional in Development and Preview, where unconfigured webhook/cron endpoints remain closed and safe request telemetry still reaches stdout.
+The production monitor selects production telemetry; ephemeral previews do not need production alert credentials to build or serve simulator journeys.
 `env-manifest` is a blocking local/CI registry check that parses source environment reads, including bracket access and destructuring.
 Dynamic selectors require an exact file/expression exception.
 A new variable cannot pass CI until declared; optional declarations still require review of whether the binding is operationally required.
@@ -110,6 +114,7 @@ The shared `fitsy-production-monitor` concurrency group serializes scheduled mon
 Issue state records each channel/direct delivery separately so a failed DM retries without repeating the successful channel message.
 Failures receive reminders at most every 30 minutes; observed recovery sends one resolved transition.
 An unavailable metric source cannot resolve an incident from that source.
+Skipped, neutral, missing, or unknown workflow conclusions likewise preserve open incidents and reminders until success or a verified release recovery is observed.
 Slack errors remain pending and fail execution; a failed state/query/transport cannot be reported healthy.
 A crash between Slack acceptance and persistence can still repeat a delivery; deterministic message IDs reduce this unavoidable transport ambiguity.
 

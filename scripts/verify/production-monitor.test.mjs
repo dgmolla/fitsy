@@ -236,7 +236,7 @@ test('every required environment fails on a missing/blank binding, with names on
   }
 });
 
-test('the scheduled entrypoint consumes provider responses and preserves incidents when a source fails', async () => {
+test('the scheduled entrypoint preserves incidents until provider or workflow recovery is observed', async () => {
   const external = transport();
   const env = { ...external.context.env, AXIOM_TOKEN: 'private', CRON_SECRET: 'private', VERCEL_TOKEN: 'private',
     POSTHOG_PERSONAL_API_KEY: 'private', POSTHOG_PROJECT_ID: '1', UPSTASH_EMAIL: 'private@example.test',
@@ -272,4 +272,19 @@ test('the scheduled entrypoint consumes provider responses and preserves inciden
   queryDenied = false; apiBroken = false;
   assert.deepEqual(await runMonitor({ env, fetchImpl, now: now + 120_000 }), []);
   assert.equal(external.messages.filter(message => message.text.includes('RESOLVED') && message.text.includes('api:5xx')).length, 2);
+
+  for (const name of ['Deploy', 'EAS Build + TestFlight', 'Dev maintenance']) {
+    const key = `workflow:${name}`;
+    const event = conclusion => ({ workflow_run: { id: 123, name, conclusion } });
+    await runMonitor({ env, fetchImpl, now: now + 180_000, event: event('failure') });
+    const recoveries = () => external.messages.filter(message => message.text.includes(`RESOLVED production alert: ${key}.`));
+    for (const conclusion of ['skipped', 'neutral', undefined, null, 'unknown']) {
+      await runMonitor({ env, fetchImpl, now: now + 181_000, event: event(conclusion) });
+      assert.equal((await loadAlertState(external.context)).state.incidents[key].active, true, `${name}: ${conclusion}`);
+      assert.equal(recoveries().length, 0, `${name}: ${conclusion} is not recovery`);
+    }
+    await runMonitor({ env, fetchImpl, now: now + 182_000, event: event('success') });
+    assert.equal((await loadAlertState(external.context)).state.incidents[key].active, false);
+    assert.equal(recoveries().length, name === 'Dev maintenance' ? 1 : 2);
+  }
 });

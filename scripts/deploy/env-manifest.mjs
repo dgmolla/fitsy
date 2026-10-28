@@ -9,6 +9,8 @@ export function readManifest() {
 
 /** Values never leave the process; diagnostics contain names only. */
 export function assertRequiredEnvironment(target, env = process.env, manifest = readManifest()) {
+  // Requirements belong to the selected target. Production webhook/cron/alert
+  // credentials are not prerequisites for ephemeral preview or local journeys.
   const required = manifest.required[target];
   if (!Array.isArray(required) || required.length === 0) throw new Error('Unknown environment target');
   const missing = required.filter(name => typeof env[name] !== 'string' || !env[name].trim());
