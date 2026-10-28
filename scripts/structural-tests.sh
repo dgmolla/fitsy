@@ -54,10 +54,14 @@ else
 fi
 
 echo -n "3. No .env files staged... "
-# Branch diff (falls back to staged for a mid-edit local run). The staging
-# area is always empty in CI, which made the old --cached version a no-op there.
+# CI checks committed branch source; local checks include tracked edits before
+# commit so corrections and newly introduced violations use the current source.
 DIFF_RANGE="origin/main...HEAD"
-git -C "$REPO_ROOT" rev-parse origin/main >/dev/null 2>&1 || DIFF_RANGE="HEAD"
+if ! git -C "$REPO_ROOT" rev-parse origin/main >/dev/null 2>&1; then
+  DIFF_RANGE="HEAD"
+elif [ -z "${CI:-}${GITHUB_EVENT_NAME:-}" ] && [ "${FITSY_RUNS:-}" != ci ]; then
+  DIFF_RANGE="$(git -C "$REPO_ROOT" merge-base origin/main HEAD)"
+fi
 ENVFILES=$(git -C "$REPO_ROOT" diff "$DIFF_RANGE" --name-only 2>/dev/null | grep -E '\.env$' | grep -v 'env\.example' || true)
 [ -z "$ENVFILES" ] && ENVFILES=$(git -C "$REPO_ROOT" diff --cached --name-only 2>/dev/null | grep -E '\.env$' | grep -v 'env\.example' || true)
 if [ -n "$ENVFILES" ]; then

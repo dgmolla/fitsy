@@ -115,7 +115,7 @@ checks:
     layer: 2
     blocking: true
     runs: [local, ci]
-    why: Complete affected API, scripts and mobile tests; API and scripts Jest refuse shared database targets before suites load. Retain all diagnostics through run.mjs even when later workspaces pass (incident 267).
+    why: Complete affected API, scripts and mobile tests, including API/script/SQL/shell/test writer coverage; API and scripts Jest refuse shared database targets before suites load. Retain all diagnostics through run.mjs even when later workspaces pass (incident 267).
 
   - name: rate-limit-store
     script: rate-limit-store.sh

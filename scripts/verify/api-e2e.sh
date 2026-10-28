@@ -15,13 +15,19 @@ BASE="${BASE:-https://dev.fitsy.org}"
 # environment or localhost; every other host - prod, previews, aliases - is
 # read-only, full stop (test-user pollution incident class).
 if [ "$SAFE" = "0" ]; then
-  case "$BASE" in
-    https://dev.fitsy.org*|http://localhost*|http://127.0.0.1*) : ;;
-    *)
-      printf '{"name":"api-e2e","status":"fail","summary":"write-mode allowed only against dev.fitsy.org or localhost, not %s","fix":"drop --write (read-only works everywhere), or point --base at the dev environment"}\n' "$BASE"
-      exit 1 ;;
-  esac
+  # Match the complete origin, including a bounded local port, before any curl.
+  # Paths, credentials, lookalike hosts, query strings and fragments are forbidden.
+  if [[ "$BASE" =~ ^https://dev\.fitsy\.org/?$ ]]; then
+    :
+  elif [[ "$BASE" =~ ^http://(localhost|127\.0\.0\.1)(:([0-9]{1,5}))?/?$ ]] &&
+       { [ -z "${BASH_REMATCH[3]}" ] || { [ "$((10#${BASH_REMATCH[3]}))" -ge 1 ] && [ "$((10#${BASH_REMATCH[3]}))" -le 65535 ]; }; }; then
+    :
+  else
+    printf '{"name":"api-e2e","status":"fail","summary":"write-mode allowed only against the exact dev.fitsy.org origin or loopback HTTP origin","fix":"drop --write or use the dev environment"}\n'
+    exit 1
+  fi
 fi
+BASE="${BASE%/}"
 FAILS=""
 say() { echo "  $1 -> $2" >&2; }
 code() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$@"; }

@@ -21,7 +21,7 @@ const WINDOW_HOURS = 24;
 const POST = process.argv.includes("--post");
 
 async function main(): Promise<void> {
-  const prisma = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(process.env["POSTGRES_PRISMA_URL"]) } } });
+  const prisma = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(process.env["POSTGRES_PRISMA_URL"]) } } });
   const seededIds: string[] = [];
   try {
     const user = await prisma.user.findFirst({ select: { id: true, email: true } });

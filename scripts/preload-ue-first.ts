@@ -916,7 +916,7 @@ async function processRestaurant(
 
 async function main(): Promise<void> {
   validateEnv();
-  const directUrl = assertDatabaseWriteAllowed(process.env["POSTGRES_URL_NON_POOLING"]);
+  const directUrl = await assertDatabaseWriteAllowed(process.env["POSTGRES_URL_NON_POOLING"]);
   await validateApiCredentials();
 
   const startTime = Date.now();

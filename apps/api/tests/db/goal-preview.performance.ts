@@ -13,7 +13,7 @@ async function main() {
   const token = process.env['GOAL_BENCH_TOKEN'];
   assert.ok(token, 'GOAL_BENCH_TOKEN must be a valid account session for SUPABASE_URL');
   const prisma = new PrismaClient({ datasourceUrl, log: [{ emit: 'event', level: 'query' }] });
-  (globalThis as unknown as { prisma: PrismaClient }).prisma = prisma;
+  Object.assign(globalThis, { prisma, fitsyPrismaDatasourceUrl: datasourceUrl });
   const { GET } = await import('../../app/api/restaurants/preview/route');
   const { findNearbyRestaurants } = await import('../../lib/restaurantService');
   const { guidedPreviewSql } = await import('../../lib/guidedPreviewService');

@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   const directUrl = process.env["POSTGRES_URL_NON_POOLING"];
   if (!directUrl) throw new Error("POSTGRES_URL_NON_POOLING is required");
 
-  const prisma = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(directUrl) } } });
+  const prisma = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(directUrl) } } });
 
   try {
     // Preview: count how many restaurants will be flipped.

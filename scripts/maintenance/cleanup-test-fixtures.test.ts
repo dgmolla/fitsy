@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:net';
-import { resolve } from 'node:path';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { chainItemMatches, checkpointMatches, cleanupReadTarget, parseOptions, restaurantMatches, tables } from './cleanup-test-fixtures';
 import { DEV_PROJECT_REF, PROD_PROJECT_REF } from '../lib/db-target-guard';
 import { compileChainProductBatch } from '../../apps/api/services/chainProductBatch';
@@ -51,16 +52,14 @@ test('exact compound fixture identities exclude normal locations, address collis
   }
 });
 
-test('real CLI refuses a synthetic production route before opening a socket, without leaking its password', async () => {
+test('real CLI refuses a synthetic production route before driver construction, without leaking its password', async () => {
   const loopback = '127.0.0.1'; // loopback test fixture
-  let connections = 0;
-  const server = createServer(socket => { connections++; socket.destroy(); });
-  await new Promise<void>(done => server.listen(0, loopback, done));
+  const directory = mkdtempSync(join(tmpdir(), 'fitsy-cleanup-refusal-'));
+  const log = join(directory, 'connections');
   try {
-    const address = server.address();
-    if (!address || typeof address === 'string') throw new Error('No fixture port');
-    const url = `postgresql://postgres.${PROD_PROJECT_REF}:password-marker@${loopback}:${address.port}/postgres`;
-    const env: NodeJS.ProcessEnv = { ...process.env, POSTGRES_PRISMA_URL: url };
+    const url = `postgresql://postgres.${PROD_PROJECT_REF}:password-marker@${loopback}:1/postgres`;
+    const env: NodeJS.ProcessEnv = { ...process.env, POSTGRES_PRISMA_URL: url, FITSY_TEST_DB_CLIENT_LOG: log,
+      NODE_OPTIONS: `--require=${resolve(__dirname, '../test-fixtures/database-client-recorder.cjs')}` };
     delete env['FITSY_ALLOW_PROD_WRITE']; delete env['GITHUB_ACTIONS']; delete env['VERCEL'];
     const output = await new Promise<{ code: number | null; text: string }>((done, reject) => {
       const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/maintenance/cleanup-test-fixtures.ts', '--apply', '--expect=' + JSON.stringify(counts)], {
@@ -73,8 +72,8 @@ test('real CLI refuses a synthetic production route before opening a socket, wit
       child.on('close', code => { clearTimeout(timer); done({ code, text }); });
     });
     expect(output.code).toBe(1); expect(output.text).toContain('DB_WRITE_REFUSED');
-    expect(output.text).not.toContain('password-marker'); expect(connections).toBe(0);
-  } finally { await new Promise<void>(done => server.close(() => done())); }
+    expect(output.text).not.toContain('password-marker'); expect(existsSync(log)).toBe(false);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test('checkpoints require a verified fixture scope and the exact suite-specific hex identity', () => {

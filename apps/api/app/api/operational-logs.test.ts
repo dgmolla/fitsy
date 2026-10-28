@@ -34,7 +34,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   process.env['VERCEL_ENV'] = 'preview';
   process.env['ALLOW_STUB_SUBSCRIPTIONS'] = 'true';
-  process.env['SUPABASE_URL'] = 'https://auth.example.test';
+  process.env['SUPABASE_URL'] = 'http://localhost:54321'; // loopback test fixture
   process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'fixture-key';
   delete process.env['AXIOM_TOKEN'];
   const error = Object.assign(new Error(`${SENTINEL} Prisma query / provider body`), {

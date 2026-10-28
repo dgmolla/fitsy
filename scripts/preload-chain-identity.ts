@@ -18,7 +18,6 @@ let url: URL;
 try { url = new URL(raw.trim()); } catch { throw new Error("Invalid database URL"); }
 const target = stateHash([url.host, url.pathname, url.username]);
 url.searchParams.set("connection_limit", "1");
-const p = new PrismaClient({ datasources: { db: { url: assertDatabaseWriteAllowed(url.toString()) } } });
 function save(file: string, value: unknown) {
   const fd = openSync(file, "wx", 0o600);
   try { writeFileSync(fd, JSON.stringify(value, null, 2) + "\n"); fsyncSync(fd); } finally { closeSync(fd); }
@@ -26,6 +25,10 @@ function save(file: string, value: unknown) {
 const read = <T>(file: string) => JSON.parse(readFileSync(file, "utf8")) as T;
 const report = (value: unknown) => process.stdout.write(JSON.stringify(value) + "\n");
 async function main() {
+  const p = new PrismaClient({ datasources: { db: { url: await assertDatabaseWriteAllowed(url.toString()) } } });
+  try { await run(p); } finally { await p.$disconnect(); }
+}
+async function run(p: PrismaClient) {
   if (command === "plan") {
     const current = await p.$transaction(async tx => {
       await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
@@ -54,4 +57,4 @@ async function main() {
 main().catch(error => {
   console.error(error?.constructor?.name?.startsWith("Prisma") ? JSON.stringify({ error: error.constructor.name, code: error.code }) : error instanceof Error ? error.message : "Identity operation failed");
   process.exitCode = 1;
-}).finally(() => p.$disconnect());
+});

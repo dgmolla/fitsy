@@ -5,7 +5,7 @@ import { sanitizeCleanupDatabaseUrl } from './sanitize-cleanup-db-url';
 const base = `postgresql://postgres.${PROD_PROJECT_REF}:synthetic@localhost:1/postgres`;
 const reference = `reference=${PROD_PROJECT_REF}`;
 
-test('keeps the guard allowlist, first values and connection identity without mutating the guard', () => {
+test('keeps the guard allowlist, first values and connection identity without mutating the guard', async () => {
   const parameters = new URLSearchParams([...allowedParameters].map(key => [key, key === 'options' ? reference : 'first value']));
   const original = base + '?' + parameters + '&host=synthetic-secret&sslmode=second&%73chema=second';
   const result = sanitizeCleanupDatabaseUrl(original);
@@ -17,7 +17,7 @@ test('keeps the guard allowlist, first values and connection identity without mu
   expect(new URL(result.url).pathname).toBe('/postgres');
   expect(databaseTarget(result.url).ref).toBe(PROD_PROJECT_REF);
   expect(() => databaseTarget(original)).toThrow('unsupported database routing parameters');
-  expect(() => assertDatabaseWriteAllowed(result.url, { env: {}, args: [] })).toThrow('PRODUCTION requires');
+  await expect(assertDatabaseWriteAllowed(result.url, { env: {}, args: [] })).rejects.toThrow('PRODUCTION requires');
 });
 
 test.each([

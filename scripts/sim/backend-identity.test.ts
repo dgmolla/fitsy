@@ -64,25 +64,34 @@ test('preview selection retains ready, nonproduction, project and clean source c
   }
 });
 
-test('the real native backend check queries the configured preview and refuses divergent API source', () => {
+test('the real native backend check queries the preview and refuses divergent or dirty API source', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'fitsy-backend-preview-'));
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
   const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, env, encoding: 'utf8', timeout: 10000 }).trim();
+  const commit = (message: string) => {
+    git('add', '.');
+    git('-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', 'commit', '-qm', message);
+    return git('rev-parse', 'HEAD');
+  };
+  const source = resolve(dir, 'apps/api/source.ts');
   try {
     // Own the history: origin/main may already have exactly the candidate's API contents.
-    git('init', '-q'); git('config', 'user.name', 'Backend fixture'); git('config', 'user.email', 'fixture@example.test');
+    git('init', '-q');
+    git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.test');
     mkdirSync(resolve(dir, 'apps/api'), { recursive: true });
-    writeFileSync(resolve(dir, 'apps/api/source.ts'), 'export const version = 1;\n');
-    git('add', '.'); git('commit', '-qm', 'previous API');
-    const divergent = git('rev-parse', 'HEAD');
-    writeFileSync(resolve(dir, 'apps/api/source.ts'), 'export const version = 2;\n');
-    git('add', '.'); git('commit', '-qm', 'candidate API');
-    const equivalent = git('rev-parse', 'HEAD');
+    writeFileSync(source, 'export const revision = 1;\n');
+    const previous = commit('base fixture');
+    const candidate = 'export const revision = 2;\n';
+    writeFileSync(source, candidate);
+    const equivalent = commit('candidate fixture');
     writeFileSync(resolve(dir, 'notes.txt'), 'non-API change\n');
-    git('add', '.'); git('commit', '-qm', 'candidate notes');
-    const head = git('rev-parse', 'HEAD');
+    const head = commit('candidate notes');
     const script = `import {backend} from ${JSON.stringify(resolve(__dirname, 'product-flow.mjs'))}; process.stdout.write(JSON.stringify(backend()));`;
-    for (const revision of [head, equivalent, divergent]) {
+    for (const state of ['clean', 'equivalent', 'older', 'dirty', 'untracked']) {
+      const revision = state === 'older' ? previous : state === 'equivalent' ? equivalent : head;
+      if (state === 'dirty') writeFileSync(source, 'export const revision = 3;\n');
+      const untracked = resolve(dir, 'apps/api/untracked.ts');
+      if (state === 'untracked') writeFileSync(untracked, 'export const untracked = true;\n');
       writeFileSync(resolve(dir, 'vercel'), `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(resolve(dir, 'args.json'))},JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ ...cli, name: 'fitsy-api', meta: { gitCommitSha: revision } }))});\n`, { mode: 0o755 });
       const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
         cwd: dir, env: { ...env, PATH: dir + ':' + env.PATH, FITSY_PRODUCT_ROOT: dir, EXPO_PUBLIC_API_URL: preview },
@@ -91,9 +100,11 @@ test('the real native backend check queries the configured preview and refuses d
       expect(result.error).toBeUndefined();
       expect(JSON.parse(readFileSync(resolve(dir, 'args.json'), 'utf8'))).toEqual(['api',
         '/v13/deployments/' + new URL(preview).hostname, '--raw']);
-      expect(result.status).toBe(revision === divergent ? 1 : 0);
-      if (revision !== divergent) expect(JSON.parse(result.stdout)).toEqual({ backendRevision: revision, backendDeployment: cli.id });
+      const matches = state === 'clean' || state === 'equivalent';
+      expect({ state, status: result.status }).toEqual({ state, status: matches ? 0 : 1 });
+      if (matches) expect(JSON.parse(result.stdout)).toEqual({ backendRevision: revision, backendDeployment: cli.id });
       else expect(result.stderr).toContain('Deploy candidate backend/shared/schema changes');
+      writeFileSync(source, candidate); rmSync(untracked, { force: true });
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

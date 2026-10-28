@@ -308,6 +308,19 @@ class GitDeploymentTests(unittest.TestCase):
 
 
 class VercelBuildTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Reuse synthetic signing material across subprocesses, preserving real
+        # JWT verification without repeated RSA generation in the bounded suite.
+        cls.oidc_keys = json.loads(subprocess.check_output(['node', '-e', '''
+const { generateKeyPairSync } = require('node:crypto');
+const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+process.stdout.write(JSON.stringify({
+  privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+  publicKey: publicKey.export({ format: 'jwk' }),
+}));
+'''], text=True))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='fitsy-vercel-build-')
         self.root = Path(self.temp.name)
@@ -324,9 +337,25 @@ class VercelBuildTests(unittest.TestCase):
             shutil.copyfile(ROOT / name, target)
         (self.root / 'node_modules').symlink_to(ROOT / 'node_modules', target_is_directory=True)
         transport = self.root / 'redis-transport.mjs'
-        transport.write_text('''import assert from 'node:assert/strict';
+        transport.write_text('const { privateKey, publicKey } = ' + json.dumps(self.oidc_keys) + ''';
+import assert from 'node:assert/strict';
 import { appendFileSync } from 'node:fs';
+import { sign } from 'node:crypto';
+const now = Math.floor(Date.now() / 1000);
+const owner = 'dawits-projects-74b6e00f';
+const issuer = `https://oidc.vercel.com/${owner}`;
+const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+const data = encode({ alg: 'RS256', kid: 'vercel-fixture' }) + '.' + encode({
+  iss: issuer, aud: `https://vercel.com/${owner}`,
+  sub: `owner:${owner}:project:fitsy-api:environment:production`,
+  owner_id: 'team_VVc52BrZfx5IT2B1mDI5AuPT', project_id: 'prj_z1QTfOgbj4tlm91U2Hf8JXr5k4v4',
+  environment: 'production', iat: now, nbf: now, exp: now + 300,
+});
+process.env.VERCEL_OIDC_TOKEN = data + '.' + sign('RSA-SHA256', Buffer.from(data), privateKey).toString('base64url');
 globalThis.fetch = async (url, init) => {
+  if (String(url) === `${issuer}/.well-known/jwks`) return Response.json({
+    keys: [{ ...publicKey, kid: 'vercel-fixture', alg: 'RS256', use: 'sig' }],
+  });
   assert.equal(String(url), 'https://quota.example.test/');
   assert.equal(init.headers.Authorization, 'Bearer private-fixture-token');
   assert.equal(init.redirect, 'error');

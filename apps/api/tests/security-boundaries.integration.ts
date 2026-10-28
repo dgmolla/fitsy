@@ -20,7 +20,6 @@ before(() => {
   process.env['SUPABASE_URL'] = 'https://fixture.supabase.test';
   process.env['SUPABASE_ANON_KEY'] = 'fixture-public-key';
   process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'fixture-server-key';
-  process.env['POSTGRES_PRISMA_URL'] = 'invalid-security-audit-sentinel';
   global.fetch = async input => {
     if (String(input) === 'https://quota.example.test/') return Response.json({ result: [1, 0, 0] });
     providerCalls++;
@@ -82,7 +81,7 @@ test('sandbox webhooks and unrelated entitlements never reach production persist
       body: JSON.stringify({ event: { type: 'INITIAL_PURCHASE', app_user_id: 'fixture-account',
         environment: 'PRODUCTION', entitlement_ids: ['pro'], ...overrides } }),
     }));
-    assert.equal(response.status, 200); // Invalid DB target would fail if persistence were reached.
+    assert.equal(response.status, 200); // The unconfigured datasource would fail if persistence were reached.
     assert.deepEqual(await response.json(), { received: true });
   }
 });

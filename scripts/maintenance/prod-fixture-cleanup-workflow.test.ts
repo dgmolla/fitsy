@@ -12,7 +12,7 @@ const workflow = yaml.load(readFileSync(join(root, '.github/workflows/prod-fixtu
   on: { workflow_dispatch: { inputs: Record<string, unknown> } };
   permissions: Record<string, string>;
   concurrency: { group: string; 'cancel-in-progress': boolean };
-  jobs: { cleanup: { if: string; environment: string; steps: Step[] } };
+  jobs: { cleanup: { if: string; environment: string; permissions: Record<string, string>; steps: Step[] } };
 };
 const job = workflow.jobs.cleanup;
 const cleanup = job.steps.find(step => step.run?.includes('scripts/maintenance/sanitize-cleanup-db-url.ts'))!;
@@ -75,6 +75,7 @@ test('only manual main-branch runs can access the protected production credentia
   expect(job.if).toBe("github.ref == 'refs/heads/main'");
   expect(job.environment).toBe('production-release');
   expect(workflow.permissions).toEqual({ contents: 'read' });
+  expect(job.permissions).toEqual({ contents: 'read', 'id-token': 'write' });
   expect(workflow.concurrency).toEqual({ group: 'prod-fixture-cleanup', 'cancel-in-progress': false });
   expect(cleanup.env).toEqual({
     POSTGRES_PRISMA_URL: '${{ secrets.PROD_DATABASE_URL }}',
@@ -92,7 +93,7 @@ test('dry-run mode only inventories and never enables production writes', () => 
   expect(result.calls).toEqual([{ args: ['tsx', 'scripts/maintenance/cleanup-test-fixtures.ts', '--dry-run', '--prod'], actions: 'true', databaseUrl: url }]);
 });
 
-test('apply inventories first, preserves the count manifest and satisfies the real production guard', () => {
+test('apply preserves the count manifest and intentions, but flags alone cannot satisfy the production guard', async () => {
   const result = run('apply', expected);
   expect(result.status).toBe(0);
   expect(result.calls).toEqual([
@@ -101,9 +102,9 @@ test('apply inventories first, preserves the count manifest and satisfies the re
   ]);
   const apply = result.calls[1]!;
   expect(parseOptions(apply.args.slice(2))).toMatchObject({ apply: true, prod: true, expect: counts });
-  expect(assertDatabaseWriteAllowed(url, { args: apply.args, env: {
+  await expect(assertDatabaseWriteAllowed(url, { args: apply.args, env: {
     GITHUB_ACTIONS: apply.actions, FITSY_ALLOW_PROD_WRITE: apply.allowProd,
-  } })).toBe(url);
+  } })).rejects.toThrow(/signed.*identity/);
 });
 
 test('a failed dry run stops apply in the actual workflow shell', () => {
