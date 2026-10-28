@@ -36,6 +36,8 @@ function confirmedProdAuditUrl(value: string, confirmation: string): URL {
   url.searchParams.set("connection_limit", "1");
   url.searchParams.set("connect_timeout", "10");
   url.searchParams.set("pool_timeout", "10");
+  // Supavisor transaction mode may not support Prisma's named statements.
+  if (url.hostname.endsWith(".pooler.supabase.com") && url.port === "6543") url.searchParams.set("pgbouncer", "true");
   return url;
 }
 
@@ -130,6 +132,7 @@ export async function provisionProdReadonlyRole(options: Options = {}): Promise<
     readonly.username = readonly.hostname.endsWith(".pooler.supabase.com") ? `${AUDIT_ROLE}.${PROD_PROJECT_REF}` : AUDIT_ROLE;
     readonly.password = password;
     readonly.search = "?sslmode=require&connection_limit=1&connect_timeout=10&pool_timeout=10";
+    if (url.searchParams.get("pgbouncer") === "true") readonly.searchParams.set("pgbouncer", "true");
     const candidate = `${file}.prod-readonly-pending`;
     const fd = openSync(candidate, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
     pending = candidate;

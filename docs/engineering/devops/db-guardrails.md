@@ -200,6 +200,7 @@ At the second prompt, type exactly `zaxkmjqozvmbifiwbxps`.
 Both input and output must be terminals; piped confirmation, extra flags, missing `--prod`, a mismatched reference and ambiguous or unknown routes refuse before database client construction.
 The admin URL is consumed and removed from the provisioner's environment immediately, and neither it nor the generated password is printed or saved in the output file.
 TLS is required for both database connections.
+Supavisor transaction-pooler URLs on port `6543` enable `pgbouncer=true` for both connections, and an explicitly supplied `pgbouncer=true` is preserved in the saved credential, following [Supavisor's Prisma guidance](https://supabase.github.io/supavisor/orms/prisma/).
 
 The command uses `node:crypto` to generate a fresh 32-byte password and creates `fitsy_audit_readonly` in one transaction with the exact statements from `scripts/dev/sql/audit-role.sql`.
 The existing `fitsy_dev_audit_select` policy name is preserved on PROD to keep the shared SQL identical; the policy grants SELECT only to the audit role.

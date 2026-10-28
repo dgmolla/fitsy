@@ -100,6 +100,9 @@ test("app environment URLs cannot substitute for a shell-scoped admin URL", asyn
 
 test.each([direct(), `postgresql://postgres.${PROD_PROJECT_REF}:synthetic-admin@${pooler}:5432/postgres`,
   `postgresql://postgres%2E${PROD_PROJECT_REF}:synthetic-admin@${pooler}:6543/postgres`,
+  `postgresql://postgres.${PROD_PROJECT_REF}:synthetic-admin@${pooler}:6543/postgres?pgbouncer=true`,
+  `postgresql://postgres.${PROD_PROJECT_REF}:synthetic-admin@${pooler}:6543/postgres?pgbouncer=false`,
+  direct() + "?pgbouncer=true",
   `postgresql://postgres:synthetic-admin@${pooler}/postgres?options=reference%3D${PROD_PROJECT_REF}`])(
   "provisions with shared SQL, verifies as the generated login and saves only its private URL", async url => {
     const env = { PROD_DB_ADMIN_URL: url };
@@ -114,6 +117,11 @@ test.each([direct(), `postgresql://postgres.${PROD_PROJECT_REF}:synthetic-admin@
     expect(admin.execute.mock.calls[0]?.[0]).toContain(`PASSWORD '${readonly.password}'`);
     expect(readonly.searchParams.get("sslmode")).toBe("require");
     expect(readonly.searchParams.has("options")).toBe(false);
+    const compatibility = (readonly.hostname === pooler && readonly.port === "6543") ||
+      new URL(url).searchParams.get("pgbouncer") === "true" ? "true" : null;
+    expect(readonly.searchParams.get("pgbouncer")).toBe(compatibility);
+    const adminUrl = new URL((PrismaClient as jest.Mock).mock.calls[0]?.[0].datasources.db.url);
+    expect(adminUrl.searchParams.get("pgbouncer")).toBe(compatibility);
     const auditUrl = (PrismaClient as jest.Mock).mock.calls[1]?.[0].datasources.db.url;
     expect(auditUrl).toBe(readonly.toString());
     expect(statSync(file).mode & 0o777).toBe(0o600);
