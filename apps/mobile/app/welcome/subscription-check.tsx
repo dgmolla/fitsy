@@ -5,6 +5,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
 
+const failureCopy = {
+  network: 'We could not confirm your subscription just now. Try again when you are connected.',
+  server: 'Our servers are having trouble. Try again in a few minutes.',
+  rate_limited: 'Too many attempts, try again shortly.',
+  unavailable: 'We could not confirm your subscription just now. Please try again.',
+};
+
 export default function SubscriptionCheck() {
   const purchases = usePurchases();
   const [retrying, setRetrying] = useState(false);
@@ -27,8 +34,9 @@ export default function SubscriptionCheck() {
     <SafeAreaView style={s.page}>
       <View style={s.content}>
         <Text style={s.title}>Checking your subscription</Text>
-        <Text style={s.body}>We could not confirm your subscription just now. Try again when you are connected.</Text>
-        <Pressable testID="subscription-check-retry" accessibilityRole="button" onPress={() => { void retry(); }} style={s.button}>
+        <Text style={s.body}>{failureCopy[purchases.entitlementError ?? 'unavailable']}</Text>
+        <Pressable testID="subscription-check-retry" accessibilityRole="button" disabled={retrying}
+          accessibilityState={{ busy: retrying }} onPress={() => { void retry(); }} style={s.button}>
           <Text style={s.buttonText}>{retrying ? 'Checking...' : 'Try again'}</Text>
         </Pressable>
       </View>

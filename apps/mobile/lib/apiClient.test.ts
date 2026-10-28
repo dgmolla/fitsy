@@ -6,6 +6,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 import { fetchRestaurants, fetchRestaurantsPage, fetchSubscriptionStatus, syncSubscription } from './apiClient';
+import { ApiRequestError } from './api';
 import type { RestaurantsResponse } from '@fitsy/shared';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -158,6 +159,14 @@ describe('syncSubscription', () => {
   it('throws on a failed sync so callers can treat it as best-effort', async () => {
     global.fetch = makeMockFetch({ ok: false, status: 500, body: { error: 'boom' } });
     await expect(syncSubscription('mismatch')).rejects.toThrow('boom');
+  });
+
+  it.each([429, 500, 503])('preserves HTTP %s on sync even when the response is not JSON', async status => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status,
+      json: async () => { throw new SyntaxError('HTML error page'); } });
+    const error = await syncSubscription('mismatch').catch(error => error);
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ status, message: `Request failed: ${status}` });
   });
 });
 

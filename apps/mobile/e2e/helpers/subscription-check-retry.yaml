@@ -1,0 +1,13 @@
+# Start on subscription-check with the same transport failure on status and sync.
+# Set SUBSCRIPTION_ERROR_COPY to the expected network, server or rate-limit copy.
+# SubscriptionCheckNavigation.test.tsx replays these assertions for all three faults.
+appId: com.fitsy.mobile
+---
+- assertVisible: "Checking your subscription"
+- assertVisible: "${SUBSCRIPTION_ERROR_COPY}"
+- assertVisible:
+    id: subscription-check-retry
+- tapOn:
+    id: subscription-check-retry
+- assertVisible: "Try again"
+- assertVisible: "${SUBSCRIPTION_ERROR_COPY}"
