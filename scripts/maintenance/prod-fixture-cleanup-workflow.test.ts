@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { assertDatabaseWriteAllowed, PROD_PROJECT_REF } from '../lib/db-target-guard';
@@ -15,40 +15,52 @@ const workflow = yaml.load(readFileSync(join(root, '.github/workflows/prod-fixtu
   jobs: { cleanup: { if: string; environment: string; steps: Step[] } };
 };
 const job = workflow.jobs.cleanup;
-const cleanup = job.steps.find(step => step.run?.includes('scripts/maintenance/cleanup-test-fixtures.ts'))!;
+const cleanup = job.steps.find(step => step.run?.includes('scripts/maintenance/sanitize-cleanup-db-url.ts'))!;
 const counts = Object.fromEntries(tables.map(table => [table, 0]));
 const expected = JSON.stringify(counts);
 // Synthetic loopback route only; the external command recorder never connects.
 const url = `postgresql://postgres.${PROD_PROJECT_REF}:synthetic@localhost:1/postgres`;
 let directory: string;
-type Call = { args: string[]; allowProd?: string; actions?: string };
+type Call = { args: string[]; allowProd?: string; actions?: string; databaseUrl: string };
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'fitsy-cleanup-workflow-'));
+  symlinkSync(process.execPath, join(directory, 'node'));
   // Substitute only the external npx transport to inspect the actual workflow shell's argv/environment.
   writeFileSync(join(directory, 'npx'), `#!${process.execPath}
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.CALLS, JSON.stringify({ args,
-  allowProd: process.env.FITSY_ALLOW_PROD_WRITE, actions: process.env.GITHUB_ACTIONS }) + '\\n');
+  allowProd: process.env.FITSY_ALLOW_PROD_WRITE, actions: process.env.GITHUB_ACTIONS,
+  databaseUrl: process.env.POSTGRES_PRISMA_URL }) + '\\n');
+process.stdout.write('cleanup invoked\\n');
+require(${JSON.stringify(require.resolve('tsx/cjs'))});
+const { databaseTarget } = require(${JSON.stringify(join(root, 'scripts/lib/db-target-guard.ts'))});
+try { databaseTarget(process.env.POSTGRES_PRISMA_URL); }
+catch (error) { console.error(error.message); process.exit(1); }
 if (args.includes('--dry-run') && process.env.FAIL_DRY_RUN === '1') process.exit(9);
 `, { mode: 0o755 });
 });
 afterEach(() => { rmSync(directory, { recursive: true, force: true }); });
 
-function run(mode: string, expect = '', failDryRun = false) {
+function run(mode: string, expectedInput = '', failDryRun = false, databaseUrl = url) {
   const log = join(directory, 'calls.jsonl');
+  const githubEnv = join(directory, 'github-env');
   const result = spawnSync('/bin/bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', cleanup.run!], {
-    cwd: directory, encoding: 'utf8', env: {
-      PATH: directory, CALLS: log, GITHUB_ACTIONS: 'true', POSTGRES_PRISMA_URL: url,
-      CLEANUP_MODE: mode, CLEANUP_EXPECT: expect, FAIL_DRY_RUN: failDryRun ? '1' : '0',
+    cwd: root, encoding: 'utf8', env: {
+      PATH: directory, CALLS: log, GITHUB_ACTIONS: 'true', POSTGRES_PRISMA_URL: databaseUrl,
+      CLEANUP_MODE: mode, CLEANUP_EXPECT: expectedInput, FAIL_DRY_RUN: failDryRun ? '1' : '0',
+      GITHUB_ENV: githubEnv,
     },
   });
   const calls: Call[] = existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [];
   expectNoUrl(result.stdout + result.stderr);
+  expect(existsSync(githubEnv)).toBe(false);
   return { ...result, calls };
 }
 function expectNoUrl(output: string) {
+  // The sole permitted URL emission registers a mask before any cleanup use.
+  output = output.split('\n').filter(line => !line.startsWith('::add-mask::')).join('\n');
   expect(output).not.toContain(url);
   expect(output).not.toContain('synthetic');
 }
@@ -77,15 +89,15 @@ test('only manual main-branch runs can access the protected production credentia
 test('dry-run mode only inventories and never enables production writes', () => {
   const result = run('dry-run');
   expect(result.status).toBe(0);
-  expect(result.calls).toEqual([{ args: ['tsx', 'scripts/maintenance/cleanup-test-fixtures.ts', '--dry-run', '--prod'], actions: 'true' }]);
+  expect(result.calls).toEqual([{ args: ['tsx', 'scripts/maintenance/cleanup-test-fixtures.ts', '--dry-run', '--prod'], actions: 'true', databaseUrl: url }]);
 });
 
 test('apply inventories first, preserves the count manifest and satisfies the real production guard', () => {
   const result = run('apply', expected);
   expect(result.status).toBe(0);
   expect(result.calls).toEqual([
-    { args: ['tsx', 'scripts/maintenance/cleanup-test-fixtures.ts', '--dry-run', '--prod'], actions: 'true' },
-    { args: ['tsx', 'scripts/maintenance/cleanup-test-fixtures.ts', '--apply', '--prod', '--expect=' + expected], actions: 'true', allowProd: '1' },
+    { args: ['tsx', 'scripts/maintenance/cleanup-test-fixtures.ts', '--dry-run', '--prod'], actions: 'true', databaseUrl: url },
+    { args: ['tsx', 'scripts/maintenance/cleanup-test-fixtures.ts', '--apply', '--prod', '--expect=' + expected], actions: 'true', allowProd: '1', databaseUrl: url },
   ]);
   const apply = result.calls[1]!;
   expect(parseOptions(apply.args.slice(2))).toMatchObject({ apply: true, prod: true, expect: counts });
@@ -101,6 +113,55 @@ test('a failed dry run stops apply in the actual workflow shell', () => {
   expect(result.calls[0]!.args).toContain('--dry-run');
   expect(result.calls[0]!.allowProd).toBeUndefined();
 });
+
+test('unsupported and duplicate query parameters are sanitized before the real guard sees the cleanup URL', () => {
+  const result = run('apply', expected, false, url + '?sslmode=require&unknown=synthetic-secret&sslmode=disable&options=-csearch_path%3Dpublic');
+  expect(result.status).toBe(0);
+  expect(result.calls.map(call => call.databaseUrl)).toEqual([url + '?sslmode=require', url + '?sslmode=require']);
+  const mask = '::add-mask::' + url + '?sslmode=require';
+  const dropped = 'Dropped database URL query keys: ["unknown","sslmode","options"]';
+  expect(result.stdout.trim().split('\n')).toEqual([mask, dropped, 'cleanup invoked', mask, dropped, 'cleanup invoked']);
+  expect(result.stdout).not.toContain('synthetic-secret');
+});
+
+test('the mask escapes percent signs before any consumer and key names cannot inject workflow commands', () => {
+  const key = 'unexpected\n::error::injected';
+  const input = url.replace('synthetic', 'synthetic%25password') + '?' + new URLSearchParams([
+    ['options', `reference=${PROD_PROJECT_REF}`], [key, 'synthetic-secret'],
+  ]);
+  const result = run('dry-run', '', false, input);
+  expect(result.status).toBe(0);
+  expect(result.stdout.trim().split('\n')).toEqual([
+    '::add-mask::' + result.calls[0]!.databaseUrl.replaceAll('%', '%25'),
+    'Dropped database URL query keys: ' + JSON.stringify([key]), 'cleanup invoked',
+  ]);
+  expect(result.stdout).not.toContain('synthetic-secret');
+});
+
+test('invalid URLs fail without exposing parser input or invoking cleanup', () => {
+  const result = run('apply', expected, false, 'invalid-synthetic-secret');
+  expect(result.status).toBe(1);
+  expect(result.calls).toEqual([]);
+  expect(result.stderr).toBe('::error::Unable to run cleanup with a sanitized database URL.\n');
+});
+
+test('dropped names remain JSON-readable without triggering legacy workflow commands anywhere in the line', () => {
+  const key = '##[error]injected';
+  const result = run('dry-run', '', false, url + '?' + new URLSearchParams([[key, 'synthetic-secret']]));
+  expect(result.status).toBe(0);
+  const diagnostic = result.stdout.trim().split('\n')[1]!;
+  expect(diagnostic).not.toContain('##[');
+  expect(JSON.parse(diagnostic.slice('Dropped database URL query keys: '.length))).toEqual([key]);
+});
+
+test.each(['#fragment', '?options=reference%3Dabcdefghijklmnopqrst'])(
+  'remaining guard refusals still stop apply after sanitization: %s', suffix => {
+    const result = run('apply', expected, false, url + suffix);
+    expect(result.status).toBe(1);
+    expect(result.calls).toHaveLength(1);
+    expect(result.stderr).toContain('DB_WRITE_REFUSED');
+  },
+);
 
 test.each([['apply', ''], ['unexpected', expected]])('invalid request %s refuses before invoking cleanup', (mode, expectedInput) => {
   const result = run(mode, expectedInput);
