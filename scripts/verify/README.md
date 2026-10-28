@@ -128,6 +128,9 @@ UI smoke executes locally on the Mac, with no simulator step added to this hook.
 A fresh checkout needs installed dependencies but no issue binding, review daemon or home-directory review state.
 Keep dependencies local to this checkout so workspace links resolve its own packages.
 When the dependency preflight reports `verification dependencies are missing`, run `npm ci` in that checkout before rerunning the unchanged verifier or hook.
+The preflight checks every workspace's direct runtime and development dependencies from the lockfile, including nested mobile packages, and identifies missing packages before running checks.
+When restoring an identical-lockfile dependency tree from another checkout, include each workspace's `node_modules` as well as the root directory.
+Copying only the root directory can omit `expo-blur`, `react-native-reanimated` and `@testing-library/react-native`, producing missing-module and cascading implicit-any errors.
 If network access is unavailable but an existing npm cache contains the lockfile's packages, copy that cache to a writable task-owned directory and run `npm ci --offline --cache <task-cache>`.
 Keep the lockfile and hook unchanged; a cache miss still requires restoring the missing package through supported access.
 In a sandbox where Prisma cannot update its home cache, copy the existing Prisma cache into `<task-cache>/prisma` and set `XDG_CACHE_HOME=<task-cache>` for the normal verification command.

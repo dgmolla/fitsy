@@ -31,12 +31,28 @@ export async function verify(argv, prepareDatabase) {
 
   const VERIFY_DIR = dirname(fileURLToPath(import.meta.url));
   const REPO_ROOT = join(VERIFY_DIR, "..", "..");
-  if (!existsSync(join(REPO_ROOT, "node_modules/js-yaml"))) {
+  const require = createRequire(import.meta.url);
+  const lockfile = join(REPO_ROOT, "package-lock.json");
+  const packages = existsSync(lockfile) ? JSON.parse(readFileSync(lockfile, "utf8")).packages : {};
+  const missing = [];
+  for (const [workspace, pkg] of Object.entries(packages ?? {})) {
+    if (workspace.split("/").includes("node_modules")) continue;
+    const from = createRequire(join(REPO_ROOT, workspace, "package.json"));
+    for (const name of Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })) {
+      if (pkg.optionalDependencies?.[name]) continue;
+      // Check hoisted and nested packages without executing them or relying on
+      // entrypoints/package.json exports (some type-only packages have neither).
+      if (!from.resolve.paths(name)?.some(path => existsSync(join(path, name, "package.json")))) {
+        missing.push(`${workspace || "."}: ${name}`);
+      }
+    }
+  }
+  if (!existsSync(join(REPO_ROOT, "node_modules/js-yaml")) || missing.length) {
     console.log(JSON.stringify({ name: "dependencies", status: "fail",
-      summary: "verification dependencies are missing", fix: "run npm ci before verification" }));
+      summary: "verification dependencies are missing" + (missing.length ? `: ${missing.join(", ")}` : ""),
+      fix: "run npm ci before verification" }));
     return 1;
   }
-  const require = createRequire(import.meta.url);
   const yaml = require("js-yaml");
 
   const args = Object.fromEntries(

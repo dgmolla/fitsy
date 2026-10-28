@@ -17,6 +17,7 @@
 - Imports: `packages/shared` + `apps/api/services` only; never api lib/app or
   mobile code (dependency-cruiser).
 - Keep TypeScript and Jest shared-package mappings pointed at checkout-owned source without relying on workspace links.
+- Dependency recovery must include nested workspace installations; the verifier checks locked direct dependencies before running checks.
 - Checks follow the contract in `verify/README.md`: JSON line out, exit 0/1/2,
   a `fix:` hint on failure, and a registry entry (T11).
 - Preserve full check output; the verifier retains logs and CI uploads them even after failure.
