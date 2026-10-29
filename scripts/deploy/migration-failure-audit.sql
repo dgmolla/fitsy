@@ -1,4 +1,4 @@
--- Read-only incident #637 evidence, never permission to resolve a migration.
+-- Read-only release incident evidence, never permission to resolve a migration.
 -- Run the complete file in the production owner's existing SQL connection.
 -- Keep the read-only opener recognized by the database writer inventory.
 BEGIN READ ONLY;
@@ -36,6 +36,17 @@ SELECT jsonb_build_object(
     ) ORDER BY names.name)
     FROM (VALUES ('fitsy_app'), ('pipeline_writer'), ('fitsy_audit_readonly')) AS names(name)
     LEFT JOIN pg_roles r ON r.rolname = names.name
+  ),
+  'runtime_schema', jsonb_build_object(
+    'migration_name', '20261029010000_widget_search_tokens',
+    'migration_history', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', id, 'checksum', checksum, 'finished_at', finished_at, 'rolled_back_at', rolled_back_at
+      ) ORDER BY started_at, id)
+      FROM public._prisma_migrations
+      WHERE migration_name = '20261029010000_widget_search_tokens'
+    ), '[]'::jsonb),
+    'relation_present', to_regclass('public."WidgetToken"') IS NOT NULL
   )
 ) AS migration_failure_audit;
 

@@ -103,6 +103,9 @@ The correction prevents new attempts without approved roles; it does not repair 
 The existing production maintenance owner must inspect the failed row and checksum, transaction rollback and actual table/ACL state before separately authorizing any Prisma recovery.
 Run the complete read-only [migration failure audit](../../../scripts/deploy/migration-failure-audit.sql) through that owner's existing SQL connection or Supabase SQL editor and retain its JSON with the incident.
 It reports every unresolved attempt, the hex-jobs history, remaining tables/ACLs and controlled-role presence in one bounded read-only snapshot without disclosing raw driver logs.
+Its `runtime_schema` field also reports every widget migration attempt and whether `WidgetToken` exists, so the owner can distinguish ledger recovery from the API's remaining runtime prerequisite.
+The protected recovery command compares every audit field except the snapshot timestamp and expected rollback marker, so new evidence cannot be silently omitted from recovery verification.
+Resolving hex-jobs cannot establish widget schema readiness or authorize its role prerequisite.
 Compare the failed checksum with `shasum -a 256 prisma/migrations/20261028130000_hex_jobs/migration.sql`; a matching checksum or zero applied steps alone does not prove rollback.
 Compare the recorded failure with the original build evidence, confirm both hex tables are absent, and diagnose any other unresolved attempt or partial effect.
 Missing ledger logs remain unknown; role absence alone does not establish the original error.
