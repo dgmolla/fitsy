@@ -19,7 +19,7 @@ checks:
     layer: 0
     blocking: true
     runs: [local] # CI classify owns this unconditional baseline.
-    why: Growing invariant checklist (docs layout, route guards, routing-table sync, size/any/console warnings).
+    why: Growing invariant checklist (workspace manifest JSON, docs layout, route guards, routing-table sync, size/any/console warnings).
 
   - name: secrets
     script: secrets.sh
