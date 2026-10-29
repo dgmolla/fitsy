@@ -464,8 +464,26 @@ model PipelinePaidRequest {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   settledAt   DateTime? @map("settled_at") @db.Timestamptz(6)
   budget      PipelineServiceBudget @relation(fields: [service], references: [service])
+  runId       String? @map("run_id")
+  run         PipelineRun? @relation(fields: [runId], references: [runId], onDelete: Restrict, onUpdate: NoAction)
   @@index([service, day], map: "pipeline_paid_requests_service_day")
+  @@index([runId], map: "pipeline_paid_requests_run_id")
   @@map("pipeline_paid_requests")
+}
+
+// Immutable run selection and cumulative envelopes survive worker scaling and restart.
+model PipelineRun {
+  runId       String @id @map("run_id")
+  config      Json
+  maxHexes    Int @map("max_hexes")
+  budgetUsd   Decimal @map("budget_usd") @db.Decimal(18,9)
+  chargedUsd  Decimal @default(0) @map("charged_usd") @db.Decimal(18,9)
+  reservedUsd Decimal @default(0) @map("reserved_usd") @db.Decimal(18,9)
+  status      String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  requests    PipelinePaidRequest[]
+  @@map("pipeline_runs")
 }
 
 enum GoalType {

@@ -56,12 +56,13 @@ async function main() {
     }
     const git = (args: string[]) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
     const files = git(['ls-files', '--cached', '--others', '--exclude-standard', '--', 'package.json', 'scripts/package.json',
-      'scripts/preload-v2.ts', 'scripts/pipeline-v2', 'scripts/hex-persist.ts', 'scripts/hex-resume.ts', 'scripts/pipeline-utils.ts', 'scripts/menu-item-identity.ts',
+      'scripts/preload-v2.ts', 'scripts/pipeline-cloud-worker.ts', 'scripts/pipeline-v2', 'scripts/hex-persist.ts', 'scripts/hex-resume.ts', 'scripts/pipeline-utils.ts', 'scripts/menu-item-identity.ts',
       'scripts/preload-invariants.ts', 'scripts/lib/db-target-guard.ts', 'scripts/eval/lib/jev-experiment.ts', 'scripts/eval/suite/adapters.ts',
       'scripts/eval/pdf-finder',
       'scripts/eval/suite/types.ts', 'scripts/eval/jev-macro/*.ts', 'apps/api/services', 'packages/shared/src', 'prisma/schema.prisma',
       'prisma/migrations/20261028130000_hex_jobs', 'prisma/migrations/20261028140000_pipeline_ue_rate_limit',
-      'prisma/migrations/20261028150000_pipeline_pdf_jobs', 'prisma/migrations/20261028160000_pipeline_service_budgets']).split('\n').sort();
+      'prisma/migrations/20261028150000_pipeline_pdf_jobs', 'prisma/migrations/20261028160000_pipeline_service_budgets',
+      'prisma/migrations/20261028170000_pipeline_cloud_runs']).split('\n').sort();
     const source = { event: 'source', at: new Date().toISOString(), head: git(['rev-parse', 'HEAD']),
       sourceHash: pipelineSourceHash(files),
       dirty: Boolean(git(['status', '--porcelain'])) };

@@ -4,7 +4,8 @@
 
 The queue runs the [existing v2 hex implementation](pipeline-v2-dev-poc.md) against explicitly enqueued resolution-7 LA cells.
 It retains the DEV-only target guard, dedicated `pipeline_writer` credentials, reviewed official matcher, Jev protocol and cumulative $5 per-hex cap.
-Fleet-wide [daily service budgets and Axiom telemetry](pipeline-v2-budgets.md) now supplement the per-hex cap; cloud hosting remains #594 work.
+Fleet-wide [daily service budgets and Axiom telemetry](pipeline-v2-budgets.md) supplement the per-hex cap.
+The [cloud worker service](pipeline-v2-cloud-worker.md) adds immutable fleet run limits, private invocation, health probes, and graceful lease release; deployment acceptance remains separate.
 No mobile journey changes or App Store actions are involved.
 
 ```mermaid
