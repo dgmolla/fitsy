@@ -25,6 +25,7 @@ on:
       - "scripts/deploy/pipeline-roles-approval.mjs"
       - "scripts/deploy/activate-runtime-role.ts"
       - "scripts/deploy/rate-limit-preflight.ts"
+      - "scripts/deploy/runtime-migrations-preflight.ts"
       - "scripts/lib/db-target-guard.ts"
 permissions:
   contents: write

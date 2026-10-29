@@ -427,12 +427,13 @@ process.stdout.write(JSON.stringify({
         self.root = Path(self.temp.name)
         for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh', 'scripts/lib/db-target-guard.ts',
                      'apps/api/services/rateLimitStoreConfig.ts', 'scripts/deploy/pipeline-roles-approval.mjs',
-                     'scripts/deploy/activate-runtime-role.ts',
+                     'scripts/deploy/activate-runtime-role.ts', 'scripts/deploy/runtime-migrations-preflight.ts',
                      'prisma/schema.prisma', 'prisma/migrations/migration_lock.toml',
                      'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql',
                      'prisma/migrations/20261028130000_hex_jobs/migration.sql',
                      'prisma/migrations/20261028140000_pipeline_ue_rate_limit/migration.sql',
-                     'prisma/migrations/20261028150000_pipeline_pdf_jobs/migration.sql'):
+                     'prisma/migrations/20261028150000_pipeline_pdf_jobs/migration.sql',
+                     'prisma/migrations/20261029010000_widget_search_tokens/migration.sql'):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
@@ -450,8 +451,25 @@ process.stdout.write(JSON.stringify({
         (self.root / 'node_modules').symlink_to(ROOT / 'node_modules', target_is_directory=True)
         database_transport = self.root / 'database-transport.cjs'
         database_transport.write_text("""const Module = require('module'), original = Module._load;
+const assert = require('node:assert/strict');
+const { readFileSync, appendFileSync } = require('node:fs');
+const { createHash } = require('node:crypto');
 Module._load = function(name, ...args) {
   if (name === '@prisma/client') return { PrismaClient: class {
+    async $queryRaw(strings, migration) {
+      assert.match(strings.join('?'), /SELECT checksum FROM public\\._prisma_migrations/);
+      assert.match(strings.join('?'), /finished_at IS NOT NULL AND rolled_back_at IS NULL/);
+      assert.equal(migration, '20261029010000_widget_search_tokens');
+      appendFileSync(process.env.CALLS, 'runtime migration preflight\\n');
+      const checksum = createHash('sha256').update(readFileSync('prisma/migrations/' + migration + '/migration.sql')).digest('hex');
+      switch (process.env.RUNTIME_MIGRATION_STATE) {
+        case 'missing': return [];
+        case 'changed': return [{ checksum: '0'.repeat(64) }];
+        case 'duplicate': return [{ checksum }, { checksum }];
+        case 'driver-error': throw Error('private-fixture-database-detail');
+        default: return [{ checksum }]; // A previously applied migration remains valid when held.
+      }
+    }
     async $transaction(fn) {
       return fn({ $queryRaw: async () => [], $executeRawUnsafe: async () => {
         if (process.env.ROLE_ACTIVATION_EXIT === '1') throw Error('private-fixture-password');
@@ -618,6 +636,37 @@ exit "${BUILD_EXIT:-0}"
                     self.assertIn('holding ' + role, result.stderr)
                     self.assertEqual({path: path.read_bytes() for path in original}, original)
 
+    def test_held_widget_migration_withholds_build_until_its_schema_is_applied(self):
+        name = '20261029010000_widget_search_tokens'
+        for role in ('postgres', 'fitsy_app'):
+            with self.subTest(role=role):
+                runtime = self.env['POSTGRES_PRISMA_URL'].replace('fitsy_app.', role + '.')
+                result, calls = self.drive(FITSY_PIPELINE_ROLES_APPROVED_SHA256=None,
+                                           POSTGRES_PRISMA_URL=runtime, RUNTIME_MIGRATION_STATE='missing')
+                self.assertNotEqual(result.returncode, 0, 'a held WidgetToken migration must not publish its API')
+                self.assertFalse(any(call.startswith('npm') for call in calls))
+                self.assertIn(name, result.stderr)
+                self.assertNotIn(name, json.loads(self.migrations.read_text()))
+                self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+                self.assertFalse(any('resolve' in call for call in calls))
+
+    def test_runtime_schema_failure_withholds_production_and_preview_builds_privately(self):
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        for environment in ('production', 'preview'):
+            bindings = {} if environment == 'production' else {
+                'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev.replace('postgres.', 'fitsy_app.'),
+                'SUPABASE_URL': 'https://kegycybiruksmrzvniha.supabase.co'}
+            for state in ('missing', 'changed', 'duplicate', 'driver-error'):
+                with self.subTest(environment=environment, state=state):
+                    result, calls = self.drive(VERCEL_ENV=environment, RUNTIME_MIGRATION_STATE=state, **bindings)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertFalse(any(call.startswith('npm') for call in calls))
+                    self.assertEqual(calls.count('runtime migration preflight'), 1)
+                    self.assertIn('Runtime migration preflight failed', result.stderr)
+                    self.assertNotIn('private-fixture-database-detail', result.stderr + result.stdout)
+                    self.assertNotIn('fixture@', result.stderr + result.stdout)
+                    self.assertFalse(any('resolve' in call for call in calls))
+
     def test_matching_approval_includes_exact_role_migration(self):
         result, calls = self.drive()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -625,7 +674,8 @@ exit "${BUILD_EXIT:-0}"
         self.assertEqual(json.loads(self.migrations.read_text()), [
             '20261028110000_unrelated_before', '20261028120000_pipeline_writer_roles',
             '20261028130000_hex_jobs', '20261028130000_unrelated_after',
-            '20261028140000_pipeline_ue_rate_limit', '20261028150000_pipeline_pdf_jobs'])
+            '20261028140000_pipeline_ue_rate_limit', '20261028150000_pipeline_pdf_jobs',
+            '20261029010000_widget_search_tokens'])
         self.assertNotIn('holding ', result.stderr)
 
     def test_changed_role_sql_is_held_until_the_new_bytes_are_approved(self):
@@ -696,7 +746,8 @@ exit "${BUILD_EXIT:-0}"
         paths = workflow['on']['push']['paths']
         for path in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh',
                      'scripts/deploy/rate-limit-preflight.ts', 'scripts/lib/db-target-guard.ts',
-                     'scripts/deploy/pipeline-roles-approval.mjs', 'scripts/deploy/activate-runtime-role.ts'):
+                     'scripts/deploy/pipeline-roles-approval.mjs', 'scripts/deploy/activate-runtime-role.ts',
+                     'scripts/deploy/runtime-migrations-preflight.ts'):
             self.assertIn(path, paths)
 
     def test_actual_production_build_migrates_before_build_using_existing_bindings(self):
@@ -706,7 +757,8 @@ exit "${BUILD_EXIT:-0}"
                 result, calls = self.drive(**bindings)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate status --schema prisma/schema.prisma',
-                                         'npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
+                                         'npx prisma migrate deploy --schema prisma/schema.prisma',
+                                         'runtime migration preflight', 'npm run build -w apps/api'])
 
     def test_actual_production_build_accepts_supavisor_options_reference_route(self):
         route = ('postgresql://postgres:fixture@aws-1-us-east-1.pooler.supabase.com:{port}/postgres'
@@ -715,7 +767,8 @@ exit "${BUILD_EXIT:-0}"
                                    POSTGRES_PRISMA_URL=route.format(port=6543).replace('postgres:', 'fitsy_app:') + '&pgbouncer=true')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate status --schema prisma/schema.prisma',
-                                 'npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
+                                 'npx prisma migrate deploy --schema prisma/schema.prisma',
+                                 'runtime migration preflight', 'npm run build -w apps/api'])
 
     def test_supavisor_options_route_rejects_ambiguous_or_overridden_targets(self):
         base = 'postgresql://postgres:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
@@ -774,7 +827,8 @@ exit "${BUILD_EXIT:-0}"
         result, calls = self.drive(VERCEL_ENV='preview', SUPABASE_URL='https://kegycybiruksmrzvniha.supabase.co',
                                    POSTGRES_URL_NON_POOLING=dev, POSTGRES_PRISMA_URL=dev.replace('postgres.', 'fitsy_app.'))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate deploy --schema prisma/schema.prisma', 'npm run build -w apps/api'])
+        self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate deploy --schema prisma/schema.prisma',
+                                 'runtime migration preflight', 'npm run build -w apps/api'])
         for env in ('preview', 'development', ''):
             for name in ('POSTGRES_URL_NON_POOLING', 'POSTGRES_PRISMA_URL'):
                 values = {'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev.replace('postgres.', 'fitsy_app.'), name: self.env[name]}

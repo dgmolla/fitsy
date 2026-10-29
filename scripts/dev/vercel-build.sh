@@ -16,6 +16,7 @@ if [ "${VERCEL_ENV:-}" = "preview" ]; then
     "") echo "preview build: POSTGRES_URL_NON_POOLING unset, skipping migrate" >&2 ;;
     *) echo "preview build: prisma migrate deploy -> dev" >&2
        npx prisma migrate deploy --schema prisma/schema.prisma
+       node --import tsx scripts/deploy/runtime-migrations-preflight.ts
        node --import tsx scripts/deploy/activate-runtime-role.ts ;;
   esac
 fi
