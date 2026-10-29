@@ -34,6 +34,7 @@ export class PdfJobQueue {
         updated_at = clock_timestamp() FROM exhausted e WHERE j.brand_id = e.brand_id RETURNING j.brand_id
     ), candidate AS (
       SELECT brand_id FROM public.pipeline_pdf_jobs WHERE attempts < max_attempts
+        AND public.pipeline_budget_available('pdf_finder', 0)
         AND next_retry_at <= clock_timestamp() AND (status = 'pending'
           OR (status = 'running' AND lease_expires_at <= clock_timestamp()))
       ORDER BY next_retry_at, brand_id FOR UPDATE SKIP LOCKED LIMIT 1
@@ -44,6 +45,14 @@ export class PdfJobQueue {
       updated_at = clock_timestamp()
       FROM candidate c WHERE j.brand_id = c.brand_id RETURNING ${columns}`;
     return rows[0] ?? null;
+  }
+
+  async deferBudget(job: PdfJob): Promise<void> {
+    this.owned(await this.db.$executeRaw`UPDATE public.pipeline_pdf_jobs SET status='pending', attempts=GREATEST(attempts-1,0),
+      next_retry_at=((clock_timestamp() AT TIME ZONE 'UTC')::date + 1)::timestamp AT TIME ZONE 'UTC',
+      lease_owner=NULL, lease_expires_at=NULL, updated_at=clock_timestamp()
+      WHERE brand_id=${job.brandId} AND status='running' AND lease_token=${job.leaseToken}::uuid
+        AND lease_owner=${job.leaseOwner} AND lease_expires_at>clock_timestamp()`);
   }
 
   async renew(job: PdfJob): Promise<void> {

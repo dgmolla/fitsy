@@ -189,7 +189,8 @@ const CHUNK_SIZE = 50;
 
 /** Observes every billable chunk, including responses that fail parsing. */
 export interface EstimationObserver {
-  beforeRequest(): void;
+  beforeRequest(envelope: { inputTokens: number; outputTokens: number }): void;
+  onRequestError?(error: unknown): void;
   onUsage(items: StructuredMenuItem[], usage: Anthropic.Usage): void;
 }
 
@@ -227,13 +228,16 @@ export async function estimateMacros(
 
   const userMessage = `Estimate macros for these ${items.length} menu item(s):\n${JSON.stringify(payload, null, 2)}`;
 
-  observer?.beforeRequest();
-  const message = await anthropic.messages.create({
+  // UTF-8 bytes conservatively bound text tokens; include message framing overhead.
+  observer?.beforeRequest({ inputTokens: Buffer.byteLength((systemPrompt ?? SYSTEM_PROMPT) + userMessage, 'utf8') + 1024, outputTokens: MAX_TOKENS });
+  const request: Anthropic.MessageCreateParamsNonStreaming = {
     model: HAIKU_MODEL,
     max_tokens: MAX_TOKENS,
     system: systemPrompt ?? SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],
-  });
+  };
+  const message = await (observer ? anthropic.messages.create(request, { maxRetries: 0 }) : anthropic.messages.create(request))
+    .catch((error: unknown) => { observer?.onRequestError?.(error); throw error; });
   observer?.onUsage(items, message.usage);
 
   const contentBlock = message.content[0];

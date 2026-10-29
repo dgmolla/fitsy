@@ -12,6 +12,8 @@ import { extract } from '../eval/pdf-finder/extract';
 import { digest, type JournalEvent } from './journal';
 import { LeaseLostError } from './queue';
 import { PdfJobQueue, PDF_LEASE_MS, type PdfJob } from './pdf-queue';
+import { DailyBudgetExceeded, SharedServiceBudget } from './service-budget';
+import { v2Telemetry } from './telemetry';
 import { pdfBrandHash, readVerifiedPdf, sealPdf, verifyPdf, PdfVerificationError, type PdfEvidence, type VerifiedPdf } from './pdf-verify';
 
 export interface PdfOptions { mode: 'pdf-enqueue' | 'pdf-worker'; brandIds: string[]; workerId: string; maxJobs: number; out: string }
@@ -126,7 +128,12 @@ export async function workPdfJob(prisma: PrismaClient, queue: PdfJobQueue, optio
     const saved = await queue.latest(job, 'verified');
     if (saved) packet = readVerifiedPdf(saved, brand);
     else {
-      const { evidence, extraction } = await researchPdf(brand, out, signal);
+      const budget = new SharedServiceBudget(prisma);
+      // The current finder uses free search HTTP and local extraction. Bound research
+      // attempts without inventing a dollar charge; paid providers must reserve separately.
+      const permit = await budget.reserve('pdf_finder', 0, `${job.brandId}:${job.attempts}`);
+      const research = await researchPdf(brand, out, signal).finally(() => budget.settle(permit, 0));
+      const { evidence, extraction } = research;
       await queue.append(job, 'document', { evidence, extraction });
       const catalog = await prisma.chainItem.findMany({ where: { brandId: brand.id } });
       const restaurants = (await prisma.restaurant.findMany({ where: { menuKind: 'restaurant' } })).filter(row => identity(row) === brand.id);
@@ -157,6 +164,10 @@ export async function workPdfJob(prisma: PrismaClient, queue: PdfJobQueue, optio
   } catch (error) {
     await lease.stop();
     if (signal.aborted || error instanceof LeaseLostError) return { brandId: job.brandId, attempt: job.attempts, status: 'lease_lost' };
+    if (error instanceof DailyBudgetExceeded) {
+      await queue.deferBudget(job);
+      return { brandId: job.brandId, attempt: job.attempts, status: 'daily_cap' };
+    }
     // Provider exceptions can include private data; retained payloads contain only bounded safe diagnostics.
     const reason = error instanceof PdfVerificationError ? error.message : 'PDF execution failed; inspect source evidence and retry window';
     await queue.append(job, 'failure', { reason });
@@ -177,8 +188,9 @@ export async function runPdfCommand(prisma: PrismaClient, options: PdfOptions, s
     const outcome = await workPdfJob(prisma, queue, options, source);
     if (!outcome) break;
     outcomes.push(outcome);
-    if (outcome.status === 'lease_lost') break;
+    if (outcome.status === 'lease_lost' || outcome.status === 'daily_cap') break;
   }
   const status = outcomes.length ? outcomes.some(outcome => outcome.status !== 'completed') ? 'incomplete' : 'completed' : 'idle';
+  if (process.env['AXIOM_TOKEN']) v2Telemetry.budgets(await new SharedServiceBudget(prisma).state());
   return { status, outcomes, sourceHash: stateHash(source) };
 }
