@@ -18,7 +18,17 @@ FILES = ('driver.py', 'planner.py', 'progress.py', 'taskfiles.py', 'recovery.py'
 def sources():
     """Freeze controls and their imports at reviewed installation, before workers run."""
     files = {name: (SOURCE / name).read_bytes() for name in FILES}
-    root = SOURCE.parents[2]
+    root = SOURCE.resolve().parents[2]
+    # Pin canonical directories before workers start. Never turn a dependency
+    # link in either the installation checkout or a later candidate into a grant.
+    dependencies = []
+    for name in ('node_modules', 'apps/mobile/node_modules'):
+        path = root / name
+        if path.is_symlink() or path.resolve() != path:
+            raise ValueError(f'Install dependencies in their canonical directory before installing loop controls: {name}')
+        if path.is_dir():
+            dependencies.append(str(path))
+    files['controls/dependency-roots.json'] = (json.dumps(dependencies) + '\n').encode()
     paths = [*sorted((root / 'scripts/sim').glob('*.mjs')), root / 'scripts/sim/sim', root / 'scripts/sim/xcodebuild',
              *(root / name for name in ('scripts/verify/product-flow.mjs', 'scripts/verify/impact-plan.mjs',
                                        'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh'))]

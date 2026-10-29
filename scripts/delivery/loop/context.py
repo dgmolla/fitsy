@@ -5,12 +5,39 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import urllib.error
 import urllib.request
 
 from recovery import redact
 import host
+
+
+def blocker_reason(wt):
+    """Read only a bounded regular workspace marker, never a linked host file."""
+    invalid = 'Rejected .infra-blocked: diagnosis must be a regular workspace file with no links.'
+    directory = os.open(wt, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        try:
+            descriptor = os.open('.infra-blocked', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        except FileNotFoundError:
+            return None
+        except OSError:
+            return invalid
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                return invalid
+            reason = os.read(descriptor, 1500).decode(errors='replace').strip()
+        finally:
+            os.close(descriptor)
+        os.unlink('.infra-blocked', dir_fd=directory)
+        return reason or 'Worker reported an environment blocker without a diagnosis.'
+    except OSError:
+        return invalid
+    finally:
+        os.close(directory)
 
 
 def run(args, cwd, env=None, timeout=60):

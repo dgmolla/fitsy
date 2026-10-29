@@ -55,10 +55,20 @@ def profile(wt, directory, env):
     for key in ('JAVA_HOME', 'DEVELOPER_DIR', 'MAESTRO_BIN'):
         if env.get(key):
             reads.append(Path(env[key]).resolve())
-    # Worktrees commonly share immutable dependencies and Git object storage.
+    # The reviewed installer pins these exact roots outside candidate control.
+    # Resolving candidate links may validate a grant, never create a new one.
+    approved = json.loads(Path(control('dependency-roots.json')).read_text())
+    if not isinstance(approved, list) or any(not isinstance(path, str) or not Path(path).is_absolute()
+                                             for path in approved):
+        raise ValueError('Reinstall loop controls with approved dependency roots')
     for path in (wt / 'node_modules', wt / 'apps/mobile/node_modules'):
-        if path.exists():
-            reads.append(path.resolve())
+        if path.is_symlink() or path.exists():
+            target = path.resolve(strict=True)
+            if not target.is_relative_to(wt):
+                if str(target) not in approved or not target.is_dir():
+                    raise ValueError('Unapproved dependency root: ' + str(path.relative_to(wt)))
+                reads.append(target)
+    # Worktrees also share Git object storage.
     git = subprocess.check_output(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'],
                                   cwd=wt, env=env, text=True).strip()
     reads.append(Path(git).resolve())

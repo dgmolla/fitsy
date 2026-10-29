@@ -338,6 +338,89 @@ class DriverTest(unittest.TestCase):
                              for call in self.service_state()['calls']))
         self.assertFalse(any(call['tool']=='codex' for call in self.service_state()['calls']))
 
+    def test_dependency_symlinks_cannot_grant_host_reads_during_replay_or_publish(self):
+        private_home = self.root / 'private-home'; private_home.mkdir()
+        (private_home / 'credentials').write_text('synthetic-dependency-secret')
+        self.env['HOME'] = str(private_home)
+        for name in ('node_modules', 'apps/mobile/node_modules'):
+            with self.subTest(name=name):
+                dependency = self.wt / name
+                dependency.parent.mkdir(parents=True, exist_ok=True)
+                dependency.symlink_to(private_home, target_is_directory=True)
+                try:
+                    self.service_state(calls=[])
+                    replay = context.host_replay(self.wt, self.root / 'sim.lock', self.ev, self.env)
+                    self.assertEqual(replay['status'], 'error', replay)
+                    self.assertIn('Unapproved dependency root', replay['logs'])
+                    with self.assertRaisesRegex(ValueError, 'Unapproved dependency root'):
+                        host.publish(self.wt, 'main', self.env)
+                    calls = self.service_state()['calls']
+                    self.assertFalse(any(call['tool']=='sandbox-exec' or
+                                         call['tool']=='git' and 'push' in call['args'] for call in calls))
+                finally:
+                    dependency.unlink()
+
+    def test_dependency_links_accept_only_the_original_installed_paths(self):
+        approved = SOURCE.parents[2] / 'node_modules'
+        dependency = self.wt / 'node_modules'
+        dependency.symlink_to(approved, target_is_directory=True)
+        self.assertEqual(context.host_replay(self.wt, self.root / 'sim.lock', self.ev, self.env)['status'], 'pass')
+        dependency.unlink()
+        dependency.symlink_to(Path(self.env['HOME']), target_is_directory=True)
+        self.assertEqual(context.host_replay(self.wt, self.root / 'sim.lock', self.ev, self.env)['status'], 'error')
+
+    def test_missing_dependency_manifest_never_falls_back_to_candidate_permissions(self):
+        controls = self.root / 'missing-manifest-controls'; shutil.copytree(host.CONTROLS, controls)
+        (controls / 'dependency-roots.json').unlink()
+        (self.wt / 'node_modules').symlink_to(Path(self.env['HOME']), target_is_directory=True)
+        with mock.patch.object(host, 'CONTROLS', controls):
+            replay = context.host_replay(self.wt, self.root / 'sim.lock', self.ev, self.env)
+            self.assertEqual(replay['status'], 'error')
+            self.assertIn('Install reviewed loop controls', replay['logs'])
+            with self.assertRaisesRegex(ValueError, 'Install reviewed loop controls'):
+                host.publish(self.wt, 'main', self.env)
+        self.assertFalse(any(call['tool']=='sandbox-exec' for call in self.service_state()['calls']))
+
+    def test_symlinked_blocker_never_reaches_parking_diagnostics(self):
+        private = self.root / 'id_ed25519'
+        secret = 'synthetic-credential-canary-never-publish'
+        private.write_text(secret)
+        (self.wt / '.infra-blocked').symlink_to(private)
+        st = {'pr':585}
+        self.assertEqual(self.repair(st), 'blocked')
+        observed = self.service_state()
+        self.assertNotIn(secret, json.dumps({'state':st, 'comments':observed['comments']}))
+        self.assertIn('regular workspace file', st['blocked'])
+        self.assertEqual(private.read_text(), secret)
+        self.assertEqual(len(observed['comments']), 2)
+
+    def test_regular_blocker_is_bounded_redacted_and_consumed(self):
+        marker = self.wt / '.infra-blocked'
+        marker.write_text('Missing configuration token=synthetic-private\n' + 'x' * 6000 + 'unread-tail')
+        st = {'pr':585}
+        self.assertEqual(self.repair(st), 'blocked')
+        self.assertNotIn('synthetic-private', st['blocked'])
+        self.assertNotIn('unread-tail', st['blocked'])
+        self.assertLessEqual(len(st['blocked']), 1500)
+        self.assertFalse(marker.exists())
+
+    def test_nonregular_and_hardlinked_blockers_are_rejected(self):
+        private = self.root / 'host-credential'; private.write_text('synthetic-hardlink-secret')
+        marker = self.wt / '.infra-blocked'
+        for kind in ('directory', 'hardlink', 'fifo'):
+            with self.subTest(kind=kind):
+                if kind=='directory': marker.mkdir()
+                elif kind=='hardlink': os.link(private, marker)
+                else: os.mkfifo(marker)
+                try:
+                    st = {'pr':585}
+                    self.assertEqual(self.repair(st), 'blocked')
+                    self.assertIn('regular workspace file', st['blocked'])
+                    self.assertNotIn('synthetic-hardlink-secret', json.dumps(self.service_state()['comments']))
+                finally:
+                    if marker.is_dir(): marker.rmdir()
+                    elif marker.exists(): marker.unlink()
+
     def test_claim_wrapper_uses_only_claim_files_in_home(self):
         private_home = self.root / 'claim-home'; private_home.mkdir()
         # Portable filesystem boundary: fail any non-claim write in HOME. The
@@ -377,6 +460,26 @@ exec(compile(sys.stdin.read(), '<claim-fixture>', 'exec'))
         credential = self.root / 'host-auth.json'; credential.write_text('synthetic-host-secret')
         dotenv = self.wt / '.env.local'; dotenv.write_text('GH_TOKEN=synthetic-host-secret\n')
         link = self.wt / 'auth-link'; link.symlink_to(credential)
+        # Freeze a trusted dependency root before the candidate links exist.
+        # Direct HOME links must fail before either native or verifier execution;
+        # links nested in an approved tree still face the actual OS read denial.
+        controls = self.root / 'isolation-controls'; shutil.copytree(host.CONTROLS, controls)
+        trusted = self.root / 'shared/node_modules'; trusted.mkdir(parents=True)
+        (controls / 'dependency-roots.json').write_text(json.dumps([str(trusted.resolve())]))
+        pinned = mock.patch.object(host, 'CONTROLS', controls)
+        pinned.start(); self.addCleanup(pinned.stop)
+        (trusted / 'host-link').symlink_to(private_home, target_is_directory=True)
+        dependency_secrets = []
+        for name in ('node_modules', 'apps/mobile/node_modules'):
+            dependency = self.wt / name; dependency.parent.mkdir(parents=True, exist_ok=True)
+            dependency.symlink_to(private_home, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'Unapproved dependency root'):
+                with host.isolated(self.wt, self.env):
+                    self.fail('Candidate dependency link must not authorize host reads')
+            with self.assertRaisesRegex(ValueError, 'Unapproved dependency root'):
+                host.publish(self.wt, 'main', self.env)
+            dependency.unlink(); dependency.symlink_to(trusted, target_is_directory=True)
+            dependency_secrets.append(dependency / 'host-link/credentials.json')
         self.env.update(GH_TOKEN='synthetic-host-secret', VERCEL_TOKEN='synthetic-host-secret',
                         POSTGRES_PRISMA_URL='synthetic-host-secret')
         attempt = '''import json, os, pathlib, subprocess, sys
@@ -385,6 +488,7 @@ def denied(path):
     except PermissionError: return True
 result = {'host_file': denied(sys.argv[1]), 'dotenv': denied(sys.argv[2]), 'symlink': denied(sys.argv[3]),
           'home_file': denied(sys.argv[4]),
+          'dependency_link': denied(sys.argv[5]), 'mobile_dependency_link': denied(sys.argv[6]),
           'env': all(key not in os.environ for key in ('GH_TOKEN','VERCEL_TOKEN','POSTGRES_PRISMA_URL'))}
 pathlib.Path('native-output.txt').write_text('owned workspace output')
 child = subprocess.run([sys.executable, '-I', '-c', 'import pathlib,sys; pathlib.Path(sys.argv[1]).read_text()',
@@ -398,10 +502,11 @@ print(json.dumps(result))
             temporary = Path(selected['TMPDIR'])
             result = subprocess.run(['/usr/bin/sandbox-exec', '-f', str(temporary / 'native.sb'),
                                      sys.executable, '-I', '-c', attempt, str(credential), str(dotenv), str(link),
-                                     str(private_credential)],
+                                     str(private_credential), *(str(path) for path in dependency_secrets)],
                                     cwd=self.wt, env=selected, capture_output=True, text=True, timeout=15)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(result.stdout), dict.fromkeys(('host_file','dotenv','symlink','home_file','env','child'), True))
+            self.assertEqual(json.loads(result.stdout), dict.fromkeys(('host_file','dotenv','symlink','home_file',
+                              'dependency_link','mobile_dependency_link','env','child'), True))
             # Exercise the actual wrapper, atomic claim replacement, parent
             # directory fsync and release under the emitted OS profile.
             command = ['/usr/bin/lockf', '-t', '3600', str(Path.home() / 'fitsy-refactor/loop/sim.lock'),
@@ -432,7 +537,8 @@ print(json.dumps(result))
         # cannot replace the owner's required selections.
         verifier = self.wt / 'scripts/verify/run.mjs'; verifier.parent.mkdir(parents=True)
         verifier.write_text("import fs from 'node:fs';\nconst paths=" +
-                            json.dumps([str(credential), str(dotenv), str(link), str(private_credential)]) + ''';
+                            json.dumps([str(credential), str(dotenv), str(link), str(private_credential),
+                                        *(str(path) for path in dependency_secrets)]) + ''';
 const denied = paths.map(path => { try { fs.readFileSync(path); return false; }
   catch (error) { return error.code === 'EPERM' || error.code === 'EACCES'; } });
 denied.push(['GH_TOKEN','VERCEL_TOKEN','POSTGRES_PRISMA_URL'].every(key => !(key in process.env)));
@@ -452,7 +558,7 @@ if (denied.some(value => !value)) process.exit(1);
             published = host.publish(self.wt, 'main', {**self.env, 'PATH':real_path})
         self.assertEqual(published.returncode, 0, published.stderr)
         self.assertEqual([json.loads(line) for line in (self.wt / '.evidence/published.jsonl').read_text().splitlines()],
-                         [[True] * 5, [True] * 5])
+                         [[True] * 7, [True] * 7])
         self.assertFalse((self.wt / '.evidence/untrusted-hook-ran').exists())
 
     def test_production_credentials_are_rejected_before_native_execution(self):
@@ -981,6 +1087,10 @@ if (denied.some(value => !value)) process.exit(1);
         self.assertEqual(json.loads((host / 'source-receipt.json').read_text())['source'], plan['source'])
         installed = Path(receipt['version']) / 'controls/scripts/sim/preview-backend.mjs'
         self.assertEqual(installed.read_bytes(), (SOURCE.parents[2] / 'scripts/sim/preview-backend.mjs').read_bytes())
+        dependencies = Path(receipt['version']) / 'controls/dependency-roots.json'
+        self.assertEqual(json.loads(dependencies.read_text()),
+                         [str(SOURCE.resolve().parents[2] / name) for name in
+                          ('node_modules', 'apps/mobile/node_modules') if (SOURCE.parents[2] / name).is_dir()])
         self.assertTrue(os.access(Path(receipt['version']) / 'controls/scripts/sim/xcodebuild', os.X_OK))
         # Existing callers resolve both Python recovery and JS imports from this
         # installed version, without importing candidate-controlled modules.
@@ -998,6 +1108,25 @@ if (denied.some(value => !value)) process.exit(1);
         progress = subprocess.run([sys.executable,'-B',str(host/'progress.py')],env=self.env,text=True,capture_output=True,timeout=10)
         self.assertEqual(progress.returncode,0,progress.stderr)
         self.assertNotIn('NOTES-priority:',(self.root/'loop-progress.md').read_text())
+        # The original installed entrypoint must consume the frozen permissions,
+        # even when a later worker replaces its dependency path.
+        private_home = self.root / 'installation-home'; private_home.mkdir()
+        (self.wt / 'node_modules').symlink_to(private_home, target_is_directory=True)
+        code = ('import os, runpy, sys; loaded=runpy.run_path(sys.argv[1],run_name="fixture"); '
+                'loaded["context"].host.profile(sys.argv[2],sys.argv[3],dict(os.environ))')
+        rejected = subprocess.run([sys.executable,'-B','-c',code,str(host/'driver.py'),str(self.wt),str(self.root)],
+                                  env=self.env,text=True,capture_output=True,timeout=10)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn('Unapproved dependency root', rejected.stderr)
+
+    def test_installer_rejects_dependency_symlinks_before_recording_permissions(self):
+        source = self.root / 'installation/scripts/delivery/loop'; source.mkdir(parents=True)
+        for name in install.FILES:
+            shutil.copyfile(SOURCE / name, source / name)
+        (source.parents[2] / 'node_modules').symlink_to(Path(self.env['HOME']), target_is_directory=True)
+        with mock.patch.object(install, 'SOURCE', source):
+            with self.assertRaisesRegex(ValueError, 'canonical directory'):
+                install.sources()
 
     def test_installer_refuses_an_active_owner(self):
         import fcntl

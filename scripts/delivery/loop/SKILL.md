@@ -21,6 +21,8 @@ Retain the concrete blocker, selected skill/tool, attempted recovery and next ac
 
 Install reviewed recovery controls and their imports outside every candidate's writable roots before starting workers.
 The installer freezes the canonical simulator controls, policy files and JavaScript dependencies alongside the Python driver.
+It records canonical dependency directories in the installed `controls/dependency-roots.json` before workers start and refuses linked installation directories.
+Candidate dependency links may resolve only within their workspace or to those exact recorded roots; a missing manifest requires reviewed reinstallation, never a candidate-derived grant.
 Privileged backend selection runs only that installed snapshot, with core environment and Vercel authentication; it never evaluates candidate JavaScript or inherits startup selectors.
 Coverage selection runs only installed controls and treats candidate source as data.
 Native replay uses the installed controls with an explicit DEV environment and an enforced macOS sandbox, including every Metro, Expo and fixture child.
@@ -30,7 +32,7 @@ The sandbox denies host credential files, other processes' environments, Keychai
 Atomic simulator claims stage only `.fitsy-sim-claim.json.<random>.tmp` in HOME, on the claim's filesystem.
 The profile permits those staging names and read access to the HOME directory for fsync; it does not grant access to HOME's other files.
 An unavailable sandbox is an environment error with no unsandboxed fallback; use the existing host owner for the exact-source replay.
-The canonical host media lane exercises real credential-file, dotenv, symlink and child-process isolation plus actual simulator claim, renewal and release before writing its source-bound receipt.
+The canonical host media lane exercises credential-file, dotenv, dependency-link and child-process isolation plus actual simulator claim, renewal and release before writing its source-bound receipt.
 Model workers receive only core environment variables and Codex provider authentication, matching `local-dispatcher.py`'s worker allowlist.
 Set the host's existing `FITSY_XCTEST_SIM_UDID` to an explicitly owned compatible device.
 Prepare a clean merge-base checkout and set optional `FITSY_LOOP_MAIN_CHECKOUT` for differential replay.
@@ -66,6 +68,8 @@ An empty host replay response is an environment error with its exit code and red
 An unavailable merge-base comparison parks on `baseline`; preparing the checkout permits periodic re-triage without requiring main to advance.
 Reset active repair counters on unpark and retain additive historical attempts.
 Parking comments go to the PR and issue once per episode; failed publication stays pending for the same owner.
+Read worker `.infra-blocked` diagnoses through a bounded, nonblocking, no-follow descriptor and accept only regular files with one link.
+Linked or nonregular markers produce a fixed rejection diagnosis without reading or publishing their contents.
 Human or release approval boundaries remain unchanged.
 
 Run `python3 -B scripts/delivery/loop/loop.test.py` after any recovery-policy change.

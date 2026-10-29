@@ -199,9 +199,8 @@ def repair_sim(name, wt, st, s, ev, meta, prompt):
     record_attempt(st,'code-repair',strategy=strategy,head=ev.get('head'))
     save(s)
     codex(wt,repair+COMMON,f'{name}-simfix{sr}-{strategy}',images=ev['images'])
-    infra=Path(wt)/'.infra-blocked'
-    if infra.exists():
-        reason=infra.read_text()[:1500]; infra.unlink()
+    reason=context.blocker_reason(wt)
+    if reason is not None:
         return block(name,st,s,reason,{**ev,'sim_state':'error'},meta)
     # Only the host runner can validate the repaired journey before commit/push.
     replay=context.host_replay(wt,L+'/sim.lock',ev,ENV)
