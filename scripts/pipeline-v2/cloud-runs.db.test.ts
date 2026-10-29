@@ -74,7 +74,8 @@ suite('cloud runs with real PostgreSQL, shared caps and independent worker conne
     expect(await runs.state(runId)).toMatchObject({ costUsd:0.002,reservedUsd:0 });
   });
   test('graceful scale-down releases the lease immediately, preserving its journal and fencing the old token', async () => {
-    await runs.start(request);
+    // Use one job: release makes it eligible now, without priority over older pending jobs.
+    await runs.start({ ...request, maxHexes: 1 });
     const queue = new HexJobQueue(db), job = (await queue.claim(runId,'old-replica'))!;
     await queue.append(job,{ event:'source',sourceHash:'retained' });
     await queue.release(job);
