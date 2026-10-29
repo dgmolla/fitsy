@@ -53,6 +53,10 @@ export function deployProductionMigrations(env = process.env) {
     // refuses failed/unresolved migrations, as in the original build caller.
     spawnSync('npx', [...args, 'status', '--schema', schema], options);
     const result = spawnSync('npx', [...args, 'deploy', '--schema', schema], options);
+    if (result.status !== 0) console.error(
+      'TL;DR: Production migrations stopped; recovery requires separate authorization.\n' +
+      'Retain the Prisma error; inspect scripts/deploy/migration-failure-audit.sql and docs/engineering/devops/routine-production.md before recovery; no automatic resolve or retry',
+    );
     return result.status ?? 1;
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
