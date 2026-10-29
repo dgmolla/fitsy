@@ -171,11 +171,12 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
     const safeMessages = ['TYPESAFE_API_KEY is required', 'Selected hex has no discovered UE restaurants',
       'Jev overflow or incomplete estimate; leave the hex pending', 'Menu has no valid sourced food; leave the hex pending',
       'No sourced menus; leave the hex pending', 'Nutrition target in estimator input'];
-    const failureReason = journal.dailyCap ? `Daily ${journal.dailyCap} budget exhausted; resume next UTC day` : journal.unknown ? 'Unknown Jev spend; retain and reconcile the journal before resuming'
+    const failureReason = journal.runCap ? 'Cumulative run budget unavailable; retain the hex for operator inspection'
+      : journal.dailyCap ? `Daily ${journal.dailyCap} budget exhausted; resume next UTC day` : journal.unknown ? 'Unknown Jev spend; retain and reconcile the journal before resuming'
       : journal.stopped ?? (error instanceof Error && safeMessages.includes(error.message) ? error.message
         : error instanceof Error && error.name === 'UeUnexpectedError' ? 'UE menu fetch or parsing failed'
           : 'Execution or database failure; inspect the private command diagnostics before resuming');
-    const failed = { ...report(journal.dailyCap ? 'daily_cap' : journal.stopped?.includes('spend cap') ? 'spend_cap' : 'failed'), failure: error instanceof Error ? error.name : 'UnknownError', failureReason };
+    const failed = { ...report(journal.runCap ? 'run_cap' : journal.dailyCap ? 'daily_cap' : journal.stopped?.includes('spend cap') ? 'spend_cap' : 'failed'), failure: error instanceof Error ? error.name : 'UnknownError', failureReason };
     await journal.append({ event: 'failed', at: new Date().toISOString(), report: failed });
     return failed;
   } finally { await journal.append({ event: 'attempt_end', at: new Date().toISOString(), wallMs: performance.now() - start }); }

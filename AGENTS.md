@@ -66,6 +66,7 @@ fitsy/
 | Preload pipeline (UE-first) | `scripts/preload-ue-first.ts` | Uber Eats discovery and menus → reviewed official or Haiku macros → PostgreSQL (H3 hex checkpoints, Axiom telemetry) |
 | Pipeline v2 DEV proof | `scripts/preload-v2.ts` | Explicit single LA hex, reviewed exact official matches + Jev, $5 journal cap; [runbook](docs/engineering/pipeline/pipeline-v2-dev-poc.md) |
 | Pipeline v2 shared DEV queue | `scripts/preload-v2.ts enqueue/worker` | Leased hex jobs, shared paid-call replay, atomic completion and bounded retries; [runbook](docs/engineering/pipeline/pipeline-v2-queue.md) |
+| Pipeline v2 cloud DEV worker | `scripts/pipeline-cloud-worker.ts` | Private service, immutable fleet run limits, health and graceful shutdown; [deployment and acceptance](docs/engineering/pipeline/pipeline-v2-cloud-worker.md) |
 | API backend | `apps/api/` | Query + filter preloaded data; only auth/subscription provider lookups at request time |
 
 Architecture: `docs/engineering/architecture/system-design.md` (+ `auth.md`, `api-reference.md`). Pipeline: `docs/engineering/pipeline/` (runbook, ue-first-pipeline, macro-accuracy-recommendations-2026-08-16).
