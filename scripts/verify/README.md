@@ -173,6 +173,9 @@ GitHub requires `Verify` and `AI review` on the current PR head and owns heavy v
 Every selected check executes on each invocation and reports its actual exit status.
 An empty check selection or a missing registry script fails verification.
 The L2 test check runs complete affected API, scripts and mobile groups, including files already run in the focused selection.
+It also runs `npm test -w packages/shared` for pure contracts on every selection.
+Shared matching and macro tests can be selected directly with `focused-tests.mjs --set packages/shared/src/utils/macroScoring.test.ts`.
+Each app and shared package documents its single test command in its own `AGENTS.md`; API test commands generate the current Prisma client first.
 Unknown comparison history expands full-suite selection to every group.
 An empty group selection or an engine reporting zero passing tests fails the test check.
 Temporary engine reports count the current execution and are removed afterward.

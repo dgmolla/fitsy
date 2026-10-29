@@ -10,6 +10,7 @@ import { passingTests } from './test-results.mjs';
 
 const file = join(repository, '.evidence/verify/focused-tests.json');
 const selectionHelp = 'select meaningful focused reproduction/regression tests with focused-tests.mjs --set <test paths>';
+const jestWorkspaces = ['apps/api', 'apps/mobile', 'packages/shared', 'scripts'];
 function selection(paths) {
   if (!Array.isArray(paths) || !paths.length) throw new Error(selectionHelp);
   return [...new Set(paths)].map(path => {
@@ -17,7 +18,7 @@ function selection(paths) {
         !/\.(?:test\.(?:ts|tsx|mjs|py)|spec\.(?:ts|tsx))$/.test(path) || !existsSync(resolve(repository, path))) {
       throw new Error(`invalid focused test path: ${path}`);
     }
-    if (/\.(?:ts|tsx)$/.test(path) && !['apps/api', 'apps/mobile', 'scripts'].some(workspace => path.startsWith(workspace + '/'))) {
+    if (/\.(?:ts|tsx)$/.test(path) && !jestWorkspaces.some(workspace => path.startsWith(workspace + '/'))) {
       throw new Error(`unsupported focused test workspace: ${path}`);
     }
     return path;
@@ -38,7 +39,7 @@ async function run(paths, pattern) {
     let key;
     if (path.endsWith('.mjs')) key = 'node';
     else if (path.endsWith('.py')) key = 'python';
-    else key = ['apps/api', 'apps/mobile', 'scripts'].find(workspace => path.startsWith(workspace + '/'));
+    else key = jestWorkspaces.find(workspace => path.startsWith(workspace + '/'));
     if (!key) throw new Error(`unsupported focused test workspace: ${path}`);
     const entries = groups.get(key) ?? []; entries.push(path); groups.set(key, entries);
   }

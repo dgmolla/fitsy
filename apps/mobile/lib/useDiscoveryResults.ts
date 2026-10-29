@@ -159,11 +159,12 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         if (isOnboardingPreview) trackPreviewFetchFailed(err);
       } finally {
         clearTimeout(timeout);
-        if (!isCurrent()) return;
-        setCompletedContext(requestContext);
-        setRefreshing(false);
-        setLoading(false);
-        shuffleInFlight.current = false;
+        if (isCurrent()) {
+          setCompletedContext(requestContext);
+          setRefreshing(false);
+          setLoading(false);
+          shuffleInFlight.current = false;
+        }
       }
     },
     [isOnboardingPreview, rememberShown],
@@ -257,9 +258,10 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     } catch {
       // Existing rows remain usable; the next scroll retries pagination.
     } finally {
-      if (generation !== fetchGeneration.current) return;
-      isLoadingMoreRef.current = false;
-      setLoadingMore(false);
+      if (generation === fetchGeneration.current) {
+        isLoadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
     }
   }, [
     query,

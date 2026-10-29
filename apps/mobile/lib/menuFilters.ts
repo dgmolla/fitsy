@@ -1,7 +1,6 @@
 /**
  * Filter, sort, and tag-derivation helpers for the restaurant detail screen.
- * Pulled out of `[id].tsx` so the screen stays under the 300-line limit and
- * the predicates are unit-testable in isolation if we ever add tests for them.
+ * Pure predicates are exercised in menuFilters.test.ts without a screen render.
  *
  * The menu API does not yet expose `MenuItem.dietaryTags` (the column exists
  * in Postgres but the response shape is intentionally out of scope for S-229),

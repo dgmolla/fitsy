@@ -1,11 +1,6 @@
-import { calculateDailyMacros, calculateMacros, dailyToPerMealMacros, MEALS_PER_DAY } from './macroCalculator';
+import { calculateDailyMacros, calculateMacros, dailyToPerMealMacros } from './macroCalculator';
 import { calculateSettledDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
-import { calculateSuggestedCalories, type Goal } from './onboardingStorage';
-
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  __esModule: true,
-  default: { getItem: jest.fn(), setItem: jest.fn() },
-}));
+import type { Goal } from './onboardingStorage';
 
 const goals: Goal[] = ['build_muscle', 'lose_fat', 'performance', 'maintain'];
 
@@ -40,18 +35,22 @@ describe('adult macro recommendations', () => {
   });
 
   test('retains 3.5 meal equivalents and rounds only after division', () => {
-    expect(MEALS_PER_DAY).toBe(3.5);
     expect(dailyToPerMealMacros(calculateDailyMacros(2400, 'build_muscle'))).toEqual({
       calories: 687, protein: 26, carbs: 94, fat: 23,
     });
     expect(dailyToPerMealMacros({ calories: 2000, protein: 120.6, carbs: 250, fat: 60 }).protein).toBe(34);
   });
 
-  test.each(goals)('profile calculation uses shared %s policy and calorie calculation', (goal) => {
-    const profile = { goal, weightKg: 75, heightCm: 170 };
-    expect(calculateMacros(profile)).toEqual(
-      dailyToPerMealMacros(calculateSettledDailyMacros(calculateSuggestedCalories(profile), goal)),
-    );
+  test.each([
+    ['maintain', { calories: 753, protein: 23, carbs: 109, fat: 25 }],
+    ['build_muscle', { calories: 819, protein: 31, carbs: 113, fat: 27 }],
+    ['lose_fat', { calories: 604, protein: 21, carbs: 85, fat: 20 }],
+    ['performance', { calories: 757, protein: 25, carbs: 117, fat: 21 }],
+  ] as const)('profile calculation delivers the reference %s meal without native or auth mocks', (goal, expected) => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-06-15T12:00:00Z'));
+    try {
+      expect(calculateMacros({ goal, birthday: '1996-01-15', weightKg: 75, heightCm: 175, activity: 'active', sex: 'male' })).toEqual(expected);
+    } finally { jest.useRealTimers(); }
   });
 
   test.each(goals)('%s stays at or below 40 g per meal over every generated daily calorie', goal => {

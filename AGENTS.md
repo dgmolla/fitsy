@@ -7,17 +7,10 @@ nearby restaurants with specific meals matching their macronutrient
 targets, with optional filtering by cuisine, chain vs. mom-and-pop,
 and more.
 
-## Current State
+## Where to start
 
-Last audited: 2026-06-12 (docs audit executed; proposal archived under `docs/engineering/archive/`).
-
-**Built and shipped**: Prisma schema + all API routes (filter expansion + `requireAuth` JWT middleware on reads), full mobile auth (Apple + Google Sign-In via Supabase, JWKS-verified), 15-screen onboarding, GPS via `expo-location` (wired into search), search/detail/saved/profile screens (editorial cream palette), UE-first preload pipeline (Uber Eats discovery and menus, reviewed official facts or estimates), search 60× faster (LATERAL + denormalized MenuItem macros), PostHog analytics, security hardening, RevenueCat subscriptions wired on Test Store, EAS build config.
-
-**DB state**: Staging populated (verified 2026-06-12) — 9,327 restaurants, 676,137 menu items, 676,137 MacroEstimates (haiku ~85%, fatsecret ~15%; 0 NULL source, 0 NULL denormalized macros), 0 duplicates.
-
-**Blocked on human**: EAS Build → App Store submission (Apple Developer account + ASC products); RevenueCat production (ASC products, paywall, bundle-id, webhook deploy). No real users yet.
-
-**Next**: App Store submission → launch → first 10 users.
+Read [API](apps/api/AGENTS.md), [mobile](apps/mobile/AGENTS.md), or [shared](packages/shared/AGENTS.md) instructions for package commands and boundaries.
+Current issue scope, deployment state, evidence and next actions belong in the issue or task handoff.
 
 ---
 
@@ -33,7 +26,7 @@ API keys, macro pipeline, and caching server-side.
 ### Repository Structure
 ```
 fitsy/
-├── CLAUDE.md
+├── AGENTS.md
 ├── apps/
 │   ├── mobile/        # React Native (Expo) — iOS/Android client
 │   │   ├── app/       # Expo Router screens
@@ -79,7 +72,7 @@ Architecture: `docs/engineering/architecture/system-design.md` (+ `auth.md`, `ap
 npm run dev:env        # Pull DEV env creds (api .env.local, mobile .env.development.local, .env.dev)
 npm run dev:api        # API dev server (talks to the dev DB by default)
 npm run dev:mobile     # Expo dev client
-npm test               # Run tests
+npm test               # All workspace tests; package commands are in their AGENTS.md
 npm run perf:check     # Stable performance invariants (no network timing gate)
 npm run perf:bundle    # Local production iOS JS size budget; never publishes
 npm run verify:dependencies # Live full and production dependency audits with retained evidence
@@ -126,8 +119,13 @@ vercel env add KEY prod    # Add/update a secret
 - **Database**: Prisma, always use transactions for multi-record mutations
 - **Menu identity**: Preserve provider-qualified source IDs and stable Fitsy dish IDs; follow the [persistence and cutover contract](docs/engineering/backend/idempotent-preload-spec.md).
 - **Error responses**: `{ "error": "message" }` with appropriate HTTP status codes
-- **Tests**: Write tests for new endpoints. Mock only external services, never your own code.
+- **Tests**: Assert observable behavior with independent expected outcomes and deterministic fixtures.
+  Mock external boundaries, keep core logic real, and use the disposable database for persistence behavior.
 - **API calls**: All external API calls go through service wrappers in `apps/api/services/`
+- **Search scope**: Ranking, qualification, query relevance, filters, pagination and serving interpretation are product behavior.
+  Onboarding, presentation, paywall and marketing work must preserve that policy unless the issue explicitly requests a search change.
+  For a search fix, reproduce the real journey and verify preview and authenticated search with default targets, common cravings such as pizza, restaurant/cuisine names, sparse or absent matches, clearing the query and affected pagination.
+  API agreement or a successful empty state alone does not prove useful search behavior.
 - **Docs structure**: `docs/` children are domains (product, engineering, design, gtm, release); subdirs are grandchildren.
   Superseded/historical docs live in each domain's `archive/`.
   Index + conventions: `docs/README.md`.
@@ -144,7 +142,7 @@ vercel env add KEY prod    # Add/update a secret
 The human-selected standalone Pstack orchestrate-delivery, ship-branch and verify-fitsy skills supplied by the coordinator control orchestration and shipping.
 Repository documents retain product, supported command, security/data and release contracts.
 Follow [model routing and delegation](docs/engineering/devops/agent-model-routing.md) for configured model and independent review protections.
-The installed local AI reviewer owns the two-attempt limit per head SHA; individual executions are bounded by workflow and provider timeouts.
+The installed local reviewer owns source-bound independent review; standing human execution exceptions supersede historical attempt limits.
 Preserve historical review records needed by unfinished tasks.
 
 ## Session Discipline
