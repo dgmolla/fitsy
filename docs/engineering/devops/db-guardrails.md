@@ -86,9 +86,11 @@ The following DEV live catalog results matched that migration; PROD application 
 | `_prisma_migrations` | RLS enabled; no direct client grants | RLS enabled |
 | `_marketing_send` | RLS enabled; no direct client grants | RLS enabled |
 | `_review_watch` | RLS enabled; no direct client grants | RLS enabled |
-| `spatial_ref_sys` | PostGIS extension metadata, outside application migration inventory | RLS disabled |
+| `spatial_ref_sys` | PostGIS extension metadata; client schema access restricted by `20261029000000_private_public_schema` | RLS disabled in the original audit |
 
 The extension metadata table is not user/application data and was not modified.
+The [PostGIS metadata review](../../../scripts/security/README.md#postgis-metadata-boundary) records the effective client privileges, supported schema-owner restriction, ownership exception and disposable regressions.
+Schema restrictions are versioned source, not evidence of live application; rerun the read-only audit after deployment.
 Use `scripts/security/supabase-audit.sql` inside its read-only transaction for a future separately authorized live PROD audit with a genuinely read-only credential.
 
 ## Script mutation boundary

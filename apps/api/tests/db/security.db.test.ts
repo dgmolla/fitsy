@@ -48,9 +48,9 @@ describeIfDb('server-only application data (real Postgres)', () => {
       return tx.$queryRawUnsafe(`${fixtureCatalogs}${grantQuery}`);
     });
     expect(grants).toEqual([
-      { table_name: 'anon_insert', grantee: 'anon', privilege_type: 'INSERT' },
-      { table_name: 'authenticated_update', grantee: 'authenticated', privilege_type: 'UPDATE' },
-      { table_name: 'public_select', grantee: 'PUBLIC', privilege_type: 'SELECT' },
+      { table_name: 'anon_insert', grantee: 'anon', privilege_type: 'INSERT', grantor: 'server', is_grantable: false },
+      { table_name: 'authenticated_update', grantee: 'authenticated', privilege_type: 'UPDATE', grantor: 'server', is_grantable: false },
+      { table_name: 'public_select', grantee: 'PUBLIC', privilege_type: 'SELECT', grantor: 'server', is_grantable: false },
     ]);
   });
 });
