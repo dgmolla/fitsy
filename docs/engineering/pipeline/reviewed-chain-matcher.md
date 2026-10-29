@@ -48,7 +48,8 @@ They are indexed once per run; an item match makes no database, network, or LLM 
 The caller must supply a verified brand ID.
 The API serving path does not run this matcher.
 
-The shared source priority is merchant > reviewed official > FatSecret > FFN > Haiku, in both SQL and TypeScript.
+The shared source priority remains merchant > reviewed official > retained historical published sources > estimates, in both SQL and TypeScript.
+Retiring a provider does not rewrite its stored estimates or change the compatibility ranking in `macroProvenance.ts`.
 
 Catalog code alone does not change serving data.
 Pipeline and existing-menu update adapters both call this module; existing-menu updates preserve Fitsy IDs and metadata.

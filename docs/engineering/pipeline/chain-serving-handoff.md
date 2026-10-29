@@ -1,6 +1,7 @@
 # Reviewed chains: April updates and new hexes
 
-The same reviewed catalog matcher supplies both paths. The pilot is WaBa Grill and Yoshinoya; adding a reviewed alias enables that brand for UE-first chain enrichment. Reviewed brands deliberately drop FatSecret as a menu fallback: if UE has no menu, the location is skipped and its existing menu is untouched. Other brands retain the existing resolver order. A full enrichment rerun makes UE authoritative and removes items absent from that menu, unsetting saved links to removed items. This pilot uses the nutrition-only adapter for April; it does not run menu refresh.
+The same reviewed catalog matcher supplies both paths. The pilot is WaBa Grill and Yoshinoya; adding a reviewed alias enables that brand for UE-first chain enrichment. Every brand and independent restaurant uses its UE location menu.
+If UE has no menu, the location is skipped and its existing menu is untouched. A full enrichment rerun makes UE authoritative and removes items absent from that menu, unsetting saved links to removed items. This pilot uses the nutrition-only adapter for April; it does not run menu refresh.
 
 ```mermaid
 flowchart LR
@@ -17,7 +18,7 @@ flowchart LR
 
 - **April:** this adapter gets its production caller in the separate pilot runner. Validate the current catalog, brand and complete menu identity, then add/update the official estimate and recompute winning macros in one serializable transaction. IDs, membership, saved references, tags, prices and photos remain intact. A changed plan is rejected; re-planning a completed update is a no-op. Merchant estimates retain priority. The caller must supply the captured, ordered estimate snapshot; the adapter returns the committed item and ordered estimates for journaling.
 - **New hex:** resolve a unique verified brand, fetch its UE menu, match once against the run's catalog index, estimate only unmatched items, and persist the brand with the menu and checkpoint. The catalog never creates menu membership. Existing dietary tags survive official nutrition replacement; new official rows have no inferred dietary tags. Per-location logs count reviewed matches so alias drift is visible.
-- **Unmatched items:** reviewed brands use Haiku for unreviewed UE items. FatSecret values need a separate serving match before reuse; a higher source rank does not establish the right serving. A verified chain can legitimately have zero matches in this partial pilot, so brand identity still persists and the per-location match count remains visible in logs.
+- **Unmatched items:** reviewed brands use Haiku for unreviewed UE items. Historical values retain provenance and source priority; a higher source rank does not establish the right serving. A verified chain can legitimately have zero matches in this partial pilot, so brand identity still persists and the per-location match count remains visible in logs.
 - **Serving guard:** preserve exact UE calorie labels, ranges and customization flags. Ranges, malformed labels and calorie conflicts abstain. A named standard serving is not a claim about every optional customization.
 - **Provenance:** official estimates store the catalog row, approval digest, PDF digest/URL, serving and menu fingerprint.
   A non-official write preserves a still-valid reviewed binding; a changed serving, approval, identity or fact invalidates that stale estimate.

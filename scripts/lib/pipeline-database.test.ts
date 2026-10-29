@@ -44,9 +44,10 @@ test('actual pipeline CLI rejects the administrator before driver construction',
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-pipeline-role-'));
   const log = join(directory, 'connections');
   try {
-    const result = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/backfill-chain-flag.ts', '--dry-run'], {
+    const result = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/preload-ue-first.ts', '--dry-run'], {
       cwd: root, encoding: 'utf8', timeout: 10_000,
       env: { ...process.env, PIPELINE_DATABASE_URL: url('postgres'),
+        ANTHROPIC_API_KEY: 'test-key', UE_LOC_COOKIE: 'test-cookie',
         NODE_OPTIONS: `--require=${join(root, 'scripts/test-fixtures/database-client-recorder.cjs')}`,
         FITSY_TEST_DB_CLIENT_LOG: log },
     });

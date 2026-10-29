@@ -4,7 +4,6 @@ import { approvedChainRow, buildChainMatcher, chainBindingFingerprint, type Appr
 // Offline adapters need the pure ordering utility without the shared barrel's environment initialization.
 import { macroWinnerSqlOrder } from "../../../packages/shared/src/utils/macroProvenance";
 import { MenuSourceResolver } from "./menuSources/resolver";
-import { FatSecretSource } from "./menuSources/fatSecretSource";
 import { UeApiDirectSource, type UeConcurrencyGate } from "./menuSources/ueApiDirectSource";
 import type { MacroData, StructuredMenuItem } from "./menuSources/types";
 import type { ChainLocation } from './chainGeography';
@@ -47,11 +46,11 @@ export async function loadChainServing(prisma: Pick<PrismaClient, "brand" | "cha
   }, match: matcher };
 }
 export type ChainServing = Awaited<ReturnType<typeof loadChainServing>>;
-/** Reviewed brands require location menu evidence. Empty UE menus have no national-catalog fallback; unmatched UE items use estimation, not unverified FatSecret servings. */
+/** Every location requires its UE menu. Reviewed catalog facts supply nutrition only for matched servings. */
 export function chainMenuResolver(restaurant: { name: string; brandId?: string | null; storeUuid: string } & ChainLocation, runtime: ChainServing, gate?: UeConcurrencyGate) {
   const brandId = runtime.brandId(restaurant);
   return { brandId, resolver: new MenuSourceResolver([
-    ...(brandId ? [] : [new FatSecretSource()]), new UeApiDirectSource(restaurant.storeUuid, {}, gate),
+    new UeApiDirectSource(restaurant.storeUuid, {}, gate),
   ]), resolveMacros: (items: StructuredMenuItem[], estimate: Parameters<typeof resolveChainMacros>[3]) =>
     resolveChainMacros(items, brandId, runtime.match, estimate, restaurant) };
 }

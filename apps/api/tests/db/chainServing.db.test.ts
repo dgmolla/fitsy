@@ -19,6 +19,24 @@ suite("reviewed chains through April and real new-hex persistence", () => {
     await p.pipelineCompletedHex.deleteMany({ where: { runId: scope } });
     await p.$disconnect();
   });
+  test.each([false, true])('refresh preserves historical estimates and the existing chain flag (%s)', async chainFlag => {
+    const restaurant = await p.restaurant.create({ data: { id: randomUUID(), storeUuid: randomUUID(), name: 'Historical Kitchen',
+      source: 'ue_feed', address: 'Fixture', lat: 34.05, lng: -118.25, cuisineTags: [], chainFlag } });
+    restaurants.push(restaurant.id);
+    const item = { name: 'Chicken Bowl', sourceItemId: 'ubereats:historical-bowl' };
+    const historical = { calories: 650, proteinG: 40, carbsG: 75, fatG: 21, confidence: 'HIGH' as const, source: 'fatsecret', dietaryTags: [] };
+    await persistItems(restaurant.id, [{ item, macro: historical }], p);
+    const before = await p.menuItem.findFirstOrThrow({ where: { restaurantId: restaurant.id } });
+    const estimate = await p.macroEstimate.findUniqueOrThrow({ where: { menuItemId_source: { menuItemId: before.id, source: historical.source } } });
+    await persistHex(scope, `historical-${chainFlag}`, [{ restaurantId: restaurant.id, menuHash: 'refresh',
+      items: [{ item, macro: { ...historical, calories: 500, source: 'jev', confidence: 'LOW' } }] }], p, { validateInTx: validateHexInTx });
+    expect(await p.macroEstimate.findUniqueOrThrow({ where: { id: estimate.id } })).toEqual(estimate);
+    expect(await p.menuItem.findUniqueOrThrow({ where: { id: before.id } })).toMatchObject({
+      sourceItemId: item.sourceItemId, calories: historical.calories, proteinG: historical.proteinG, carbsG: historical.carbsG, fatG: historical.fatG,
+    });
+    expect(await p.macroEstimate.count({ where: { menuItemId: before.id, source: 'jev' } })).toBe(1);
+    expect(await p.restaurant.findUniqueOrThrow({ where: { id: restaurant.id } })).toMatchObject({ chainFlag });
+  });
   test.each([false, true])("official nutrition preserves dietary discovery without changing same-name indie items (bulk=%s)", async bulk => {
     const ids = [randomUUID(), randomUUID()]; restaurants.push(...ids);
     for (const id of ids) {
@@ -111,10 +129,9 @@ suite("reviewed chains through April and real new-hex persistence", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       fetchSpy.mockImplementation(async () => new Response(JSON.stringify(fixture.ue)));
       expect((await resolver.resolve(request.name, request.address)).items).toEqual([ue]);
-      fetchSpy.mockResolvedValueOnce(new Response("missing", { status: 404 }));
       const unreviewed = chainMenuResolver({ ...request, name: "Unrelated Deli" }, runtime);
       expect(unreviewed.brandId).toBeUndefined();
-      expect(await unreviewed.resolver.resolve("Unrelated Deli", "Fixture")).toMatchObject({ found: true, items: [ue], attempts: [{ sourceId: "fatsecret", status: "not_found" }, { sourceId: "ue_api_direct", status: "ok" }] });
+      expect(await unreviewed.resolver.resolve("Unrelated Deli", "Fixture")).toMatchObject({ found: true, items: [ue], attempts: [{ sourceId: "ue_api_direct", status: "ok" }] });
     } finally { fetchSpy.mockRestore(); }
     await p.restaurant.update({ where: { id: aprilRestaurant.id }, data: { brandId: null } });
     await expect(applyAprilChainMatch(p, await backup(after), approved)).resolves.toMatchObject({ id: after.id });

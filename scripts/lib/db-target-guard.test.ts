@@ -71,15 +71,16 @@ async function cli(file: string, args: string[], url: string, extra: NodeJS.Proc
   });
 }
 
-test("actual backfill CLI refuses forged CI before constructing a database client", async () => {
+test("actual preload CLI refuses forged CI before constructing a database client", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-write-guard-'));
   const log = join(directory, 'connections');
   const transport = { NODE_OPTIONS: `--require=${join(root, 'scripts/test-fixtures/database-client-recorder.cjs')}`,
     FITSY_TEST_DB_CLIENT_LOG: log };
   try {
     const url = `postgresql://postgres.${PROD_PROJECT_REF}:synthetic@${loopback}:1/postgres`;
-    const result = await cli("scripts/backfill-chain-flag.ts", ["--dry-run", "--prod"], url, {
+    const result = await cli("scripts/preload-ue-first.ts", ["--dry-run", "--prod"], url, {
       ...transport, GITHUB_ACTIONS: "true", FITSY_ALLOW_PROD_WRITE: "1",
+      ANTHROPIC_API_KEY: "test-key", UE_LOC_COOKIE: "test-cookie",
     });
     expect(result.code).toBe(1); expect(result.output).toContain("DB_WRITE_REFUSED");
     expect(result.output).not.toContain("synthetic@"); expect(existsSync(log)).toBe(false);

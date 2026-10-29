@@ -103,7 +103,7 @@ Rationale:
   The ground truth (`ChainItem`) already stores protein/carbs/fat, and the calibration constants (`CARB_MULT`/`FAT_MULT`) act on macros, not calories - so a calorie-only metric literally cannot see whether the calibration helps or hurts.
   Score MdAPE + catastrophic rate per macro, and keep calories as the headline for comparability with rounds 1-4.
 - **Indie ground truth: build a small golden set by hand rather than waiting for a data source that does not exist.**
-  Pick ~50-100 indie items from the LA DB where truth is obtainable (menu-published calories, chain-adjacent indies, or hand-verified FatSecret generic matches), commit them as `ground-truth-indie.json`, and treat the set as a *sanity anchor*, not a statistical instrument.
+  Pick ~50-100 indie items from the LA DB where truth is obtainable (menu-published calories, chain-adjacent indies, or independently verified published serving facts), commit them as `ground-truth-indie.json`, and treat the set as a *sanity anchor*, not a statistical instrument.
 - **The per-metro certification harness is no longer optional - it is the rollout gate.**
   Under the top-10 direction, "can we turn on city X" is a question that gets asked ~9 times, and answering it ad hoc each time guarantees it degrades into vibes.
   Define it once as a script: for a new metro, (a) run the D10 coverage audit (UE discovery vs Overture ground truth on sampled hexes), (b) spot-check N chain items against canonical/official values, (c) hand-check a small indie sample, (d) run the divergence detector, and emit a pass/fail summary.
@@ -174,7 +174,7 @@ The metro direction promotes two items that were previously deferred: the Batch 
 | 1 | Ship the name-echo + control-char fix to main | **Now** (Decision 0) | Live production bug; stands alone |
 | 2 | Real cost telemetry (`message.usage` → per-hex/per-run events) | **Now** | Small; makes the already-provisioned Axiom cost monitors functional (D7); also removes the vestigial `braveSearch`/`firecrawl` zero-fields |
 | 3 | Per-item dedup (skip items with a fresh `MacroEstimate`; replace whole-menu `menuHash` gating) | **Before metro #2** | Refresh is about to become the pipeline's recurring workload across 10 metros; ~10x waste per refresh today; pure win; low risk |
-| 4 | Canonical short-circuit ahead of FatSecret/Haiku | **With D9 Phase 3** | The structural accuracy fix AND the coverage unlock (D10); belongs in the same change as the lookup wiring |
+| 4 | Canonical short-circuit ahead of estimation | **With D9 Phase 3** | The structural accuracy fix AND the coverage unlock (D10); belongs in the same change as the lookup wiring |
 | 5 | Batch API | **At the first metro onboarding** | Flat 50% off on builds that are now actually scheduled; the async ≤24h window is fine for metro builds (no user is waiting on a city that is not live yet) |
 | 6 | Parallelize chunk calls (`Promise.all` over chunks, move the semaphore inside) | **Only if per-restaurant wall-clock becomes a bottleneck** | Second-order next to hex/metro-level scheduling (D8); adds rate-limit interaction risk |
 
@@ -199,7 +199,7 @@ The record of the arguments is kept below because it explains the gates.)*
    The existing `preview_out_of_area` PostHog event gives the denominator.
 3. **Onboard metros one at a time**, each through the same gate: D10 coverage audit → build (Batch API) → D1 certification (chain spot-check, indie sanity sample, divergence detector) → flip live → point geo-targeted ads at it.
    One at a time is deliberate: each city's audit will teach something (UE coverage ratios vary by metro - see D10), and the second city's onboarding should be cheaper than the first because the harness hardens.
-4. **Prefer chain-dense metros early** (Houston/Phoenix-profile cities): the canonical head + FatSecret give their catalogs a validated accuracy floor on day one, and the national canonical head amortizes across every subsequent city.
+4. **Prefer chain-dense metros early** (Houston/Phoenix-profile cities): reviewed canonical bindings give matched servings a validated accuracy floor on day one, and the national canonical head amortizes across every subsequent city.
 5. **Write the missing Meta-ads GTM section** - `docs/gtm/strategy.md` has no paid channel documented.
    A good AI-drafted, founder-reviewed doc: per-metro geo-targeting setup (radius vs city, exclusions), budget ramp, CAC target vs the $4.99/$29.99 pricing, creative angles that survive Advantage+ expansion, and the waitlist as the out-of-area backstop.
    It belongs in `docs/gtm/`, not this pipeline doc; flagged here so it does not get lost.
@@ -295,13 +295,13 @@ Steps, in order:
 1. **Rescue the work (Decision 0, step 1).** Commit the schema, migration, and phase0 scripts.
 2. **Wire the Phase-3 short-circuit for what already exists.**
    52 brands / 40,200 official items are in `ChainItem` with a measured 41% runtime match rate, and the live pipeline does not consult them.
-   In `preload-ue-first.ts`: resolve `restaurant → brandId`, look items up in `ChainItem` first, fall through to FatSecret/Haiku, and Slack-alert (never silently downgrade) when a known brand matches zero items.
+   In `preload-ue-first.ts`: resolve `restaurant → brandId`, look items up in `ChainItem` first, estimate unmatched UE servings, and Slack-alert (never silently downgrade) when a known brand matches zero items.
    Build this on the consolidation base so it lands with the schema it depends on.
 3. **Measure the lift through the D1 eval before expanding coverage.**
    Score the canonically-matched items against ground truth vs the fall-through population; this turns the "official is better" assumption into a number and validates the conservative matcher.
 4. **Scope the Nutritionix buy when the first metro onboarding is scheduled** (no longer "defer indefinitely").
    The 27% SPA-big-chain prize (Subway, McDonald's, Starbucks) is national and amortizes across all ten metros at once, which materially improves the buy's economics versus the LA-only world.
-   It is still sequenced after steps 2-3: those brands largely resolve via FatSecret today at ~3.5% MdAPE, so the buy upgrades good data to official data, while the short-circuit upgrades catastrophic data to good data.
+   It is still sequenced after steps 2-3: those brands largely resolved via the legacy aggregator at the time of this audit at ~3.5% MdAPE, so the buy upgrades good data to official data, while the short-circuit upgrades catastrophic data to good data.
    Evaluate buy-vs-agent against Phase-1-agent coverage of the same brands at that point.
 
 ---

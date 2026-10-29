@@ -20,7 +20,6 @@ import { PrismaClient } from "@prisma/client";
 import Anthropic from "@anthropic-ai/sdk";
 
 import { MenuSourceResolver } from "../apps/api/services/menuSources/resolver.js";
-import { FatSecretSource } from "../apps/api/services/menuSources/fatSecretSource.js";
 import { UberEatsSource } from "../apps/api/services/menuSources/uberEatsSource.js";
 import { UESitemapIndex } from "../apps/api/services/menuSources/ueSitemapIndex.js";
 import { FirecrawlScraper } from "../apps/api/services/scrapers/firecrawlScraper.js";
@@ -108,7 +107,6 @@ async function main(): Promise<void> {
   const ueSource = new UberEatsSource(undefined, sitemapIndex, firecrawlScraper);
   ueSource.urlCache = urlCache;
   const resolver = new MenuSourceResolver([
-    new FatSecretSource(),
     ueSource,
   ]);
 
@@ -175,23 +173,16 @@ async function main(): Promise<void> {
 
       // Estimate macros
       let macros: (MacroData | null)[];
-      if (menuResult.macros && menuResult.macros.size > 0) {
-        macros = menuResult.items.map((item) => {
-          const macro = menuResult.macros?.get(item.name.toLowerCase());
-          return macro ?? null;
-        });
-      } else {
-        try {
-          const { result: estimated } = await withRetry(
-            () => estimateMacros(menuResult.items, anthropic),
-            { label: `${restaurant.name}/haiku` },
-          );
-          macros = estimated;
-        } catch (err) {
-          log(`  Haiku failed: ${String(err)}`);
-          results.push({ name: restaurant.name, status: "HAIKU_FAILED", itemsBefore, itemsAfter: itemsBefore });
-          continue;
-        }
+      try {
+        const { result: estimated } = await withRetry(
+          () => estimateMacros(menuResult.items, anthropic),
+          { label: `${restaurant.name}/haiku` },
+        );
+        macros = estimated;
+      } catch (err) {
+        log(`  Haiku failed: ${String(err)}`);
+        results.push({ name: restaurant.name, status: "HAIKU_FAILED", itemsBefore, itemsAfter: itemsBefore });
+        continue;
       }
 
       // Validate (S-111/S-112 reject, S-121 macro mismatch flag)

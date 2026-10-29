@@ -43,6 +43,8 @@ An explicit alias still passes through the production `verifiedBrand` function; 
 
 Set `PIPELINE_DATABASE_URL` explicitly with the intended database's `pipeline_writer` credential.
 Use an isolated local database for tests; the primary checkout's production environment is not a development target.
+All shell examples below target DEV or disposable loopback fixtures only.
+Production identity application and recovery require the [approved cloud execution path](../devops/production-deployment.md#invocation); never run them from a laptop.
 Do not apply identity or catalog changes during an active UE enrichment run.
 The serializable identity check reads all restaurant identities and may otherwise conflict with the pipeline's writes.
 

@@ -19,7 +19,7 @@ The snapshot and script are read-only; no additional brands were approved or upd
 
 These are existing menu rows to investigate, not promised new matches or measured customer demand.
 Counts include drinks, combos and other items that may remain unresolved.
-They can also include historical menus built by the FatSecret adapter; this inventory does not verify that every listed item is currently sold at every location.
+They can also include historical menus built by a retired aggregator adapter; this inventory does not verify that every listed item is currently sold at every location.
 
 | Suggested order | Chain | Locations with menus | Menu rows | Distinct contexts | Source and initial scope |
 |---:|---|---:|---:|---:|---|
@@ -65,7 +65,8 @@ flowchart LR
    The database replays require all 162 source products to persist and pair each product's macros by source ID.
    The original catalog still matches 20 WaBa and 32 Yoshinoya products; the reviewed defaults raise those counts to 29 and 33.
    The 11 recovered same-name products remain unreviewed and use estimation.
-   Activating a reviewed brand also switches its new-import resolver away from the legacy FatSecret menu fallback to UE, so test the complete menu, empty responses and estimation volume before activation.
+   Every new import uses its UE location menu.
+   Activating reviewed nutrition bindings changes which servings skip estimation, so test complete menus, empty responses and estimation volume before activation.
    The April nutrition-only update preserves the existing menu membership and does not perform that menu-source replacement.
 6. **Make routine onboarding a data operation.** After the shared matcher/schema release, compatible facts and aliases can ship through guarded catalog and menu batches without a separate API deployment per chain.
    New matching or serving behavior still needs a code release.

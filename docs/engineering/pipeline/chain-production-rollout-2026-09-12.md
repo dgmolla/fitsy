@@ -72,7 +72,8 @@ Offline imports and backfills must use a checkout containing these releases.
 Older writers and the chain-unaware rerun command must not rewrite reviewed menus.
 Matching makes no LLM call; unmatched UE items continue to estimation.
 Catalog loading and write validation add database work.
-Activating a chain switches its menu source from the legacy FatSecret-first route to UE, so partially covered chains can require more estimation than before.
+The historical rollout switched activated chains from the retired aggregator route to UE.
+All new imports now use UE, so partially covered chains can require more estimation than that historical baseline.
 Net throughput of a complete production UE run has not been benchmarked.
 
 | Local new-import proof | UE items checked | Official matches | Historical menu rows replayed | Official matches |

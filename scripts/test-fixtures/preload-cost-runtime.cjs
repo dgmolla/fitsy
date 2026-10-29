@@ -77,12 +77,12 @@ Module._load = function (id, parent, isMain) {
 };
 global.fetch = async (url, options) => {
   const address = String(url);
+  record({ type: 'external_request', address });
   if (address.includes('places.googleapis.com')) {
     record({ type: 'google_request', operation: address.includes('searchText') ? 'search' : 'photo' });
     if (address.includes('searchText')) return Response.json({ places: [{ location: { latitude: 34.05, longitude: -118.25 }, photos: [{ name: 'places/test/photos/photo' }] }] });
     return Response.json({ photoUri: 'https://example.test/google-photo.jpg' });
   }
-  if (address.includes('foods.fatsecret.com')) return new Response('', { status: 404 });
   if (address.includes('getFeedV1')) return Response.json({ data: { feedItems: [{}] } });
   if (address.includes('getStoreV1')) return Response.json({ status: 'success', data: {
     title: 'Test Kitchen', catalogSectionsMap: { mains: [{ payload: {
