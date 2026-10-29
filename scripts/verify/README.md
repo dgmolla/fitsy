@@ -37,7 +37,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `domain-check.sh` | 1 | reports routed domains; unavailable comparison or routing still fails |
 | `context-freshness.sh` | 1 | CLAUDE.md/FEATURE_MAP commands and paths actually exist (T14) |
 | `migration-safety.sh` | 1 | destructive migrations carry a down.sql (T9) |
-| `test.sh` | 2 | api + scripts + mobile tests |
+| `test.sh` | 2 | api + scripts + mobile tests, including Python cleanup and loop recovery regressions |
 | `rate-limit-store.sh` | 2 | actual Redis Lua and independent API workers enforce shared quotas, trusted-IP selection, atomic admission and key bounds; requires Docker |
 | `media-integration.sh` | 2 (local, blocking when simulator or product-flow controls change) | real decoder and attachment suites plus a source-bound receipt; hosted L2 stays media-tool free |
 | `own-code-mocks.sh` | 2 (shadow) | api tests mock only external services |
