@@ -28,6 +28,7 @@ const config = {
         '^react-native-purchases$': '<rootDir>/__mocks__/react-native-purchases.ts',
         '^react-native-purchases-ui$': '<rootDir>/__mocks__/react-native-purchases-ui.ts',
         '^expo-constants$': '<rootDir>/__mocks__/expo-constants.ts',
+        '^expo-updates$': '<rootDir>/__mocks__/expo-updates.ts',
       },
       transform: {
         '^.+\\.tsx?$': [

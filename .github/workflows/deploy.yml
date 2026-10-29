@@ -107,6 +107,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
           SMOKE_OUTCOME: ${{ needs.smoke.outputs.smoke_outcome }}
+          PROD_SMOKE_EMAIL: ${{ secrets.PROD_SMOKE_EMAIL }}
+          PROD_SMOKE_PASSWORD: ${{ secrets.PROD_SMOKE_PASSWORD }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_ALERT_USER_ID: ${{ vars.SLACK_ALERT_USER_ID }}

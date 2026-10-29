@@ -52,6 +52,8 @@ Mobile `subscription_check` events report every completed status/sync attempt, i
 Outcomes distinguish `known`, `unknown`, `server_error`, `client_error`, and `network_error`.
 Only source, outcome, HTTP status, duration, and production/development kind survive the privacy filter.
 Existing JS `client_error` events now carry the same environment kind so developer crashes cannot page production.
+Both emitters require the production API origin and production EAS Update channel, without a debug bundle or local Metro host, before labeling an event production.
+Release simulator bundles using dev or PR preview backends remain development telemetry.
 This adds no native SDK, entitlement decision, billing grant, or navigation change.
 Existing Maestro journeys remain applicable because user interactions are unchanged.
 
@@ -147,6 +149,8 @@ It checks that production still serves the failed release SHA, selects an explic
 It rechecks serving identity immediately before calling the unchanged `scripts/deploy/rollback.sh api <verified-url>`.
 A newer serving source, unknown source, unsafe URL, or unhealthy prior target withholds promotion.
 After promotion, public health must report the previous SHA and all probes must pass before a resolved transition is recorded.
+Recovery also reruns the existing `api-e2e.sh --prod-safe` contract with the same optional production smoke account as Release Verify.
+A failed login, locked or empty entitled search, or unavailable smoke command withholds the recovery receipt even when basic 200/401 probes pass.
 A successfully recovered Deploy run does not generate a second generic workflow-failure page.
 Failed observation before smoke still pages through the external workflow observer, but does not guess a rollback source.
 
@@ -174,8 +178,9 @@ node --test scripts/verify/production-monitor.test.mjs scripts/deploy/production
 node scripts/deploy/env-manifest.mjs
 python3 -B scripts/deploy/routine-release.test.py
 npm test -w apps/api -- --runInBand --runTestsByPath app/api/monitoring.test.ts app/api/health/deep.test.ts lib/apiTelemetry.test.ts lib/rateLimit.test.ts app/api/subscriptions/sync/route.sandbox.test.ts
-npm test -w apps/mobile -- --runInBand --runTestsByPath lib/subscriptionMonitoring.test.ts lib/analytics.privacy.test.ts lib/errorReporting.test.ts
+npm test -w apps/mobile -- --runInBand --runTestsByPath lib/monitoringEnvironment.test.ts lib/subscriptionMonitoring.test.ts lib/analytics.privacy.test.ts lib/errorReporting.test.ts
 ```
+The Jest release bridge discovers every Python test and runs each with its own bounded deadline, so adding guarded build cases cannot exhaust one aggregate timeout.
 
 The scripts workspace bridge runs the monitoring and recovery regressions through the existing test group.
 The initial Oct 27 reproduction must fail if the handled-503 telemetry emission is removed.

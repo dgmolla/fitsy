@@ -766,4 +766,12 @@ exit "${BUILD_EXIT:-0}"
 
 
 if __name__ == '__main__':
-    unittest.main()
+    if sys.argv[1:] == ['--list-tests']:
+        print(json.dumps([
+            f'{cls.__name__}.{method}'
+            for cls in tuple(globals().values())
+            if isinstance(cls, type) and issubclass(cls, unittest.TestCase)
+            for method in unittest.defaultTestLoader.getTestCaseNames(cls)
+        ]))
+    else:
+        unittest.main()

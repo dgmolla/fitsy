@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { policy, alert } from '../verify/production-policy.mjs';
 import { requestJson, loadAlertState, saveAlertState, dispatchAlerts, sendSlack } from '../verify/production-alerts.mjs';
 import { assertRequiredEnvironment } from './env-manifest.mjs';
@@ -44,6 +44,19 @@ async function servingIdentity(fetchImpl) {
   return health.deploymentSha;
 }
 
+function verifyProductionSmoke(base, env) {
+  try {
+    // Reuse the failed smoke's full read-only contract, including configured
+    // login and entitled discovery. Healthy invalid sessions alone cannot resolve it.
+    execFileSync('bash', [fileURLToPath(new URL('../verify/api-e2e.sh', import.meta.url)),
+      `--base=${base}`, '--prod-safe'], {
+      env: { ...process.env, ...env }, stdio: 'pipe', timeout: 90_000,
+    });
+  } catch {
+    throw new Error('Production-safe recovery smoke failed');
+  }
+}
+
 function invokeRollback(target) {
   // The existing helper stays unchanged and receives an explicit target.
   // It requires a project link; never overwrite a link belonging to another app.
@@ -74,6 +87,7 @@ export async function recoverProduction({ failedSha, smokeOutcome, env = process
   await verifyServing(target.url, target.sha, fetchImpl);
   if (await servingIdentity(fetchImpl) !== failedSha) return { status: 'superseded', rolledBack: false };
   await runRollback(target);
+  verifyProductionSmoke(policy.baseUrl, env);
   await verifyServing(policy.baseUrl, target.sha, fetchImpl);
   await resolved();
   if (alertError) throw new Error('Service recovered but initial alert delivery failed');

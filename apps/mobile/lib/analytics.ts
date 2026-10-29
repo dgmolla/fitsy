@@ -10,6 +10,7 @@
 import PostHog from 'posthog-react-native';
 import type { JsonType } from '@posthog/core';
 import { sanitizeAnalyticsEvent } from './analyticsPrivacy';
+import { monitoringEnvironment } from './monitoringEnvironment';
 
 const API_KEY =
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY ?? 'phc_placeholder_replace_via_vercel_cli';
@@ -70,7 +71,7 @@ export function trackSubscriptionCheck(props: {
   duration_ms: number;
 }): void {
   try {
-    getPostHogClient().capture('subscription_check', { ...props, kind: typeof __DEV__ !== 'undefined' && __DEV__ ? 'development' : 'production' });
+    getPostHogClient().capture('subscription_check', { ...props, kind: monitoringEnvironment() });
   } catch (err) { logCaptureError('subscription_check', err); }
 }
 
