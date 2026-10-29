@@ -129,7 +129,7 @@ checks:
     layer: 2
     blocking: true
     runs: [local]
-    why: Real decoder, optional Slack preview and attachment integration tests for changed simulator or product-flow controls; missing local tools fail.
+    why: Real decoder, attachment and credential-isolation tests for changed simulator, product-flow or loop host controls; missing local tools fail.
 
   - name: build
     script: build.sh

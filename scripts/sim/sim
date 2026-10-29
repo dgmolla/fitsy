@@ -14,7 +14,7 @@
 # Identity is ALWAYS the FITSY_SIM_OWNER env var, for claim and destructive
 # verbs alike - one source, so you cannot lock yourself out.
 set -euo pipefail
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+REPO_ROOT="${FITSY_PRODUCT_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 EVID="$REPO_ROOT/.evidence/sim"; mkdir -p "$EVID"
 CMD="${1:-status}"; shift || true
 

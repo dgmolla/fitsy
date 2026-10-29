@@ -22,7 +22,7 @@ def codex(wt,prompt,tag,images=()):
     p=f'{L}/{tag}.prompt'; Path(p).write_text(prompt)
     args=['codex','exec','-m','gpt-6.1-sol','-s','workspace-write','-C',wt]
     for path in images: args.extend(['--image',path])
-    # Issue-derived prompts get core/provider auth only; host recovery retains ENV.
+    # Issue-derived prompts get core/provider auth only; privileged controls are separate.
     worker_env={key:value for key,value in ENV.items()
                 if key in {'PATH','HOME','USER','LOGNAME','LANG','LC_ALL','TMPDIR','CODEX_HOME','OPENAI_API_KEY'}}
     with open(p) as source, open(f'{L}/{tag}.log','w') as output:
@@ -194,6 +194,7 @@ def repair_sim(name, wt, st, s, ev, meta, prompt):
     st.pop('needs_local_validation',None)
     st.pop('repair_evidence',None)
     st['local_validation_source']=replay['source']
+    st['local_validation_required']=True
     save(s)
     return 'fixed'
 
@@ -223,6 +224,24 @@ def prepare_task(wt,meta):
                 sh(f'git worktree add -f {shlex.quote(wt)} -B loop/{br} origin/{br}',cwd=ROOT+'/wt3',timeout=120)
                 sh('git merge -q --no-edit origin/main',cwd=wt,check=False,timeout=120)
             else: sh(f'git worktree add -f {shlex.quote(wt)} -B {br} origin/main',cwd=ROOT+'/wt3',timeout=120)
+
+
+def refresh_pr_head(wt, branch, head):
+    """Advance only a clean, owned checkout, preserving unpublished work on mismatch."""
+    if not re.fullmatch(r'[a-f0-9]{40}', head):
+        raise ValueError('PR head is not a full commit identity')
+    if context.run(['git','status','--porcelain'],wt,ENV):
+        raise ValueError('Parked checkout has unfinished edits; preserve them before current-head replay')
+    if context.run(['git','rev-parse','HEAD'],wt,ENV)==head:
+        return
+    context.run(['git','fetch','-q','origin',f'refs/heads/{branch}:refs/remotes/origin/{branch}'],wt,ENV)
+    remote=context.run(['git','rev-parse',f'refs/remotes/origin/{branch}'],wt,ENV)
+    if remote!=head:
+        raise ValueError('PR advanced during checkout refresh; retry with the newly observed head')
+    # Never reset, stash, discard or merge unpublished divergent work to obtain evidence.
+    context.run(['git','-c','core.hooksPath=/dev/null','merge','-q','--ff-only',head],wt,ENV)
+    if context.run(['git','rev-parse','HEAD'],wt,ENV)!=head:
+        raise ValueError('Owned checkout contains unpublished commits; current-head replay remains pending')
 
 
 def retriage(files,s):
@@ -255,7 +274,9 @@ def retriage(files,s):
             record_attempt(st,'preparation-retriage',outcome='ready' if ev['preparation_ready'] else 'error',logs=ev['logs'])
         else:
             try:
-                if st.get('pr'): j,res=checks(st['pr'])
+                if st.get('pr'):
+                    j,res=checks(st['pr'])
+                    refresh_pr_head(wt,meta['branch'],j['headRefOid'])
                 else:
                     head=sh('git rev-parse HEAD',cwd=wt,check=False)
                     j,res={'headRefOid':head},{}
@@ -263,13 +284,18 @@ def retriage(files,s):
                     ev=evidence(wt,j['headRefOid'],res)
                     if condition=='environment' or condition.startswith('env:'):
                         # A stale GitHub error cannot observe a repaired host dependency.
-                        replay=context.host_replay(wt,L+'/sim.lock',ev,ENV)
+                        replay=context.host_replay(wt,L+'/sim.lock',{**ev,'require_native':True},ENV)
                         record_attempt(st,'environment-retriage',outcome=replay['status'],
                                        head=replay.get('head'),source=replay.get('source'),logs=replay.get('logs',''))
                         ev['rerun_passed']=replay['status']=='pass' and replay.get('head')==j['headRefOid']
                 if condition=='baseline': ev.update(context.compare_main(wt,L+'/sim.lock',ev,ENV))
                 passed=res.get(condition.removeprefix('check:'))=='SUCCESS'
-            except (RuntimeError,ValueError,OSError): continue
+            except (RuntimeError,ValueError,OSError,subprocess.TimeoutExpired) as error:
+                record_attempt(st,'retriage-prerequisite',outcome='error',logs=redact(str(error)))
+                st['triaged_at']=time.time()
+                st['triaged_main']=main
+                log(name,'current-head re-triage pending:',redact(str(error))[:500])
+                continue
         if requeue(st,ev,main,dependency,passed): log(name,'REQUEUED',condition)
     save(s)
 def review_text(pr):
@@ -319,16 +345,26 @@ def run_task(f,s):
             log(name,'pre-push merge of main conflicts; codex resolving')
             codex(wt,f"This branch has merge conflicts with origin/main (a merge is in progress). Resolve every conflict keeping both this branch's intent and main's changes (main may have deleted legacy files: keep them deleted unless this task needs them). Remove all conflict markers, run the affected tests. Original task:\n{prompt}"+COMMON,f'{name}-conflict')
             sh('git add -A && (git -c core.editor=true merge --continue || git commit -q --no-edit)',cwd=wt,check=False)
+        # A resumed PR must reach its repair feedback even when its published
+        # source currently fails Maestro. There is no publication to validate.
+        remote=sh(f'git rev-parse --verify refs/remotes/origin/{br}',cwd=wt,check=False)
+        if remote==sh('git rev-parse HEAD',cwd=wt): return
         for tryn in range(4):
-            # The source binding survives requeue's reset of active repair counters.
-            if (st.get('simrepair') or st.get('local_validation_source')) and context.source_hash(wt,ENV)!=st.get('local_validation_source'):
-                replay=context.host_replay(wt,L+'/sim.lock',st.get('repair_evidence',{}),ENV)
+            # Every entrypoint, including general, conflict and hook repairs, uses
+            # trusted current-source selection. Attempt counters cannot bypass it.
+            if context.source_hash(wt,ENV)!=st.get('local_validation_source'):
+                validation={**st.get('repair_evidence',{}), 'require_native': bool(st.get('needs_local_validation') or
+                            st.get('local_validation_required', bool(st.get('local_validation_source'))))}
+                replay=context.host_replay(wt,L+'/sim.lock',validation,ENV)
                 record_attempt(st,'pre-push-validation',outcome=replay['status'])
                 save(s)
                 if replay['status']!='pass':
                     st['needs_local_validation']=True
                     raise RuntimeError('Current-source local Maestro pass required before push: '+replay.get('logs',''))
                 st['local_validation_source']=replay['source']
+                st['local_validation_required']=replay.get('required',True)
+                st.pop('needs_local_validation',None)
+                save(s)
             r=subprocess.run(f'git push -q -u origin HEAD:{br}',shell=True,cwd=wt,env=ENV,capture_output=True,text=True)
             if not r.returncode: return
             err=(r.stdout+r.stderr)[-4000:]
@@ -340,12 +376,14 @@ def run_task(f,s):
         tail=[l for l in err.strip().splitlines() if l.strip()][-3:]
         raise RuntimeError('pre-push hook still failing after 3 codex repairs: '+' | '.join(tail)[:600])
     if st.get('needs_local_validation'):
-        replay=context.host_replay(wt,L+'/sim.lock',st.get('repair_evidence',st.get('blocked_evidence',{})),ENV)
+        replay=context.host_replay(wt,L+'/sim.lock',
+                                   {**st.get('repair_evidence',st.get('blocked_evidence',{})), 'require_native':True},ENV)
         if replay['status']!='pass':
             return block(name,st,s,'Pending local validation still requires host recovery.',
                          {**st.get('blocked_evidence',{}),'sim_state':'error'},meta)
         st.pop('needs_local_validation',None)
         st['local_validation_source']=replay['source']
+        st['local_validation_required']=True
         save(s)
     commit_push(meta['title'])
     if not pr:
@@ -406,6 +444,9 @@ def run_task(f,s):
         if triage=='env': return block(name,st,s,'Environment failure precedes code feedback.',ev,meta)
         sh(f'git fetch -q origin && git merge -q --ff-only origin/{br}; git merge -q --no-edit origin/main',cwd=wt,check=False)
         st['fix_rounds']=st.get('fix_rounds',0)+1
+        if ev.get('sim_state')=='failure':
+            st['repair_evidence']=ev
+            st['needs_local_validation']=True
         record_attempt(st,'general-repair',round=st['fix_rounds'],checks=relevant)
         save(s)
         log(name,'fix round',st['fix_rounds']); codex(wt,f"Continue task on this branch. Original task:\n{prompt}\n\nFeedback to fix now:\n{fb}\nLocal evidence:\n{redact(json.dumps(ev))}\nPrior attempts:\n{redact(json.dumps(st.get('attempts',[])))}\nIf a finding is wrong, add a brief code comment/explanation rather than over-engineering. If a CI failure is pre-existing on main and unrelated, say so in your summary and don't hack around it."+COMMON,f'{name}-fix{rnd}',images=ev.get('images',[]))

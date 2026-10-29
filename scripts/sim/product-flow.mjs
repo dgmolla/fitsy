@@ -17,6 +17,7 @@ import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailur
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
+const controlDirectory = fileURLToPath(new URL('.', import.meta.url));
 const out = resolve(root, '.evidence/product-flow');
 const buildDir = resolve(root, '.evidence/product-build');
 const mobile = resolve(root, 'apps/mobile');
@@ -53,7 +54,7 @@ export function backend(value = process.env.EXPO_PUBLIC_API_URL) {
   const d = JSON.parse(run('vercel', ['api', `/v13/deployments/${new URL(origin).hostname}`, '--raw']));
   const revision = backendRevision(d, origin);
   // A different backend revision is safe only if its API/shared/schema contents match.
-  const diff = run('git', ['diff', '--name-only', revision, '--', 'apps/api', 'packages/shared', 'prisma', 'package.json', 'package-lock.json']);
+  const diff = run('git', ['diff', '--no-ext-diff', '--no-textconv', '--name-only', revision, '--', 'apps/api', 'packages/shared', 'prisma', 'package.json', 'package-lock.json']);
   const untracked = run('git', ['ls-files', '--others', '--exclude-standard', '--', 'apps/api', 'packages/shared', 'prisma']);
   if (diff || untracked) throw Object.assign(new Error('Deploy candidate backend/shared/schema changes to the configured preview before running product flows; keep dev.fitsy.org pinned to dev'),
     { code: 'FITSY_BACKEND_SOURCE_MISMATCH' });
@@ -72,9 +73,9 @@ export function claimDevice() {
   assert(Number.isFinite(workerSeconds) && workerSeconds > 0, 'Native phase requires a positive worker time budget');
   // One bounded lease covers the permitted worker run plus completion and release.
   const minutes = String(Math.ceil(workerSeconds / 60) + 5);
-  run('bash', ['scripts/sim/sim', 'claim', '--minutes', minutes], { stdio: 'inherit' });
+  run('bash', [join(controlDirectory, 'sim'), 'claim', '--minutes', minutes], { stdio: 'inherit' });
 }
-export const releaseDevice = () => run('bash', ['scripts/sim/sim', 'release'], { stdio: 'inherit' });
+export const releaseDevice = () => run('bash', [join(controlDirectory, 'sim'), 'release'], { stdio: 'inherit' });
 const metroFile = join(buildDir, 'metro.json');
 const processIdentity = pid => run('ps', ['-p', String(pid), '-o', 'lstart=,command=']);
 export function runSelectedRecordedFlow(mode, options) {
@@ -570,7 +571,7 @@ async function execute(udid, names, mode) {
         maestroCommand: process.env.MAESTRO_BIN || 'maestro',
         maestroArgs: ['test', '--udid', udid, ...maestroApiArgs(), join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
         udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,
-        env: { ...repoEnv(), PATH: `${join(root, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
+        env: { ...repoEnv(), PATH: `${controlDirectory}${delimiter}${process.env.PATH || ''}`,
           FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },
         dir, timeline, flow: flowBytes, diagnostic });
       } finally {

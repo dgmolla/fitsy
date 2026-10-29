@@ -10,6 +10,8 @@ import { mediaIntegrationRequired, validateMediaReceipt, writeMediaReceipt } fro
 test('media lane selects changed native controls without selecting unrelated application paths', () => {
   assert.equal(mediaIntegrationRequired(['apps/api/app/api/health/route.ts']), false);
   for (const path of ['scripts/sim/runner-controls.mjs', 'scripts/sim/xctest-attachments.test.mjs',
+    'scripts/delivery/loop/host.py', 'scripts/delivery/loop/context.py', 'scripts/delivery/loop/driver.py', 'scripts/delivery/loop/install.py',
+    'scripts/delivery/loop/loop.test.py',
     'scripts/verify/product-flow.mjs', 'scripts/verify/test.sh', 'scripts/verify/registry.yml'])
     assert.equal(mediaIntegrationRequired([path]), true, path);
 });
@@ -20,7 +22,7 @@ test('receipt binds the completed media lane to source and test contents', () =>
     assert.deepEqual(validateMediaReceipt(['apps/api/health.ts'], 'head', 'hash', file), { required: false });
     assert.throws(() => validateMediaReceipt(['scripts/sim/runner-controls.mjs'], 'head', 'hash', file), /Missing local media integration receipt/);
     const receipt = writeMediaReceipt(file, 'head', 'hash');
-    assert.equal(receipt.command.includes('xctest-attachments.test.ts'), true);
+    assert.equal(receipt.command, 'bash scripts/verify/media-integration.sh');
     assert.equal(validateMediaReceipt(['scripts/sim/runner-controls.mjs'], 'head', 'hash', file).required, true);
     assert.throws(() => validateMediaReceipt(['scripts/sim/runner-controls.mjs'], 'changed', 'hash', file), /Stale or failed/);
     assert.throws(() => validateMediaReceipt(['scripts/sim/runner-controls.mjs'], 'head', 'changed', file), /Stale or failed/);
@@ -34,7 +36,7 @@ test('receipt binds the completed media lane to source and test contents', () =>
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('canonical media caller fails unavailable process inspection or decoders before starting fixtures', () => {
+test('canonical media caller rejects unavailable tools and failed isolation before recording acceptance', () => {
   const root = fileURLToPath(new URL('../..', import.meta.url));
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-media-preflight-'));
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|FITSY_|CI$)/.test(key)));
@@ -70,6 +72,21 @@ test('canonical media caller fails unavailable process inspection or decoders be
       assert.equal(result.status, 1, result.stderr);
       assert.match(JSON.parse(result.stdout).summary, entry.summary);
       assert.equal(existsSync(join(dir, 'fixtures-started')), false);
+    }
+    for (const name of ['ps', 'ffprobe', 'ffmpeg'])
+      writeFileSync(join(bin, name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    writeFileSync(join(bin, 'npm'), '#!/bin/sh\ntouch fixtures-started\nexit 0\n', { mode: 0o755 });
+    const receipt = join(dir, '.evidence/verify/media-integration.json');
+    for (const code of [1, 0]) {
+      writeFileSync(join(bin, 'python3'), `#!/bin/sh\ntouch isolation-started\nexit ${code}\n`, { mode: 0o755 });
+      const result = spawnSync('/bin/bash', ['scripts/verify/media-integration.sh'], {
+        cwd: dir, env: { ...env, PATH: `${bin}:/usr/bin:/bin`, FITSY_PRODUCT_ROOT: dir }, encoding: 'utf8',
+      });
+      assert.equal(result.status, code, result.stderr);
+      assert.equal(existsSync(join(dir, 'isolation-started')), true);
+      assert.equal(existsSync(receipt), code === 0);
+      if (code) assert.match(JSON.parse(result.stdout).summary, /recovery isolation test failed/);
+      else assert.equal(JSON.parse(readFileSync(receipt, 'utf8')).command, 'bash scripts/verify/media-integration.sh');
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

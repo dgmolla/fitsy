@@ -17,6 +17,7 @@ SOURCE = Path(__file__).parent
 sys.path.insert(0, str(SOURCE))
 import context
 import driver
+import host
 import install
 import planner
 from recovery import (classify_failure, repair_prompt, requeue, park, gating_failures,
@@ -25,7 +26,7 @@ from taskfiles import read_task, task_files, priority_notes, migrate_notes
 
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
 SERVICE = '''#!/usr/bin/env python3
-import json, os, sys
+import json, os, subprocess, sys
 from pathlib import Path
 p=Path(SERVICE_PATH); s=json.loads(p.read_text())
 args=sys.argv[1:]; name=Path(sys.argv[0]).name
@@ -35,9 +36,23 @@ if name=='lockf':
         p.write_text(json.dumps(s)); sys.stdout.write(s.get('lock_stdout',''))
         print(s['lock_error'],file=sys.stderr); sys.exit(73)
     p.write_text(json.dumps(s)); os.execvp(args[3],args[3:])
+elif name=='sandbox-exec':
+    s.setdefault('sandbox_profiles',[]).append(Path(args[1]).read_text())
+    p.write_text(json.dumps(s))
+    if s.get('sandbox_error'): print(s['sandbox_error'],file=sys.stderr); sys.exit(71)
+    os.execvp(args[2],args[2:])
 elif name=='node' and 'preview-backend.mjs' in args[0]:
-    print(json.dumps({'backend':'https://candidate.example.test'}))
+    s.setdefault('backend_environment_keys',[]).append(sorted(os.environ))
+    if s.get('real_selector'):
+        p.write_text(json.dumps(s)); os.execv(s['real_node'],[s['real_node']]+args)
+    print(json.dumps({'backend':'https://candidate.example.test', 'deployment':{'id':'dpl_fixture'}}))
+elif name=='node' and '--plan' in args:
+    if s.get('real_plan'):
+        p.write_text(json.dumps(s)); os.execv(s['real_node'],[s['real_node']]+args)
+    required=s.get('native_required',True)
+    print(json.dumps({'required':required, 'scope':'flow' if required else 'none', 'flows':['shuffle'] if required else []}))
 elif name=='node':
+    s.setdefault('native_environment_keys',[]).append(sorted(os.environ))
     status=s.get('replays',['pass']).pop(0) if s.get('replays') else 'pass'
     if status=='failure':
         print(json.dumps({'status':'fail','summary':'Maestro flow shuffle failed; inspect '+s['artifacts']}))
@@ -51,9 +66,15 @@ elif name=='codex':
     if s.get('inspect_worker_env'):
         s.setdefault('worker_environment_keys',[]).append(sorted(os.environ))
         s.setdefault('worker_auth',[]).append({key:os.environ.get(key) for key in ('CODEX_HOME','OPENAI_API_KEY')})
+    if s.get('edit_mobile'):
+        target=Path(args[args.index('-C')+1])/'apps/mobile/components/ShuffleButton.tsx'; target.parent.mkdir(parents=True,exist_ok=True)
+        target.write_text('export const enabled = true;\\n'); s['native_required']=True
+    if s.get('after_worker_pr'): s['pr']=s['after_worker_pr']
     print('Repair completed')
 elif name=='gh':
     if args[:2]==['pr','view'] and 'statusCheckRollup' in ' '.join(args):
+        if s.get('live_pr_head'):
+            s['pr']['headRefOid']=subprocess.check_output([s['real_git'],'-C',s['candidate'],'rev-parse','HEAD'],text=True).strip()
         print(json.dumps(s['pr']))
     elif args[:2]==['pr','view']: print(s.get('dependency','OPEN'))
     elif args[:2]==['issue','list']: print('[]')
@@ -74,7 +95,10 @@ elif name=='xcrun':
 elif name=='git':
     if args[:1]==['fetch'] and s.get('fetch_error'):
         p.write_text(json.dumps(s)); print('Temporary fetch connectivity failure',file=sys.stderr); sys.exit(75)
-    p.write_text(json.dumps(s)); os.execv(os.environ['REAL_GIT'],[os.environ['REAL_GIT']]+args)
+    if args[:1]==['push'] and s.get('push_error'):
+        s['push_error']=False; p.write_text(json.dumps(s)); print('Focused native check failed',file=sys.stderr); sys.exit(1)
+    p.write_text(json.dumps(s)); os.execv(s['real_git'],[s['real_git']]+args)
+elif name=='vercel': print(json.dumps(s['deployment']))
 p.write_text(json.dumps(s))
 '''
 
@@ -168,6 +192,19 @@ class ClassificationTest(unittest.TestCase):
 
 
 class DriverTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.controls_directory = tempfile.TemporaryDirectory()
+        for name, data in install.sources().items():
+            if name.startswith('controls/'):
+                path = Path(cls.controls_directory.name) / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.controls_directory.cleanup()
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -187,18 +224,22 @@ class DriverTest(unittest.TestCase):
         tools = self.root / 'bin'; tools.mkdir()
         self.service = self.root / 'service.json'
         real_git = shutil.which('git')
-        for tool in ('node', 'lockf', 'codex', 'gh', 'ps', 'lsof', 'pgrep', 'xcrun', 'git'):
+        for tool in ('node', 'lockf', 'sandbox-exec', 'codex', 'gh', 'ps', 'lsof', 'pgrep', 'xcrun', 'git', 'vercel'):
             executable = tools / tool
             executable.write_text(SERVICE.replace('#!/usr/bin/env python3', '#!' + sys.executable)
                                   .replace('SERVICE_PATH', repr(str(self.service))))
             executable.chmod(0o700)
-        self.service.write_text(json.dumps({'calls': [], 'artifacts': str(self.artifacts)}))
+        self.service.write_text(json.dumps({'calls': [], 'artifacts': str(self.artifacts),
+                                           'real_git': real_git, 'real_node': shutil.which('node')}))
         self.env = {**os.environ, 'PATH': str(tools) + ':' + os.environ['PATH'],
                     'LOOP_SERVICE': str(self.service), 'FITSY_XCTEST_SIM_UDID': 'a' * 36, 'REAL_GIT': real_git}
         self.environ = mock.patch.dict(os.environ, self.env)
         self.environ.start(); self.addCleanup(self.environ.stop)
         self.patch = mock.patch.multiple(driver, L=str(self.root), ROOT=str(self.root), ENV=self.env)
         self.patch.start(); self.addCleanup(self.patch.stop)
+        controls = mock.patch.multiple(host, CONTROLS=Path(self.controls_directory.name) / 'controls',
+                                       SANDBOX=str(tools / 'sandbox-exec'))
+        controls.start(); self.addCleanup(controls.stop)
         self.meta = {'branch': 'codex/issue-583', 'title': 'Shuffle', 'body': 'Closes #583'}
         self.ev = failure(images=[str(self.artifacts / 'failure.png')])
 
@@ -235,6 +276,123 @@ class DriverTest(unittest.TestCase):
         probe = 'import json, os; print(json.dumps([os.environ.get(k) for k in ("VERCEL_TOKEN", "POSTGRES_PRISMA_URL")]))'
         self.assertEqual(json.loads(driver.sh(shlex.join([sys.executable, '-c', probe]), cwd=str(self.wt))),
                          ['test-vercel', 'test-database'])
+
+    def test_privileged_backend_preflight_ignores_candidate_code_and_imports(self):
+        sentinel = self.wt / 'credential-exposure.txt'
+        for name in ('preview-backend.mjs', 'backend-identity.mjs'):
+            path = self.wt / 'scripts/sim' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('import fs from "node:fs"; fs.writeFileSync(' + json.dumps(str(sentinel)) +
+                            ', process.env.GH_TOKEN || "executed"); throw new Error("candidate executed");')
+        self.git('add', '.'); self.git('commit', '-qm', 'hostile candidate fixture')
+        head = self.git('rev-parse', 'HEAD')
+        deployment = {'id': 'dpl_fixture', 'name': 'fitsy-api', 'readyState': 'READY',
+                      'target': 'preview', 'gitSource': {'sha': head}}
+        self.env.update(GH_TOKEN='test-github', VERCEL_TOKEN='test-vercel', POSTGRES_PRISMA_URL='test-database',
+                        NODE_OPTIONS='--require=/hostile/startup.js', NODE_PATH='/hostile/imports',
+                        BASH_ENV='/hostile/startup.sh', EXPO_PUBLIC_API_URL='https://dev.fitsy.org')
+        self.service_state(real_selector=True, deployment=deployment)
+        selected = context.select_backend(self.wt, head, self.env)
+        self.assertEqual(selected['backendRevision'], head)
+        self.assertEqual(selected['deployment'], deployment)
+        self.assertFalse(sentinel.exists(), 'Neither candidate entrypoint nor its imports may run privileged')
+        observed = set(self.service_state()['backend_environment_keys'][0])
+        self.assertIn('VERCEL_TOKEN', observed)
+        self.assertTrue(observed.isdisjoint({'GH_TOKEN', 'POSTGRES_PRISMA_URL', 'NODE_OPTIONS', 'NODE_PATH', 'BASH_ENV'}))
+
+    def test_native_execution_has_isolation_and_only_dev_credentials(self):
+        self.env.update(GH_TOKEN='test-github', VERCEL_TOKEN='test-vercel', POSTGRES_PRISMA_URL='test-database',
+                        AWS_SECRET_ACCESS_KEY='test-cloud', NODE_OPTIONS='--require=/hostile/startup.js',
+                        EXPO_PUBLIC_SUPABASE_URL='https://dev-fixture.supabase.co',
+                        EXPO_PUBLIC_SUPABASE_ANON_KEY='test-public')
+        replay = context.host_replay(self.wt, self.root / 'sim.lock', self.ev, self.env)
+        self.assertEqual(replay['status'], 'pass', replay)
+        observed = self.service_state()
+        for keys in observed['native_environment_keys']:
+            self.assertTrue(set(keys).isdisjoint({'GH_TOKEN', 'VERCEL_TOKEN', 'POSTGRES_PRISMA_URL',
+                                               'AWS_SECRET_ACCESS_KEY', 'NODE_OPTIONS'}))
+            self.assertIn('EXPO_PUBLIC_SUPABASE_ANON_KEY', keys)
+        node = [call for call in observed['calls'] if call['tool']=='node' and 'ci.mjs' in call['args'][0] and '--plan' not in call['args']]
+        self.assertTrue(all(Path(call['args'][0]).is_relative_to(host.CONTROLS) for call in node))
+        self.assertEqual(len(observed['sandbox_profiles']), len(node))
+        self.assertIn('(deny file-read-data', observed['sandbox_profiles'][0])
+        self.assertIn('(deny process-info*)', observed['sandbox_profiles'][0])
+        with host.isolated(self.wt, self.env, {'backend': 'https://dev.fitsy.org',
+                                             'deployment': {'id': 'dpl_public'}}) as (_, selected):
+            binary = str(Path(selected['PATH'].split(os.pathsep)[0]) / 'vercel')
+            response = subprocess.run([binary, 'api', '/v13/deployments/dev.fitsy.org', '--raw'],
+                                      env=selected, capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(response.stdout), {'id': 'dpl_public'})
+            self.assertNotEqual(subprocess.run([binary, 'deploy'], env=selected, capture_output=True).returncode, 0)
+
+    def test_isolation_denial_never_falls_back_to_host_execution(self):
+        self.service_state(sandbox_error='sandbox_apply: Operation not permitted')
+        replay = context.host_replay(self.wt, self.root / 'sim.lock', self.ev, self.env)
+        self.assertEqual(replay['status'], 'error')
+        self.assertIn('Operation not permitted', replay['logs'])
+        self.assertFalse(any(call['tool']=='node' and 'ci.mjs' in call['args'][0] and '--plan' not in call['args']
+                             for call in self.service_state()['calls']))
+        self.assertFalse(any(call['tool']=='codex' for call in self.service_state()['calls']))
+
+    @unittest.skipUnless(os.environ.get('FITSY_MEDIA_INTEGRATION') == '1', 'Requires the canonical host media lane')
+    def test_real_host_sandbox_denies_credentials_and_preserves_child_isolation(self):
+        credential = self.root / 'host-auth.json'; credential.write_text('synthetic-host-secret')
+        dotenv = self.wt / '.env.local'; dotenv.write_text('GH_TOKEN=synthetic-host-secret\n')
+        link = self.wt / 'auth-link'; link.symlink_to(credential)
+        self.env.update(GH_TOKEN='synthetic-host-secret', VERCEL_TOKEN='synthetic-host-secret',
+                        POSTGRES_PRISMA_URL='synthetic-host-secret')
+        attempt = '''import json, os, pathlib, subprocess, sys
+def denied(path):
+    try: pathlib.Path(path).read_text(); return False
+    except PermissionError: return True
+result = {'host_file': denied(sys.argv[1]), 'dotenv': denied(sys.argv[2]), 'symlink': denied(sys.argv[3]),
+          'env': all(key not in os.environ for key in ('GH_TOKEN','VERCEL_TOKEN','POSTGRES_PRISMA_URL'))}
+pathlib.Path('native-output.txt').write_text('owned workspace output')
+child = subprocess.run([sys.executable, '-I', '-c', 'import pathlib,sys; pathlib.Path(sys.argv[1]).read_text()',
+                        sys.argv[1]], capture_output=True)
+result['child'] = child.returncode != 0 and b'PermissionError' in child.stderr
+print(json.dumps(result))
+'''
+        # Use the actual OS boundary here. An unavailable sandbox fails the host
+        # lane and prevents its receipt; the ordinary portable suite skips it.
+        with host.isolated(self.wt, self.env) as (_, selected):
+            temporary = Path(selected['TMPDIR'])
+            result = subprocess.run(['/usr/bin/sandbox-exec', '-f', str(temporary / 'native.sb'),
+                                     sys.executable, '-I', '-c', attempt, str(credential), str(dotenv), str(link)],
+                                    cwd=self.wt, env=selected, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), dict.fromkeys(('host_file','dotenv','symlink','env','child'), True))
+        self.assertEqual((self.wt / 'native-output.txt').read_text(), 'owned workspace output')
+
+    def test_production_credentials_are_rejected_before_native_execution(self):
+        self.env['EXPO_PUBLIC_SUPABASE_URL'] = 'https://zaxkmjqozvmbifiwbxps.supabase.co'
+        replay = context.host_replay(self.wt, self.root / 'sim.lock', self.ev, self.env)
+        self.assertEqual(replay['status'], 'error')
+        self.assertIn('Production Supabase', replay['logs'])
+        self.assertFalse(self.service_state()['calls'])
+
+    def test_candidate_fixture_configuration_cannot_widen_host_read_permissions(self):
+        fixture = self.wt / 'untracked-fixtures.json'
+        fixture.write_text(json.dumps({'version': 1, 'fixtures': {'default': {
+            'prepare': ['/usr/bin/python3', str(self.root / 'host-auth.json')]}}}))
+        self.env['FITSY_E2E_FIXTURES'] = str(fixture)
+        replay = context.host_replay(self.wt, self.root / 'sim.lock', self.ev, self.env)
+        self.assertEqual(replay['status'], 'error')
+        self.assertIn('outside candidate writable roots', replay['logs'])
+        self.assertFalse(self.service_state().get('native_environment_keys'))
+
+    def test_native_selection_uses_installed_policy_and_candidate_source(self):
+        for name, body in {
+                'apps/mobile/components/ShuffleButton.tsx': 'export const enabled = true;\n',
+                'apps/mobile/e2e/flows/shuffle.yaml': 'appId: com.fitsy.mobile\n---\n- launchApp\n',
+                'scripts/route-reviewers.sh': '#!/bin/sh\ntouch candidate-policy-executed\nprintf \'["frontend"]\'\n',
+                'scripts/verify/risk-tiers.yml': 'invalid candidate policy\n'}.items():
+            path = self.wt / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text(body)
+        self.service_state(real_plan=True)
+        result = context.host_replay(self.wt, self.root / 'sim.lock', {}, self.env)
+        self.assertEqual(result['status'], 'pass', result)
+        self.assertTrue(result['required'], 'Candidate mobile source must retain native coverage')
+        self.assertFalse((self.wt / 'candidate-policy-executed').exists())
 
     def test_three_real_repair_invocations_use_distinct_prompts_and_image_attachments(self):
         st = {}
@@ -477,8 +635,64 @@ class DriverTest(unittest.TestCase):
         self.assertNotIn('simrepair', st)
         self.assertNotIn('fix_rounds', st)
         self.assertEqual([row['outcome'] for row in st['attempts'] if row['kind']=='environment-retriage'],
-                         ['error', 'pass', 'pass'])
+                         ['error', 'pass'])
+        self.assertTrue(any(row['kind']=='retriage-prerequisite' for row in st['attempts']))
         self.assertFalse(any(call['tool']=='codex' for call in self.service_state()['calls']))
+
+    def test_parked_checkout_fast_forwards_to_the_observed_repaired_pr_head(self):
+        task, s = self.task_checkout(simrepair=3, fix_rounds=5)
+        st = s[task.stem]
+        previous = self.git('rev-parse', 'HEAD')
+        ev = failure(head=previous, main=previous, sim_state='error', api_status=503)
+        st['blocked_evidence'] = ev
+        park(st, 'Restore API configuration', ev, 'env:api-config', previous, now=1)
+        (self.wt / 'repair.txt').write_text('Host repair commit\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'host repair')
+        repaired = self.git('rev-parse', 'HEAD')
+        self.git('push', '-q', 'origin', 'main')
+        self.git('reset', '--hard', previous)
+        pr = self.service_state()['pr']; pr['headRefOid'] = repaired
+        self.service_state(pr=pr, replays=['pass'])
+        with mock.patch('urllib.request.urlopen') as health:
+            health.return_value.__enter__.return_value.status = 200
+            driver.retriage([str(task)], s)
+        self.assertEqual(self.git('rev-parse', 'HEAD'), repaired)
+        self.assertEqual((self.wt / 'repair.txt').read_text(), 'Host repair commit\n')
+        self.assertNotIn('blocked', st)
+        for key in ('simrepair', 'fix_rounds'):
+            self.assertNotIn(key, st)
+        replay = next(row for row in st['attempts'] if row['kind']=='environment-retriage')
+        self.assertEqual(replay['head'], repaired)
+        self.assertEqual(replay['outcome'], 'pass')
+        self.assertFalse(any(call['tool']=='codex' for call in self.service_state()['calls']))
+
+    def test_parked_refresh_preserves_dirty_and_unpublished_divergent_work(self):
+        task, s = self.task_checkout()
+        head = self.git('rev-parse', 'HEAD')
+        path = self.wt / 'file.txt'; path.write_text('unfinished edit\n')
+        with self.assertRaisesRegex(ValueError, 'unfinished edits'):
+            driver.refresh_pr_head(str(self.wt), 'main', head)
+        self.assertEqual(path.read_text(), 'unfinished edit\n')
+        self.assertEqual(self.git('rev-parse', 'HEAD'), head)
+        self.git('add', '.'); self.git('commit', '-qm', 'unpublished work')
+        local = self.git('rev-parse', 'HEAD')
+        with self.assertRaisesRegex(ValueError, 'unpublished commits'):
+            driver.refresh_pr_head(str(self.wt), 'main', head)
+        self.assertEqual(self.git('rev-parse', 'HEAD'), local)
+        self.assertEqual(path.read_text(), 'unfinished edit\n')
+        other = self.root / 'host-repair'
+        real = self.env['REAL_GIT']
+        subprocess.run([real, 'clone', '-q', '-b', 'main', str(self.root / 'origin.git'), str(other)], check=True)
+        def remote(*args):
+            return subprocess.check_output([real, '-C', str(other), *args], text=True, stderr=subprocess.PIPE).strip()
+        remote('checkout', '-q', 'main')
+        remote('config', 'user.name', 'Host'); remote('config', 'user.email', 'host@example.test')
+        (other / 'remote.txt').write_text('independent host repair\n')
+        remote('add', '.'); remote('commit', '-qm', 'remote repair'); remote('push', '-q', 'origin', 'main')
+        with self.assertRaises(RuntimeError):
+            driver.refresh_pr_head(str(self.wt), 'main', remote('rev-parse', 'HEAD'))
+        self.assertEqual(self.git('rev-parse', 'HEAD'), local)
+        self.assertEqual(path.read_text(), 'unfinished edit\n')
 
     def test_preparing_baseline_requeues_unknown_failure_without_main_advancing(self):
         task, s = self.task_checkout()
@@ -607,6 +821,21 @@ class DriverTest(unittest.TestCase):
         self.assertIn('ALL DONE', (host / 'driver.log').read_text())
         self.assertTrue(list(host.glob('driver.py.*.bak')))
         self.assertEqual(json.loads((host / 'source-receipt.json').read_text())['source'], plan['source'])
+        installed = Path(receipt['version']) / 'controls/scripts/sim/preview-backend.mjs'
+        self.assertEqual(installed.read_bytes(), (SOURCE.parents[2] / 'scripts/sim/preview-backend.mjs').read_bytes())
+        self.assertTrue(os.access(Path(receipt['version']) / 'controls/scripts/sim/xcodebuild', os.X_OK))
+        # Existing callers resolve both Python recovery and JS imports from this
+        # installed version, without importing candidate-controlled modules.
+        code = ('import json, os, runpy, sys; loaded=runpy.run_path(sys.argv[1],run_name="fixture"); '
+                'c=loaded["context"]; print(json.dumps(c.select_backend(sys.argv[2],sys.argv[3],os.environ)))')
+        selected = subprocess.run([sys.executable, '-B', '-c', code, str(host / 'driver.py'),
+                                   str(self.wt), self.git('rev-parse', 'HEAD')],
+                                  env=self.env, text=True, capture_output=True, timeout=10)
+        self.assertEqual(selected.returncode, 0, selected.stderr)
+        self.assertEqual(json.loads(selected.stdout)['deployment']['id'], 'dpl_fixture')
+        preflight = [call for call in self.service_state()['calls']
+                     if call['tool']=='node' and 'preview-backend.mjs' in call['args'][0]][-1]
+        self.assertEqual(Path(preflight['args'][0]), installed)
         self.assertFalse(any(call['tool'] == 'codex' for call in self.service_state()['calls']))
         progress = subprocess.run([sys.executable,'-B',str(host/'progress.py')],env=self.env,text=True,capture_output=True,timeout=10)
         self.assertEqual(progress.returncode,0,progress.stderr)
@@ -632,7 +861,7 @@ class DriverTest(unittest.TestCase):
         subprocess.run([self.env['REAL_GIT'], 'init', '--bare', '-q', str(remote)], check=True)
         self.git('remote', 'add', 'origin', str(remote))
         self.git('push', '-q', '-u', 'origin', 'main')
-        self.service_state(calls=[], replays=['error'], pr={'headRefOid': self.git('rev-parse', 'HEAD'),
+        self.service_state(calls=[], replays=['error'], native_required=False, pr={'headRefOid': self.git('rev-parse', 'HEAD'),
             'state':'OPEN', 'mergeStateStatus':'UNSTABLE', 'statusCheckRollup':[
             {'name':name,'conclusion':value,'status':'COMPLETED'} for name,value in
             [('Verify','SUCCESS'),('AI review','SUCCESS'),('Simulator','ERROR'),('Vercel','FAILURE')]]})
@@ -658,13 +887,49 @@ class DriverTest(unittest.TestCase):
         self.assertFalse(any(call['tool']=='git' and 'push' in call['args'] for call in calls))
         self.assertTrue(s['50583-issue-583']['needs_local_validation'])
 
+    def test_general_review_repair_with_simulator_failure_requires_local_pass_before_push(self):
+        task, s = self.task_checkout()
+        pr = self.service_state()['pr']
+        for check in pr['statusCheckRollup']:
+            if check['name'] in ('AI review', 'Simulator'):
+                check['conclusion'] = 'FAILURE'
+        after = json.loads(json.dumps(pr))
+        after['statusCheckRollup'][1]['conclusion'] = 'SUCCESS'
+        after['statusCheckRollup'][2]['conclusion'] = 'ERROR'
+        self.service_state(pr=pr, native_required=True, edit_mobile=True, live_pr_head=True,
+                           candidate=str(self.wt), after_worker_pr=after)
+        with mock.patch('time.sleep'), mock.patch('urllib.request.urlopen') as health:
+            health.return_value.__enter__.return_value.status = 200
+            with self.assertRaisesRegex(RuntimeError, 'Current-source local Maestro pass'):
+                driver.run_task(str(task), s)
+        calls = self.service_state()['calls']
+        workers = [i for i, call in enumerate(calls) if call['tool']=='codex']
+        pushes = [i for i, call in enumerate(calls) if call['tool']=='git' and call['args'][:1]==['push']]
+        self.assertEqual(len(workers), 1)
+        self.assertEqual(pushes, [], 'A published head needs no push; a failed repair may never publish')
+        self.assertTrue(s[task.stem]['needs_local_validation'])
+        self.assertNotIn('simrepair', s[task.stem])
+
+    def test_hook_repair_revalidates_new_native_source_before_retrying_push(self):
+        task, s = self.task_checkout()
+        (self.wt / 'file.txt').write_text('Unpublished tooling change\n')
+        self.service_state(push_error=True, edit_mobile=True, live_pr_head=True, candidate=str(self.wt))
+        with mock.patch('time.sleep'), self.assertRaisesRegex(RuntimeError, 'Current-source local Maestro pass'):
+            driver.run_task(str(task), s)
+        calls = self.service_state()['calls']
+        self.assertEqual(len([call for call in calls if call['tool']=='git' and call['args'][:1]==['push']]), 1)
+        self.assertTrue(s[task.stem]['needs_local_validation'])
+
     def test_requeued_repair_revalidates_after_merging_new_source_before_push(self):
         task, s = self.task_checkout(needs_local_validation=True, simrepair=2)
+        task.write_text('---\nbranch: codex/issue-583\ntitle: Shuffle\npr: 585\n---\nImplement shuffle\n')
+        self.git('checkout', '-qb', 'codex/issue-583')
+        self.git('push', '-q', '-u', 'origin', 'codex/issue-583')
         st = s[task.stem]
         base = self.git('rev-parse', 'HEAD')
         (self.wt / 'main-update.txt').write_text('new main source\n')
         self.git('add', '.'); self.git('commit', '-qm', 'advance main')
-        self.git('push', '-q', 'origin', 'main')
+        self.git('push', '-q', 'origin', 'HEAD:main')
         advanced = self.git('rev-parse', 'HEAD')
         self.git('reset', '--hard', base)
         park(st, 'Wait for dependency', self.ev, 'PR#587', base, now=1)

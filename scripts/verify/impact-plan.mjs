@@ -6,7 +6,8 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 
-export const repository = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const controlRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+export const repository = resolve(process.env.FITSY_PRODUCT_ROOT || controlRoot);
 export function isMain(url) {
   try { return Boolean(process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(url))); }
   catch { return false; } // Imports from stdin have no file entrypoint.
@@ -129,13 +130,14 @@ export function simulatorFlows(cwd = repository) {
 // poller. The supported router establishes domain ownership; REVIEW.md's
 // severity and independent review rules are separate and remain unchanged.
 function simulatorReviewTier(files, cwd, env) {
-  const roles = JSON.parse(execFileSync('/bin/bash', [resolve(cwd, 'scripts/route-reviewers.sh')],
+  const controls = env.FITSY_PRODUCT_ROOT ? controlRoot : cwd;
+  const roles = JSON.parse(execFileSync('/bin/bash', [resolve(controls, 'scripts/route-reviewers.sh')],
     { cwd, env: gitEnv(env), input: files.join('\n'), encoding: 'utf8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] }));
   if (!Array.isArray(roles) || !roles.length || roles.some(role =>
     !['backend', 'frontend', 'cto', 'designer', 'product-manager', 'gtm'].includes(role))) throw new Error('Invalid review routing');
   const tiers = { high: [], low: [] };
   let current;
-  for (const raw of readFileSync(resolve(cwd, 'scripts/verify/risk-tiers.yml'), 'utf8').split('\n')) {
+  for (const raw of readFileSync(resolve(controls, 'scripts/verify/risk-tiers.yml'), 'utf8').split('\n')) {
     const line = raw.replace(/#.*$/, '').trimEnd();
     if (!line.trim() || line === 'tiers:') continue;
     const heading = /^  (high|low):$/.exec(line);

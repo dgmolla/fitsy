@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 
 from recovery import redact
+import host
 
 
 def run(args, cwd, env=None, timeout=60):
@@ -81,14 +82,16 @@ def collect(wt, evidence_root, sha, checks, description='', env=None):
     directory = Path(evidence_root) / sha[:12]
     result.update(local_artifacts(directory))
     result['logs'] = redact(description + '\n' + result['logs'])
-    result['diff_stat'] = run(['git', 'diff', 'origin/main...HEAD', '--stat'], wt) or '(no diff)'
-    result['diff_hunks'] = run(['git', 'diff', '--no-ext-diff', '--unified=3', 'origin/main...HEAD'], wt)[-16000:] or '(no hunks)'
-    local = run(['git', 'diff', '--no-ext-diff', 'HEAD', '--stat'], wt)
+    safe = host.dev_environment(wt, env or os.environ)
+    diff = ['git', 'diff', '--no-ext-diff', '--no-textconv']
+    result['diff_stat'] = run([*diff, 'origin/main...HEAD', '--stat'], wt, safe) or '(no diff)'
+    result['diff_hunks'] = run([*diff, '--unified=3', 'origin/main...HEAD'], wt, safe)[-16000:] or '(no hunks)'
+    local = run([*diff, 'HEAD', '--stat'], wt, safe)
     if local:
         result['diff_stat'] += '\nUncommitted repair:\n' + local
-        result['diff_hunks'] += '\nUncommitted repair:\n' + run(['git', 'diff', '--no-ext-diff', 'HEAD'], wt)[-8000:]
-    result['merge_base'] = run(['git', 'merge-base', 'origin/main', 'HEAD'], wt)
-    result['main'] = run(['git', 'rev-parse', 'origin/main'], wt)
+        result['diff_hunks'] += '\nUncommitted repair:\n' + run([*diff, 'HEAD'], wt, safe)[-8000:]
+    result['merge_base'] = run(['git', 'merge-base', 'origin/main', 'HEAD'], wt, safe)
+    result['main'] = run(['git', 'rev-parse', 'origin/main'], wt, safe)
     result['main_comparison'] = 'No matching merge-base run available.'
     baseline = local_artifacts(Path(evidence_root) / result['merge_base'][:12])
     # Never infer success from missing failure files or use another flow's result.
@@ -99,7 +102,7 @@ def collect(wt, evidence_root, sha, checks, description='', env=None):
     if (env or os.environ).get('FITSY_XCTEST_SIM_UDID'):
         try:
             devices = json.loads(run(['lockf', '-t', '3600', str(Path(evidence_root).parents[1] / 'loop/sim.lock'),
-                                      'xcrun', 'simctl', 'list', 'devices', '--json'], wt, env))
+                                      'xcrun', 'simctl', 'list', 'devices', '--json'], wt, safe))
             udid = (env or os.environ)['FITSY_XCTEST_SIM_UDID']
             found = [d for values in devices['devices'].values() for d in values if d['udid'] == udid]
             result['simulator_booted'] = bool(found and found[0]['state'] == 'Booted')
@@ -107,32 +110,54 @@ def collect(wt, evidence_root, sha, checks, description='', env=None):
             result['logs'] += '\nSimulator preflight: ' + redact(str(error))
             result['simulator_booted'] = False
     try:
-        selected = json.loads(run(['node', 'scripts/sim/preview-backend.mjs', sha], wt, env))
+        selected = select_backend(wt, sha, env or os.environ)
         result['backend'] = selected['backend']
         with urllib.request.urlopen(selected['backend'] + '/api/health', timeout=15) as response:
             result['api_status'] = response.status
     except urllib.error.HTTPError as error:
         result['api_status'] = error.code
-        result['logs'] += '\nAPI health: ' + redact(error.read(4000).decode(errors='replace'))
+        with error:
+            result['logs'] += '\nAPI health: ' + redact(error.read(4000).decode(errors='replace'))
     except (OSError, RuntimeError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
         result['logs'] += '\nBackend preflight unavailable: ' + redact(str(error))
     return result
 
 
+def select_backend(wt, head, env):
+    return json.loads(run(['node', host.control('scripts/sim/preview-backend.mjs'), '--recovery', head], wt,
+                          host.backend_environment(wt, env)))
+
+
 def host_replay(wt, lock, evidence, env):
-    """Fixed canonical runner on the existing host, outside candidate Codex's sandbox."""
-    udid = env.get('FITSY_XCTEST_SIM_UDID', '')
-    if not re.fullmatch(r'[a-fA-F0-9-]{36}', udid):
-        return {'status': 'error', 'logs': 'Host runner requires an explicitly owned simulator UDID.'}
+    """Trusted controls select coverage; candidate execution gets DEV auth and isolation."""
     try:
-        head = run(['git', 'rev-parse', 'HEAD'], wt, env)
-        source = source_hash(wt, env)
-        backend = json.loads(run(['node', 'scripts/sim/preview-backend.mjs', head], wt, env))
+        safe = host.dev_environment(wt, env)
+        head = run(['git', 'rev-parse', 'HEAD'], wt, safe)
+        source = source_hash(wt, safe)
         scope = ['--scope=flow', '--flows=' + evidence['flow']] if evidence.get('baseline') else ['--scope=changed']
-        process = subprocess.run(['lockf', '-t', '3600', str(lock), 'node', 'scripts/sim/ci.mjs',
-                                  *scope, '--udid=' + udid, '--record-video'], cwd=wt,
-                                 env={**env, 'EXPO_PUBLIC_API_URL': backend['backend'], 'EXPO_NO_DOTENV': '1'},
-                                 capture_output=True, text=True, timeout=3600)
+        runner = host.control('scripts/sim/ci.mjs')
+        # Planning executes only installed controls and reads candidate source as
+        # data. Native imports, fixtures, Expo and Metro run only after isolation.
+        plan = json.loads(run(['node', runner, *scope, '--plan'], wt, safe))
+        if (not isinstance(plan.get('required'), bool) or plan.get('scope') not in ('none', 'smoke', 'flow', 'full') or
+                plan['required'] != (plan['scope'] != 'none') or not isinstance(plan.get('flows'), list) or
+                plan['required'] != bool(plan['flows'])):
+            raise ValueError('Trusted native selection returned no coverage decision')
+        if not plan['required'] and not evidence.get('flow') and not evidence.get('require_native'):
+            if source_hash(wt, safe) != source or run(['git', 'rev-parse', 'HEAD'], wt, safe) != head:
+                raise ValueError('Source changed during native selection')
+            return {'status': 'pass', 'required': False, 'head': head, 'source': source, 'logs': 'Trusted native scope: none'}
+        if not plan['required']:
+            # A failing journey still needs replay even if this diff has no mapped UI changes.
+            scope = (['--scope=flow', '--flows=' + evidence['flow']] if evidence.get('flow') else ['--scope=full'])
+        udid = env.get('FITSY_XCTEST_SIM_UDID', '')
+        if not re.fullmatch(r'[a-fA-F0-9-]{36}', udid):
+            raise ValueError('Host runner requires an explicitly owned simulator UDID.')
+        backend = select_backend(wt, head, env)
+        with host.isolated(wt, env, backend) as (isolation, selected):
+            process = subprocess.run(['lockf', '-t', '3600', str(lock), *isolation, 'node', runner,
+                                      *scope, '--udid=' + udid, '--record-video'], cwd=wt,
+                                     env=selected, capture_output=True, text=True, timeout=3600)
         output = process.stdout
         lines = output.strip().splitlines()
         if not lines:
@@ -149,9 +174,9 @@ def host_replay(wt, lock, evidence, env):
                     'logs': redact((output + process.stderr)[-8000:])}
         if result.get('status') != 'pass' or result.get('name') != 'mobile-e2e':
             raise ValueError('Host runner did not produce a passing canonical result')
-        if source_hash(wt, env) != source:
+        if source_hash(wt, safe) != source or run(['git', 'rev-parse', 'HEAD'], wt, safe) != head:
             raise ValueError('Source changed during host replay')
-        return {**result, 'head': head, 'source': source, 'flow': evidence.get('flow'), 'logs': output[-8000:]}
+        return {**result, 'required': True, 'head': head, 'source': source, 'flow': evidence.get('flow'), 'logs': output[-8000:]}
     except (OSError, RuntimeError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
         return {'status': 'error', 'logs': redact(str(error))}
 

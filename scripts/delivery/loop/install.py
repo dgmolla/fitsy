@@ -12,7 +12,28 @@ import subprocess
 import tempfile
 
 SOURCE = Path(__file__).parent
-FILES = ('driver.py', 'planner.py', 'progress.py', 'taskfiles.py', 'recovery.py', 'context.py', 'SKILL.md')
+FILES = ('driver.py', 'planner.py', 'progress.py', 'taskfiles.py', 'recovery.py', 'context.py', 'host.py', 'SKILL.md')
+
+
+def sources():
+    """Freeze controls and their imports at reviewed installation, before workers run."""
+    files = {name: (SOURCE / name).read_bytes() for name in FILES}
+    root = SOURCE.parents[2]
+    paths = [*sorted((root / 'scripts/sim').glob('*.mjs')), root / 'scripts/sim/sim', root / 'scripts/sim/xcodebuild',
+             *(root / name for name in ('scripts/verify/product-flow.mjs', 'scripts/verify/impact-plan.mjs',
+                                       'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh'))]
+    for path in paths:
+        if '.test.' not in path.name:
+            files['controls/' + str(path.relative_to(root))] = path.read_bytes()
+    # Resolve imports inside the installed snapshot, never candidate node_modules.
+    for package in ('js-yaml', 'argparse'):
+        directory = root / 'node_modules' / package
+        for path in sorted(directory.rglob('*')):
+            if path.is_file():
+                files[f'controls/node_modules/{package}/' + str(path.relative_to(directory))] = path.read_bytes()
+        if f'controls/node_modules/{package}/package.json' not in files:
+            raise ValueError(f'Install trusted {package} dependencies before installing loop controls')
+    return files
 
 
 def running_legacy_owner(directory):
@@ -48,7 +69,8 @@ def install(directory, apply=False):
     state = directory / 'state.json'
     if state.exists() and not isinstance(json.loads(state.read_text()), dict):
         raise ValueError('Existing loop state is invalid')
-    digest = hashlib.sha256(b''.join(name.encode() + (SOURCE / name).read_bytes() for name in FILES)).hexdigest()
+    frozen = sources()
+    digest = hashlib.sha256(b''.join(name.encode() + data for name, data in sorted(frozen.items()))).hexdigest()
     result = {'status': 'planned', 'directory': str(directory), 'source': digest,
               'entrypoints': ['driver.py', 'planner.py', 'progress.py']}
     if not apply:
@@ -65,12 +87,16 @@ def install(directory, apply=False):
         if not version.exists():
             stage = Path(tempfile.mkdtemp(prefix='.install-', dir=versions))
             try:
-                for name in FILES:
-                    shutil.copyfile(SOURCE / name, stage / name)
+                for name, data in frozen.items():
+                    path = stage / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(data)
+                    if name in ('controls/scripts/sim/sim', 'controls/scripts/sim/xcodebuild'):
+                        path.chmod(0o755)
                 stage.rename(version)
             finally:
                 if stage.exists(): shutil.rmtree(stage)
-        elif any((version / name).read_bytes() != (SOURCE / name).read_bytes() for name in FILES):
+        elif any((version / name).read_bytes() != data for name, data in frozen.items()):
             raise ValueError('Installed source digest does not match its contents')
         for module in ('driver', 'planner', 'progress'):
             path = directory / (module + '.py')
