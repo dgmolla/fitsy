@@ -43,6 +43,14 @@ suite('cloud runs with real PostgreSQL, shared caps and independent worker conne
     expect(results.filter(result => result.status==='fulfilled')).toHaveLength(1);
     expect(await db.$queryRaw`SELECT run_id FROM public.pipeline_runs WHERE status='running'`).toHaveLength(1);
   });
+  test('rollout priorities survive cloud start, determine the next claim, and cannot change on replay', async () => {
+    const prioritized = { ...request, priorities: [1, 100, 0] };
+    await runs.start(prioritized);
+    expect(await new HexJobQueue(clients[1]!).claim(runId, 'metro-first')).toMatchObject({ hexId: hexIds[1], priority: 100 });
+    expect(await runs.start(prioritized)).toMatchObject({ selectedHexes: 2 });
+    await expect(runs.start({ ...request, priorities: [100, 1, 0] })).rejects.toThrow('limits changed');
+    expect(await db.hexJob.findUnique({ where: { runId_hexId: { runId, hexId: hexIds[1]! } } })).toMatchObject({ priority: 100 });
+  });
   test('concurrent replicas cannot multiply a run budget; known charges and restart never reset it', async () => {
     await runs.start(request);
     const budgets = clients.map(client => new CloudRunBudget(client,runId));

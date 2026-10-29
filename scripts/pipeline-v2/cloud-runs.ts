@@ -10,6 +10,7 @@ const startSchema = z.object({
   hexIds: z.array(z.string()).min(1).max(1000),
   maxHexes: z.number().int().min(1).max(1000),
   budgetUsd: z.number().finite().min(0).max(5000),
+  priorities: z.array(z.number().int().min(0).max(2147483647)).min(1).max(1000).optional(),
 }).strict();
 export type RunStart = z.infer<typeof startSchema>;
 export class RunRequestError extends Error {}
@@ -18,9 +19,11 @@ export function parseRunStart(input: unknown): RunStart {
   try {
     const result = startSchema.parse(input);
     result.hexIds.forEach(validateV2Hex);
+    if (result.priorities && (result.priorities.length !== result.hexIds.length || new Set(result.hexIds).size !== result.hexIds.length)) throw new Error();
     if (new Prisma.Decimal(result.budgetUsd).decimalPlaces() > 9) throw new Error();
     // Count distinct hexes, with an explicit finite upper bound even for a larger supplied list.
-    return { ...result, hexIds: [...new Set(result.hexIds)].slice(0, result.maxHexes) };
+    return { ...result, hexIds: [...new Set(result.hexIds)].slice(0, result.maxHexes),
+      ...(result.priorities ? { priorities: result.priorities.slice(0, result.maxHexes) } : {}) };
   } catch { throw new RunRequestError('Start requires runId, explicit LA hexIds, maxHexes (1-1000), and budgetUsd (0-5000, up to 9 decimals)'); }
 }
 export interface RunState {
@@ -54,7 +57,7 @@ export class CloudRuns {
       await tx.$executeRaw`INSERT INTO public.pipeline_runs(run_id,config,max_hexes,budget_usd,status)
         VALUES (${runId},${config}::jsonb,${request.maxHexes},${request.budgetUsd}::numeric,${status})`;
       const queue = new HexJobQueue(tx);
-      for (const hexId of request.hexIds) await queue.enqueue({ runId, hexId, target: this.target });
+      for (const [index, hexId] of request.hexIds.entries()) await queue.enqueue({ runId, hexId, target: this.target }, 5, 3, request.priorities?.[index] ?? 0);
     });
     return (await this.state(runId))!;
   }
