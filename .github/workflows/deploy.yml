@@ -78,8 +78,18 @@ jobs:
           RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          cat > "$RUNNER_TEMP/production-incident.md" <<EOF
+          **TL;DR:** Production verification stopped; inspect the exact failed deployment before resuming.
+
+          Source: [$RELEASE_SHA]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$RELEASE_SHA).
+          [Deploy logs]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) identify the failed Vercel deployment, build/migration logs and observed fitsy.org serving source.
+          A healthy older source does not establish recovery.
+          For Prisma P3009, retain failed history and follow [the read-only migration audit and separately authorized recovery]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$RELEASE_SHA/docs/engineering/devops/routine-production.md).
+          Do not automatically resolve or retry failed migrations.
+          If rollback is needed, use the retained verified deployment URL with scripts/deploy/rollback.sh api.
+          EOF
           gh issue create --label incident --title "incident: prod release failed at ${RELEASE_SHA:0:7}" \
-            --body "**TL;DR:** Production verification stopped. Inspect Vercel's Git deployment, migration/build logs and actual fitsy.org serving source before resuming. If needed, use the retained known-good URL: scripts/deploy/rollback.sh api https://KNOWN_GOOD_URL. Source $RELEASE_SHA; see Deploy logs."
+            --body-file "$RUNNER_TEMP/production-incident.md"
 
   ota:
     # Trusted main release jobs coordinate with local rollback through a Git ref.

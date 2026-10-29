@@ -59,6 +59,10 @@ It is not a gate on the timing of the existing Git producer's build.
 The smoke job observes GitHub's actual Vercel bot deployment/status for the exact main SHA and Production environment.
 It checks the trusted bot identity and immutable deployment URL, then requires that deployment and `https://fitsy.org/api/health` to report the exact source and connected database.
 It waits boundedly for Git deployment/domain readiness, fails on a failed newest deployment, runs the existing production-safe API smoke, then rechecks public serving identity.
+On a terminal Vercel failure, the observer records the exact source, GitHub deployment ID, provider state and the trusted project's build-log link.
+It makes one read-only public health request with a five-second timeout to report the currently serving source; unavailable or malformed health remains unknown and cannot mask the original deployment failure.
+Provider descriptions, arbitrary log URLs and raw health errors are excluded from this diagnostic.
+The failure incident links the exact Deploy run and source plus the existing separately authorized migration recovery procedure, without emitting a success receipt or retrying the deployment.
 The health endpoint already consumes Vercel's system `VERCEL_GIT_COMMIT_SHA`.
 No custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval is required.
 Keep the existing repository Expo/smoke credential route.

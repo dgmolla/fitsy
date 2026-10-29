@@ -32,6 +32,29 @@ def vercel_bot(value):
     return value.get('id') == 35613825 and value.get('login') == 'vercel[bot]' and value.get('type') == 'Bot'
 
 
+def deployment_failure(source, row, status):
+    # Diagnostics cannot admit an older source, retry a migration, or replace
+    # the terminal provider failure if public health is itself unavailable.
+    serving = 'unavailable'
+    try:
+        value = read_health('https://fitsy.org', timeout=5)
+        sha = value.get('deploymentSha') if isinstance(value, dict) else None
+        if isinstance(sha, str) and re.fullmatch('[0-9a-f]{40}', sha):
+            serving = sha
+    except (ValueError, OSError):
+        pass
+    logs = status.get('log_url')
+    if not isinstance(logs, str) or not re.fullmatch(
+            r'https://vercel\.com/dawits-projects-74b6e00f/fitsy-api/[A-Za-z0-9]+', logs):
+        logs = 'https://vercel.com/dawits-projects-74b6e00f/fitsy-api/deployments'
+    state = status['state'] if status['state'] in ('failure', 'error', 'inactive') else 'unknown'
+    identity = row.get('id') if type(row.get('id')) is int else 'unknown'
+    return (f'Vercel Git production deployment failed or inactive: state={state}, source={source}, '
+            f'deployment={identity}; build/migration logs: {logs}; fitsy.org serving source: {serving}. '
+            'For P3009, inspect scripts/deploy/migration-failure-audit.sql; '
+            'recovery requires separately authorized maintenance, never automatic resolve or retry.')
+
+
 def deployment(source):
     """Observe the existing Git producer, without deployment credentials."""
     rows = github({}, f'repos/{REPO}/deployments?sha={source}&environment=Production&per_page=100')
@@ -51,7 +74,8 @@ def deployment(source):
             'untrusted production deployment status issuer/environment')
     if status['state'] in ('queued', 'pending', 'in_progress'):
         return None
-    require(status['state'] == 'success', 'Vercel Git production deployment failed or inactive')
+    if status['state'] != 'success':
+        raise ValueError(deployment_failure(source, row, status))
     url = status.get('environment_url', '')
     require(status.get('target_url') == url and re.fullmatch(
         r'https://fitsy-[a-z0-9]+-dawits-projects-74b6e00f\.vercel\.app', url),
@@ -61,10 +85,14 @@ def deployment(source):
     return {'deployment': row, 'status': status}
 
 
-def health(source, base='https://fitsy.org'):
+def read_health(base, timeout=30):
     request = urllib.request.Request(base + '/api/health', headers={'Cache-Control': 'no-cache'})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        value = json.load(response)
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.load(response)
+
+
+def health(source, base='https://fitsy.org'):
+    value = read_health(base)
     require(value.get('status') == 'ok' and value.get('db') == 'connected'
             and value.get('deploymentSha') == source, 'production health/source mismatch')
 

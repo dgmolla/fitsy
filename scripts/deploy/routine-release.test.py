@@ -140,6 +140,11 @@ class GitDeploymentTests(unittest.TestCase):
         self.url = 'https://fitsy-brnzbu5lq-dawits-projects-74b6e00f.vercel.app'
         self.status = {'id': 13, 'state': 'success', 'creator': bot, 'environment': 'Production',
                        'environment_url': self.url, 'target_url': self.url}
+        # Failed observations now read public health for diagnostics. Keep every
+        # scenario offline, including older refusal tests with no health fixture.
+        transport = patch.object(gate.urllib.request, 'urlopen', side_effect=gate.urllib.error.URLError('offline fixture'))
+        transport.start()
+        self.addCleanup(transport.stop)
 
     def post_smoke(self, change, snapshot=None, during_health=None, missing=False):
         """Drive the real CLI selected by the workflow, replacing only transport."""
@@ -291,6 +296,101 @@ class GitDeploymentTests(unittest.TestCase):
                 patch.object(gate, 'health', side_effect=ValueError('source mismatch')), patch.object(gate.time, 'sleep'):
             with self.assertRaisesRegex(ValueError, 'not observed'):
                 gate.observe(self.source)
+
+    def failed_observation(self, response, *, state='error', transport_error=None):
+        self.status['state'] = state
+        self.status['log_url'] = self.log_url
+        self.trace = []
+
+        def github(config, endpoint):
+            self.trace.append(endpoint)
+            if endpoint.endswith('git/ref/heads/main'):
+                return {'object': {'sha': self.source}}
+            return [self.status] if '/statuses?' in endpoint else [self.row]
+
+        output = io.StringIO()
+        with patch.object(gate, 'github', side_effect=github), \
+                patch.object(gate.urllib.request, 'urlopen',
+                             return_value=io.StringIO(json.dumps(response)), side_effect=transport_error) as read, \
+                patch.object(sys, 'argv', ['routine-release.py', 'observe', self.source]), \
+                patch('sys.stdout', output), self.assertRaises(ValueError) as failure:
+            gate.main()
+        self.assertEqual(output.getvalue(), '', 'a failed observation must never emit a successful receipt')
+        self.assertEqual(self.trace, [
+            f'repos/{gate.REPO}/git/ref/heads/main', f'repos/{gate.REPO}/git/ref/heads/main',
+            f'repos/{gate.REPO}/deployments?sha={self.source}&environment=Production&per_page=100',
+            f'repos/{gate.REPO}/deployments/12/statuses?per_page=1',
+        ], 'a terminal failure must not retry or select another deployment')
+        return str(failure.exception), read
+
+    log_url = 'https://vercel.com/dawits-projects-74b6e00f/fitsy-api/AC5ozgRAfyb2VX7bqMDyfYZqFNEL'
+
+    def test_failed_observer_reports_exact_deployment_logs_and_older_serving_source(self):
+        serving = 'bfd87f8fbd7ee9863554e973870f6988248d102f'
+        for state in ('failure', 'error', 'inactive'):
+            with self.subTest(state=state):
+                message, read = self.failed_observation(
+                    {'status': 'ok', 'db': 'connected', 'deploymentSha': serving}, state=state)
+                self.assertIn(f'state={state}', message)
+                self.assertIn(f'source={self.source}', message)
+                self.assertIn('deployment=12', message)
+                self.assertIn(self.log_url, message)
+                self.assertIn(f'fitsy.org serving source: {serving}', message)
+                self.assertIn('migration-failure-audit.sql', message)
+                self.assertEqual(read.call_args.args[0].full_url, 'https://fitsy.org/api/health')
+                self.assertEqual(read.call_args.kwargs['timeout'], 5)
+
+    def test_failed_observer_preserves_failure_when_public_health_is_unavailable_or_malformed(self):
+        for response, error in [(None, gate.urllib.error.URLError('private-driver-detail')),
+                                ([], None), ({'deploymentSha': 'private-driver-detail'}, None)]:
+            with self.subTest(response=response, error=error):
+                message, _ = self.failed_observation(response, transport_error=error)
+                self.assertIn('Vercel Git production deployment failed or inactive', message)
+                self.assertIn('fitsy.org serving source: unavailable', message)
+                self.assertNotIn('private-driver-detail', message)
+                self.assertIn(self.log_url, message)
+
+    def test_failed_observer_omits_untrusted_log_urls_and_provider_descriptions(self):
+        self.status['description'] = 'private-provider-detail'
+        for url in ('https://attacker.invalid/private-token', self.log_url + '?token=private-token',
+                    self.log_url.replace('/fitsy-api/', '/other-project/'), None):
+            with self.subTest(url=url):
+                self.log_url = url
+                message, _ = self.failed_observation({})
+                self.assertIn('https://vercel.com/dawits-projects-74b6e00f/fitsy-api/deployments', message)
+                self.assertNotIn('private-token', message)
+                self.assertNotIn('private-provider-detail', message)
+                self.assertNotIn('other-project', message)
+
+    def test_failure_workflow_files_actionable_incident_using_the_exact_run_and_source(self):
+        command = next(step['run'] for step in self.steps if step.get('name') == 'File incident on failure')
+        with tempfile.TemporaryDirectory(prefix='fitsy-incident-') as directory:
+            root = Path(directory)
+            gh = root / 'gh'
+            gh.write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+assert args[:2] == ['issue', 'create']
+body = Path(args[args.index('--body-file') + 1]).read_text()
+Path(os.environ['INCIDENT_CAPTURE']).write_text(json.dumps({'args': args, 'body': body}))
+''')
+            gh.chmod(0o700)
+            result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', command], text=True, capture_output=True,
+                                    env={**os.environ, 'PATH': directory + ':' + os.environ['PATH'],
+                                         'RUNNER_TEMP': directory, 'RELEASE_SHA': self.source,
+                                         'GITHUB_SERVER_URL': 'https://github.com', 'GITHUB_REPOSITORY': gate.REPO,
+                                         'GITHUB_RUN_ID': '40823525184', 'INCIDENT_CAPTURE': str(root / 'capture')})
+            self.assertEqual(result.returncode, 0, result.stderr)
+            captured = json.loads((root / 'capture').read_text())
+            self.assertIn(f'incident: prod release failed at {self.source[:7]}', captured['args'])
+            body = captured['body']
+            self.assertTrue(body.startswith('**TL;DR:**'))
+            self.assertIn('https://github.com/dgmolla/fitsy/actions/runs/40823525184', body)
+            self.assertIn(f'https://github.com/dgmolla/fitsy/commit/{self.source}', body)
+            self.assertIn('P3009', body)
+            self.assertIn('separately authorized', body)
+            self.assertNotIn('KNOWN_GOOD_URL', body)
 
     def test_public_health_must_report_exact_source_and_connected_database(self):
         import io
