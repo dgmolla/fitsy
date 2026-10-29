@@ -1,6 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { calculateAge } from '../../../packages/shared/src/utils/dateUtils';
-import { calculateRecommendedCalories } from '../../../packages/shared/src/utils/macroTargets';
 import type { TriedApproach } from './onboardingPersonalization';
 import { supabase } from './supabase';
 import { validateProfileFact } from './profileFactValidation';
@@ -173,16 +171,5 @@ export async function clearAccountOnboardingData(userId: string | null, forgetLe
     else await retainLegacy(record);
     if (record && (record._owner === userId || record._owner === undefined || record._owner === null))
       await AsyncStorage.removeItem(KEY);
-  });
-}
-
-export function calculateSuggestedCalories(data: OnboardingData): number {
-  return calculateRecommendedCalories({
-    age: data.birthday ? calculateAge(data.birthday) : undefined,
-    heightCm: data.heightCm,
-    weightKg: data.weightKg,
-    sex: data.sex,
-    activityLevel: data.activity,
-    goal: data.goal,
   });
 }

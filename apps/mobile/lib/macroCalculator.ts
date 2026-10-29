@@ -1,6 +1,7 @@
 import { calculateSettledDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
 export { calculateDailyMacros } from '../../../packages/shared/src/utils/macroTargets';
-import { calculateSuggestedCalories, type OnboardingData } from './onboardingStorage';
+import type { OnboardingData } from './onboardingStorage';
+import { calculateSuggestedCalories } from './onboardingRecommendations';
 import type { StoredMacroTargets } from './macroStorage';
 import { macroCalories } from './macroEnergy';
 

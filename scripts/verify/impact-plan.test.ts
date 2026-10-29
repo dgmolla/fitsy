@@ -42,6 +42,7 @@ case "$*" in
   *--workspace=apps/api*) group=api ;;
   *--workspace=@fitsy/scripts*) group=scripts ;;
   *--workspace=@fitsy/mobile*) group=mobile ;;
+  *--workspace=@fitsy/shared*) group=shared ;;
   *) echo 'unexpected test engine command' >&2; exit 1 ;;
 esac
 echo "$group" >> .evidence/group-calls
@@ -118,15 +119,17 @@ test.each([
   expect(actual).toEqual(['scripts', 'api', 'mobile'].filter(group => groups.includes(group)));
   expect(fixture.calls().includes('scripts-node')).toBe(groups.includes('scripts'));
   expect(fixture.calls().includes('scripts-python')).toBe(groups.includes('scripts'));
+  expect(fixture.calls().filter(call => call === 'shared')).toEqual(groups.length ? ['shared'] : []);
   if (groups.includes('api')) expect(readFileSync(join(directory, '.evidence/group-argv'), 'utf8')).toContain('test:coverage');
 });
 
-test.each(['api', 'scripts', 'mobile'])('a failed selected whole %s group blocks acceptance', group => {
+test.each(['api', 'scripts', 'mobile', 'shared'])('a failed selected whole %s group blocks acceptance', group => {
   const fixture = wholeGroupFixture();
   write('packages/shared/src/changed.ts', 'export const value = true;\n'); const head = commit();
   const result = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head, FAIL_GROUP: group });
   expect(result.status).toBe(1);
   expect(result.stdout).toContain('"name":"test","status":"fail"');
+  expect(result.stdout).toContain(`tests failed in: ${group}`);
   expect(fixture.calls().filter(call => ['api', 'scripts', 'mobile'].includes(call))).toEqual(['scripts', 'api', 'mobile']);
 });
 
@@ -153,12 +156,12 @@ test('whole groups use the integrated main range and the actual pinned PR range'
   git('update-ref', 'refs/remotes/origin/main', head);
   const main = { CI: 'true', GITHUB_EVENT_NAME: 'push', GITHUB_EVENT_PATH: event('groups-main', { before: fixture.base, after: head }) };
   expect(fixture.run(main).status).toBe(0);
-  expect(fixture.calls()).toEqual(['api', 'mobile']);
+  expect(fixture.calls()).toEqual(['shared', 'api', 'mobile']);
   git('checkout', '--detach', fixture.base);
   const pr = { CI: 'true', GITHUB_EVENT_NAME: 'pull_request',
     GITHUB_EVENT_PATH: event('groups-pr', { pull_request: { base: { sha: fixture.base }, head: { sha: head } } }) };
   expect(fixture.run(pr).status).toBe(0);
-  expect(fixture.calls()).toEqual(['api', 'mobile']);
+  expect(fixture.calls()).toEqual(['shared', 'api', 'mobile']);
 });
 
 test('whole groups retain dirty and untracked changes even with an explicit local head', () => {
@@ -177,7 +180,7 @@ test('whole groups cover deleted and cross-group renamed paths', () => {
   git('update-ref', 'refs/remotes/origin/main', base);
   git('rm', 'apps/api/lib/removed.ts'); const head = commit();
   expect(fixture.run({ CI: 'true', FITSY_DIFF_BASE: base, FITSY_DIFF_HEAD: head }).status).toBe(0);
-  expect(fixture.calls()).toEqual(['api']);
+  expect(fixture.calls()).toEqual(['shared', 'api']);
   write('apps/api/lib/moved.ts', 'export const value = true;\n'); const renameBase = commit();
   mkdirSync(join(directory, 'scripts/review'), { recursive: true });
   git('mv', 'apps/api/lib/moved.ts', 'scripts/review/moved.ts'); const renamed = commit();

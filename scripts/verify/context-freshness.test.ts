@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -13,6 +13,7 @@ beforeEach(() => {
     writeFileSync(join(root, path), "Context\n");
   }
   writeFileSync(join(root, "package.json"), '{"scripts":{"verify":"true"}}');
+  execFileSync('git', ['init', '-q'], { cwd: root });
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 function check() {
@@ -24,4 +25,20 @@ test("root instructions are checked for stale commands", () => {
   const result = check();
   expect(result.status).toBe(1);
   expect(result.stdout).toContain("AGENTS.md->npm-run:missing-script");
+});
+
+test('new package AGENTS files participate without a hard-coded file list', () => {
+  mkdirSync(join(root, 'packages/shared'), { recursive: true });
+  writeFileSync(join(root, 'packages/shared/AGENTS.md'), 'Run npm run missing-shared-test.\n');
+  const result = check();
+  expect(result.status).toBe(1);
+  expect(result.stdout).toContain('packages/shared/AGENTS.md->npm-run:missing-shared-test');
+});
+
+test.each(['apps/mobile', '@fitsy/mobile'])('workspace test commands accept the actual path or package name: %s', workspace => {
+  writeFileSync(join(root, 'apps/mobile/package.json'), JSON.stringify({ name: '@fitsy/mobile' }));
+  writeFileSync(join(root, 'apps/mobile/AGENTS.md'), `Run npm test -w ${workspace}.\n`);
+  expect(check().status).toBe(0);
+  writeFileSync(join(root, 'apps/mobile/AGENTS.md'), 'Run npm test -w @fitsy/missing.\n');
+  expect(check().stdout).toContain('apps/mobile/AGENTS.md->workspace:@fitsy/missing');
 });

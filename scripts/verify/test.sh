@@ -42,6 +42,8 @@ run_node() {
   node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=./scripts/verify/node-focused-reporter.mjs --test-reporter-destination="$REPORTS/$group.json" "$@" >&2 &&
     node scripts/verify/test-results.mjs "$REPORTS/$group.json" node >&2 || FAIL="${FAIL:+$FAIL, }$group"
 }
+# Shared pure contracts run with every affected group; they need no database.
+run_jest shared npm test --workspace=@fitsy/shared --
 if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   unset FITSY_VERIFY_FOCUSED_RECIPE
   # Real decoder and attachment cases retain the required local media lane.

@@ -2,6 +2,22 @@ import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
 import reactHooks from "eslint-plugin-react-hooks";
 
+// General correctness checks, shared by every application TypeScript boundary.
+const correctnessRules = {
+  "no-async-promise-executor": "error",
+  "no-constant-binary-expression": "error",
+  "no-unsafe-finally": "error",
+  "use-isnan": "error",
+  "valid-typeof": "error",
+};
+
+const typedCorrectnessRules = {
+  "@typescript-eslint/await-thenable": "error",
+  // React/native event callbacks accept async handlers whose own body handles errors.
+  // Still reject promises used as conditions, predicates or object spreads.
+  "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: false }],
+};
+
 /** @type {import("eslint").Linter.FlatConfig[]} */
 export default [
   // Global ignores (no `files` key = applies everywhere)
@@ -14,8 +30,7 @@ export default [
       "**/next-env.d.ts",
     ],
   },
-  // Mobile: type-aware parsing is too slow for RN's tree and jest-expo mocks;
-  // parse without a project. Same rule intent as api; deviations noted inline.
+  // Tests retain syntax rules and strict tsc; typed source lint stays within 512 MB.
   {
     files: ["apps/mobile/**/*.{ts,tsx}"],
     languageOptions: {
@@ -28,6 +43,7 @@ export default [
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      ...correctnessRules,
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
       "@typescript-eslint/no-explicit-any": "error",
@@ -50,21 +66,29 @@ export default [
       ],
     },
   },
+  {
+    files: ["apps/mobile/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.*", "**/__mocks__/**", "**/test-fixtures/**"],
+    languageOptions: {
+      parserOptions: {
+        project: "./apps/mobile/tsconfig.eslint.json",
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: typedCorrectnessRules,
+  },
   // TypeScript rules for app + shared sources
   {
     files: ["apps/api/**/*.{ts,tsx}", "packages/shared/**/*.ts"],
     languageOptions: {
       parser: tsParser,
-      parserOptions: {
-        project: ["./apps/api/tsconfig.json", "./packages/shared/tsconfig.json"],
-        tsconfigRootDir: import.meta.dirname,
-      },
     },
     plugins: {
       "@typescript-eslint": tsPlugin,
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      ...correctnessRules,
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
@@ -73,5 +97,16 @@ export default [
       "@typescript-eslint/explicit-function-return-type": "off",
       "no-console": "warn",
     },
+  },
+  {
+    files: ["apps/api/{app,lib,components}/**/*.{ts,tsx}", "packages/shared/**/*.ts"],
+    ignores: ["**/*.test.*", "**/__mocks__/**", "**/test-fixtures/**"],
+    languageOptions: {
+      parserOptions: {
+        project: ["./apps/api/tsconfig.eslint.json", "./packages/shared/tsconfig.json"],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: { ...typedCorrectnessRules, "@typescript-eslint/no-floating-promises": "error" },
   },
 ];

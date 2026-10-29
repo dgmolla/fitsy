@@ -15,7 +15,11 @@ beforeEach(() => {
   for (const name of ['focused-tests.mjs', 'test-results.mjs', 'impact-plan.mjs', 'python-focused.py', 'local-db.mjs', 'local-db-control.mjs', 'docker-runtime.mjs', 'node-focused-reporter.mjs']) copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
   symlinkSync(join(source, 'node_modules'), join(root, 'node_modules'));
   writeFileSync(join(root, '.gitignore'), 'node_modules\n.evidence/\n');
-  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts'] }));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts', 'packages/shared'] }));
+  mkdirSync(join(root, 'packages/shared'), { recursive: true });
+  writeFileSync(join(root, 'packages/shared/package.json'), JSON.stringify({ name: '@fitsy/shared', scripts: { test: 'jest --config=jest.config.cjs' } }));
+  writeFileSync(join(root, 'packages/shared/jest.config.cjs'), 'module.exports = { testMatch: ["**/*.test.ts"], transform: {} };\n');
+  writeFileSync(join(root, 'packages/shared/fixture.test.ts'), "test('shared contract', () => expect(process.env.SHARED_FAILURE).not.toBe('1'));\n");
   writeFileSync(join(root, 'scripts/package.json'), JSON.stringify({ name: '@fitsy/scripts', scripts: { test: 'jest --config=jest.config.cjs' } }));
   writeFileSync(join(root, 'scripts/jest.config.cjs'), 'module.exports = { testMatch: ["**/*.test.ts"], transform: {} };\n');
   writeFileSync(join(root, 'scripts/fixture.test.ts'), "test('fixture outcome', () => { expect(2 + 2).toBe(4); expect(process.env.PIPELINE_DATABASE_URL).toBeUndefined(); });\n");
@@ -30,10 +34,20 @@ test('persisted focused recipe executes real matching Jest tests and retains the
   expect(cli().status).toBe(0);
   expect(JSON.parse(readFileSync(join(root, '.evidence/verify/focused-tests.json'), 'utf8'))).toMatchObject({ pattern: 'fixture outcome' });
 });
+test('shared focused assertions execute and failures remain failures', () => {
+  expect(cli('--set', 'packages/shared/fixture.test.ts').status).toBe(0);
+  const passed = cli();
+  expect(passed.status).toBe(0);
+  expect(JSON.parse(passed.stdout.trim().split('\n').at(-1)!)).toMatchObject({ status: 'pass', executed_tests: 1 });
+  const failed = spawnSync(process.execPath, ['scripts/verify/focused-tests.mjs'],
+    { cwd: root, env: { ...env, SHARED_FAILURE: '1' }, encoding: 'utf8', timeout: 30000 });
+  expect(failed.status).toBe(1);
+  expect(failed.stderr).toContain('shared contract');
+});
 test('the full affected group reruns focused files and includes unselected failing assertions', () => {
   copyFileSync(join(source, 'scripts/verify/test.sh'), join(root, 'scripts/verify/test.sh'));
   mkdirSync(join(root, 'apps/mobile'), { recursive: true });
-  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts', 'apps/mobile'] }));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts', 'apps/mobile', 'packages/shared'] }));
   writeFileSync(join(root, 'apps/mobile/package.json'), JSON.stringify({ name: '@fitsy/mobile', scripts: { test: 'jest --config=jest.config.cjs' } }));
   copyFileSync(join(root, 'scripts/jest.config.cjs'), join(root, 'apps/mobile/jest.config.cjs'));
   writeFileSync(join(root, 'apps/mobile/fixture.test.ts'), `const fs = require('node:fs');
@@ -52,11 +66,16 @@ test('whole group outcome', () => { fs.appendFileSync('../../.evidence/cases', '
   expect(readFileSync(join(root, '.evidence/cases'), 'utf8')).toBe('AAB');
   expect(full('1').status).toBe(1);
   expect(readFileSync(join(root, '.evidence/cases'), 'utf8')).toBe('AABAB');
+  const failedShared = spawnSync('/bin/bash', ['scripts/verify/test.sh', '--scope=changed'],
+    { cwd: root, encoding: 'utf8', env: { ...env, SHARED_FAILURE: '1', FULL_FAILURE: '0' }, timeout: 30000 });
+  expect(failedShared.status).toBe(1);
+  expect(JSON.parse(failedShared.stdout)).toMatchObject({ summary: 'tests failed in: shared' });
+  expect(failedShared.stderr).toContain('shared contract');
 }, 45000);
 test('Verify retains an API assertion followed by more than 10000 characters of mobile output', () => {
   for (const name of ['run.mjs', 'test.sh']) copyFileSync(join(source, 'scripts/verify', name), join(root, 'scripts/verify', name));
   writeFileSync(join(root, 'scripts/verify/registry.yml'), 'checks:\n  - name: test\n    script: test.sh\n    layer: 2\n    blocking: true\n    runs: [ci]\n');
-  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts', 'apps/api', 'apps/mobile'] }));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['scripts', 'apps/api', 'apps/mobile', 'packages/shared'] }));
   for (const workspace of ['api', 'mobile']) {
     const path = join(root, 'apps', workspace);
     mkdirSync(path, { recursive: true });
@@ -203,10 +222,10 @@ test('focused Node selection retains counted real passing cases', () => {
   expect(cli().status).toBe(0);
 });
 
-test('unsupported shared Jest selection is rejected before persisting a broken recipe', () => {
-  mkdirSync(join(root, 'packages/shared/src'), { recursive: true });
-  writeFileSync(join(root, 'packages/shared/src/fixture.test.ts'), "test('shared outcome', () => {});\n");
-  const result = cli('--set', 'packages/shared/src/fixture.test.ts');
+test('unknown package Jest selection is rejected before persisting a broken recipe', () => {
+  mkdirSync(join(root, 'packages/unknown/src'), { recursive: true });
+  writeFileSync(join(root, 'packages/unknown/src/fixture.test.ts'), "test('unknown outcome', () => {});\n");
+  const result = cli('--set', 'packages/unknown/src/fixture.test.ts');
   expect(result.status).toBe(1);
   expect(result.stdout).toContain('unsupported focused test workspace');
   expect(existsSync(join(root, '.evidence/verify/focused-tests.json'))).toBe(false);

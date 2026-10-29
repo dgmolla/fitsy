@@ -9,6 +9,7 @@ export default {
   jest: {
     projectType: "custom",
     configFile: "apps/api/jest.config.js",
+    config: { roots: ["<rootDir>", "<rootDir>/../../packages/shared/src"] },
     // Jest's related-test discovery misses consumers through the shared barrel.
     enableFindRelatedTests: false,
   },
@@ -20,10 +21,10 @@ export default {
     "apps/api/services/chainServing.ts",
     "apps/api/services/menuSources/ueNutritionLabel.ts",
     "apps/api/services/chainCatalog.ts",
-    "apps/api/lib/macroScoring.ts",
     "apps/api/lib/macroTargetParams.ts",
     "apps/api/lib/macroScoreSql.ts",
     "packages/shared/src/utils/macroScoring.ts",
+    "packages/shared/src/utils/macroTargets.ts",
     "apps/api/lib/rateLimit.ts",
     "apps/api/lib/pricing.ts",
     "packages/shared/src/utils/dateUtils.ts",
