@@ -86,6 +86,7 @@ jobs:
           A healthy older source does not establish recovery.
           For Prisma P3009, retain failed history and follow [the read-only migration audit and separately authorized recovery]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$RELEASE_SHA/docs/engineering/devops/routine-production.md).
           Do not automatically resolve or retry failed migrations.
+          The manual production-migration-recovery.yml workflow defaults to audit and retains production-release approval for the exact #643 recovery.
           If rollback is needed, use the retained verified deployment URL with scripts/deploy/rollback.sh api.
           EOF
           gh issue create --label incident --title "incident: prod release failed at ${RELEASE_SHA:0:7}" \

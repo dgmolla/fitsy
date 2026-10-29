@@ -135,6 +135,7 @@ with sqlite3.connect(sys.argv[1]) as db:
     assert.equal(blocked.status, 1, blocked.stdout + blocked.stderr);
     assert.match(blocked.stderr + blocked.stdout, /P3009/);
     assert.match(blocked.stderr, /migration-failure-audit.sql/);
+    assert.match(blocked.stderr, /production-migration-recovery.yml/);
     assert.equal(ledger(), originalLedger);
     assert.deepEqual(applied(), { tables: ['_prisma_migrations', 'before'], migrations: [before] });
     // Only the separately authorized maintenance owner resolves production.

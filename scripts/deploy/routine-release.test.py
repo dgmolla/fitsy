@@ -840,6 +840,7 @@ exit "${BUILD_EXIT:-0}"
             self.assertFalse(any(call.startswith('npm') for call in calls))
             self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
             self.assertIn('migration-failure-audit.sql', result.stderr)
+            self.assertIn('production-migration-recovery.yml', result.stderr)
             self.assertIn('recovery requires separate authorization', result.stderr)
         result, calls = self.drive(BUILD_EXIT='9')
         self.assertEqual(result.returncode, 9)

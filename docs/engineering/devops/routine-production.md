@@ -90,11 +90,25 @@ Compare the failed checksum with `shasum -a 256 prisma/migrations/20261028130000
 Compare the recorded failure with the original build evidence, confirm both hex tables are absent, and diagnose any other unresolved attempt or partial effect.
 Missing ledger logs remain unknown; role absence alone does not establish the original error.
 Only after a confirmed complete rollback may that owner prepare a separately reviewed Prisma `migrate resolve --rolled-back 20261028130000_hex_jobs` operation under the existing `production-release` protection, retaining failed history and withholding role approval.
-This checkout has no generic production recovery command; do not repurpose fixture cleanup or bypass the Git-build identity guard.
+The manual `Production migration recovery` workflow now supplies only that incident-specific operation; it is separate from the routine Git build and fixture cleanup.
+It defaults to `audit`, runs on protected `main` behind the existing `production-release` environment, and uses its existing `PROD_DATABASE_URL` binding.
+No new secret or Vercel environment variable is required.
+The dedicated recovery identity is signed by GitHub and binds the exact workflow, main source, manual event, GitHub-hosted runner and protected environment to a recovery-only audience.
+It does not expand the ordinary database-writer allowlist or permit another workflow to perform recovery.
+The target must be the exact production `postgres` database with an administrator session/direct connection; DEV, loopback, transaction pooling, nonpublic schemas and role approval are refused.
+Only after separately reviewing the original failure and rollback may the maintenance owner select `resolve` and approve that protected run.
+The command re-audits the database and accepts only attempt `c4b89b99-d4a5-49d9-9664-4699383e5f81`, its original timestamp and checksum, NULL ledger logs, zero completed steps, no other unresolved attempt and absent hex tables.
+This narrow NULL-log exception is tied to the previously verified original PostgreSQL error, not an inference from missing roles or a general permission to resolve unknown failures.
+Prisma performs `migrate resolve --rolled-back`; the command checks that only the rollback marker changed and that object and role state remained unchanged.
+Repeated recovery, partial effects, changed migration bytes/history, unknown failure evidence and failed Prisma execution stop without an automatic retry, role grant or redeployment.
+The owner must coordinate exclusive maintenance, retain the audit/recovery run and resume the ordinary guarded Git deployment separately.
+This checkout still has no generic production recovery command; do not repurpose fixture cleanup or bypass the Git-build identity guard.
 Partial effects or a different failure require diagnosis and a separately reviewed repair, not a speculative resolve or another identical build.
 After authorized recovery, resume the guarded Git build and exact-source smoke against `fitsy.org`; neither local regression tests nor a healthy older serving source establish recovery.
 The guarded caller now points failures to this inspection path without resolving or retrying them.
 The disposable Prisma regression explicitly resolves its failed fixture through Prisma, then proves ordinary filtered deployment resumes, preserves the failed attempt and leaves role-dependent SQL held.
+Run `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath deploy/recover-hex-jobs.test.ts` for signed identity, target, state and actual workflow-shell refusal coverage.
+The owned database verifier also runs `apps/api/tests/db/hexJobsRecovery.db.test.ts`, which recreates the observed ledger in a disposable PostgreSQL database, proves P3009 and partial-state refusal, and rehearses real Prisma recovery followed by filtered deployment.
 If smoke reports `invalid-session=503` while database health and missing-session checks pass, inspect shared-store configuration and runtime `[rate-limit] Shared store unavailable` logs.
 Missing-session 401s return before Redis, and `/api/health` probes only the database; neither establishes authentication readiness.
 Restore both store variables in the existing `fitsy-api` Vercel environment with a writable token and verify `EVAL` access.
