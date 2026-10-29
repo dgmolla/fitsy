@@ -1,0 +1,34 @@
+{
+  "populationSource": "https://tigerweb.geo.census.gov/tigerwebmain/Files/acs25/tigerweb_acs25_metro_cbsa_2020_tab20_us.html",
+  "populationVintage": "2020 Census, January 2020 CBSA definitions",
+  "geographyNote": "Chosen H3 service envelopes around city centers, not official CBSA boundaries. Clip to the maintained US state mask. Population ranks metros only; no per-hex population is inferred.",
+  "metros": [
+    { "id": "los-angeles", "population": 13200998, "lat": 34.05, "lng": -118.25, "rings": 30 },
+    { "id": "new-york", "population": 20140470, "lat": 40.71, "lng": -74.01, "rings": 30 },
+    { "id": "chicago", "population": 9618502, "lat": 41.88, "lng": -87.63, "rings": 25 },
+    { "id": "dallas", "population": 7637387, "lat": 32.85, "lng": -96.97, "rings": 30 },
+    { "id": "houston", "population": 7122240, "lat": 29.76, "lng": -95.37, "rings": 25 },
+    { "id": "washington", "population": 6385162, "lat": 38.90, "lng": -77.04, "rings": 25 },
+    { "id": "philadelphia", "population": 6245051, "lat": 39.95, "lng": -75.17, "rings": 22 },
+    { "id": "miami", "population": 6138333, "lat": 26.13, "lng": -80.14, "rings": 30 },
+    { "id": "atlanta", "population": 6089815, "lat": 33.75, "lng": -84.39, "rings": 30 },
+    { "id": "boston", "population": 4941632, "lat": 42.36, "lng": -71.06, "rings": 22 }
+  ],
+  "scenario": {
+    "note": "Unmeasured planning scenario, not issue 591 live results. Replace with --poc=report.json before execution gates. Jev unit cost uses the curated dev baseline in eval-suite.md.",
+    "restaurants": 10, "uniqueItems": 400, "officialItems": 80, "jevItems": 320,
+    "uberEatsCalls": 10, "jevCalls": 640, "costUsd": 0.040384, "wallMs": 180000
+  },
+  "capacity": {
+    "ueCapRps": 1, "ueUtilization": 0.5, "workers": 8,
+    "jevDailyUsd": 250, "jevDailyCalls": 5000000,
+    "discoveryPagesPerProbe": 5, "retryFactor": 1.25,
+    "workerUsdPerHour": 0.1, "pdfUsdPerBrand": 0.05
+  },
+  "phases": {
+    "la-pilot": { "occupiedFraction": 1, "newPdfBrands": 5, "budgetUsd": 5 },
+    "la-metro": { "occupiedFraction": 0.5, "newPdfBrands": 50, "budgetUsd": 250 },
+    "top-metros": { "occupiedFraction": 0.5, "newPdfBrands": 150, "budgetUsd": 2000 },
+    "rest-us": { "occupiedFraction": 0.08, "newPdfBrands": 300, "budgetUsd": 10000 }
+  }
+}

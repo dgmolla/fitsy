@@ -8,16 +8,17 @@ import { HexJobLease, HexJobQueue, LeaseLostError, SharedV2Journal } from './que
 import { runV2Hex, validateV2Cap, validateV2Hex, validateV2RunId } from './run';
 import { v2Telemetry } from './telemetry';
 import { SharedServiceBudget } from './service-budget';
+import { readPriorityBatch, type PriorityJob } from './rollout-priority';
 
 export interface QueueOptions {
   mode: 'enqueue' | 'worker'; runId: string; hexIds: string[]; out: string; workerId: string;
-  capUsd: number; maxAttempts: number; priority: number; maxJobs: number;
+  capUsd: number; maxAttempts: number; priority: number; maxJobs: number; priorityJobs: PriorityJob[];
 }
 export function parseQueueOptions(args: string[]): QueueOptions {
   const mode = args[0];
   if (mode !== 'enqueue' && mode !== 'worker') throw new Error('Use enqueue or worker');
   const values = new Map<string, string>(), hexIds: string[] = [];
-  const allowed = mode === 'enqueue' ? ['run-id', 'hex-id', 'cost-cap-usd', 'max-attempts', 'priority']
+  const allowed = mode === 'enqueue' ? ['run-id', 'hex-id', 'cost-cap-usd', 'max-attempts', 'priority', 'priority-file']
     : ['run-id', 'out', 'worker-id', 'max-jobs'];
   for (const arg of args.slice(1)) {
     const match = /^--([a-z-]+)=(.+)$/.exec(arg);
@@ -29,11 +30,15 @@ export function parseQueueOptions(args: string[]): QueueOptions {
   const capUsd = Number(values.get('cost-cap-usd') ?? 5); validateV2Cap(capUsd);
   const maxAttempts = Number(values.get('max-attempts') ?? 3), priority = Number(values.get('priority') ?? 0);
   const maxJobs = Number(values.get('max-jobs') ?? 1), out = values.get('out') ?? '', workerId = values.get('worker-id') ?? '';
+  if (values.has('priority-file') && (hexIds.length || values.has('priority'))) throw new Error('Priority file cannot be combined with hex-id or priority');
+  const priorityJobs = values.has('priority-file') ? readPriorityBatch(values.get('priority-file')!) : [];
+  // Validate the complete batch before constructing Prisma or mutating any job.
+  for (const job of priorityJobs) { validateV2Hex(job.hexId); hexIds.push(job.hexId); }
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 100 || !Number.isInteger(priority)
     || priority < -2147483648 || priority > 2147483647 || !Number.isInteger(maxJobs) || maxJobs < 1 || maxJobs > 1000) throw new Error('Invalid queue bounds');
   if (mode === 'enqueue' && !hexIds.length) throw new Error('Enqueue requires explicit --hex-id=HEX values');
   if (mode === 'worker' && (!out || !workerId.trim() || workerId.length > 128)) throw new Error('Worker requires --out=PRIVATE_DIR and --worker-id=ID');
-  return { mode, runId: `${DEV_POC_RUN_PREFIX}queue:${runId}`, hexIds: [...new Set(hexIds)], out, workerId, capUsd, maxAttempts, priority, maxJobs };
+  return { mode, runId: `${DEV_POC_RUN_PREFIX}queue:${runId}`, hexIds: [...new Set(hexIds)], out, workerId, capUsd, maxAttempts, priority, maxJobs, priorityJobs };
 }
 
 /** One claim is a bounded unit, shared by the CLI and the cloud service. */
@@ -92,7 +97,8 @@ export async function workV2Job(prisma: PrismaClient, queue: HexJobQueue, runId:
 export async function runQueueCommand(prisma: PrismaClient, options: QueueOptions, target: string, source: JournalEvent) {
   const queue = new HexJobQueue(prisma);
   if (options.mode === 'enqueue') {
-    for (const hexId of options.hexIds) await queue.enqueue({ runId: options.runId, hexId, target }, options.capUsd, options.maxAttempts, options.priority);
+    const priorities = new Map(options.priorityJobs.map(job => [job.hexId, job.priority]));
+    for (const hexId of options.hexIds) await queue.enqueue({ runId: options.runId, hexId, target }, options.capUsd, options.maxAttempts, priorities.get(hexId) ?? options.priority);
     return { runId: options.runId, enqueued: options.hexIds.length };
   }
   const outcomes = [];

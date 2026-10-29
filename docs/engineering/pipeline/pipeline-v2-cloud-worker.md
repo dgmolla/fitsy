@@ -3,6 +3,7 @@
 **TL;DR:** An IAM-private Cloud Run service pulls bounded DEV runs from the existing queue and retains accounting across replicas.
 
 The worker reuses the [hex queue and UE limiter](pipeline-v2-queue.md), reviewed official matcher, Jev estimator, atomic persistence, and [daily service budgets](pipeline-v2-budgets.md).
+The [US rollout plan](pipeline-v2-us-rollout.md) supplies offline priority batches through `start --priority-file=FILE`; selected priorities become part of the immutable run limits, and current DEV/LA restrictions still apply.
 This change supplies the service, control CLI, container, deployment configuration, and executable acceptance scenarios.
 Live deployment and DEV acceptance are separate from local unit or packaging checks.
 Production remains refused by the existing DEV-only and signed workload identity guards.

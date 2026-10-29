@@ -11,6 +11,7 @@ import { parsePdfOptions, runPdfCommand } from './pipeline-v2/pdf-worker';
 import { parseBudgetOptions, SharedServiceBudget } from './pipeline-v2/service-budget';
 import { v2Telemetry } from './pipeline-v2/telemetry';
 import { runDashboardCommand } from './pipeline-v2/dashboard';
+import { runRolloutCommand } from './pipeline-v2/rollout';
 
 /** Keep the guarded datasource at the connection entrypoint for the writer inventory to verify. */
 export async function v2Database(value = process.env['PIPELINE_DATABASE_URL']): Promise<string> {
@@ -30,6 +31,7 @@ export function pipelineSourceHash(files: string[]): string {
 
 async function main() {
   const args = process.argv.slice(2);
+  if (args[0] === 'rollout') { process.stdout.write(JSON.stringify(runRolloutCommand(args)) + '\n'); return; }
   if (args[0] === 'dashboard') { await runDashboardCommand(args); return; }
   const rateCommand = args[0] === 'ue-rate';
   const budgetCommand = args[0] === 'budgets';
