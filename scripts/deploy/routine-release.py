@@ -46,7 +46,15 @@ def deployment_failure(source, row, status):
     logs = status.get('log_url')
     if not isinstance(logs, str) or not re.fullmatch(
             r'https://vercel\.com/dawits-projects-74b6e00f/fitsy-api/[A-Za-z0-9]+', logs):
-        logs = 'https://vercel.com/dawits-projects-74b6e00f/fitsy-api/deployments'
+        # Real failed statuses use the app URL as log_url. Recognize only the
+        # complete provider message; never emit or execute its command text.
+        description = status.get('description')
+        provider = re.fullmatch(
+            r'Deployment has failed \u2014 run this Vercel CLI command: '
+            r'npx vercel inspect dpl_([A-Za-z0-9]{1,64}) --logs',
+            description) if isinstance(description, str) else None
+        logs = ('https://vercel.com/dawits-projects-74b6e00f/fitsy-api/'
+                + (provider[1] if provider else 'deployments'))
     state = status['state'] if status['state'] in ('failure', 'error', 'inactive') else 'unknown'
     identity = row.get('id') if type(row.get('id')) is int else 'unknown'
     return (f'Vercel Git production deployment failed or inactive: state={state}, source={source}, '

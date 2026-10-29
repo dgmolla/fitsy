@@ -68,7 +68,9 @@ It checks the trusted bot identity and immutable deployment URL, then requires t
 It waits boundedly for Git deployment/domain readiness, fails on a failed newest deployment, runs the existing production-safe API smoke, then rechecks public serving identity.
 On a terminal Vercel failure, the observer records the exact source, GitHub deployment ID, provider state and the trusted project's build-log link.
 It makes one read-only public health request with a five-second timeout to report the currently serving source; unavailable or malformed health remains unknown and cannot mask the original deployment failure.
-Provider descriptions, arbitrary log URLs and raw health errors are excluded from this diagnostic.
+When Vercel supplies an app URL as `log_url`, only the deployment ID from its complete recognized failure message is used to construct the fixed trusted project build-log URL.
+Unknown or malformed descriptions fall back to the project's deployments list.
+Raw provider descriptions, command text, arbitrary log URLs and raw health errors are excluded from this diagnostic.
 The failure incident links the exact Deploy run and source plus the existing separately authorized migration recovery procedure, without emitting a success receipt or retrying the deployment.
 The health endpoint already consumes Vercel's system `VERCEL_GIT_COMMIT_SHA`.
 No custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval is required.
@@ -90,6 +92,9 @@ If Prisma reports `P3009`, the failed migration ledger still blocks deployment e
 The role filter never resolves failures, deletes ledger rows, marks unexecuted SQL applied, or retries with unfiltered migrations.
 For incident [#629](https://github.com/dgmolla/fitsy/issues/629), Vercel deployment `H3t9dcTY75kXmgPvmtpizY6oQZ2J` at `b28c630` reported a retained failure of `20261028130000_hex_jobs` from the preceding `63a36df` build.
 Incident [#647](https://github.com/dgmolla/fitsy/issues/647) is the same retained failure: exact Vercel deployment [aei8rXsjyWKEhiAywALkLrF5yr1f](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/aei8rXsjyWKEhiAywALkLrF5yr1f) at `6f6d579` stopped with P3009 before building the widget API.
+Incident [#650](https://github.com/dgmolla/fitsy/issues/650) repeats that unresolved attempt: [Deploy run 40858904921](https://github.com/dgmolla/fitsy/actions/runs/40858904921) observed GitHub deployment `7409367502` at `605560241b8c076bef45585457175317d491f2b0`, and exact Vercel deployment [7coDSBVrAKVpB5zT45D2aUufd3LT](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/7coDSBVrAKVpB5zT45D2aUufd3LT) stopped with P3009.
+The 2026-10-29 10:58 UTC read-only audit again found attempt `c4b89b99-d4a5-49d9-9664-4699383e5f81`, its matching checksum, zero completed steps, NULL logs and absent hex tables; `fitsy_app` and `pipeline_writer` were absent, while `fitsy_audit_readonly` was present.
+The existing production maintenance owner still owns separately approved #643 recovery, followed by guarded deployment and exact-source smoke; the diagnostic correction does not establish production recovery.
 The 2026-10-29 10:12 UTC read-only audit found the original unresolved attempt, absent hex tables, absent `fitsy_app` and `pipeline_writer`, and absent `WidgetToken`.
 The healthy public source remained `bfd87f8fbd7ee9863554e973870f6988248d102f`.
 Reuse the existing #643 maintenance path for that exact failed attempt; a new application commit does not authorize recovery or an identical migration retry.
