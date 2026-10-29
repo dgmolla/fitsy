@@ -72,6 +72,8 @@ When Vercel supplies an app URL as `log_url`, only the deployment ID from its co
 Unknown or malformed descriptions fall back to the project's deployments list.
 Raw provider descriptions, command text, arbitrary log URLs and raw health errors are excluded from this diagnostic.
 The failure incident links the exact Deploy run and source plus the existing separately authorized migration recovery procedure, without emitting a success receipt or retrying the deployment.
+The observer's P3009 diagnostic also names the existing audit-first `production-migration-recovery.yml` workflow and limits that recovery route to the reviewed #643 attempt.
+The release regression replays the retained #645 and #650 status shapes, preserving each failed deployment's source and build-log link even when an older source is healthy.
 The health endpoint already consumes Vercel's system `VERCEL_GIT_COMMIT_SHA`.
 No custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval is required.
 Keep the existing repository Expo/smoke credential route.
