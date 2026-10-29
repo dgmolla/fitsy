@@ -32,7 +32,7 @@ import { loadChainServing, chainMenuResolver, type ChainServing } from "../apps/
  *   --days N                       Skip restaurants scraped within N days (default 7).
  *   --run-id ID                    Explicit run id; otherwise resumed or date-based.
  *   --skip-preflight               Skip UE + Anthropic preflight (offline testing).
- *   --cost-cap-usd USD             Cumulative AI spend cap per run (default $15).
+ *   --cost-cap-usd USD             Cumulative Haiku + Google spend cap per run (default $15).
  *   --cost-log PATH                Durable usage JSONL (default scripts/cache/preload-costs/<run-id>.jsonl).
  *
  * Environment:
@@ -73,6 +73,8 @@ import { persistHex, type HexRestaurantData } from "./hex-persist.js";
 import { validateItems, type ValidatedPair } from "./pipeline-utils.js";
 import { API_SEMAPHORES } from "./semaphore.js";
 import { withRetry } from "./retry.js";
+import { DailyBudgetExceeded, SharedServiceBudget } from './pipeline-v2/service-budget';
+import { v2Telemetry } from './pipeline-v2/telemetry';
 import { PreloadCostTracker, SpendCapReached, CostAccountingError, parseCostCap } from './preload-cost.js';
 import {
   PipelineEmitter,
@@ -362,6 +364,7 @@ async function runPhase1Invariants(prisma: PrismaClient): Promise<void> {
 
 interface EnrichmentStats {
   status: 'completed' | 'spend_cap' | 'failed';
+  spendCapScope?: 'run' | 'daily_google';
   hexesCompleted: number;
   failure?: unknown;
   processed: number;
@@ -473,6 +476,9 @@ function shouldSkipPreFetch(r: Phase2Restaurant): boolean {
 async function resolvePhotoUrl(
   r: Phase2Restaurant,
   menuResult: MenuSourceResult,
+  prisma: PrismaClient,
+  costs: PreloadCostTracker,
+  context: { hexId: string; restaurantId: string; placeId: string },
 ): Promise<{ url: string | null; source: string | null }> {
   // Tier 1: feed hero already persisted in Phase 1.
   if (r.photoUrl) return { url: r.photoUrl, source: r.photoSource ?? "ue_feed_hero" };
@@ -483,7 +489,24 @@ async function resolvePhotoUrl(
   }
 
   // Tier 3: Google Places fallback.
-  const placesUrl = await fetchGooglePlacesPhoto(r.name, r.lat, r.lng);
+  let reservation = '', permit = '', charge = 0;
+  const budget = new SharedServiceBudget(prisma);
+  const placesUrl = await fetchGooglePlacesPhoto(r.name, r.lat, r.lng, {
+    beforeRequest: async usd => {
+      reservation = costs.reserve('google', usd); charge = usd;
+      try { permit = await budget.reserve('google', usd, `${context.hexId}:${r.id}`); }
+      catch (error) {
+        costs.release(reservation);
+        if (error instanceof DailyBudgetExceeded) throw new SpendCapReached(error.message, 'daily_google');
+        throw new CostAccountingError('Shared Google budget unavailable; paid work stopped');
+      }
+    },
+    onResponse: async status => {
+      costs.recordGoogle(context, reservation);
+      if (status === 429 || status === 403) v2Telemetry.throttle('google', { status });
+      try { await budget.settle(permit, charge, status === 429 || status === 403); } catch { throw new CostAccountingError('Google settlement unavailable; reservation retained'); }
+    },
+  });
   if (placesUrl) return { url: placesUrl, source: "google_places" };
 
   return { url: null, source: null };
@@ -609,7 +632,7 @@ async function runPhase2(
       const workers = Array.from({ length: workerCount }, async () => {
         while (cursor < restaurants.length && !failure) {
           if (costs.capReached) {
-            failure = new SpendCapReached('AI spend cap reached before starting the next restaurant');
+            failure = new SpendCapReached('Spend cap reached before starting the next restaurant');
             return;
           }
           const idx = cursor++;
@@ -637,13 +660,14 @@ async function runPhase2(
     if (failure) {
       stats.status = failure instanceof SpendCapReached ? 'spend_cap' : 'failed';
       if (stats.status === 'failed') stats.failure = failure;
+      if (failure instanceof SpendCapReached) stats.spendCapScope = failure.scope;
       log(`  hex ${hexId} stopped (${stats.status}); no persist or checkpoint; pending for resume`);
       await emitter.flushHex({
         type: 'cost_checkpoint', runId, hexId, hexesCompleted, hexesTotal,
-        status: stats.status, hexCost: costs.forHex(hexId).costUsd,
+        status: stats.status, hexCost: costs.forHex(hexId).costUsd + costs.googleForHex(hexId),
         hexUsage: costs.forHex(hexId), cumulativeUsage: { ...costs.total },
-        cumulativeCost: costs.total.costUsd,
-        cumulativeCostBreakdown: { braveSearch: 0, firecrawl: 0, haiku: costs.total.costUsd },
+        cumulativeCost: costs.spentUsd,
+        cumulativeCostBreakdown: { braveSearch: 0, firecrawl: 0, haiku: costs.total.costUsd, google: costs.googleCostUsd },
         _time: new Date().toISOString(),
       });
       break;
@@ -675,11 +699,11 @@ async function runPhase2(
       hexesCompleted,
       hexesTotal,
       status: 'completed',
-      hexCost: costs.forHex(hexId).costUsd,
+      hexCost: costs.forHex(hexId).costUsd + costs.googleForHex(hexId),
       hexUsage: costs.forHex(hexId),
       cumulativeUsage: { ...costs.total },
-      cumulativeCost: costs.total.costUsd,
-      cumulativeCostBreakdown: { braveSearch: 0, firecrawl: 0, haiku: costs.total.costUsd },
+      cumulativeCost: costs.spentUsd,
+      cumulativeCostBreakdown: { braveSearch: 0, firecrawl: 0, haiku: costs.total.costUsd, google: costs.googleCostUsd },
       _time: new Date().toISOString(),
     });
 
@@ -809,7 +833,7 @@ async function processRestaurant(
   }
 
   // Photo resolution — write photoSource + photoUrl back to Restaurant.
-  const photo = await resolvePhotoUrl(r, resolverResult);
+  const photo = await resolvePhotoUrl(r, resolverResult, prisma, costs, { hexId, restaurantId: r.id, placeId: r.storeUuid });
   if (photo.source) {
     stats.photoSourceBreakdown[photo.source] =
       (stats.photoSourceBreakdown[photo.source] ?? 0) + 1;
@@ -832,10 +856,12 @@ async function processRestaurant(
     try {
       macros = await resolveMacros(resolverResult.items, async unresolved => {
         stats.anthropicCalls++;
+        let reservation = '';
         const { result } = await withRetry(
           () => API_SEMAPHORES.haiku.run(() => estimateMacros(unresolved, anthropic, undefined, {
-            beforeRequest: () => { assertActive(); costs.assertCanSpend(); },
-            onUsage: (items, usage) => costs.record({ hexId, restaurantId: r.id, placeId: r.storeUuid }, items, usage),
+            beforeRequest: envelope => { assertActive(); reservation = costs.reserve('haiku', (envelope.inputTokens + envelope.outputTokens * 5) / 1_000_000); },
+            onRequestError: error => costs.requestFailed(reservation, error),
+            onUsage: (items, usage) => costs.record({ hexId, restaurantId: r.id, placeId: r.storeUuid }, items, usage, reservation),
           })),
           {
             label: `${r.name}/haiku`,
@@ -953,8 +979,8 @@ async function main(): Promise<void> {
 
       const costs = new PreloadCostTracker(runId, CONFIG.costCapUsd,
         CONFIG.costLog ?? join('scripts/cache/preload-costs', `${encodeURIComponent(runId)}.jsonl`),
-        event => emitter.emitUsage(event));
-      log(`  AI spend cap=$${costs.capUsd}, prior cost=$${costs.total.costUsd.toFixed(6)}, ledger=${costs.path}`);
+        event => event.type === 'ai_usage' ? emitter.emitUsage(event) : emitter.emitServiceUsage(event));
+      log(`  Haiku + Google spend cap=$${costs.capUsd}, prior cost=$${costs.spentUsd.toFixed(6)}, ledger=${costs.path}`);
       const enrichStats = await runPhase2(prisma, anthropic, emitter, runId, costs);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       log(`\nPhase 2 done — ${elapsed}s`);
@@ -973,8 +999,10 @@ async function main(): Promise<void> {
       );
       log(`  photoSource: ${JSON.stringify(enrichStats.photoSourceBreakdown)}`);
       log(`  AI input_tokens=${costs.total.inputTokens} output_tokens=${costs.total.outputTokens} ` +
-        `total_cost=$${costs.total.costUsd.toFixed(6)} cost_per_1k_items=$${costs.costPer1kItems.toFixed(6)}`);
-      if (enrichStats.status === 'spend_cap') {
+        `total_cost=$${costs.spentUsd.toFixed(6)} cost_per_1k_items=$${costs.costPer1kItems.toFixed(6)}`);
+      if (enrichStats.status === 'spend_cap' && enrichStats.spendCapScope === 'daily_google') {
+        log('  Daily Google budget exhausted; resume after the next UTC day or inspect the shared budgets command. Existing daily usage is retained.');
+      } else if (enrichStats.status === 'spend_cap') {
         log(`  Spend cap reached; run ${runId} is resumable. Reuse --run-id ${runId} and --cost-log ${costs.path} with a higher --cost-cap-usd.`);
       }
 
@@ -988,7 +1016,7 @@ async function main(): Promise<void> {
         restaurantsPersisted: enrichStats.persistedRestaurants,
         restaurantsFailed: enrichStats.skippedNoSource + enrichStats.skippedHaikuFailed,
         itemsTotal: enrichStats.persistedItems,
-        costTotal: costs.total.costUsd,
+        costTotal: costs.spentUsd,
         aiUsage: { ...costs.total },
         costPer1kItems: costs.costPer1kItems,
         status: enrichStats.status,
@@ -1005,7 +1033,7 @@ async function main(): Promise<void> {
     }
 
   } finally {
-    try { await emitter.flush(); }
+    try { await emitter.flush(); await v2Telemetry.flush(); }
     finally { await prisma.$disconnect(); }
   }
 }

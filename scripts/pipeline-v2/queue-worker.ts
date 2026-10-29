@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -5,6 +6,8 @@ import { DEV_POC_RUN_PREFIX } from '../hex-resume';
 import { digest, type JournalEvent } from './journal';
 import { HexJobLease, HexJobQueue, LeaseLostError, SharedV2Journal } from './queue';
 import { runV2Hex, validateV2Cap, validateV2Hex, validateV2RunId } from './run';
+import { v2Telemetry } from './telemetry';
+import { SharedServiceBudget } from './service-budget';
 
 export interface QueueOptions {
   mode: 'enqueue' | 'worker'; runId: string; hexIds: string[]; out: string; workerId: string;
@@ -48,6 +51,7 @@ export async function workV2Job(prisma: PrismaClient, queue: HexJobQueue, runId:
       checkpointInTx: tx => queue.completeInTx(job, tx),
     });
     await lease.stop(); lease.controller.signal.throwIfAborted();
+    v2Telemetry.hex(report);
     if (report.status === 'completed') {
       // Recovery of an existing atomic checkpoint also needs an ownership-fenced acknowledgement.
       if ('resumedCheckpoint' in report) await prisma.$transaction(async tx => {
@@ -56,6 +60,10 @@ export async function workV2Job(prisma: PrismaClient, queue: HexJobQueue, runId:
         await queue.completeInTx(job, tx);
       });
       return { hexId: job.hexId, attempt: job.attempts, status: 'completed', report };
+    }
+    if (journal.dailyCap) {
+      await queue.deferBudget(job);
+      return { hexId: job.hexId, attempt: job.attempts, status: 'daily_cap', report };
     }
     const terminal = journal.unknown || Boolean(journal.stopped);
     await queue.fail(job, terminal);
@@ -83,8 +91,9 @@ export async function runQueueCommand(prisma: PrismaClient, options: QueueOption
     // This is a private export, never the recovery source. The DB checkpoint is authoritative.
     const directory = join(options.out, digest([options.runId, outcome.hexId]));
     mkdirSync(directory, { recursive: true, mode: 0o700 });
-    writeFileSync(join(directory, `attempt-${outcome.attempt}.json`), JSON.stringify(outcome, null, 2) + '\n', { mode: 0o600 });
+    writeFileSync(join(directory, `attempt-${outcome.attempt}-${randomUUID()}.json`), JSON.stringify(outcome, null, 2) + '\n', { mode: 0o600 });
     if (outcome.status !== 'completed') break;
   }
+  if (process.env['AXIOM_TOKEN']) v2Telemetry.budgets(await new SharedServiceBudget(prisma).state());
   return { runId: options.runId, status: outcomes.length ? outcomes.at(-1)!.status : 'idle', outcomes };
 }

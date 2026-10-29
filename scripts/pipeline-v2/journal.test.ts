@@ -45,10 +45,41 @@ test('existing insertion-order request hashes retain their paid responses withou
   const retained = readFileSync(j.path, 'utf8'), resumed = open(j.path); await resumed.send(request);
   expect(readFileSync(j.path, 'utf8')).toBe(retained); expect(fetcher).toHaveBeenCalledTimes(1);
 });
-test('reserves the worst-case request before spending and cannot reset the cap on resume', async () => {
-  const fetcher = jest.spyOn(global, 'fetch'), j = open(undefined, reservationUsd / 2);
+test.each([reservationUsd / 2, 0.000688127])('a $%s cap refuses an uncovered envelope and cannot be reset on resume', async cap => {
+  const fetcher = jest.spyOn(global, 'fetch'), j = open(undefined, cap);
   await expect(j.send(request)).rejects.toThrow('spend cap'); expect(fetcher).not.toHaveBeenCalled();
   const path = j.path; j.close(); expect(() => open(path, 5)).toThrow('identity, protocol or cap');
+});
+test.each([[16_384, 0.000688128], [16_383, 0.000688086]])(
+  'a $0.000688128 cap admits one Jev envelope and preserves the exact %i-token charge on resume', async (tokens, costUsd) => {
+    const fetcher = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(body(request, {
+      usage: { input_tokens: tokens, output_tokens: 0 },
+    })));
+    const j = open(undefined, 0.000688128);
+    await expect(j.send(request)).resolves.toMatchObject({ costUsd });
+    expect(j.knownUsd).toBe(costUsd);
+    const path = j.path; j.close();
+    const resumed = open(path, 0.000688128);
+    await expect(resumed.send(request)).resolves.toMatchObject({ costUsd });
+    expect(resumed.knownUsd).toBe(costUsd);
+    await expect(resumed.send({ ...request, state: { ...request.state, itemName: 'Another bowl' } })).rejects.toThrow('spend cap');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  },
+);
+test('three full Jev envelopes fit an exact $0.002064384 cap across resume', async () => {
+  const fetcher = jest.spyOn(global, 'fetch').mockImplementation(async () => new Response(body(request, {
+    usage: { input_tokens: 16_384, output_tokens: 0 },
+  })));
+  const j = open(undefined, 0.002064384);
+  for (let i = 0; i < 3; i++) {
+    await expect(j.send({ ...request, state: { ...request.state, itemName: `Bowl ${i}` } })).resolves.toMatchObject({ costUsd: 0.000688128 });
+  }
+  expect(j.knownUsd).toBe(0.002064384);
+  const path = j.path; j.close();
+  const resumed = open(path, 0.002064384);
+  expect(resumed.knownUsd).toBe(0.002064384);
+  await expect(resumed.send(request)).rejects.toThrow('spend cap');
+  expect(fetcher).toHaveBeenCalledTimes(3);
 });
 test.each([{ usage: undefined }, { usage: { input_tokens: -1, output_tokens: 0 } }])('unknown usage blocks further requests and resume', async patch => {
   const fetcher = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(body(request, patch))), j = open();

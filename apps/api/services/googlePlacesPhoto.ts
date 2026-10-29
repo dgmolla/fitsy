@@ -7,7 +7,7 @@
  * Requires GOOGLE_PLACES_API_KEY env var. Returns null when the key is
  * absent, the search fails, or no photo is found within 1000m.
  *
- * Cost: 1 Text Search call ($0.017) + 1 Photo Fetch call (~$0.007) per
+ * Cost: 1 Text Search Pro call ($0.032) + 1 Photo Fetch call (~$0.007) per
  * restaurant. Only called when both UberEats and the primary source
  * returned no image.
  */
@@ -49,11 +49,13 @@ export async function fetchGooglePlacesPhoto(
   name: string,
   lat: number,
   lng: number,
+  accounting?: { beforeRequest(usd: number): void | Promise<void>; onResponse(status?: number): void | Promise<void> },
 ): Promise<string | null> {
   const apiKey = process.env["GOOGLE_PLACES_API_KEY"];
   if (!apiKey) return null;
 
   // Step 1: Text search with tight location bias
+  await accounting?.beforeRequest(0.032);
   let searchRes: Response;
   try {
     searchRes = await fetch(`${PLACES_BASE}/places:searchText`, {
@@ -72,9 +74,11 @@ export async function fetchGooglePlacesPhoto(
       }),
     });
   } catch {
+    await accounting?.onResponse(); // Keep the list-price bound on uncertain transport.
     return null;
   }
 
+  await accounting?.onResponse(searchRes.status);
   if (!searchRes.ok) return null;
 
   const searchData = (await searchRes.json()) as PlacesSearchResult;
@@ -96,6 +100,7 @@ export async function fetchGooglePlacesPhoto(
 
   // Step 3: Fetch photo — skipHttpRedirect=true returns JSON with photoUri (Google CDN URL)
   const photoName = bestPlace.photos[0].name;
+  await accounting?.beforeRequest(0.007);
   let photoRes: Response;
   try {
     photoRes = await fetch(
@@ -103,9 +108,11 @@ export async function fetchGooglePlacesPhoto(
       { headers: { "X-Goog-Api-Key": apiKey } },
     );
   } catch {
+    await accounting?.onResponse();
     return null;
   }
 
+  await accounting?.onResponse(photoRes.status);
   if (!photoRes.ok) return null;
 
   const photoData = (await photoRes.json()) as PhotoMediaResult;

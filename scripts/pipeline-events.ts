@@ -10,7 +10,7 @@
  */
 
 import { Axiom } from "@axiomhq/js";
-import type { AiUsageEvent, AiUsageTotals } from './preload-cost';
+import type { AiUsageEvent, AiUsageTotals, ServiceUsageEvent } from './preload-cost';
 
 const DATASET = "fitsy-pipeline";
 
@@ -72,6 +72,7 @@ export interface CostCheckpoint {
     braveSearch: number;
     firecrawl: number;
     haiku: number;
+    google?: number;
   };
   _time: string;
 }
@@ -112,7 +113,7 @@ export interface SubstepEvent {
   _time: string;
 }
 
-export type PipelineEvent = RestaurantEvent | PipelineError | CostCheckpoint | RunEvent | SubstepEvent | AiUsageEvent;
+export type PipelineEvent = RestaurantEvent | PipelineError | CostCheckpoint | RunEvent | SubstepEvent | AiUsageEvent | ServiceUsageEvent;
 
 // ─── Emitter ────────────────────────────────────────────────────────────────
 
@@ -136,6 +137,10 @@ export class PipelineEmitter {
   }
 
   /** Billable responses are emitted before parsing or menu persistence can fail. */
+  emitServiceUsage(event: ServiceUsageEvent): void {
+    if (this.axiom) this.axiom.ingest(DATASET, [event]);
+  }
+
   emitUsage(event: AiUsageEvent): void {
     if (this.axiom) this.axiom.ingest(DATASET, [event]);
   }

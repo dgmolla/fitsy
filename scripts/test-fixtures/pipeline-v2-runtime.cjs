@@ -31,6 +31,11 @@ class Database {
   }
   async $queryRaw(strings, ...values) {
     const sql = strings.join('?');
+    if (sql.includes('pipeline_budget_reserve')) {
+      record({ type: 'budget_reservation', service: values[1], usd: values[2] });
+      return [{ id: process.env.V2_TEST_DAILY_CAP ? null : values[0] }];
+    }
+    if (sql.includes('pipeline_budget_settle')) { record({ type: 'budget_settlement', usd: values[1] }); return [{ id: values[0] }]; }
     if (sql.includes('pipeline_ue_rate_limit')) {
       if (sql.includes('RETURNING p.allowed')) {
         record({ type: 'ue_rate_admission' });

@@ -8,6 +8,9 @@ import { parseOptions, runV2Hex, targetIdentity } from './pipeline-v2/run';
 import { parseQueueOptions, runQueueCommand } from './pipeline-v2/queue-worker';
 import { parseUeRateOptions, SharedUeRateLimiter } from './pipeline-v2/ue-rate-limiter';
 import { parsePdfOptions, runPdfCommand } from './pipeline-v2/pdf-worker';
+import { parseBudgetOptions, SharedServiceBudget } from './pipeline-v2/service-budget';
+import { v2Telemetry } from './pipeline-v2/telemetry';
+import { runDashboardCommand } from './pipeline-v2/dashboard';
 
 /** Keep the guarded datasource at the connection entrypoint for the writer inventory to verify. */
 export async function v2Database(value = process.env['PIPELINE_DATABASE_URL']): Promise<string> {
@@ -16,15 +19,24 @@ export async function v2Database(value = process.env['PIPELINE_DATABASE_URL']): 
 
 async function main() {
   const args = process.argv.slice(2);
+  if (args[0] === 'dashboard') { await runDashboardCommand(args); return; }
   const rateCommand = args[0] === 'ue-rate';
+  const budgetCommand = args[0] === 'budgets';
+  const budgetConfig = budgetCommand ? parseBudgetOptions(args) : undefined;
   const capRps = rateCommand ? parseUeRateOptions(args) : undefined;
   const queued = args[0] === 'enqueue' || args[0] === 'worker' ? parseQueueOptions(args) : undefined;
   const pdf = args[0] === 'pdf-enqueue' || args[0] === 'pdf-worker' ? parsePdfOptions(args) : undefined;
-  const options = queued || rateCommand || pdf ? undefined : parseOptions(args), url = await v2Database();
+  const options = queued || rateCommand || budgetCommand || pdf ? undefined : parseOptions(args), url = await v2Database();
   let prisma: PrismaClient | undefined;
   let journal: V2Journal | undefined;
   try {
     prisma = new PrismaClient({ datasources: { db: { url } } });
+    if (budgetCommand) {
+      const budget = new SharedServiceBudget(prisma);
+      if (budgetConfig) await budget.configure(budgetConfig.service, budgetConfig.usd, budgetConfig.calls);
+      process.stdout.write(JSON.stringify(await budget.state()) + '\n');
+      return;
+    }
     if (rateCommand) {
       const limiter = new SharedUeRateLimiter(prisma);
       const state = capRps === undefined ? await limiter.state() : await limiter.configure(capRps);
@@ -38,7 +50,7 @@ async function main() {
       'scripts/eval/pdf-finder',
       'scripts/eval/suite/types.ts', 'scripts/eval/jev-macro/*.ts', 'apps/api/services', 'packages/shared/src', 'prisma/schema.prisma',
       'prisma/migrations/20261028130000_hex_jobs', 'prisma/migrations/20261028140000_pipeline_ue_rate_limit',
-      'prisma/migrations/20261028150000_pipeline_pdf_jobs']).split('\n').sort();
+      'prisma/migrations/20261028150000_pipeline_pdf_jobs', 'prisma/migrations/20261028160000_pipeline_service_budgets']).split('\n').sort();
     const source = { event: 'source', at: new Date().toISOString(), head: git(['rev-parse', 'HEAD']),
       sourceHash: digest(files.map(file => [file, digest(readFileSync(file).toString('base64'))])),
       dirty: Boolean(git(['status', '--porcelain'])) };
@@ -56,13 +68,20 @@ async function main() {
     }
     if (!options) throw new Error('Missing hex options');
     const out = resolve(options.out);
-    journal = new V2Journal(join(out, 'journal.jsonl'), { runId: options.runId, hexId: options.hexId, target: targetIdentity(url) }, options.capUsd);
+    journal = new V2Journal(join(out, 'journal.jsonl'), { runId: options.runId, hexId: options.hexId, target: targetIdentity(url) }, options.capUsd, new SharedServiceBudget(prisma));
     journal.append(source);
     const report = await runV2Hex(prisma, options, journal);
+    v2Telemetry.hex(report);
     writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
     process.stdout.write(JSON.stringify(report) + '\n');
     if (report.status !== 'completed') process.exitCode = 1;
-  } finally { try { await prisma?.$disconnect(); } finally { journal?.close(); } }
+  } finally {
+    try {
+      if (prisma && process.env['AXIOM_TOKEN']) v2Telemetry.budgets(await new SharedServiceBudget(prisma).state());
+      await v2Telemetry.flush();
+    }
+    finally { try { await prisma?.$disconnect(); } finally { journal?.close(); } }
+  }
 }
 if (process.argv[1] && /[/\\]preload-v2\.ts$/.test(process.argv[1])) {
   void main().catch(error => {
