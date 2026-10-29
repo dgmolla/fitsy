@@ -11,7 +11,7 @@ and more.
 
 Last audited: 2026-06-12 (docs audit executed; proposal archived under `docs/engineering/archive/`).
 
-**Built and shipped**: Prisma schema + all API routes (filter expansion + `requireAuth` JWT middleware on reads), full mobile auth (Apple + Google Sign-In via Supabase, JWKS-verified — no local secret), 15-screen onboarding, GPS via `expo-location` (wired into search), search/detail/saved/profile screens (editorial cream palette), UE-first preload pipeline (Uber Eats discovery → FatSecret/Brave menus → Haiku macros), search 60× faster (LATERAL + denormalized MenuItem macros), PostHog analytics, security hardening, RevenueCat subscriptions wired on Test Store, EAS build config.
+**Built and shipped**: Prisma schema + all API routes (filter expansion + `requireAuth` JWT middleware on reads), full mobile auth (Apple + Google Sign-In via Supabase, JWKS-verified), 15-screen onboarding, GPS via `expo-location` (wired into search), search/detail/saved/profile screens (editorial cream palette), UE-first preload pipeline (Uber Eats discovery and menus, reviewed official facts or estimates), search 60× faster (LATERAL + denormalized MenuItem macros), PostHog analytics, security hardening, RevenueCat subscriptions wired on Test Store, EAS build config.
 
 **DB state**: Staging populated (verified 2026-06-12) — 9,327 restaurants, 676,137 menu items, 676,137 MacroEstimates (haiku ~85%, fatsecret ~15%; 0 NULL source, 0 NULL denormalized macros), 0 duplicates.
 
@@ -63,7 +63,7 @@ fitsy/
 
 | System | Location | What it does |
 |--------|----------|-------------|
-| Preload pipeline (UE-first) | `scripts/preload-ue-first.ts` | Uber Eats discovery → FatSecret/Brave menus → Claude Haiku macros → PostgreSQL (H3 hex checkpoints, Axiom telemetry) |
+| Preload pipeline (UE-first) | `scripts/preload-ue-first.ts` | Uber Eats discovery and menus → reviewed official or Haiku macros → PostgreSQL (H3 hex checkpoints, Axiom telemetry) |
 | Pipeline v2 DEV proof | `scripts/preload-v2.ts` | Explicit single LA hex, reviewed exact official matches + Jev, $5 journal cap; [runbook](docs/engineering/pipeline/pipeline-v2-dev-poc.md) |
 | Pipeline v2 shared DEV queue | `scripts/preload-v2.ts enqueue/worker` | Leased hex jobs, shared paid-call replay, atomic completion and bounded retries; [runbook](docs/engineering/pipeline/pipeline-v2-queue.md) |
 | API backend | `apps/api/` | Query + filter preloaded data; only auth/subscription provider lookups at request time |
@@ -217,8 +217,8 @@ You are done when CI and deploy are green, not when you push. After pushing, pol
 - **Data integrity (nutrition estimates)** — LLM-estimated macros are
   approximate; users may make health decisions based on this data.
   Always show confidence ranges, never false precision.
-- **External APIs** — Uber Eats (discovery), FatSecret/Brave (menus), and
-  Claude Haiku (macros) are core preload dependencies. Handle rate limits,
+- **External APIs** - Uber Eats supplies discovery and location menus; reviewed official facts and
+  Haiku or Jev supply nutrition. Handle rate limits,
   failures, and resume.
   Runtime restaurant queries never call discovery, menu or macro-estimation providers.
 
@@ -236,7 +236,7 @@ Existing GitHub merge requirements remain authoritative; local tooling cleanup d
 - **API**: Vercel project `fitsy-api` (Next.js). **Landing**: Vercel project `fitsy` (fitsy.org).
 - **Database**: Supabase managed PostgreSQL.
 - **Mobile**: Expo EAS Build → App Store.
-- **Preload**: `scripts/preload-ue-first.ts`, run locally or on CI — not a production service.
+- **Preload**: local commands target DEV or disposable fixtures; production ingestion requires an approved cloud worker and signed workload identity. See [the execution boundary](docs/engineering/pipeline/runbook.md#environment-variables).
 
 ## Project Management
 

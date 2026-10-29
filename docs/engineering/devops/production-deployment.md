@@ -32,7 +32,7 @@ flowchart TD
     A[Create prod Supabase project] --> B[Set env vars in Vercel prod environment]
     B --> C[Deploy to Vercel production]
     C --> D[Run prisma migrate deploy against prod DB]
-    D --> E[Run preload script: npx tsx scripts/preload-ue-first.ts --phase both]
+    D --> E[Approved cloud pipeline worker with signed identity]
     E --> F[Verify data: SELECT COUNT FROM Restaurant]
     F --> G[Smoke-test Vercel prod endpoints]
     G --> H{All checks pass?}
@@ -77,7 +77,11 @@ vercel env add JWT_SECRET production    # openssl rand -base64 32
 
 ## Step 2: Run UE-First Preload Pipeline
 
-Target area: Silver Lake / Los Feliz, LA (LA-only launch). The pipeline is now **UE-first**: Uber Eats `getFeedV1` for discovery, FatSecret/UE direct API for chain macros, Claude Haiku for indie menus, Google Places for photo fallback only.
+Target area: Silver Lake / Los Feliz, LA (LA-only launch).
+Uber Eats supplies discovery and every location menu.
+Reviewed official catalog facts supply matched serving nutrition; unmatched items use the configured estimator.
+The legacy UE-first command uses Haiku, while Pipeline v2 uses Jev and remains DEV-only.
+Google Places is an optional photo fallback in the legacy command.
 
 The primary script is `scripts/preload-ue-first.ts`. The canonical invocation reference and resume/troubleshooting procedures are in `docs/engineering/pipeline/runbook.md`.
 
@@ -108,31 +112,20 @@ The primary script is `scripts/preload-ue-first.ts`. The canonical invocation re
 
 ### Invocation
 
-```bash
-# Pull prod env vars
-vercel env pull .env.production.local
-set -a && source .env.production.local && set +a
-# Load PIPELINE_DATABASE_URL separately from the private pipeline environment.
-# Vercel's app and migration credentials cannot substitute for pipeline_writer.
+Production writes must run in the approved cloud execution environment with its own `pipeline_writer` credential and signed workload identity accepted by [the database guard](db-guardrails.md#script-mutation-boundary).
+Do not pull or source production environments locally, run ingestion from a laptop, or copy CI markers to bypass that guard.
+Deploy migrations through the existing [Vercel Git main production build](routine-production.md); it does not run ingestion.
+The current v2 queue explicitly refuses production targets, even with production-write flags.
+Cloud hosting and production worker authorization remain separate work; do not treat the protected fixture-cleanup workflow as an ingestion launcher.
+Until that worker is deployed and authorized, use only the DEV commands in the [pipeline runbook](../pipeline/runbook.md#environment-variables).
+In the approved worker, preflight and a bounded dry run precede ingestion; resume with the same run ID, cost cap and retained ledger rather than restarting spend accounting.
 
-# Dry run first — confirm env and preflight pass
-npx tsx scripts/preload-ue-first.ts --phase discover --dry-run
-
-# Full pipeline — both phases
-npx tsx scripts/preload-ue-first.ts --phase both
-
-# Resume enrichment only (after a partial run)
-npx tsx scripts/preload-ue-first.ts --phase enrich --run-id <run-id-from-prior-run>
-```
-
-> **Cost note:** API costs depend on the number of independent (non-chain) restaurants requiring Haiku estimation. Chains use FatSecret/UE direct and incur negligible LLM cost. A typical LA-area full run costs significantly less than the old Google Places + Firecrawl approach; confirm current estimates from the Axiom `fitsy-pipeline` dataset telemetry after a dry run. The old ~$5–10 estimate (Google Places + Firecrawl) no longer applies.
+**Cost note:** Estimator costs apply to every unmatched serving, including chain items without reviewed bindings.
+Use measured usage and the run's cumulative spend cap; menu discovery alone does not establish negligible estimation cost.
 
 **Verify data was written:**
-```bash
-npx prisma studio  # or
-psql $DATABASE_URL -c "SELECT COUNT(*) FROM \"Restaurant\";"
-# Expected for LA: 80–120 restaurants
-```
+Read counts and checkpoint results through the approved worker's retained report or a separately authorized read-only audit credential.
+Do not open Prisma Studio with a production writer credential on a laptop.
 
 ---
 

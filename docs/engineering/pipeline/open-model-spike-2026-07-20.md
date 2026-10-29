@@ -89,7 +89,7 @@ Calories are *recomputed* from adjusted macros, so this is not a cosmetic post-s
 
 Applying them to Qwen or Gemma corrects a bias those models may not have, and may introduce one they didn't. **The open-model numbers above are therefore a lower bound.** Calibration was worth roughly 5 points to Haiku (18.3% to 13.5% in eval-v2), which is larger than the entire 2.3-point gap this round measured.
 
-Second caveat: the fixture is all chain items, while the Haiku path in production serves only indie restaurants (chains short-circuit to FatSecret/official at `preload-ue-first.ts:833-836`). Chains are the easier, better-documented distribution.
+Second caveat: the fixture is all chain items, while the Haiku path in production serves only indie restaurants (matched chains short-circuited to legacy aggregator or official values in that historical implementation). Chains are the easier, better-documented distribution.
 
 ---
 
@@ -100,7 +100,8 @@ Second caveat: the fixture is all chain items, while the Haiku path in productio
 Ranked next steps:
 
 1. **Recalibrate per model, then re-run.** Derive fresh multipliers for Qwen3 235B and Gemma 3 27B on a held-out split and compare calibrated-to-calibrated. This is the only way to know whether the 2.3-point gap is real or an artifact. Cost: pennies.
-2. **Rebuild the fixture to match production.** Indie-weighted, not chain-only. Chain items are already solved by the FatSecret/official path and are not what Haiku actually estimates.
+2. **Rebuild the fixture to match production.** Indie-weighted, not chain-only. The historical chain path used published or aggregator values.
+Current unmatched chain servings also require estimation, so the fixture must represent both unresolved chain and independent items.
 3. **Take the free wins regardless of model choice.** The Batch API is a flat 50% discount and is unused; per-item dedup addresses `menuHash` re-paying for a whole menu when one item changes. Neither carries accuracy risk.
 4. **Investigate the catastrophic tail.** 18/160 (11%) catastrophic on production Haiku is a data-integrity concern independent of which model runs. That is the number worth attacking, and no model swap fixes it.
 

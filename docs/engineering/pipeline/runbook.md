@@ -1,4 +1,4 @@
-# UE-First Pipeline — Operational Runbook
+# UE-First Pipeline Operational Runbook
 
 > **Status:** living · **Last verified:** 2026-06-12
 
@@ -35,7 +35,7 @@ The [2026-10-24 report](menu-source-collisions-2026-10-24.md) distinguishes meas
 ```mermaid
 flowchart TD
     subgraph Pre["Pre-run"]
-        E[Pull env vars\nvercel env pull .env.local] --> PF[Preflight check\nUE cookie + Anthropic]
+        E[Explicit DEV environment\nand pipeline writer] --> PF[Preflight check\nUE cookie + Anthropic]
     end
 
     subgraph P1["Phase 1 — Discover"]
@@ -52,13 +52,14 @@ flowchart TD
         HEX --> PROBE[Guard 1: cookie liveness probe\nfetchFeedV1 at hex center]
         PROBE --> PRE[Pre-fetch skip gate\nlastScrapedAt within --days?]
         PRE -->|skip| SKIP[skipped_incremental_prefetch]
-        PRE -->|fetch| RESOLVE["MenuSourceResolver\nFatSecret → UeApiDirectSource(storeUuid)"]
-        RESOLVE -->|FatSecret hit| OFFICIAL[Official chain macros\nno Haiku call]
-        RESOLVE -->|UE hit| HAIKU[Haiku estimation\nwithRetry 5× backoff]
+        PRE -->|fetch| RESOLVE["UeApiDirectSource(storeUuid)\nlocation menu membership"]
+        RESOLVE --> MATCH{Reviewed serving match?}
+        MATCH -->|Yes| OFFICIAL[Official chain macros\nno Haiku call]
+        MATCH -->|No| HAIKU[Haiku estimation\nwithRetry 5× backoff]
         OFFICIAL --> PHOTO["Photo resolution\nTier-1: feed hero\nTier-2: store hero\nTier-3: Google Places (optional)"]
         HAIKU --> PHOTO
         PHOTO --> VAL[validateItems\nreject non-food / bad macros]
-        VAL --> PERSIST["persistHex + checkpoint\n$transaction — atomic"]
+        VAL --> PERSIST["persistHex + checkpoint\natomic transaction"]
         PERSIST --> AXIOM[Emit to Axiom\nfitsy-pipeline dataset]
     end
 
@@ -69,12 +70,20 @@ flowchart TD
 
 ## Environment variables
 
-Pull from Vercel before running:
+All shell examples in this runbook target DEV or a disposable loopback database.
+Load Development credentials through the supported setup:
 
 ```bash
-vercel env pull .env.local
-export $(grep -v '^#' .env.local | xargs)
+npm run dev:env
 ```
+
+Supply `PIPELINE_DATABASE_URL` separately from the private DEV pipeline environment.
+Application and migration credentials cannot substitute for `pipeline_writer`.
+Never pull or source production credentials on a laptop to run ingestion, catalog apply, refresh or rollback.
+Production migrations run only through the existing guarded Vercel Git main deploy, described in [routine production](../devops/routine-production.md).
+Production ingestion requires an approved cloud worker with a signed workload identity accepted by the database guard and separately provisioned pipeline credentials.
+The current v2 worker is DEV-only; cloud hosting remains separate work and these examples do not authorize a PROD run.
+Copying CI markers or adding `--prod` does not establish workload identity.
 
 ### Required
 
@@ -90,7 +99,6 @@ export $(grep -v '^#' .env.local | xargs)
 |---|---|---|
 | `GOOGLE_PLACES_API_KEY` | — | Tier-3 photo fallback only. If absent, restaurants without a UE feed hero or store hero image get `photoUrl=null`. No other pipeline function requires it. |
 | `AXIOM_TOKEN` | — | Pipeline telemetry. If absent, no events are emitted (pipeline still runs). |
-| `FATSECRET_KEY` / `FATSECRET_SECRET` | — | FatSecret chain macro lookups. If absent, FatSecret source is skipped; every restaurant falls to UE + Haiku. |
 
 ### UE_LOC_COOKIE mechanics
 
@@ -99,8 +107,11 @@ The `uev2.loc` cookie is set client-side by UberEats's web JS after an address p
 1. Open any browser (incognito is fine), go to `ubereats.com`
 2. Pick any delivery address (logged-out session is sufficient)
 3. DevTools → Application → Cookies → `uev2.loc` → copy the raw (URL-encoded) value
-4. Update the secret: `vercel env add UE_LOC_COOKIE production`
-5. Pull locally: `vercel env pull .env.local`
+4. Update `UE_LOC_COOKIE` in the invoking DEV worker's private secret configuration.
+5. Restart that DEV worker so its next preflight validates the new cookie.
+
+Production cookie rotation belongs to the approved cloud worker's secret configuration and guarded rollout.
+Do not pull its production environment locally.
 
 The cookie's `latitude`/`longitude` fields are overwritten per-probe by the script — the captured value only needs to be structurally valid, not geographically relevant. One captured cookie works for the entire US probe grid.
 
@@ -133,11 +144,9 @@ npx tsx scripts/preload-ue-first.ts [flags]
 
 ## Common operations
 
-### Full LA run (both phases)
+### Full LA DEV run (both phases)
 
 ```bash
-vercel env pull .env.local
-export $(grep -v '^#' .env.local | xargs)
 npx tsx scripts/preload-ue-first.ts --phase=both --cost-cap-usd=200
 ```
 
@@ -219,7 +228,9 @@ Anthropic reports tokens for a whole request, so `allocation: equal_batch_share`
 These allocations sum to the actual request charge; they are not provider-measured individual-item token counts.
 Run, hex, and restaurant totals include all billable attempts, even rejected or malformed estimates.
 The summary prints `total_cost` and `cost_per_1k_items`, using submitted AI item attempts as the denominator and zero for an empty run.
-Official and FatSecret results bypassing Haiku add no AI usage.
+Reviewed official matches bypassing Haiku add no AI usage.
+Every restaurant's menu comes from UE; unmatched servings use the estimator regardless of brand.
+Existing historical estimates retain their stored provenance and source priority.
 
 The cap is checked before every paid chunk and retry, and before scheduling another restaurant or hex.
 Every request first reserves its full envelope, so concurrently active responses cannot spend beyond the configured cap.
@@ -331,7 +342,6 @@ Alert scenarios:
 | Step | Volume | Cost |
 |---|---|---|
 | UE `getStoreV1` menu fetch | ~6,000–10,000 fetches | $0 (raw HTTP) |
-| FatSecret chain lookups | ~500–1,000 chains | $0 (free API) |
 | Brave Search (indie URL fallback) | Not used in UE-first | $0 |
 | Haiku estimation | ~5,000–8,000 calls | $42–84 |
 | Google Places photos (tier-3) | Only restaurants with no UE hero | $0–15 |
@@ -380,13 +390,17 @@ psql "$PIPELINE_DATABASE_URL" -c "
 
 ## Rollback
 
+The destructive reset below is for disposable local fixtures only.
+For production, use the existing reviewed backup/journal recovery through the approved cloud maintenance path; preserve historical rows and saved references.
+Never execute a production reset from a laptop.
+
 ```sql
 -- Wipe all restaurant-scoped data (FK cascades handle MenuItem/MacroEstimate/SavedItem)
 TRUNCATE "Restaurant" CASCADE;
 TRUNCATE "PipelineCompletedHex";
 ```
 
-Then re-run Phase 1 to repopulate. Supabase daily backups make a full restore one-command if needed.
+Then re-run Phase 1 against the same disposable fixture to repopulate it.
 
 ---
 
@@ -398,4 +412,4 @@ Then re-run Phase 1 to repopulate. Supabase daily backups make a full restore on
 | Haiku rate limit (429) mid-hex | Pipeline retries 5× with up to 30s backoff per `retry-after` header; sustained 429s will abort the hex and leave it pending for resume |
 | Non-food storefronts (florists, pharmacies) classified as `REGULAR_STORE` by UE | `validateItems()` rejects all items → logged as `skipped_validation_empty`; not a bug |
 | Pagination cursor instability | `paginateFeedV1` deduplicates by `storeUuid`; a repeated page yields no new rows and the cursor halts naturally |
-| Chain naming mismatch (FatSecret miss for known chain) | Extend `toFatSecretSlug` normalization table in `fatSecretSource.ts` when a "likely chain but FatSecret miss" pattern appears in Axiom logs |
+| Reviewed chain has unmatched UE servings | Review exact menu identity and serving evidence through the [chain catalog workflow](chain-catalog-batches.md); unresolved servings remain estimated |

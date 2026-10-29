@@ -95,7 +95,7 @@ Neither summary should silently replace the other.
 
 | Set | Mix and inputs | Truth | Main comparison limits |
 | --- | --- | --- | --- |
-| April 5 Haiku macro suite | 60 items; 10 each from McDonald's, Chick-fil-A, Starbucks, Denny's, Chipotle, Subway; baseline, chain hints, and serving prompts | Curated fixture with source strings naming chain sites, fastfoodnutrition.org, FatSecret, and CalorieKing | Same 60 items across three prompt variants; older continuous estimates and a different prompt implementation |
+| April 5 Haiku macro suite | 60 items; 10 each from McDonald's, Chick-fil-A, Starbucks, Denny's, Chipotle, Subway; baseline, chain hints, and serving prompts | Curated fixture with source strings naming chain sites, fastfoodnutrition.org, a legacy aggregator, and CalorieKing | Same 60 items across three prompt variants; older continuous estimates and a different prompt implementation |
 | July round-1 Qwen/Haiku | 160 items across 16 national chains; name-only production-path estimates, normally small batches | `hero-eval/ground-truth.json`, curated fastfoodnutrition.org values | Calorie-only published scores; calibration tuned for Haiku; not indie production accuracy |
 | Expanded Qwen/Haiku | 2,708 LA-regional chain items across 49 chains; name-only, batches of up to 50; interrupted Qwen overlaps | Historical `ChainItem` values described as official-published nutrition; builder reportedly removed items below 150 kcal and 4/4/9-inconsistent rows, with per-brand caps | Actual fixture and full chain allocation absent; positional schema compromised rounds 2/3; serving was not sent |
 | April eval-v2 prompt lab | Eight dishes: Bacari 3, L'Antica 2, Luv2eat 2, Superba 1; prompt/calibration experiments | Hand-curated `expected` macros without source provenance in `cases.json` | No saved result JSON or Qwen run here; documented 13.5% is average macro error, not calorie MdAPE |
@@ -132,7 +132,7 @@ For completeness, the two April 6 `hero-eval-*.json` archives are different cons
 The 02:29:33 run scores only 46/60 rows: calorie MdAPE 31.88%, 14/46 catastrophic, 30.43%, and 14 unmatched rows omitted from that archive's aggregate.
 The 02:50:26 run scores 32/60: MdAPE 30.56%, 9/32 catastrophic, 28.13%, with 28 omitted rows.
 They retain calorie estimates only, so per-macro medians cannot be reconstructed from those files.
-The April 6 two-path archive is 24/64 matched rows, all FatSecret and zero Haiku rows; its 3.52% calorie MdAPE and 0/24 catastrophic are not Haiku performance.
+The April 6 two-path archive is 24/64 matched rows, all legacy aggregator values and zero Haiku rows; its 3.52% calorie MdAPE and 0/24 catastrophic are not Haiku performance.
 These partial consumer results should not become a convenient alternative Haiku baseline.
 
 The arithmetic differences for every published Qwen accuracy row against the three April prompt runs and new Jev are shown below because they are easy to confuse with paired improvements.

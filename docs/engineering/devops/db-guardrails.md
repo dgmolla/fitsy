@@ -117,7 +117,7 @@ Auth mutations independently require the exact DEV Supabase API origin.
 
 | Writer entrypoints | Guarded target |
 | --- | --- |
-| `preload-ue-first.ts`, `backfill-chain-flag.ts`, `backfill-menu-item-macros.ts` | Exact selected direct URL, with the existing macro-backfill pooled fallback guarded |
+| `preload-ue-first.ts`, `backfill-menu-item-macros.ts` | Exact selected direct URL, with the existing macro-backfill pooled fallback guarded |
 | `rerun.ts`, `backfill-photos.ts`, `feedback-digest-dryrun.ts`, `phase1-create-table.ts` | Explicit guarded Prisma URL |
 | `phase0-populate-brands.ts`, `preload-chain-identity.ts`, `preload-chain-pilot.ts` | Explicit guarded direct URL; existing plan hashes, journals and chain write guards remain required |
 | `prisma/seed.ts`, `scripts/dev/reset.ts`, `snapshot.ts`, `preload-chain-quality-fixture.ts` | DEV-only destination; snapshot source remains session-read-only |

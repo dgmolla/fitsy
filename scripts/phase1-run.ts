@@ -10,7 +10,7 @@
  *   pdf            → download → extractPdf (render→vision, chunked)
  *   nutrition-page → extractStaticHtml; if it yields < MIN_ROWS valid → require manual source review
  *   site / other   → same static attempt, else defer
- * SPA + static-empty + no-official → deferred to the FatSecret/Haiku fallback tier (still
+ * SPA + static-empty + no-official → deferred to the estimator fallback tier (still
  *   "enriched", just not via official). Every unresolved chain is listed in _manual-sources.json.
  *
  * Run:  npx tsx --env-file=.env.local scripts/phase1-run.ts [discoverFile] [maxBrands]

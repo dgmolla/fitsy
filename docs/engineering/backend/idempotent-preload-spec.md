@@ -32,7 +32,7 @@ Without a source ID, ingestion falls back to the decoded, case-insensitive item 
 The database also maintains a partial unique `(restaurantId, name)` index for active rows without source IDs.
 Two different source IDs never merge merely because their names, descriptions or prices match.
 Repeated placements of one source ID still produce one item.
-Sources that expose no stable product ID, including the current markdown/JSON-LD and FatSecret HTML fallbacks, retain the name fallback.
+Sources that expose no stable product ID, including the legacy markdown/JSON-LD readers, retain the name fallback.
 
 ## Reconciliation and history
 

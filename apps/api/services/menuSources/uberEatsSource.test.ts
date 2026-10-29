@@ -289,7 +289,7 @@ describe("UberEatsSource", () => {
     expect(result.items[0]?.description).toBeDefined();
     expect(result.items[0]?.price).toBeDefined();
     expect(result.items[0]?.section).toBeDefined();
-    expect(result.macros).toBeUndefined();
+    expect(result).not.toHaveProperty("macros");
   });
 
   it("returns restaurant name from JSON-LD block", async () => {

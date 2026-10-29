@@ -602,19 +602,8 @@ export async function persistHexBulkInTx(
     WHERE r.id = u.id
   `;
 
-  // Q7: preserve a bound chain identity; FatSecret and current verified handoff can establish new ones.
-  if (restaurantIdsWithItems.length > 0) {
-    await tx.$executeRaw`
-      UPDATE "Restaurant" r
-      SET "chainFlag" = (r."brandId" IS NOT NULL AND r."chainFlag") OR EXISTS (
-        SELECT 1 FROM "MenuItem" mi
-        JOIN "MacroEstimate" me ON me."menuItemId" = mi.id
-        WHERE mi."restaurantId" = r.id AND mi."retiredAt" IS NULL AND me.source = 'fatsecret'
-      ),
-      "updatedAt" = now()
-      WHERE r.id = ANY(${restaurantIdsWithItems}::text[])
-    `;
-  }
+  // Chain identity is established by the verified brand handoff in persistHex.
+  // Preserve existing flags and historical nutrition provenance on ordinary refreshes.
 
   return flatCandidateIds.length;
 }

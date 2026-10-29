@@ -83,7 +83,8 @@ Only menu text, restaurant identity, serving context and region enter requests.
 Nutrition columns and official targets do not enter estimator state.
 Jev estimates retain their own `source=jev`, LOW confidence and protocol/quantization provenance.
 The shared TypeScript and SQL winner ranking treats Jev and Haiku as estimate peers, with recency breaking ties.
-Higher-trust existing sources retain their normal priority; no FatSecret lookup occurs in this flow.
+Higher-trust existing sources retain their normal priority.
+UE supplies menu membership, reviewed official facts supply matched nutrition, and Jev estimates unresolved servings.
 Invalid food is reported with its rejection reason rather than silently counted as persisted coverage.
 
 The single-restaurant and bulk writers preserve an existing reviewed official estimate when its current catalog binding and facts still match.

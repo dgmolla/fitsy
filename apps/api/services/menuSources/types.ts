@@ -1,9 +1,10 @@
 /**
  * Shared types for the MenuSource pipeline.
  *
- * Each data source (FFN, FatSecret, Uber Eats, Firecrawl) implements
+ * Each menu provider implements
  * the MenuSource interface and returns MenuSourceResult. The pipeline
  * doesn't care which source provided the data.
+ * Nutrition is resolved separately through reviewed catalog facts or estimation.
  */
 
 export interface StructuredMenuItem {
@@ -27,7 +28,7 @@ export interface MacroData {
   fatG: number;
   confidence: "HIGH" | "MEDIUM" | "LOW";
   reasoning?: string; // durable source/binding provenance for reviewed chain estimates
-  source: string; // "official" | "ffn" | "fatsecret" | "haiku" | "jev"
+  source: string; // Includes historical provenance; new estimates use "official", "haiku", or "jev".
   dietaryTags: string[]; // e.g. ["vegan", "gluten-free"]
 }
 
@@ -40,8 +41,7 @@ export interface MenuSourceResult {
     imageUrl?: string; // restaurant hero photo (from UE JSON-LD, Google Places, etc.)
   };
   items: StructuredMenuItem[];
-  macros?: Map<string, MacroData>; // populated by FFN/FatSecret; key = item name (lowercased)
-  sourceId: string; // "ffn" | "fatsecret" | "ubereats" | "firecrawl" | "none"
+  sourceId: string; // menu provider identifier, or "none"
   nameMismatch?: boolean; // S-118: true if scraped name didn't match expected name (log-only)
 }
 

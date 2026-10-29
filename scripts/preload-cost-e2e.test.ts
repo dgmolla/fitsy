@@ -41,6 +41,16 @@ it('reports actual usage from the CLI through the hex checkpoint and run summary
   expect(result.events.filter(e => e.type === 'db_checkpoint')).toHaveLength(1);
   expect(result.stdout).toContain('cost_per_1k_items=$5.500000');
 });
+it('completes enrichment with only UE menus and the estimator configured', () => {
+  const result = run();
+  expect(result.status).toBe(0);
+  expect(result.events.filter(e => e.type === 'external_request').map(e => e.address)).toEqual([
+    'https://www.ubereats.com/_p/api/getFeedV1',
+    'https://www.ubereats.com/_p/api/getStoreV1',
+  ]);
+  expect(result.events.filter(e => e.type === 'db_checkpoint')).toHaveLength(1);
+  expect(result.events.find(e => e.type === 'run')).toMatchObject({ status: 'completed' });
+});
 it('automatic UE-first resume never adopts a DEV POC checkpoint namespace', () => {
   const result = run(2, '15', [], undefined, { PRELOAD_TEST_AUTO_RESUME: '1', PRELOAD_TEST_RESTAURANTS: '2', PRELOAD_TEST_SPLIT_HEXES: '1' });
   expect(result.status).toBe(0);

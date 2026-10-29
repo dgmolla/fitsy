@@ -49,6 +49,8 @@ flowchart LR
 
 Run `npx tsx --tsconfig apps/api/tsconfig.json scripts/preload-chain-pilot.ts` with `PIPELINE_DATABASE_URL` explicitly set to the intended database's `pipeline_writer` credential.
 Commands below take a local artifact path.
+These replay commands target DEV or disposable loopback fixtures only.
+Production catalog application and recovery require the [approved cloud execution path](../devops/production-deployment.md#invocation); never run them from a laptop.
 Plan commands only read the DB; each apply requires the printed plan hash and validates the target and current rows.
 
 1. `catalog-plan <catalog.json>`; inspect twelve changes, then `catalog-apply <catalog.json> <hash>`.
@@ -62,7 +64,8 @@ The April patch preserves IDs, membership, saved references and non-nutrition fi
 
 The April CLI intentionally selects already brand-linked restaurants; a zero replan certifies this pilot scope, not unlinked locations or all chain dishes. If catalog apply commits but `.applied.json` is missing, inspect the saved `.started.json` and current rows by `(brandId, canonicalKey)` before reconstructing the after-state evidence for `rollbackCatalogPlan`. Do not blindly rerun apply or assume an unrelated later catalog edit belongs to this operation.
 
-New-hex enrichment snapshots the catalog at startup: do not edit approvals during an active run; restart with the corrected catalog if an approval changes. Activation takes effect when enrichment next runs for a location; its existing pre-fetch skip rules still apply. This April pilot uses the separate nutrition-only command. Approving these brands switches all their future enrichment to UE menus: unmatched items use Haiku, and an empty UE menu skips the location, with no FatSecret menu fallback.
+New-hex enrichment snapshots the catalog at startup: do not edit approvals during an active run; restart with the corrected catalog if an approval changes. Activation takes effect when enrichment next runs for a location; its existing pre-fetch skip rules still apply. This April pilot uses the separate nutrition-only command. Every future import uses its UE menu; approved nutrition bindings cover only matched servings.
+Unmatched items use the configured estimator, and an empty UE menu skips the location.
 
 ## Local proof
 

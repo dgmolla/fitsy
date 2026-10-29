@@ -30,6 +30,9 @@ The identity batch preserves menu rows and leaves a brand inactive until its nut
 
 The CLI is `scripts/preload-chain-pilot.ts`; its name and default seven-serving pilot remain compatible. All commands accept `--batch=/absolute/path/batch.json`. The JSON schema is `apps/api/services/chainCatalogBatch.ts`.
 
+The shell examples below target DEV or disposable loopback fixtures only.
+Production catalog application and recovery require the [approved cloud execution path](../devops/production-deployment.md#invocation); never run them from a laptop.
+
 ```sh
 # Explicit database environment required. Planning and inventory do not write the DB.
 npx tsx scripts/preload-chain-pilot.ts menu-inventory work/variants.json --batch=work/batch.json

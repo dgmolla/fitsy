@@ -17,6 +17,17 @@ export async function v2Database(value = process.env['PIPELINE_DATABASE_URL']): 
   return await assertPipelineDatabase(assertDevDatabase(value));
 }
 
+/** A tracked deletion is part of the candidate source, even before commit. */
+export function pipelineSourceHash(files: string[]): string {
+  return digest(files.map(file => {
+    try { return [file, digest(readFileSync(file).toString('base64'))]; }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      return [file, null];
+    }
+  }));
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args[0] === 'dashboard') { await runDashboardCommand(args); return; }
@@ -52,7 +63,7 @@ async function main() {
       'prisma/migrations/20261028130000_hex_jobs', 'prisma/migrations/20261028140000_pipeline_ue_rate_limit',
       'prisma/migrations/20261028150000_pipeline_pdf_jobs', 'prisma/migrations/20261028160000_pipeline_service_budgets']).split('\n').sort();
     const source = { event: 'source', at: new Date().toISOString(), head: git(['rev-parse', 'HEAD']),
-      sourceHash: digest(files.map(file => [file, digest(readFileSync(file).toString('base64'))])),
+      sourceHash: pipelineSourceHash(files),
       dirty: Boolean(git(['status', '--porcelain'])) };
     if (pdf) {
       const result = await runPdfCommand(prisma, pdf, source);

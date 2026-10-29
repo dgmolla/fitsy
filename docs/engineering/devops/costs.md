@@ -52,7 +52,7 @@ graph LR
 
 | Service | Pricing | Notes | Upgrade trigger |
 |---------|---------|-------|-----------------|
-| Anthropic API (Claude Haiku 4.5) | $1/MTok in · $5/MTok out ([standard pricing](https://platform.claude.com/docs/en/about-claude/pricing)) | Preload records real token usage, item allocations, and cost in a durable ledger and Axiom; default $15 cumulative run cap. Reviewed official/FatSecret macros bypass estimation; unmatched UE items use Haiku. | Configure `--cost-cap-usd` / `PRELOAD_COST_CAP_USD`; see [accounting and resume](../pipeline/runbook.md#ai-spend-accounting-and-resumable-cap) and reconcile with provider billing |
+| Anthropic API (Claude Haiku 4.5) | $1/MTok in · $5/MTok out ([standard pricing](https://platform.claude.com/docs/en/about-claude/pricing)) | Preload records real token usage, item allocations, and cost in a durable ledger and Axiom; default $15 cumulative run cap. Reviewed official matches bypass estimation; unmatched chain and independent UE items use Haiku in the legacy command. | Configure `--cost-cap-usd` / `PRELOAD_COST_CAP_USD`; see [accounting and resume](../pipeline/runbook.md#ai-spend-accounting-and-resumable-cap) and reconcile with provider billing |
 | Google Places API | $17/1K requests | **Optional only** — tier-3 photo fallback in `preload-ue-first.ts`. Not used for discovery (UE-first). | Only incurred if `GOOGLE_PLACES_API_KEY` is set and photo fallback is triggered |
 
 ---

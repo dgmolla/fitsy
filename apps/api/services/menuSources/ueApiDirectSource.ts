@@ -18,7 +18,7 @@ import type { MenuSource, MenuSourceResult } from "./types";
 /**
  * Optional semaphore injected by the pipeline to cap concurrent UE calls at
  * the process level. Lives in the source (not around the whole resolver) so
- * non-UE work like FatSecret doesn't waste a UE slot.
+ * other resolver work doesn't waste a UE slot.
  */
 export interface UeConcurrencyGate {
   run<T>(fn: () => Promise<T>): Promise<T>;

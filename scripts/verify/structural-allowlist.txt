@@ -9,7 +9,6 @@ console-log apps/api/services/menuSources/ueSitemapIndex.ts
 console-log apps/mobile/lib/apiClient.ts
 console-log packages/shared/src/env.ts
 console-log scripts/axiom-setup.ts
-console-log scripts/backfill-chain-flag.ts
 console-log scripts/backfill-menu-item-macros.ts
 console-log scripts/backfill-photos.ts
 console-log scripts/dev/reset.ts
@@ -19,7 +18,6 @@ console-log scripts/eval/auto-improve.ts
 console-log scripts/eval/hero-eval.ts
 console-log scripts/eval/hero-eval/discover-urls.ts
 console-log scripts/eval/hero-eval/run.ts
-console-log scripts/eval/hero-eval/two-path-eval.ts
 console-log scripts/eval/lib/reporter.ts
 console-log scripts/eval/run-eval.ts
 console-log scripts/eval/test-two-flow.ts
@@ -104,7 +102,6 @@ long-file scripts/eval-v2/run.ts
 long-file scripts/eval/auto-improve.ts
 long-file scripts/eval/hero-eval.ts
 long-file scripts/eval/hero-eval/run.ts
-long-file scripts/eval/hero-eval/two-path-eval.ts
 long-file scripts/eval/lib/metrics.test.ts
 long-file scripts/eval/test-two-flow.ts
 long-file scripts/mini-hex-e2e.test.ts
