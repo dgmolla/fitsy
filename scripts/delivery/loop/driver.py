@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Loop: for each task file, codex implements on fresh branch, PR, wait CI + AI review, fix rounds, merge (no admin)."""
 import json, os, subprocess, time, re, threading, shlex, tempfile
+from contextlib import nullcontext
 from pathlib import Path
 import context
 from taskfiles import read_task, task_files, migrate_notes, issue_number
@@ -15,7 +16,10 @@ ENV=dict(os.environ, PATH=os.path.expanduser('~/.local/bin')+':/opt/homebrew/bin
 def log(*a):
     with open(L+'/driver.log','a') as f: print(time.strftime('%H:%M:%S'),*a,file=f,flush=True)
 def sh(cmd,cwd=None,check=True,inp=None,timeout=None):
-    r=subprocess.run(cmd,shell=True,cwd=cwd,env=ENV,capture_output=True,text=True,input=inp,timeout=timeout)
+    # Candidate commit/merge hooks are as untrusted as its pre-push verifier.
+    boundary=context.host.git_environment(cwd,ENV) if cwd and cmd.startswith('git ') else nullcontext(ENV)
+    with boundary as selected:
+        r=subprocess.run(cmd,shell=True,cwd=cwd,env=selected,capture_output=True,text=True,input=inp,timeout=timeout)
     if check and r.returncode: raise RuntimeError(f'{cmd[:120]} -> {r.returncode}: {(r.stderr or r.stdout)[-1500:]}')
     return r.stdout.strip()
 def codex(wt,prompt,tag,images=()):
@@ -83,6 +87,19 @@ def evidence(wt, sha, res, why=''):
     return context.collect(wt, ROOT+'/sim-review/evidence', sha, res, why, ENV)
 
 
+def current_repair_evidence(wt, ev, st):
+    """Reuse source-bound artifacts, preserving today's measured environment."""
+    fresh=st.get('repair_evidence',{})
+    if (fresh.get('source') and fresh.get('head')==ev.get('head') and
+            fresh['source']==context.source_hash(wt,ENV)):
+        for key in ('sim_state','status','source','flow','step','images','videos','logs','assertion_failure','rerun_passed'):
+            if key in fresh: ev[key]=fresh[key]
+        if fresh.get('merge_base') and fresh['merge_base']==ev.get('merge_base'):
+            for key in ('main_passed','main_same_failure','main_comparison'):
+                if key in fresh: ev[key]=fresh[key]
+    return ev
+
+
 def notify_park(name, st, ev, meta):
     """The existing worker sends one diagnosis per destination and parking episode."""
     notice=st.get('park_notice')
@@ -132,6 +149,11 @@ def repair_sim(name, wt, st, s, ev, meta, prompt):
             save(s)
             if replay['status']=='pass':
                 ev={**ev,'rerun_passed':True,'sim_state':'failure','logs':replay.get('logs','')}
+                triage=classify_failure(ev)
+            elif replay['status']=='failure' and replay.get('head')==ev.get('head'):
+                ev={**ev,**replay,'sim_state':'failure','rerun_passed':False,
+                    'main_passed':False,'main_same_failure':False}
+                ev.update(context.compare_main(wt,L+'/sim.lock',ev,ENV))
                 triage=classify_failure(ev)
             elif triage=='unknown':
                 comparison=context.compare_main(wt,L+'/sim.lock',ev,ENV)
@@ -281,14 +303,22 @@ def retriage(files,s):
                     head=sh('git rev-parse HEAD',cwd=wt,check=False)
                     j,res={'headRefOid':head},{}
                 if Path(wt).is_dir():
-                    ev=evidence(wt,j['headRefOid'],res)
+                    ev=current_repair_evidence(wt,evidence(wt,j['headRefOid'],res),st)
                     if condition=='environment' or condition.startswith('env:'):
                         # A stale GitHub error cannot observe a repaired host dependency.
                         replay=context.host_replay(wt,L+'/sim.lock',{**ev,'require_native':True},ENV)
                         record_attempt(st,'environment-retriage',outcome=replay['status'],
                                        head=replay.get('head'),source=replay.get('source'),logs=replay.get('logs',''))
+                        if replay['status'] in ('pass','failure') and replay.get('head')!=j['headRefOid']:
+                            raise ValueError('Host replay does not match the current PR head')
                         ev['rerun_passed']=replay['status']=='pass' and replay.get('head')==j['headRefOid']
-                if condition=='baseline': ev.update(context.compare_main(wt,L+'/sim.lock',ev,ENV))
+                        if replay['status']=='failure':
+                            ev={**ev,**replay,'sim_state':'failure','main_passed':False,'main_same_failure':False}
+                            ev.update(context.compare_main(wt,L+'/sim.lock',ev,ENV))
+                            st['repair_evidence']=ev
+                if condition=='baseline':
+                    ev.update(context.compare_main(wt,L+'/sim.lock',ev,ENV))
+                    if ev.get('source'): st['repair_evidence']=ev
                 passed=res.get(condition.removeprefix('check:'))=='SUCCESS'
             except (RuntimeError,ValueError,OSError,subprocess.TimeoutExpired) as error:
                 record_attempt(st,'retriage-prerequisite',outcome='error',logs=redact(str(error)))
@@ -297,6 +327,8 @@ def retriage(files,s):
                 log(name,'current-head re-triage pending:',redact(str(error))[:500])
                 continue
         if requeue(st,ev,main,dependency,passed): log(name,'REQUEUED',condition)
+        st['blocked_evidence']=ev
+        st['triage']=classify_failure(ev)
     save(s)
 def review_text(pr):
     return sh(f"gh api repos/{REPO}/issues/{pr}/comments --jq '[.[]|select(.body|contains(\"fitsy-simple-review\"))][-1].body'",check=False)[-6000:]
@@ -341,7 +373,7 @@ def run_task(f,s):
         if sh('git status --porcelain',cwd=wt): sh(f'git commit -q -m {shlex.quote(msg)}',cwd=wt)
         sh('git fetch -q origin',cwd=wt,check=False)
         sh(f'git rev-parse -q --verify origin/{br} && git merge -q --no-edit origin/{br}',cwd=wt,check=False)
-        if subprocess.run('git merge-base --is-ancestor origin/main HEAD',shell=True,cwd=wt).returncode and subprocess.run('git merge -q --no-edit origin/main',shell=True,cwd=wt,env=ENV,capture_output=True).returncode:
+        if subprocess.run('git merge-base --is-ancestor origin/main HEAD',shell=True,cwd=wt).returncode and context.host.git(wt,['merge','-q','--no-edit','origin/main'],ENV).returncode:
             log(name,'pre-push merge of main conflicts; codex resolving')
             codex(wt,f"This branch has merge conflicts with origin/main (a merge is in progress). Resolve every conflict keeping both this branch's intent and main's changes (main may have deleted legacy files: keep them deleted unless this task needs them). Remove all conflict markers, run the affected tests. Original task:\n{prompt}"+COMMON,f'{name}-conflict')
             sh('git add -A && (git -c core.editor=true merge --continue || git commit -q --no-edit)',cwd=wt,check=False)
@@ -365,9 +397,11 @@ def run_task(f,s):
                 st['local_validation_required']=replay.get('required',True)
                 st.pop('needs_local_validation',None)
                 save(s)
-            r=subprocess.run(f'git push -q -u origin HEAD:{br}',shell=True,cwd=wt,env=ENV,capture_output=True,text=True)
+            r=context.host.publish(wt,br,ENV)
             if not r.returncode: return
             err=(r.stdout+r.stderr)[-4000:]
+            if classify_failure({'logs':err})=='env':
+                raise RuntimeError('Isolated pre-push environment recovery required: '+err)
             if tryn==3: break
             log(name,f'pre-push hook failed (repair {tryn+1}/3); codex fixing')
             codex(wt,"git push was rejected by the repo pre-push hook. Fix the reported failures in code (never bypass or edit the hook, never --no-verify, never push another way). Hook output tail:\n"+err+"\nOriginal task:\n"+prompt+COMMON,f'{name}-hookfix{tryn}')
@@ -392,7 +426,7 @@ def run_task(f,s):
         pr=int(url.rstrip('/').split('/')[-1]); st['pr']=pr; save(s); log(name,'PR',url)
     def refresh():
         sh(f'git fetch -q origin && git merge -q --ff-only origin/{br}',cwd=wt,check=False)
-        if subprocess.run('git merge -q --no-edit origin/main',shell=True,cwd=wt,env=ENV,capture_output=True).returncode:
+        if context.host.git(wt,['merge','-q','--no-edit','origin/main'],ENV).returncode:
             log(name,'conflicts with main; codex resolving')
             codex(wt,f"This branch has merge conflicts with origin/main (a merge is in progress). Resolve every conflict keeping both this branch's intent and main's changes (main may have deleted legacy files: keep them deleted unless this task needs them). Remove all conflict markers, run the affected tests. Original task:\n{prompt}"+COMMON,f'{name}-conflict')
             sh('git add -A && (git -c core.editor=true merge --continue || git commit -q --no-edit)',cwd=wt,check=False)
@@ -403,9 +437,10 @@ def run_task(f,s):
         if subprocess.run(f"gh pr view {pr} -R {REPO} --json state -q .state",shell=True,env=ENV,capture_output=True,text=True).stdout.strip()=='MERGED':
             st['done']=1; save(s); log(name,'already MERGED',pr); return
         if res.get('Simulator')=='ERROR':
-            ev=evidence(wt,j['headRefOid'],res)
+            ev=current_repair_evidence(wt,evidence(wt,j['headRefOid'],res),st)
             result=repair_sim(name,wt,st,s,ev,meta,prompt)
             if result=='blocked': return result
+            if result=='fixed': commit_push(f"{meta['title']} (fix sim gate {st['simrepair']})")
             continue
         if res.get('Verify')=='SUCCESS' and res.get('AI review')=='SUCCESS' and not gating_failures(res,'unknown'):
             g,why=sim_gate(pr,j['headRefOid']); n0=0

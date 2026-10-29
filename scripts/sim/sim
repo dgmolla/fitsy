@@ -71,7 +71,7 @@ else:
         raise SystemExit('--minutes must be a positive integer')
     value = {'owner': args[0], 'expires': time.time() + minutes * 60,
              'claimed_at': time.strftime('%FT%TZ', time.gmtime())}
-    with tempfile.NamedTemporaryFile('w', dir=path.parent, delete=False) as out:
+    with tempfile.NamedTemporaryFile('w', dir=path.parent, prefix=path.name + '.', suffix='.tmp', delete=False) as out:
         json.dump(value, out); out.flush(); os.fsync(out.fileno()); temporary = Path(out.name)
     temporary.chmod(0o600); os.replace(temporary, path)
     directory = os.open(path.parent, os.O_RDONLY)

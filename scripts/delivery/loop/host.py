@@ -1,9 +1,10 @@
 """Installed recovery controls and an isolated, DEV-only native execution boundary."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -80,8 +81,13 @@ def profile(wt, directory, env):
                 raise ValueError('Recovery mobile dotenv must contain only public DEV configuration')
     literal = lambda path: json.dumps(str(path))
     excluded = ' '.join(f'(require-not (subpath {literal(path)}))' for path in reads)
+    # Atomic claim replacement stages only these names on HOME's filesystem.
+    # Directory read access permits the parent's fsync, never its descendants.
+    staging = '(regex #' + json.dumps('^' + re.escape(str(claim[0]) + '.') + r'[a-z0-9_]+\.tmp$') + ')'
+    excluded += f' (require-not (literal {literal(home)})) (require-not {staging})'
     writable = [wt, directory, simulator, *claim]
     write_excluded = ' '.join(f'(require-not (subpath {literal(path)}))' for path in writable)
+    write_excluded += f' (require-not {staging})'
     # deny rules take precedence over the broad workspace permission, including
     # symlink targets. Process environment inspection and Keychain IPC stay denied.
     return f'''(version 1)
@@ -122,3 +128,41 @@ def isolated(wt, env, backend=None):
         (directory / 'java-home').mkdir()
         selected['JAVA_TOOL_OPTIONS'] = '-Duser.home=' + str(directory / 'java-home')
         yield [SANDBOX, '-f', str(policy)], selected
+
+
+@contextmanager
+def git_environment(wt, env, verify=False):
+    """Keep candidate hooks out of every host Git operation, including staging."""
+    wt = Path(wt).resolve()
+    # Git must never invoke the candidate's hook with host authentication. The
+    # installed owner supplies a private hook outside all candidate write roots.
+    with tempfile.TemporaryDirectory(prefix='fitsy-loop-publish-') as hooks:
+        with isolated(wt, env) if verify else nullcontext(None) as boundary:
+            hook = Path(hooks) / 'pre-push'
+            script = '#!/bin/bash -p\necho "Use installed host.publish for isolated pre-push verification" >&2\nexit 1\n'
+            # Retain both canonical .githooks/pre-push selections even if the
+            # candidate changes its own hook. The caller fixture compares them.
+            if boundary:
+                isolation, selected = boundary
+                commands = '\n'.join(shlex.join(['node', str(wt / 'scripts/verify/run.mjs'), *flags]) for flags in (
+                    ['--only=size-check,domain-check', '--scope=changed', '--runs=local'],
+                    ['--layer=0-1', '--stage=cheap', '--scope=changed', '--runs=local']))
+                command = ['/usr/bin/env', '-i', *(f'{key}={value}' for key, value in selected.items()),
+                           *isolation, '/bin/bash', '-p', '-c', 'set -euo pipefail\n' + commands]
+                script = '#!/bin/bash -p\nexec ' + shlex.join(command) + '\n'
+            hook.write_text(script)
+            hook.chmod(0o700)
+            count = int(env.get('GIT_CONFIG_COUNT', '0'))
+            yield {**env, 'GIT_CONFIG_COUNT': str(count + 1),
+                   f'GIT_CONFIG_KEY_{count}': 'core.hooksPath', f'GIT_CONFIG_VALUE_{count}': hooks}
+
+
+def git(wt, args, env):
+    with git_environment(wt, env, verify=args[:1] == ['push']) as selected:
+        return subprocess.run(['git', *args], cwd=wt, env=selected,
+                              capture_output=True, text=True, timeout=1800)
+
+
+def publish(wt, branch, env):
+    """Authenticate Git on the host; run candidate verification only in isolation."""
+    return git(wt, ['push', '-q', '-u', 'origin', 'HEAD:' + branch], env)

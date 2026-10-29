@@ -119,7 +119,8 @@ def collect(wt, evidence_root, sha, checks, description='', env=None):
         with error:
             result['logs'] += '\nAPI health: ' + redact(error.read(4000).decode(errors='replace'))
     except (OSError, RuntimeError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
-        result['logs'] += '\nBackend preflight unavailable: ' + redact(str(error))
+        result['preflight_logs'] = '\nBackend preflight unavailable: ' + redact(str(error))
+        result['logs'] += result['preflight_logs']
     return result
 
 
@@ -158,6 +159,10 @@ def host_replay(wt, lock, evidence, env):
             process = subprocess.run(['lockf', '-t', '3600', str(lock), *isolation, 'node', runner,
                                       *scope, '--udid=' + udid, '--record-video'], cwd=wt,
                                      env=selected, capture_output=True, text=True, timeout=3600)
+        # Failed assertions are actionable evidence too. Bind them to unchanged
+        # source just like passing results before returning any artifacts.
+        if source_hash(wt, safe) != source or run(['git', 'rev-parse', 'HEAD'], wt, safe) != head:
+            raise ValueError('Source changed during host replay')
         output = process.stdout
         lines = output.strip().splitlines()
         if not lines:
@@ -170,12 +175,10 @@ def host_replay(wt, lock, evidence, env):
             match = re.search(r'inspect (.+)', result.get('summary', ''))
             artifacts = local_artifacts(match[1]) if match else {}
             status = 'failure' if artifacts.get('step') else 'error'
-            return {**artifacts, 'status': status, 'head': head,
-                    'logs': redact((output + process.stderr)[-8000:])}
+            return {**artifacts, 'status': status, 'head': head, 'source': source,
+                    'logs': redact((artifacts.get('logs', '') + '\n' + output + process.stderr)[-16000:])}
         if result.get('status') != 'pass' or result.get('name') != 'mobile-e2e':
             raise ValueError('Host runner did not produce a passing canonical result')
-        if source_hash(wt, safe) != source or run(['git', 'rev-parse', 'HEAD'], wt, safe) != head:
-            raise ValueError('Source changed during host replay')
         return {**result, 'required': True, 'head': head, 'source': source, 'flow': evidence.get('flow'), 'logs': output[-8000:]}
     except (OSError, RuntimeError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
         return {'status': 'error', 'logs': redact(str(error))}

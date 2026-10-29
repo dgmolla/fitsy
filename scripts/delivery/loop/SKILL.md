@@ -27,8 +27,10 @@ Native replay uses the installed controls with an explicit DEV environment and a
 Deployment metadata reaches native checks through a read-only local adapter; GitHub, deployment, production database and provider credentials stay outside candidate execution.
 Keep host fixture configuration outside candidate writable roots; a candidate-owned file cannot grant access to additional host paths.
 The sandbox denies host credential files, other processes' environments, Keychain access and writes outside the owned DEV workspace and simulator resources.
+Atomic simulator claims stage only `.fitsy-sim-claim.json.<random>.tmp` in HOME, on the claim's filesystem.
+The profile permits those staging names and read access to the HOME directory for fsync; it does not grant access to HOME's other files.
 An unavailable sandbox is an environment error with no unsandboxed fallback; use the existing host owner for the exact-source replay.
-The canonical host media lane exercises real credential-file, dotenv, symlink and child-process isolation before writing its source-bound receipt.
+The canonical host media lane exercises real credential-file, dotenv, symlink and child-process isolation plus actual simulator claim, renewal and release before writing its source-bound receipt.
 Model workers receive only core environment variables and Codex provider authentication, matching `local-dispatcher.py`'s worker allowlist.
 Set the host's existing `FITSY_XCTEST_SIM_UDID` to an explicitly owned compatible device.
 Prepare a clean merge-base checkout and set optional `FITSY_LOOP_MAIN_CHECKOUT` for differential replay.
@@ -37,6 +39,9 @@ Keep `dev.fitsy.org` pinned to `dev`.
 Every simulator command must hold `lockf -t 3600 ~/fitsy-refactor/loop/sim.lock`.
 Native repairs need a real local Maestro pass before push; never remove or skip assertions to obtain it.
 Every push entrypoint reselects native coverage for changed source, including general review fixes, conflict resolution and hook repairs, independently of simulator attempt counters.
+Host Git operations, including commit and merge preparation, use the installed owner's private hook directory outside candidate writable roots.
+That hook runs both canonical pre-push verifier selections inside the same enforced isolation with allowlisted DEV configuration.
+Never execute the candidate hook or verifier with host credentials, skip either required selection, or fall back to unsandboxed verification.
 Only trusted scope `none` permits publication without native execution; a pending failed journey still requires a real replay.
 Keep validation bound to the current source after requeue, merges and hook repairs.
 The driver attaches failure screenshots or extracted video frames through Codex's image argument and includes failing commands, logs, diff and prior outcomes in the prompt.
@@ -50,6 +55,9 @@ Park with a concrete condition such as `PR#587`, `check:Simulator`, `env:api-con
 Re-triage every fifteen minutes or when main advances.
 Only changed evidence or a resolved dependency/check can requeue work, with three requeues per rolling day.
 Environment re-triage runs one bounded host replay of the current PR head so a stale Simulator error cannot hide repaired dependencies.
+Bind failed replays to unchanged source and the observed PR head as well as passing replays.
+Merge fresh assertion status, flow, media and logs into retained evidence before reclassifying and requeueing.
+Recheck the merge-base before authorizing code repair, and consume retained replay evidence only while its head and source still match.
 Before collecting evidence, fast-forward a clean owned checkout to the observed PR head and verify its identity.
 Preserve dirty and unpublished divergent work; record the prerequisite failure and retry interval instead of replaying an old head or discarding edits.
 Preparation failures retry the bounded fetch and checkout setup from the existing `wt3` checkout before resolving a task HEAD, including legacy parks without a worktree.

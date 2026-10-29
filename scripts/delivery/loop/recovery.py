@@ -30,13 +30,13 @@ def redact(text):
 def classify_failure(evidence):
     """Only positive candidate evidence authorizes a code repair."""
     status = str(evidence.get('sim_state', '')).lower()
-    logs = str(evidence.get('logs', '')).lower()
+    logs = (str(evidence.get('logs', '')) + '\n' + str(evidence.get('preflight_logs', ''))).lower()
     api = evidence.get('api_status')
     if (status == 'error' or evidence.get('free_disk_gb', 100) < 5 or
             evidence.get('simulator_booted') is False or
             evidence.get('missing_env') or
             re.search(r'enospc|no space left|missing.*(?:env|upstash|redis)|'
-                      r'(?:env|upstash|redis).*not (?:set|configured)|sandbox.*denied|'
+                      r'(?:env|upstash|redis).*not (?:set|configured)|sandbox.*(?:denied|operation not permitted)|'
                       r'coresimulator.*(?:unavailable|refused)|no ready fitsy-api preview|'
                       r'backend.*source.*mismatch', logs)):
         return 'env'
@@ -55,7 +55,7 @@ def classify_failure(evidence):
 
 def failure_fingerprint(evidence):
     keys = ('sim_state', 'flow', 'step', 'api_status', 'missing_env', 'deploy_state',
-            'simulator_booted', 'main_same_failure', 'main_passed', 'candidate_stack', 'logs')
+            'simulator_booted', 'main_same_failure', 'main_passed', 'candidate_stack', 'logs', 'preflight_logs')
     value = {key: evidence.get(key) for key in keys}
     value['low_disk'] = evidence.get('free_disk_gb', 100) < 5
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
