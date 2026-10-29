@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
+const env = { ...process.env, PYTHONDONTWRITEBYTECODE: '1' };
+
 function runPython(args: string[]) {
   return spawnSync('python3', ['-B', join(__dirname, 'routine-release.test.py'), ...args], {
     encoding: 'utf8', timeout: 90_000,
-    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+    env,
   });
 }
 
@@ -13,7 +15,7 @@ if (discovery.error || discovery.status !== 0) {
   throw new Error(`Release test discovery failed: ${discovery.error?.message ?? discovery.stderr}`);
 }
 const cases: string[] = JSON.parse(discovery.stdout);
-if (!Array.isArray(cases) || !cases.length || cases.some(name => typeof name !== 'string')) {
+if (!Array.isArray(cases) || !cases.length || cases.some(name => typeof name !== 'string' || !/^\w+\.test_\w+$/.test(name))) {
   throw new Error('Release test discovery must return a nonempty list of case names');
 }
 
@@ -24,4 +26,5 @@ test.each(cases)('automatic release guards: %s', name => {
   expect({ status: result.status, stderr: result.stderr, error: result.error?.message }).toEqual({
     status: 0, stderr: expect.stringContaining('OK'), error: undefined,
   });
+  expect(result.stderr).toMatch(/\bRan 1 test in /);
 }, 95_000);
