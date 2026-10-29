@@ -319,11 +319,44 @@ class GitDeploymentTests(unittest.TestCase):
         self.assertEqual(self.trace, [
             f'repos/{gate.REPO}/git/ref/heads/main', f'repos/{gate.REPO}/git/ref/heads/main',
             f'repos/{gate.REPO}/deployments?sha={self.source}&environment=Production&per_page=100',
-            f'repos/{gate.REPO}/deployments/12/statuses?per_page=1',
+            f'repos/{gate.REPO}/deployments/{self.row["id"]}/statuses?per_page=1',
         ], 'a terminal failure must not retry or select another deployment')
         return str(failure.exception), read
 
     log_url = 'https://vercel.com/dawits-projects-74b6e00f/fitsy-api/AC5ozgRAfyb2VX7bqMDyfYZqFNEL'
+
+    def test_failed_observer_recovers_exact_logs_from_real_issue_650_status_shape(self):
+        self.source = '605560241b8c076bef45585457175317d491f2b0'
+        self.row.update(id=7409367502, sha=self.source, ref=self.source)
+        self.log_url = 'https://fitsy-128l2az42-dawits-projects-74b6e00f.vercel.app'
+        provider_id = '7coDSBVrAKVpB5zT45D2aUufd3LT'
+        self.status.update(environment_url=self.log_url, target_url=self.log_url,
+                           description='Deployment has failed \u2014 run this Vercel CLI command: '
+                           f'npx vercel inspect dpl_{provider_id} --logs')
+        serving = 'bfd87f8fbd7ee9863554e973870f6988248d102f'
+        message, _ = self.failed_observation(
+            {'status': 'ok', 'db': 'connected', 'deploymentSha': serving}, state='failure')
+        self.assertIn(f'build/migration logs: https://vercel.com/dawits-projects-74b6e00f/fitsy-api/{provider_id};', message)
+        self.assertIn('deployment=7409367502', message)
+        self.assertIn(f'source={self.source}', message)
+        self.assertIn(f'fitsy.org serving source: {serving}', message)
+        self.assertNotIn('npx vercel', message)
+
+    def test_failed_observer_rejects_unknown_or_injected_provider_failure_descriptions(self):
+        self.log_url = self.url
+        description = ('Deployment has failed \u2014 run this Vercel CLI command: '
+                       'npx vercel inspect dpl_privateProviderDetail --logs')
+        for value in (None, 7, {}, [description], 'private-provider-detail',
+                      description + '\n', description + '; private-provider-detail',
+                      description.replace('privateProviderDetail', '../private-provider-detail'),
+                      description.replace('privateProviderDetail', 'id?token=private-provider-detail'),
+                      description.replace('inspect', 'remove')):
+            with self.subTest(description=value):
+                self.status['description'] = value
+                message, _ = self.failed_observation({})
+                self.assertIn('build/migration logs: https://vercel.com/dawits-projects-74b6e00f/fitsy-api/deployments;', message)
+                self.assertNotIn('privateProviderDetail', message)
+                self.assertNotIn('private-provider-detail', message)
 
     def test_failed_observer_reports_exact_deployment_logs_and_older_serving_source(self):
         serving = 'bfd87f8fbd7ee9863554e973870f6988248d102f'
