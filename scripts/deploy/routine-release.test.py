@@ -329,7 +329,10 @@ process.stdout.write(JSON.stringify({
                      'apps/api/services/rateLimitStoreConfig.ts', 'scripts/deploy/pipeline-roles-approval.mjs',
                      'scripts/deploy/activate-runtime-role.ts',
                      'prisma/schema.prisma', 'prisma/migrations/migration_lock.toml',
-                     'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql'):
+                     'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql',
+                     'prisma/migrations/20261028130000_hex_jobs/migration.sql',
+                     'prisma/migrations/20261028140000_pipeline_ue_rate_limit/migration.sql',
+                     'prisma/migrations/20261028150000_pipeline_pdf_jobs/migration.sql'):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, target)
@@ -502,7 +505,7 @@ exit "${BUILD_EXIT:-0}"
 
     def test_unapproved_role_migration_is_held_while_other_migrations_and_build_proceed(self):
         role = '20261028120000_pipeline_writer_roles'
-        original = (self.root / 'prisma/migrations' / role / 'migration.sql').read_bytes()
+        original = {path: path.read_bytes() for path in (self.root / 'prisma/migrations').glob('*/migration.sql')}
         for approval in (None, '', 'a' * 64, 'true'):
             for runtime in (self.env['POSTGRES_PRISMA_URL'], self.env['POSTGRES_PRISMA_URL'].replace('fitsy_app.', 'postgres.')):
                 with self.subTest(approval=approval, role='legacy' if 'postgres.' in runtime else 'fitsy_app'):
@@ -513,13 +516,16 @@ exit "${BUILD_EXIT:-0}"
                     self.assertEqual(json.loads(self.migrations.read_text()),
                                      ['20261028110000_unrelated_before', '20261028130000_unrelated_after'])
                     self.assertIn('holding ' + role, result.stderr)
-                    self.assertEqual((self.root / 'prisma/migrations' / role / 'migration.sql').read_bytes(), original)
+                    self.assertEqual({path: path.read_bytes() for path in original}, original)
 
     def test_matching_approval_includes_exact_role_migration(self):
         result, calls = self.drive()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls[-1], 'npm run build -w apps/api')
-        self.assertIn('20261028120000_pipeline_writer_roles', json.loads(self.migrations.read_text()))
+        self.assertEqual(json.loads(self.migrations.read_text()), [
+            '20261028110000_unrelated_before', '20261028120000_pipeline_writer_roles',
+            '20261028130000_hex_jobs', '20261028130000_unrelated_after',
+            '20261028140000_pipeline_ue_rate_limit', '20261028150000_pipeline_pdf_jobs'])
         self.assertNotIn('holding ', result.stderr)
 
     def test_changed_role_sql_is_held_until_the_new_bytes_are_approved(self):
@@ -528,7 +534,8 @@ exit "${BUILD_EXIT:-0}"
         result, calls = self.drive()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls[-1], 'npm run build -w apps/api')
-        self.assertNotIn(sql.parent.name, json.loads(self.migrations.read_text()))
+        self.assertEqual(json.loads(self.migrations.read_text()),
+                         ['20261028110000_unrelated_before', '20261028130000_unrelated_after'])
 
     def test_missing_role_sql_fails_closed_without_an_unfiltered_retry(self):
         (self.root / 'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql').unlink()

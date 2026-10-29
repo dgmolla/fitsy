@@ -191,7 +191,7 @@ Keep `dev.fitsy.org` pinned to `dev`; candidate native acceptance uses the PR's 
 
 Production migration is owned exclusively by the existing Vercel Git main deploy.
 The role migration requires Dawit's explicit approval via `FITSY_PIPELINE_ROLES_APPROVED_SHA256` matching its SHA-256, in addition to the existing signed deployment and target checks.
-Without matching approval, the build gives Prisma a temporary schema/migration copy excluding only that migration so unrelated migrations and builds can proceed.
+Without matching approval, the build gives Prisma a temporary schema/migration copy excluding that migration and SQL mentioning its controlled roles so unrelated migrations and builds can proceed.
 It leaves the original SQL and migration ledger untouched; matching approval includes the role migration on the next deploy, while any migration failure still withholds the build.
 Provision separate production credentials and bindings through the approved operator path; the DEV provisioner refuses production.
 Preparing code and tests does not establish owner approval, production application or successful credential cutover.
