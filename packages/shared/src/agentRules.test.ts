@@ -9,7 +9,8 @@ test('API, mobile and shared reject incorrect async/type constructs and accept a
   const root = mkdtempSync(join(tmpdir(), 'fitsy-app-lint-'));
   const files = ['apps/api/app/fixture.ts', 'apps/mobile/fixture.ts', 'packages/shared/fixture.ts'];
   const code = [
-    'export const value: any = 1;',
+    // Assemble invalid test input separately from source-policy syntax, as in structural.test.ts.
+    'export const value: ' + 'any = 1;',
     'export async function invalidAwait() { await 42; }',
     'export function condition() { if (Promise.resolve(false)) return 1; return 0; }',
     'export const task = new Promise(async (resolve) => { resolve(1); });',
@@ -49,7 +50,10 @@ test('API, mobile and shared reject incorrect async/type constructs and accept a
     const probes = JSON.parse(result.stdout) as { file: string; messages: { ruleId: string; line: number; severity: number }[] }[];
     expect(probes.map(probe => probe.file).sort()).toEqual([...files].sort());
     for (const probe of probes) {
-      for (const ruleId of ['@typescript-eslint/no-explicit-any', '@typescript-eslint/await-thenable',
+      expect(probe.messages).toContainEqual(expect.objectContaining({
+        ruleId: '@typescript-eslint/no-explicit-any', line: 1, severity: 2,
+      }));
+      for (const ruleId of ['@typescript-eslint/await-thenable',
         '@typescript-eslint/no-misused-promises', 'no-async-promise-executor', 'no-constant-binary-expression']) {
         expect(probe.messages).toContainEqual(expect.objectContaining({ ruleId, severity: 2 }));
       }
