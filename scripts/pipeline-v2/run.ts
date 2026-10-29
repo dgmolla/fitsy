@@ -13,6 +13,7 @@ import { validateItems } from '../pipeline-utils';
 import { JEV_LIMITS } from '../eval/lib/jev-experiment';
 import { digest, protocolHash, type V2Ledger } from './journal';
 import { SharedUeRateLimiter } from './ue-rate-limiter';
+import { v2Telemetry } from './telemetry';
 import { PdfJobQueue } from './pdf-queue';
 
 export interface V2Options { hexId: string; runId: string; out: string; capUsd: number }
@@ -65,7 +66,10 @@ export interface HexCoverage {
 export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal: V2Ledger,
   persistence: PersistHexOpts & { beforePersist?: () => Promise<void> } = {}) {
   const start = performance.now();
-  const rateLimiter = new SharedUeRateLimiter(prisma, event => Promise.resolve(journal.append({ ...event })));
+  const rateLimiter = new SharedUeRateLimiter(prisma, async event => {
+    await journal.append({ ...event });
+    v2Telemetry.throttle('uber_eats', { status: event.status, runId: options.runId, hexId: options.hexId });
+  });
   // Honor the explicit hex's checkpoint too. --hex-id never overrides resume.
   if (await isHexComplete(options.runId, options.hexId, prisma)) {
     const completed = [...journal.events].reverse().find(e => e.event === 'completed');
@@ -77,6 +81,7 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
   }
   const coverage: HexCoverage = { restaurants: 0, menus: 0, emptyMenus: 0, rawItems: 0, uniqueItems: 0,
     officialItems: 0, jevItems: 0, rejectedItems: 0, persistedItems: 0, chainsWithPublishedData: 0, chainsWithoutPublishedData: 0, independentRestaurants: 0 };
+  const sourceMix = { official: 0, jev: 0, other: 0 };
   const matches: Record<string, unknown>[] = [], rejections: Record<string, unknown>[] = [];
   const previousWallMs = journal.events.filter(e => e.event === 'attempt_end').reduce((sum, e) => sum + Number(e.wallMs), 0);
   const interruptedAttempts = journal.events.filter(e => e.event === 'attempt_start').length - journal.events.filter(e => e.event === 'attempt_end').length;
@@ -84,7 +89,7 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
   const report = (status: string) => ({ version: 2, environment: 'dev', runId: options.runId, hexId: options.hexId, status,
     source: [...journal.events].reverse().find(e => e.event === 'source') ?? null,
     model: JEV_LIMITS.requiredModel, protocolHash, pricing: JEV_LIMITS.pricing,
-    coverage, officialCoverage: coverage.uniqueItems ? coverage.officialItems / coverage.uniqueItems : 0,
+    coverage, sourceMix, officialCoverage: coverage.uniqueItems ? coverage.officialItems / coverage.uniqueItems : 0,
     persistedCoverage: coverage.uniqueItems ? coverage.persistedItems / coverage.uniqueItems : 0,
     calls: { uberEats: journal.events.filter(e => e.event === 'ue_request').length, jev: journal.requests,
       pdfSearch: 0, reusedJev: journal.reusedRequests },
@@ -142,6 +147,10 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
         }
       }
       const validated = validateItems(items, macros);
+      for (const entry of validated.valid) {
+        const source = entry.macro.source;
+        sourceMix[source === 'official' || source === 'jev' ? source : 'other']++;
+      }
       coverage.rejectedItems += validated.rejected.length;
       rejections.push(...validated.rejected.map(item => ({ restaurantId: restaurant.id, ...item })));
       if (!validated.valid.length) throw new Error('Menu has no valid sourced food; leave the hex pending');
@@ -162,11 +171,11 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
     const safeMessages = ['TYPESAFE_API_KEY is required', 'Selected hex has no discovered UE restaurants',
       'Jev overflow or incomplete estimate; leave the hex pending', 'Menu has no valid sourced food; leave the hex pending',
       'No sourced menus; leave the hex pending', 'Nutrition target in estimator input'];
-    const failureReason = journal.unknown ? 'Unknown Jev spend; retain and reconcile the journal before resuming'
+    const failureReason = journal.dailyCap ? `Daily ${journal.dailyCap} budget exhausted; resume next UTC day` : journal.unknown ? 'Unknown Jev spend; retain and reconcile the journal before resuming'
       : journal.stopped ?? (error instanceof Error && safeMessages.includes(error.message) ? error.message
         : error instanceof Error && error.name === 'UeUnexpectedError' ? 'UE menu fetch or parsing failed'
           : 'Execution or database failure; inspect the private command diagnostics before resuming');
-    const failed = { ...report(journal.stopped?.includes('spend cap') ? 'spend_cap' : 'failed'), failure: error instanceof Error ? error.name : 'UnknownError', failureReason };
+    const failed = { ...report(journal.dailyCap ? 'daily_cap' : journal.stopped?.includes('spend cap') ? 'spend_cap' : 'failed'), failure: error instanceof Error ? error.name : 'UnknownError', failureReason };
     await journal.append({ event: 'failed', at: new Date().toISOString(), report: failed });
     return failed;
   } finally { await journal.append({ event: 'attempt_end', at: new Date().toISOString(), wallMs: performance.now() - start }); }

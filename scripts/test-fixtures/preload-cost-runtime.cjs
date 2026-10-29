@@ -10,7 +10,7 @@ const restaurants = Array.from({ length: Number(process.env.PRELOAD_TEST_RESTAUR
   id: `restaurant-${i}`, storeUuid: `store-${i}`, name: `Test Kitchen ${i}`, brandId: null,
   address: '123 Test St', lat: 34.05, lng: -118.25,
   homeHex: process.env.PRELOAD_TEST_SPLIT_HEXES ? require('h3-js').latLngToCell(34.05 + i * 0.05, -118.25, 7) : '8729a1d75ffffff',
-  photoUrl: 'https://example.test/hero.jpg', photoSource: 'ue_feed_hero', lastScrapedAt: null, menuHash: null,
+  photoUrl: process.env.PRELOAD_TEST_GOOGLE ? null : 'https://example.test/hero.jpg', photoSource: 'ue_feed_hero', lastScrapedAt: null, menuHash: null,
 }));
 class Database {
   macroEstimate = { findMany: async () => [] };
@@ -29,6 +29,8 @@ class Database {
   };
   async $queryRaw(strings, ...values) {
     const sql = strings.join('?');
+    if (sql.includes('pipeline_budget_reserve')) { record({ type: 'daily_reservation', service: values[1], usd: values[2] }); return [{ id: process.env.PRELOAD_TEST_DAILY_CAP ? null : values[0] }]; }
+    if (sql.includes('pipeline_budget_settle')) return [{ id: values[0] }];
     if (sql.includes('COUNT(DISTINCT mi.id)')) return restaurants.map(r => ({ restaurantId: r.id, itemCount: BigInt(count), macroCount: BigInt(count) }));
     if (sql.includes('INSERT INTO "MenuItem"')) return values[0].map(id => ({ id }));
     if (sql.includes('FROM "Restaurant"') && sql.includes("'ue_feed'")) return restaurants;
@@ -57,7 +59,7 @@ Module._load = function (id, parent, isMain) {
         const text = params.messages[0].content;
         const batch = JSON.parse(text.slice(text.indexOf('\n') + 1));
         const call = ++calls;
-        record({ type: 'ai_request', items: batch.length });
+        record({ type: 'ai_request', items: batch.length, maxTokens: params.max_tokens });
         if (process.env.PRELOAD_TEST_DELAY) await new Promise(resolve => setTimeout(resolve, call * 20));
         return { id: 'test-message', model: params.model,
           usage: process.env.PRELOAD_TEST_INVALID_USAGE || Number(process.env.PRELOAD_TEST_INVALID_USAGE_CALL) === call
@@ -76,6 +78,11 @@ Module._load = function (id, parent, isMain) {
 global.fetch = async (url, options) => {
   const address = String(url);
   record({ type: 'external_request', address });
+  if (address.includes('places.googleapis.com')) {
+    record({ type: 'google_request', operation: address.includes('searchText') ? 'search' : 'photo' });
+    if (address.includes('searchText')) return Response.json({ places: [{ location: { latitude: 34.05, longitude: -118.25 }, photos: [{ name: 'places/test/photos/photo' }] }] });
+    return Response.json({ photoUri: 'https://example.test/google-photo.jpg' });
+  }
   if (address.includes('getFeedV1')) return Response.json({ data: { feedItems: [{}] } });
   if (address.includes('getStoreV1')) return Response.json({ status: 'success', data: {
     title: 'Test Kitchen', catalogSectionsMap: { mains: [{ payload: {
@@ -91,7 +98,7 @@ global.fetch = async (url, options) => {
     const text = params.messages[0].content;
     const batch = JSON.parse(text.slice(text.indexOf('\n') + 1));
     const call = ++calls;
-    record({ type: 'ai_request', items: batch.length });
+    record({ type: 'ai_request', items: batch.length, maxTokens: params.max_tokens });
     if (call === 1) return Response.json({ type: 'error', error: { type: 'rate_limit_error', message: 'Test retry' } },
       { status: 429, headers: { 'retry-after': '0.1' } });
     await new Promise(resolve => setTimeout(resolve, 20));

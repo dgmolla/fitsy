@@ -106,3 +106,53 @@ it.each(['runId', 'costUsd'])('rejects a ledger with missing or inconsistent bil
   writeFileSync(path, JSON.stringify(event) + '\n');
   expect(() => new PreloadCostTracker('run', 15, path)).toThrow(CostAccountingError);
 });
+
+it('charges in-flight envelopes before the transport and releases only known-unused capacity', () => {
+  const tracker = new PreloadCostTracker('run',0.04,path);
+  const first = tracker.reserve('haiku',0.03);
+  expect(tracker.reservedUsd).toBe(0.03);
+  expect(() => tracker.reserve('haiku',0.03)).toThrow(SpendCapReached);
+  tracker.record(context,[{ name:'Bowl' }],usage,first);
+  expect(tracker.reservedUsd).toBe(0);
+  expect(tracker.spentUsd).toBe(0.011);
+  expect(() => tracker.reserve('google',0.032)).toThrow(SpendCapReached);
+});
+
+it('restores unresolved reservations and refuses further paid work instead of resetting capacity', () => {
+  const tracker = new PreloadCostTracker('run',1,path);
+  tracker.reserve('haiku',0.03);
+  const resumed = new PreloadCostTracker('run',1,path);
+  expect(resumed.reservedUsd).toBe(0.03);
+  expect(() => resumed.reserve('google',0.007)).toThrow(CostAccountingError);
+});
+
+it('Google list-price bounds survive restarts and contribute to the combined cap and hex costs', () => {
+  const tracker = new PreloadCostTracker('run',0.039,path);
+  tracker.recordGoogle(context,tracker.reserve('google',0.032));
+  tracker.recordGoogle(context,tracker.reserve('google',0.007));
+  const resumed = new PreloadCostTracker('run',0.039,path);
+  expect(resumed.total.costUsd).toBe(0);
+  expect(resumed.googleCostUsd).toBeCloseTo(0.039);
+  expect(resumed.googleForHex(context.hexId)).toBeCloseTo(0.039);
+  expect(() => resumed.assertCanSpend()).toThrow(SpendCapReached);
+});
+
+it('known pre-inference rejections release their reservation while uncertain errors retain it', () => {
+  const tracker = new PreloadCostTracker('run',1,path);
+  const rejected = tracker.reserve('haiku',0.03);
+  tracker.requestFailed(rejected,{ status:429 });
+  expect(tracker.reservedUsd).toBe(0);
+  const uncertain = tracker.reserve('haiku',0.03);
+  expect(() => tracker.requestFailed(uncertain,new Error('network failure'))).toThrow(CostAccountingError);
+  expect(tracker.reservedUsd).toBe(0.03);
+  expect(() => tracker.assertCanSpend()).toThrow(CostAccountingError);
+});
+
+it('records provider envelope violations and refuses any subsequent requests', () => {
+  const tracker = new PreloadCostTracker('run',1,path);
+  const id = tracker.reserve('haiku',0.001);
+  expect(() => tracker.record(context,[{ name:'Bowl' }],usage,id)).toThrow('exceeded');
+  expect(tracker.total.costUsd).toBe(0.011);
+  expect(() => tracker.reserve('haiku',0.03)).toThrow(CostAccountingError);
+  expect(() => new PreloadCostTracker('run',1,path).assertCanSpend()).toThrow(CostAccountingError);
+});

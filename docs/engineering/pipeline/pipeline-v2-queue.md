@@ -4,7 +4,7 @@
 
 The queue runs the [existing v2 hex implementation](pipeline-v2-dev-poc.md) against explicitly enqueued resolution-7 LA cells.
 It retains the DEV-only target guard, dedicated `pipeline_writer` credentials, reviewed official matcher, Jev protocol and cumulative $5 per-hex cap.
-Cloud hosting and fleet-wide budgets remain the later #594 and #596 work.
+Fleet-wide [daily service budgets and Axiom telemetry](pipeline-v2-budgets.md) now supplement the per-hex cap; cloud hosting remains #594 work.
 No mobile journey changes or App Store actions are involved.
 
 ```mermaid
@@ -56,11 +56,12 @@ The single-host POC keeps its original local journal and separate run namespace;
 
 Enqueue is idempotent, can raise priority, and cannot reset attempts, progress or a parked/completed job.
 An existing job refuses changes to its target, estimator protocol, cap or attempt limit.
-The $5 ceiling is per hex and cumulative across that hex's claims; it is not a fleet-wide budget.
+The $5 ceiling is per hex and cumulative across that hex's claims, in addition to the shared daily Jev budget.
 Workers read these stored settings rather than supplying new budgets on resume.
 
 `--max-jobs` defaults to one and permits 1-1000 claims per invocation.
-A worker exits when no eligible job exists, the bound is reached or a job does not complete.
+A worker exits when no eligible job exists, daily paid capacity is exhausted, the bound is reached or a job does not complete.
+A mid-job `daily_cap` stop defers to the next UTC day without consuming a failure attempt.
 `idle` means no job is currently claimable; pending backoff, another live lease and exhausted work can all produce it.
 This command does not install a daemon or scheduler.
 Private per-attempt exports under `--out` are optional recovery evidence; the database journal remains authoritative even on another host.

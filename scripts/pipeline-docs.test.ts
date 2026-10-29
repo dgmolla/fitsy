@@ -15,8 +15,9 @@ test('active pipeline documentation and operational sources have no retired prov
     'docs/engineering/architecture/system-design.md', 'docs/engineering/devops/production-deployment.md',
     'docs/engineering/devops/costs.md', 'docs/engineering/backend/idempotent-preload-spec.md',
     'scripts/preload-ue-first.ts', 'scripts/preload-v2.ts', 'scripts/pipeline-utils.ts', 'scripts/rerun.ts',
+    'scripts/test-fixtures/preload-cost-runtime.cjs',
     'apps/api/services/chainServing.ts', 'apps/api/services/menuSources/types.ts',
-    ...readdirSync(join(root, 'scripts/pipeline-v2')).filter(file => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+    ...readdirSync(join(root, 'scripts/pipeline-v2')).filter(file => file.endsWith('.ts'))
       .map(file => join('scripts/pipeline-v2', file)),
     '.env.example', 'package.json', 'scripts/package.json', 'scripts/verify/registry.yml', 'scripts/verify/run.mjs',
   ];

@@ -36,7 +36,7 @@ test('real CLI sources one hex, abstains on unreviewed/independent items, persis
   expect(result.stderr).toBe(''); expect(result.status).toBe(0);
   expect(result.report).toMatchObject({ status: 'completed', environment: 'dev', coverage: { restaurants: 4, officialItems: 1, jevItems: 4,
     uniqueItems: 5, persistedItems: 5, chainsWithPublishedData: 2, chainsWithoutPublishedData: 1, independentRestaurants: 1 },
-    calls: { uberEats: 4, jev: 8, pdfSearch: 0 }, unknownUsage: false });
+    calls: { uberEats: 4, jev: 8, pdfSearch: 0 }, sourceMix: { official:1,jev:4,other:0 }, unknownUsage: false });
   expect(result.report.costUsd).toBeCloseTo(8 * 100 * .042 / 1e6);
   expect(result.report.matches).toMatchObject([{ restaurantId: 'restaurant-0', name: 'Chicken Plate', servingSize: '1 standard chicken plate' }]);
   expect(result.report.pdfJobs).toMatchObject([{ brandId: 'brand-1', status: 'pending' }]);
@@ -85,6 +85,19 @@ test('a cap stop never persists a partial hex or writes a completion checkpoint'
   const result = run({}, undefined, '0'); expect(result.status).toBe(1);
   expect(result.report).toMatchObject({ status: 'spend_cap', coverage: { persistedItems: 0 }, costUsd: 0 });
   expect(result.events.some((e: { type: string }) => e.type === 'jev_call' || e.type === 'db_transaction')).toBe(false);
+});
+test('the real CLI admits one exact Jev envelope before stopping the next paid request', () => {
+  const result = run({}, undefined, '0.000688128');
+  expect(result.stderr).toBe(''); expect(result.status).toBe(1);
+  expect(result.report).toMatchObject({ status: 'spend_cap', coverage: { persistedItems: 0 }, costUsd: 0.0000042 });
+  expect(result.events.filter((e: { type: string }) => e.type === 'budget_reservation')).toEqual([
+    { type: 'budget_reservation', service: 'jev', usd: 0.000688128 },
+  ]);
+  expect(result.events.filter((e: { type: string }) => e.type === 'budget_settlement')).toEqual([
+    { type: 'budget_settlement', usd: 0.0000042 },
+  ]);
+  expect(result.events.filter((e: { type: string }) => e.type === 'jev_call')).toHaveLength(1);
+  expect(result.events.some((e: { type: string }) => e.type === 'db_transaction')).toBe(false);
 });
 test('unknown spend remains unknown on resume and cannot produce a checkpoint', () => {
   const first = run({ V2_TEST_UNKNOWN_USAGE: '1' }), second = run({}, first.out);
@@ -137,4 +150,11 @@ test.each([['--phase=both'], [`--hex-id=${hexId}`, '--run-id=poc', '--out=privat
   ['--hex-id=not-a-hex', '--run-id=poc', '--out=private'], [`--hex-id=${latLngToCell(40, -74, 7)}`, '--run-id=poc', '--out=private'],
   [`--hex-id=${hexId}`, '--hex-id=duplicate', '--run-id=poc', '--out=private']].map(args => ({ args })))('invalid POC scope is refused: $args', ({ args }) => {
   expect(() => parseOptions(args)).toThrow();
+});
+
+test('a daily Jev cap stop leaves the hex incomplete without starting a paid request', () => {
+  const result = run({ V2_TEST_DAILY_CAP:'1' });
+  expect(result.status).toBe(1);
+  expect(result.report).toMatchObject({ status:'daily_cap',unknownUsage:false,coverage:{ persistedItems:0 } });
+  expect(result.events.some((e:{ type:string })=>e.type==='jev_call' || e.type==='db_commit')).toBe(false);
 });

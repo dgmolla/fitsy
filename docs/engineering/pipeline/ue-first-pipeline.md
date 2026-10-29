@@ -78,8 +78,14 @@ The [reviewed serving contract](chain-serving-handoff.md) covers stale approvals
 The pre-fetch gate skips recently scraped locations unless `--force` is set.
 The post-fetch gate compares the menu identity hash and freshness threshold before estimation and writes.
 The usage ledger records every billed Haiku attempt, including retries and rejected responses, before validation.
-The cumulative cap is checked before further paid work; active requests drain and remain charged.
+The observer reserves each full request envelope against the cumulative run cap before every chunk.
+Active requests drain and remain charged when further paid work stops.
 A failed or interrupted hex has no completion checkpoint and resumes with the same ledger and run ID.
+
+Photo resolution uses the stored feed hero, the UE photo lookup, then optional Google Places search and photo requests.
+Each Google request reserves its price bound against the shared daily Google budget and the cumulative run cap before transport.
+The [service budgets and telemetry](pipeline-v2-budgets.md) record each search and photo attempt, including failed calls.
+The successful `photoSource` distribution alone cannot measure paid call volume.
 
 The legacy command uses process-local UE and estimator semaphores.
 The v2 queue adds shared PostgreSQL UE throttling, leased jobs, paid-call replay and token-fenced atomic completion.
