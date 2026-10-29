@@ -1,0 +1,71 @@
+# Covers in-app discovery/setup. The actual Home Screen widget also needs the
+# manual WidgetKit checks in plugins/widget/README.md; Maestro cannot add it.
+appId: com.fitsy.mobile
+tags: [billing, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
+---
+- assertTrue: ${!!LOGIN_EMAIL && !!LOGIN_PASSWORD}
+- evalScript: ${output.apiPaths = ['/api/restaurants?lat=34.0407&lng=-118.2468&shuffle=1&calories=600&protein=40']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at ${EXPO_PUBLIC_API_URL} must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+- assertTrue: ${output.dataApiResponses[0].status === 200 && json(output.dataApiResponses[0].body).meta.locked === false}
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
+- tapOn:
+    id: welcome-login
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 15000
+- tapOn: ".*Dev Login.*"
+- extendedWaitUntil:
+    visible: "Search restaurants or dishes"
+    timeout: 30000
+- openLink: com.fitsy.mobile://profile
+- tapOn:
+    text: "^Open$"
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: profile-widget
+    direction: DOWN
+- tapOn:
+    id: profile-widget
+- assertVisible:
+    id: widget-step-1
+- assertVisible:
+    id: widget-step-2
+- scrollUntilVisible:
+    element:
+      id: widget-step-3
+    direction: DOWN
+- assertVisible:
+    id: widget-step-3
+- assertNotVisible:
+    id: widget-unlock
+- assertNotVisible:
+    id: widget-unavailable
+- takeScreenshot: widget-setup
+- tapOn:
+    id: widget-search
+- extendedWaitUntil:
+    visible: "Search restaurants or dishes"
+    timeout: 15000

@@ -32,6 +32,19 @@ model User {
   feedback        Feedback[]
   feedbackVotes   FeedbackVote[]
   launchWaitlist  LaunchWaitlist?
+  widgetTokens    WidgetToken[]
+}
+
+// Revocable, device-scoped search credentials. Only the SHA-256 digest is stored.
+model WidgetToken {
+  id             String   @id @default(cuid())
+  userId         String
+  installationId String
+  tokenHash      String   @unique
+  expiresAt      DateTime
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, installationId])
 }
 
 // The launch email list. One row per email address, from either of two

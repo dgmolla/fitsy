@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { forgetLegacyMacroRecords, quarantineLegacyMacroRecord } from './macroLegacyStorage';
 import { macroCalories, normalizeCompleteTarget, parseTarget } from './macroEnergy';
 import { supabase } from './supabase';
+import { notifyWidgetUpdates } from './widgetEvents';
 export const MACRO_TARGETS_KEY = '@fitsy/macro_targets';
 export const SEARCH_MACRO_TARGETS_KEY = '@fitsy/search_macro_targets';
 const ownedTargetKey = (userId: string) => `${MACRO_TARGETS_KEY}:${userId}`;
@@ -197,6 +198,7 @@ export function saveMacroTargets(targets: StoredMacroTargets, mode: MacroTargetM
         await AsyncStorage.removeItem(MACRO_TARGETS_KEY);
       return false;
     }
+    notifyWidgetUpdates();
     return true;
   });
 }
@@ -216,6 +218,7 @@ export async function saveDiscoveryMacroTargets(targets: StoredMacroTargets, mod
     if (await currentUserId() !== owner) return false;
     if (!originalOwner && owner) await AsyncStorage.removeItem(SEARCH_MACRO_TARGETS_KEY);
     if (mode === 'complete') await AsyncStorage.removeItem(key);
+    notifyWidgetUpdates();
     return await currentUserId() === owner;
   });
   discoverySaveQueue = next.then(() => {}, () => {});

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
+import { requireWidgetSearchAuth } from './widgetAuth';
 import type { JwtPayload } from "@/services/authService";
 import { fetchProEntitlement } from "@/services/revenuecatService";
 import { isDevelopmentEnvironment } from "@/services/runtimeEnvironment";
@@ -126,8 +127,10 @@ export interface OptionalSubscriptionResult {
  */
 export async function optionalSubscription(
   request: NextRequest,
+  { widgetSearch = false }: { widgetSearch?: boolean } = {},
 ): Promise<OptionalSubscriptionResult | NextResponse> {
-  const auth = await requireAuth(request);
+  // Only search opts in; the capability validator also enforces method/path.
+  const auth = await (widgetSearch ? requireWidgetSearchAuth(request) : requireAuth(request));
   if (auth instanceof NextResponse) return auth;
   const entitled = await isEntitled(auth.sub, auth.email);
   return { payload: auth, entitled };

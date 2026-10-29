@@ -16,8 +16,8 @@ export async function GET(
   request: NextRequest,
 ): Promise<NextResponse<RestaurantsApiResponse> | NextResponse> {
   const tEntry = Date.now();
-  // A session is mandatory, including for the signed-in free/lapsed teaser.
-  const subscription = await optionalSubscription(request);
+  // Require an account session or its read-only widget search capability.
+  const subscription = await optionalSubscription(request, { widgetSearch: true });
   if (subscription instanceof NextResponse) return subscription;
   let { entitled } = subscription;
   const tAfterAuth = Date.now();

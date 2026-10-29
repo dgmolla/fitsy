@@ -10,6 +10,7 @@ import { ReminderProvider } from '@/lib/useReminders';
 import { getPostHogClient } from '@/lib/analytics';
 import { installGlobalErrorReporting } from '@/lib/errorReporting';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
+import { WidgetSync } from '@/components/WidgetSync';
 import { recordSession } from '@/lib/ratingPrompt';
 import { supabase } from '@/lib/supabase';
 import {
@@ -107,6 +108,7 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <ThemeProvider>
             <PurchasesProvider>
+              <WidgetSync />
               <ReminderProvider><Stack screenOptions={{ headerShown: false }} /></ReminderProvider>
             </PurchasesProvider>
           </ThemeProvider>

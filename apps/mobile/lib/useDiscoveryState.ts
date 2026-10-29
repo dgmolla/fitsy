@@ -12,6 +12,7 @@ import { useDiscoveryResults } from './useDiscoveryResults';
 import { useDiscoveryLocation } from './useDiscoveryLocation';
 import { useEntitlementMismatch } from './useEntitlementMismatch';
 import { usePurchases } from './usePurchases';
+import { saveWidgetLocation } from './widgetSync';
 import { routeToPaywall } from './teaserGate';
 import { getDiscoveryMacroTargetSnapshot, saveDiscoveryMacroTargets, type MacroTargetMode } from './macroStorage';
 import { queueSavedProfileToServer, deliverQueuedProfile } from './profileSync';
@@ -44,6 +45,9 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
   const [query, setQuery] = useState(initialQuery ?? '');
   const location = useDiscoveryLocation(isOnboardingPreview);
+  useEffect(() => {
+    if (!isOnboardingPreview && !location.loading) void saveWidgetLocation(location.lat, location.lng).catch(() => undefined);
+  }, [isOnboardingPreview, location.loading, location.lat, location.lng]);
   function handleOpenLocationPicker() {
     trackLocationManualOverrideOpened();
     setLocationPickerVisible(true);
