@@ -125,7 +125,7 @@ with sqlite3.connect(sys.argv[1]) as db:
     const ledger = () => {
       const result = spawnSync('python3', ['-c', `import json, sqlite3, sys
 with sqlite3.connect(sys.argv[1]) as db:
-    print(json.dumps(db.execute('SELECT * FROM _prisma_migrations ORDER BY started_at, id').fetchall()))`, database],
+    print(json.dumps(db.execute('SELECT id, migration_name, checksum, started_at, finished_at, rolled_back_at, logs, applied_steps_count FROM _prisma_migrations ORDER BY started_at, id').fetchall()))`, database],
       { encoding: 'utf8', timeout: 5_000 });
       assert.equal(result.status, 0, result.stderr);
       return result.stdout;
@@ -134,7 +134,27 @@ with sqlite3.connect(sys.argv[1]) as db:
     const blocked = deploy();
     assert.equal(blocked.status, 1, blocked.stdout + blocked.stderr);
     assert.match(blocked.stderr + blocked.stdout, /P3009/);
+    assert.match(blocked.stderr, /migration-failure-audit.sql/);
     assert.equal(ledger(), originalLedger);
     assert.deepEqual(applied(), { tables: ['_prisma_migrations', 'before'], migrations: [before] });
+    // Only the separately authorized maintenance owner resolves production.
+    // In this disposable fixture, exercise Prisma's real recovery command and
+    // prove the ordinary filtered deploy resumes without granting role approval.
+    const failedName = dependencies[0];
+    const resolved = spawnSync('npx', ['prisma', 'migrate', 'resolve', '--rolled-back', failedName,
+      '--schema', join(directory, 'prisma/schema.prisma')], {
+      cwd: directory, env, encoding: 'utf8', timeout: 15_000,
+    });
+    assert.equal(resolved.status, 0, resolved.stdout + resolved.stderr);
+    const recoveredLedger = JSON.parse(ledger());
+    const failedRow = recoveredLedger.find(row => row[1] === failedName);
+    assert.ok(failedRow, 'the failed migration history must be retained');
+    assert.ok(failedRow[5], 'Prisma must mark the failed attempt rolled back');
+    const originalFailedRow = JSON.parse(originalLedger).find(row => row[1] === failedName);
+    assert.deepEqual(failedRow, originalFailedRow.map((value, index) => index === 5 ? failedRow[5] : value));
+    const resumed = deploy();
+    assert.equal(resumed.status, 0, resumed.stdout + resumed.stderr);
+    assert.deepEqual(applied(), { tables: ['_prisma_migrations', 'after', 'before'], migrations: [before, after] });
+    assert.deepEqual(JSON.parse(ledger()).find(row => row[0] === failedRow[0]), failedRow);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

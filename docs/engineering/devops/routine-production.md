@@ -80,10 +80,17 @@ The role filter never resolves failures, deletes ledger rows, marks unexecuted S
 For incident [#629](https://github.com/dgmolla/fitsy/issues/629), Vercel deployment `H3t9dcTY75kXmgPvmtpizY6oQZ2J` at `b28c630` reported a retained failure of `20261028130000_hex_jobs` from the preceding `63a36df` build.
 The correction prevents new attempts without approved roles; it does not repair that existing production ledger.
 The existing production maintenance owner must inspect the failed row and checksum, transaction rollback and actual table/ACL state before separately authorizing any Prisma recovery.
+Run the complete read-only [migration failure audit](../../../scripts/deploy/migration-failure-audit.sql) through that owner's existing SQL connection or Supabase SQL editor and retain its JSON with the incident.
+It reports every unresolved attempt, the hex-jobs history, remaining tables/ACLs and controlled-role presence in one bounded read-only snapshot without disclosing raw driver logs.
+Compare the failed checksum with `shasum -a 256 prisma/migrations/20261028130000_hex_jobs/migration.sql`; a matching checksum or zero applied steps alone does not prove rollback.
+Compare the recorded failure with the original build evidence, confirm both hex tables are absent, and diagnose any other unresolved attempt or partial effect.
+Missing ledger logs remain unknown; role absence alone does not establish the original error.
 Only after a confirmed complete rollback may that owner prepare a separately reviewed Prisma `migrate resolve --rolled-back 20261028130000_hex_jobs` operation under the existing `production-release` protection, retaining failed history and withholding role approval.
 This checkout has no generic production recovery command; do not repurpose fixture cleanup or bypass the Git-build identity guard.
 Partial effects or a different failure require diagnosis and a separately reviewed repair, not a speculative resolve or another identical build.
 After authorized recovery, resume the guarded Git build and exact-source smoke against `fitsy.org`; neither local regression tests nor a healthy older serving source establish recovery.
+The guarded caller now points failures to this inspection path without resolving or retrying them.
+The disposable Prisma regression explicitly resolves its failed fixture through Prisma, then proves ordinary filtered deployment resumes, preserves the failed attempt and leaves role-dependent SQL held.
 If smoke reports `invalid-session=503` while database health and missing-session checks pass, inspect shared-store configuration and runtime `[rate-limit] Shared store unavailable` logs.
 Missing-session 401s return before Redis, and `/api/health` probes only the database; neither establishes authentication readiness.
 Restore both store variables in the existing `fitsy-api` Vercel environment with a writable token and verify `EVAL` access.
