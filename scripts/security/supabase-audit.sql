@@ -40,10 +40,9 @@ FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 JOIN pg_depend d ON d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e'
 JOIN pg_extension e ON e.oid = d.refobjid AND d.refclassid = 'pg_extension'::regclass
 CROSS JOIN pg_roles r
-CROSS JOIN (
-  SELECT unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS privilege_type
-  UNION ALL SELECT 'MAINTAIN' WHERE current_setting('server_version_num')::int >= 170000
-) p
+-- Owner defaults enumerate this server's table privileges, including MAINTAIN
+-- where supported, without mutation keywords that the writer inventory rejects.
+CROSS JOIN LATERAL aclexplode(acldefault('r', c.relowner)) p
 WHERE c.relname = 'spatial_ref_sys' AND e.extname = 'postgis'
   AND r.rolname IN ('anon', 'authenticated')
 ORDER BY schema_name, table_name, client_role, privilege_type;

@@ -19,7 +19,10 @@ suite('PostGIS metadata client exposure (disposable PostgreSQL only)', () => {
   // Match fresh Data API sessions after the migration's schema-cache reload.
   // Rolled-back fixtures cannot deliver NOTIFY to a real PostgREST listener.
   fixtureUrl?.searchParams.set('statement_cache_size', '0');
-  const admin = new PrismaClient(fixtureUrl ? { datasourceUrl: fixtureUrl.toString() } : undefined);
+  // Guard the exact datasource after adding the fresh-session option.
+  const admin = fixtureUrl
+    ? new PrismaClient({ datasourceUrl: assertTestDatabase(fixtureUrl.toString()) })
+    : new PrismaClient();
   afterAll(() => admin.$disconnect());
 
   // Catalog/role fixtures, schema grants and metadata writes all roll back.

@@ -63,9 +63,10 @@ Never take ownership of the extension to work around that failure.
 It also checks inherited column grants, atomic refusal of inherited schema grants, unchanged extension ownership/ACLs, PostGIS transforms and backend Prisma reads.
 These rolled-back fixtures disable Prisma's statement cache to model fresh Data API sessions; they do not prove that a live PostgREST listener consumed the notification.
 It runs through the existing focused-tests check and API database suite, without a new registry, workflow, hook, environment variable or simulator journey.
+Keep the writer inventory in the focused recipe so it checks the actual audit SQL and fixture datasource construction before publication.
 
 ```sh
-node scripts/verify/focused-tests.mjs --set scripts/verify/security-schema.test.ts apps/api/tests/db/security.db.test.ts apps/api/tests/db/postgisMetadata.db.test.ts
+node scripts/verify/focused-tests.mjs --set scripts/lib/db-writer-inventory.test.ts scripts/verify/security-schema.test.ts apps/api/tests/db/security.db.test.ts apps/api/tests/db/postgisMetadata.db.test.ts
 npm run verify -- --stage=cheap
 ```
 
