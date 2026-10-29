@@ -2,7 +2,7 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { assertFailedAttempt, failedAttempt, recoveryMode, type Audit } from './recover-hex-jobs';
+import { assertFailedAttempt, assertRecoveryResult, failedAttempt, recoveryMode, type Audit } from './recover-hex-jobs';
 
 const { load }: { load(input: string): unknown } = require('js-yaml');
 
@@ -39,6 +39,41 @@ test('unknown failures, missing evidence and any partial relation refuse recover
     { ...snapshot(), migration_history: [] }, { ...snapshot(), relations: [] }]) {
     expect(() => assertFailedAttempt(audit)).toThrow(/audit differs/);
   }
+});
+
+function recoveredSnapshot(): Audit {
+  const audit = snapshot();
+  Object.assign(audit.migration_history[0]!, { rolled_back_at: '2026-10-29T09:00:00+00:00', unresolved: false });
+  return audit;
+}
+
+test('rollback comparison accepts independently parsed audit results without mutating the original evidence', () => {
+  const before: Audit = JSON.parse(JSON.stringify(snapshot()));
+  const after: Audit = JSON.parse(JSON.stringify(recoveredSnapshot()));
+  const evidence = JSON.stringify({ before, after });
+  expect(() => assertRecoveryResult(before, after)).not.toThrow();
+  expect(JSON.stringify({ before, after })).toBe(evidence);
+});
+
+test.each([
+  { rolled_back_at: null }, { unresolved: true },
+])('rollback comparison requires Prisma to resolve the attempt: %j', change => {
+  const after = recoveredSnapshot(); Object.assign(after.migration_history[0]!, change);
+  expect(() => assertRecoveryResult(snapshot(), after)).toThrow(/did not mark the expected attempt/);
+});
+
+test.each([
+  ['database', (audit: Audit) => { audit.database = 'other'; }],
+  ['checksum', (audit: Audit) => { audit.migration_history[0]!.checksum = 'b'.repeat(64); }],
+  ['ledger steps', (audit: Audit) => { audit.migration_history[0]!.applied_steps_count = 1; }],
+  ['failure evidence', (audit: Audit) => { audit.migration_history[0]!.failure_logs_present = true; }],
+  ['extra attempt', (audit: Audit) => { audit.migration_history.push({ ...audit.migration_history[0]!, id: 'other' }); }],
+  ['relation', (audit: Audit) => { audit.relations[0]!.present = true; }],
+  ['relation metadata', (audit: Audit) => { Object.assign(audit.relations[0]!, { rls: true, acl: '{unexpected}' }); }],
+  ['role', (audit: Audit) => { audit.roles[0]!.present = true; }],
+])('rollback comparison refuses unexpected changes to %s', (_name, change) => {
+  const after = recoveredSnapshot(); change(after);
+  expect(() => assertRecoveryResult(snapshot(), after)).toThrow(/state changed beyond the expected rollback marker/);
 });
 
 test('command arguments require explicit production intent and one mode', () => {

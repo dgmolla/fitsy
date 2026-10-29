@@ -108,6 +108,7 @@ After authorized recovery, resume the guarded Git build and exact-source smoke a
 The guarded caller now points failures to this inspection path without resolving or retrying them.
 The disposable Prisma regression explicitly resolves its failed fixture through Prisma, then proves ordinary filtered deployment resumes, preserves the failed attempt and leaves role-dependent SQL held.
 Run `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath deploy/recover-hex-jobs.test.ts` for signed identity, target, state and actual workflow-shell refusal coverage.
+Its post-recovery comparison tests accept independently parsed snapshots and reject changes beyond the rollback marker while preserving the original evidence.
 The owned database verifier also runs `apps/api/tests/db/hexJobsRecovery.db.test.ts`, which recreates the observed ledger in a disposable PostgreSQL database, proves P3009 and partial-state refusal, and rehearses real Prisma recovery followed by filtered deployment.
 If smoke reports `invalid-session=503` while database health and missing-session checks pass, inspect shared-store configuration and runtime `[rate-limit] Shared store unavailable` logs.
 Missing-session 401s return before Redis, and `/api/health` probes only the database; neither establishes authentication readiness.

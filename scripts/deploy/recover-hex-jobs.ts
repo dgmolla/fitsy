@@ -60,6 +60,21 @@ export async function migrationAudit(client: PrismaClient): Promise<Audit> {
   });
 }
 
+export function assertRecoveryResult(before: Audit, after: Audit) {
+  const recovered = after.migration_history[0];
+  // structuredClone crosses Jest's object realm and makes strict prototype
+  // equality fail. Copy only the ledger row whose rollback fields can change.
+  const expected = { ...before, migration_history: [{ ...before.migration_history[0]! }] };
+  if (!recovered?.rolled_back_at || recovered.unresolved !== false) return refuse('Prisma did not mark the expected attempt rolled back');
+  expected.migration_history[0]!.rolled_back_at = recovered.rolled_back_at;
+  expected.migration_history[0]!.unresolved = false;
+  // Timestamps of the snapshots naturally differ; all observed history and
+  // object/role state must otherwise remain unchanged.
+  const state = (audit: Audit) => ({ database: audit.database, migration_history: audit.migration_history,
+    relations: audit.relations, roles: audit.roles });
+  if (!isDeepStrictEqual(state(after), state(expected))) refuse('database state changed beyond the expected rollback marker; retain evidence');
+}
+
 /** Called only after production identity validation; schema override supports disposable DB rehearsals. */
 export async function resolveHexJobs(client: PrismaClient, url: string, schema = join(root, 'prisma/schema.prisma')) {
   const before = await migrationAudit(client);
@@ -75,16 +90,8 @@ export async function resolveHexJobs(client: PrismaClient, url: string, schema =
     writeFileSync(join(directory, 'prisma.log'), result.stdout + '\n' + result.stderr, { mode: 0o600 });
     refuse(`Prisma resolve failed; private diagnostics: ${directory}/prisma.log; do not automatically retry`);
   }
-  const after = await migrationAudit(client), recovered = after.migration_history[0];
-  const expected = structuredClone(before);
-  if (!recovered?.rolled_back_at || recovered.unresolved !== false) return refuse('Prisma did not mark the expected attempt rolled back');
-  expected.migration_history[0]!.rolled_back_at = recovered.rolled_back_at;
-  expected.migration_history[0]!.unresolved = false;
-  // Timestamps of the snapshots naturally differ; all observed history and
-  // object/role state must otherwise remain unchanged.
-  const state = (audit: Audit) => ({ database: audit.database, migration_history: audit.migration_history,
-    relations: audit.relations, roles: audit.roles });
-  if (!isDeepStrictEqual(state(after), state(expected))) refuse('database state changed beyond the expected rollback marker; retain evidence');
+  const after = await migrationAudit(client);
+  assertRecoveryResult(before, after);
   return { before, after };
 }
 
