@@ -53,6 +53,7 @@ for (const name of ['POSTGRES_URL_NON_POOLING', 'POSTGRES_PRISMA_URL']) {
 NODE
 # Refuse an unavailable auth dependency before changing the production schema.
 node --import tsx scripts/deploy/rate-limit-preflight.ts
-# Owner approval controls which SQL Prisma receives, never unrelated deploys.
+# Owner approval controls SQL selection without authorizing failed-ledger recovery.
 node scripts/deploy/pipeline-roles-approval.mjs --deploy
+FITSY_ALLOW_PROD_WRITE=1 node --import tsx scripts/deploy/runtime-migrations-preflight.ts --prod
 FITSY_ALLOW_PROD_WRITE=1 node --import tsx scripts/deploy/activate-runtime-role.ts --prod

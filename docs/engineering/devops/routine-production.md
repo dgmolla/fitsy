@@ -11,7 +11,8 @@ flowchart LR
     M --> G[Existing Vercel Git production build]
     G --> P[Project and database guards plus Redis write preflight]
     P --> D[Guarded additive migration]
-    D --> B[API build and Vercel promotion]
+    D --> Q[Required runtime migration preflight]
+    Q --> B[API build and Vercel promotion]
     M --> V[Exact main Verify]
     V --> A[Deploy exact-source admission]
     B --> O[Observe trusted Git deployment and serving health]
@@ -30,6 +31,12 @@ The pipeline-role migration additionally requires Dawit's explicit approval reco
 Without matching approval, `pipeline-roles-approval.mjs --deploy` excludes that migration and SQL mentioning its controlled roles (`fitsy_app`, `pipeline_writer`, `fitsy_audit_readonly`) from a temporary Prisma input directory while deploying unrelated migrations.
 This conservatively holds role-dependent queue migrations, including future files and role names in comments, without marking held SQL applied or editing original migrations.
 With matching approval, it includes the role SQL and checks the staged bytes before running Prisma.
+Holding SQL does not establish that the current API can run without it.
+After migration deployment, `scripts/deploy/runtime-migrations-preflight.ts` reads only the guarded database's migration ledger before production or preview can build.
+It requires exactly one completed, non-rolled-back attempt of `20261029010000_widget_search_tokens` with the checkout's SQL checksum, because the widget API requires `WidgetToken`.
+Absent, incomplete, duplicate or changed history and failed database reads withhold the build without exposing driver details.
+An already-applied matching migration passes while its SQL is held; pending pipeline-only migrations can remain held.
+The preflight uses the existing signed build identity, database target guard and bindings; it adds no environment variable, role grant or recovery permission.
 The build logs an activation skip for a validated legacy binding; configured `fitsy_app` activation failures still withhold promotion, and pipeline credentials are provisioned separately for pipeline workers.
 Names alone do not prove a database target.
 Credentials stay in their existing Vercel bindings; do not copy them into GitHub, files or build arguments.
@@ -82,6 +89,11 @@ After a failed or uncertain release, read the actual project/deployment/alias an
 If Prisma reports `P3009`, the failed migration ledger still blocks deployment even when the failed file is held from the temporary input.
 The role filter never resolves failures, deletes ledger rows, marks unexecuted SQL applied, or retries with unfiltered migrations.
 For incident [#629](https://github.com/dgmolla/fitsy/issues/629), Vercel deployment `H3t9dcTY75kXmgPvmtpizY6oQZ2J` at `b28c630` reported a retained failure of `20261028130000_hex_jobs` from the preceding `63a36df` build.
+Incident [#647](https://github.com/dgmolla/fitsy/issues/647) is the same retained failure: exact Vercel deployment [aei8rXsjyWKEhiAywALkLrF5yr1f](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/aei8rXsjyWKEhiAywALkLrF5yr1f) at `6f6d579` stopped with P3009 before building the widget API.
+The 2026-10-29 10:12 UTC read-only audit found the original unresolved attempt, absent hex tables, absent `fitsy_app` and `pipeline_writer`, and absent `WidgetToken`.
+The healthy public source remained `bfd87f8fbd7ee9863554e973870f6988248d102f`.
+Reuse the existing #643 maintenance path for that exact failed attempt; a new application commit does not authorize recovery or an identical migration retry.
+After separately approved recovery, the widget migration still needs its existing role prerequisite before this API can pass runtime-schema readiness.
 The correction prevents new attempts without approved roles; it does not repair that existing production ledger.
 The existing production maintenance owner must inspect the failed row and checksum, transaction rollback and actual table/ACL state before separately authorizing any Prisma recovery.
 Run the complete read-only [migration failure audit](../../../scripts/deploy/migration-failure-audit.sql) through that owner's existing SQL connection or Supabase SQL editor and retain its JSON with the incident.
