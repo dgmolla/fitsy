@@ -13,7 +13,8 @@ Local commands target DEV or disposable loopback databases with explicit `PIPELI
 Production migrations belong to the existing [guarded Vercel Git main deploy](../devops/routine-production.md).
 Production ingestion requires an approved cloud worker and a signed workload identity accepted by [the database guard](../devops/db-guardrails.md#script-mutation-boundary).
 The current v2 workers refuse production even with production-write flags.
-Cloud hosting remains separate work; never run ingestion, catalog apply, refresh or rollback against production from a laptop.
+The [v2 cloud worker configuration](pipeline-v2-cloud-worker.md) is DEV-only pending deployment acceptance and separate production authorization.
+Never run ingestion, catalog apply, refresh or rollback against production from a laptop.
 No migration, catalog approval or data reset is authorized by this document.
 
 ## Flow

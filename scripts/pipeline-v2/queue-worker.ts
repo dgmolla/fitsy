@@ -36,17 +36,19 @@ export function parseQueueOptions(args: string[]): QueueOptions {
   return { mode, runId: `${DEV_POC_RUN_PREFIX}queue:${runId}`, hexIds: [...new Set(hexIds)], out, workerId, capUsd, maxAttempts, priority, maxJobs };
 }
 
-/** One claim is a bounded unit; the future cloud service can repeatedly invoke this same worker. */
-export async function workV2Job(prisma: PrismaClient, queue: HexJobQueue, runId: string, workerId: string, target: string, source: JournalEvent) {
+/** One claim is a bounded unit, shared by the CLI and the cloud service. */
+export async function workV2Job(prisma: PrismaClient, queue: HexJobQueue, runId: string, workerId: string, target: string, source: JournalEvent, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const job = await queue.claim(runId, workerId);
   if (!job) return null;
   const lease = new HexJobLease(queue, job);
   let journal: SharedV2Journal | undefined;
   try {
-    journal = await SharedV2Journal.open(queue, job, target, lease.controller.signal);
+    const activeSignal = signal ? AbortSignal.any([signal, lease.controller.signal]) : lease.controller.signal;
+    journal = await SharedV2Journal.open(queue, job, target, activeSignal);
     await journal.append(source);
     const report = await runV2Hex(prisma, { runId: job.runId, hexId: job.hexId, capUsd: job.capUsd, out: '' }, journal, {
-      beforePersist: async () => { await lease.stop(); lease.controller.signal.throwIfAborted(); await queue.renew(job); },
+      beforePersist: async () => { await lease.stop(); activeSignal.throwIfAborted(); await queue.renew(job); },
       guardInTx: tx => queue.lockInTx(job, tx),
       checkpointInTx: tx => queue.completeInTx(job, tx),
     });
@@ -65,12 +67,22 @@ export async function workV2Job(prisma: PrismaClient, queue: HexJobQueue, runId:
       await queue.deferBudget(job);
       return { hexId: job.hexId, attempt: job.attempts, status: 'daily_cap', report };
     }
+    if (journal.runCap) {
+      await queue.release(job);
+      return { hexId: job.hexId, attempt: job.attempts, status: 'run_cap', report };
+    }
     const terminal = journal.unknown || Boolean(journal.stopped);
     await queue.fail(job, terminal);
     return { hexId: job.hexId, attempt: job.attempts, status: terminal || job.attempts >= job.maxAttempts ? 'failed' : 'retry', report };
   } catch (error) {
     await lease.stop();
     if (error instanceof LeaseLostError || lease.controller.signal.aborted) return { hexId: job.hexId, attempt: job.attempts, status: 'lease_lost' };
+    if (signal?.aborted) {
+      // A completed transaction needs no release, even if SIGTERM arrived while it committed.
+      try { await queue.release(job, !journal || journal.unknown || Boolean(journal.stopped)); }
+      catch (releaseError) { if (!(releaseError instanceof LeaseLostError)) throw releaseError; }
+      return { hexId: job.hexId, attempt: job.attempts, status: 'stopped' };
+    }
     // Invalid identity/protocol/checkpoint cannot be made safe by another automatic paid attempt.
     await queue.fail(job, !journal || journal.unknown || Boolean(journal.stopped));
     throw error;

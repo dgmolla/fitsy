@@ -11,6 +11,7 @@ import { adapterProtocol, choiceMethod } from '../eval/suite/adapters';
 import type { ChoiceClient } from '../eval/suite/budget';
 import { DailyBudgetExceeded, type PaidBudget, type PaidService } from './service-budget';
 import { v2Telemetry } from './telemetry';
+import { RunBudgetExceeded } from './cloud-budget';
 
 export const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function canonical(value: unknown): unknown {
@@ -78,6 +79,7 @@ export abstract class V2Ledger implements ChoiceClient {
   reusedRequests = 0;
   unknown = false;
   dailyCap: PaidService | null = null;
+  runCap = false;
   context = '';
   readonly events: JournalEvent[] = [];
   private readonly responses = new Map<string, { status: number; body: string; latencyMs: number }>();
@@ -137,6 +139,7 @@ export abstract class V2Ledger implements ChoiceClient {
   }
 
   private async sendOne(request: JevRequest): Promise<{ raw: unknown; costUsd: number; latencyMs: number }> {
+    this.signal?.throwIfAborted();
     if (Buffer.byteLength(JSON.stringify(request)) > JEV_LIMITS.maxRequestBytes) throw new Error('Jev request exceeds 12KB');
     const key = requestKey(request);
     let response = this.responses.get(key);
@@ -148,7 +151,11 @@ export abstract class V2Ledger implements ChoiceClient {
       if (!apiKey.trim()) throw new Error('TYPESAFE_API_KEY is required');
       let permit: string | undefined;
       try { permit = await this.budget?.reserve('jev', reservationUsd, this.context || key); }
-      catch (error) { if (error instanceof DailyBudgetExceeded) this.dailyCap = error.service; throw error; }
+      catch (error) {
+        if (error instanceof DailyBudgetExceeded) this.dailyCap = error.service;
+        if (error instanceof RunBudgetExceeded) this.runCap = true;
+        throw error;
+      }
       await this.append({ event: 'jev_request', at: new Date().toISOString(), requestId: randomUUID(), ...(permit ? { budgetId: permit } : {}), key, request, context: this.context });
       this.requests++;
       const start = performance.now();

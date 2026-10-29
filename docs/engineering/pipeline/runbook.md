@@ -8,6 +8,7 @@
 
 The separate [single-hex Pipeline v2 DEV proof](pipeline-v2-dev-poc.md) uses `npm run preload:v2:dev` with an explicit LA hex and a cumulative $5 cap.
 The [Pipeline v2 shared queue](pipeline-v2-queue.md) adds explicit enqueue/worker commands, token-fenced leases and database-backed paid-call recovery.
+The [Pipeline v2 cloud worker](pipeline-v2-cloud-worker.md) adds a private service with explicit fleet-wide hex/budget limits, health probes, and graceful shutdown.
 It uses official reviewed serving matches plus Jev estimates and a durable PDF-search outbox.
 
 ## Source identity cutover and collision audit
@@ -82,7 +83,7 @@ Application and migration credentials cannot substitute for `pipeline_writer`.
 Never pull or source production credentials on a laptop to run ingestion, catalog apply, refresh or rollback.
 Production migrations run only through the existing guarded Vercel Git main deploy, described in [routine production](../devops/routine-production.md).
 Production ingestion requires an approved cloud worker with a signed workload identity accepted by the database guard and separately provisioned pipeline credentials.
-The current v2 worker is DEV-only; cloud hosting remains separate work and these examples do not authorize a PROD run.
+The v2 worker and its cloud deployment configuration remain DEV-only; these examples do not authorize a PROD run.
 Copying CI markers or adding `--prod` does not establish workload identity.
 
 ### Required
