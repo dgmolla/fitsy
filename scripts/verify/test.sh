@@ -55,6 +55,9 @@ if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   report="$REPORTS/cleanup.json"
   PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/python-focused.py scripts/delivery/cleanup.test.py "$report" >&2 &&
     node scripts/verify/test-results.mjs "$report" python >&2 || FAIL="${FAIL:+$FAIL, }cleanup"
+  report="$REPORTS/loop-recovery.json"
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/python-focused.py scripts/delivery/loop/loop.test.py "$report" >&2 &&
+    node scripts/verify/test-results.mjs "$report" python >&2 || FAIL="${FAIL:+$FAIL, }loop-recovery"
 fi
 if [[ " $TEST_GROUPS " == *" api "* ]]; then
   if [ -n "${POSTGRES_PRISMA_URL:-}" ]; then

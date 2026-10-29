@@ -1,6 +1,9 @@
 # Local delivery dispatcher
 
 The GitHub project is the only delivery queue.
+The existing cutback loop's recovery implementation and host-owner procedure live in [loop recovery](../../../scripts/delivery/loop/SKILL.md).
+Its compatibility installer preserves the current loop's state and entrypoints, refuses active owners and creates no additional dispatcher or scheduler.
+Use it only for that already-owned loop; it does not transfer queue custody or replace board admission.
 An issue is eligible when it is Queued, priority Now or Next, labeled `dispatch-ready`, lacks `dispatch-hold`, and every strict `#ID` dependency is Done on the same board.
 Readiness starts at the label event or first observation when historical event time is unavailable.
 

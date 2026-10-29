@@ -77,6 +77,8 @@ The existence check preserves the original Maestro invocation for older PR heads
 This wraps the already selected flows without adding fixture setup, new journeys, a publisher or a schedule.
 For a grouped Maestro invocation, the preview samples the first 90 seconds of that group; the local scripted gate saves a separate preview for each selected journey.
 Keep `ev` at `~/fitsy-refactor/sim-review/evidence/<head-sha-prefix>` so `~/fitsy-refactor/loop/evidence.py` finds the MP4 recursively with the existing screenshots on merge.
+The existing loop's [recovery consumer](../delivery/loop/SKILL.md) reads the same head-bound artifacts and attaches failure images to repair prompts.
+Recovery uses an installed trusted control snapshot and isolated DEV execution; `preview-backend.mjs --recovery <sha>` supplies verified public deployment metadata without passing host credentials to native children.
 That publisher already enforces the same decimal size limit and needs no Slack API or credential changes.
 External poller adoption and a real simulator run are separate from the repository's wrapper tests.
 Replay deterministic regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath sim/slack-video.test.ts sim/ci.test.ts`.

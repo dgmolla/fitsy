@@ -4,10 +4,12 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { delimiter, resolve } from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { impactPlan, repository, simulatorFlows, gitEnv, isMain } from '../verify/impact-plan.mjs';
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
 import { withSlackVideo } from './slack-video.mjs';
 import { maestroApiArgs } from './backend-identity.mjs';
+const controlDirectory = fileURLToPath(new URL('.', import.meta.url));
 
 export function renderSmoke(documents, selector) {
   const [header, commands] = documents;
@@ -119,7 +121,7 @@ export async function runLocal(args = process.argv.slice(2)) {
             '--output', resolve(dir, 'report.xml'), '--debug-output', dir, '--test-output-dir', dir, path], {
             cwd: repository, dir, timeline: resolve(out, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'),
             signal: controller.signal, env: { ...gitEnv(),
-              PATH: `${resolve(repository, 'scripts/sim')}${delimiter}${process.env.PATH || ''}`,
+              PATH: `${controlDirectory}${delimiter}${process.env.PATH || ''}`,
               FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: resolve(dir, 'capture.jsonl') },
             diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', resolve(dir, 'failure.png')]),
           }));

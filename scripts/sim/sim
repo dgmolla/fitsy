@@ -14,7 +14,7 @@
 # Identity is ALWAYS the FITSY_SIM_OWNER env var, for claim and destructive
 # verbs alike - one source, so you cannot lock yourself out.
 set -euo pipefail
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+REPO_ROOT="${FITSY_PRODUCT_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 EVID="$REPO_ROOT/.evidence/sim"; mkdir -p "$EVID"
 CMD="${1:-status}"; shift || true
 
@@ -71,7 +71,7 @@ else:
         raise SystemExit('--minutes must be a positive integer')
     value = {'owner': args[0], 'expires': time.time() + minutes * 60,
              'claimed_at': time.strftime('%FT%TZ', time.gmtime())}
-    with tempfile.NamedTemporaryFile('w', dir=path.parent, delete=False) as out:
+    with tempfile.NamedTemporaryFile('w', dir=path.parent, prefix=path.name + '.', suffix='.tmp', delete=False) as out:
         json.dump(value, out); out.flush(); os.fsync(out.fileno()); temporary = Path(out.name)
     temporary.chmod(0o600); os.replace(temporary, path)
     directory = os.open(path.parent, os.O_RDONLY)

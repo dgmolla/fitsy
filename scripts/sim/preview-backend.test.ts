@@ -28,7 +28,7 @@ function execute({ stable = deployment(previous), detail = deployment(head),
   listed = [{ id: 'dpl_fixture', url: hostname, name: 'fitsy-api', state: 'READY', target: null,
     meta: { githubCommitSha: head } }] as { id?: string; url: string; name: string; state: string; target: string | null;
       meta: { githubCommitSha: string } }[], origin = 'https://dev.fitsy.org', sha = head, unavailable = false, dirty = false,
-  aliasedCheckout = false } = {}) {
+  aliasedCheckout = false, recovery = false, recoveryDetail = undefined as ReturnType<typeof deployment> | undefined } = {}) {
   const dir = mkdtempSync(resolve(tmpdir(), 'fitsy-preview-selection-'));
   const trace = resolve(dir, 'trace.jsonl');
   try {
@@ -37,13 +37,16 @@ function execute({ stable = deployment(previous), detail = deployment(head),
 const fs = require('node:fs'), args = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(trace)}, JSON.stringify(args) + '\\n');
 if (${unavailable}) process.exit(1);
+const repeated = fs.readFileSync(${JSON.stringify(trace)}, 'utf8').trim().split('\\n')
+  .map(line => JSON.parse(line)).filter(call => call[0] === 'api' && call[1] === args[1]).length > 1;
 const result = args[0] === 'list' ? ${JSON.stringify({ deployments: listed })}
-  : args[1].endsWith('dev.fitsy.org') ? ${JSON.stringify(stable)} : ${JSON.stringify(detail)};
+  : repeated ? ${JSON.stringify(recoveryDetail ?? detail)} : args[1].endsWith('dev.fitsy.org') ? ${JSON.stringify(stable)} : ${JSON.stringify(detail)};
 process.stdout.write(JSON.stringify(result));
 `, { mode: 0o755 });
     const alias = resolve(dir, 'checkout');
     if (aliasedCheckout) symlinkSync(resolve(__dirname, '../..'), alias, 'dir');
-    const result = spawnSync(process.execPath, [aliasedCheckout ? resolve(alias, 'scripts/sim/preview-backend.mjs') : cli, sha], { cwd: root, encoding: 'utf8',
+    const result = spawnSync(process.execPath, [aliasedCheckout ? resolve(alias, 'scripts/sim/preview-backend.mjs') : cli,
+      ...(recovery ? ['--recovery'] : []), sha], { cwd: root, encoding: 'utf8',
       env: { ...cleanEnv, PATH: dir + ':' + cleanEnv.PATH, FITSY_PRODUCT_ROOT: root, EXPO_PUBLIC_API_URL: origin } });
     let calls: string[][] = [];
     try { calls = readFileSync(trace, 'utf8').trim().split('\n').map(line => JSON.parse(line)); } catch { /* Refused before calling Vercel. */ }
@@ -149,4 +152,26 @@ test('a Ready exact-head preview cannot conceal uncommitted API changes', () => 
   const result = execute({ dirty: true });
   expect(result.status).toBe(1);
   expect(result.stderr).toContain('Deploy candidate backend');
+});
+
+test('recovery returns only verified deployment identity without private build configuration', () => {
+  const detail = { ...deployment(head), env: { GH_TOKEN: 'test-private' },
+    meta: { ...deployment(head).meta, gitDirty: false, private: 'test-private' } };
+  const result = execute({ origin: preview, recovery: true, detail });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ head, backend: preview, deployment: {
+    id: 'dpl_fixture', name: 'fitsy-api', readyState: 'READY', gitSource: { sha: head },
+  } });
+  expect(result.stdout).not.toContain('test-private');
+  expect(result.stdout).not.toContain('env');
+  expect(result.calls).toHaveLength(2);
+});
+
+test.each(['revision', 'production', 'project', 'deployment'])('recovery rejects a changed %s on repeated inspection', field => {
+  const detail = deployment(head);
+  const changed = { ...detail, ...(field === 'revision' ? { gitSource: { sha: previous } }
+    : field === 'production' ? { target: 'production' }
+      : field === 'project' ? { name: 'unrelated' } : { id: 'dpl_changed' }) };
+  const result = execute({ origin: preview, recovery: true, detail, recoveryDetail: changed });
+  expect(result.status).toBe(1);
 });

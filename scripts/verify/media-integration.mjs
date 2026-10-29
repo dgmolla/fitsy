@@ -8,11 +8,11 @@ import { isMain } from './impact-plan.mjs';
 import { changedPaths, inputHash, repoEnv, root } from './product-flow.mjs';
 
 const receiptFile = resolve(root, '.evidence/verify/media-integration.json');
-const command = 'FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- --runInBand --runTestsByPath verify/product-flow.test.ts sim/xctest-attachments.test.ts sim/slack-video.test.ts';
+const command = 'bash scripts/verify/media-integration.sh';
 const head = () => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', env: repoEnv() }).trim();
 
 export function mediaIntegrationRequired(paths) {
-  return paths.some(path => /^scripts\/sim\/|^scripts\/verify\/(?:product-flow|media-integration|test\.sh|registry\.yml)/.test(path));
+  return paths.some(path => /^scripts\/sim\/|^scripts\/delivery\/loop\/(?:host|context|driver|install|loop\.test)\.py$|^scripts\/verify\/(?:product-flow|media-integration|test\.sh|registry\.yml)/.test(path));
 }
 
 export function writeMediaReceipt(file = receiptFile, sourceSha = head(), sourceHash = inputHash()) {

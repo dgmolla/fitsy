@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { isMain } from '../verify/impact-plan.mjs';
 import { root, repoEnv } from '../verify/product-flow.mjs';
 import { backend } from './product-flow.mjs';
-import { backendOrigin } from './backend-identity.mjs';
+import { backendOrigin, backendRevision } from './backend-identity.mjs';
 
 const run = (command, args) => execFileSync(command, args, {
   cwd: root, env: repoEnv(), encoding: 'utf8', timeout: 30000, maxBuffer: 2 << 20, stdio: ['ignore', 'pipe', 'pipe'],
@@ -36,9 +36,25 @@ export function selectBackend(head, value = process.env.EXPO_PUBLIC_API_URL) {
   return { head, backend: selected, ...identity };
 }
 
+// The isolated recovery runner consumes this public response instead of host
+// Vercel credentials. Selection above independently verifies revision and origin.
+export function recoveryBackend(head) {
+  const selected = selectBackend(head);
+  const deployment = JSON.parse(run('vercel', ['api', `/v13/deployments/${new URL(selected.backend).hostname}`, '--raw']));
+  if (deployment.id !== selected.backendDeployment || backendRevision(deployment, selected.backend) !== selected.backendRevision)
+    throw new Error('Recovery backend deployment changed during selection');
+  const { id, name, readyState, target, source } = deployment;
+  // Get-deployment responses can contain private build configuration. Only the
+  // identity fields consumed by backendRevision cross into candidate execution.
+  return { ...selected, deployment: { id, name, readyState, target, source,
+    ...(deployment.gitSource ? { gitSource: { sha: deployment.gitSource.sha } }
+      : { meta: { gitCommitSha: deployment.meta?.gitCommitSha, gitDirty: deployment.meta?.gitDirty } }) } };
+}
+
 if (isMain(import.meta.url)) {
   try {
-    if (process.argv.length !== 3) throw new Error('Usage: preview-backend.mjs <full-checkout-head-sha>');
-    console.log(JSON.stringify(selectBackend(process.argv[2])));
+    const args = process.argv.slice(2), recovery = args.length === 2 && args[0] === '--recovery';
+    if (args.length !== 1 && !recovery) throw new Error('Usage: preview-backend.mjs [--recovery] <full-checkout-head-sha>');
+    console.log(JSON.stringify(recovery ? recoveryBackend(args[1]) : selectBackend(args[0])));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

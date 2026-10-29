@@ -36,7 +36,7 @@ for arg in "$@"; do
 done
 [ "\${FAIL_GROUP:-}" != scripts ]
 `);
-  write('bin/python3', '#!/bin/sh\necho scripts-python >> .evidence/group-calls\ncount=1; [ "${ZERO_ENGINE:-}" != python ] || count=0\n[ "${ZERO_ENGINE:-}" = missing-python ] || printf \'{"success":true,"passing_tests":%s}\\n\' "$count" > "$3"\n[ "${FAIL_GROUP:-}" != scripts ]\n');
+  write('bin/python3', '#!/bin/sh\necho scripts-python >> .evidence/group-calls\nprintf \'%s\\n\' "$2" >> .evidence/python-tests\ncount=1; [ "${ZERO_ENGINE:-}" != python ] || count=0\n[ "${ZERO_ENGINE:-}" = missing-python ] || printf \'{"success":true,"passing_tests":%s}\\n\' "$count" > "$3"\n[ "${FAIL_PYTHON_TEST:-}" != "$2" ] && [ "${FAIL_GROUP:-}" != scripts ]\n');
   write('bin/npm', `#!/bin/sh
 case "$*" in
   *--workspace=apps/api*) group=api ;;
@@ -57,7 +57,7 @@ done
   const calls = () => existsSync(join(directory, '.evidence/group-calls'))
     ? readFileSync(join(directory, '.evidence/group-calls'), 'utf8').trim().split('\n').filter(Boolean) : [];
   const run = (extra: Record<string, string> = {}, args = ['--layer=2', '--runs=ci', '--scope=changed']) => {
-    write('.evidence/group-calls', ''); write('.evidence/group-argv', '');
+    write('.evidence/group-calls', ''); write('.evidence/group-argv', ''); write('.evidence/python-tests', '');
     return cli('run.mjs', args, { PATH: `${join(directory, 'bin')}:${env.PATH}`, ...extra });
   };
   return { base, calls, run };
@@ -87,6 +87,16 @@ test('scripts-only actual runner executes its whole group without API or mobile'
   expect(fixture.calls()).toContain('scripts');
   expect(fixture.calls()).not.toContain('api');
   expect(fixture.calls()).not.toContain('mobile');
+});
+
+test('the whole scripts group runs loop recovery and propagates its failure', () => {
+  const fixture = wholeGroupFixture();
+  write('scripts/delivery/loop/recovery.py', 'changed = True\n'); const head = commit();
+  const result = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head,
+    FAIL_PYTHON_TEST: 'scripts/delivery/loop/loop.test.py' });
+  expect(result.status).not.toBe(0);
+  expect(readFileSync(join(directory, '.evidence/python-tests'), 'utf8')).toContain('scripts/delivery/loop/loop.test.py');
+  expect(result.stdout).toContain('loop-recovery');
 });
 
 test.each([

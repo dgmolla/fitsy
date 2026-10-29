@@ -28,6 +28,10 @@ if ! FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- --runInBan
   printf '{"name":"media-integration","status":"fail","summary":"real-media integration tests failed","fix":"run the named local suites with FFmpeg and fix the failure"}\n'
   exit 1
 fi
+if ! FITSY_MEDIA_INTEGRATION=1 python3 -B scripts/delivery/loop/loop.test.py DriverTest.test_real_host_sandbox_denies_credentials_and_preserves_child_isolation >&2; then
+  printf '{"name":"media-integration","status":"fail","summary":"real host recovery isolation test failed","fix":"repair the host sandbox boundary before installing recovery controls"}\n'
+  exit 1
+fi
 if ! node scripts/verify/media-integration.mjs --record >&2; then
   printf '{"name":"media-integration","status":"fail","summary":"cannot write source-bound media test receipt","fix":"inspect .evidence/verify and rerun npm run verify"}\n'
   exit 1
