@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest",
+    "test:widget": "node --test plugins/widget.test.cjs",
     "type-check": "tsc --noEmit",
     "lint": "eslint --no-warn-ignored ."
   },

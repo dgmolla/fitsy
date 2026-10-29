@@ -29,6 +29,7 @@ test.each([
 
 test.each([
   ['apps/mobile/app/notification-settings.tsx', ['reminders'], ['notifications']],
+  ['apps/mobile/app/widget.tsx', ['widget-setup'], ['billing', 'changed-journey', 'discovery']],
   ['apps/mobile/app/(tabs)/saved.tsx', ['log-meal'], ['discovery']],
   ['apps/api/app/api/restaurants/[id]/menu/route.ts', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'paywall-access', 'shuffle'], ['billing', 'discovery']],
   ['apps/api/lib/shuffleSearch.ts', ['shuffle'], ['billing', 'changed-journey', 'discovery']],

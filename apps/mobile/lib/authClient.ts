@@ -15,6 +15,7 @@ import { archiveActiveMacroTargets, clearActiveMacroTargets } from './macroStora
 import { clearAccountOnboardingData } from './onboardingStorage';
 import { forgetPendingProfileSync } from './profileSyncStorage';
 import { clearDiscoverySignIn } from './discoverySignIn';
+import { clearWidget } from './widgetSync';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 // SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
@@ -56,6 +57,7 @@ export async function clearToken({ reason = 'logout', forgetTargets = false }: {
   forgetTargets?: boolean;
 } = {}): Promise<void> {
   const { data } = await supabase.auth.getSession();
+  await clearWidget(data.session?.access_token).catch(() => undefined);
   if (forgetTargets && data.session?.user?.id) await forgetPendingProfileSync(data.session.user.id);
   await archiveActiveMacroTargets(data.session?.user?.id ?? null, forgetTargets);
   await clearAccountOnboardingData(data.session?.user?.id ?? null, forgetTargets);

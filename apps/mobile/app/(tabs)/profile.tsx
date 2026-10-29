@@ -1,6 +1,7 @@
 import React, { type ComponentProps, useCallback, useRef, useState } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ActivityIndicator,
   ScrollView,
@@ -20,7 +21,7 @@ import { getMacroTargets, getQuarantinedLegacyTarget, restoreQuarantinedLegacyTa
   saveMacroTargets, type MacroTargetMode } from '@/lib/macroStorage';
 import { getOnboardingData, getLegacyOnboardingData, restoreLegacyOnboardingData, retireLegacyOnboardingData,
   type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
-import { calculateAge } from '@fitsy/shared';
+import { calculateAge } from '@fitsy/shared/utils/dateUtils';
 import { syncSavedProfileToServer, queueSavedProfileToServer, deliverQueuedProfile } from '@/lib/profileSync';
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
@@ -391,6 +392,11 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
         </Pressable>
         {/* Logout */}
+        {Platform.OS === 'ios' && <Pressable style={s.feedbackBanner} onPress={() => router.push('/widget')}
+          accessibilityRole="button" testID="profile-widget">
+          <Text style={s.feedbackValue}>Home Screen widget</Text>
+          <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
+        </Pressable>}
         <Pressable testID="profile-logout" style={s.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={16} color="#B85450" />
           <Text style={s.logoutText}>Log out</Text>
