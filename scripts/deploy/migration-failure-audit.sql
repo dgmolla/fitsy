@@ -1,6 +1,8 @@
 -- Read-only incident #637 evidence, never permission to resolve a migration.
 -- Run the complete file in the production owner's existing SQL connection.
-BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+-- Keep the read-only opener recognized by the database writer inventory.
+BEGIN READ ONLY;
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 SET LOCAL statement_timeout = '5s';
 
 SELECT jsonb_build_object(
