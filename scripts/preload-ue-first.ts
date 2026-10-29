@@ -13,15 +13,15 @@ import { loadChainServing, chainMenuResolver, type ChainServing } from "../apps/
  *     hero photo (photoSource='ue_feed_hero').
  *
  *   Phase 2 (enrich): iterate Restaurants grouped by homeHex → resolver
- *     [FatSecret, UeApiDirectSource(storeUuid)] → Haiku (indie path) →
+ *     UeApiDirectSource(storeUuid) → reviewed official macros or Haiku →
  *     photo fallback (hero → menu image → Google Places) → persistHex.
  *
  * Reuses: assignToHexes (via h3-js directly), persistHex, filterPendingHexes,
  *   findIncompleteRunId, PipelineEmitter, API_SEMAPHORES, shouldSkipIncremental,
- *   validateItems, fetchGooglePlacesPhoto, FatSecretSource, UeApiDirectSource,
+ *   validateItems, fetchGooglePlacesPhoto, UeApiDirectSource,
  *   estimateMacros.
  *
- * See `docs/engineering/plans/ue-first-pipeline.md` for the full design.
+ * See `docs/engineering/pipeline/ue-first-pipeline.md` for the full design.
  *
  * Flags:
  *   --phase discover|enrich|both   Default: both.
@@ -372,7 +372,6 @@ interface EnrichmentStats {
   skippedHaikuFailed: number;
   skippedValidationEmpty: number;
   rejectedItems: number;
-  fatsecretHits: number;
   ueApiHits: number;
   photoSourceBreakdown: Record<string, number>;
   anthropicCalls: number;
@@ -569,7 +568,6 @@ async function runPhase2(
     skippedHaikuFailed: 0,
     skippedValidationEmpty: 0,
     rejectedItems: 0,
-    fatsecretHits: 0,
     ueApiHits: 0,
     photoSourceBreakdown: {},
     anthropicCalls: 0,
@@ -756,9 +754,7 @@ async function processRestaurant(
 
   const { brandId, resolver, resolveMacros } = chainMenuResolver(r, chainServing, API_SEMAPHORES.ubereats);
 
-  // The UE semaphore lives inside UeApiDirectSource now — it only wraps the
-  // UE getStoreV1 call. Holding it around the whole resolver wastes UE slots
-  // on FatSecret work for chain restaurants that never hit UE at all.
+  // The UE semaphore lives inside UeApiDirectSource and only wraps getStoreV1.
   const { result: resolverResult } = await withRetry(
     () => resolver.resolve(r.name, r.address, { lat: r.lat, lng: r.lng }),
     { label: `${r.name}/resolve` },
@@ -790,8 +786,7 @@ async function processRestaurant(
     return null;
   }
 
-  if (resolverResult.sourceId === "fatsecret") stats.fatsecretHits++;
-  else if (resolverResult.sourceId === "ue_api_direct") stats.ueApiHits++;
+  if (resolverResult.sourceId === "ue_api_direct") stats.ueApiHits++;
 
   log(`    source: ${resolverResult.sourceId}, ${resolverResult.items.length} items`);
 
@@ -824,72 +819,66 @@ async function processRestaurant(
 
   // Reviewed chain matches bypass estimation; unresolved UE items use Haiku.
   let macros: (MacroData | null)[];
-  if (resolverResult.macros && resolverResult.macros.size > 0) {
-    macros = resolverResult.items.map((item) =>
-      resolverResult.macros?.get(item.name.toLowerCase()) ?? null,
-    );
-  } else {
-    try {
-      macros = await resolveMacros(resolverResult.items, async unresolved => {
-        stats.anthropicCalls++;
-        const { result } = await withRetry(
-          () => API_SEMAPHORES.haiku.run(() => estimateMacros(unresolved, anthropic, undefined, {
-            beforeRequest: () => { assertActive(); costs.assertCanSpend(); },
-            onUsage: (items, usage) => costs.record({ hexId, restaurantId: r.id, placeId: r.storeUuid }, items, usage),
-          })),
-          {
-            label: `${r.name}/haiku`,
-            maxRetries: 5,
-            shouldRetry: err => {
-              if (err instanceof SpendCapReached || err instanceof CostAccountingError) return false;
-              assertActive();
-              costs.assertCanSpend();
-              return true;
-            },
-            backoffMs: [1000, 3000, 8000, 15000, 30000],
-            computeDelayMs: (err) => {
-              if (!(err instanceof Anthropic.APIError) || err.status !== 429) return null;
-              const h = err.headers;
-              if (!h || typeof (h as Headers).get !== "function") return null;
-              const ra = (h as Headers).get("retry-after");
-              if (!ra) return null;
-              const sec = parseInt(ra, 10);
-              return Number.isFinite(sec) && sec > 0 ? sec * 1000 : null;
-            },
+  try {
+    macros = await resolveMacros(resolverResult.items, async unresolved => {
+      stats.anthropicCalls++;
+      const { result } = await withRetry(
+        () => API_SEMAPHORES.haiku.run(() => estimateMacros(unresolved, anthropic, undefined, {
+          beforeRequest: () => { assertActive(); costs.assertCanSpend(); },
+          onUsage: (items, usage) => costs.record({ hexId, restaurantId: r.id, placeId: r.storeUuid }, items, usage),
+        })),
+        {
+          label: `${r.name}/haiku`,
+          maxRetries: 5,
+          shouldRetry: err => {
+            if (err instanceof SpendCapReached || err instanceof CostAccountingError) return false;
+            assertActive();
+            costs.assertCanSpend();
+            return true;
           },
-        );
-        return result;
-      });
-    } catch (err) {
-      if (err instanceof SpendCapReached || err instanceof CostAccountingError) {
-        emitEvent(err instanceof SpendCapReached ? 'spend_cap' : 'cost_accounting_failed', resolverResult.sourceId, 0, 0, resolverResult.attempts);
-        throw err;
-      }
-      // Strict: Haiku retries have already been exhausted by withRetry. A
-      // macro estimation failure produces bad data, so abort the hex rather
-      // than persist items without macros.
-      const diag = describeAnthropicError(err);
-      const msg = err instanceof Error ? err.message : String(err);
-      stats.skippedHaikuFailed++;
-      if (diag.isRateLimit) stats.anthropicRateLimitErrors++;
-      else if (diag.status !== undefined) stats.anthropicApiErrors++;
-      console.error(`[haiku-fail] ${r.name}: ${diag.summary}`);
-      emitter.emitError({
-        type: "error",
-        runId,
-        hexId,
-        restaurant: r.name,
-        placeId: r.storeUuid,
-        stage: "macro_estimation",
-        source: "haiku",
-        error: diag.summary,
-        retryable: true,
-        retriesAttempted: 2,
-        _time: new Date().toISOString(),
-      });
-      emitEvent("skipped_haiku_failed", resolverResult.sourceId, 0, 0, resolverResult.attempts);
-      throw new Error(`[${r.name}] haiku failed after retries: ${msg}`);
+          backoffMs: [1000, 3000, 8000, 15000, 30000],
+          computeDelayMs: (err) => {
+            if (!(err instanceof Anthropic.APIError) || err.status !== 429) return null;
+            const h = err.headers;
+            if (!h || typeof (h as Headers).get !== "function") return null;
+            const ra = (h as Headers).get("retry-after");
+            if (!ra) return null;
+            const sec = parseInt(ra, 10);
+            return Number.isFinite(sec) && sec > 0 ? sec * 1000 : null;
+          },
+        },
+      );
+      return result;
+    });
+  } catch (err) {
+    if (err instanceof SpendCapReached || err instanceof CostAccountingError) {
+      emitEvent(err instanceof SpendCapReached ? 'spend_cap' : 'cost_accounting_failed', resolverResult.sourceId, 0, 0, resolverResult.attempts);
+      throw err;
     }
+    // Strict: Haiku retries have already been exhausted by withRetry. A
+    // macro estimation failure produces bad data, so abort the hex rather
+    // than persist items without macros.
+    const diag = describeAnthropicError(err);
+    const msg = err instanceof Error ? err.message : String(err);
+    stats.skippedHaikuFailed++;
+    if (diag.isRateLimit) stats.anthropicRateLimitErrors++;
+    else if (diag.status !== undefined) stats.anthropicApiErrors++;
+    console.error(`[haiku-fail] ${r.name}: ${diag.summary}`);
+    emitter.emitError({
+      type: "error",
+      runId,
+      hexId,
+      restaurant: r.name,
+      placeId: r.storeUuid,
+      stage: "macro_estimation",
+      source: "haiku",
+      error: diag.summary,
+      retryable: true,
+      retriesAttempted: 2,
+      _time: new Date().toISOString(),
+    });
+    emitEvent("skipped_haiku_failed", resolverResult.sourceId, 0, 0, resolverResult.attempts);
+    throw new Error(`[${r.name}] haiku failed after retries: ${msg}`);
   }
 
   if (brandId) log(`    reviewed chain: ${macros.filter(m => m?.source === "official").length}/${resolverResult.items.length} official; remaining items sent to estimation`);
@@ -963,7 +952,7 @@ async function main(): Promise<void> {
           `items=${enrichStats.persistedItems} haiku=${enrichStats.anthropicCalls}`,
       );
       log(
-        `  source: fatsecret=${enrichStats.fatsecretHits} ue_api=${enrichStats.ueApiHits} ` +
+        `  source: ue_api=${enrichStats.ueApiHits} ` +
           `no_source=${enrichStats.skippedNoSource}`,
       );
       log(

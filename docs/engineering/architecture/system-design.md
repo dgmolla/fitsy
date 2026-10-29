@@ -25,15 +25,16 @@ backend is a read-only query layer over a pre-populated database.
 graph TD
     subgraph offline["Offline: Preload Pipeline — scripts/preload-ue-first.ts"]
         UE["Uber Eats getFeedV1\n(unauthenticated, uev2.loc cookie)\nrestaurant discovery"]
-        FS["FatSecret / FoodFacts\nchain macro lookup"]
-        BS["Brave Search + Uber Eats JSON-LD\nindependent restaurant menus"]
+        FS["Reviewed official catalog\nexact serving nutrition"]
+        BS["Uber Eats getStoreV1\nlocation menus"]
         CL["Claude Haiku\nmacro estimation\n(indie menus)"]
         AX["Axiom telemetry\nfitsy-pipeline dataset"]
         PG_off["PostgreSQL\nRestaurant + MenuItem\n(macros denormalized)"]
 
-        UE --> FS
         UE --> BS
-        BS --> CL
+        BS --> Match{Reviewed serving match?}
+        Match -->|Yes| FS
+        Match -->|No| CL
         FS --> PG_off
         CL --> PG_off
         AX -.->|telemetry| PG_off
@@ -59,8 +60,8 @@ Primary script: `scripts/preload-ue-first.ts`. Runs as a batch script (not a pro
 | Component | Purpose | Used at runtime? |
 |---|---|---|
 | Uber Eats `getFeedV1` | Restaurant discovery (unauthenticated, uev2.loc cookie; lat/lng authoritative) | No — preload only |
-| FatSecret / FoodFacts (FFN) | Chain restaurant macro lookup (accurate, pre-verified) | No — preload only |
-| Brave Search + Uber Eats JSON-LD | Independent restaurant menus | No — preload only |
+| Reviewed official catalog | Nutrition for exact approved serving bindings | No - preload only |
+| Uber Eats `getStoreV1` | Location menus for chains and independent restaurants | No - preload only |
 | Claude Haiku | Macro estimation from indie menu text | No — preload only |
 | Axiom (`fitsy-pipeline` dataset) | Pipeline telemetry and run logging | No — preload only |
 | Google Places API | Optional tier-3 photo fallback only | No — removed from discovery |
@@ -70,9 +71,9 @@ Primary script: `scripts/preload-ue-first.ts`. Runs as a batch script (not a pro
 **Pipeline flow:**
 
 1. `getFeedV1` probe (Uber Eats) — hexes tiled by H3; returns restaurants with lat/lng per store
-2. Chain identification — match against FatSecret/FoodFacts chain database for verified macros
-3. Independent restaurants — Brave Search finds menu URL; Uber Eats JSON-LD extracted from the page
-4. Claude Haiku — estimates macros from menu text for independents without structured data
+2. Fetch every location's menu through UE `getStoreV1`
+3. Resolve verified brand identity and exact reviewed official serving matches
+4. Estimate unmatched chain and independent servings with Haiku, or Jev in Pipeline v2
 5. Dual-write to PostgreSQL — macros written to both `MenuItem` (denormalized) and `MacroEstimate` (audit log) in the same transaction
 
 Telemetry for each run ships to Axiom dataset `fitsy-pipeline`. Slack alerts go to `C0ASM3865AA`.
@@ -100,8 +101,8 @@ See `docs/engineering/architecture/api-reference.md` for the full route referenc
 | Service | Used by | When |
 |---|---|---|
 | Uber Eats `getFeedV1` | Preload script | Offline batch — restaurant discovery |
-| FatSecret / FoodFacts | Preload script | Offline batch — chain macros |
-| Brave Search | Preload script | Offline batch — indie menu URLs |
+| Uber Eats `getStoreV1` | Preload script | Offline batch - location menus |
+| Reviewed official catalog | Preload script | Offline batch - exact serving matches |
 | Claude Haiku | Preload script | Offline batch — macro estimation |
 | Axiom | Preload script | Offline batch — telemetry |
 | Google Places API | Preload script (optional) | Tier-3 photo fallback only |
@@ -115,11 +116,14 @@ See `docs/engineering/architecture/api-reference.md` for the full route referenc
 
 ### 2.1 Pipeline Overview (UE-first)
 
-The pipeline uses Uber Eats as the primary discovery source, FatSecret/FoodFacts for chain macros, and Brave Search + Uber Eats JSON-LD for independent restaurant menus. Claude Haiku fills in macro estimates where structured data is unavailable.
+The pipeline uses Uber Eats for discovery and every location's menu.
+The reviewed official catalog supplies matched serving nutrition; unmatched items use Haiku in the legacy command or Jev in Pipeline v2.
+Existing historical estimates retain their provenance and source priority.
+Local writes target DEV or disposable fixtures; production ingestion requires the [approved cloud worker path](../devops/production-deployment.md#invocation).
 
 - **Discovery**: Uber Eats `getFeedV1` (unauthenticated, captured `uev2.loc` cookie; lat/lng per store authoritative from Uber Eats response) tiled by H3 hexes with midnight-safe auto-resume
-- **Chain macros**: FatSecret/FoodFacts lookups — verified, accurate, low cost
-- **Independent menus**: Brave Search finds the menu URL; Uber Eats JSON-LD extracted; Claude Haiku estimates macros from unstructured text
+- **Chain macros**: reviewed official facts for exact serving matches, estimation for unresolved servings
+- **Location menus**: UE `getStoreV1` for both chains and independent restaurants
 - **H3 checkpointing**: each hex is processed atomically; failed hexes auto-resume on restart
 - **Telemetry**: all run events ship to Axiom dataset `fitsy-pipeline`; Slack alerts on error to `C0ASM3865AA`
 
@@ -133,15 +137,10 @@ flowchart TD
 
     Start --> UE["Uber Eats getFeedV1\nrestaurant discovery\n(uev2.loc cookie, lat/lng per store)"]
 
-    UE --> IsChain{"Chain\nrestaurant?"}
-
-    IsChain -- "Yes" --> FFN["FatSecret / FoodFacts\nverified chain macro lookup"]
-    IsChain -- "No" --> Brave["Brave Search\nfind menu URL"]
-
-    Brave --> UEJLD["Uber Eats JSON-LD\nextract structured menu data"]
-    UEJLD --> HasMenu{"Structured\ndata found?"}
-    HasMenu -- "No" --> Haiku["Claude Haiku\nmacro estimation"]
-    HasMenu -- "Yes" --> DualWrite
+    UE --> Menu["UE getStoreV1 location menu"]
+    Menu --> HasMenu{"Reviewed exact\nserving match?"}
+    HasMenu -- "No" --> Haiku["Configured estimator\nHaiku or Jev"]
+    HasMenu -- "Yes" --> FFN["Reviewed official nutrition"]
 
     FFN --> DualWrite
     Haiku --> DualWrite
@@ -326,19 +325,21 @@ The Next.js backend is API-only — no server-rendered pages. All endpoints serv
 - H3 hex tiling: the pipeline tiles the target area by H3 resolution and probes each hex
 - **Not used at runtime** — preload only
 
-### 4.3 FatSecret / FoodFacts (Preload — Chain Macros)
-- Purpose: verified macro data for chain restaurants
-- Chain identification is done in the pipeline; matched restaurants skip the Haiku estimation step
-- **Not used at runtime** — preload only
+### 4.3 Reviewed Official Catalog
 
-### 4.4 Brave Search + Uber Eats JSON-LD (Preload — Indie Menus)
-- Purpose: find menu URLs for independent restaurants; extract structured menu data
-- Brave Search finds the likely menu URL; JSON-LD extraction pulls schema.org `Menu` data from the Uber Eats page for the restaurant
-- **Not used at runtime** — preload only
+- Purpose: published nutrition with reviewed source, serving and exact menu binding
+- Only matched servings skip estimation; menu membership always comes from the location's UE response
+- Used during preload only
 
-### 4.5 Claude API (Haiku — Preload, Indie Macro Estimation)
-- Purpose: macro estimation from unstructured indie restaurant menu text
-- Used for independent restaurants where FatSecret doesn't match and JSON-LD is unavailable
+### 4.4 Uber Eats Location Menus
+
+- Purpose: fetch structured location menus directly from the discovered `storeUuid`
+- Empty menus preserve stored data; unexpected fetch or parse failures abort the hex
+- Used during preload only
+
+### 4.5 Claude API (Haiku Preload Estimation)
+- Purpose: macro estimation for unresolved UE menu servings
+- Used for unmatched chain and independent UE items; Pipeline v2 uses Jev instead
 - Returns structured JSON with item name, calories, protein, carbs, fat, confidence tier
 - **Not used at runtime** — all estimates precomputed and stored in DB
 

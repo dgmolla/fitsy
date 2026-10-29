@@ -1,13 +1,25 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseOptions } from './run';
-import { v2Database } from '../preload-v2';
+import { pipelineSourceHash, v2Database } from '../preload-v2';
 import { latLngToCell } from 'h3-js';
 
 const root = resolve(__dirname, '../..'), hexId = latLngToCell(34.05, -118.25, 7), dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach(dir => rmSync(dir, { recursive: true, force: true })));
+test('source snapshots retain deleted adapter identities before commit', () => {
+  const out = mkdtempSync(join(tmpdir(), 'v2-source-')); dirs.push(out);
+  const file = join(out, 'adapter.ts');
+  writeFileSync(file, 'export const source = "retired";');
+  const before = pipelineSourceHash([file]);
+  rmSync(file);
+  const deleted = pipelineSourceHash([file]);
+  expect(deleted).not.toBe(before);
+  expect(deleted).not.toBe(pipelineSourceHash([]));
+  expect(pipelineSourceHash([file])).toBe(deleted);
+  expect(() => pipelineSourceHash([out])).toThrow();
+});
 function run(extra: Record<string, string> = {}, directory?: string, cap = '5') {
   const out = directory ?? mkdtempSync(join(tmpdir(), 'v2-cli-')); if (!directory) dirs.push(out);
   const eventsPath = join(out, 'events.jsonl');
@@ -24,7 +36,7 @@ test('real CLI sources one hex, abstains on unreviewed/independent items, persis
   expect(result.stderr).toBe(''); expect(result.status).toBe(0);
   expect(result.report).toMatchObject({ status: 'completed', environment: 'dev', coverage: { restaurants: 4, officialItems: 1, jevItems: 4,
     uniqueItems: 5, persistedItems: 5, chainsWithPublishedData: 2, chainsWithoutPublishedData: 1, independentRestaurants: 1 },
-    calls: { uberEats: 4, jev: 8, fatSecret: 0, pdfSearch: 0 }, unknownUsage: false });
+    calls: { uberEats: 4, jev: 8, pdfSearch: 0 }, unknownUsage: false });
   expect(result.report.costUsd).toBeCloseTo(8 * 100 * .042 / 1e6);
   expect(result.report.matches).toMatchObject([{ restaurantId: 'restaurant-0', name: 'Chicken Plate', servingSize: '1 standard chicken plate' }]);
   expect(result.report.pdfJobs).toMatchObject([{ brandId: 'brand-1', status: 'pending' }]);

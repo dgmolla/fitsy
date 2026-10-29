@@ -87,14 +87,14 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
     coverage, officialCoverage: coverage.uniqueItems ? coverage.officialItems / coverage.uniqueItems : 0,
     persistedCoverage: coverage.uniqueItems ? coverage.persistedItems / coverage.uniqueItems : 0,
     calls: { uberEats: journal.events.filter(e => e.event === 'ue_request').length, jev: journal.requests,
-      fatSecret: 0, pdfSearch: 0, reusedJev: journal.reusedRequests },
+      pdfSearch: 0, reusedJev: journal.reusedRequests },
     ueThrottles: journal.events.filter(e => e.event === 'ue_throttle').length,
     costUsd: journal.unknown ? null : journal.knownUsd, knownCostUsd: journal.knownUsd,
     unknownUsage: journal.unknown, capUsd: options.capUsd, wallMs: previousWallMs + performance.now() - start,
     wallTimeComplete: interruptedAttempts === 0, interruptedAttempts,
     matches, rejections, wrongMatches: null, matchAudit: 'Inspect the retained official serving evidence before claiming zero wrong matches',
     pdfJobs: journal.events.filter(e => e.event === 'pdf_search_enqueued'),
-    notes: 'Verified chains without published data enter the shared async PDF queue; no PDF search or FatSecret calls run in the hex worker.' });
+    notes: 'Verified chains without published data enter the shared async PDF queue; PDF search runs separately from the hex worker.' });
   try {
     if (journal.unknown || journal.stopped) throw new Error('Prior Jev accounting failure requires reconciliation');
     const catalog = await loadV2Catalog(prisma);

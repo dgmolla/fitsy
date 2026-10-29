@@ -67,7 +67,7 @@ Offline UE imports must also run revision `32b4a7c` or a compatible successor; a
 | PDF and HTML have different coverage | Yoshinoya HTML adds 99 g cheesecake and 227 g rice rows | Add candidates to research, not automatic bindings to generic cheesecake or rice |
 | Official pages can disagree or contain errors | Yoshinoya HTML beef differs materially from PDF; PDF gyoza has saturated fat above total fat | Keep affected facts or bindings held; do not prefer a whole source blindly |
 | Recipe wording protects identity | April Signature House includes chicken; current official ordering requires a protein choice | Keep the existing description-sensitive binding; do not inherit it by name |
-| Discovery source is not menu source | Sparse historical menus were built by the FatSecret menu adapter at UE-discovered restaurants | Do not use `Restaurant.source = ue_feed` as evidence that the menu came from UE |
+| Discovery source is not menu source | Sparse historical menus were built by a retired aggregator menu adapter at UE-discovered restaurants | Do not use `Restaurant.source = ue_feed` as evidence that the menu came from UE |
 
 The 592 prior applied rows retain their evidence distinctions: 281 have matching-context captured UE calorie corroboration, 113 have reviewed mappings without that corroboration, and 198 have sparse historical WaBa names.
 Calorie corroboration checks calories, not all three macros or actual kitchen portions.
@@ -118,9 +118,10 @@ flowchart LR
 
 The same approved facts feed both writers, with no extra model, network or per-item database calls in matching.
 The manufacturer compiler is offline and deterministic; it does not discover sources or automatically approve fuzzy bindings.
-Enabling a brand also changes new-import menu resolution: reviewed brands use UE without the legacy FatSecret menu fallback.
+All new imports use UE location menus.
+Enabling reviewed nutrition bindings changes which servings skip estimation.
 Replay a complete captured UE menu before activating a new brand, including empty-menu behavior, unmatched estimation volume and duplicate listings.
-The April nutrition-only update preserves existing menu membership; it does not replace historical FatSecret-built menus with UE menus.
+The April nutrition-only update preserves existing menu membership; it does not replace historical aggregator-built menus with UE menus.
 National onboarding can proceed chain by chain, reusing manufacturer facts and contextual aliases across stores.
 After this matcher/schema release, compatible facts and aliases can ship as guarded data batches without an API deployment or a separate implementation per chain.
 New serving or matching behavior still requires a code release and regression coverage.

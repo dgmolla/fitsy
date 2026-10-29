@@ -84,11 +84,11 @@ async function sendDummyEvents() {
         itemsTotal: 312000,
       },
       sourceBreakdown: {
-        byRestaurant: { fatsecret: 5000, ubereats: 12000, yelp: 4000, brave_website: 2500, name_only: 700 },
+        byRestaurant: { ue_api_direct: 24200 },
       },
       dataQuality: {
         lowItemCount: { total: 45 },
-        missingPrices: { total: 8200, bySource: { fatsecret: 6000, ubereats: 500, yelp: 1200, brave_website: 500 } },
+        missingPrices: { total: 8200, bySource: { ue_api_direct: 8200 } },
         nonFoodRejected: { total: 120 },
         macroMismatch: { total: 35 },
       },
@@ -103,7 +103,7 @@ async function sendDummyEvents() {
     // Restaurant events
     { _time: now, type: "restaurant", runId, hexId: "hex_001", name: "Sqirl", placeId: "ChIJ_test_001", source: "ubereats", itemCount: 35, durationMs: 4200 },
     { _time: now, type: "restaurant", runId, hexId: "hex_001", name: "Pine & Crane", placeId: "ChIJ_test_002", source: "ubereats", itemCount: 28, durationMs: 3800 },
-    { _time: now, type: "restaurant", runId, hexId: "hex_001", name: "Chick-fil-A", placeId: "ChIJ_test_003", source: "fatsecret", itemCount: 85, durationMs: 1200 },
+    { _time: now, type: "restaurant", runId, hexId: "hex_001", name: "Chick-fil-A", placeId: "ChIJ_test_003", source: "ue_api_direct", itemCount: 85, durationMs: 1200 },
     { _time: now, type: "restaurant", runId, hexId: "hex_002", name: "Guisados", placeId: "ChIJ_test_004", source: "ubereats", itemCount: 22, durationMs: 5100 },
     { _time: now, type: "restaurant", runId, hexId: "hex_002", name: "Masa of Echo Park", placeId: "ChIJ_test_005", source: "yelp", itemCount: 15, durationMs: 7800 },
 

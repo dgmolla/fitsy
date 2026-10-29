@@ -977,7 +977,7 @@ export class UberEatsSource implements MenuSource {
    * Photo-only lookup. Discovers the UE store URL and extracts just the
    * restaurant image URL from JSON-LD. Does NOT require menu items.
    *
-   * Used as a photo fallback for chains where FatSecret provided the macros
+   * Used as a photo fallback when another source supplied the menu
    * but returned no imageUrl.
    *
    * Returns the photo URL string, or null if unavailable.

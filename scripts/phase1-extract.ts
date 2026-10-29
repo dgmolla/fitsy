@@ -285,7 +285,7 @@ function selftest() {
     console.log(`${ok ? "✓" : "✗"} ${row.name.padEnd(16)} valid=${got} (want ${want})  ${validateRow(row).note}`);
   }
   console.log(`\nvalidator selftest: ${pass}/${cases.length} expectations met`);
-  console.log("note: pure 4/4/9 cannot catch a P↔C swap (same calorie sum) — that's a known limit; FatSecret cross-check covers it.");
+  console.log("note: pure 4/4/9 cannot catch a P↔C swap (same calorie sum); independently check the published source columns.");
   process.exit(pass === cases.length ? 0 : 1);
 }
 

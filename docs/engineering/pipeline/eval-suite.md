@@ -292,7 +292,7 @@ Every remaining unchecked PDF-finder row stays unused.
 This includes Wahoo's repeated black-bean salsa portions and competing white-rice rows without a reliable serving distinction.
 The measured extension explicitly expands source scope to individually checked labelled official Old Spaghetti Factory HTML cards.
 It preserves the real HTML section/card locator instead of inventing a PDF page; malformed labels remain excluded.
-No third-party nutrition, production database snapshot query, FatSecret value, inferred modifier arithmetic, or model prediction becomes truth.
+No third-party nutrition, production database snapshot query, legacy aggregator value, inferred modifier arithmetic, or model prediction becomes truth.
 Source currency, regional recipe availability, correlated menus, manufacturer rounding, and published-table imperfections limit any production-accuracy claim.
 
 ## Baseline evidence

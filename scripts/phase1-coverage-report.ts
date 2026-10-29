@@ -1,6 +1,6 @@
 /**
  * Phase 1 — coverage report in RESTAURANT (location) + ITEM terms, by route, plus the
- * fallback-tier source split (fatsecret/haiku) for everything not officially extracted.
+ * estimator fallback for everything not officially extracted.
  *   npx tsx --env-file=.env.local scripts/phase1-coverage-report.ts
  */
 import { PrismaClient } from "@prisma/client";
@@ -59,7 +59,7 @@ async function main() {
   for (const [route, v] of Object.entries(byRoute))
     console.log(`    ${route.padEnd(15)} ${v.brands} brands → ${v.rest} restaurants, ${v.items} menu items`);
   console.log(`    ${"TOTAL official".padEnd(15)} ${officialSlugs.length} brands → ${offRest} restaurants, ${offItems} menu items`);
-  console.log(`\n  FALLBACK tier (FatSecret→Haiku): ${totalRest - offRest} restaurants (SPA chains + no-official + indie)`);
+  console.log(`\n  FALLBACK tier (estimator): ${totalRest - offRest} restaurants (SPA chains + no-official + indie)`);
   console.log(`    (of which SPA/deferred chain locations: ${spaRest})`);
 
   console.log(`\n=== MacroEstimate source split ===`);
