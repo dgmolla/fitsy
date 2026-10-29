@@ -62,6 +62,8 @@ Failed checks print the last 10,000 bytes of each stream and the full log paths,
 The `test` check names every failing workspace or test engine even when later suites pass.
 Use the retained stderr log to recover an early API assertion hidden by later mobile output.
 If a sandbox cannot reach GitHub through `gh`, read the run and download its complete diagnostic artifact through the authenticated browser, then match the archive's SHA-256 to the digest displayed by GitHub before inspecting it locally.
+If the browser's download event times out, check its configured download directory for a completed archive before retrying; the file can arrive without an event being reported.
+Require the same SHA-256 match before using that file.
 
 Verify's Static, Tests and Build jobs upload only `.evidence/verify/logs/` with `always()`, including hidden directories, even after a check fails.
 Artifacts are named `verify-l0-l1-logs-attempt-N`, `verify-l2-logs-attempt-N` and `verify-l3-logs-attempt-N`, with seven-day retention and separate names for retries.
