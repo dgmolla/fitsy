@@ -131,6 +131,8 @@ def requeue(st, evidence, main, dependency_state=None, check_passed=False, now=N
         changed = dependency_state == 'MERGED'
     elif condition.startswith('check:'):
         changed = check_passed
+    elif condition == 'env:preparation':
+        changed = evidence.get('preparation_ready') is True
     elif condition == 'env:api-config':
         # A stale error status cannot hide recovery of the measured blocking API.
         changed = isinstance(evidence.get('api_status'), int) and 200 <= evidence['api_status'] < 500

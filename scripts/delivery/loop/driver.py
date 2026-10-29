@@ -22,8 +22,11 @@ def codex(wt,prompt,tag,images=()):
     p=f'{L}/{tag}.prompt'; Path(p).write_text(prompt)
     args=['codex','exec','-m','gpt-6.1-sol','-s','workspace-write','-C',wt]
     for path in images: args.extend(['--image',path])
+    # Issue-derived prompts get core/provider auth only; host recovery retains ENV.
+    worker_env={key:value for key,value in ENV.items()
+                if key in {'PATH','HOME','USER','LOGNAME','LANG','LC_ALL','TMPDIR','CODEX_HOME','OPENAI_API_KEY'}}
     with open(p) as source, open(f'{L}/{tag}.log','w') as output:
-        subprocess.run(args+['-'],env=ENV,stdin=source,stdout=output,stderr=subprocess.STDOUT,timeout=5400)
+        subprocess.run(args+['-'],env=worker_env,stdin=source,stdout=output,stderr=subprocess.STDOUT,timeout=5400)
     out=Path(f'{L}/{tag}.log').read_text(); return out[-3000:]
 def state():
     try: value=json.loads(Path(L+'/state.json').read_text())
@@ -210,6 +213,18 @@ def file_flake(name,st,ev):
         log(name,'flake issue pending:',redact(str(error))[:500])
 
 
+def prepare_task(wt,meta):
+    """Retry the same bounded source prerequisite before implementation or requeue."""
+    with LOCK:
+        sh('git fetch -q origin',cwd=ROOT+'/wt3',timeout=60)
+        if not os.path.isdir(wt):
+            br=meta['branch']
+            if meta.get('existing'):
+                sh(f'git worktree add -f {shlex.quote(wt)} -B loop/{br} origin/{br}',cwd=ROOT+'/wt3',timeout=120)
+                sh('git merge -q --no-edit origin/main',cwd=wt,check=False,timeout=120)
+            else: sh(f'git worktree add -f {shlex.quote(wt)} -B {br} origin/main',cwd=ROOT+'/wt3',timeout=120)
+
+
 def retriage(files,s):
     if any(s.get(Path(f).stem,{}).get('blocked') and time.time()-s.get(Path(f).stem,{}).get('triaged_at',0)>=RETRIAGE_SECONDS for f in files):
         sh('git fetch -q origin main',cwd=ROOT+'/wt3',check=False)
@@ -225,15 +240,25 @@ def retriage(files,s):
         if main==st.get('triaged_main',st.get('parked_main')) and time.time()-st.get('triaged_at',0)<RETRIAGE_SECONDS: continue
         dependency=None; passed=False
         condition=st.get('blocked_on','')
+        wt=ROOT+'/loop/wt-'+name
         if re.fullmatch(r'PR#\d+',condition):
             dependency=sh(f'gh pr view {condition[3:]} -R {REPO} --json state -q .state',check=False)
+        elif condition=='env:preparation' or (condition=='environment' and not Path(wt).is_dir()):
+            # Older preparation failures were parked as generic environment errors.
+            st['blocked_on']='env:preparation'
+            ev={**ev,'sim_state':'error','preparation_ready':False}
+            try:
+                prepare_task(wt,meta)
+                ev.update(preparation_ready=True,logs='Task fetch and checkout preparation succeeded.')
+            except (RuntimeError,OSError,subprocess.TimeoutExpired) as error:
+                ev['logs']=redact(str(error))
+            record_attempt(st,'preparation-retriage',outcome='ready' if ev['preparation_ready'] else 'error',logs=ev['logs'])
         else:
             try:
                 if st.get('pr'): j,res=checks(st['pr'])
                 else:
-                    head=sh('git rev-parse HEAD',cwd=ROOT+'/loop/wt-'+name,check=False)
+                    head=sh('git rev-parse HEAD',cwd=wt,check=False)
                     j,res={'headRefOid':head},{}
-                wt=ROOT+'/loop/wt-'+name
                 if Path(wt).is_dir():
                     ev=evidence(wt,j['headRefOid'],res)
                     if condition=='environment' or condition.startswith('env:'):
@@ -266,13 +291,10 @@ def run_task(f,s):
         record_attempt(st,'legacy-counters',simrepair=st.get('simrepair',0),fix_rounds=st.get('fix_rounds',0))
         st.pop('simrepair',None); st.pop('fix_rounds',None)
     br=meta['branch']; wt=f'{ROOT}/loop/wt-{name}'
-    with LOCK:
-        sh('git fetch -q origin',cwd=ROOT+'/wt3')
-        if not os.path.isdir(wt):
-            if meta.get('existing'):
-                sh(f'git worktree add -f {shlex.quote(wt)} -B loop/{br} origin/{br}',cwd=ROOT+'/wt3')
-                sh('git merge -q --no-edit origin/main',cwd=wt,check=False)
-            else: sh(f'git worktree add -f {shlex.quote(wt)} -B {br} origin/main',cwd=ROOT+'/wt3')
+    try: prepare_task(wt,meta)
+    except (RuntimeError,OSError,subprocess.TimeoutExpired) as error:
+        return block(name,st,s,'Task preparation failed: '+str(error),
+                     {'sim_state':'error','preparation_ready':False,'logs':redact(str(error))},meta,'env:preparation')
     while True:
         orphan=subprocess.run(['pgrep','-f',f'codex exec .*-C {re.escape(wt)} '],capture_output=True,env=ENV)
         if orphan.returncode==1: break

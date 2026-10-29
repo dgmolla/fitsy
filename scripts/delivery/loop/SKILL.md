@@ -20,6 +20,8 @@ Do not replace the gate's receipt with a manual pass or rerun it in the unchange
 Retain the concrete blocker, selected skill/tool, attempted recovery and next action in the task's existing evidence.
 
 The driver executes fixed host commands outside candidate Codex's sandbox.
+Keep deployment, database, GitHub and shell startup variables in that host environment.
+Model workers receive only core environment variables and Codex provider authentication, matching `local-dispatcher.py`'s worker allowlist.
 Set the host's existing `FITSY_XCTEST_SIM_UDID` to an explicitly owned compatible device.
 Prepare a clean merge-base checkout and set optional `FITSY_LOOP_MAIN_CHECKOUT` for differential replay.
 Use the canonical backend resolver so Metro, fixtures and Maestro target the PR's Ready preview where required.
@@ -34,10 +36,13 @@ Legacy metadata followed by `---` remains supported.
 Put human ordering notes under `tasks/notes/`; both planner prompts and driver ordering consume them.
 Use `#583 BEFORE #547` or `order: #608 > #583 > #547` for deterministic ordering among eligible tasks.
 
-Park with a concrete condition such as `PR#587`, `check:Simulator` or `env:api-config`.
+Park with a concrete condition such as `PR#587`, `check:Simulator`, `env:api-config` or `env:preparation`.
 Re-triage every fifteen minutes or when main advances.
 Only changed evidence or a resolved dependency/check can requeue work, with three requeues per rolling day.
 Environment re-triage runs one bounded host replay of the current PR head so a stale Simulator error cannot hide repaired dependencies.
+Preparation failures retry the bounded fetch and checkout setup from the existing `wt3` checkout before resolving a task HEAD, including legacy parks without a worktree.
+Only successful preparation clears that blocker; failed prerequisites retain the retry interval and rolling requeue cap.
+An empty host replay response is an environment error with its exit code and redacted stderr; it must not stop recovery for other tasks.
 An unavailable merge-base comparison parks on `baseline`; preparing the checkout permits periodic re-triage without requiring main to advance.
 Reset active repair counters on unpark and retain additive historical attempts.
 Parking comments go to the PR and issue once per episode; failed publication stays pending for the same owner.

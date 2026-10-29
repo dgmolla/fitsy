@@ -134,7 +134,12 @@ def host_replay(wt, lock, evidence, env):
                                  env={**env, 'EXPO_PUBLIC_API_URL': backend['backend'], 'EXPO_NO_DOTENV': '1'},
                                  capture_output=True, text=True, timeout=3600)
         output = process.stdout
-        result = json.loads(output.splitlines()[-1])
+        lines = output.strip().splitlines()
+        if not lines:
+            return {'status': 'error', 'head': head, 'exit_code': process.returncode,
+                    'logs': redact(f'Host runner returned no JSON output (exit {process.returncode}):\n'
+                                   + process.stderr[-8000:])}
+        result = json.loads(lines[-1])
         if process.returncode:
             # Only a real failing Maestro report establishes an application/test failure.
             match = re.search(r'inspect (.+)', result.get('summary', ''))
