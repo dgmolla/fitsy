@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import {
@@ -46,7 +47,7 @@ async function readReason(request: NextRequest): Promise<string | null> {
   }
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePOST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
@@ -67,3 +68,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     synced: active !== null,
   });
 }
+
+export const POST = withApiTelemetry('POST', '/api/subscriptions/sync', handlePOST);

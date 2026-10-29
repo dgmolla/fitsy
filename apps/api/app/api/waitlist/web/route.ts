@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { waitlistLimiter, rateLimitResponse } from "@/lib/rateLimit";
@@ -27,7 +28,7 @@ export const runtime = "nodejs";
  * Always responds { ok: true } for a well-formed address, whether or not it
  * was already on the list, so the form cannot be used to probe membership.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePOST(request: NextRequest): Promise<NextResponse> {
   const limit = await waitlistLimiter.check(trustedClientIp(request));
   if (!limit.ok) return rateLimitResponse(limit);
 
@@ -74,3 +75,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }
+
+export const POST = withApiTelemetry('POST', '/api/waitlist/web', handlePOST);

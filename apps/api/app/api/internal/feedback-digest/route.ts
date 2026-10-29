@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { postSlackMessage } from "@fitsy/shared";
 import { prisma } from "@/lib/restaurantService";
@@ -16,7 +17,7 @@ import { buildFeedbackDigest } from "@/lib/feedbackDigest";
 
 const WINDOW_HOURS = 24;
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+async function handleGET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
   const provided = req.headers.get("authorization");
   if (!expected || provided !== `Bearer ${expected}`) {
@@ -40,3 +41,5 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const posted = await postSlackMessage(text);
   return NextResponse.json({ ok: true, count: rows.length, posted });
 }
+
+export const GET = withApiTelemetry('GET', '/api/internal/feedback-digest', handleGET);

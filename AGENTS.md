@@ -114,7 +114,7 @@ vercel env add KEY prod    # Add/update a secret
 | `ANTHROPIC_API_KEY` | Macro estimation (Haiku) | console.anthropic.com |
 | `UE_LOC_COOKIE` | Uber Eats discovery (preload) | captured cookie |
 | `BRAVE_API_KEY` | Indie menu URL discovery (preload) | brave.com/search/api |
-| `AXIOM_TOKEN` / `SLACK_BOT_TOKEN` | Pipeline telemetry + alerts | Axiom / Slack |
+| `AXIOM_TOKEN` / `SLACK_BOT_TOKEN` | Pipeline/API telemetry and alerts | Axiom / Slack |
 
 ---
 
@@ -211,6 +211,8 @@ You are done when CI and deploy are green, not when you push. After pushing, pol
 
 ## Danger Zones
 
+- **Fail-closed dependencies** - ship a bounded health check and a real handled-failure alert regression with every new path.
+  Every API handler uses `withApiTelemetry`; required bindings belong in `scripts/deploy/env-manifest.json` before guarded deployment.
 - **Auth** - every data handler requires a Supabase account session, including onboarding samples; see `apps/api/app/api/auth-coverage.test.ts` for exact public exceptions.
   User accounts and session management are security-sensitive.
 - **Database access** - Prisma serves application data; keep default-deny RLS and no direct client grants on every application table, including migration-managed operational tables.

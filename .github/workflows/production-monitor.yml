@@ -1,0 +1,50 @@
+name: Production Monitor
+on:
+  schedule:
+    - cron: '2-59/5 * * * *'
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Deploy, EAS Build + TestFlight, Dev maintenance]
+    types: [completed]
+
+concurrency:
+  group: fitsy-production-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+jobs:
+  monitor:
+    # A private repo's five-minute schedule can exceed included Actions minutes.
+    # Enable only after credentials/routing and a no-charge budget are verified.
+    if: github.event_name != 'schedule' || vars.FITSY_MONITOR_SCHEDULE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      # Never run code from the failed build, its artifacts or a PR checkout.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Evaluate production and page the human
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_ALERT_USER_ID: ${{ vars.SLACK_ALERT_USER_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+          POSTHOG_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
+          UPSTASH_EMAIL: ${{ secrets.UPSTASH_EMAIL }}
+          UPSTASH_API_KEY: ${{ secrets.UPSTASH_API_KEY }}
+          UPSTASH_DATABASE_ID: ${{ vars.UPSTASH_DATABASE_ID }}
+          UPSTASH_DAILY_COMMAND_LIMIT: ${{ vars.UPSTASH_DAILY_COMMAND_LIMIT }}
+        run: node scripts/verify/production-monitor.mjs

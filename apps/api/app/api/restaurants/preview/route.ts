@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { findNearbyRestaurants } from "@/lib/restaurantService";
 import { findGuidedPreview } from '@/lib/guidedPreviewService';
@@ -33,7 +34,7 @@ interface PreviewResponse {
  * for the onboarding tour, with separate coverage and goal-qualified counts.
  * Full menus and continued discovery remain subscription features.
  */
-export async function GET(
+async function handleGET(
   request: NextRequest,
 ): Promise<NextResponse<PreviewResponse | GuidedPreviewResponse | { error: string }> | NextResponse> {
   const auth = await requireAuth(request);
@@ -114,3 +115,5 @@ export async function GET(
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const GET = withApiTelemetry('GET', '/api/restaurants/preview', handleGET);

@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { getRestaurantMenu } from "@/lib/restaurantService";
 import { optionalSubscription } from "@/lib/subscription";
@@ -10,7 +11,7 @@ import { parseMacroTargetParams } from "@/lib/macroTargetParams";
 // data, just less of it.
 const FREE_SAMPLE_ITEM_COUNT = 3;
 
-export async function GET(
+async function handleGET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse<MenuApiResponse> | NextResponse> {
@@ -61,3 +62,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withApiTelemetry('GET', '/api/restaurants/[id]/menu', handleGET);

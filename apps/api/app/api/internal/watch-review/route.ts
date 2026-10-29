@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { postSlackMessage } from "@fitsy/shared";
 import { prisma } from "@/lib/restaurantService";
@@ -49,7 +50,7 @@ function classify(state: string): { kind: string; emoji: string; text: string } 
 
 type Version = { attributes?: { versionString?: string; appStoreState?: string; state?: string } };
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+async function handleGET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
   const provided = req.headers.get("authorization");
   if (!expected || provided !== `Bearer ${expected}`) {
@@ -113,3 +114,5 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ ok: true, notified: posted, state: chosen.state, version: chosen.version });
 }
+
+export const GET = withApiTelemetry('GET', '/api/internal/watch-review', handleGET);

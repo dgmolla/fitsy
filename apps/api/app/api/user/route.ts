@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/restaurantService";
@@ -27,7 +28,7 @@ import { normalizeEmail } from "@/lib/waitlist";
 // DB is the source of truth. A dangling Supabase auth row is recoverable; a
 // dangling Prisma user is not. Returns 204 on success.
 
-export async function DELETE(
+async function handleDELETE(
   request: NextRequest,
 ): Promise<NextResponse<{ error: string }> | NextResponse> {
   const auth = await requireAuth(request);
@@ -77,3 +78,5 @@ export async function DELETE(
 
   return new NextResponse(null, { status: 204 });
 }
+
+export const DELETE = withApiTelemetry('DELETE', '/api/user', handleDELETE);
