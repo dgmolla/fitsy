@@ -63,6 +63,14 @@ test('only real guard imports and guarded target properties count', () => {
   expect(check('scripts/new.ts', guard + prisma + 'new Database({datasourceUrl: await assertDatabaseWriteAllowed(process.env.URL)});')).toEqual([]);
 });
 
+test('the signed recovery target is awaited and scoped to its one maintenance caller', () => {
+  const source = prisma + "import { recoveryTarget } from './hex-jobs-recovery-target';\n";
+  const guarded = "new Database({datasourceUrl: await recoveryTarget('resolve')});";
+  expect(check('scripts/deploy/recover-hex-jobs.ts', source + guarded)).toEqual([]);
+  expect(check('scripts/deploy/recover-hex-jobs.ts', source + guarded.replace('await ', ''))).not.toEqual([]);
+  expect(check('scripts/deploy/other.ts', source + guarded)).not.toEqual([]);
+});
+
 test('implicit Prisma test clients require the actual disposable-DB Jest setup; explicit overrides need their own guard', () => {
   expect(check('scripts/new.test.ts', prisma + 'new Database();')).toEqual([]);
   expect(check('scripts/new.test.ts', prisma + 'new Database();', [['scripts/jest.config.js', 'module.exports = {};']])).not.toEqual([]);

@@ -1,0 +1,48 @@
+name: Production migration recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Audit #643 or resolve its reviewed rolled-back hex-jobs attempt
+        type: choice
+        options: [audit, resolve]
+        default: audit
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  recovery:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production-release
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate --schema prisma/schema.prisma
+      - name: Audit or perform the separately approved one-off recovery
+        env:
+          POSTGRES_URL_NON_POOLING: ${{ secrets.PROD_DATABASE_URL }}
+          RECOVERY_MODE: ${{ inputs.mode }}
+        run: |
+          case "$RECOVERY_MODE" in
+            audit) node --import tsx scripts/deploy/recover-hex-jobs.ts --prod --audit ;;
+            resolve)
+              FITSY_ALLOW_PROD_WRITE=1 node --import tsx scripts/deploy/recover-hex-jobs.ts --prod --resolve ;;
+            *) echo '::error::Unknown recovery mode.'; exit 1 ;;
+          esac

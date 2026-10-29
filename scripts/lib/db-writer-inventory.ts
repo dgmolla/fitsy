@@ -12,6 +12,7 @@ const guardModules: Record<string, string[]> = {
   'scripts/lib/db-target-guard': ['assertDatabaseWriteAllowed', 'assertPipelineDatabase', 'assertDevDatabase', 'assertRuntimeDatabase', 'assertDevSupabase', 'assertRuntimeSupabase'],
   'scripts/lib/test-database-guard': ['assertTestDatabase'],
   'scripts/dev/lib/guard': ['assertNotProd', 'prodReadOnlyUrl'],
+  'scripts/deploy/hex-jobs-recovery-target': ['recoveryTarget'],
 };
 const mutation = /\b(?:INSERT\s+INTO|UPDATE\s+["\w]|DELETE\s+FROM|TRUNCATE|CREATE\s+(?:TABLE|ROLE|POLICY|INDEX)|ALTER\s+(?:TABLE|ROLE|DEFAULT)|DROP\s+(?:TABLE|DATABASE)|GRANT|REVOKE)\b/i;
 const unwrap = (node: ts.Expression): ts.Expression =>
@@ -48,7 +49,8 @@ function clientErrors(path: string, text: string, sources: ReadonlyMap<string, s
       if (ts.isIdentifier(node.expression) && imported(node.expression).some(({ from, name }) => guardModules[from]?.includes(name) &&
           (!testFile || name === 'assertTestDatabase') &&
           (!name.startsWith('assertRuntime') || path.startsWith('apps/api/')) &&
-          (!['assertDatabaseWriteAllowed', 'assertPipelineDatabase'].includes(name) || awaited) && (name !== 'prodReadOnlyUrl' || path === 'scripts/dev/snapshot.ts'))) return true;
+          (name !== 'recoveryTarget' || path === 'scripts/deploy/recover-hex-jobs.ts') &&
+          (!['assertDatabaseWriteAllowed', 'assertPipelineDatabase', 'recoveryTarget'].includes(name) || awaited) && (name !== 'prodReadOnlyUrl' || path === 'scripts/dev/snapshot.ts'))) return true;
       // The alternative cleanup path is an enforced READ ONLY transaction.
       if (path === 'scripts/maintenance/cleanup-test-fixtures.ts' && node.expression.getText(source) === 'cleanupReadTarget') return true;
       if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'toString') return guarded(node.expression.expression, seen);

@@ -77,6 +77,7 @@ The pre-push hook runs size/domain checks followed by cheap static checks and fo
 GitHub's current-head `Verify` and `AI review` results provide merge authority.
 The final Verify job still requires every applicable classified job to succeed and only permits legitimate skips.
 Deployment validates successful main Verify and the exact protected release source through the existing [routine production entrypoints](routine-production.md).
+The incident-specific manual migration recovery described there retains `production-release` approval and does not run from routine Deploy or the Git build.
 A hook pass does not replace the applicable product-flow verification or independent review.
 The registry determines which checks apply and whether a check is blocking or shadow.
 Removing obsolete structural exceptions belongs to the changed product domain only when every removed entry names a file in the same diff.

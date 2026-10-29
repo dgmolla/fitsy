@@ -55,7 +55,8 @@ export function deployProductionMigrations(env = process.env) {
     const result = spawnSync('npx', [...args, 'deploy', '--schema', schema], options);
     if (result.status !== 0) console.error(
       'TL;DR: Production migrations stopped; recovery requires separate authorization.\n' +
-      'Retain the Prisma error; inspect scripts/deploy/migration-failure-audit.sql and docs/engineering/devops/routine-production.md before recovery; no automatic resolve or retry',
+      'Retain the Prisma error; inspect scripts/deploy/migration-failure-audit.sql and docs/engineering/devops/routine-production.md before recovery; no automatic resolve or retry. ' +
+      'The manual production-migration-recovery.yml workflow prepares separately approved recovery of the exact #643 attempt only',
     );
     return result.status ?? 1;
   } finally { rmSync(directory, { recursive: true, force: true }); }
