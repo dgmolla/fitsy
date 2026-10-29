@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -17,7 +17,7 @@ test('approval binds to the migration bytes and cannot inherit general productio
   assert.equal(assertPipelineRolesApproval({ FITSY_PIPELINE_ROLES_APPROVED_SHA256: digest }), digest);
 });
 
-test('real Prisma deploy holds unapproved SQL, applies an approved gap once, and preserves failure handling', { timeout: 60_000 }, () => {
+test('real Prisma deploy holds role dependencies, applies approved gaps once, and preserves failures', { timeout: 60_000 }, () => {
   // File-backed SQLite exercises the installed migration engine and its ledger
   // without a server or production access. Marker SQL stands in for role DDL.
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-role-deploy-'));
@@ -34,10 +34,23 @@ test('real Prisma deploy holds unapproved SQL, applies an approved gap once, and
 }
 `);
     writeFileSync(join(migrations, 'migration_lock.toml'), 'provider = "sqlite"\n');
-    const before = '20261028110000_before', after = '20261028130000_after';
-    for (const [name, table] of [[before, 'before'], [migrationName, 'role_probe'], [after, 'after']]) {
+    const before = '20261028110000_before', after = '20261028160000_after';
+    // SQLite tables stand in for PostgreSQL roles. Execute a real dependency,
+    // so filtering only role creation fails the same migration CLI as Vercel.
+    const roles = ['pipeline_writer', 'fitsy_app', 'fitsy_audit_readonly'];
+    const dependencies = ['20261028130000_hex_jobs', '20261028140000_pipeline_ue_rate_limit',
+      '20261028150000_pipeline_pdf_jobs', '20261101000000_future_role_dependency'];
+    for (const [name, table] of [[before, 'before'], [migrationName, 'pipeline_writer'], [after, 'after'],
+      ...dependencies.map((name, index) => [name, `dependent_${index}`])]) {
       mkdirSync(join(migrations, name));
-      writeFileSync(join(migrations, name, 'migration.sql'), `CREATE TABLE "${table}" (id INTEGER PRIMARY KEY);\n`);
+      const index = dependencies.indexOf(name);
+      const role = roles[Math.max(index, 0) % roles.length];
+      const dependency = index >= 0
+        ? `INSERT INTO "${index === 3 ? role.toUpperCase() : role}" (id) VALUES (${index + 1});\n` : '';
+      const additionalRoles = name === migrationName
+        ? roles.slice(1).map(role => `CREATE TABLE "${role}" (id INTEGER PRIMARY KEY);\n`).join('') : '';
+      writeFileSync(join(migrations, name, 'migration.sql'), dependency +
+        `CREATE TABLE "${table}" (id INTEGER PRIMARY KEY);\n` + additionalRoles + '-- pipeline_writer_metrics is not an approval-controlled role\n');
     }
     const sql = readFileSync(join(migrations, migrationName, 'migration.sql'));
     let database = join(directory, 'fixture.db');
@@ -69,7 +82,8 @@ with sqlite3.connect(sys.argv[1]) as db:
     }
     const approved = deploy(createHash('sha256').update(sql).digest('hex'));
     assert.equal(approved.status, 0, approved.stderr + approved.stdout);
-    const expected = { tables: ['_prisma_migrations', 'after', 'before', 'role_probe'], migrations: [before, migrationName, after] };
+    const expected = { tables: ['_prisma_migrations', 'after', 'before', 'dependent_0', 'dependent_1', 'dependent_2', 'dependent_3', 'fitsy_app', 'fitsy_audit_readonly', 'pipeline_writer'],
+      migrations: [before, migrationName, ...dependencies, after].sort() };
     assert.deepEqual(applied(), expected);
     // An already-applied role change does not need repeated approval, nor does
     // holding it erase or forge the existing ledger entry.
@@ -92,5 +106,35 @@ with sqlite3.connect(sys.argv[1]) as db:
     const heldFailure = deploy();
     assert.equal(heldFailure.status, 1, heldFailure.stdout + heldFailure.stderr);
     assert.deepEqual(applied().migrations, [before]);
+    // Reproduce #629's retained failed dependency using the old selection.
+    // A corrected filter must still refuse P3009, preserving the raw ledger
+    // for the separate, explicitly authorized production recovery operation.
+    const legacy = join(directory, 'legacy');
+    mkdirSync(legacy);
+    cpSync(join(directory, 'prisma/schema.prisma'), join(legacy, 'schema.prisma'));
+    cpSync(migrations, join(legacy, 'migrations'), {
+      recursive: true, filter: source => source !== join(migrations, migrationName),
+    });
+    database = join(directory, 'failed-dependency.db');
+    env.POSTGRES_PRISMA_URL = `file:${database}`;
+    const failedDependency = spawnSync('npx', ['prisma', 'migrate', 'deploy', '--schema', join(legacy, 'schema.prisma')], {
+      cwd: directory, env, encoding: 'utf8', timeout: 15_000,
+    });
+    assert.equal(failedDependency.status, 1);
+    assert.match(failedDependency.stderr + failedDependency.stdout, /no such table: pipeline_writer/);
+    const ledger = () => {
+      const result = spawnSync('python3', ['-c', `import json, sqlite3, sys
+with sqlite3.connect(sys.argv[1]) as db:
+    print(json.dumps(db.execute('SELECT * FROM _prisma_migrations ORDER BY started_at, id').fetchall()))`, database],
+      { encoding: 'utf8', timeout: 5_000 });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout;
+    };
+    const originalLedger = ledger();
+    const blocked = deploy();
+    assert.equal(blocked.status, 1, blocked.stdout + blocked.stderr);
+    assert.match(blocked.stderr + blocked.stdout, /P3009/);
+    assert.equal(ledger(), originalLedger);
+    assert.deepEqual(applied(), { tables: ['_prisma_migrations', 'before'], migrations: [before] });
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

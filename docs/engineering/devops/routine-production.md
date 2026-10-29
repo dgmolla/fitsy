@@ -27,7 +27,8 @@ It validates both existing Production `POSTGRES_URL_NON_POOLING` and `POSTGRES_P
 Migration connections must use the direct/session port, not the transaction pooler.
 `POSTGRES_URL_NON_POOLING` uses the deploy administrator; `POSTGRES_PRISMA_URL` accepts the separate `fitsy_app` credential or the existing explicit `postgres` binding pending provisioning, and must match `SUPABASE_URL`.
 The pipeline-role migration additionally requires Dawit's explicit approval recorded as its exact SHA-256 in `FITSY_PIPELINE_ROLES_APPROVED_SHA256`.
-Without matching approval, `pipeline-roles-approval.mjs --deploy` excludes that migration from a temporary Prisma input directory while deploying the other migrations; it never marks held SQL applied or edits the original migration.
+Without matching approval, `pipeline-roles-approval.mjs --deploy` excludes that migration and SQL mentioning its controlled roles (`fitsy_app`, `pipeline_writer`, `fitsy_audit_readonly`) from a temporary Prisma input directory while deploying unrelated migrations.
+This conservatively holds role-dependent queue migrations, including future files and role names in comments, without marking held SQL applied or editing original migrations.
 With matching approval, it includes the role SQL and checks the staged bytes before running Prisma.
 The build logs an activation skip for a validated legacy binding; configured `fitsy_app` activation failures still withhold promotion, and pipeline credentials are provisioned separately for pipeline workers.
 Names alone do not prove a database target.
@@ -40,7 +41,7 @@ Missing or partial configuration, read-only credentials, unavailable transport, 
 Provider errors, tokens and URLs never enter preflight diagnostics.
 The existing release regression suite executes the real build scripts with synthetic signed identity and external transports, checks Prisma's exact migration input and cleanup, and runs the runtime binding guard at the build boundary.
 Run `python3 -B scripts/deploy/routine-release.test.py` to verify approved, held, changed-SQL, legacy preview and fail-closed deployment paths without contacting production.
-Run `node --test scripts/deploy/pipeline-roles-approval.test.mjs` for an installed-Prisma regression against disposable SQLite marker migrations, including delayed approval, unchanged ledger entries and migration failures.
+Run `node --test scripts/deploy/pipeline-roles-approval.test.mjs` for an installed-Prisma regression against disposable SQLite dependency migrations, including delayed approval, future role references, unchanged ledger entries and migration failures.
 Already-applied role SQL needs no repeated approval; Prisma's [production deployment contract](https://docs.prisma.io/docs/orm/v6/prisma-migrate/workflows/development-and-production#production-and-testing-environments) permits an applied migration to be absent from the deploy input.
 Wrong identity, missing binding or failed migration also withholds the build; failed API build cannot succeed.
 Preview/development builds refuse either production binding and preview migrations retain the development route.
@@ -74,6 +75,15 @@ Before the pilot, retain the actual known-good serving deployment URL and applic
 Use `bash scripts/deploy/rollback.sh api https://KNOWN_GOOD_URL` for an authorized API rollback.
 Do not infer the known-good target from second-newest deployment ordering.
 After a failed or uncertain release, read the actual project/deployment/alias and health before resuming.
+If Prisma reports `P3009`, the failed migration ledger still blocks deployment even when the failed file is held from the temporary input.
+The role filter never resolves failures, deletes ledger rows, marks unexecuted SQL applied, or retries with unfiltered migrations.
+For incident [#629](https://github.com/dgmolla/fitsy/issues/629), Vercel deployment `H3t9dcTY75kXmgPvmtpizY6oQZ2J` at `b28c630` reported a retained failure of `20261028130000_hex_jobs` from the preceding `63a36df` build.
+The correction prevents new attempts without approved roles; it does not repair that existing production ledger.
+The existing production maintenance owner must inspect the failed row and checksum, transaction rollback and actual table/ACL state before separately authorizing any Prisma recovery.
+Only after a confirmed complete rollback may that owner prepare a separately reviewed Prisma `migrate resolve --rolled-back 20261028130000_hex_jobs` operation under the existing `production-release` protection, retaining failed history and withholding role approval.
+This checkout has no generic production recovery command; do not repurpose fixture cleanup or bypass the Git-build identity guard.
+Partial effects or a different failure require diagnosis and a separately reviewed repair, not a speculative resolve or another identical build.
+After authorized recovery, resume the guarded Git build and exact-source smoke against `fitsy.org`; neither local regression tests nor a healthy older serving source establish recovery.
 If smoke reports `invalid-session=503` while database health and missing-session checks pass, inspect shared-store configuration and runtime `[rate-limit] Shared store unavailable` logs.
 Missing-session 401s return before Redis, and `/api/health` probes only the database; neither establishes authentication readiness.
 Restore both store variables in the existing `fitsy-api` Vercel environment with a writable token and verify `EVAL` access.

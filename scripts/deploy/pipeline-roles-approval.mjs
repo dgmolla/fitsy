@@ -2,13 +2,16 @@
 // Only an owner-set production build value authorizes this exact role migration.
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const migrationName = '20261028120000_pipeline_writer_roles';
 export const migration = `prisma/migrations/${migrationName}/migration.sql`;
+// Hold SQL mentioning any approval-controlled role, including future queue
+// migrations. Excluding role creation alone still lets dependent SQL fail.
+const roleReference = /\b(?:fitsy_app|pipeline_writer|fitsy_audit_readonly)\b/i;
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const migrationDigest = () => createHash('sha256').update(readFileSync(join(root, migration))).digest('hex');
 export function assertPipelineRolesApproval(env = process.env) {
@@ -28,9 +31,13 @@ export function deployProductionMigrations(env = process.env) {
   try {
     cpSync(join(root, 'prisma/schema.prisma'), schema);
     const migrations = join(root, 'prisma/migrations');
+    const held = new Set(approved ? [] : readdirSync(migrations, { withFileTypes: true })
+      .filter(entry => entry.isDirectory() && (entry.name === migrationName ||
+        roleReference.test(readFileSync(join(migrations, entry.name, 'migration.sql'), 'utf8'))))
+      .map(entry => join(migrations, entry.name)));
     cpSync(migrations, join(directory, 'migrations'), {
       recursive: true,
-      filter: source => approved || source !== join(migrations, migrationName),
+      filter: source => !held.has(source),
     });
     // Recheck the actual staged bytes before allowing role SQL into Prisma.
     if (approved) {
@@ -39,7 +46,7 @@ export function deployProductionMigrations(env = process.env) {
       if (env.FITSY_PIPELINE_ROLES_APPROVED_SHA256 !== stagedDigest) {
         throw new Error('refusing: staged database role migration does not match owner approval');
       }
-    } else console.error(`production migrations: holding ${migrationName}; exact owner approval is unset or mismatched, proceeding with other migrations`);
+    } else console.error(`production migrations: holding ${[...held].map(path => basename(path)).sort().join(', ')}; exact owner approval is unset or mismatched, proceeding with other migrations`);
     const args = ['prisma', 'migrate'];
     const options = { cwd: root, env, stdio: 'inherit' };
     // Pending migrations make status nonzero. Deploy remains authoritative and
