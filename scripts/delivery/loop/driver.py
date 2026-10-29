@@ -136,7 +136,9 @@ def repair_sim(name, wt, st, s, ev, meta, prompt):
                 triage=classify_failure(ev)
             else:
                 return block(name,st,s,'Environment recovery requires host configuration: '+replay.get('logs','')[-1000:],ev,meta)
-        if triage in ('env','unknown'):
+        if triage=='unknown':
+            return block(name,st,s,'Merge-base comparison requires host preparation; no code repair authorized.',ev,meta,'baseline')
+        if triage=='env':
             return block(name,st,s,'Environment/diagnostic recovery exhausted; no code repair authorized.',ev,meta)
     if triage=='flaky':
         reruns=st.get('reruns',0)
@@ -232,7 +234,14 @@ def retriage(files,s):
                     head=sh('git rev-parse HEAD',cwd=ROOT+'/loop/wt-'+name,check=False)
                     j,res={'headRefOid':head},{}
                 wt=ROOT+'/loop/wt-'+name
-                if Path(wt).is_dir(): ev=evidence(wt,j['headRefOid'],res)
+                if Path(wt).is_dir():
+                    ev=evidence(wt,j['headRefOid'],res)
+                    if condition=='environment' or condition.startswith('env:'):
+                        # A stale GitHub error cannot observe a repaired host dependency.
+                        replay=context.host_replay(wt,L+'/sim.lock',ev,ENV)
+                        record_attempt(st,'environment-retriage',outcome=replay['status'],
+                                       head=replay.get('head'),source=replay.get('source'),logs=replay.get('logs',''))
+                        ev['rerun_passed']=replay['status']=='pass' and replay.get('head')==j['headRefOid']
                 if condition=='baseline': ev.update(context.compare_main(wt,L+'/sim.lock',ev,ENV))
                 passed=res.get(condition.removeprefix('check:'))=='SUCCESS'
             except (RuntimeError,ValueError,OSError): continue
@@ -289,7 +298,8 @@ def run_task(f,s):
             codex(wt,f"This branch has merge conflicts with origin/main (a merge is in progress). Resolve every conflict keeping both this branch's intent and main's changes (main may have deleted legacy files: keep them deleted unless this task needs them). Remove all conflict markers, run the affected tests. Original task:\n{prompt}"+COMMON,f'{name}-conflict')
             sh('git add -A && (git -c core.editor=true merge --continue || git commit -q --no-edit)',cwd=wt,check=False)
         for tryn in range(4):
-            if st.get('simrepair') and context.source_hash(wt,ENV)!=st.get('local_validation_source'):
+            # The source binding survives requeue's reset of active repair counters.
+            if (st.get('simrepair') or st.get('local_validation_source')) and context.source_hash(wt,ENV)!=st.get('local_validation_source'):
                 replay=context.host_replay(wt,L+'/sim.lock',st.get('repair_evidence',{}),ENV)
                 record_attempt(st,'pre-push-validation',outcome=replay['status'])
                 save(s)

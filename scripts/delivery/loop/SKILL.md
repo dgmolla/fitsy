@@ -26,6 +26,7 @@ Use the canonical backend resolver so Metro, fixtures and Maestro target the PR'
 Keep `dev.fitsy.org` pinned to `dev`.
 Every simulator command must hold `lockf -t 3600 ~/fitsy-refactor/loop/sim.lock`.
 Native repairs need a real local Maestro pass before push; never remove or skip assertions to obtain it.
+Keep that pass bound to the current source after requeue, merges and hook repairs, independently of active attempt counters.
 The driver attaches failure screenshots or extracted video frames through Codex's image argument and includes failing commands, logs, diff and prior outcomes in the prompt.
 
 Task frontmatter requires `branch`, `title`, a closing `---` and a body.
@@ -36,6 +37,8 @@ Use `#583 BEFORE #547` or `order: #608 > #583 > #547` for deterministic ordering
 Park with a concrete condition such as `PR#587`, `check:Simulator` or `env:api-config`.
 Re-triage every fifteen minutes or when main advances.
 Only changed evidence or a resolved dependency/check can requeue work, with three requeues per rolling day.
+Environment re-triage runs one bounded host replay of the current PR head so a stale Simulator error cannot hide repaired dependencies.
+An unavailable merge-base comparison parks on `baseline`; preparing the checkout permits periodic re-triage without requiring main to advance.
 Reset active repair counters on unpark and retain additive historical attempts.
 Parking comments go to the PR and issue once per episode; failed publication stays pending for the same owner.
 Human or release approval boundaries remain unchanged.

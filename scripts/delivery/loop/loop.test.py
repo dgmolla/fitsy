@@ -352,6 +352,69 @@ class DriverTest(unittest.TestCase):
         self.assertNotIn('simrepair', st)
         self.assertNotIn('fix_rounds', st)
 
+    def test_environment_retriage_probes_recovery_while_simulator_status_is_stale(self):
+        task, s = self.task_checkout(simrepair=3, fix_rounds=5)
+        name = task.stem
+        st = s[name]
+        head = self.git('rev-parse', 'HEAD')
+        artifacts = self.root / 'sim-review/evidence' / head[:12]
+        shutil.copytree(self.artifacts, artifacts)
+        ev = failure(head=head, main=head, sim_state='error', api_status=200,
+                     logs='Redis not configured')
+        st['blocked_evidence'] = ev
+        park(st, 'Restore runner configuration', ev, 'environment', head, now=1)
+        self.service_state(replays=['error', 'pass', 'pass'])
+        with mock.patch('urllib.request.urlopen') as health:
+            health.return_value.__enter__.return_value.status = 200
+            driver.retriage([str(task)], s)
+            self.assertIn('blocked', st)
+            self.assertEqual(st['simrepair'], 3)
+            pr = self.service_state()['pr']
+            pr['headRefOid'] = 'b' * 40
+            self.service_state(pr=pr)
+            st['triaged_at'] = 0
+            driver.retriage([str(task)], s)
+            self.assertIn('blocked', st)
+            pr['headRefOid'] = head
+            self.service_state(pr=pr)
+            st['triaged_at'] = 0
+            driver.retriage([str(task)], s)
+        self.assertNotIn('blocked', st)
+        self.assertNotIn('simrepair', st)
+        self.assertNotIn('fix_rounds', st)
+        self.assertEqual([row['outcome'] for row in st['attempts'] if row['kind']=='environment-retriage'],
+                         ['error', 'pass', 'pass'])
+        self.assertFalse(any(call['tool']=='codex' for call in self.service_state()['calls']))
+
+    def test_preparing_baseline_requeues_unknown_failure_without_main_advancing(self):
+        task, s = self.task_checkout()
+        st = s[task.stem]
+        main = self.git('rev-parse', 'origin/main')
+        (self.wt / 'candidate.txt').write_text('candidate change\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'candidate')
+        head = self.git('rev-parse', 'HEAD')
+        shutil.copytree(self.artifacts, self.root / 'sim-review/evidence' / head[:12])
+        ev = failure(head=head, main=main, main_passed=False)
+        self.service_state(replays=['failure'])
+        self.assertEqual(self.repair(st, ev), 'blocked')
+        self.assertEqual(st['blocked_on'], 'baseline')
+        baseline = self.root / 'baseline'
+        subprocess.run([self.env['REAL_GIT'], 'clone', '-q', str(self.wt), str(baseline)], check=True)
+        subprocess.run([self.env['REAL_GIT'], '-C', str(baseline), 'checkout', '-q', main], check=True)
+        driver.ENV['FITSY_LOOP_MAIN_CHECKOUT'] = str(baseline)
+        pr = self.service_state()['pr']
+        pr['headRefOid'] = head
+        pr['statusCheckRollup'][2]['conclusion'] = 'FAILURE'
+        self.service_state(pr=pr, replays=['pass'])
+        st['triaged_at'] = 0
+        with mock.patch('urllib.request.urlopen') as health:
+            health.return_value.__enter__.return_value.status = 200
+            driver.retriage([str(task)], s)
+        self.assertNotIn('blocked', st)
+        self.assertEqual(st['parked_main'], main)
+        self.assertEqual(st['triaged_main'], main)
+        self.assertFalse(any(call['tool']=='codex' for call in self.service_state()['calls']))
+
     def test_artifact_reader_extracts_failed_maestro_step_media_and_device_logs(self):
         ev = context.local_artifacts(self.artifacts)
         self.assertEqual(ev['flow'], 'shuffle')
@@ -465,6 +528,28 @@ class DriverTest(unittest.TestCase):
         calls = self.service_state()['calls']
         self.assertFalse(any(call['tool']=='git' and 'push' in call['args'] for call in calls))
         self.assertTrue(s['50583-issue-583']['needs_local_validation'])
+
+    def test_requeued_repair_revalidates_after_merging_new_source_before_push(self):
+        task, s = self.task_checkout(needs_local_validation=True, simrepair=2)
+        st = s[task.stem]
+        base = self.git('rev-parse', 'HEAD')
+        (self.wt / 'main-update.txt').write_text('new main source\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'advance main')
+        self.git('push', '-q', 'origin', 'main')
+        advanced = self.git('rev-parse', 'HEAD')
+        self.git('reset', '--hard', base)
+        park(st, 'Wait for dependency', self.ev, 'PR#587', base, now=1)
+        self.assertTrue(requeue(st, self.ev, base, 'MERGED', now=1000))
+        self.assertNotIn('simrepair', st)
+        pr = self.service_state()['pr']
+        pr['headRefOid'] = advanced
+        self.service_state(calls=[], replays=['pass', 'error'], pr=pr, dependency='MERGED')
+        with mock.patch('time.sleep'), self.assertRaisesRegex(RuntimeError, 'Current-source local Maestro pass'):
+            driver.run_task(str(task), s)
+        self.assertTrue((self.wt / 'main-update.txt').exists())
+        self.assertTrue(st['needs_local_validation'])
+        self.assertFalse(any(call['tool']=='git' and 'push' in call['args'] for call in self.service_state()['calls']))
+        self.assertEqual(st['attempts'][-1]['kind'], 'pre-push-validation')
 
 
 if __name__ == '__main__':

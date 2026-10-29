@@ -136,7 +136,8 @@ def requeue(st, evidence, main, dependency_state=None, check_passed=False, now=N
         changed = isinstance(evidence.get('api_status'), int) and 200 <= evidence['api_status'] < 500
     elif condition == 'environment' or condition.startswith('env:'):
         prior = st.get('blocked_evidence', {})
-        changed = ((prior.get('free_disk_gb', 100) < 5 <= evidence.get('free_disk_gb', 0)) or
+        changed = (evidence.get('rerun_passed') or
+                   (prior.get('free_disk_gb', 100) < 5 <= evidence.get('free_disk_gb', 0)) or
                    (prior.get('simulator_booted') is False and evidence.get('simulator_booted') is True) or
                    (classify_failure(evidence) != 'env' and
                     failure_fingerprint(evidence) != st.get('blocked_fingerprint')))
