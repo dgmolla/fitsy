@@ -325,22 +325,33 @@ class GitDeploymentTests(unittest.TestCase):
 
     log_url = 'https://vercel.com/dawits-projects-74b6e00f/fitsy-api/AC5ozgRAfyb2VX7bqMDyfYZqFNEL'
 
-    def test_failed_observer_recovers_exact_logs_from_real_issue_650_status_shape(self):
-        self.source = '605560241b8c076bef45585457175317d491f2b0'
-        self.row.update(id=7409367502, sha=self.source, ref=self.source)
-        self.log_url = 'https://fitsy-128l2az42-dawits-projects-74b6e00f.vercel.app'
-        provider_id = '7coDSBVrAKVpB5zT45D2aUufd3LT'
-        self.status.update(environment_url=self.log_url, target_url=self.log_url,
-                           description='Deployment has failed \u2014 run this Vercel CLI command: '
-                           f'npx vercel inspect dpl_{provider_id} --logs')
-        serving = 'bfd87f8fbd7ee9863554e973870f6988248d102f'
-        message, _ = self.failed_observation(
-            {'status': 'ok', 'db': 'connected', 'deploymentSha': serving}, state='failure')
-        self.assertIn(f'build/migration logs: https://vercel.com/dawits-projects-74b6e00f/fitsy-api/{provider_id};', message)
-        self.assertIn('deployment=7409367502', message)
-        self.assertIn(f'source={self.source}', message)
-        self.assertIn(f'fitsy.org serving source: {serving}', message)
-        self.assertNotIn('npx vercel', message)
+    def test_failed_observer_recovers_exact_logs_from_real_incident_statuses(self):
+        # Both builds stopped on the same retained hex-jobs attempt. Keep each
+        # release's own source and provider identity in the actionable refusal.
+        for source, deployment, slug, provider_id in (
+            ('99e19bb580c3c924c9fc953031636bdcb124185d', 7406075806, '6w4mtxwhp', '9bJfrPDUs53XkF6DEFk8M6r1qtZV'),
+            ('605560241b8c076bef45585457175317d491f2b0', 7409367502, '128l2az42', '7coDSBVrAKVpB5zT45D2aUufd3LT'),
+        ):
+            with self.subTest(source=source):
+                self.source = source
+                self.row.update(id=deployment, sha=source, ref=source)
+                self.log_url = f'https://fitsy-{slug}-dawits-projects-74b6e00f.vercel.app'
+                self.status.update(environment_url=self.log_url, target_url=self.log_url,
+                                   description='Deployment has failed \u2014 run this Vercel CLI command: '
+                                   f'npx vercel inspect dpl_{provider_id} --logs')
+                serving = 'bfd87f8fbd7ee9863554e973870f6988248d102f'
+                message, _ = self.failed_observation(
+                    {'status': 'ok', 'db': 'connected', 'deploymentSha': serving}, state='failure')
+                self.assertIn(f'build/migration logs: https://vercel.com/dawits-projects-74b6e00f/fitsy-api/{provider_id};', message)
+                self.assertIn(f'deployment={deployment}', message)
+                self.assertIn(f'source={source}', message)
+                self.assertIn(f'fitsy.org serving source: {serving}', message)
+                self.assertIn('production-migration-recovery.yml', message)
+                self.assertIn('defaults to audit', message)
+                self.assertIn('only the reviewed #643 attempt', message)
+                self.assertIn('separately authorized maintenance', message)
+                self.assertIn('never automatic resolve or retry', message)
+                self.assertNotIn('npx vercel', message)
 
     def test_failed_observer_rejects_unknown_or_injected_provider_failure_descriptions(self):
         self.log_url = self.url
