@@ -1,0 +1,7 @@
+{
+  "source": "bd306a15f72455042bb408f89dc5d1f261f9b5d2",
+  "deploy_run": "https://github.com/dgmolla/fitsy/actions/runs/40627648987",
+  "build_logs": "https://vercel.com/dawits-projects-74b6e00f/fitsy-api/HRjjY8pR4ThJLd2dU9yP7mHjWdM7",
+  "build_stderr": "Shared rate-limit store preflight failed: configure UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for this Vercel environment with a writable Redis REST token; verify connectivity and EVAL access, then retry the guarded Git build. Migration/build withheld.\n",
+  "recovered_build_logs": "https://vercel.com/dawits-projects-74b6e00f/fitsy-api/4PEAcjpZeFAyQ6twB4vQ41eqixa3"
+}

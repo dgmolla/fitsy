@@ -942,6 +942,37 @@ exit "${BUILD_EXIT:-0}"
                     self.assertIn('UPSTASH_REDIS_REST_TOKEN', result.stderr)
                     self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
 
+    def test_incident_602_store_recovery_preserves_guarded_build_order(self):
+        incident = json.loads((ROOT / 'scripts/deploy/__fixtures__/incident-602.json').read_text())
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        for environment in ('production', 'preview'):
+            bindings = {} if environment == 'production' else {
+                'SUPABASE_URL': 'https://kegycybiruksmrzvniha.supabase.co',
+                'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev.replace('postgres.', 'fitsy_app.')}
+            source = {'VERCEL_ENV': environment, 'VERCEL_GIT_COMMIT_SHA': incident['source'], **bindings}
+            # The retained diagnostic does not reveal which binding failed.
+            # Cover absent configuration and a configured but unwritable store.
+            for failure, expected_calls in (({'UPSTASH_REDIS_REST_URL': '', 'UPSTASH_REDIS_REST_TOKEN': ''}, []),
+                                            ({'REDIS_RESULT': 'readonly'}, ['redis EVAL'])):
+                with self.subTest(environment=environment, failure=list(failure)):
+                    result, calls = self.drive(**source, **failure)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn(incident['build_stderr'], result.stderr)
+                    self.assertEqual(calls, expected_calls)
+                    self.assertFalse(self.migrations.exists())
+                    self.assertNotIn('private-fixture', result.stdout + result.stderr)
+
+            # A separately restored provider permits the same source to build;
+            # readiness must not bypass migration/history/runtime-schema gates.
+            result, calls = self.drive(**source)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Shared rate-limit store preflight passed', result.stdout)
+            history = ['audit read only', 'audit statement timeout', 'migration history preflight',
+                       'npx prisma migrate status --schema prisma/schema.prisma'] if environment == 'production' else []
+            self.assertEqual(calls, ['redis EVAL', *history,
+                                     'npx prisma migrate deploy --schema prisma/schema.prisma',
+                                     'runtime migration preflight', 'npm run build -w apps/api'])
+
     def test_invalid_shared_store_configuration_is_private_and_withholds_build(self):
         dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
         invalid = [('UPSTASH_REDIS_REST_URL', value) for value in
