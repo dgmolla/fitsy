@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { runInNewContext } from 'node:vm';
 import { copyProductFlowControls } from '../verify/product-flow-fixture';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
@@ -55,10 +56,45 @@ test('menu startup retries only observations and authenticates once before readi
   expect(commands[launch + 2]).toEqual({ openLink: "${'fitsy://restaurant/' + output.seed.id}" });
 });
 
+test.each([
+  ['map-search', 'allow'],
+  ['map-search-location-denied', 'deny'],
+])('%s launches once with a literal %s location permission before observing readiness', (flow, permission) => {
+  type Step = {
+    launchApp?: object;
+    assertTrue?: string | object;
+    runFlow?: { file?: string; env?: Record<string, string>; when?: { true: string }; commands: Step[] };
+    retry?: { maxRetries: number; commands: object[] };
+  };
+  const read = (path: string) => loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e', path), 'utf8'))[1] as Step[];
+  const setup = read(`flows/${flow}.yaml`)[0]?.runFlow;
+  if (!setup?.file) throw new Error('Map journey must use the shared setup');
+  expect(setup.env?.LOCATION_PERMISSION).toBe(permission);
+  const commands = read(join('flows', setup.file));
+  const evaluate = (expression: string) => runInNewContext(expression.slice(2, -1), setup.env);
+  const selected = commands.flatMap(step => step.runFlow?.when?.true
+    ? evaluate(step.runFlow.when.true) ? step.runFlow.commands : []
+    : [step]);
+  // launchApp permission values reach the native driver without variable expansion.
+  expect(selected.filter(step => step.launchApp)).toEqual([{
+    launchApp: { clearState: true, clearKeychain: true, permissions: { location: permission } },
+  }]);
+  const launch = selected.findIndex(step => step.launchApp);
+  const readiness = selected[launch + 1]?.retry;
+  expect(readiness?.maxRetries).toBe(2);
+  expect(readiness?.commands).toEqual([
+    { runFlow: { when: { visible: 'Development Build' }, commands: [
+      { tapOn: '^http://(localhost|127\\.0\\.0\\.1):[0-9]+$' },
+    ] } },
+    { waitForAnimationToEnd: { timeout: 10000 } },
+    { extendedWaitUntil: { visible: { id: 'welcome-start' }, timeout: 30000 } },
+  ]);
+});
+
 test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-energy-sync', 'menu-load-recovery',
   'menu-macro-serving', 'onboarding-assisted-targets', 'onboarding-guided-preview', 'onboarding-out-of-area',
   'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight', 'paywall-access', 'paywall-live-terms', 'shuffle', 'widget-setup']
-  .map(flow => `flows/${flow}`).concat('helpers/mixed-trial-visual', 'helpers/map-search-setup'))('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
+  .map(flow => `flows/${flow}`).concat('helpers/mixed-trial-visual'))('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/${flow}.yaml`), 'utf8')) as [unknown, {
     launchApp?: object;
     retry?: { maxRetries: number; commands: {
@@ -70,7 +106,6 @@ test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-
   }[]];
   const launch = commands.findIndex(step => step.launchApp);
   expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true,
-    ...(flow === 'helpers/map-search-setup' ? { permissions: { location: '${LOCATION_PERMISSION}' } } : {}),
     ...(['flows/onboarding-search-highlight', 'flows/onboarding-guided-preview'].includes(flow) ? { permissions: { notifications: 'deny' } } : {}) });
   const startup = commands[launch + 1]?.retry;
   expect(startup).toBeDefined();
