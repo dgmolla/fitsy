@@ -945,6 +945,9 @@ exit "${BUILD_EXIT:-0}"
     def test_incident_602_store_recovery_preserves_guarded_build_order(self):
         self.assert_store_recovery(602)
 
+    def test_incident_580_runtime_outage_is_withheld_before_migrations_or_build(self):
+        self.assert_store_recovery(580)
+
     def test_incident_584_runtime_outage_is_withheld_before_migrations_or_build(self):
         self.assert_store_recovery(584)
 

@@ -62,8 +62,8 @@ test.each([{ args: [] }, { args: ['--prod-safe'] }, { args: ['--write', '--prod-
   expect(result.calls).not.toContain('api/auth/register');
 });
 
-test('incident 584 fails despite healthy database and missing-session responses, then recovers', () => {
-  const incident = JSON.parse(readFileSync(resolve(__dirname, '../deploy/__fixtures__/incident-584.json'), 'utf8'));
+test.each([580, 584])('incident %i fails despite healthy database and missing-session responses, then recovers', number => {
+  const incident = JSON.parse(readFileSync(resolve(__dirname, `../deploy/__fixtures__/incident-${number}.json`), 'utf8'));
   const failed = smoke('https://fitsy.org', ['--prod-safe'], {
     SMOKE_HEALTH_STATUS: String(incident.smoke.health),
     SMOKE_INVALID_SESSION_STATUS: String(incident.smoke.invalid_session),

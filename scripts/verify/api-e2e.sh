@@ -73,7 +73,7 @@ fi
 
 if [ -n "$FAILS" ]; then
   FIX="check the failing route on $BASE; if this is a fresh deploy, roll back first (scripts/deploy/rollback.sh api), diagnose second"
-  # Incident #584 passed database health while authentication failed closed.
+  # Incidents #580 and #584 passed database health while authentication failed closed.
   # This signature points to readiness inspection, not proof of a missing binding.
   if [ "$H" = "200" ] && [ "$I" = "503" ]; then
     FIX="inspect shared rate-limit readiness and runtime logs on $BASE; verify UPSTASH_REDIS_REST_URL and a writable UPSTASH_REDIS_REST_TOKEN with EVAL access, "
