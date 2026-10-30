@@ -826,18 +826,28 @@ exit "${BUILD_EXIT:-0}"
         self.assertNotIn('private-fixture-password', result.stdout + result.stderr)
 
     def test_unapproved_role_migration_is_held_while_other_migrations_and_build_proceed(self):
+        # #626 stopped the entire Vercel build before any migration or API
+        # compilation. Replay that source with approval absent or invalid;
+        # unrelated deployment must proceed without executing controlled SQL.
+        incident = json.loads((ROOT / 'scripts/deploy/__fixtures__/incident-626.json').read_text())
         role = '20261028120000_pipeline_writer_roles'
         original = {path: path.read_bytes() for path in (self.root / 'prisma/migrations').glob('*/migration.sql')}
         for approval in (None, '', 'a' * 64, 'true'):
             for runtime in (self.env['POSTGRES_PRISMA_URL'], self.env['POSTGRES_PRISMA_URL'].replace('fitsy_app.', 'postgres.')):
                 with self.subTest(approval=approval, role='legacy' if 'postgres.' in runtime else 'fitsy_app'):
-                    result, calls = self.drive(FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval, POSTGRES_PRISMA_URL=runtime,
+                    result, calls = self.drive(VERCEL_GIT_COMMIT_SHA=incident['source'],
+                                               FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval, POSTGRES_PRISMA_URL=runtime,
                                                ROLE_ACTIVATION_EXIT='1' if 'postgres.' in runtime else '0')
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(calls[-1], 'npm run build -w apps/api')
+                    self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout',
+                                             'migration history preflight',
+                                             'npx prisma migrate status --schema prisma/schema.prisma',
+                                             'npx prisma migrate deploy --schema prisma/schema.prisma',
+                                             'runtime migration preflight', 'npm run build -w apps/api'])
                     self.assertEqual(json.loads(self.migrations.read_text()),
                                      ['20261028110000_unrelated_before', '20261028130000_unrelated_after'])
                     self.assertIn('holding ' + role, result.stderr)
+                    self.assertNotIn(incident['build_stderr'], result.stderr)
                     self.assertEqual({path: path.read_bytes() for path in original}, original)
 
     def test_held_widget_migration_withholds_build_until_its_schema_is_applied(self):
