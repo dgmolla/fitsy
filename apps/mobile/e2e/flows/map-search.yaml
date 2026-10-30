@@ -90,7 +90,9 @@ env:
 - assertVisible:
     id: discovery-search
     text: pizza
-- assertVisible: "40g protein"
+- assertVisible:
+    id: map-filter-protein
+    text: "Edit protein grams, 40"
 - tapOn:
     id: map-pin-0
 - copyTextFrom:
@@ -104,7 +106,9 @@ env:
 - inputText: "45"
 - tapOn:
     id: meal-filter-apply
-- assertVisible: "45g protein"
+- assertVisible:
+    id: map-filter-protein
+    text: "Edit protein grams, 45"
 - extendedWaitUntil:
     visible:
       id: shuffle-button
@@ -130,7 +134,9 @@ env:
 - assertVisible:
     id: discovery-search
     text: pizza
-- assertVisible: "45g protein"
+- assertVisible:
+    id: map-filter-protein
+    text: "Edit protein grams, 45"
 - assertVisible: "Location: DTLA"
 - takeScreenshot: map-search-shuffle
 - tapOn:

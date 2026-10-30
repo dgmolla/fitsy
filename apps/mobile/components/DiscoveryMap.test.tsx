@@ -122,25 +122,37 @@ it('opens a photo pin preview, then returns from the real detail using the saved
 });
 
 it('keeps query, targets and results when switching and applies the same filter editor and shuffle', async () => {
+  type Selector = string | { id: string; text: string };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/map-search.yaml'), 'utf8')) as [unknown, { assertVisible?: Selector }[]];
+  const proteinAssertions = commands.map(step => step.assertVisible).filter((selector): selector is Selector =>
+    typeof selector === 'string' ? selector.endsWith('g protein') : selector?.id === 'map-filter-protein');
+  expect(proteinAssertions).toHaveLength(3);
   const screen = open();
+  const assertSavedProtein = (checkpoint: number) => {
+    const selector = proteinAssertions[checkpoint];
+    // iOS exposes the Pressable's explicit label, not the nested visual Text.
+    const chip = screen.getByLabelText(typeof selector === 'string' ? selector : selector.text);
+    expect(chip.props.accessibilityRole).toBe('button');
+    if (typeof selector !== 'string') expect(chip).toBe(screen.getByTestId(selector.id));
+  };
   await screen.findByTestId('map-pin-0');
+  await act(async () => fireEvent.changeText(screen.getByTestId('discovery-search'), 'pizza'));
+  await waitFor(() => expect(searchParams()).toMatchObject({ q: 'pizza' }));
   const before = searchRequests().length;
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('discovery-hero');
-  expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
+  expect(screen.getByTestId('discovery-search').props.value).toBe('pizza');
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('map-pin-0');
   expect(searchRequests()).toHaveLength(before);
-  await act(async () => fireEvent.changeText(screen.getByTestId('discovery-search'), 'pizza'));
-  await screen.findByTestId('map-pin-0');
-  expect(searchParams()).toMatchObject({ q: 'pizza' });
+  assertSavedProtein(0);
   await act(async () => fireEvent.press(screen.getByTestId('preview-edit-targets')));
-  await act(async () => fireEvent.changeText(screen.getByLabelText('Protein grams'), '55'));
+  await act(async () => fireEvent.changeText(screen.getByLabelText('Protein grams'), '45'));
   await act(async () => fireEvent.press(screen.getByTestId('meal-filter-apply')));
   await screen.findByTestId('map-pin-0');
-  expect(screen.getByText('55g protein')).toBeTruthy();
+  assertSavedProtein(1);
   const filtered = Object.fromEntries(searchRequests().at(-1)!.searchParams);
-  expect(filtered).toMatchObject({ q: 'pizza', ...values, protein: '55', lat: '34.04', lng: '-118.24' });
+  expect(filtered).toMatchObject({ q: 'pizza', ...values, protein: '45', lat: '34.04', lng: '-118.24' });
   rows = restaurants.map(row => ({ ...row, id: `${row.id}-new`, name: `${row.name} new` }));
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
   await waitFor(() => expect(screen.getByTestId('map-pin-0').props.accessibilityLabel).toBe('Flor do Ave new · Portuguese'));
@@ -148,6 +160,7 @@ it('keeps query, targets and results when switching and applies the same filter 
     ...filtered, shuffle: '1', excludeRestaurantIds: restaurants.map(row => row.id).join(','),
   });
   expect(searchParams().seed).toBeTruthy();
+  assertSavedProtein(2);
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('discovery-hero');
   expect(screen.getByTestId('discovery-search').props.value).toBe('pizza');

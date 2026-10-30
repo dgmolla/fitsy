@@ -126,6 +126,8 @@ The first flow opens a pin, enters the restaurant menu, searches pizza, edits me
 The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
 Both map journeys submit the single-line search field with `pressKey: Enter`, which uses its native Search return key to dismiss the keyboard.
 The detail round trip taps `restaurant-back`; generic Maestro `back` does not activate the iOS screen's custom Back control.
+Map filter assertions require the chip ID and its exact accessibility label, such as `map-filter-protein` with `Edit protein grams, 40`.
+An explicit label hides the nested `40g protein` text from iOS accessibility; `DiscoveryMap.test.tsx` exercises the saved selectors against the rendered controls after switching views, editing targets and shuffling.
 `helpers/map-search-setup.yaml` shares the authenticated API preflight and bounded startup reconnection.
 Maestro passes `launchApp.permissions` values to iOS without expanding variables, so this helper selects literal `inuse` or `never` launches through `runFlow.when.true`.
 The installed iOS location driver rejects generic `allow`/`deny`; `inuse` grants foreground location and `never` exercises denial.
