@@ -64,7 +64,7 @@ function LockedDishTeaser({ variant }: { variant: 'hero' | 'card' }) {
 // `opening` guards a fast double-tap from pushing two detail screens while
 // the (cached, usually instant) flag read is still a microtask away.
 let opening = false;
-async function openRestaurantOrPaywall(
+export async function openRestaurantOrPaywall(
   locked: boolean,
   navigate: () => void,
   unlocking?: () => void,

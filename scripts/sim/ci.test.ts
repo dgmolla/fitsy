@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { runInNewContext } from 'node:vm';
 import { copyProductFlowControls } from '../verify/product-flow-fixture';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
@@ -53,6 +54,61 @@ test('menu startup retries only observations and authenticates once before readi
   const [, signIn] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/helpers/discovery-signin.yaml'), 'utf8')) as [unknown, Record<string, unknown>[]];
   expect(signIn.some(step => step.retry || step.launchApp || step.openLink)).toBe(false);
   expect(commands[launch + 2]).toEqual({ openLink: "${'fitsy://restaurant/' + output.seed.id}" });
+});
+
+test.each([
+  'map-search', 'map-search-location-denied',
+])('%s submits search through the iOS return key before requiring a result pin', flow => {
+  type Step = string | {
+    inputText?: string;
+    pressKey?: string;
+    extendedWaitUntil?: { visible: { id: string }; timeout: number };
+  };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, Step[]];
+  const search = commands.findIndex(step => typeof step === 'object' && step.inputText === 'pizza');
+  expect(search).toBeGreaterThan(-1);
+  // Use the input's native Search action instead of heuristic iOS keyboard
+  // dismissal, and keep the result gate after submission.
+  expect(commands[search + 1]).toEqual({ pressKey: 'Enter' });
+  expect(commands[search + 2]).toEqual({
+    extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 },
+  });
+});
+
+test.each([
+  ['map-search', 'inuse'],
+  ['map-search-location-denied', 'never'],
+])('%s launches once with a literal %s location permission before observing readiness', (flow, permission) => {
+  type Step = {
+    launchApp?: object;
+    assertTrue?: string | object;
+    runFlow?: { file?: string; env?: Record<string, string>; when?: { true: string }; commands: Step[] };
+    retry?: { maxRetries: number; commands: object[] };
+  };
+  const read = (path: string) => loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e', path), 'utf8'))[1] as Step[];
+  const setup = read(`flows/${flow}.yaml`)[0]?.runFlow;
+  if (!setup?.file) throw new Error('Map journey must use the shared setup');
+  expect(setup.env?.LOCATION_PERMISSION).toBe(permission);
+  const commands = read(join('flows', setup.file));
+  const evaluate = (expression: string) => runInNewContext(expression.slice(2, -1), setup.env);
+  const selected = commands.flatMap(step => step.runFlow?.when?.true
+    ? evaluate(step.runFlow.when.true) ? step.runFlow.commands : []
+    : [step]);
+  // Maestro's iOS driver accepts inuse/never for location, not generic allow/deny.
+  // launchApp permission values reach that driver without variable expansion.
+  expect(selected.filter(step => step.launchApp)).toEqual([{
+    launchApp: { clearState: true, clearKeychain: true, permissions: { location: permission } },
+  }]);
+  const launch = selected.findIndex(step => step.launchApp);
+  const readiness = selected[launch + 1]?.retry;
+  expect(readiness?.maxRetries).toBe(2);
+  expect(readiness?.commands).toEqual([
+    { runFlow: { when: { visible: 'Development Build' }, commands: [
+      { tapOn: '^http://(localhost|127\\.0\\.0\\.1):[0-9]+$' },
+    ] } },
+    { waitForAnimationToEnd: { timeout: 10000 } },
+    { extendedWaitUntil: { visible: { id: 'welcome-start' }, timeout: 30000 } },
+  ]);
 });
 
 test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-energy-sync', 'menu-load-recovery',

@@ -117,6 +117,33 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
+The `map-search` and `map-search-location-denied` journeys require an iOS Debug binary rebuilt with the Expo-compatible `react-native-maps` dependency.
+An OTA cannot add this native module to an older binary.
+Both flows use the existing `entitled-dev` fixture and real search/shuffle API with no purchases or remote flag changes.
+The boolean PostHog `map-search` flag enables the experiment only in development iOS builds; `mapDebug=1` is the local walkthrough opt-in.
+Production builds and Android ignore both opt-ins and keep the list.
+The first flow opens a pin, enters the restaurant menu, searches pizza, edits meal targets, switches map/list without losing state, shuffles, and clears search.
+The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
+Both map journeys submit the single-line search field with `pressKey: Enter`, which uses its native Search return key to dismiss the keyboard.
+The detail round trip taps `restaurant-back`; generic Maestro `back` does not activate the iOS screen's custom Back control.
+Map filter assertions require the chip ID and its exact accessibility label, such as `map-filter-protein` with `Edit protein grams, 40`.
+An explicit label hides the nested `40g protein` text from iOS accessibility; `DiscoveryMap.test.tsx` exercises the saved selectors against the rendered controls after switching views, editing targets and shuffling.
+Dense photo pins overlap, and MapKit can dispatch Maestro's coordinate tap to a neighboring pin despite the requested accessibility ID.
+Both journeys retain pin-to-preview coverage; `map-search` compares toggle and shuffle results through `helpers/map-first-spot.yaml`, which closes any preview and uses the existing carousel to require the first result.
+The real-screen regression replays that helper with different native pin hit targets and a previously selected restaurant, requiring the same first result after toggling and a new one after shuffling.
+Ranked search can return pizza restaurants whose meals do not satisfy Shuffle's close-fit nutrition filter.
+After checking pizza and the 45g protein edit, the positive Shuffle phase clears the craving and restores the exact 600 kcal, 40g protein, 60g carbs and 20g fat context verified by `shuffle-subscriber.mjs`.
+It still requires a changed first result and preserved area and targets; a disabled Shuffle button after a successful empty response is expected behavior.
+`DiscoveryMap.test.tsx` replays those saved edits against a boundary with no qualified pizza results and separately verifies empty-shuffle state and Clear search recovery.
+`helpers/map-search-setup.yaml` shares the authenticated API preflight and bounded startup reconnection.
+Maestro passes `launchApp.permissions` values to iOS without expanding variables, so this helper selects literal `inuse` or `never` launches through `runFlow.when.true`.
+The installed iOS location driver rejects generic `allow`/`deny`; `inuse` grants foreground location and `never` exercises denial.
+Keep both permission scenarios covered by `scripts/sim/ci.test.ts` before host replay.
+The planner and product acceptance entrypoint consume both saved flows; the native dependency change requires the full selection.
+Run `lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node scripts/sim/ci.mjs --scope=full --udid=<owned-UDID>` with the documented host fixture configuration.
+If the managed worker cannot open that shared lock, stop native execution and preserve the exact denial for the existing host owner.
+Do not substitute another lock or drive the device through another tool; YAML parsing and component tests do not establish a native pass.
+
 For syntax-only checks in a restricted worker, Maestro may fail while changing permissions on its shared `~/.maestro/deps` cache.
 The installed CLI supports `MAESTRO_OPTS="-Duser.home=$PWD/.evidence/maestro-runtime" maestro check-syntax apps/mobile/e2e/flows/shuffle.yaml` to put its Java runtime cache inside the owned checkout without changing `HOME` or shared binaries.
 This validates the saved YAML with Maestro's parser; it does not grant CoreSimulator access or establish native acceptance.
