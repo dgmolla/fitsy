@@ -123,11 +123,41 @@ it('opens a photo pin preview, then returns from the real detail using the saved
 
 it('keeps query, targets and results when switching and applies the same filter editor and shuffle', async () => {
   type Selector = string | { id: string; text: string };
-  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/map-search.yaml'), 'utf8')) as [unknown, { assertVisible?: Selector }[]];
+  type Step = {
+    tapOn?: { id: string };
+    copyTextFrom?: { id: string };
+    assertVisible?: Selector;
+    runFlow?: string | { when: { visible: { id: string } }; commands: Step[] };
+  };
+  const readCommands = (path: string) => (loadAll(readFileSync(path, 'utf8')) as [unknown, Step[]])[1];
+  const flowDirectory = resolve(__dirname, '../e2e/flows');
+  const commands = readCommands(resolve(flowDirectory, 'map-search.yaml'));
+  const selections = commands.flatMap((step, index) => step.copyTextFrom?.id === 'map-preview-open' ? [commands[index - 1]] : []);
+  expect(selections).toHaveLength(4);
   const proteinAssertions = commands.map(step => step.assertVisible).filter((selector): selector is Selector =>
     typeof selector === 'string' ? selector.endsWith('g protein') : selector?.id === 'map-filter-protein');
   expect(proteinAssertions).toHaveLength(3);
   const screen = open();
+  const selectSavedSpot = async (checkpoint: number, nativeHit: number) => {
+    async function replay(steps: Step[]) {
+      for (const step of steps) {
+        if (typeof step.runFlow === 'string') await replay(readCommands(resolve(flowDirectory, step.runFlow)));
+        else if (step.runFlow) {
+          if (screen.queryByTestId(step.runFlow.when.visible.id)) await replay(step.runFlow.commands);
+        } else if (step.tapOn) {
+          // MapKit dispatches a coordinate tap to the frontmost overlapping pin,
+          // even when Maestro located a different annotation's accessibility ID.
+          const id = step.tapOn.id.startsWith('map-pin-') ? `map-pin-${nativeHit}` : step.tapOn.id;
+          await act(async () => fireEvent.press(screen.getByTestId(id)));
+        } else if (step.assertVisible && typeof step.assertVisible !== 'string') {
+          expect(screen.getByTestId(step.assertVisible.id)).toBeTruthy();
+          if (step.assertVisible.text) expect(screen.getByText(new RegExp(step.assertVisible.text))).toBeTruthy();
+        } else throw new Error('Unexpected saved map selection command');
+      }
+    }
+    await replay([selections[checkpoint]]);
+    return screen.getByTestId('map-preview-open').props.accessibilityLabel;
+  };
   const assertSavedProtein = (checkpoint: number) => {
     const selector = proteinAssertions[checkpoint];
     // iOS exposes the Pressable's explicit label, not the nested visual Text.
@@ -138,6 +168,11 @@ it('keeps query, targets and results when switching and applies the same filter 
   await screen.findByTestId('map-pin-0');
   await act(async () => fireEvent.changeText(screen.getByTestId('discovery-search'), 'pizza'));
   await waitFor(() => expect(searchParams()).toMatchObject({ q: 'pizza' }));
+  // The real failure selected result 17 after tapping map-pin-0.
+  // Exercise different native hit targets while keeping the actual results fixed.
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-3')));
+  const beforeToggle = await selectSavedSpot(0, 2);
+  expect(beforeToggle).toBe('Open Flor do Ave · Portuguese');
   const before = searchRequests().length;
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('discovery-hero');
@@ -145,6 +180,7 @@ it('keeps query, targets and results when switching and applies the same filter 
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('map-pin-0');
   expect(searchRequests()).toHaveLength(before);
+  expect(await selectSavedSpot(1, 1)).toBe(beforeToggle);
   assertSavedProtein(0);
   await act(async () => fireEvent.press(screen.getByTestId('preview-edit-targets')));
   await act(async () => fireEvent.changeText(screen.getByLabelText('Protein grams'), '45'));
@@ -153,6 +189,9 @@ it('keeps query, targets and results when switching and applies the same filter 
   assertSavedProtein(1);
   const filtered = Object.fromEntries(searchRequests().at(-1)!.searchParams);
   expect(filtered).toMatchObject({ q: 'pizza', ...values, protein: '45', lat: '34.04', lng: '-118.24' });
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
+  const beforeShuffle = await selectSavedSpot(2, 3);
+  expect(beforeShuffle).toBe('Open Flor do Ave · Portuguese');
   rows = restaurants.map(row => ({ ...row, id: `${row.id}-new`, name: `${row.name} new` }));
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
   await waitFor(() => expect(screen.getByTestId('map-pin-0').props.accessibilityLabel).toBe('Flor do Ave new · Portuguese'));
@@ -160,6 +199,8 @@ it('keeps query, targets and results when switching and applies the same filter 
     ...filtered, shuffle: '1', excludeRestaurantIds: restaurants.map(row => row.id).join(','),
   });
   expect(searchParams().seed).toBeTruthy();
+  expect(await selectSavedSpot(3, 2)).toBe('Open Flor do Ave new · Portuguese');
+  expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).not.toBe(beforeShuffle);
   assertSavedProtein(2);
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('discovery-hero');

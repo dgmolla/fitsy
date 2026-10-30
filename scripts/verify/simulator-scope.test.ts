@@ -41,6 +41,7 @@ test.each([
   ['apps/mobile/lib/useMapSearchFlag.ts', ['map-search', 'map-search-location-denied']],
   ['apps/mobile/lib/discoveryMap.ts', ['map-search', 'map-search-location-denied']],
   ['apps/mobile/e2e/helpers/map-search-setup.yaml', ['map-search', 'map-search-location-denied']],
+  ['apps/mobile/e2e/helpers/map-first-spot.yaml', ['map-search', 'map-search-location-denied']],
   ['apps/mobile/e2e/flows/map-search.yaml', ['map-search']],
   ['apps/mobile/e2e/flows/map-search-location-denied.yaml', ['map-search-location-denied']],
   ['apps/mobile/app/notification-settings.tsx', ['reminders']],

@@ -69,8 +69,7 @@ env:
     visible:
       id: map-pin-0
     timeout: 30000
-- tapOn:
-    id: map-pin-0
+- runFlow: ../helpers/map-first-spot.yaml
 - copyTextFrom:
     id: map-preview-open
 - evalScript: ${output.mapBeforeToggle = maestro.copiedText}
@@ -93,8 +92,7 @@ env:
 - assertVisible:
     id: map-filter-protein
     text: "Edit protein grams, 40"
-- tapOn:
-    id: map-pin-0
+- runFlow: ../helpers/map-first-spot.yaml
 - copyTextFrom:
     id: map-preview-open
 - assertTrue: ${maestro.copiedText === output.mapBeforeToggle}
@@ -114,8 +112,7 @@ env:
       id: shuffle-button
       enabled: true
     timeout: 30000
-- tapOn:
-    id: map-pin-0
+- runFlow: ../helpers/map-first-spot.yaml
 - copyTextFrom:
     id: map-preview-open
 - evalScript: ${output.mapBeforeShuffle = maestro.copiedText}
@@ -126,8 +123,7 @@ env:
       id: shuffle-button
       enabled: true
     timeout: 30000
-- tapOn:
-    id: map-pin-0
+- runFlow: ../helpers/map-first-spot.yaml
 - copyTextFrom:
     id: map-preview-open
 - assertTrue: ${maestro.copiedText !== output.mapBeforeShuffle}

@@ -1,0 +1,19 @@
+# MapKit hit-tests screen coordinates, so overlapping photo pins can select a
+# neighbor despite the requested accessibility ID. Use the existing carousel
+# when comparing result identity; the journeys separately test pin -> preview.
+appId: com.fitsy.mobile
+---
+- runFlow:
+    when:
+      visible:
+        id: map-preview-close
+    commands:
+      - tapOn:
+          id: map-preview-close
+- tapOn:
+    id: map-next-spot
+- assertVisible:
+    id: map-page
+    text: "^1 / [1-9][0-9]*$"
+- assertVisible:
+    id: map-preview-open

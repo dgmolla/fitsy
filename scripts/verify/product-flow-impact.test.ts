@@ -37,6 +37,7 @@ test.each([
   ['apps/mobile/e2e/helpers/shuffle-subscriber.mjs', ['map-search', 'shuffle'], ['billing', 'changed-journey', 'discovery']],
   ['apps/mobile/lib/useMapSearchFlag.ts', ['map-search', 'map-search-location-denied'], ['billing', 'changed-journey', 'discovery']],
   ['apps/mobile/e2e/helpers/map-search-setup.yaml', ['map-search', 'map-search-location-denied'], ['billing', 'changed-journey', 'discovery']],
+  ['apps/mobile/e2e/helpers/map-first-spot.yaml', ['map-search', 'map-search-location-denied'], ['billing', 'changed-journey', 'discovery']],
 ])('local, final-run and publication callers share affected journeys for %s', (path, flows, categories) => {
   copyProductFlowControls(directory);
   symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));

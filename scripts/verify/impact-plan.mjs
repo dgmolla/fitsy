@@ -81,7 +81,7 @@ const screenFlows = [
     /^(shuffle|map-search)$/, ['billing', 'discovery', 'changed-journey']],
   [/^apps\/api\/lib\/shuffleSearch\./,
     /^(shuffle|map-search)$/, ['billing', 'discovery', 'changed-journey']],
-  [/^apps\/mobile\/(components\/(DiscoveryMap|DiscoveryViewToggle)\.|lib\/(discoveryMap|useMapSearchFlag)\.|e2e\/helpers\/map-search-setup\.yaml$)/,
+  [/^apps\/mobile\/(components\/(DiscoveryMap|DiscoveryViewToggle)\.|lib\/(discoveryMap|useMapSearchFlag)\.|e2e\/helpers\/map-(search-setup|first-spot)\.yaml$)/,
     /^map-search(-location-denied)?$/, ['billing', 'discovery', 'changed-journey']],
   [/^apps\/mobile\/(app\/\(tabs\)\/saved\.|lib\/menuBookmarks\.)/, /^log-meal$/, ['discovery']],
   [/^apps\/mobile\/(app\/restaurant\/|components\/MenuItemCard\.|lib\/(menuFilters|menuLoadState)\.)/,

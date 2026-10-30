@@ -128,6 +128,9 @@ Both map journeys submit the single-line search field with `pressKey: Enter`, wh
 The detail round trip taps `restaurant-back`; generic Maestro `back` does not activate the iOS screen's custom Back control.
 Map filter assertions require the chip ID and its exact accessibility label, such as `map-filter-protein` with `Edit protein grams, 40`.
 An explicit label hides the nested `40g protein` text from iOS accessibility; `DiscoveryMap.test.tsx` exercises the saved selectors against the rendered controls after switching views, editing targets and shuffling.
+Dense photo pins overlap, and MapKit can dispatch Maestro's coordinate tap to a neighboring pin despite the requested accessibility ID.
+Both journeys retain pin-to-preview coverage; `map-search` compares toggle and shuffle results through `helpers/map-first-spot.yaml`, which closes any preview and uses the existing carousel to require the first result.
+The real-screen regression replays that helper with different native pin hit targets and a previously selected restaurant, requiring the same first result after toggling and a new one after shuffling.
 `helpers/map-search-setup.yaml` shares the authenticated API preflight and bounded startup reconnection.
 Maestro passes `launchApp.permissions` values to iOS without expanding variables, so this helper selects literal `inuse` or `never` launches through `runFlow.when.true`.
 The installed iOS location driver rejects generic `allow`/`deny`; `inuse` grants foreground location and `never` exercises denial.
