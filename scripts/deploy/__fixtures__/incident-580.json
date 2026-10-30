@@ -1,0 +1,16 @@
+{
+  "source": "27b7bfc3cd2b61e74c967a03bad85c98e1492466",
+  "deploy_run": "https://github.com/dgmolla/fitsy/actions/runs/40566188200",
+  "smoke_logs": "https://github.com/dgmolla/fitsy/actions/runs/40566188200/job/122408065380",
+  "deployment_id": 7367496167,
+  "deployment_url": "https://fitsy-4spcs31z1-dawits-projects-74b6e00f.vercel.app",
+  "build_logs": "https://vercel.com/dawits-projects-74b6e00f/fitsy-api/DN5PyHWKKRSEKcP1or4H2WzwV5Vn",
+  "build_state": "Ready",
+  "build_observations": ["Database schema is up to date!", "Deployment completed"],
+  "smoke": {
+    "health": 200,
+    "missing_session": 401,
+    "invalid_session": 503,
+    "summary": "invalid-session=503"
+  }
+}
