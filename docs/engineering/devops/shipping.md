@@ -287,7 +287,9 @@ Use the existing release tooling and documentation:
 - API/landing: inspect the appropriate Vercel deployment for the merged commit; these are separate projects.
 - Mobile JS: `scripts/deploy/ota.sh` and the iOS release runbook own the production OTA procedure.
   Production exports must use the production environment and valid RevenueCat/Supabase configuration.
-  Native dependency/configuration changes require the appropriate binary build; an OTA cannot supply native changes.
+  The [Expo fingerprint and channel contract](ios-ota-baseline.md) requires a verified matching native baseline and runtime.
+  JS, styles and bundle-only assets can use OTA; native modules, permissions, plugins, icon/splash, Expo SDK and widget/Swift changes require a verified binary build.
+  Before App Store launch, automatic OTA moves to `testflight`; App Store production OTA requires Dawit's manual main Deploy dispatch and protected release approval.
 - Database: use the documented migration and rollback process; a successful Vercel deployment does not prove a migration ran.
 - Rollback: `scripts/deploy/rollback.sh` plus the relevant deployment runbook; record the previous deployment/update and data rollback evidence before publishing risky changes.
 - Documentation-only work has no mobile/API deployment requirement.
