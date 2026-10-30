@@ -1,0 +1,48 @@
+# Permission denial must retain a usable city picker, search, and view toggle.
+appId: com.fitsy.mobile
+tags: [billing, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
+---
+- runFlow:
+    file: ../helpers/map-search-setup.yaml
+    env:
+      LOCATION_PERMISSION: deny
+- extendedWaitUntil:
+    visible:
+      id: map-location-fallback
+    timeout: 15000
+- assertVisible: "Location: Silver Lake, LA"
+- takeScreenshot: map-search-location-denied
+- tapOn:
+    id: discovery-location
+- tapOn: "Search near Hollywood"
+- assertVisible: "Location: Hollywood"
+- assertNotVisible:
+    id: map-location-fallback
+- tapOn:
+    id: discovery-search
+- inputText: pizza
+- hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: map-pin-0
+    timeout: 30000
+- tapOn:
+    id: map-pin-0
+- assertVisible:
+    id: map-preview-open
+- tapOn:
+    id: discovery-view-toggle
+- assertVisible:
+    id: discovery-hero
+- assertVisible:
+    id: discovery-search
+    text: pizza
+- tapOn:
+    id: discovery-view-toggle
+- assertVisible:
+    id: discovery-map
+- assertVisible: "Location: Hollywood"
+- takeScreenshot: map-search-manual-area

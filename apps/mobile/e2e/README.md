@@ -117,6 +117,19 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
+The `map-search` and `map-search-location-denied` journeys require an iOS Debug binary rebuilt with the Expo-compatible `react-native-maps` dependency.
+An OTA cannot add this native module to an older binary.
+Both flows use the existing `entitled-dev` fixture and real search/shuffle API with no purchases or remote flag changes.
+The boolean PostHog `map-search` flag enables the experiment only in development iOS builds; `mapDebug=1` is the local walkthrough opt-in.
+Production builds and Android ignore both opt-ins and keep the list.
+The first flow opens a pin, enters the restaurant menu, searches pizza, edits meal targets, switches map/list without losing state, shuffles, and clears search.
+The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
+`helpers/map-search-setup.yaml` shares the authenticated API preflight and bounded startup reconnection.
+The planner and product acceptance entrypoint consume both saved flows; the native dependency change requires the full selection.
+Run `lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node scripts/sim/ci.mjs --scope=full --udid=<owned-UDID>` with the documented host fixture configuration.
+If the managed worker cannot open that shared lock, stop native execution and preserve the exact denial for the existing host owner.
+Do not substitute another lock or drive the device through another tool; YAML parsing and component tests do not establish a native pass.
+
 For syntax-only checks in a restricted worker, Maestro may fail while changing permissions on its shared `~/.maestro/deps` cache.
 The installed CLI supports `MAESTRO_OPTS="-Duser.home=$PWD/.evidence/maestro-runtime" maestro check-syntax apps/mobile/e2e/flows/shuffle.yaml` to put its Java runtime cache inside the owned checkout without changing `HOME` or shared binaries.
 This validates the saved YAML with Maestro's parser; it does not grant CoreSimulator access or establish native acceptance.

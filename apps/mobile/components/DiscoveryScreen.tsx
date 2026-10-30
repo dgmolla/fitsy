@@ -1,8 +1,8 @@
-import React, { useCallback, useReducer, useRef } from 'react';
+import React, { Suspense, useCallback, useReducer, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WelcomeNav } from './WelcomeNav';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DiscoveryLoading } from './DiscoveryLoading';
 import { LockedUnlockCard } from './LockedUnlockCard';
@@ -18,14 +18,23 @@ import { s } from './DiscoveryScreen.styles';
 import { Masthead, MacroStrip, SearchBar } from './DiscoveryChrome';
 import { HeroCard, RestaurantSection } from './DiscoveryCards';
 import { ShuffleButton } from './ShuffleButton';
+import { DiscoveryViewToggle } from './DiscoveryViewToggle';
+import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
+// Keep the native map module out of the disabled experiment's execution path.
+const DiscoveryMap = React.lazy(async () => require('./DiscoveryMap') as typeof import('./DiscoveryMap'));
 const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { onboardingPreview?: boolean; onPreviewBack?: () => void }) {
+  const { mapDebug } = useLocalSearchParams<{ mapDebug?: string }>();
+  const mapEnabled = useMapSearchFlag(mapDebug === '1') && !onboardingPreview;
+  const [view, setView] = useState<'map' | 'list'>('map');
+  const showMap = mapEnabled && view === 'map';
+  const discovery = useDiscoveryState({ onboardingPreview });
   const { navigation, isOnboardingPreview, tried, inputs, filterMode, query, setQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible, startTour,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown, cancelTourTyping, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
-    unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached, canShuffle, handleShuffle } = useDiscoveryState({ onboardingPreview });
+    unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached, canShuffle, handleShuffle } = discovery;
   const listRef = useRef<FlatList<(typeof results)[number]>>(null);
   const scrollOffset = useRef(0);
   const viewportRef = useRef<View>(null);
@@ -161,11 +170,15 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel, isOnboardingPreview, unlockPreview, loading, error, outOfArea, tourMoreRef]);
   return (
     <SafeAreaView
-      edges={isOnboardingPreview ? ['top', 'right', 'bottom', 'left'] : ['top', 'right', 'left']}
+      edges={showMap ? [] : isOnboardingPreview ? ['top', 'right', 'bottom', 'left'] : ['top', 'right', 'left']}
       style={{ flex: 1, backgroundColor: EDITORIAL.cream }}
     >
+      {showMap ? <Suspense fallback={<ActivityIndicator accessibilityLabel="Loading map" />}>
+        <DiscoveryMap discovery={discovery} onShowList={() => setView('list')} />
+      </Suspense> : <>
       {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined)} />}
       <Masthead preview={isOnboardingPreview} locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
+      {mapEnabled && <View style={{ paddingHorizontal: 16 }}><DiscoveryViewToggle map={false} onPress={() => setView('map')} /></View>}
       {!loading && error !== null && (
         <View style={s.errorBanner}>
           <Text style={s.errorText}>{error}</Text>
@@ -212,6 +225,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
         doneLabel="Find my meal"
         onStepShown={(step) => { tourStepShown(step.key); trackOnboardingScreenView(`preview_tour_${step.key}`); }}
       />
+      </>}
       <FilterPopup
         visible={filterVisible}
         values={inputs}

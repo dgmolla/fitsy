@@ -49,7 +49,7 @@ beforeEach(async () => {
   locked = false;
   flag = true;
   listeners = new Set();
-  jest.mocked(PostHog).mockImplementation(() => ({ capture() {}, identify() {}, getFeatureFlag: () => flag,
+  jest.mocked(PostHog).mockImplementation(() => ({ capture() {}, identify() {}, getFeatureFlag: (name: string) => name === 'shuffle' ? flag : false,
     onFeatureFlags: (callback: () => void) => { listeners.add(callback); return () => listeners.delete(callback); },
   }) as unknown as PostHog);
   searchResponse = async () => response({ data: rows, meta: { locked, total: rows.length, limit: 20, nextCursor: null } });

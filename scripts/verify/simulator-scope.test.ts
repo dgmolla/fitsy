@@ -31,13 +31,18 @@ test.each([
 });
 
 test.each([
-  ['apps/mobile/app/restaurant/[id].tsx', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'shuffle']],
+  ['apps/mobile/app/restaurant/[id].tsx', ['chain-menu-serving', 'log-meal', 'map-search', 'menu-load-recovery', 'menu-macro-serving', 'shuffle']],
   ['apps/mobile/app/widget.tsx', ['widget-setup']],
-  ['apps/mobile/lib/menuFilters.ts', ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'shuffle']],
-  ['apps/api/lib/shuffleSearch.ts', ['shuffle']],
-  ['apps/mobile/lib/useShuffleFlag.ts', ['shuffle']],
+  ['apps/mobile/lib/menuFilters.ts', ['chain-menu-serving', 'log-meal', 'map-search', 'menu-load-recovery', 'menu-macro-serving', 'shuffle']],
+  ['apps/api/lib/shuffleSearch.ts', ['map-search', 'shuffle']],
+  ['apps/mobile/lib/useShuffleFlag.ts', ['map-search', 'shuffle']],
   ['apps/mobile/e2e/flows/shuffle.yaml', ['shuffle']],
-  ['apps/mobile/e2e/helpers/shuffle-subscriber.mjs', ['shuffle']],
+  ['apps/mobile/e2e/helpers/shuffle-subscriber.mjs', ['map-search', 'shuffle']],
+  ['apps/mobile/lib/useMapSearchFlag.ts', ['map-search', 'map-search-location-denied']],
+  ['apps/mobile/lib/discoveryMap.ts', ['map-search', 'map-search-location-denied']],
+  ['apps/mobile/e2e/helpers/map-search-setup.yaml', ['map-search', 'map-search-location-denied']],
+  ['apps/mobile/e2e/flows/map-search.yaml', ['map-search']],
+  ['apps/mobile/e2e/flows/map-search-location-denied.yaml', ['map-search-location-denied']],
   ['apps/mobile/app/notification-settings.tsx', ['reminders']],
   ['apps/mobile/lib/notificationSchedule.ts', ['reminders']],
   ['apps/mobile/app/macro-setup.tsx', ['onboarding-assisted-targets']],
@@ -80,7 +85,7 @@ test.each([
 test('multiple affected areas union and deduplicate flows independently of path order', () => {
   const paths = ['apps/mobile/lib/menuFilters.ts', 'apps/mobile/app/notification-settings.tsx',
     'apps/mobile/app/restaurant/[id].tsx', 'docs/guide.md'];
-  const expected = ['chain-menu-serving', 'log-meal', 'menu-load-recovery', 'menu-macro-serving', 'reminders', 'shuffle'];
+  const expected = ['chain-menu-serving', 'log-meal', 'map-search', 'menu-load-recovery', 'menu-macro-serving', 'reminders', 'shuffle'];
   expect(select(paths).flows).toEqual(expected);
   expect(select(paths.reverse()).flows).toEqual(expected);
 });

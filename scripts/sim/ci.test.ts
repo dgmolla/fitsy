@@ -58,7 +58,7 @@ test('menu startup retries only observations and authenticates once before readi
 test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-energy-sync', 'menu-load-recovery',
   'menu-macro-serving', 'onboarding-assisted-targets', 'onboarding-guided-preview', 'onboarding-out-of-area',
   'onboarding-target-ranked-search', 'onboarding-returning-preview', 'onboarding-search-highlight', 'paywall-access', 'paywall-live-terms', 'shuffle', 'widget-setup']
-  .map(flow => `flows/${flow}`).concat('helpers/mixed-trial-visual'))('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
+  .map(flow => `flows/${flow}`).concat('helpers/mixed-trial-visual', 'helpers/map-search-setup'))('%s reconnects a cleared dev client only to local Metro before asserting guest readiness', flow => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/${flow}.yaml`), 'utf8')) as [unknown, {
     launchApp?: object;
     retry?: { maxRetries: number; commands: {
@@ -70,6 +70,7 @@ test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-
   }[]];
   const launch = commands.findIndex(step => step.launchApp);
   expect(commands[launch]?.launchApp).toEqual({ clearState: true, clearKeychain: true,
+    ...(flow === 'helpers/map-search-setup' ? { permissions: { location: '${LOCATION_PERMISSION}' } } : {}),
     ...(['flows/onboarding-search-highlight', 'flows/onboarding-guided-preview'].includes(flow) ? { permissions: { notifications: 'deny' } } : {}) });
   const startup = commands[launch + 1]?.retry;
   expect(startup).toBeDefined();
