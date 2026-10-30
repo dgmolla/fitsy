@@ -1,0 +1,6 @@
+{
+  "source": "63a36dfb787968141e42630f0bd11aad70806102",
+  "deploy_run": "https://github.com/dgmolla/fitsy/actions/runs/40753740475",
+  "build_logs": "https://vercel.com/dawits-projects-74b6e00f/fitsy-api/2DcDdaK24gTAb4wro7NMziFpLFEA",
+  "prisma_stderr": "Error: ERROR: current transaction is aborted, commands ignored until end of transaction block\n   0: schema_commands::commands::apply_migrations::Applying migration\n           with migration_name=\"20261028130000_hex_jobs\"\n             at schema-engine/commands/src/commands/apply_migrations.rs:95\n   1: schema_core::state::ApplyMigrations\n             at schema-engine/core/src/state.rs:260\n"
+}
