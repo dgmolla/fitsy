@@ -50,6 +50,7 @@ class Database {
   }
   async $executeRaw(strings, ...values) {
     const sql = strings.join('?');
+    if (sql.includes('INSERT INTO public.pipeline_pdf_jobs')) record({ type: 'pdf_enqueue', brandId: values[0] });
     if (sql.includes('INSERT INTO "MacroEstimate"')) record({ type: 'db_estimates', sources: values[6], calories: values[1], reasoning: values[7] });
     if (sql.includes('SET "brandId" = b.brand')) return values[0].length;
     return 1;
@@ -79,7 +80,8 @@ global.fetch = async (url, options) => {
       return new Promise(() => setInterval(() => {}, 1000));
     }
     if (process.env.V2_TEST_EXIT_BETWEEN_RESTAURANTS && storeUuid === 'store-1') process.exit(0);
-    if (process.env.V2_TEST_UE_FAIL) throw Error('Simulated unavailable menu');
+    if (process.env.V2_TEST_UE_FAIL || storeUuid === process.env.V2_TEST_FAIL_STORE) throw Error('Simulated unavailable menu');
+    if (storeUuid === process.env.V2_TEST_EMPTY_STORE) return Response.json({ status: 'success', data: {} });
     const captured = require('../../apps/api/tests/fixtures/chain-pilot.ts').capturedChainPilot[0].ue;
     const data = JSON.parse(JSON.stringify(captured));
     if (storeUuid === 'store-0') {

@@ -10,7 +10,8 @@ The separate [single-hex Pipeline v2 DEV proof](pipeline-v2-dev-poc.md) uses `np
 The [Pipeline v2 shared queue](pipeline-v2-queue.md) adds explicit enqueue/worker commands, token-fenced leases and database-backed paid-call recovery.
 The [Pipeline v2 cloud worker](pipeline-v2-cloud-worker.md) adds a private service with explicit fleet-wide hex/budget limits, health probes, and graceful shutdown.
 The [US rollout plan](pipeline-v2-us-rollout.md) adds offline population/density priority generation, per-phase forecasts, and explicit quality/budget gates with `npm run preload:v2:dev -- rollout`.
-It uses official reviewed serving matches plus Jev estimates and a durable PDF-search outbox.
+Pipeline v2 uses official reviewed serving matches plus Jev estimates and atomically published background PDF jobs.
+The [roadmap acceptance guide](pipeline-v2-roadmap.md) connects the security, ingestion, upgrade and scale contracts to their maintained tests.
 
 ## Source identity cutover and collision audit
 
