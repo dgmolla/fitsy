@@ -826,10 +826,15 @@ exit "${BUILD_EXIT:-0}"
         self.assertNotIn('private-fixture-password', result.stdout + result.stderr)
 
     def test_unapproved_role_migration_is_held_while_other_migrations_and_build_proceed(self):
-        # #626 stopped the entire Vercel build before any migration or API
-        # compilation. Replay that source with approval absent or invalid;
-        # unrelated deployment must proceed without executing controlled SQL.
-        incident = json.loads((ROOT / 'scripts/deploy/__fixtures__/incident-626.json').read_text())
+        self.assert_unapproved_role_build(626)
+
+    def test_incident_622_build_proceeds_with_unapproved_role_sql_held(self):
+        self.assert_unapproved_role_build(622)
+
+    def assert_unapproved_role_build(self, number):
+        # Both incidents stopped before migrations or API compilation.
+        # Replay each source without executing unapproved controlled SQL.
+        incident = json.loads((ROOT / f'scripts/deploy/__fixtures__/incident-{number}.json').read_text())
         role = '20261028120000_pipeline_writer_roles'
         original = {path: path.read_bytes() for path in (self.root / 'prisma/migrations').glob('*/migration.sql')}
         for approval in (None, '', 'a' * 64, 'true'):
