@@ -2,9 +2,9 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { assertFailedAttempt, assertRecoveryResult, failedAttempt, recoveryMode, type Audit } from './recover-hex-jobs';
-
-const { load }: { load(input: string): unknown } = require('js-yaml');
+import { parse } from 'yaml';
+import { assertFailedAttempt, assertRecoveryResult, failedAttempt, recoveryMode } from './recover-hex-jobs';
+import type { Audit } from './migration-failure-audit';
 
 function snapshot(): Audit {
   return {
@@ -110,7 +110,7 @@ test('real signatures and the production guard reject unauthorized recovery', ()
 }, 35_000);
 
 test('manual workflow defaults to audit and retains the protected maintenance environment and release concurrency', () => {
-  const workflow = load(readFileSync(join(__dirname, '../../.github/workflows/production-migration-recovery.yml'), 'utf8')) as {
+  const workflow = parse(readFileSync(join(__dirname, '../../.github/workflows/production-migration-recovery.yml'), 'utf8')) as {
     on: Record<string, { inputs: { mode: { default: string } } }>;
     concurrency: unknown; permissions: unknown;
     jobs: { recovery: { if: string; environment: string; permissions: unknown;

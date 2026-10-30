@@ -7,27 +7,13 @@ import { join, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { PrismaClient } from '@prisma/client';
 import { recoveryTarget, RecoveryRefused, refuseRecovery as refuse } from './hex-jobs-recovery-target';
+import { migrationAudit, type Audit } from './migration-failure-audit';
 
 const root = resolve(__dirname, '../..');
 export const failedAttempt = {
   id: 'c4b89b99-d4a5-49d9-9664-4699383e5f81',
   migration_name: '20261028130000_hex_jobs',
   checksum: 'f793bacb999d2db72489a4bb9ab89bc2ae1da2a6b1ecff68942e66e1b65889b9',
-};
-export type Audit = {
-  database: string;
-  migration_history: Array<typeof failedAttempt & {
-    started_at: string; finished_at: string | null; rolled_back_at: string | null;
-    applied_steps_count: number; unresolved: boolean;
-    failure_logs_present: boolean; missing_pipeline_writer: boolean | null;
-  }>;
-  relations: Array<{ name: string; present: boolean }>;
-  roles: Array<{ name: string; present: boolean }>;
-  runtime_schema: {
-    migration_name: string;
-    migration_history: Array<{ id: string; checksum: string; finished_at: string | null; rolled_back_at: string | null }>;
-    relation_present: boolean;
-  };
 };
 
 export function recoveryMode(args: string[]) {
@@ -51,18 +37,6 @@ export function assertFailedAttempt(audit: Audit) {
       !['hex_jobs', 'hex_job_events'].every(name => audit.relations.some(item => item.name === name && item.present === false))) {
     refuse('audit differs from the reviewed #643 failed attempt or contains partial effects; inspect before any recovery');
   }
-}
-
-export async function migrationAudit(client: PrismaClient): Promise<Audit> {
-  const sql = readFileSync(join(root, 'scripts/deploy/migration-failure-audit.sql'), 'utf8')
-    .split(';').find(statement => statement.includes('AS migration_failure_audit'))!;
-  return client.$transaction(async tx => {
-    await tx.$executeRawUnsafe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
-    await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '5s'");
-    const [row] = await tx.$queryRawUnsafe<Array<{ migration_failure_audit: Audit }>>(sql);
-    if (!row) return refuse('migration audit returned no snapshot');
-    return row.migration_failure_audit;
-  });
 }
 
 export function assertRecoveryResult(before: Audit, after: Audit) {

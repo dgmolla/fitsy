@@ -54,6 +54,14 @@ NODE
 # Refuse an unavailable auth dependency before changing the production schema.
 node --import tsx scripts/deploy/rate-limit-preflight.ts
 # Owner approval controls SQL selection without authorizing failed-ledger recovery.
-node scripts/deploy/pipeline-roles-approval.mjs --deploy
+if node scripts/deploy/pipeline-roles-approval.mjs --deploy; then
+  :
+else
+  migration_status=$?
+  # Retain bounded read-only evidence without resolving, retrying or masking
+  # the original failure, including when the diagnostic database read fails.
+  FITSY_ALLOW_PROD_WRITE=1 node --import tsx scripts/deploy/migration-failure-audit.ts --prod || true
+  exit "$migration_status"
+fi
 FITSY_ALLOW_PROD_WRITE=1 node --import tsx scripts/deploy/runtime-migrations-preflight.ts --prod
 FITSY_ALLOW_PROD_WRITE=1 node --import tsx scripts/deploy/activate-runtime-role.ts --prod

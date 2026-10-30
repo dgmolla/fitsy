@@ -461,6 +461,7 @@ process.stdout.write(JSON.stringify({
         for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh', 'scripts/lib/db-target-guard.ts',
                      'apps/api/services/rateLimitStoreConfig.ts', 'scripts/deploy/pipeline-roles-approval.mjs',
                      'scripts/deploy/activate-runtime-role.ts', 'scripts/deploy/runtime-migrations-preflight.ts',
+                     'scripts/deploy/migration-failure-audit.ts', 'scripts/deploy/migration-failure-audit.sql',
                      'prisma/schema.prisma', 'prisma/migrations/migration_lock.toml',
                      'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql',
                      'prisma/migrations/20261028130000_hex_jobs/migration.sql',
@@ -504,9 +505,27 @@ Module._load = function(name, ...args) {
       }
     }
     async $transaction(fn) {
-      return fn({ $queryRaw: async () => [], $executeRawUnsafe: async () => {
+      return fn({ $queryRaw: async () => [], $executeRawUnsafe: async sql => {
+        if (sql === 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY') {
+          appendFileSync(process.env.CALLS, 'audit read only\\n');
+          return 0;
+        }
+        if (sql === "SET LOCAL statement_timeout = '5s'") {
+          appendFileSync(process.env.CALLS, 'audit statement timeout\\n');
+          return 0;
+        }
         if (process.env.ROLE_ACTIVATION_EXIT === '1') throw Error('private-fixture-password');
         return 0;
+      }, $queryRawUnsafe: async sql => {
+        assert.equal(sql, readFileSync('scripts/deploy/migration-failure-audit.sql', 'utf8')
+          .split(';').find(statement => statement.includes('AS migration_failure_audit')));
+        appendFileSync(process.env.CALLS, 'migration failure audit\\n');
+        switch (process.env.AUDIT_STATE) {
+          case 'driver-error': throw Error('private-fixture-database-detail');
+          case 'missing': return [];
+          case 'timeout': return new Promise(() => {});
+          default: return [{ migration_failure_audit: JSON.parse(process.env.AUDIT_REPORT) }];
+        }
       } });
     }
     async $disconnect() {}
@@ -582,10 +601,21 @@ exit "${BUILD_EXIT:-0}"
         command.chmod(0o700)
         self.calls = self.root / 'calls'
         self.migrations = self.root / 'migrations.json'
+        self.audit = {'database': 'postgres', 'migration_history': [{
+            'id': 'c4b89b99-d4a5-49d9-9664-4699383e5f81',
+            'migration_name': '20261028130000_hex_jobs',
+            'checksum': 'f793bacb999d2db72489a4bb9ab89bc2ae1da2a6b1ecff68942e66e1b65889b9',
+            'finished_at': None, 'rolled_back_at': None, 'unresolved': True,
+            'failure_logs_present': False, 'missing_pipeline_writer': None}],
+            'relations': [{'name': name, 'present': False} for name in ('hex_job_events', 'hex_jobs')],
+            'roles': [{'name': 'pipeline_writer', 'present': False}],
+            'runtime_schema': {'migration_name': '20261029010000_widget_search_tokens',
+                               'migration_history': [], 'relation_present': False}}
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith(('VERCEL', 'POSTGRES', 'SUPABASE', 'PIPELINE_DATABASE_URL', 'PROD_', 'FITSY_ALLOW_PROD', 'FITSY_PIPELINE_ROLES', 'GITHUB_ACTIONS', 'UPSTASH', 'NODE_OPTIONS'))}
         self.env.update(PATH=str(self.bin) + ':' + os.environ['PATH'], CALLS=str(self.calls),
                         MIGRATIONS=str(self.migrations),
+                        AUDIT_REPORT=json.dumps(self.audit),
                         NODE_OPTIONS=f'--require={database_transport} --import={transport}', REDIS_RESULT='ok',
                         UPSTASH_REDIS_REST_URL='https://quota.example.test',
                         UPSTASH_REDIS_REST_TOKEN='private-fixture-token',
@@ -606,7 +636,7 @@ exit "${BUILD_EXIT:-0}"
         env = {**self.env, **changes}
         env = {key: value for key, value in env.items() if value is not None}
         result = subprocess.run(['bash', 'scripts/dev/vercel-build.sh'], cwd=self.root,
-                                env=env, text=True, capture_output=True)
+                                env=env, text=True, capture_output=True, timeout=30)
         calls = self.calls.read_text().splitlines()
         # Production uses a disposable filtered schema. Keep existing order
         # assertions while also proving the actual CLI input was removed.
@@ -725,7 +755,7 @@ exit "${BUILD_EXIT:-0}"
         for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
             result, calls = self.drive(FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
             self.assertNotEqual(result.returncode, 0)
-            self.assertEqual(calls, ['redis EVAL'])
+            self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration failure audit'])
             self.assertFalse(self.migrations.exists())
 
     def test_pipeline_and_audit_credentials_cannot_become_the_app_runtime_binding(self):
@@ -932,6 +962,46 @@ exit "${BUILD_EXIT:-0}"
         result, calls = self.drive(BUILD_EXIT='9')
         self.assertEqual(result.returncode, 9)
         self.assertEqual(calls[-1], 'npm run build -w apps/api')
+
+    def test_failed_migration_emits_read_only_evidence_without_resolving_or_retrying(self):
+        for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
+            result, calls = self.drive(MIGRATE_EXIT='7', FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
+            self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertEqual(calls[-3:], ['audit read only', 'audit statement timeout', 'migration failure audit'])
+            reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+            self.assertEqual(reports, [{'migration_failure_audit': self.audit}])
+            self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+            self.assertFalse(any('resolve' in call or call.startswith('npm') for call in calls))
+            self.assertNotIn('runtime migration preflight', calls)
+
+    def test_failed_audit_preserves_migration_failure_and_withholds_private_errors(self):
+        for state in ('driver-error', 'missing', 'timeout'):
+            with self.subTest(state=state):
+                result, calls = self.drive(MIGRATE_EXIT='7', AUDIT_STATE=state)
+                self.assertEqual(result.returncode, 7, result.stderr)
+                self.assertEqual(calls[-3:], ['audit read only', 'audit statement timeout', 'migration failure audit'])
+                self.assertIn('Migration failure audit unavailable', result.stderr)
+                self.assertEqual(result.stdout, 'Shared rate-limit store preflight passed\n')
+                self.assertNotIn('private-fixture-database-detail', result.stderr)
+                self.assertNotIn('fixture@', result.stderr)
+                self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+                self.assertFalse(any('resolve' in call or call.startswith('npm') for call in calls))
+
+    def test_build_audit_cli_requires_production_target_and_trusted_identity(self):
+        for changes in ({'VERCEL_GIT_COMMIT_REF': 'dev'}, {'VERCEL_PROJECT_ID': 'other-project'},
+                        {'VERCEL_ENV': 'preview'}, {'FITSY_ALLOW_PROD_WRITE': ''},
+                        {'POSTGRES_URL_NON_POOLING': self.env['POSTGRES_URL_NON_POOLING'].replace(
+                            'zaxkmjqozvmbifiwbxps', 'kegycybiruksmrzvniha')}):
+            with self.subTest(changes=changes):
+                self.calls.write_text('')
+                result = subprocess.run(['node', '--import', 'tsx', 'scripts/deploy/migration-failure-audit.ts', '--prod'],
+                                        cwd=self.root, env={**self.env, 'FITSY_ALLOW_PROD_WRITE': '1', **changes},
+                                        text=True, capture_output=True, timeout=15)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(self.calls.read_text(), '')
+                self.assertEqual(result.stdout, '')
+                self.assertIn('Migration failure audit unavailable', result.stderr)
+                self.assertNotIn('fixture@', result.stderr)
 
 
 if __name__ == '__main__':

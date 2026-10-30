@@ -11,6 +11,8 @@ flowchart LR
     M --> G[Existing Vercel Git production build]
     G --> P[Project and database guards plus Redis write preflight]
     P --> D[Guarded additive migration]
+    D -->|failure| F[Bounded read-only migration audit]
+    F --> H[Withhold build and retain original failure]
     D --> Q[Required runtime migration preflight]
     Q --> B[API build and Vercel promotion]
     M --> V[Exact main Verify]
@@ -52,6 +54,11 @@ The existing Jest wrapper discovers these cases with `--list-tests` and runs eac
 Run `node --test scripts/deploy/pipeline-roles-approval.test.mjs` for an installed-Prisma regression against disposable SQLite dependency migrations, including delayed approval, future role references, unchanged ledger entries and migration failures.
 Already-applied role SQL needs no repeated approval; Prisma's [production deployment contract](https://docs.prisma.io/docs/orm/v6/prisma-migrate/workflows/development-and-production#production-and-testing-environments) permits an applied migration to be absent from the deploy input.
 Wrong identity, missing binding or failed migration also withholds the build; failed API build cannot succeed.
+After a guarded production migration fails, `migrate-prod.sh` invokes `scripts/deploy/migration-failure-audit.ts` once to retain the existing audit in that Vercel build log.
+The helper revalidates production workload identity and target, uses a read-only repeatable-read transaction with a five-second statement timeout, and caps the entire diagnostic process at ten seconds.
+It prints only the existing audit's ledger, object, role and runtime-schema evidence, without raw database logs or credentials.
+Unavailable diagnostics retain a private error summary and the original migration exit status; they cannot start the API build, resolve history, grant roles or retry migrations.
+Protected maintenance shares the same audit function and SQL, while its separate recovery identity and approval remain required.
 Preview/development builds refuse either production binding and preview migrations retain the development route.
 Preview runs the same Redis preflight after the DEV database guard and before migrations; undeployed development remains usable without Redis.
 The existing dev mirror watches the preflight and database guard inputs so changes reach the stable dev deployment.
