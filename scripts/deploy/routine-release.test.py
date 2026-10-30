@@ -1108,11 +1108,11 @@ exit "${BUILD_EXIT:-0}"
         self.assertEqual(result.returncode, 9)
         self.assertEqual(calls[-1], 'npm run build -w apps/api')
 
-    def test_incident_p3009_preserves_original_failure_even_when_audit_is_unavailable(self):
+    def test_incident_prisma_failure_is_preserved_even_when_audit_is_unavailable(self):
         # A concurrent failed attempt can appear after the read-only preflight.
         # Replay the original provider diagnostic at the real build boundary;
         # holding its SQL must neither hide the error nor authorize recovery.
-        for number, audit_state in ((number, state) for number in (634, 635) for state in ('ok', 'driver-error')):
+        for number, audit_state in ((number, state) for number in (628, 634, 635) for state in ('ok', 'driver-error')):
             with self.subTest(incident=number, audit_state=audit_state):
                 incident = json.loads((ROOT / f'scripts/deploy/__fixtures__/incident-{number}.json').read_text())
                 result, calls = self.drive(VERCEL_GIT_COMMIT_SHA=incident['source'], MIGRATE_EXIT='1',
@@ -1130,14 +1130,15 @@ exit "${BUILD_EXIT:-0}"
                 self.assertEqual(reports, [{'migration_failure_audit': self.audit}] if audit_state == 'ok' else [])
                 self.assertNotIn('private-fixture-database-detail', result.stdout + result.stderr)
 
-    def test_incident_634_names_the_retained_attempt_and_stops_before_prisma(self):
-        incident = json.loads((ROOT / 'scripts/deploy/__fixtures__/incident-634.json').read_text())
-        # The later read-only #661 snapshot identifies the same retained attempt
-        # named in #634's original P3009, rather than a new application failure.
+    def test_original_and_later_incidents_name_the_retained_attempt_before_prisma(self):
+        # The later read-only #661 snapshot identifies the retained attempt from
+        # #628's aborted transaction, subsequently reported as P3009 by #634.
         attempt = self.audit['migration_history'][0]
-        self.assertIn(attempt['migration_name'], incident['prisma_stderr'])
-        for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
-            with self.subTest(approved=approval is not None):
+        for number, approval in ((number, approval) for number in (628, 634)
+                                 for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256'])):
+            with self.subTest(incident=number, approved=approval is not None):
+                incident = json.loads((ROOT / f'scripts/deploy/__fixtures__/incident-{number}.json').read_text())
+                self.assertIn(attempt['migration_name'], incident['prisma_stderr'])
                 result, calls = self.drive(VERCEL_GIT_COMMIT_SHA=incident['source'],
                                            PREFLIGHT_AUDIT_REPORT=json.dumps(self.audit),
                                            FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
