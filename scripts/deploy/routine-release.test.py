@@ -395,36 +395,6 @@ class GitDeploymentTests(unittest.TestCase):
                 self.assertNotIn('private-provider-detail', message)
                 self.assertNotIn('other-project', message)
 
-    def test_failure_workflow_files_actionable_incident_using_the_exact_run_and_source(self):
-        command = next(step['run'] for step in self.steps if step.get('name') == 'File incident on failure')
-        with tempfile.TemporaryDirectory(prefix='fitsy-incident-') as directory:
-            root = Path(directory)
-            gh = root / 'gh'
-            gh.write_text('''#!/usr/bin/env python3
-import json, os, sys
-from pathlib import Path
-args = sys.argv[1:]
-assert args[:2] == ['issue', 'create']
-body = Path(args[args.index('--body-file') + 1]).read_text()
-Path(os.environ['INCIDENT_CAPTURE']).write_text(json.dumps({'args': args, 'body': body}))
-''')
-            gh.chmod(0o700)
-            result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', command], text=True, capture_output=True,
-                                    env={**os.environ, 'PATH': directory + ':' + os.environ['PATH'],
-                                         'RUNNER_TEMP': directory, 'RELEASE_SHA': self.source,
-                                         'GITHUB_SERVER_URL': 'https://github.com', 'GITHUB_REPOSITORY': gate.REPO,
-                                         'GITHUB_RUN_ID': '40823525184', 'INCIDENT_CAPTURE': str(root / 'capture')})
-            self.assertEqual(result.returncode, 0, result.stderr)
-            captured = json.loads((root / 'capture').read_text())
-            self.assertIn(f'incident: prod release failed at {self.source[:7]}', captured['args'])
-            body = captured['body']
-            self.assertTrue(body.startswith('**TL;DR:**'))
-            self.assertIn('https://github.com/dgmolla/fitsy/actions/runs/40823525184', body)
-            self.assertIn(f'https://github.com/dgmolla/fitsy/commit/{self.source}', body)
-            self.assertIn('P3009', body)
-            self.assertIn('separately authorized', body)
-            self.assertNotIn('KNOWN_GOOD_URL', body)
-
     def test_public_health_must_report_exact_source_and_connected_database(self):
         import io
         healthy = {'status': 'ok', 'db': 'connected', 'deploymentSha': self.source}
@@ -439,6 +409,182 @@ Path(os.environ['INCIDENT_CAPTURE']).write_text(json.dumps({'args': args, 'body'
                 else:
                     gate.health(self.source)
                 self.assertEqual(read.call_args.args[0].full_url, 'https://fitsy.org/api/health')
+
+
+class ProductionIncidentTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='fitsy-incident-')
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        command = "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))"
+        workflow = json.loads(subprocess.check_output(['node', '-e', command,
+                              str(ROOT / '.github/workflows/deploy.yml')], cwd=ROOT, text=True))
+        step = next(step for step in workflow['jobs']['smoke']['steps'] if step.get('name') == 'File incident on failure')
+        self.assertEqual(step['if'], 'failure()')
+        self.command = step['run']
+        self.source = '1d479eabe7ee293280229a1e55a8471dd8a290c4'
+        self.state = self.root / 'github.json'
+        self.write_state({'issues': [], 'comments': {}, 'calls': []})
+        gh = self.root / 'gh'
+        gh.write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+path = Path(os.environ['INCIDENT_FIXTURE'])
+state = json.loads(path.read_text())
+args = sys.argv[1:]
+state['calls'].append(args)
+path.write_text(json.dumps(state))
+if args[0] == 'api':
+    endpoint = args[1]
+    assert args[2:] == ['--paginate', '--slurp'], args
+    assert endpoint.startswith('repos/dgmolla/fitsy/issues'), endpoint
+    if state.get('read_error') == 'all' or state.get('read_error', 'never-match') in endpoint:
+        sys.exit(1)
+    if '/comments?' in endpoint:
+        number = endpoint.split('/')[4]
+        rows = state['comments'].get(number, [])
+    else:
+        assert endpoint == 'repos/dgmolla/fitsy/issues?state=open&labels=incident&per_page=100', endpoint
+        rows = [row for row in state['issues'] if row['state'] == 'open']
+    print(json.dumps([rows[i:i+100] for i in range(0, len(rows), 100)] or [[]]))
+else:
+    assert args[:2] in (['issue', 'create'], ['issue', 'comment']), args
+    repository = args[args.index('--repo')+1] if '--repo' in args else os.environ['GITHUB_REPOSITORY']
+    assert repository == 'dgmolla/fitsy', args
+    body = Path(args[args.index('--body-file')+1]).read_text()
+    if args[1] == 'create':
+        number = max([row['number'] for row in state['issues']] + [659]) + 1
+        state['issues'].append({'number': number, 'state': 'open', 'body': body,
+                                'title': args[args.index('--title')+1]})
+    else:
+        number = int(args[2])
+        state['comments'].setdefault(str(number), []).append({'body': body})
+    path.write_text(json.dumps(state))
+    if state.get('write_error'):
+        sys.exit(1)
+    print(f'https://github.com/dgmolla/fitsy/issues/{number}')
+''')
+        gh.chmod(0o700)
+
+    def write_state(self, state):
+        self.state.write_text(json.dumps(state))
+
+    def read_state(self):
+        return json.loads(self.state.read_text())
+
+    def drive(self, **env):
+        return subprocess.run(['bash', '--noprofile', '--norc', '-euo', 'pipefail', '-c', self.command],
+                              cwd=ROOT, text=True, capture_output=True, timeout=15,
+                              env={**os.environ, 'PATH': str(self.root) + ':' + os.environ['PATH'],
+                                   'RUNNER_TEMP': str(self.root), 'RELEASE_SHA': self.source,
+                                   'GITHUB_SERVER_URL': 'https://github.com', 'GITHUB_REPOSITORY': gate.REPO,
+                                   'GITHUB_RUN_ID': '40991993679', 'GITHUB_RUN_ATTEMPT': '1',
+                                   'INCIDENT_FIXTURE': str(self.state), **env})
+
+    def test_same_failed_release_is_reported_once_through_the_actual_workflow(self):
+        for _ in range(2):
+            result = self.drive()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.read_state()
+        self.assertEqual(len(state['issues']), 1)
+        self.assertEqual(state['comments'], {})
+        body = state['issues'][0]['body']
+        self.assertTrue(body.startswith('**TL;DR:**'))
+        self.assertIn('https://github.com/dgmolla/fitsy/actions/runs/40991993679', body)
+        self.assertIn(f'https://github.com/dgmolla/fitsy/commit/{self.source}', body)
+        self.assertIn('P3009', body)
+        self.assertIn('separately authorized', body)
+        self.assertIn('production-migration-recovery.yml', body)
+        self.assertNotIn('KNOWN_GOOD_URL', body)
+
+    def test_later_sources_and_rerun_attempts_append_evidence_without_rewriting_history(self):
+        self.assertEqual(self.drive().returncode, 0)
+        original = copy.deepcopy(self.read_state()['issues'])
+        next_source = 'cc16ffb62d1b08cfaac8721436a1435b2ea5f86e'
+        for attempt in ('1', '2', '2'):
+            result = self.drive(RELEASE_SHA=next_source, GITHUB_RUN_ID='40992500000', GITHUB_RUN_ATTEMPT=attempt)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.read_state()
+        self.assertEqual(state['issues'], original)
+        comments = state['comments']['660']
+        self.assertEqual(len(comments), 2)
+        for index, row in enumerate(comments, 1):
+            self.assertTrue(row['body'].startswith('**TL;DR:**'))
+            self.assertIn(f'/commit/{next_source}', row['body'])
+            self.assertIn(f'/actions/runs/40992500000/attempts/{index}', row['body'])
+        self.assertEqual(sum(call[:2] == ['issue', 'create'] for call in state['calls']), 1)
+
+    def test_legacy_incident_is_adopted_without_duplicating_its_original_run(self):
+        issue = {'number': 660, 'state': 'open', 'title': 'incident: prod release failed at 1d479ea',
+                 'body': f'Source: {self.source}\n[Deploy logs](https://github.com/dgmolla/fitsy/actions/runs/40991993679)'}
+        unrelated = {'number': 640, 'state': 'open', 'title': 'incident: OTA publish failed', 'body': ''}
+        closed = {**issue, 'number': 643, 'state': 'closed'}
+        pull = {**issue, 'number': 639, 'pull_request': {}}
+        original = [unrelated, issue, closed, pull]
+        self.write_state({'issues': original, 'comments': {}, 'calls': []})
+        self.assertEqual(self.drive().returncode, 0)
+        self.assertEqual(self.read_state()['comments'], {})
+        result = self.drive(GITHUB_RUN_ID='40992500000')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.read_state()
+        self.assertEqual(state['issues'], original)
+        self.assertEqual(list(state['comments']), ['660'])
+
+    def test_paginated_incidents_and_comments_preserve_a_later_page_receipt(self):
+        self.assertEqual(self.drive().returncode, 0)
+        state = self.read_state()
+        incident = state['issues'][0]
+        state['issues'] = [{'number': number, 'state': 'open', 'title': 'unrelated incident', 'body': ''}
+                           for number in range(100, 200)] + [incident]
+        state['issues'].insert(0, {**incident, 'number': 50, 'title': 'incident: prod release failed at bfd87f8',
+                                   'body': 'Legacy issue without a reporting marker'})
+        state['comments']['660'] = [{'body': 'Historical evidence'} for _ in range(100)]
+        self.write_state(state)
+        self.assertEqual(self.drive(GITHUB_RUN_ID='40992500000').returncode, 0)
+        self.assertEqual(self.drive(GITHUB_RUN_ID='40992500000').returncode, 0)
+        state = self.read_state()
+        self.assertEqual(len(state['issues']), 102)
+        self.assertEqual(list(state['comments']), ['660'])
+        self.assertEqual(len(state['comments']['660']), 101)
+
+    def test_closed_incident_starts_a_new_report_without_reopening_or_editing_it(self):
+        self.assertEqual(self.drive().returncode, 0)
+        state = self.read_state()
+        state['issues'][0]['state'] = 'closed'
+        original = copy.deepcopy(state['issues'][0])
+        self.write_state(state)
+        result = self.drive(GITHUB_RUN_ID='40992500000')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.read_state()
+        self.assertEqual(state['issues'][0], original)
+        self.assertEqual(len(state['issues']), 2)
+        self.assertEqual(state['issues'][1]['state'], 'open')
+
+    def test_failed_reads_or_uncertain_writes_never_create_a_fallback_or_repeat_a_write(self):
+        self.assertEqual(self.drive().returncode, 0)
+        original = self.read_state()
+        for error in ('all', '/comments?'):
+            with self.subTest(error=error):
+                self.write_state({**original, 'calls': [], 'read_error': error})
+                result = self.drive(GITHUB_RUN_ID='40992500000')
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn('inspect the GitHub outcome', result.stderr)
+                self.assertFalse(any(call[0] == 'issue' for call in self.read_state()['calls']))
+        for issues in ([], original['issues']):
+            with self.subTest(existing=bool(issues)):
+                self.write_state({'issues': issues, 'comments': {}, 'calls': [], 'write_error': True})
+                result = self.drive(GITHUB_RUN_ID='40992500000')
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(sum(call[0] == 'issue' for call in self.read_state()['calls']), 1)
+
+    def test_invalid_source_run_or_repository_is_refused_before_github_access(self):
+        for env in ({'RELEASE_SHA': 'bad;source'}, {'GITHUB_RUN_ID': '1/other'},
+                    {'GITHUB_RUN_ATTEMPT': '0'}, {'GITHUB_REPOSITORY': 'other/fitsy'},
+                    {'GITHUB_SERVER_URL': 'https://attacker.invalid'}):
+            with self.subTest(env=env):
+                result = self.drive(**env)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(self.read_state()['calls'], [])
 
 
 class VercelBuildTests(unittest.TestCase):

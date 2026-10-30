@@ -22,6 +22,8 @@ flowchart LR
     B --> O[Observe trusted Git deployment and serving health]
     A --> O
     O --> S[Production-safe API smoke]
+    O -->|failure| I[Create or append open production incident]
+    S -->|failure| I
     S --> E[Applicable compatible iOS OTA and readback]
 ```
 
@@ -86,6 +88,11 @@ When Vercel supplies an app URL as `log_url`, only the deployment ID from its co
 Unknown or malformed descriptions fall back to the project's deployments list.
 Raw provider descriptions, command text, arbitrary log URLs and raw health errors are excluded from this diagnostic.
 The failure incident links the exact Deploy run and source plus the existing separately authorized migration recovery procedure, without emitting a success receipt or retrying the deployment.
+The smoke job calls `scripts/deploy/production-incident.py` to reuse one open production-verification incident and append each later source/run/attempt with its own evidence.
+The reporter reads every incident/comment page, prefers its stable marker, and can adopt the oldest open legacy production-release report without rewriting historical evidence.
+The same run attempt is recorded once; a closed incident permits a new report, and failed reads or uncertain writes stop without a fallback issue or write retry.
+This groups reporting while leaving each failure's diagnosis and protected recovery separate; keep the incident open until exact-source production verification succeeds.
+Run `python3 -B scripts/deploy/routine-release.test.py ProductionIncidentTests` to exercise the actual workflow publisher with an isolated GitHub fixture.
 The health endpoint already consumes Vercel's system `VERCEL_GIT_COMMIT_SHA`.
 No custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval is required.
 Keep the existing repository Expo/smoke credential route.
