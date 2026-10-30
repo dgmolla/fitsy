@@ -107,7 +107,24 @@ test('real signatures and the production guard reject unauthorized recovery', ()
   expect({ status: result.status, error: result.error, stdout: result.stdout, stderr: result.stderr }).toEqual({
     status: 0, error: undefined, stdout: expect.stringContaining('# pass 4'), stderr: '',
   });
+  expect(result.stdout + result.stderr).not.toMatch(/synthetic-request-secret|synthetic-password|synthetic-provider-secret|sensitive-marker-keep-private/);
 }, 35_000);
+
+test('the actual workflow command exposes a specific redacted audit refusal before database or OIDC access', () => {
+  const workflow = parse(readFileSync(join(__dirname, '../../.github/workflows/production-migration-recovery.yml'), 'utf8'));
+  const step = workflow.jobs.recovery.steps.find((step: { env?: { RECOVERY_MODE?: string } }) => step.env?.RECOVERY_MODE);
+  const result = spawnSync('bash', ['-euo', 'pipefail', '-c', step.run], {
+    cwd: join(__dirname, '../..'), encoding: 'utf8', timeout: 15_000,
+    env: { PATH: process.env.PATH, RECOVERY_MODE: 'audit',
+      POSTGRES_URL_NON_POOLING: 'postgresql://postgres.zaxkmjqozvmbifiwbxps:private-cli-password@aws-1-us-east-1.pooler.supabase.com:6543/postgres',
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'private-cli-request-token' },
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe('');
+  expect(result.stderr).toBe('Recovery refused: database port: expected 5432 or default; got port 6543\n');
+  expect(result.stdout + result.stderr).not.toMatch(/private-cli|postgresql:\/\/|pooler\.supabase\.com/);
+});
 
 test('manual workflow defaults to audit and retains the protected maintenance environment and release concurrency', () => {
   const workflow = parse(readFileSync(join(__dirname, '../../.github/workflows/production-migration-recovery.yml'), 'utf8')) as {
