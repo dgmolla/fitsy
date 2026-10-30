@@ -133,7 +133,9 @@ const config: ExpoConfig = {
     url: "https://u.expo.dev/a204190c-0b71-4c31-b126-f3bc62d1c4ee",
   },
   runtimeVersion: {
-    policy: "appVersion",
+    // Applies to the next native build. Build 5 retains its embedded 1.0.0
+    // runtime and cannot receive this native/widget transition through OTA.
+    policy: "fingerprint",
   },
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000",

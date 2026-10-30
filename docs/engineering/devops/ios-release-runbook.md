@@ -59,12 +59,13 @@ Prepare its EAS public configuration with the [explicit-source uploader](staging
 Review the default dry run before an authorized `--apply`; never copy local DEV credentials into production EAS configuration.
 Confirm the evaluated configuration and actual embedded IPA, including Google sign-in scheme, signing/team, bundle, version/build, SDK, runtime and production updates channel.
 Do not expose credentials when recording identities.
-Under `runtimeVersion.policy = appVersion`, a marketing-version change also changes OTA runtime; retain [native compatibility and rollback protections](ios-ota-baseline.md).
+The next native build uses `runtimeVersion.policy = fingerprint`; build 5 keeps its embedded runtime `1.0.0`.
+Record the actual build fingerprint and separate channel baseline using the [native compatibility and channel cutover contract](ios-ota-baseline.md).
 Verify both embedded startup and applicable update behavior; an OTA in the same project does not prove the installed store binary received it.
 
 ## Build/upload boundary for a later authorized task
 
-The existing [.github/workflows/eas-build.yml](../../../.github/workflows/eas-build.yml) reacts to `v*.*.*` tags or manual dispatch and performs both a production EAS build and an upload under `production-native`.
+The existing [.github/workflows/eas-build.yml](../../../.github/workflows/eas-build.yml) reacts to `v*.*.*` tags or manual dispatch and performs both a store EAS build with the `testflight` profile and an upload under `production-native`.
 Creating a version tag can trigger that work; do not tag or dispatch during preparation.
 Inspect the actual workflow and installed EAS CLI contract before using them in a later authorized task.
 For an authorized upload, select and record the exact frozen build rather than assuming an unrelated latest build is the candidate.

@@ -1,15 +1,17 @@
 # Verified iOS OTA baseline
 
-The production OTA gate compares native inputs with actual processed iOS build 5, rather than the historical `v1.0.0` Git tag.
+The OTA gate compares Expo's iOS native fingerprint with the actual verified binary for the selected channel.
+Build 5 has no verified Expo fingerprint, so it remains blocked until a compatible binary and its fingerprint are verified.
 Issue #243 reproduced the false positive in main Deploy run [37685925003](https://github.com/dgmolla/fitsy/actions/runs/37685925003), at source `89c23ce6e5272f7fdc9a599131329e4034b23037`.
 That tag predates the actual production binary and therefore cannot establish its native compatibility.
 
 ```mermaid
 flowchart LR
   B[Verified EAS and Apple binary] --> R[Reviewed source baseline]
-  R --> G[Exact native input comparison]
+  R --> G[Expo iOS fingerprint and runtime comparison]
   G --> E[Production Google scheme comparison]
-  E --> O[iOS production OTA]
+  E --> P[Channel policy and release approval]
+  P --> O[iOS OTA on the selected channel]
   G -->|Changed or unavailable| H[Hold for verified binary]
   E -->|Changed or unavailable| H
 ```
@@ -32,19 +34,52 @@ The Google URL scheme compiled into Info.plist is `com.googleusercontent.apps.56
 The helper loads the current production environment and rejects a different or missing corresponding client ID before publishing.
 The app config's other environment variables affect JavaScript configuration rather than native configuration at this baseline.
 
-## Conservative compatibility contract
+## Fingerprint compatibility contract
 
-`scripts/deploy/ios-binary-baseline.json` records the reviewed binary anchor.
-`native-compatibility.mjs` requires exact Git equality for package and lockfile inputs, app/EAS configuration, native directories, patches, plugins, native build hooks and assets.
-Dirty or untracked native inputs also fail.
-This intentionally blocks some compatible JS-only lockfile edits until their baseline is independently verified.
-Missing ancestry or a missing or malformed receipt fails closed.
-Ignored native files also block publication, including locally generated iOS directories.
+`scripts/deploy/ios-binary-baseline.json` records the production binary anchor.
+The separate `scripts/deploy/ios-testflight-binary-baseline.json` must be recorded after the next authorized TestFlight build is processed and verified; its absence blocks that channel.
+Each receipt retains the source SHA, EAS/Apple build IDs, IPA SHA-256, bundle/build/runtime/channel identities, Google client ID and verification evidence.
+It also requires `fingerprint: { "hash": "<40 hex characters>", "package_version": "<exact @expo/fingerprint version>" }` from that actual build's source and environment.
+Never stamp the current checkout's hash onto a historical binary receipt.
 
-The sole excluded asset is `apps/mobile/assets/app-screenshot.png`, added after build 5 and required by `TrialArtwork.tsx` as a JavaScript bundle image.
-It is not referenced by the unchanged app configuration or its native plugins.
-Other asset additions, modifications and deletions continue to block publication.
-A change in how that image is consumed by native code requires updating and reviewing the native baseline.
+`native-compatibility.mjs` uses the `@expo/fingerprint` version supplied by the installed Expo SDK through `expo/fingerprint`.
+Both the gate and EAS runtime resolution use `apps/mobile/fingerprint.config.cjs` and the iOS platform.
+Expo hashes evaluated native app configuration, autolinked native dependencies and native resources rather than raw root package/lockfile or app-config text.
+The shared configuration explicitly includes native plugin payloads, patches and build hooks, including Swift files copied by the widget plugin.
+Only the runtime `extra` section is skipped because EAS Update delivers it in the JavaScript manifest; schemes, permissions, native resources and updates URL remain covered.
+API-only dependency edits, build-time guard changes with identical evaluated native config, JS, styles and arbitrary bundle-only assets do not require a binary.
+Native modules, permissions, plugins, icon/splash, Expo SDK and widget/Swift changes do.
+Missing ancestry, malformed or missing fingerprints, a different fingerprint package version, partial Expo collection and runtime/bundle mismatches fail closed.
+Ignored local native inputs still block publication, including generated iOS directories.
+The check repeats inside EAS's production environment and rejects a missing or changed Google URL scheme before export.
+
+## Next binary and channel cutover
+
+The next protected EAS Build workflow uses the `testflight` store profile, production environment and `testflight` channel.
+`app.config.ts` now selects `runtimeVersion.policy = fingerprint` for that native build and subsequent updates.
+This cannot change build 5's embedded runtime `1.0.0` or add its missing widget.
+No build, upload, channel/settings mutation, production OTA or Apple submission is authorized by this runbook.
+
+During the next separately authorized build, retain the frozen source and installed lockfile, EAS build ID and output, actual IPA hash, embedded Expo.plist runtime/channel and Apple processing evidence.
+On that exact clean source, evaluate `node scripts/deploy/native-fingerprint.mjs` inside the EAS production environment with `EXPO_NO_DOTENV=1` and without repository credentials.
+Require its hash to equal the actual fingerprint runtime embedded in the IPA, then record that hash and package version in the channel's reviewed binary receipt.
+Run `node scripts/deploy/native-compatibility.mjs --channel=testflight --production-env` with the same environment before adopting the new baseline.
+Retain independent workflow-security review of the source-bound receipt.
+
+`ota-policy.json` currently preserves automatic `production` OTA after green main Verify, exact production deployment and production smoke because that channel currently reaches TestFlight testers.
+After the TestFlight binary, its channel-to-branch mapping and separate baseline are verified, change `automatic_channel` to `testflight`.
+Before any App Store launch, set `app_store_launched` to `true` in the same reviewed change; the policy refuses automatic `production` in that state.
+Keep the production baseline bound to the actual App Store binary and the TestFlight baseline bound to its separate binary.
+Production updates then require Dawit to dispatch Deploy from main with `approve_production_ota: true`, plus the existing `production-native` environment approval.
+The manual path rechecks latest main push Verify, exact Vercel serving identity, production smoke and native compatibility before publication.
+Both channels use the production EAS environment and publish iOS only.
+Before and after publication, the helper verifies that the selected channel points only to its own named branch without a rollout; TestFlight publication also requires production to remain on its separate production branch.
+The first OTA on an empty channel compares mobile inputs with its verified embedded binary source; later runs compare with the newest applied iOS update.
+
+The existing `rollback.sh mobile` is production-only.
+For TestFlight recovery, the release owner must separately authorize a channel-specific recovery, retain the shared hold/lease protections and verify the TestFlight runtime and immutable manifest identity; do not run the production rollback against a TestFlight-only failure.
+
+## Publication and recovery protections
 
 The canonical production helper requires a clean commit on main's first-parent history, verifies source and production environment, and exports iOS only.
 The helper fetches main under the release lease and rejects older commits whose bundle inputs differ from current main.

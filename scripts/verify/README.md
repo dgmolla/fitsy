@@ -105,6 +105,16 @@ Replay the audit capture regressions with:
 npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/dependency-audit.test.ts
 ```
 
+## OTA vs native build
+
+For mobile release verification, use `node scripts/deploy/native-compatibility.mjs` after installing the frozen lockfile.
+It compares Expo's iOS native fingerprint with a verified binary receipt, then repeats with the production environment before OTA export.
+JS, styles and bundle-only assets use OTA when the fingerprint and runtime match.
+Native modules, permissions, plugins, icon/splash, Expo SDK and widget/Swift changes require a new binary.
+Missing binary fingerprints, incomplete collection, changed native configuration and incompatible runtimes block publication.
+Follow [the OTA baseline runbook](../../docs/engineering/devops/ios-ota-baseline.md) for build evidence, the TestFlight channel cutover and Dawit's manual App Store production approval.
+These release checks do not change the affected Maestro journey requirements below.
+
 ## Simulator coverage
 
 `npm run verify:sim-plan` prints the simulator scope, reason and exact existing Maestro flow names.

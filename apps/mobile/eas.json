@@ -32,6 +32,12 @@
     "production": {
       "channel": "production"
     },
+    "testflight": {
+      "extends": "production",
+      "distribution": "store",
+      "environment": "production",
+      "channel": "testflight"
+    },
     "e2e-simulator": {
       "distribution": "internal",
       "channel": "e2e",
@@ -44,6 +50,9 @@
     }
   },
   "submit": {
+    "testflight": {
+      "extends": "production"
+    },
     "production": {
       "ios": {
         "ascAppId": "6763851364",
