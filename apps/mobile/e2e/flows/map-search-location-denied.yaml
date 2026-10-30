@@ -8,7 +8,7 @@ env:
 - runFlow:
     file: ../helpers/map-search-setup.yaml
     env:
-      LOCATION_PERMISSION: deny
+      LOCATION_PERMISSION: never
 - extendedWaitUntil:
     visible:
       id: map-location-fallback

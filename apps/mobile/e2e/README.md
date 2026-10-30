@@ -125,7 +125,8 @@ Production builds and Android ignore both opt-ins and keep the list.
 The first flow opens a pin, enters the restaurant menu, searches pizza, edits meal targets, switches map/list without losing state, shuffles, and clears search.
 The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
 `helpers/map-search-setup.yaml` shares the authenticated API preflight and bounded startup reconnection.
-Maestro passes `launchApp.permissions` values to iOS without expanding variables, so this helper selects literal `allow` or `deny` launches through `runFlow.when.true`.
+Maestro passes `launchApp.permissions` values to iOS without expanding variables, so this helper selects literal `inuse` or `never` launches through `runFlow.when.true`.
+The installed iOS location driver rejects generic `allow`/`deny`; `inuse` grants foreground location and `never` exercises denial.
 Keep both permission scenarios covered by `scripts/sim/ci.test.ts` before host replay.
 The planner and product acceptance entrypoint consume both saved flows; the native dependency change requires the full selection.
 Run `lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node scripts/sim/ci.mjs --scope=full --udid=<owned-UDID>` with the documented host fixture configuration.

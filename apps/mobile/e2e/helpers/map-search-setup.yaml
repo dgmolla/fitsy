@@ -15,26 +15,26 @@ appId: com.fitsy.mobile
 - setLocation:
     latitude: 34.0407
     longitude: -118.2468
-- assertTrue: ${LOCATION_PERMISSION === 'allow' || LOCATION_PERMISSION === 'deny'}
-# Maestro does not expand launchApp permission values; select a literal launch instead.
+- assertTrue: ${LOCATION_PERMISSION === 'inuse' || LOCATION_PERMISSION === 'never'}
+# iOS location uses inuse/never, not allow/deny; launchApp also requires literal values.
 - runFlow:
     when:
-      true: ${LOCATION_PERMISSION === 'allow'}
+      true: ${LOCATION_PERMISSION === 'inuse'}
     commands:
       - launchApp:
           clearState: true
           clearKeychain: true
           permissions:
-            location: allow
+            location: inuse
 - runFlow:
     when:
-      true: ${LOCATION_PERMISSION === 'deny'}
+      true: ${LOCATION_PERMISSION === 'never'}
     commands:
       - launchApp:
           clearState: true
           clearKeychain: true
           permissions:
-            location: deny
+            location: never
 - retry:
     maxRetries: 2
     commands:

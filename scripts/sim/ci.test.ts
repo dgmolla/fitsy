@@ -57,8 +57,8 @@ test('menu startup retries only observations and authenticates once before readi
 });
 
 test.each([
-  ['map-search', 'allow'],
-  ['map-search-location-denied', 'deny'],
+  ['map-search', 'inuse'],
+  ['map-search-location-denied', 'never'],
 ])('%s launches once with a literal %s location permission before observing readiness', (flow, permission) => {
   type Step = {
     launchApp?: object;
@@ -75,7 +75,8 @@ test.each([
   const selected = commands.flatMap(step => step.runFlow?.when?.true
     ? evaluate(step.runFlow.when.true) ? step.runFlow.commands : []
     : [step]);
-  // launchApp permission values reach the native driver without variable expansion.
+  // Maestro's iOS driver accepts inuse/never for location, not generic allow/deny.
+  // launchApp permission values reach that driver without variable expansion.
   expect(selected.filter(step => step.launchApp)).toEqual([{
     launchApp: { clearState: true, clearKeychain: true, permissions: { location: permission } },
   }]);

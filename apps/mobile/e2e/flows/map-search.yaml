@@ -8,7 +8,7 @@ env:
 - runFlow:
     file: ../helpers/map-search-setup.yaml
     env:
-      LOCATION_PERMISSION: allow
+      LOCATION_PERMISSION: inuse
 - tapOn:
     id: discovery-location
 - scrollUntilVisible:
