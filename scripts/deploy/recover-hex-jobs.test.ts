@@ -113,17 +113,24 @@ test('real signatures and the production guard reject unauthorized recovery', ()
 test('the actual workflow command exposes a specific redacted audit refusal before database or OIDC access', () => {
   const workflow = parse(readFileSync(join(__dirname, '../../.github/workflows/production-migration-recovery.yml'), 'utf8'));
   const step = workflow.jobs.recovery.steps.find((step: { env?: { RECOVERY_MODE?: string } }) => step.env?.RECOVERY_MODE);
-  const result = spawnSync('bash', ['-euo', 'pipefail', '-c', step.run], {
-    cwd: join(__dirname, '../..'), encoding: 'utf8', timeout: 15_000,
-    env: { PATH: process.env.PATH, RECOVERY_MODE: 'audit',
-      POSTGRES_URL_NON_POOLING: 'postgresql://postgres.zaxkmjqozvmbifiwbxps:private-cli-password@aws-1-us-east-1.pooler.supabase.com:6543/postgres',
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'private-cli-request-token' },
-  });
-  expect(result.error).toBeUndefined();
-  expect(result.status).toBe(1);
-  expect(result.stdout).toBe('');
-  expect(result.stderr).toBe('Recovery refused: database port: expected 5432 or default; got port 6543\n');
-  expect(result.stdout + result.stderr).not.toMatch(/private-cli|postgresql:\/\/|pooler\.supabase\.com/);
+  const directory = mkdtempSync(join(tmpdir(), 'fitsy-recovery-startup-'));
+  try {
+    // Reproduce the Ubuntu runner's PS1 error without using host startup files.
+    const startup = join(directory, 'bashrc');
+    writeFileSync(startup, '[ -z "$PS1" ] && return\n');
+    // Noninteractive SSH-style shells can read bashrc; isolate the workflow's output.
+    const result = spawnSync('bash', ['--noprofile', '--norc', '--rcfile', startup, '-euo', 'pipefail', '-c', step.run], {
+      cwd: join(__dirname, '../..'), encoding: 'utf8', timeout: 15_000,
+      env: { PATH: process.env.PATH, SSH_CLIENT: 'fixture-client', RECOVERY_MODE: 'audit',
+        POSTGRES_URL_NON_POOLING: 'postgresql://postgres.zaxkmjqozvmbifiwbxps:private-cli-password@aws-1-us-east-1.pooler.supabase.com:6543/postgres',
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'private-cli-request-token' },
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('Recovery refused: database port: expected 5432 or default; got port 6543\n');
+    expect(result.stdout + result.stderr).not.toMatch(/private-cli|postgresql:\/\/|pooler\.supabase\.com/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test('manual workflow defaults to audit and retains the protected maintenance environment and release concurrency', () => {
@@ -151,11 +158,12 @@ test('manual workflow defaults to audit and retains the protected maintenance en
     writeFileSync(binary, `#!${process.execPath}\nrequire('fs').appendFileSync(process.env.CALLS, JSON.stringify({ args: process.argv.slice(2), write: process.env.FITSY_ALLOW_PROD_WRITE || '' }) + '\\n');\n`, { mode: 0o700 });
     for (const mode of ['audit', 'resolve', 'unexpected', '$(exit 0)']) {
       writeFileSync(calls, '');
-      const result = spawnSync('bash', ['-euo', 'pipefail', '-c', step.run!], {
+      const result = spawnSync('bash', ['--noprofile', '--norc', '-euo', 'pipefail', '-c', step.run!], {
         env: { PATH: directory + ':' + process.env.PATH, RECOVERY_MODE: mode, CALLS: calls }, encoding: 'utf8',
       });
       const records = readFileSync(calls, 'utf8').trim();
       expect(result.status).toBe(['audit', 'resolve'].includes(mode) ? 0 : 1);
+      expect(result.stderr).toBe('');
       if (records) expect(JSON.parse(records)).toEqual({
         args: ['--import', 'tsx', 'scripts/deploy/recover-hex-jobs.ts', '--prod', '--' + mode],
         write: mode === 'resolve' ? '1' : '',
