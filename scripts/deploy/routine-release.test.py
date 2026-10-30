@@ -733,6 +733,7 @@ if args[:3] == ['prisma', 'migrate', 'deploy']:
     schema = Path(args[args.index('--schema') + 1])
     migrations = sorted(path.parent.name for path in (schema.parent / 'migrations').glob('*/migration.sql'))
     Path(os.environ['MIGRATIONS']).write_text(json.dumps(migrations))
+    sys.stderr.write(os.environ.get('MIGRATE_STDERR', ''))
     sys.exit(int(os.environ.get('MIGRATE_EXIT', '0')))
 ''')
         command.chmod(0o700)
@@ -1106,6 +1107,28 @@ exit "${BUILD_EXIT:-0}"
         result, calls = self.drive(BUILD_EXIT='9')
         self.assertEqual(result.returncode, 9)
         self.assertEqual(calls[-1], 'npm run build -w apps/api')
+
+    def test_incident_635_p3009_preserves_original_failure_even_when_audit_is_unavailable(self):
+        incident = json.loads((ROOT / 'scripts/deploy/__fixtures__/incident-635.json').read_text())
+        # A concurrent failed attempt can appear after the read-only preflight.
+        # Replay the original provider diagnostic at the real build boundary;
+        # holding its SQL must neither hide the error nor authorize recovery.
+        for audit_state in ('ok', 'driver-error'):
+            with self.subTest(audit_state=audit_state):
+                result, calls = self.drive(VERCEL_GIT_COMMIT_SHA=incident['source'], MIGRATE_EXIT='1',
+                                           MIGRATE_STDERR=incident['prisma_stderr'], AUDIT_STATE=audit_state,
+                                           FITSY_PIPELINE_ROLES_APPROVED_SHA256=None)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn(incident['prisma_stderr'], result.stderr)
+                self.assertIn('production-migration-recovery.yml', result.stderr)
+                self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+                self.assertEqual(calls[-3:], ['audit read only', 'audit statement timeout', 'migration failure audit'])
+                self.assertFalse(any('resolve' in call or call.startswith('npm') for call in calls))
+                self.assertNotIn('runtime migration preflight', calls)
+                self.assertNotIn('20261028130000_hex_jobs', json.loads(self.migrations.read_text()))
+                reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+                self.assertEqual(reports, [{'migration_failure_audit': self.audit}] if audit_state == 'ok' else [])
+                self.assertNotIn('private-fixture-database-detail', result.stdout + result.stderr)
 
     def test_unresolved_history_stops_before_prisma_even_when_failed_sql_is_held(self):
         # Replay #661's exact Vercel audit. Held SQL and role approval cannot
