@@ -11,7 +11,8 @@ beforeEach(() => {
   writeFileSync(join(directory, 'curl'), `#!/bin/bash
 printf '%s\\n' "$*" >> "$CALLS"
 case "$*" in
-  *api/health*) printf 200 ;;
+  *api/health*) printf '%s' "\${SMOKE_HEALTH_STATUS:-200}" ;;
+  *'Authorization: Bearer invalid.jwt.signature'*) printf '%s' "\${SMOKE_INVALID_SESSION_STATUS:-401}" ;;
   *api/auth/login*seed-free*) printf '{"token":"free"}' ;;
   *api/auth/login*) printf '{"token":"pro"}' ;;
   *api/auth/register*) printf 201 ;;
@@ -22,11 +23,13 @@ esac
 `, { mode: 0o755 });
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
-function smoke(base: string, args = ['--write']) {
+function smoke(base: string, args = ['--write'], environment: Record<string, string> = {}) {
   const calls = join(directory, 'calls');
+  rmSync(calls, { force: true });
   const result = spawnSync('bash', [resolve(__dirname, 'api-e2e.sh'), '--base=' + base, ...args], {
     encoding: 'utf8', timeout: 10_000,
-    env: { ...process.env, PATH: `${directory}:${process.env['PATH']}`, CALLS: calls, PROD_SMOKE_EMAIL: '', PROD_SMOKE_PASSWORD: '' },
+    env: { ...process.env, PATH: `${directory}:${process.env['PATH']}`, CALLS: calls, PROD_SMOKE_EMAIL: '', PROD_SMOKE_PASSWORD: '',
+      SMOKE_HEALTH_STATUS: '200', SMOKE_INVALID_SESSION_STATUS: '401', ...environment },
   });
   expect(result.error).toBeUndefined();
   return { ...result, calls: existsSync(calls) ? readFileSync(calls, 'utf8') : '' };
@@ -57,4 +60,43 @@ test.each([{ args: [] }, { args: ['--prod-safe'] }, { args: ['--write', '--prod-
   const result = smoke('https://fitsy.org', args);
   expect(result.status).toBe(0);
   expect(result.calls).not.toContain('api/auth/register');
+});
+
+test('incident 584 fails despite healthy database and missing-session responses, then recovers', () => {
+  const incident = JSON.parse(readFileSync(resolve(__dirname, '../deploy/__fixtures__/incident-584.json'), 'utf8'));
+  const failed = smoke('https://fitsy.org', ['--prod-safe'], {
+    SMOKE_HEALTH_STATUS: String(incident.smoke.health),
+    SMOKE_INVALID_SESSION_STATUS: String(incident.smoke.invalid_session),
+  });
+  expect(failed.status).toBe(1);
+  expect(JSON.parse(failed.stdout)).toMatchObject({
+    status: 'fail', summary: incident.smoke.summary,
+    fix: expect.stringContaining('shared rate-limit'),
+  });
+  expect(failed.stderr).toContain(`health -> ${incident.smoke.health}`);
+  expect(failed.stderr).toContain(`unauth subscriptions/status (expect 401) -> ${incident.smoke.missing_session}`);
+  expect(JSON.parse(failed.stdout).fix).toContain('UPSTASH_REDIS_REST_URL');
+  expect(JSON.parse(failed.stdout).fix).toContain('UPSTASH_REDIS_REST_TOKEN');
+  expect(JSON.parse(failed.stdout).fix).toContain('guarded Git build');
+  expect(failed.calls).not.toMatch(/api\/auth\/(login|register)/);
+
+  // Restoring readiness must still reject the same invalid token.
+  const recovered = smoke('https://fitsy.org', ['--prod-safe']);
+  expect(recovered.status).toBe(0);
+  expect(JSON.parse(recovered.stdout)).toMatchObject({ status: 'pass', fix: '' });
+  expect(recovered.stderr).toContain('invalid-session search (expect 401) -> 401');
+  expect(recovered.calls).toBe(failed.calls);
+});
+
+test.each([
+  { health: '503', invalid: '503' },
+  { health: '200', invalid: '429' },
+  { health: '200', invalid: '000' },
+])('other smoke failures remain failures without a store-specific diagnosis: %j', ({ health, invalid }) => {
+  const result = smoke('https://fitsy.org', ['--prod-safe'], {
+    SMOKE_HEALTH_STATUS: health, SMOKE_INVALID_SESSION_STATUS: invalid,
+  });
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ status: 'fail', summary: expect.stringContaining(`invalid-session=${invalid}`) });
+  expect(JSON.parse(result.stdout).fix).not.toContain('shared rate-limit');
 });

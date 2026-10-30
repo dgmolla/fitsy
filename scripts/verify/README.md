@@ -44,7 +44,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `build.sh` | 3 | offline production API compilation, no stray compiled output; actual store bindings are checked by the guarded Vercel build preflight |
 | `mobile-bundle.sh` | 3 | production iOS minified JS and gzip budgets; offline local export only |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |
-| `api-e2e.sh` | 6 | a deployed API serves health + data-route 401s + authenticated entitlement locks (read-only by default; `--write` adds registration only on the exact dev origin or loopback HTTP) |
+| `api-e2e.sh` | 6 | a deployed API serves health + missing/invalid-session 401s + authenticated entitlement locks; healthy-DB/invalid-session 503 failures direct shared-store readiness inspection (read-only by default; `--write` adds registration only on the exact dev origin or loopback HTTP) |
 
 Callers: `.githooks/pre-push` (size/domain checks plus cheap layers 0-1, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
 
