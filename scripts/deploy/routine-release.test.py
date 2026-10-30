@@ -943,7 +943,13 @@ exit "${BUILD_EXIT:-0}"
                     self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
 
     def test_incident_602_store_recovery_preserves_guarded_build_order(self):
-        incident = json.loads((ROOT / 'scripts/deploy/__fixtures__/incident-602.json').read_text())
+        self.assert_store_recovery(602)
+
+    def test_incident_584_runtime_outage_is_withheld_before_migrations_or_build(self):
+        self.assert_store_recovery(584)
+
+    def assert_store_recovery(self, number):
+        incident = json.loads((ROOT / f'scripts/deploy/__fixtures__/incident-{number}.json').read_text())
         dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
         for environment in ('production', 'preview'):
             bindings = {} if environment == 'production' else {
@@ -957,7 +963,9 @@ exit "${BUILD_EXIT:-0}"
                 with self.subTest(environment=environment, failure=list(failure)):
                     result, calls = self.drive(**source, **failure)
                     self.assertEqual(result.returncode, 1, result.stderr)
-                    self.assertIn(incident['build_stderr'], result.stderr)
+                    self.assertIn('Shared rate-limit store preflight failed', result.stderr)
+                    if 'build_stderr' in incident:
+                        self.assertIn(incident['build_stderr'], result.stderr)
                     self.assertEqual(calls, expected_calls)
                     self.assertFalse(self.migrations.exists())
                     self.assertNotIn('private-fixture', result.stdout + result.stderr)

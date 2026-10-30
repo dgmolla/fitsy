@@ -180,7 +180,11 @@ The disposable Prisma regression explicitly resolves its failed fixture through 
 Run `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath deploy/recover-hex-jobs.test.ts` for signed identity, target, state and actual workflow-shell refusal coverage.
 Its post-recovery comparison tests accept independently parsed snapshots and reject changes beyond the rollback marker while preserving the original evidence.
 The owned database verifier also runs `apps/api/tests/db/hexJobsRecovery.db.test.ts`, which recreates the observed ledger in a disposable PostgreSQL database, proves P3009 and partial-state refusal, and rehearses real Prisma recovery followed by filtered deployment.
-If smoke reports `invalid-session=503` while database health and missing-session checks pass, inspect shared-store configuration and runtime `[rate-limit] Shared store unavailable` logs.
+Incident [#584](https://github.com/dgmolla/fitsy/issues/584) reached Ready on production deployment [5kfvNLjY41uiWSsTEHaLFowTnLEc](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/5kfvNLjY41uiWSsTEHaLFowTnLEc) at `fa2779028de4e6160c1548ea36c5d9c27c176474`; its migration and build succeeded.
+The [Deploy smoke log](https://github.com/dgmolla/fitsy/actions/runs/40589809610/job/122490847803) recorded database health 200 and missing-session 401s, then `invalid-session=503`; this is the runtime outage covered by #587's guarded Redis preflight.
+The [retained #584 diagnostic](../../../scripts/deploy/__fixtures__/incident-584.json) drives both smoke failure/recovery and the existing production/preview build regressions, preserving the distinction between a Ready deployment and working authentication.
+If smoke reports `invalid-session=503` while database health passes, its failure result now directs inspection of shared-store configuration and runtime `[rate-limit] Shared store unavailable` logs.
+The status alone does not distinguish a missing binding, an unwritable token or a provider outage.
 Missing-session 401s return before Redis, and `/api/health` probes only the database; neither establishes authentication readiness.
 Restore both store variables in the existing `fitsy-api` Vercel environment with a writable token and verify `EVAL` access.
 Use the supported Vercel environment controls without printing credential values, and keep production and nonproduction stores separate.

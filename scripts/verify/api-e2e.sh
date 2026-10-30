@@ -72,7 +72,14 @@ if [ "$SAFE" = "0" ]; then
 fi
 
 if [ -n "$FAILS" ]; then
-  printf '{"name":"api-e2e","status":"fail","summary":"%s","fix":"check the failing route on %s; if this is a fresh deploy, roll back first (scripts/deploy/rollback.sh api), diagnose second"}\n' "$(echo $FAILS | xargs)" "$BASE"
+  FIX="check the failing route on $BASE; if this is a fresh deploy, roll back first (scripts/deploy/rollback.sh api), diagnose second"
+  # Incident #584 passed database health while authentication failed closed.
+  # This signature points to readiness inspection, not proof of a missing binding.
+  if [ "$H" = "200" ] && [ "$I" = "503" ]; then
+    FIX="inspect shared rate-limit readiness and runtime logs on $BASE; verify UPSTASH_REDIS_REST_URL and a writable UPSTASH_REDIS_REST_TOKEN with EVAL access, "
+    FIX+="then rerun the guarded Git build and exact-source smoke (docs/engineering/devops/routine-production.md); database health alone does not establish authentication readiness"
+  fi
+  printf '{"name":"api-e2e","status":"fail","summary":"%s","fix":"%s"}\n' "$(echo $FAILS | xargs)" "$FIX"
   exit 1
 fi
 printf '{"name":"api-e2e","status":"pass","summary":"smoke green against %s (prod-safe=%s)","fix":""}\n' "$BASE" "$SAFE"
