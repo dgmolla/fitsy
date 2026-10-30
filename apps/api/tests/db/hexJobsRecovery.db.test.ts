@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { assertTestDatabase } from '../../../../scripts/lib/test-database-guard';
-import { failedAttempt, migrationAudit, resolveHexJobs } from '../../../../scripts/deploy/recover-hex-jobs';
+import { failedAttempt, resolveHexJobs } from '../../../../scripts/deploy/recover-hex-jobs';
+import { migrationAudit } from '../../../../scripts/deploy/migration-failure-audit';
 
 const suite = process.env['POSTGRES_PRISMA_URL'] ? describe : describe.skip;
 const root = resolve(__dirname, '../../../..');
