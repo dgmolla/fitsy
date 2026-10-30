@@ -90,6 +90,8 @@ suite('pipeline roadmap journey with real persistence and only DNS/provider HTTP
       await db.hexJob.deleteMany({ where: { runId: { in: runIds } } });
       await db.pipelineCompletedHex.deleteMany({ where: { runId: { in: runIds } } });
       await db.restaurant.deleteMany({ where: { id: { in: restaurantIds } } });
+      // PDF upgrades add catalog rows whose brand relation does not cascade.
+      await db.chainItem.deleteMany({ where: { brandId } });
       await db.brand.deleteMany({ where: { id: brandId } });
       await new SharedUeRateLimiter(db).configure(1);
     } finally { rmSync(out, { recursive: true, force: true }); }
