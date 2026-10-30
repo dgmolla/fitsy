@@ -1,0 +1,6 @@
+{
+  "source": "9bb3d167b410891e96dc3cec87f69a97690dd64b",
+  "deploy_run": "https://github.com/dgmolla/fitsy/actions/runs/40733284116",
+  "build_logs": "https://vercel.com/dawits-projects-74b6e00f/fitsy-api/CNHHrWguhaydhBtQCTNVA2zbRdEg",
+  "build_stderr": "refusing: issue #588 requires Dawit approval of the exact database role migration before production deploy\n"
+}
