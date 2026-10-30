@@ -90,7 +90,10 @@ export async function fetchProEntitlement(
   const key = process.env["REVENUECAT_PUBLIC_API_KEY"];
   if (!key) return null;
   const production = !isDevelopmentEnvironment();
-  if (production && key.startsWith('test_')) return null;
+  if (production && key.startsWith('test_')) {
+    console.warn(JSON.stringify({ event: 'revenuecat.test_store_lookup_unknown', userId: appUserId })); // eslint-disable-line no-console
+    return null;
+  }
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), REVENUECAT_TIMEOUT_MS);
@@ -108,7 +111,7 @@ export async function fetchProEntitlement(
       },
     );
     if (!res.ok) {
-      console.warn(`[revenuecat] subscriber lookup failed: ${res.status}`);
+      console.warn(`[revenuecat] subscriber lookup failed: ${res.status}`); // eslint-disable-line no-console
       return null;
     }
     const body = (await res.json()) as SubscriberResponse;
@@ -138,9 +141,10 @@ export async function fetchProEntitlement(
     const sub = plan ? subscriber.subscriptions?.[plan] : undefined;
     const active = expiresAt ? expiresAt.getTime() > Date.now() : true;
     // TestFlight and App Review use sandbox purchases with the production API.
+    // A confirmed expiration is real state, distinct from an unknown lookup.
     if (production && sub?.is_sandbox === true) {
-      if (!active) return null;
-      console.info(JSON.stringify({ event: 'revenuecat.sandbox_entitlement_accepted', userId: appUserId })); // eslint-disable-line no-console
+      const event = active ? 'revenuecat.sandbox_entitlement_accepted' : 'revenuecat.sandbox_entitlement_expired';
+      console.info(JSON.stringify({ event, userId: appUserId })); // eslint-disable-line no-console
     }
     return {
       active,
@@ -152,7 +156,7 @@ export async function fetchProEntitlement(
       requestDate,
     };
   } catch {
-    console.warn("[revenuecat] subscriber lookup error");
+    console.warn("[revenuecat] subscriber lookup error"); // eslint-disable-line no-console
     return null;
   } finally {
     clearTimeout(timer);

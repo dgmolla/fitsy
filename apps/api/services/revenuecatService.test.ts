@@ -3,6 +3,7 @@ import { fetchProEntitlement, isRevenueCatConfigured } from "./revenuecatService
 const ENV = process.env;
 const realFetch = global.fetch;
 let info: jest.SpyInstance;
+let warn: jest.SpyInstance;
 
 function mockFetch(status: number, body: unknown) {
   global.fetch = jest.fn().mockResolvedValue({
@@ -14,7 +15,7 @@ function mockFetch(status: number, body: unknown) {
 
 beforeEach(() => {
   process.env = { ...ENV, REVENUECAT_PUBLIC_API_KEY: "appl_test" };
-  jest.spyOn(console, "warn").mockImplementation(() => {});
+  warn = jest.spyOn(console, "warn").mockImplementation(() => {});
   info = jest.spyOn(console, "info").mockImplementation(() => {});
 });
 afterEach(() => {
@@ -31,6 +32,9 @@ describe("fetchProEntitlement", () => {
     global.fetch = jest.fn();
     expect(await fetchProEntitlement('u1')).toBeNull();
     expect(global.fetch).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(JSON.stringify({
+      event: 'revenuecat.test_store_lookup_unknown', userId: 'u1',
+    }));
   });
 
   it.each([true, undefined, false])('production accepts an active platform-store entitlement with is_sandbox=%s', async sandbox => {
@@ -54,15 +58,21 @@ describe("fetchProEntitlement", () => {
     }
   });
 
-  it.each([-60_000, 0])('rejects a production sandbox entitlement expiring %s ms from now without logging acceptance', async offset => {
+  it.each([-60_000, 0])('returns the expired production sandbox state when expiry is %s ms from now', async offset => {
     process.env['VERCEL_ENV'] = 'production';
     jest.spyOn(Date, 'now').mockReturnValue(Date.now());
     mockFetch(200, { subscriber: {
       entitlements: { pro: { product_identifier: 'monthly', expires_date: new Date(Date.now() + offset).toISOString() } },
       subscriptions: { monthly: { is_sandbox: true } },
     } });
-    expect(await fetchProEntitlement('u1')).toBeNull();
-    expect(info).not.toHaveBeenCalled();
+    expect(await fetchProEntitlement('u1')).toMatchObject({
+      active: false, hadProEntitlement: true, plan: 'monthly',
+      expiresAt: new Date(Date.now() + offset),
+    });
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledWith(JSON.stringify({
+      event: 'revenuecat.sandbox_entitlement_expired', userId: 'u1',
+    }));
   });
 
   it.each([false, undefined])('retains the inactive state for an expired production entitlement with is_sandbox=%s', async sandbox => {
