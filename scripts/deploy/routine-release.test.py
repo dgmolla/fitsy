@@ -831,8 +831,11 @@ exit "${BUILD_EXIT:-0}"
     def test_incident_622_build_proceeds_with_unapproved_role_sql_held(self):
         self.assert_unapproved_role_build(622)
 
+    def test_incident_617_build_proceeds_with_unapproved_role_sql_held(self):
+        self.assert_unapproved_role_build(617)
+
     def assert_unapproved_role_build(self, number):
-        # Both incidents stopped before migrations or API compilation.
+        # These incidents stopped before migrations or API compilation.
         # Replay each source without executing unapproved controlled SQL.
         incident = json.loads((ROOT / f'scripts/deploy/__fixtures__/incident-{number}.json').read_text())
         role = '20261028120000_pipeline_writer_roles'
