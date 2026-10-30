@@ -35,7 +35,10 @@ export async function migrationAudit(client: PrismaClient): Promise<Audit> {
 }
 
 async function main() {
-  if (process.argv.length !== 3 || process.argv[2] !== '--prod') throw new Error('explicit production audit required');
+  const preflight = process.argv[3] === '--preflight';
+  if (process.argv[2] !== '--prod' || process.argv.length !== (preflight ? 4 : 3)) {
+    throw new Error('use --prod with optional --preflight');
+  }
   // Reuse the signed Git-build identity and target guard. This command never
   // resolves migrations or grants roles, regardless of production write intent.
   const url = await assertDatabaseWriteAllowed(process.env['POSTGRES_URL_NON_POOLING']);
@@ -44,7 +47,14 @@ async function main() {
   let evidence: Audit;
   try { evidence = await migrationAudit(client); }
   finally { await client.$disconnect(); }
-  process.stdout.write(JSON.stringify({ migration_failure_audit: evidence }) + '\n');
+  const unresolved = evidence.migration_history.some(row => row.unresolved);
+  if (!preflight || unresolved) process.stdout.write(JSON.stringify({ migration_failure_audit: evidence }) + '\n');
+  if (preflight && unresolved) {
+    console.error('TL;DR: Production migrations stopped before Prisma deploy because of unresolved migration history.\n' +
+      'Inspect scripts/deploy/migration-failure-audit.sql and docs/engineering/devops/routine-production.md; ' +
+      'production-migration-recovery.yml retains separate approval for the exact #643 attempt only. No automatic resolve or retry.');
+    process.exitCode = 1;
+  }
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(__filename)) {

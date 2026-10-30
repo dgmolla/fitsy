@@ -519,12 +519,13 @@ Module._load = function(name, ...args) {
       }, $queryRawUnsafe: async sql => {
         assert.equal(sql, readFileSync('scripts/deploy/migration-failure-audit.sql', 'utf8')
           .split(';').find(statement => statement.includes('AS migration_failure_audit')));
-        appendFileSync(process.env.CALLS, 'migration failure audit\\n');
-        switch (process.env.AUDIT_STATE) {
+        const preflight = process.argv.includes('--preflight');
+        appendFileSync(process.env.CALLS, preflight ? 'migration history preflight\\n' : 'migration failure audit\\n');
+        switch (process.env[preflight ? 'PREFLIGHT_AUDIT_STATE' : 'AUDIT_STATE']) {
           case 'driver-error': throw Error('private-fixture-database-detail');
           case 'missing': return [];
           case 'timeout': return new Promise(() => {});
-          default: return [{ migration_failure_audit: JSON.parse(process.env.AUDIT_REPORT) }];
+          default: return [{ migration_failure_audit: JSON.parse(process.env[preflight ? 'PREFLIGHT_AUDIT_REPORT' : 'AUDIT_REPORT']) }];
         }
       } });
     }
@@ -605,6 +606,7 @@ exit "${BUILD_EXIT:-0}"
             'id': 'c4b89b99-d4a5-49d9-9664-4699383e5f81',
             'migration_name': '20261028130000_hex_jobs',
             'checksum': 'f793bacb999d2db72489a4bb9ab89bc2ae1da2a6b1ecff68942e66e1b65889b9',
+            'started_at': '2026-10-28T18:56:48.891157+00:00', 'applied_steps_count': 0,
             'finished_at': None, 'rolled_back_at': None, 'unresolved': True,
             'failure_logs_present': False, 'missing_pipeline_writer': None}],
             'relations': [{'name': name, 'present': False} for name in ('hex_job_events', 'hex_jobs')],
@@ -616,6 +618,7 @@ exit "${BUILD_EXIT:-0}"
         self.env.update(PATH=str(self.bin) + ':' + os.environ['PATH'], CALLS=str(self.calls),
                         MIGRATIONS=str(self.migrations),
                         AUDIT_REPORT=json.dumps(self.audit),
+                        PREFLIGHT_AUDIT_REPORT=json.dumps({**self.audit, 'migration_history': []}),
                         NODE_OPTIONS=f'--require={database_transport} --import={transport}', REDIS_RESULT='ok',
                         UPSTASH_REDIS_REST_URL='https://quota.example.test',
                         UPSTASH_REDIS_REST_TOKEN='private-fixture-token',
@@ -755,7 +758,8 @@ exit "${BUILD_EXIT:-0}"
         for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
             result, calls = self.drive(FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
             self.assertNotEqual(result.returncode, 0)
-            self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration failure audit'])
+            self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight',
+                                     'audit read only', 'audit statement timeout', 'migration failure audit'])
             self.assertFalse(self.migrations.exists())
 
     def test_pipeline_and_audit_credentials_cannot_become_the_app_runtime_binding(self):
@@ -810,7 +814,8 @@ exit "${BUILD_EXIT:-0}"
         for path in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh',
                      'scripts/deploy/rate-limit-preflight.ts', 'scripts/lib/db-target-guard.ts',
                      'scripts/deploy/pipeline-roles-approval.mjs', 'scripts/deploy/activate-runtime-role.ts',
-                     'scripts/deploy/runtime-migrations-preflight.ts'):
+                     'scripts/deploy/runtime-migrations-preflight.ts',
+                     'scripts/deploy/migration-failure-audit.ts', 'scripts/deploy/migration-failure-audit.sql'):
             self.assertIn(path, paths)
 
     def test_actual_production_build_migrates_before_build_using_existing_bindings(self):
@@ -819,7 +824,8 @@ exit "${BUILD_EXIT:-0}"
             with self.subTest(route='direct' if bindings else 'qualified pooler'):
                 result, calls = self.drive(**bindings)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate status --schema prisma/schema.prisma',
+                self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight',
+                                         'npx prisma migrate status --schema prisma/schema.prisma',
                                          'npx prisma migrate deploy --schema prisma/schema.prisma',
                                          'runtime migration preflight', 'npm run build -w apps/api'])
 
@@ -829,7 +835,8 @@ exit "${BUILD_EXIT:-0}"
         result, calls = self.drive(POSTGRES_URL_NON_POOLING=route.format(port=5432),
                                    POSTGRES_PRISMA_URL=route.format(port=6543).replace('postgres:', 'fitsy_app:') + '&pgbouncer=true')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate status --schema prisma/schema.prisma',
+        self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight',
+                                 'npx prisma migrate status --schema prisma/schema.prisma',
                                  'npx prisma migrate deploy --schema prisma/schema.prisma',
                                  'runtime migration preflight', 'npm run build -w apps/api'])
 
@@ -963,6 +970,59 @@ exit "${BUILD_EXIT:-0}"
         self.assertEqual(result.returncode, 9)
         self.assertEqual(calls[-1], 'npm run build -w apps/api')
 
+    def test_unresolved_history_stops_before_prisma_even_when_failed_sql_is_held(self):
+        # #657's exact failed attempt remains in the ledger even when its SQL
+        # is excluded. No new build may invoke Prisma deploy against that state.
+        for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
+            with self.subTest(approved=approval is not None):
+                result, calls = self.drive(MIGRATE_EXIT='7', PREFLIGHT_AUDIT_REPORT=json.dumps(self.audit),
+                                           FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout',
+                                         'migration history preflight'])
+                reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+                self.assertEqual(reports, [{'migration_failure_audit': self.audit}])
+                self.assertIn('unresolved migration history', result.stderr)
+                self.assertIn('production-migration-recovery.yml', result.stderr)
+                self.assertFalse(self.migrations.exists())
+
+    def test_other_unresolved_attempts_and_partial_objects_also_withhold_prisma(self):
+        audit = copy.deepcopy(self.audit)
+        audit['migration_history'][0].update(id='other-attempt', migration_name='other_failed_migration')
+        audit['relations'][0]['present'] = True
+        result, calls = self.drive(PREFLIGHT_AUDIT_REPORT=json.dumps(audit))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight'])
+        self.assertIn(json.dumps({'migration_failure_audit': audit}, separators=(',', ':')), result.stdout)
+        self.assertFalse(self.migrations.exists())
+
+    def test_settled_history_allows_deploy_but_does_not_establish_runtime_schema_readiness(self):
+        for field in ('finished_at', 'rolled_back_at'):
+            audit = copy.deepcopy(self.audit)
+            audit['migration_history'][0].update({field: '2026-10-29T12:00:00+00:00', 'unresolved': False})
+            for runtime in ('applied', 'missing'):
+                with self.subTest(field=field, runtime=runtime):
+                    result, calls = self.drive(PREFLIGHT_AUDIT_REPORT=json.dumps(audit),
+                                               FITSY_PIPELINE_ROLES_APPROVED_SHA256=None, RUNTIME_MIGRATION_STATE=runtime)
+                    self.assertEqual(result.returncode, 0 if runtime == 'applied' else 1, result.stderr)
+                    self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+                    self.assertEqual(calls.count('runtime migration preflight'), 1)
+                    self.assertEqual(any(call.startswith('npm') for call in calls), runtime == 'applied')
+                    self.assertNotIn('migration_failure_audit', result.stdout)
+                    self.assertNotIn('20261028130000_hex_jobs', json.loads(self.migrations.read_text()))
+
+    def test_unavailable_history_preflight_withholds_prisma_without_retry_or_private_errors(self):
+        for state in ('driver-error', 'missing', 'timeout'):
+            with self.subTest(state=state):
+                result, calls = self.drive(PREFLIGHT_AUDIT_STATE=state)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight'])
+                self.assertIn('Migration failure audit unavailable', result.stderr)
+                self.assertNotIn('private-fixture-database-detail', result.stdout + result.stderr)
+                self.assertNotIn('fixture@', result.stdout + result.stderr)
+                self.assertEqual(result.stdout, 'Shared rate-limit store preflight passed\n')
+                self.assertFalse(self.migrations.exists())
+
     def test_failed_migration_emits_read_only_evidence_without_resolving_or_retrying(self):
         for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
             result, calls = self.drive(MIGRATE_EXIT='7', FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
@@ -993,15 +1053,27 @@ exit "${BUILD_EXIT:-0}"
                         {'POSTGRES_URL_NON_POOLING': self.env['POSTGRES_URL_NON_POOLING'].replace(
                             'zaxkmjqozvmbifiwbxps', 'kegycybiruksmrzvniha')}):
             with self.subTest(changes=changes):
+                for args in (['--prod'], ['--prod', '--preflight']):
+                    self.calls.write_text('')
+                    result = subprocess.run(['node', '--import', 'tsx', 'scripts/deploy/migration-failure-audit.ts', *args],
+                                            cwd=self.root, env={**self.env, 'FITSY_ALLOW_PROD_WRITE': '1', **changes},
+                                            text=True, capture_output=True, timeout=15)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(self.calls.read_text(), '')
+                    self.assertEqual(result.stdout, '')
+                    self.assertIn('Migration failure audit unavailable', result.stderr)
+                    self.assertNotIn('fixture@', result.stderr)
+
+    def test_build_audit_cli_refuses_recovery_and_unknown_arguments(self):
+        for args in ([], ['--preflight'], ['--prod', '--resolve'], ['--prod', '--preflight', '--resolve']):
+            with self.subTest(args=args):
                 self.calls.write_text('')
-                result = subprocess.run(['node', '--import', 'tsx', 'scripts/deploy/migration-failure-audit.ts', '--prod'],
-                                        cwd=self.root, env={**self.env, 'FITSY_ALLOW_PROD_WRITE': '1', **changes},
+                result = subprocess.run(['node', '--import', 'tsx', 'scripts/deploy/migration-failure-audit.ts', *args],
+                                        cwd=self.root, env={**self.env, 'FITSY_ALLOW_PROD_WRITE': '1'},
                                         text=True, capture_output=True, timeout=15)
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertEqual(self.calls.read_text(), '')
                 self.assertEqual(result.stdout, '')
-                self.assertIn('Migration failure audit unavailable', result.stderr)
-                self.assertNotIn('fixture@', result.stderr)
 
 
 if __name__ == '__main__':
