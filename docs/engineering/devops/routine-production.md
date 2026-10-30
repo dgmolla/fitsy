@@ -112,6 +112,8 @@ Use `bash scripts/deploy/rollback.sh api https://KNOWN_GOOD_URL` for an authoriz
 Do not infer the known-good target from second-newest deployment ordering.
 After a failed or uncertain release, read the actual project/deployment/alias and health before resuming.
 If Prisma reports `P3009`, the failed migration ledger still blocks deployment even when the failed file is held from the temporary input.
+The release regression suite replays [#635's original Vercel diagnostic](../../../scripts/deploy/__fixtures__/incident-635.json) through the actual build caller, including a failure appearing after the history preflight and an unavailable follow-up audit.
+The original Prisma failure must remain visible, with no build, automatic resolve or migration retry.
 The role filter never resolves failures, deletes ledger rows, marks unexecuted SQL applied, or retries with unfiltered migrations.
 For incident [#629](https://github.com/dgmolla/fitsy/issues/629), Vercel deployment `H3t9dcTY75kXmgPvmtpizY6oQZ2J` at `b28c630` reported a retained failure of `20261028130000_hex_jobs` from the preceding `63a36df` build.
 Incident [#647](https://github.com/dgmolla/fitsy/issues/647) is the same retained failure: exact Vercel deployment [aei8rXsjyWKEhiAywALkLrF5yr1f](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/aei8rXsjyWKEhiAywALkLrF5yr1f) at `6f6d579` stopped with P3009 before building the widget API.
