@@ -112,6 +112,10 @@ Before the pilot, retain the actual known-good serving deployment URL and applic
 Use `bash scripts/deploy/rollback.sh api https://KNOWN_GOOD_URL` for an authorized API rollback.
 Do not infer the known-good target from second-newest deployment ordering.
 After a failed or uncertain release, read the actual project/deployment/alias and health before resuming.
+Incident [#626](https://github.com/dgmolla/fitsy/issues/626) stopped before Prisma: [Deploy run 40744571501](https://github.com/dgmolla/fitsy/actions/runs/40744571501) at `b47915a15cc3b027de952b118ba41ef901608d4a` observed failed Vercel deployment [2VxCGquGpsGoXe186GiQSa4bDstS](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/2VxCGquGpsGoXe186GiQSa4bDstS), whose build required role approval for every production deployment.
+The selection repair in #627 and dependency filter in #632 supersede that whole-build gate while retaining exact approval for controlled SQL.
+The [retained #626 diagnostic](../../../scripts/deploy/__fixtures__/incident-626.json) binds the build regression to its original source: absent or invalid role approval must still permit unrelated migrations and API compilation, with controlled SQL held, source SQL unchanged, and database, Redis, history and runtime-schema guards executed.
+This regression does not authorize role application, failed-migration recovery or a production redeploy.
 If Prisma reports `P3009`, the failed migration ledger still blocks deployment even when the failed file is held from the temporary input.
 The release regression suite replays the original Vercel diagnostics from [#628](../../../scripts/deploy/__fixtures__/incident-628.json), [#634](../../../scripts/deploy/__fixtures__/incident-634.json) and [#635](../../../scripts/deploy/__fixtures__/incident-635.json) through the actual build caller, including a failure appearing after the history preflight and an unavailable follow-up audit.
 The original Prisma failure must remain visible, with no build, automatic resolve or migration retry.
