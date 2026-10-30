@@ -748,17 +748,8 @@ exit "${BUILD_EXIT:-0}"
         command.chmod(0o700)
         self.calls = self.root / 'calls'
         self.migrations = self.root / 'migrations.json'
-        self.audit = {'database': 'postgres', 'migration_history': [{
-            'id': 'c4b89b99-d4a5-49d9-9664-4699383e5f81',
-            'migration_name': '20261028130000_hex_jobs',
-            'checksum': 'f793bacb999d2db72489a4bb9ab89bc2ae1da2a6b1ecff68942e66e1b65889b9',
-            'started_at': '2026-10-28T18:56:48.891157+00:00', 'applied_steps_count': 0,
-            'finished_at': None, 'rolled_back_at': None, 'unresolved': True,
-            'failure_logs_present': False, 'missing_pipeline_writer': None}],
-            'relations': [{'name': name, 'present': False} for name in ('hex_job_events', 'hex_jobs')],
-            'roles': [{'name': 'pipeline_writer', 'present': False}],
-            'runtime_schema': {'migration_name': '20261029010000_widget_search_tokens',
-                               'migration_history': [], 'relation_present': False}}
+        self.incident = json.loads((ROOT / 'scripts/deploy/fixtures/incident-661.json').read_text())
+        self.audit = self.incident['migration_failure_audit']
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith(('VERCEL', 'POSTGRES', 'SUPABASE', 'PIPELINE_DATABASE_URL', 'PROD_', 'FITSY_ALLOW_PROD', 'FITSY_PIPELINE_ROLES', 'GITHUB_ACTIONS', 'UPSTASH', 'NODE_OPTIONS'))}
         self.env.update(PATH=str(self.bin) + ':' + os.environ['PATH'], CALLS=str(self.calls),
@@ -770,7 +761,7 @@ exit "${BUILD_EXIT:-0}"
                         UPSTASH_REDIS_REST_TOKEN='private-fixture-token',
                         VERCEL='1', VERCEL_ENV='production', VERCEL_PROJECT_ID='prj_z1QTfOgbj4tlm91U2Hf8JXr5k4v4',
                         VERCEL_GIT_PROVIDER='github', VERCEL_GIT_REPO_OWNER='dgmolla', VERCEL_GIT_REPO_SLUG='fitsy',
-                        VERCEL_GIT_COMMIT_REF='main', VERCEL_GIT_COMMIT_SHA='a' * 40,
+                        VERCEL_GIT_COMMIT_REF='main', VERCEL_GIT_COMMIT_SHA=self.incident['source'],
                         SUPABASE_URL='https://zaxkmjqozvmbifiwbxps.supabase.co',
                         FITSY_PIPELINE_ROLES_APPROVED_SHA256=hashlib.sha256((ROOT / 'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql').read_bytes()).hexdigest(),
                         POSTGRES_URL_NON_POOLING='postgresql://postgres.zaxkmjqozvmbifiwbxps:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres',
@@ -1117,8 +1108,8 @@ exit "${BUILD_EXIT:-0}"
         self.assertEqual(calls[-1], 'npm run build -w apps/api')
 
     def test_unresolved_history_stops_before_prisma_even_when_failed_sql_is_held(self):
-        # #657's exact failed attempt remains in the ledger even when its SQL
-        # is excluded. No new build may invoke Prisma deploy against that state.
+        # Replay #661's exact Vercel audit. Held SQL and role approval cannot
+        # authorize another Prisma invocation against this retained failure.
         for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
             with self.subTest(approved=approval is not None):
                 result, calls = self.drive(MIGRATE_EXIT='7', PREFLIGHT_AUDIT_REPORT=json.dumps(self.audit),
@@ -1139,8 +1130,65 @@ exit "${BUILD_EXIT:-0}"
         result, calls = self.drive(PREFLIGHT_AUDIT_REPORT=json.dumps(audit))
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight'])
-        self.assertIn(json.dumps({'migration_failure_audit': audit}, separators=(',', ':')), result.stdout)
+        reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+        self.assertEqual(reports, [{'migration_failure_audit': audit}])
         self.assertFalse(self.migrations.exists())
+
+    def test_incomplete_or_inconsistent_history_evidence_cannot_authorize_deploy(self):
+        for change in ({'unresolved': None}, {'unresolved': False}):
+            with self.subTest(change=change):
+                audit = copy.deepcopy(self.audit)
+                audit['migration_history'][0].update(change)
+                result, calls = self.drive(PREFLIGHT_AUDIT_REPORT=json.dumps(audit))
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertFalse(self.migrations.exists())
+                self.assertFalse(any(call.startswith(('npx', 'npm')) for call in calls))
+                self.assertIn('Migration failure audit unavailable', result.stderr)
+
+    def test_missing_snapshot_fields_or_duplicate_objects_cannot_authorize_deploy(self):
+        invalid = []
+        for field in ('database', 'inspected_at', 'migration_history', 'roles', 'relations', 'runtime_schema'):
+            audit = copy.deepcopy(self.audit)
+            del audit[field]
+            invalid.append(audit)
+        for field in ('roles', 'relations'):
+            audit = copy.deepcopy(self.audit)
+            audit[field][0] = audit[field][1]
+            invalid.append(audit)
+        audit = copy.deepcopy(self.audit)
+        del audit['relations'][0]['acl']
+        invalid.append(audit)
+        for audit in invalid:
+            with self.subTest(audit=audit):
+                result, calls = self.drive(PREFLIGHT_AUDIT_REPORT=json.dumps(audit))
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertFalse(self.migrations.exists())
+                self.assertFalse(any(call.startswith(('npx', 'npm')) for call in calls))
+                self.assertIn('Migration failure audit unavailable', result.stderr)
+                self.assertEqual(result.stdout, 'Shared rate-limit store preflight passed\n')
+
+    def test_invalid_post_failure_snapshot_preserves_the_original_migration_failure(self):
+        audit = copy.deepcopy(self.audit)
+        audit['runtime_schema'] = {'private-fixture-database-detail': 'fixture@'}
+        result, calls = self.drive(MIGRATE_EXIT='7', AUDIT_REPORT=json.dumps(audit))
+        self.assertEqual(result.returncode, 7, result.stderr)
+        self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+        self.assertFalse(any('resolve' in call or call.startswith('npm') for call in calls))
+        self.assertEqual(result.stdout, 'Shared rate-limit store preflight passed\n')
+        self.assertIn('Migration failure audit unavailable', result.stderr)
+        self.assertNotIn('private-fixture-database-detail', result.stderr)
+        self.assertNotIn('fixture@', result.stderr)
+
+    def test_valid_additional_audit_evidence_is_preserved_for_recovery_comparison(self):
+        audit = copy.deepcopy(self.audit)
+        audit['additional_evidence'] = {'reviewed': True}
+        audit['relations'][0]['additional_metadata'] = 'retained object evidence'
+        audit['runtime_schema']['additional_metadata'] = 'retained runtime evidence'
+        result, calls = self.drive(MIGRATE_EXIT='7', AUDIT_REPORT=json.dumps(audit))
+        self.assertEqual(result.returncode, 7, result.stderr)
+        reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+        self.assertEqual(reports, [{'migration_failure_audit': audit}])
+        self.assertFalse(any('resolve' in call or call.startswith('npm') for call in calls))
 
     def test_settled_history_allows_deploy_but_does_not_establish_runtime_schema_readiness(self):
         for field in ('finished_at', 'rolled_back_at'):

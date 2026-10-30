@@ -64,6 +64,8 @@ Unavailable history also withholds deployment, without retrying the read or disc
 Completed or rolled-back history permits the existing guarded migration selection; the subsequent runtime-schema preflight must still pass.
 After a new guarded production migration fails, `migrate-prod.sh` invokes the same helper without `--preflight` once to retain the audit in that Vercel build log.
 The helper revalidates production workload identity and target, uses a read-only repeatable-read transaction with a five-second statement timeout, and caps the entire diagnostic process at ten seconds.
+Both build and protected recovery validate the complete audit snapshot, including unique relation/role evidence and agreement between ledger timestamps and unresolved flags, before consuming it.
+Missing or contradictory evidence is unavailable evidence: it withholds Prisma/build, preserves an existing migration failure, and never authorizes recovery.
 It prints only the existing audit's ledger, object, role and runtime-schema evidence, without raw database logs or credentials.
 Unavailable diagnostics retain a private error summary and the original migration exit status; they cannot start the API build, resolve history, grant roles or retry migrations.
 Protected maintenance shares the same audit function and SQL, while its separate recovery identity and approval remain required.
