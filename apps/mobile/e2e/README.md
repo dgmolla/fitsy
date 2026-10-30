@@ -124,6 +124,8 @@ The boolean PostHog `map-search` flag enables the experiment only in development
 Production builds and Android ignore both opt-ins and keep the list.
 The first flow opens a pin, enters the restaurant menu, searches pizza, edits meal targets, switches map/list without losing state, shuffles, and clears search.
 The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
+Both map journeys submit the single-line search field with `pressKey: Enter`, which uses its native Search return key to dismiss the keyboard.
+The detail round trip taps `restaurant-back`; generic Maestro `back` does not activate the iOS screen's custom Back control.
 `helpers/map-search-setup.yaml` shares the authenticated API preflight and bounded startup reconnection.
 Maestro passes `launchApp.permissions` values to iOS without expanding variables, so this helper selects literal `inuse` or `never` launches through `runFlow.when.true`.
 The installed iOS location driver rejects generic `allow`/`deny`; `inuse` grants foreground location and `never` exercises denial.

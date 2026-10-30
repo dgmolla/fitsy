@@ -57,6 +57,25 @@ test('menu startup retries only observations and authenticates once before readi
 });
 
 test.each([
+  'map-search', 'map-search-location-denied',
+])('%s submits search through the iOS return key before requiring a result pin', flow => {
+  type Step = string | {
+    inputText?: string;
+    pressKey?: string;
+    extendedWaitUntil?: { visible: { id: string }; timeout: number };
+  };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, Step[]];
+  const search = commands.findIndex(step => typeof step === 'object' && step.inputText === 'pizza');
+  expect(search).toBeGreaterThan(-1);
+  // Use the input's native Search action instead of heuristic iOS keyboard
+  // dismissal, and keep the result gate after submission.
+  expect(commands[search + 1]).toEqual({ pressKey: 'Enter' });
+  expect(commands[search + 2]).toEqual({
+    extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 },
+  });
+});
+
+test.each([
   ['map-search', 'inuse'],
   ['map-search-location-denied', 'never'],
 ])('%s launches once with a literal %s location permission before observing readiness', (flow, permission) => {

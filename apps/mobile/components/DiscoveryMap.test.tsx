@@ -1,13 +1,18 @@
 import { act, deferred, ExpoLocation, fireEvent, installPurchasedAccount, renderJourney, response, routes, SecureStore, waitFor, withAccountProfile } from './OnboardingNavigationHarness';
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Platform } from 'react-native';
 import PostHog from 'posthog-react-native';
 import type { RestaurantResult } from '@fitsy/shared';
 import Search from '../app/(tabs)/search';
+import Restaurant from '../app/restaurant/[id]';
 import { DiscoveryScreen } from './DiscoveryScreen';
 import { saveDiscoveryMacroTargets } from '../lib/macroStorage';
 import { FALLBACK_LAT, FALLBACK_LNG, MANUAL_LOCATION_KEY } from '../lib/useLocation';
 import { __resetForTesting } from '../lib/analytics';
+
+const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
 const mockAnimate = jest.fn();
 jest.mock('react-native-maps', () => {
@@ -67,6 +72,11 @@ beforeEach(async () => {
     const url = new URL(input);
     requests.push(url);
     if (url.pathname === '/api/restaurants') return searchResponse(url);
+    if (url.pathname === '/api/restaurants/spot-0/menu') return response({ data: {
+      restaurantId: 'spot-0', restaurantName: restaurants[0].name, totalItemCount: 1, locked: false,
+      menuItems: [{ id: 'dish-0', name: 'Grilled chicken', category: 'Mains', macros: null }],
+    } });
+    if (url.pathname === '/api/saved-items') return response({ data: [] });
     return response({ active: true, verdict: 'active', synced: true, stale: false,
       lastRcVerifiedAt: new Date().toISOString(), expiresAt: '2030-01-08T12:00:00Z' });
   }));
@@ -78,8 +88,10 @@ afterEach(() => {
 });
 const open = (url = '/search?query=meal') => renderJourney(url, { ...routes, '(tabs)/search': () => <Search /> });
 
-it('opens a photo pin preview first, then the existing restaurant detail', async () => {
-  const screen = open();
+it('opens a photo pin preview, then returns from the real detail using the saved iOS flow control', async () => {
+  const screen = renderJourney('/search?query=meal', {
+    ...routes, '(tabs)/search': () => <Search />, 'restaurant/[id]': () => <Restaurant />,
+  });
   const pin = await screen.findByTestId('map-pin-0');
   expect(pin.props.coordinate).toEqual({ latitude: 34.04, longitude: -118.24 });
   expect(pin.props.stopPropagation).toBe(true);
@@ -91,6 +103,22 @@ it('opens a photo pin preview first, then the existing restaurant detail', async
   expect(screen.getPathname()).toBe('/search');
   await act(async () => fireEvent.press(screen.getByTestId('map-preview-open')));
   expect(screen.getPathname()).toBe('/restaurant/spot-0');
+  await screen.findByTestId('menu-search');
+  type Step = string | { tapOn?: { id: string }; extendedWaitUntil?: { visible: { id: string } } };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/map-search.yaml'), 'utf8')) as [unknown, Step[]];
+  const detail = commands.findIndex(step => typeof step === 'object' && step.extendedWaitUntil?.visible.id === 'menu-search');
+  expect(detail).toBeGreaterThan(-1);
+  const back = commands[detail + 1];
+  // Maestro's generic back command does not press an iOS app's custom header.
+  if (typeof back !== 'object' || !back.tapOn?.id) throw new Error('The iOS flow must tap the rendered restaurant Back control');
+  const backControl = screen.getByTestId(back.tapOn.id);
+  await act(async () => fireEvent.press(backControl));
+  await screen.findByTestId('discovery-map');
+  await screen.findByTestId('map-pin-0');
+  expect(screen.getPathname()).toBe('/search');
+  expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
+  expect(screen.getByText('40g protein')).toBeTruthy();
+  expect(screen.getByLabelText('Location: DTLA')).toBeTruthy();
 });
 
 it('keeps query, targets and results when switching and applies the same filter editor and shuffle', async () => {

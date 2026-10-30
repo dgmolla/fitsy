@@ -55,7 +55,8 @@ env:
     visible:
       id: menu-search
     timeout: 30000
-- back
+- tapOn:
+    id: restaurant-back
 - extendedWaitUntil:
     visible:
       id: discovery-map
@@ -63,7 +64,7 @@ env:
 - tapOn:
     id: discovery-search
 - inputText: pizza
-- hideKeyboard
+- pressKey: Enter
 - extendedWaitUntil:
     visible:
       id: map-pin-0

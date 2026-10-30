@@ -24,7 +24,7 @@ env:
 - tapOn:
     id: discovery-search
 - inputText: pizza
-- hideKeyboard
+- pressKey: Enter
 - extendedWaitUntil:
     visible:
       id: map-pin-0
