@@ -10,7 +10,9 @@ flowchart LR
     R[Independent PR review and acceptance] --> M[Protected main merge]
     M --> G[Existing Vercel Git production build]
     G --> P[Project and database guards plus Redis write preflight]
-    P --> D[Guarded additive migration]
+    P --> L[Read-only migration history preflight]
+    L -->|unresolved or unavailable| H
+    L --> D[Guarded additive migration]
     D -->|failure| F[Bounded read-only migration audit]
     F --> H[Withhold build and retain original failure]
     D --> Q[Required runtime migration preflight]
@@ -54,7 +56,11 @@ The existing Jest wrapper discovers these cases with `--list-tests` and runs eac
 Run `node --test scripts/deploy/pipeline-roles-approval.test.mjs` for an installed-Prisma regression against disposable SQLite dependency migrations, including delayed approval, future role references, unchanged ledger entries and migration failures.
 Already-applied role SQL needs no repeated approval; Prisma's [production deployment contract](https://docs.prisma.io/docs/orm/v6/prisma-migrate/workflows/development-and-production#production-and-testing-environments) permits an applied migration to be absent from the deploy input.
 Wrong identity, missing binding or failed migration also withholds the build; failed API build cannot succeed.
-After a guarded production migration fails, `migrate-prod.sh` invokes `scripts/deploy/migration-failure-audit.ts` once to retain the existing audit in that Vercel build log.
+Before invoking Prisma, `migrate-prod.sh` runs `scripts/deploy/migration-failure-audit.ts --prod --preflight` through the existing signed identity and exact production-target guards.
+Any unresolved migration attempt withholds Prisma status/deploy and the API build, emits the read-only snapshot, and leaves recovery with the separately approved maintenance owner.
+Unavailable history also withholds deployment, without retrying the read or disclosing database errors.
+Completed or rolled-back history permits the existing guarded migration selection; the subsequent runtime-schema preflight must still pass.
+After a new guarded production migration fails, `migrate-prod.sh` invokes the same helper without `--preflight` once to retain the audit in that Vercel build log.
 The helper revalidates production workload identity and target, uses a read-only repeatable-read transaction with a five-second statement timeout, and caps the entire diagnostic process at ten seconds.
 It prints only the existing audit's ledger, object, role and runtime-schema evidence, without raw database logs or credentials.
 Unavailable diagnostics retain a private error summary and the original migration exit status; they cannot start the API build, resolve history, grant roles or retry migrations.
@@ -101,6 +107,9 @@ The role filter never resolves failures, deletes ledger rows, marks unexecuted S
 For incident [#629](https://github.com/dgmolla/fitsy/issues/629), Vercel deployment `H3t9dcTY75kXmgPvmtpizY6oQZ2J` at `b28c630` reported a retained failure of `20261028130000_hex_jobs` from the preceding `63a36df` build.
 Incident [#647](https://github.com/dgmolla/fitsy/issues/647) is the same retained failure: exact Vercel deployment [aei8rXsjyWKEhiAywALkLrF5yr1f](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/aei8rXsjyWKEhiAywALkLrF5yr1f) at `6f6d579` stopped with P3009 before building the widget API.
 Incident [#650](https://github.com/dgmolla/fitsy/issues/650) repeats that unresolved attempt: [Deploy run 40858904921](https://github.com/dgmolla/fitsy/actions/runs/40858904921) observed GitHub deployment `7409367502` at `605560241b8c076bef45585457175317d491f2b0`, and exact Vercel deployment [7coDSBVrAKVpB5zT45D2aUufd3LT](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/7coDSBVrAKVpB5zT45D2aUufd3LT) stopped with P3009.
+Incident [#657](https://github.com/dgmolla/fitsy/issues/657) repeats the same failure at `706e930e601f83aa6200594a6ee8460781bbe614`: [Deploy run 40986927219](https://github.com/dgmolla/fitsy/actions/runs/40986927219) observed GitHub deployment `7428295367`, and exact Vercel deployment [BX7QMc6Go5PccVBSdkMzUs9a1aug](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/BX7QMc6Go5PccVBSdkMzUs9a1aug) reported P3009 for the hex-jobs attempt started at `2026-10-28 18:56:48.891157 UTC`.
+That run observed older source `bfd87f8fbd7ee9863554e973870f6988248d102f` serving; it did not establish recovery.
+The history preflight prevents another Prisma invocation against that unresolved ledger, without resolving it, granting roles or retrying the failed SQL.
 The 2026-10-29 10:58 UTC read-only audit again found attempt `c4b89b99-d4a5-49d9-9664-4699383e5f81`, its matching checksum, zero completed steps, NULL logs and absent hex tables; `fitsy_app` and `pipeline_writer` were absent, while `fitsy_audit_readonly` was present.
 The existing production maintenance owner still owns separately approved #643 recovery, followed by guarded deployment and exact-source smoke; the diagnostic correction does not establish production recovery.
 The 2026-10-29 10:12 UTC read-only audit found the original unresolved attempt, absent hex tables, absent `fitsy_app` and `pipeline_writer`, and absent `WidgetToken`.

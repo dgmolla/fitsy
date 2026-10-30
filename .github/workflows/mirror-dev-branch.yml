@@ -22,6 +22,8 @@ on:
       - "package-lock.json"
       - "scripts/dev/vercel-build.sh"
       - "scripts/deploy/migrate-prod.sh"
+      - "scripts/deploy/migration-failure-audit.ts"
+      - "scripts/deploy/migration-failure-audit.sql"
       - "scripts/deploy/pipeline-roles-approval.mjs"
       - "scripts/deploy/activate-runtime-role.ts"
       - "scripts/deploy/rate-limit-preflight.ts"
