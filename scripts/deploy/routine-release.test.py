@@ -1108,13 +1108,13 @@ exit "${BUILD_EXIT:-0}"
         self.assertEqual(result.returncode, 9)
         self.assertEqual(calls[-1], 'npm run build -w apps/api')
 
-    def test_incident_635_p3009_preserves_original_failure_even_when_audit_is_unavailable(self):
-        incident = json.loads((ROOT / 'scripts/deploy/__fixtures__/incident-635.json').read_text())
+    def test_incident_p3009_preserves_original_failure_even_when_audit_is_unavailable(self):
         # A concurrent failed attempt can appear after the read-only preflight.
         # Replay the original provider diagnostic at the real build boundary;
         # holding its SQL must neither hide the error nor authorize recovery.
-        for audit_state in ('ok', 'driver-error'):
-            with self.subTest(audit_state=audit_state):
+        for number, audit_state in ((number, state) for number in (634, 635) for state in ('ok', 'driver-error')):
+            with self.subTest(incident=number, audit_state=audit_state):
+                incident = json.loads((ROOT / f'scripts/deploy/__fixtures__/incident-{number}.json').read_text())
                 result, calls = self.drive(VERCEL_GIT_COMMIT_SHA=incident['source'], MIGRATE_EXIT='1',
                                            MIGRATE_STDERR=incident['prisma_stderr'], AUDIT_STATE=audit_state,
                                            FITSY_PIPELINE_ROLES_APPROVED_SHA256=None)
@@ -1129,6 +1129,27 @@ exit "${BUILD_EXIT:-0}"
                 reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
                 self.assertEqual(reports, [{'migration_failure_audit': self.audit}] if audit_state == 'ok' else [])
                 self.assertNotIn('private-fixture-database-detail', result.stdout + result.stderr)
+
+    def test_incident_634_names_the_retained_attempt_and_stops_before_prisma(self):
+        incident = json.loads((ROOT / 'scripts/deploy/__fixtures__/incident-634.json').read_text())
+        # The later read-only #661 snapshot identifies the same retained attempt
+        # named in #634's original P3009, rather than a new application failure.
+        attempt = self.audit['migration_history'][0]
+        self.assertIn(attempt['migration_name'], incident['prisma_stderr'])
+        for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
+            with self.subTest(approved=approval is not None):
+                result, calls = self.drive(VERCEL_GIT_COMMIT_SHA=incident['source'],
+                                           PREFLIGHT_AUDIT_REPORT=json.dumps(self.audit),
+                                           FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout',
+                                         'migration history preflight'])
+                self.assertIn(attempt['migration_name'], result.stderr)
+                self.assertIn(attempt['id'], result.stderr)
+                self.assertIn(attempt['started_at'], result.stderr)
+                self.assertIn('production-migration-recovery.yml', result.stderr)
+                self.assertNotIn('private-fixture', result.stdout + result.stderr)
+                self.assertFalse(self.migrations.exists())
 
     def test_unresolved_history_stops_before_prisma_even_when_failed_sql_is_held(self):
         # Replay #661's exact Vercel audit. Held SQL and role approval cannot
@@ -1149,12 +1170,24 @@ exit "${BUILD_EXIT:-0}"
     def test_other_unresolved_attempts_and_partial_objects_also_withhold_prisma(self):
         audit = copy.deepcopy(self.audit)
         audit['migration_history'][0].update(id='other-attempt', migration_name='other_failed_migration')
+        audit['migration_history'].append({**self.audit['migration_history'][0], 'id': 'settled-attempt',
+                                           'finished_at': '2026-10-29T12:00:00+00:00', 'unresolved': False})
+        audit['migration_history'].append({**self.audit['migration_history'][0],
+                                           'id': 'interrupted-attempt', 'migration_name': 'interrupted\nfixture'})
         audit['relations'][0]['present'] = True
         result, calls = self.drive(PREFLIGHT_AUDIT_REPORT=json.dumps(audit))
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight'])
         reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
         self.assertEqual(reports, [{'migration_failure_audit': audit}])
+        diagnostics = [json.loads(line.removeprefix('Unresolved migration attempt: '))
+                       for line in result.stderr.splitlines() if line.startswith('Unresolved migration attempt: ')]
+        self.assertEqual(diagnostics, [
+            {'migration_name': 'other_failed_migration', 'id': 'other-attempt',
+             'started_at': audit['migration_history'][0]['started_at']},
+            {'migration_name': 'interrupted\nfixture', 'id': 'interrupted-attempt',
+             'started_at': audit['migration_history'][2]['started_at']},
+        ])
         self.assertFalse(self.migrations.exists())
 
     def test_incomplete_or_inconsistent_history_evidence_cannot_authorize_deploy(self):

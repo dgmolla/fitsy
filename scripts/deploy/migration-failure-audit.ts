@@ -61,10 +61,12 @@ async function main() {
   let evidence: Audit;
   try { evidence = await migrationAudit(client); }
   finally { await client.$disconnect(); }
-  const unresolved = evidence.migration_history.some(row => row.unresolved);
-  if (!preflight || unresolved) process.stdout.write(JSON.stringify({ migration_failure_audit: evidence }) + '\n');
-  if (preflight && unresolved) {
+  const unresolved = evidence.migration_history.filter(row => row.unresolved);
+  if (!preflight || unresolved.length) process.stdout.write(JSON.stringify({ migration_failure_audit: evidence }) + '\n');
+  if (preflight && unresolved.length) {
     console.error('TL;DR: Production migrations stopped before Prisma deploy because of unresolved migration history.\n' +
+      unresolved.map(({ migration_name, id, started_at }) =>
+        'Unresolved migration attempt: ' + JSON.stringify({ migration_name, id, started_at })).join('\n') + '\n' +
       'Inspect scripts/deploy/migration-failure-audit.sql and docs/engineering/devops/routine-production.md; ' +
       'production-migration-recovery.yml retains separate approval for the exact #643 attempt only. No automatic resolve or retry.');
     process.exitCode = 1;
