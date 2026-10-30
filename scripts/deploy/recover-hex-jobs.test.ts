@@ -14,6 +14,8 @@ function snapshot(): Audit {
     }],
     relations: ['hex_job_events', 'hex_jobs'].map(name => ({ name, present: false })),
     roles: [{ name: 'pipeline_writer', present: false }],
+    runtime_schema: { migration_name: '20261029010000_widget_search_tokens',
+      migration_history: [], relation_present: false },
   };
 }
 
@@ -50,6 +52,8 @@ function recoveredSnapshot(): Audit {
 test('rollback comparison accepts independently parsed audit results without mutating the original evidence', () => {
   const before: Audit = JSON.parse(JSON.stringify(snapshot()));
   const after: Audit = JSON.parse(JSON.stringify(recoveredSnapshot()));
+  Object.assign(before, { inspected_at: '2026-10-29T08:00:00+00:00' });
+  Object.assign(after, { inspected_at: '2026-10-29T09:00:00+00:00' });
   const evidence = JSON.stringify({ before, after });
   expect(() => assertRecoveryResult(before, after)).not.toThrow();
   expect(JSON.stringify({ before, after })).toBe(evidence);
@@ -71,9 +75,21 @@ test.each([
   ['relation', (audit: Audit) => { audit.relations[0]!.present = true; }],
   ['relation metadata', (audit: Audit) => { Object.assign(audit.relations[0]!, { rls: true, acl: '{unexpected}' }); }],
   ['role', (audit: Audit) => { audit.roles[0]!.present = true; }],
+  ['runtime migration', (audit: Audit) => { audit.runtime_schema.migration_history.push({
+    id: 'other', checksum: 'a'.repeat(64), finished_at: '2026-10-29', rolled_back_at: null }); }],
+  ['runtime audit', (audit: Audit) => { Object.assign(audit, { runtime_schema: undefined }); }],
+  ['additional audit evidence', (audit: Audit) => { Object.assign(audit, { additional_evidence: 'changed' }); }],
 ])('rollback comparison refuses unexpected changes to %s', (_name, change) => {
   const after = recoveredSnapshot(); change(after);
   expect(() => assertRecoveryResult(snapshot(), after)).toThrow(/state changed beyond the expected rollback marker/);
+});
+
+test('rollback comparison preserves the runtime schema prerequisite observed by the audit', () => {
+  const runtime = { migration_name: '20261029010000_widget_search_tokens',
+    migration_history: [], relation_present: false };
+  const before = Object.assign(snapshot(), { runtime_schema: runtime });
+  const after = Object.assign(recoveredSnapshot(), { runtime_schema: { ...runtime, relation_present: true } });
+  expect(() => assertRecoveryResult(before, after)).toThrow(/state changed beyond the expected rollback marker/);
 });
 
 test('command arguments require explicit production intent and one mode', () => {

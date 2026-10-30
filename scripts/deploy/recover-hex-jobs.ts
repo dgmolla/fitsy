@@ -23,6 +23,11 @@ export type Audit = {
   }>;
   relations: Array<{ name: string; present: boolean }>;
   roles: Array<{ name: string; present: boolean }>;
+  runtime_schema: {
+    migration_name: string;
+    migration_history: Array<{ id: string; checksum: string; finished_at: string | null; rolled_back_at: string | null }>;
+    relation_present: boolean;
+  };
 };
 
 export function recoveryMode(args: string[]) {
@@ -70,8 +75,7 @@ export function assertRecoveryResult(before: Audit, after: Audit) {
   expected.migration_history[0]!.unresolved = false;
   // Timestamps of the snapshots naturally differ; all observed history and
   // object/role state must otherwise remain unchanged.
-  const state = (audit: Audit) => ({ database: audit.database, migration_history: audit.migration_history,
-    relations: audit.relations, roles: audit.roles });
+  const state = (audit: Audit) => Object.fromEntries(Object.entries(audit).filter(([key]) => key !== 'inspected_at'));
   if (!isDeepStrictEqual(state(after), state(expected))) refuse('database state changed beyond the expected rollback marker; retain evidence');
 }
 

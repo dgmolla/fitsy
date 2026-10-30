@@ -935,4 +935,8 @@ exit "${BUILD_EXIT:-0}"
 
 
 if __name__ == '__main__':
-    unittest.main()
+    if sys.argv[1:] == ['--list-tests']:
+        suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
+        print(json.dumps([test.id().removeprefix('__main__.') for group in suite for test in group]))
+    else:
+        unittest.main()
