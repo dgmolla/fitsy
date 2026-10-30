@@ -3,20 +3,11 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parse } from 'yaml';
-import { assertFailedAttempt, assertRecoveryResult, failedAttempt, recoveryMode } from './recover-hex-jobs';
+import { assertFailedAttempt, assertRecoveryResult, recoveryMode } from './recover-hex-jobs';
 import type { Audit } from './migration-failure-audit';
 
 function snapshot(): Audit {
-  return {
-    database: 'postgres', migration_history: [{ ...failedAttempt,
-      started_at: '2026-10-28T18:56:48.891157+00:00', finished_at: null, rolled_back_at: null,
-      applied_steps_count: 0, unresolved: true, failure_logs_present: false, missing_pipeline_writer: null,
-    }],
-    relations: ['hex_job_events', 'hex_jobs'].map(name => ({ name, present: false })),
-    roles: [{ name: 'pipeline_writer', present: false }],
-    runtime_schema: { migration_name: '20261029010000_widget_search_tokens',
-      migration_history: [], relation_present: false },
-  };
+  return JSON.parse(readFileSync(join(__dirname, 'fixtures/incident-661.json'), 'utf8')).migration_failure_audit;
 }
 
 test('the exact inspected failure is eligible for separately approved recovery', () => {
@@ -74,7 +65,7 @@ test.each([
   ['extra attempt', (audit: Audit) => { audit.migration_history.push({ ...audit.migration_history[0]!, id: 'other' }); }],
   ['relation', (audit: Audit) => { audit.relations[0]!.present = true; }],
   ['relation metadata', (audit: Audit) => { Object.assign(audit.relations[0]!, { rls: true, acl: '{unexpected}' }); }],
-  ['role', (audit: Audit) => { audit.roles[0]!.present = true; }],
+  ['role', (audit: Audit) => { audit.roles[0]!.present = !audit.roles[0]!.present; }],
   ['runtime migration', (audit: Audit) => { audit.runtime_schema.migration_history.push({
     id: 'other', checksum: 'a'.repeat(64), finished_at: '2026-10-29', rolled_back_at: null }); }],
   ['runtime audit', (audit: Audit) => { Object.assign(audit, { runtime_schema: undefined }); }],

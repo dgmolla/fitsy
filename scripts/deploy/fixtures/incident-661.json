@@ -1,0 +1,39 @@
+{
+  "source": "cc16ffb62d1b08cfaac8721436a1435b2ea5f86e",
+  "deploy_run": "https://github.com/dgmolla/fitsy/actions/runs/40995732692",
+  "github_deployment_id": 7429454518,
+  "build_logs": "https://vercel.com/dawits-projects-74b6e00f/fitsy-api/7y5x4BTvjv9o4wDPFcBri2baRWN7",
+  "observed_serving_source": "bfd87f8fbd7ee9863554e973870f6988248d102f",
+  "migration_failure_audit": {
+    "roles": [
+      { "name": "fitsy_app", "present": false },
+      { "name": "fitsy_audit_readonly", "present": true },
+      { "name": "pipeline_writer", "present": false }
+    ],
+    "database": "postgres",
+    "relations": [
+      { "acl": null, "rls": null, "kind": null, "name": "hex_job_events", "owner": null, "present": false },
+      { "acl": null, "rls": null, "kind": null, "name": "hex_jobs", "owner": null, "present": false }
+    ],
+    "inspected_at": "2026-10-30T02:48:12.715756+00:00",
+    "runtime_schema": {
+      "migration_name": "20261029010000_widget_search_tokens",
+      "relation_present": false,
+      "migration_history": []
+    },
+    "migration_history": [
+      {
+        "id": "c4b89b99-d4a5-49d9-9664-4699383e5f81",
+        "checksum": "f793bacb999d2db72489a4bb9ab89bc2ae1da2a6b1ecff68942e66e1b65889b9",
+        "started_at": "2026-10-28T18:56:48.891157+00:00",
+        "unresolved": true,
+        "finished_at": null,
+        "migration_name": "20261028130000_hex_jobs",
+        "rolled_back_at": null,
+        "applied_steps_count": 0,
+        "failure_logs_present": false,
+        "missing_pipeline_writer": null
+      }
+    ]
+  }
+}

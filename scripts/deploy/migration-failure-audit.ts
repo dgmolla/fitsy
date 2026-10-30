@@ -2,25 +2,40 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
+import { z } from 'zod';
 import { assertDatabaseWriteAllowed, databaseTarget, PROD_PROJECT_REF } from '../lib/db-target-guard';
 
 const root = resolve(__dirname, '../..');
-export type Audit = {
-  database: string;
-  migration_history: Array<{
-    id: string; migration_name: string; checksum: string;
-    started_at: string; finished_at: string | null; rolled_back_at: string | null;
-    applied_steps_count: number; unresolved: boolean;
-    failure_logs_present: boolean; missing_pipeline_writer: boolean | null;
-  }>;
-  relations: Array<{ name: string; present: boolean }>;
-  roles: Array<{ name: string; present: boolean }>;
-  runtime_schema: {
-    migration_name: string;
-    migration_history: Array<{ id: string; checksum: string; finished_at: string | null; rolled_back_at: string | null }>;
-    relation_present: boolean;
-  };
-};
+const text = z.string().min(1), nullableText = text.nullable();
+const checksum = z.string().regex(/^[a-f0-9]{64}$/);
+// SQL JSON is an external boundary. Missing or contradictory evidence must not
+// authorize Prisma or silently disappear from the recovery before/after check.
+// Preserve additional audit fields so recovery still compares all evidence.
+const auditSchema = z.looseObject({
+  database: text,
+  inspected_at: text,
+  migration_history: z.array(z.looseObject({
+    id: text, migration_name: text, checksum,
+    started_at: text, finished_at: nullableText, rolled_back_at: nullableText,
+    applied_steps_count: z.number().int().nonnegative(), unresolved: z.boolean(),
+    failure_logs_present: z.boolean(), missing_pipeline_writer: z.boolean().nullable(),
+  }).refine(row => row.unresolved === (row.finished_at === null && row.rolled_back_at === null))),
+  relations: z.array(z.looseObject({
+    name: z.enum(['hex_job_events', 'hex_jobs']), present: z.boolean(),
+    kind: nullableText, owner: nullableText, rls: z.boolean().nullable(), acl: nullableText,
+  })).length(2).refine(rows => new Set(rows.map(row => row.name)).size === 2),
+  roles: z.array(z.looseObject({
+    name: z.enum(['fitsy_app', 'fitsy_audit_readonly', 'pipeline_writer']), present: z.boolean(),
+  })).length(3).refine(rows => new Set(rows.map(row => row.name)).size === 3),
+  runtime_schema: z.looseObject({
+    migration_name: text,
+    migration_history: z.array(z.looseObject({
+      id: text, checksum, finished_at: nullableText, rolled_back_at: nullableText,
+    })),
+    relation_present: z.boolean(),
+  }),
+});
+export type Audit = z.infer<typeof auditSchema>;
 
 export async function migrationAudit(client: PrismaClient): Promise<Audit> {
   const sql = readFileSync(join(root, 'scripts/deploy/migration-failure-audit.sql'), 'utf8')
@@ -28,9 +43,8 @@ export async function migrationAudit(client: PrismaClient): Promise<Audit> {
   return client.$transaction(async tx => {
     await tx.$executeRawUnsafe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
     await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '5s'");
-    const [row] = await tx.$queryRawUnsafe<Array<{ migration_failure_audit: Audit }>>(sql);
-    if (!row) throw new Error('migration audit returned no snapshot');
-    return row.migration_failure_audit;
+    const [row] = await tx.$queryRawUnsafe<Array<{ migration_failure_audit: unknown }>>(sql);
+    return auditSchema.parse(row?.migration_failure_audit);
   });
 }
 
