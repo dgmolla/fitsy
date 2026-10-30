@@ -48,6 +48,27 @@ test('real CLI sources one hex, abstains on unreviewed/independent items, persis
   expect(estimates.calories[0]).toBe(820);
   expect(result.report.wallMs).toBeGreaterThan(0);
 });
+test('PDF work is published inside the menu transaction, after sourced items and before the checkpoint commit', () => {
+  const result = run();
+  expect(result.status).toBe(0);
+  const types = result.events.map((event: { type: string }) => event.type);
+  expect(result.events.filter((event: { type: string }) => event.type === 'pdf_enqueue')).toEqual([
+    { type: 'pdf_enqueue', brandId: 'brand-1' },
+  ]);
+  expect(types.indexOf('pdf_enqueue')).toBeGreaterThan(types.indexOf('db_estimates'));
+  expect(types.indexOf('pdf_enqueue')).toBeLessThan(types.indexOf('db_commit'));
+});
+test('failed sourcing never publishes a PDF job for a menu that cannot commit', () => {
+  const result = run({ V2_TEST_FAIL_STORE: 'store-1' });
+  expect(result.status).toBe(1);
+  expect(result.events.some((event: { type: string }) => event.type === 'pdf_enqueue')).toBe(false);
+});
+test('a genuinely empty chain menu does not consume background research while other menus commit', () => {
+  const result = run({ V2_TEST_EMPTY_STORE: 'store-1' });
+  expect(result.status).toBe(0);
+  expect(result.report).toMatchObject({ coverage: { emptyMenus: 1, persistedItems: 4 }, pdfJobs: [] });
+  expect(result.events.some((event: { type: string }) => event.type === 'pdf_enqueue')).toBe(false);
+});
 test('explicit-hex resume honors the checkpoint without more provider calls', () => {
   const initial = run(), resumed = run({}, initial.out);
   expect(resumed.status).toBe(0); expect(resumed.report.resumedCheckpoint).toBe(true);
