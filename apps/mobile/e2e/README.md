@@ -131,6 +131,10 @@ An explicit label hides the nested `40g protein` text from iOS accessibility; `D
 Dense photo pins overlap, and MapKit can dispatch Maestro's coordinate tap to a neighboring pin despite the requested accessibility ID.
 Both journeys retain pin-to-preview coverage; `map-search` compares toggle and shuffle results through `helpers/map-first-spot.yaml`, which closes any preview and uses the existing carousel to require the first result.
 The real-screen regression replays that helper with different native pin hit targets and a previously selected restaurant, requiring the same first result after toggling and a new one after shuffling.
+Ranked search can return pizza restaurants whose meals do not satisfy Shuffle's close-fit nutrition filter.
+After checking pizza and the 45g protein edit, the positive Shuffle phase clears the craving and restores the exact 600 kcal, 40g protein, 60g carbs and 20g fat context verified by `shuffle-subscriber.mjs`.
+It still requires a changed first result and preserved area and targets; a disabled Shuffle button after a successful empty response is expected behavior.
+`DiscoveryMap.test.tsx` replays those saved edits against a boundary with no qualified pizza results and separately verifies empty-shuffle state and Clear search recovery.
 `helpers/map-search-setup.yaml` shares the authenticated API preflight and bounded startup reconnection.
 Maestro passes `launchApp.permissions` values to iOS without expanding variables, so this helper selects literal `inuse` or `never` launches through `runFlow.when.true`.
 The installed iOS location driver rejects generic `allow`/`deny`; `inuse` grants foreground location and `never` exercises denial.

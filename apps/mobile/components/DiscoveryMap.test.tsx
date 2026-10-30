@@ -124,9 +124,13 @@ it('opens a photo pin preview, then returns from the real detail using the saved
 it('keeps query, targets and results when switching and applies the same filter editor and shuffle', async () => {
   type Selector = string | { id: string; text: string };
   type Step = {
-    tapOn?: { id: string };
+    tapOn?: string | { id: string };
+    eraseText?: number;
+    inputText?: string;
     copyTextFrom?: { id: string };
     assertVisible?: Selector;
+    assertTrue?: string;
+    extendedWaitUntil?: { visible: { id: string; enabled?: boolean } };
     runFlow?: string | { when: { visible: { id: string } }; commands: Step[] };
   };
   const readCommands = (path: string) => (loadAll(readFileSync(path, 'utf8')) as [unknown, Step[]])[1];
@@ -136,7 +140,7 @@ it('keeps query, targets and results when switching and applies the same filter 
   expect(selections).toHaveLength(4);
   const proteinAssertions = commands.map(step => step.assertVisible).filter((selector): selector is Selector =>
     typeof selector === 'string' ? selector.endsWith('g protein') : selector?.id === 'map-filter-protein');
-  expect(proteinAssertions).toHaveLength(3);
+  expect(proteinAssertions).toHaveLength(4);
   const screen = open();
   const selectSavedSpot = async (checkpoint: number, nativeHit: number) => {
     async function replay(steps: Step[]) {
@@ -147,6 +151,7 @@ it('keeps query, targets and results when switching and applies the same filter 
         } else if (step.tapOn) {
           // MapKit dispatches a coordinate tap to the frontmost overlapping pin,
           // even when Maestro located a different annotation's accessibility ID.
+          if (typeof step.tapOn === 'string') throw new Error('Map selection requires a named control');
           const id = step.tapOn.id.startsWith('map-pin-') ? `map-pin-${nativeHit}` : step.tapOn.id;
           await act(async () => fireEvent.press(screen.getByTestId(id)));
         } else if (step.assertVisible && typeof step.assertVisible !== 'string') {
@@ -182,13 +187,42 @@ it('keeps query, targets and results when switching and applies the same filter 
   expect(searchRequests()).toHaveLength(before);
   expect(await selectSavedSpot(1, 1)).toBe(beforeToggle);
   assertSavedProtein(0);
-  await act(async () => fireEvent.press(screen.getByTestId('preview-edit-targets')));
-  await act(async () => fireEvent.changeText(screen.getByLabelText('Protein grams'), '45'));
-  await act(async () => fireEvent.press(screen.getByTestId('meal-filter-apply')));
+  // Ranked pizza rows need not qualify for a close-fit shuffle. Reproduce the
+  // live API boundary instead of giving every search the same nonempty rows.
+  searchResponse = async url => {
+    const params = Object.fromEntries(url.searchParams);
+    return response({ data: params.shuffle && (params.q || params.protein !== '40') ? [] : rows,
+      meta: { locked: false, nextCursor: null } });
+  };
+  const toggleCheck = commands.findIndex(step => step.assertTrue === '${maestro.copiedText === output.mapBeforeToggle}');
+  expect(toggleCheck).toBeGreaterThan(-1);
+  const copies = commands.flatMap((step, index) => step.copyTextFrom?.id === 'map-preview-open' ? [index] : []);
+  let input: ReturnType<typeof screen.getByLabelText> | undefined;
+  // Drive the saved filter/search actions, including the transition back to the
+  // context whose subscriber preflight establishes positive shuffle results.
+  for (const step of commands.slice(toggleCheck + 1, copies[2] - 1)) {
+    if (typeof step.tapOn === 'string') input = screen.getByLabelText(step.tapOn);
+    else if (step.tapOn) {
+      const control = screen.getByTestId(step.tapOn.id);
+      await act(async () => fireEvent.press(control));
+    } else if (step.eraseText !== undefined || step.inputText !== undefined) {
+      if (!input) throw new Error('Saved target edit must select its input');
+      const selectedInput = input;
+      await act(async () => fireEvent.changeText(selectedInput, step.inputText ?? ''));
+    } else if (typeof step.assertVisible === 'object' && step.assertVisible.id === 'map-filter-protein') {
+      assertSavedProtein(proteinAssertions.indexOf(step.assertVisible));
+    } else if (step.extendedWaitUntil) {
+      const { id, enabled } = step.extendedWaitUntil.visible;
+      await screen.findByTestId(id);
+      if (enabled) await waitFor(() => expect(screen.getByTestId(id).props.accessibilityState.disabled).toBe(false));
+    }
+  }
   await screen.findByTestId('map-pin-0');
-  assertSavedProtein(1);
+  assertSavedProtein(2);
   const filtered = Object.fromEntries(searchRequests().at(-1)!.searchParams);
-  expect(filtered).toMatchObject({ q: 'pizza', ...values, protein: '45', lat: '34.04', lng: '-118.24' });
+  expect(searchRequests().map(url => Object.fromEntries(url.searchParams))).toContainEqual(expect.objectContaining({
+    q: 'pizza', ...values, protein: '45', lat: '34.04', lng: '-118.24',
+  }));
   await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
   const beforeShuffle = await selectSavedSpot(2, 3);
   expect(beforeShuffle).toBe('Open Flor do Ave · Portuguese');
@@ -198,14 +232,38 @@ it('keeps query, targets and results when switching and applies the same filter 
   expect(Object.fromEntries(searchRequests().at(-1)!.searchParams)).toMatchObject({
     ...filtered, shuffle: '1', excludeRestaurantIds: restaurants.map(row => row.id).join(','),
   });
+  expect(searchParams()).toMatchObject({ ...values, lat: '34.04', lng: '-118.24' });
+  expect(searchParams().q).toBeUndefined();
   expect(searchParams().seed).toBeTruthy();
   expect(await selectSavedSpot(3, 2)).toBe('Open Flor do Ave new · Portuguese');
   expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).not.toBe(beforeShuffle);
-  assertSavedProtein(2);
+  assertSavedProtein(3);
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('discovery-hero');
-  expect(screen.getByTestId('discovery-search').props.value).toBe('pizza');
+  expect(screen.getByTestId('discovery-search').props.value).toBe('');
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toBe('Flor do Ave new');
+});
+
+it('keeps a craving and its targets when Shuffle finds no close-fit meals, then recovers through Clear search', async () => {
+  await saveDiscoveryMacroTargets({ ...values, protein: '45' }, 'search');
+  searchResponse = async url => response({ data: url.searchParams.has('shuffle') ? [] : restaurants,
+    meta: { locked: false, nextCursor: null } });
+  const screen = open('/search?query=pizza');
+  await screen.findByTestId('map-pin-0');
+  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  await screen.findByText('No matches for this search');
+  expect(searchParams()).toMatchObject({ q: 'pizza', ...values, protein: '45', shuffle: '1' });
+  expect(screen.getByTestId('discovery-search').props.value).toBe('pizza');
+  expect(screen.getByLabelText('Edit protein grams, 45')).toBeTruthy();
+  expect(screen.queryByTestId('map-pin-0')).toBeNull();
+  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-empty-clear')));
+  await screen.findByTestId('map-pin-0');
+  expect(searchParams()).toMatchObject({ ...values, protein: '45' });
+  expect(searchParams().q).toBeUndefined();
+  expect(searchParams().shuffle).toBeUndefined();
+  expect(screen.getByTestId('discovery-search').props.value).toBe('');
+  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
 });
 
 it('uses the existing cursor to load more pins and browse previews', async () => {
