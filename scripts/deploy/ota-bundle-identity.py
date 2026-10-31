@@ -38,8 +38,11 @@ def identity(body, runtime):
 def main():
     group = sys.argv[1]
     baseline = (Path(sys.argv[sys.argv.index('--baseline') + 1]) if '--baseline' in sys.argv
-                else Path(__file__).resolve().parents[0] / 'ios-binary-baseline.json')
-    runtime = json.loads(baseline.read_text())['runtime_version']
+                else Path(__file__).resolve().parents[0] / 'ios-production-binary-baseline.json')
+    binary = json.loads(baseline.read_text())
+    if '--baseline' not in sys.argv and binary['channel'] != 'production':
+        raise ValueError('Default recovery baseline must describe production')
+    runtime = binary['runtime_version']
     env = {key: value for key, value in os.environ.items() if key not in ('GH_TOKEN', 'GITHUB_TOKEN')}
     updates = json.loads(subprocess.check_output(['npx', 'eas-cli@18', 'update:view', group, '--json'], env=env))
     ios = [x for x in updates if x['platform'] == 'ios' and x['group'] == group]

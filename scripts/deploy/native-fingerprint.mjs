@@ -28,7 +28,7 @@ export async function nativeFingerprint(root) {
     throw new Error('Local iOS sources are omitted by Expo; ship and verify a binary before OTA');
   const app = JSON.parse(config.contents);
   return { fingerprint: { hash: result.hash, package_version: version },
-    app: { bundle_id: app.ios?.bundleIdentifier, version: app.version,
+    app: { bundle_id: app.ios?.bundleIdentifier, version: app.version, build_number: app.ios?.buildNumber,
       runtime_version: app.ios?.runtimeVersion ?? app.runtimeVersion } };
 }
 

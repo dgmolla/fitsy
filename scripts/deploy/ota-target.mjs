@@ -19,8 +19,8 @@ export function otaTarget(root, { channel, manualProduction = false, env = proce
   }
   channel ??= policy.automatic_channel;
   if (!['production', 'testflight'].includes(channel)) throw new Error('Unsupported OTA channel');
-  return { channel, baseline_file: channel === 'production'
-    ? 'scripts/deploy/ios-binary-baseline.json' : 'scripts/deploy/ios-testflight-binary-baseline.json' };
+  return { channel, baseline_file: channel === 'testflight'
+    ? 'scripts/deploy/ios-binary-baseline.json' : 'scripts/deploy/ios-production-binary-baseline.json' };
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

@@ -170,8 +170,8 @@ jobs:
             --body "The OTA job failed for $RELEASE_SHA (see Deploy workflow logs). A partial publish is possible; verify with eas update:list, and if a broken group is live (\`scripts/deploy/rollback.sh mobile\`). Closing PR must add fix + detector + constraint." || true
 
   production-ota:
-    # Before App Store launch, switch automatic_channel to testflight and record
-    # both verified binary baselines. Store updates then use only this route.
+    # Automatic OTA targets TestFlight. App Store production updates retain
+    # their separate binary baseline and use only this approved route.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'dgmolla' && inputs.approve_production_ota
     environment: production-native
     permissions:

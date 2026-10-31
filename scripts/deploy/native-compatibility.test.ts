@@ -53,11 +53,12 @@ beforeEach(() => {
   mkdirSync(join(root, 'scripts/deploy'), { recursive: true });
   for (const file of ['native-compatibility.mjs', 'native-fingerprint.mjs', 'ota-target.mjs', 'ota-policy.json'])
     copyFileSync(join(repo, 'scripts/deploy', file), join(root, 'scripts/deploy', file));
+  write('scripts/deploy/ota-policy.json', JSON.stringify({ version: 1, automatic_channel: 'production', app_store_launched: false }));
   const native = fingerprint();
   git('add', '.'); git('commit', '-qm', 'binary source');
   const source = git('rev-parse', 'HEAD');
-  write('scripts/deploy/ios-binary-baseline.json', JSON.stringify({
-    ...JSON.parse(readFileSync(join(repo, 'scripts/deploy/ios-binary-baseline.json'), 'utf8')),
+  write('scripts/deploy/ios-production-binary-baseline.json', JSON.stringify({
+    ...JSON.parse(readFileSync(join(repo, 'scripts/deploy/ios-production-binary-baseline.json'), 'utf8')),
     source_sha: source, google_ios_client_id: 'expected.apps.googleusercontent.com', fingerprint: native,
   }));
   git('add', '.'); git('commit', '-qm', 'verified baseline');
@@ -112,20 +113,50 @@ test('fails closed on invalid app configuration rather than accepting a partial 
 });
 test.each([undefined, { hash: 'invalid', package_version: '0.15.4' }, { hash: '1'.repeat(40), package_version: '0.0.0' }])(
   'fails closed on missing, malformed or differently generated baseline fingerprints', native => {
-    const path = join(root, 'scripts/deploy/ios-binary-baseline.json');
+    const path = join(root, 'scripts/deploy/ios-production-binary-baseline.json');
     const baseline = JSON.parse(readFileSync(path, 'utf8'));
     writeFileSync(path, JSON.stringify({ ...baseline, fingerprint: native }));
     expect(check().status).toBe(1);
   });
 test('requires the fingerprint runtime to match the actual verified binary runtime', () => {
   write('apps/mobile/app.config.ts', fixtureConfig.replace("policy: 'appVersion'", "policy: 'fingerprint'"));
-  const path = join(root, 'scripts/deploy/ios-binary-baseline.json');
+  const path = join(root, 'scripts/deploy/ios-production-binary-baseline.json');
   const baseline = JSON.parse(readFileSync(path, 'utf8'));
   const native = fingerprint();
   writeFileSync(path, JSON.stringify({ ...baseline, fingerprint: native }));
   expect(check().status).toBe(1);
   writeFileSync(path, JSON.stringify({ ...baseline, fingerprint: native, runtime_version: native.hash }));
   expect(check().status).toBe(0);
+});
+test('accepts a fingerprint TestFlight upload with an explicitly unknown Apple build ID', () => {
+  write('apps/mobile/app.config.ts', fixtureConfig.replace("policy: 'appVersion'", "policy: 'fingerprint'"));
+  const native = fingerprint();
+  const baseline = JSON.parse(readFileSync(join(root, 'scripts/deploy/ios-production-binary-baseline.json'), 'utf8'));
+  const path = join(root, 'scripts/deploy/ios-binary-baseline.json');
+  const receipt = { ...baseline, channel: 'testflight', asc_build_id: null,
+    eas_submission_id: '84491d3e-1a80-4387-a82c-6cb9f5190cef', eas_submission_status: 'FINISHED',
+    fingerprint: native, runtime_version: native.hash };
+  write('scripts/deploy/ota-policy.json', JSON.stringify({ version: 1, automatic_channel: 'testflight', app_store_launched: false }));
+  writeFileSync(path, JSON.stringify(receipt));
+  write('apps/mobile/app/index.tsx', 'a later JavaScript-only change');
+  git('add', '.'); git('commit', '-qm', 'TestFlight receipt and JS update');
+  const result = check(true);
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ compatible: true, channel: 'testflight', runtime_version: native.hash });
+  for (const invalid of [{ eas_submission_status: 'IN_PROGRESS' }, { eas_submission_id: 'unknown' },
+    { asc_build_id: 'invented' }, { ipa_sha256: null }, { verified_at: null }]) {
+    writeFileSync(path, JSON.stringify({ ...receipt, ...invalid }));
+    expect(check().status).toBe(1);
+  }
+});
+test('production still requires its Apple build ID and refuses a TestFlight receipt', () => {
+  const path = join(root, 'scripts/deploy/ios-production-binary-baseline.json');
+  const baseline = JSON.parse(readFileSync(path, 'utf8'));
+  for (const invalid of [{ asc_build_id: null, eas_submission_id: '84491d3e-1a80-4387-a82c-6cb9f5190cef', eas_submission_status: 'FINISHED' },
+    { channel: 'testflight' }, { build_number: '6' }]) {
+    writeFileSync(path, JSON.stringify({ ...baseline, ...invalid }));
+    expect(check().status).toBe(1);
+  }
 });
 test('matches the runtime computed by the real expo-updates consumer', () => {
   write('apps/mobile/app.config.ts', fixtureConfig.replace("policy: 'appVersion'", "policy: 'fingerprint'"));
@@ -150,7 +181,7 @@ test('blocks ignored iOS native inputs under the real repository ignore rules', 
 test('blocks missing baseline ancestry, malformed receipts and changed production scheme', () => {
   expect(check(true, 'different.apps.googleusercontent.com').status).toBe(1);
   expect(check(true, '').status).toBe(1);
-  const path = join(root, 'scripts/deploy/ios-binary-baseline.json');
+  const path = join(root, 'scripts/deploy/ios-production-binary-baseline.json');
   const baseline = JSON.parse(readFileSync(path, 'utf8'));
   writeFileSync(path, JSON.stringify({ ...baseline, source_sha: '1'.repeat(40) }));
   expect(check().status).toBe(1);
@@ -177,8 +208,9 @@ test('uses the real Deploy step to deny an incompatible binary', () => {
 
 test.each(['production', 'testflight'])('actual %s helper prevents unsafe publication and exports only verified iOS', channel => {
   if (channel === 'testflight') {
-    const baseline = JSON.parse(readFileSync(join(root, 'scripts/deploy/ios-binary-baseline.json'), 'utf8'));
-    write('scripts/deploy/ios-testflight-binary-baseline.json', JSON.stringify({ ...baseline, channel }));
+    const baseline = JSON.parse(readFileSync(join(root, 'scripts/deploy/ios-production-binary-baseline.json'), 'utf8'));
+    write('scripts/deploy/ios-binary-baseline.json', JSON.stringify({ ...baseline, channel, asc_build_id: null,
+      eas_submission_id: '84491d3e-1a80-4387-a82c-6cb9f5190cef', eas_submission_status: 'FINISHED' }));
     write('scripts/deploy/ota-policy.json', JSON.stringify({ version: 1, automatic_channel: channel, app_store_launched: true }));
   }
   const appliedHead = git('rev-parse', 'HEAD');

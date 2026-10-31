@@ -242,8 +242,8 @@ Existing GitHub merge requirements remain authoritative; local tooling cleanup d
 JS, styles and assets bundled by JavaScript can reach compatible TestFlight binaries through EAS Update after green Verify and production smoke.
 New native modules, permissions, config plugins, icon/splash changes, Expo SDK upgrades and widget/Swift changes require a new verified binary.
 Run `node scripts/deploy/native-compatibility.mjs`; a missing baseline fingerprint fails closed.
-The next native build uses a fingerprint runtime and the `testflight` profile; build 5 retains runtime `1.0.0` and channel `production`.
-Before App Store launch, verify the separate TestFlight baseline and switch the [OTA channel policy](scripts/deploy/ota-policy.json) to automatic `testflight` with `app_store_launched: true`.
+Build 6 uses the fingerprint runtime and `testflight` channel; the [binary baseline contract](docs/engineering/devops/ios-ota-baseline.md) retains separate TestFlight and historical production evidence.
+The [OTA channel policy](scripts/deploy/ota-policy.json) targets automatic `testflight`; set `app_store_launched: true` before an actual App Store launch.
 App Store production OTA requires Dawit's explicit manual Deploy dispatch and existing protected release approval; see [binary evidence and channel cutover](docs/engineering/devops/ios-ota-baseline.md).
 
 ## Project Management

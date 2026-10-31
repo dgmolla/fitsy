@@ -12,10 +12,17 @@ export function checkCompatibility(root, { productionEnv = false, env = process.
   let baseline;
   try { baseline = JSON.parse(readFileSync(resolve(root, target.baseline_file), 'utf8')); }
   catch { throw new Error(`Missing or invalid verified ${target.channel} iOS binary baseline; verify a new build before OTA`); }
+  // EAS submission IDs identify uploads, not Apple build IDs. A completed
+  // TestFlight upload can retain an explicitly unknown Apple ID honestly.
+  const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+  const appleEvidence = uuid.test(baseline.asc_build_id) ||
+    (target.channel === 'testflight' && baseline.asc_build_id === null &&
+      uuid.test(baseline.eas_submission_id) && baseline.eas_submission_status === 'FINISHED');
   if (baseline.version !== 1 || baseline.platform !== 'ios' ||
       !/^[a-f0-9]{40}$/.test(baseline.source_sha) || baseline.channel !== target.channel ||
-      !/^[a-f0-9-]{36}$/.test(baseline.eas_build_id) || !/^[a-f0-9-]{36}$/.test(baseline.asc_build_id) ||
+      !uuid.test(baseline.eas_build_id) || !appleEvidence ||
       !/^[a-f0-9]{64}$/.test(baseline.ipa_sha256) || !baseline.runtime_version ||
+      !baseline.verified_at || !Number.isFinite(Date.parse(baseline.verified_at)) ||
       !baseline.build_number || !baseline.bundle_id || !baseline.google_ios_client_id)
     throw new Error('Missing or invalid verified iOS binary baseline; a new build must be verified before OTA');
   const fingerprint = baseline.fingerprint;
@@ -47,8 +54,9 @@ export function checkCompatibility(root, { productionEnv = false, env = process.
   const resolvedRuntime = typeof runtime === 'string' ? runtime
     : runtime?.policy === 'fingerprint' ? current.fingerprint.hash
     : runtime?.policy === 'appVersion' ? current.app.version : undefined;
-  if (current.app.bundle_id !== baseline.bundle_id || resolvedRuntime !== baseline.runtime_version)
-    throw new Error('Bundle identity or runtime differs from the verified binary; a new build is needed before OTA');
+  if (current.app.bundle_id !== baseline.bundle_id || current.app.build_number !== baseline.build_number ||
+      resolvedRuntime !== baseline.runtime_version)
+    throw new Error('Bundle identity, build number or runtime differs from the verified binary; a new build is needed before OTA');
   return { compatible: true, platform: 'ios', source_sha: head, baseline_source_sha: baseline.source_sha,
     eas_build_id: baseline.eas_build_id, runtime_version: baseline.runtime_version, channel: baseline.channel,
     fingerprint: current.fingerprint.hash, production_env_checked: productionEnv };
