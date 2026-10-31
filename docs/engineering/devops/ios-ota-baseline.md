@@ -1,7 +1,8 @@
 # Verified iOS OTA baseline
 
 The OTA gate compares Expo's iOS native fingerprint with the actual verified binary for the selected channel.
-TestFlight build 6 uses runtime `fd98d93926901555764ba66490c9bd9ca170454d`, which matches the local iOS fingerprint with build number `6` and fingerprint package `0.15.4`.
+Uploaded build 7 uses fingerprint runtime `58699659d0433dd381a23a994c7ee97f41a97902` and the embedded `production` channel.
+Automatic OTA still targets `testflight`, so the channel mismatch blocks publication independently of the incomplete IPA verification.
 Build 5 has no verified Expo fingerprint and remains blocked on its separate production channel.
 An incomplete binary receipt, including a missing IPA hash or verification timestamp, still blocks OTA.
 Issue #243 reproduced the false positive in main Deploy run [37685925003](https://github.com/dgmolla/fitsy/actions/runs/37685925003), at source `89c23ce6e5272f7fdc9a599131329e4034b23037`.
@@ -20,23 +21,28 @@ flowchart LR
 
 ## Actual binary evidence
 
-### TestFlight build 6
+### Uploaded build 7
 
-Read-only EAS build and submission pages on October 30, 2026 confirmed the completed build and upload.
-The local iOS fingerprint matches the EAS runtime after changing only the configured build number from `5` to `6`; no native source drift was found from the recorded build source.
+Read-only EAS build and submission pages on October 31, 2026 confirmed the completed build and upload.
+The build's runtime-resolution log records the fingerprint below, and its Expo.plist configuration log explicitly records `expo-channel-name: production`.
+The local iOS fingerprint matches that runtime with configured build number `7` and fingerprint package `0.15.4`.
+EAS marks the source checkout dirty; the recorded Git commit alone does not identify every uploaded input.
 
 | Identity | Verified value |
 | --- | --- |
-| EAS build | `87c977bf-ef75-401a-ac97-cef3c6eafb05`, succeeded, iOS store, testflight profile/channel |
-| Build source | `44f8280051535cf07d09687f598baf2ebca97076` |
-| App identity | `com.fitsy.mobile`, version `1.0.0`, build `6` |
-| Runtime and fingerprint | `fd98d93926901555764ba66490c9bd9ca170454d`, fingerprint package `0.15.4` |
-| EAS submission | `84491d3e-1a80-4387-a82c-6cb9f5190cef`, succeeded upload to App Store Connect |
+| EAS build | `b72f175d-07b8-4a8e-a894-2fe33fed7baa`, succeeded, iOS store, production profile/channel |
+| Build source | `c28460d3f857ef113819fa81c08fcb77a18e4148`, dirty checkout |
+| App identity | `com.fitsy.mobile`, version `1.0.0`, build `7` |
+| Runtime and fingerprint | `58699659d0433dd381a23a994c7ee97f41a97902`, fingerprint package `0.15.4` |
+| EAS submission | `4109aff6-e456-43b6-a30c-3a7fb9bb5923`, succeeded upload to App Store Connect |
 | Apple build ID | Unknown; the EAS submission ID is not an Apple build ID |
 | IPA SHA-256 | See the binary receipt; `null` means artifact verification is incomplete and OTA remains blocked |
 
 The artifact URL and build evidence are retained in `scripts/deploy/ios-binary-baseline.json`.
 A completed EAS upload establishes upload evidence; it does not establish App Review acceptance or public release.
+Read `eas build:view <id> --json` for the actual build identity, fingerprint and channel.
+If shell networking is unavailable, read the authenticated EAS build/submission pages and runtime/configuration logs, and record that fallback in the task evidence.
+Uploading to TestFlight does not imply the binary embeds the `testflight` OTA channel; retain the actual channel without changing release policy.
 
 ### Historical production build 5
 
@@ -58,7 +64,8 @@ The app config's other environment variables affect JavaScript configuration rat
 
 ## Fingerprint compatibility contract
 
-`scripts/deploy/ios-binary-baseline.json` records the current TestFlight binary.
+`scripts/deploy/ios-binary-baseline.json` records the current uploaded binary, including its actual embedded channel.
+Build 7's `production` channel does not satisfy the automatic `testflight` target; recording its upload does not authorize changing channel policy or production's historical receipt.
 `scripts/deploy/ios-production-binary-baseline.json` preserves the historical production binary without substituting TestFlight evidence.
 `ota-target.mjs` selects the matching receipt for both the compatibility guard and publication helper.
 Each receipt retains the source SHA, EAS build ID, IPA SHA-256, bundle/build/runtime/channel identities, Google client ID, verification timestamp and evidence.
@@ -81,7 +88,8 @@ The check repeats inside EAS's production environment and rejects a missing or c
 ## TestFlight baseline and channel policy
 
 The next protected EAS Build workflow uses the `testflight` store profile, production environment and `testflight` channel.
-`app.config.ts` selects build number `6` and `runtimeVersion.policy = fingerprint` for compatible TestFlight updates.
+`app.config.ts` selects build number `7` and `runtimeVersion.policy = fingerprint`.
+The already uploaded build 7 used the production profile/channel, so it cannot receive updates published only to `testflight`.
 This cannot change build 5's embedded runtime `1.0.0` or add its missing widget.
 No build, upload, channel/settings mutation, production OTA or Apple submission is authorized by this runbook.
 

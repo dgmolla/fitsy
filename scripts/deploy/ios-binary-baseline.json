@@ -1,23 +1,23 @@
 {
   "version": 1,
   "platform": "ios",
-  "source_sha": "44f8280051535cf07d09687f598baf2ebca97076",
-  "eas_build_id": "87c977bf-ef75-401a-ac97-cef3c6eafb05",
-  "eas_submission_id": "84491d3e-1a80-4387-a82c-6cb9f5190cef",
+  "source_sha": "c28460d3f857ef113819fa81c08fcb77a18e4148",
+  "eas_build_id": "b72f175d-07b8-4a8e-a894-2fe33fed7baa",
+  "eas_submission_id": "4109aff6-e456-43b6-a30c-3a7fb9bb5923",
   "eas_submission_status": "FINISHED",
   "asc_build_id": null,
   "bundle_id": "com.fitsy.mobile",
-  "build_number": "6",
-  "runtime_version": "fd98d93926901555764ba66490c9bd9ca170454d",
+  "build_number": "7",
+  "runtime_version": "58699659d0433dd381a23a994c7ee97f41a97902",
   "fingerprint": {
-    "hash": "fd98d93926901555764ba66490c9bd9ca170454d",
+    "hash": "58699659d0433dd381a23a994c7ee97f41a97902",
     "package_version": "0.15.4"
   },
-  "channel": "testflight",
+  "channel": "production",
   "google_ios_client_id": "56878207179-voo8iloc0si51ae7n8illrsu3hapks4d.apps.googleusercontent.com",
-  "ipa_url": "https://expo.dev/artifacts/eas/TjiCRoL3KnMSW8hyaPWwoagrADiOiQopYnM6ohwt0Q4.ipa",
+  "ipa_url": "https://expo.dev/artifacts/eas/33TXlf17M73YaM0WDpGF9ESk6bGC6c8dSd8wzbb7c-c.ipa",
   "ipa_sha256": null,
   "verified_at": null,
-  "evidence": "https://expo.dev/accounts/dgmolla/projects/fitsy/builds/87c977bf-ef75-401a-ac97-cef3c6eafb05",
-  "verification_note": "EAS build and local fingerprint match; IPA download is blocked and its SHA-256 is pending. Apple build ID has not been independently queried."
+  "evidence": "https://expo.dev/accounts/dgmolla/projects/fitsy/builds/b72f175d-07b8-4a8e-a894-2fe33fed7baa",
+  "verification_note": "EAS records a dirty source checkout and a completed upload. The local fingerprint matches the build's runtime. Build logs confirm the production channel, which differs from automatic TestFlight OTA. IPA SHA-256 and Apple build ID remain unverified."
 }
