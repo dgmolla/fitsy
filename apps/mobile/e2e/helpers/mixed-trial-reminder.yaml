@@ -1,0 +1,30 @@
+# Both branches retain positive and negative assertions for the selected offer.
+appId: com.fitsy.mobile
+---
+- assertTrue: ${typeof output.trialFixture.shortReminderAvailable === 'boolean' && (REMINDER_ENABLED === '0' || REMINDER_ENABLED === '1')}
+- runFlow:
+    when:
+      true: ${!output.trialFixture.shortReminderAvailable}
+    commands:
+      - assertVisible: "Reminder unavailable"
+      - assertVisible: "This trial is too short for a reminder before the cancellation deadline."
+      - assertNotVisible: "Optional; turn on reminders after purchase."
+      - assertNotVisible: "We'll send you a reminder.*"
+- runFlow:
+    when:
+      true: ${output.trialFixture.shortReminderAvailable}
+    commands:
+      - assertNotVisible: "Reminder unavailable"
+      - assertNotVisible: "This trial is too short for a reminder before the cancellation deadline."
+      - runFlow:
+          when:
+            true: ${REMINDER_ENABLED === '1'}
+          commands:
+            - assertVisible: "We'll send you a reminder.*"
+            - assertNotVisible: "Optional; turn on reminders after purchase."
+      - runFlow:
+          when:
+            true: ${REMINDER_ENABLED === '0'}
+          commands:
+            - assertVisible: "Optional; turn on reminders after purchase."
+            - assertNotVisible: "We'll send you a reminder.*"
