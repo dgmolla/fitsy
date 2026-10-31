@@ -1,7 +1,10 @@
-Original native task remains stopped by the workspace boundary, separate from the now-resolved dependency failure.
-The supplied checkout is fix/floating-nav-saved-tab at c28460d3 (main), while PR #684 is codex/floating-nav-a at d7eb69bb outside writable roots.
-The earlier required shared-lock denial is unchanged; no alternate lock or simulator tool was used, and no new native run is claimed.
-Existing simulator host owner: continue on PR #684 under lockf -t 3600 ~/fitsy-refactor/loop/sim.lock, diagnose native Saved touch/navigation delivery, fix the demonstrated cause, and obtain three consecutive green floating-nav runs.
-The unchanged pre-push hook now exits 0 in the supplied checkout after locked offline npm ci, supported Prisma engine/cache generation and selection of the existing 65-test dependency/pre-push regression suite.
-No hook, lockfile, tracked source or wait changed. No commit or push.
-Evidence: .evidence/saved-navigation/hook-recovery/handoff.md, recovery.json and pre-push-final.log; original native evidence remains in .evidence/saved-navigation/handoff.md.
+**TL;DR:** Repository repairs are locally tested; host acceptance and live-driver installation remain pending.
+Execution stopped before native launch: lockf cannot open ~/fitsy-refactor/loop/sim.lock (Operation not permitted, exit 73).
+The canonical cheap gate also stopped at the required disposable database: Docker socket access is denied.
+Eight static checks and relevant unit/regression suites passed; full native/media and database acceptance remain unverified.
+No human action is required now; the existing loop/simulator host owner owns recovery against this exact candidate.
+Read .evidence/ship-process-hardening/handoff.json for source identity, failures, test results and the concrete recovery commands.
+Selected recovery skills: scripts/delivery/loop/SKILL.md and /Users/dawitmolla/.codex/skills/verify-fitsy/SKILL.md.
+The local driver exists outside writable roots; its reviewed installer dry run is prepared, and live installation awaits an idle owner restart.
+GitHub lookup failed at api.github.com; issue comments and live TestFlight calls remain unverified.
+Do not commit, push, weaken checks or bypass the shared lock from this worker.

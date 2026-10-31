@@ -76,34 +76,34 @@ appId: com.fitsy.mobile
 # Check both plans explicitly after verifying the automatic checkout default.
 - scrollUntilVisible:
     element:
-      id: paywall-plan-${LONG_PLAN}
+      id: paywall-plan-${output.trialFixture.longPlan}
     direction: UP
 - tapOn:
-    id: paywall-plan-${LONG_PLAN}
+    id: paywall-plan-${output.trialFixture.longPlan}
 - copyTextFrom:
-    id: paywall-price-${LONG_PLAN}
+    id: paywall-price-${output.trialFixture.longPlan}
 - evalScript: ${output.longPrice = maestro.copiedText}
 - scrollUntilVisible:
     element:
       id: paywall-step-charge
     direction: UP
-- assertVisible: "In 7 days"
+- assertVisible: "In ${output.trialFixture.longDays} days"
 - scrollUntilVisible:
     element:
       id: paywall-terms
     direction: DOWN
 - copyTextFrom:
     id: paywall-terms
-- assertTrue: ${maestro.copiedText.includes('7 days free, then ' + output.longPrice + '/' + LONG_PERIOD) && maestro.copiedText.includes('Renews automatically')}
+- assertTrue: ${maestro.copiedText.includes(output.trialFixture.longDays + ' days free, then ' + output.longPrice + '/' + output.trialFixture.longPeriod) && maestro.copiedText.includes('Renews automatically')}
 # A short offer must keep its own calendar-dependent reminder eligibility.
 - scrollUntilVisible:
     element:
-      id: paywall-plan-${SHORT_PLAN}
+      id: paywall-plan-${output.trialFixture.shortPlan}
     direction: UP
 - tapOn:
-    id: paywall-plan-${SHORT_PLAN}
+    id: paywall-plan-${output.trialFixture.shortPlan}
 - copyTextFrom:
-    id: paywall-price-${SHORT_PLAN}
+    id: paywall-price-${output.trialFixture.shortPlan}
 - evalScript: ${output.shortPrice = maestro.copiedText}
 - scrollUntilVisible:
     element:
@@ -120,13 +120,13 @@ appId: com.fitsy.mobile
     direction: DOWN
 - copyTextFrom:
     id: paywall-terms
-- assertTrue: ${maestro.copiedText.includes('2 days free, then ' + output.shortPrice + '/' + SHORT_PERIOD) && maestro.copiedText.includes('Renews automatically')}
+- assertTrue: ${maestro.copiedText.includes(output.trialFixture.shortDays + ' days free, then ' + output.shortPrice + '/' + output.trialFixture.shortPeriod) && maestro.copiedText.includes('Renews automatically')}
 - scrollUntilVisible:
     element:
-      id: paywall-plan-${LONG_PLAN}
+      id: paywall-plan-${output.trialFixture.longPlan}
     direction: UP
 - tapOn:
-    id: paywall-plan-${LONG_PLAN}
+    id: paywall-plan-${output.trialFixture.longPlan}
 # This explicitly simulated opt-in does not change device permission or preferences.
 - openLink: com.fitsy.mobile://welcome/payment?devTrialVisual=${SCENARIO}&devReminderEnabled=1&devPaywallVariant=B
 - tapOn:
@@ -134,10 +134,10 @@ appId: com.fitsy.mobile
     optional: true
 - scrollUntilVisible:
     element:
-      id: paywall-plan-${LONG_PLAN}
+      id: paywall-plan-${output.trialFixture.longPlan}
     direction: DOWN
 - tapOn:
-    id: paywall-plan-${LONG_PLAN}
+    id: paywall-plan-${output.trialFixture.longPlan}
 - scrollUntilVisible:
     element:
       id: paywall-step-reminder
@@ -145,13 +145,13 @@ appId: com.fitsy.mobile
 - extendedWaitUntil:
     visible: "We'll send you a reminder.*"
     timeout: 15000
-- assertVisible: "In 7 days"
+- assertVisible: "In ${output.trialFixture.longDays} days"
 - scrollUntilVisible:
     element:
-      id: paywall-plan-${SHORT_PLAN}
+      id: paywall-plan-${output.trialFixture.shortPlan}
     direction: DOWN
 - tapOn:
-    id: paywall-plan-${SHORT_PLAN}
+    id: paywall-plan-${output.trialFixture.shortPlan}
 - scrollUntilVisible:
     element:
       id: paywall-step-reminder

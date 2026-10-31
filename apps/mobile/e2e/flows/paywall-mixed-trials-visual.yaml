@@ -6,15 +6,7 @@ tags: [billing, notifications, onboarding, changed-journey]
     file: ../helpers/mixed-trial-visual.yaml
     env:
       SCENARIO: annual-short
-      LONG_PLAN: monthly
-      LONG_PERIOD: month
-      SHORT_PLAN: yearly
-      SHORT_PERIOD: year
 - runFlow:
     file: ../helpers/mixed-trial-visual.yaml
     env:
       SCENARIO: monthly-short
-      LONG_PLAN: yearly
-      LONG_PERIOD: year
-      SHORT_PLAN: monthly
-      SHORT_PERIOD: month
