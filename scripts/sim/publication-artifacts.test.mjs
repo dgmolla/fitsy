@@ -322,6 +322,7 @@ test('publisher default validator accepts complete non-video proof and rejects c
       writeFileSync(join(evidenceDirectory, captureReceipt), capture);
       writeFileSync(join(evidenceDirectory, attachmentCloseout), closeout);
       return { name, source, sourceHash: sha(sourceBytes), commands, sha256: sha(raw),
+        screenCheck: { version: 1, screenshotHash: sha(png), expired: false, expectedExpired: false },
         screenshot, screenshotHash: sha(png), captureReceipt, captureReceiptHash: sha(capture),
         attachmentCloseout, attachmentCloseoutHash: sha(closeout) };
     });

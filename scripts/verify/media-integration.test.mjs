@@ -49,6 +49,7 @@ test('canonical media caller rejects unavailable tools and failed isolation befo
     }
     mkdirSync(join(dir, 'scripts/sim'));
     copyFileSync(join(root, 'scripts/sim/backend-identity.mjs'), join(dir, 'scripts/sim/backend-identity.mjs'));
+    copyFileSync(join(root, 'scripts/sim/screen-guard.mjs'), join(dir, 'scripts/sim/screen-guard.mjs'));
     symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'));
     writeFileSync(join(dir, '.gitignore'), 'node_modules\n');
     git('init', '-q'); git('config', 'user.name', 'Media fixture'); git('config', 'user.email', 'media@example.test');
@@ -62,9 +63,10 @@ test('canonical media caller rejects unavailable tools and failed isolation befo
       { ps: 126, ffprobe: 0, ffmpeg: 0, summary: /process ownership inspection/ },
       { ps: 0, ffprobe: 1, ffmpeg: 0, summary: /ffprobe/ },
       { ps: 0, ffprobe: 0, ffmpeg: 1, summary: /ffmpeg/ },
+      { ps: 0, ffprobe: 0, ffmpeg: 0, tesseract: 1, summary: /screenshot OCR/ },
     ]) {
-      for (const name of ['ps', 'ffprobe', 'ffmpeg']) {
-        writeFileSync(join(bin, name), `#!/bin/sh\nexit ${entry[name]}\n`); chmodSync(join(bin, name), 0o755);
+      for (const name of ['ps', 'ffprobe', 'ffmpeg', 'tesseract']) {
+        writeFileSync(join(bin, name), `#!/bin/sh\nexit ${entry[name] ?? 0}\n`); chmodSync(join(bin, name), 0o755);
       }
       const result = spawnSync('/bin/bash', ['scripts/verify/media-integration.sh'], {
         cwd: dir, env: { ...env, PATH: `${bin}:/usr/bin:/bin`, FITSY_PRODUCT_ROOT: dir }, encoding: 'utf8',
@@ -73,7 +75,7 @@ test('canonical media caller rejects unavailable tools and failed isolation befo
       assert.match(JSON.parse(result.stdout).summary, entry.summary);
       assert.equal(existsSync(join(dir, 'fixtures-started')), false);
     }
-    for (const name of ['ps', 'ffprobe', 'ffmpeg'])
+    for (const name of ['ps', 'ffprobe', 'ffmpeg', 'tesseract'])
       writeFileSync(join(bin, name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     writeFileSync(join(bin, 'npm'), '#!/bin/sh\ntouch fixtures-started\nexit 0\n', { mode: 0o755 });
     const receipt = join(dir, '.evidence/verify/media-integration.json');

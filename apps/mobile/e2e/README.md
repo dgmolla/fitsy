@@ -110,6 +110,26 @@ An optional `default` entry can restore a baseline build/state before journeys w
 All selected journeys still run; missing preparation or a store mismatch fails the selection.
 Apple history transfer retains the real-store requirements below and cannot pass on a Test Store build.
 
+Entitled journeys also verify the current login UUID against RevenueCat, require a dated Test Store or Apple sandbox subscription, and run the ordinary API sync/status checks before capture.
+Expired or recreated Test Store accounts use `helpers/active-entitlement.yaml` for one real simulated purchase; a failed purchase or unverified server verdict stops evidence.
+Apple sandbox accounts must already have active real sandbox history; the runner never automatically confirms an Apple purchase.
+Use a persistent `seed-%@fitsy.dev` account to preserve RevenueCat identity across DEV resets.
+Profile setup and a subscription database row alone cannot establish this prerequisite.
+
+Before an ordinary Debug Test Store walkthrough, reload the active account's public environment and reset the session with the following command.
+This restarts owned Metro with those credentials and signs into the active account even when a previous expired journey left another account in keychain.
+
+```sh
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs prepare-walkthrough <UDID>
+```
+
+Install local `tesseract` with English data for evidence capture and the media integration lane.
+Every successful flow screenshot is inspected from its pixels; unreadable captures and unintended subscription-expired screens fail.
+Final publication also requires a content check bound to the outcome screenshot hash, and walkthrough validation inspects returned screenshots and native hierarchy observations.
+An intentional expired-screen walkthrough must set `flow` to its executed `subscription-expired-routing` or `subscription-restore-expired` journey in the walkthrough JSON.
+Only the maintained expired/history fixture plus its mandatory `resubscribe-restore` assertion permits that screen; a billing tag or prose claim does not.
+Standalone host captures can use `node scripts/sim/screen-guard.mjs <capture-directory> [maintained-expired-flow.yaml]` before publication.
+
 ```sh
 export FITSY_E2E_FIXTURES=/absolute/local/fitsy-fixtures.json
 node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=full --udid=<UDID>
@@ -319,6 +339,7 @@ Use the same Sign in with Apple identity, including its private-relay address wh
 The flow retains receipt and login state, restores through the visible control, checks Welcome back, and repeats the routing check after cold launch.
 `subscription-restore-empty` is the negative control for a signed-in never-subscribed account whose store account has no Fitsy receipt.
 `subscription-expired-routing` starts with an already expired subscription linked to the current Fitsy account and covers inactive Restore from Welcome back plus cold launch.
+It also requires the bundled Chick-fil-A sample search card on entry, relaunch and sign-in return; restaurant data and imagery render locally while the existing RevenueCat checks remain active.
 It also leaves win-back for sign-in and returns with the same expired account, retaining win-back routing while optional restaurant requests are cancelled.
 That same-account journey can use RevenueCat Test Store without requiring history transfer.
 All flows require their documented starting state and fail if that state is absent.
