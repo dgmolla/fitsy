@@ -16,6 +16,7 @@ import { useTheme } from '@/lib/theme';
 import { trackItemSaved, trackRestaurantTapped, trackSaveFailed } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { Ionicons } from '@expo/vector-icons';
+import { useFloatingNavClearance } from '@/lib/floatingNav';
 
 type Section = {
   title: string;
@@ -43,6 +44,7 @@ function buildSections(items: SavedItemResponse[]): Section[] {
 
 export default function SavedScreen() {
   const { colors } = useTheme();
+  const tabBarClearance = useFloatingNavClearance();
   const [savedItems, setSavedItems] = useState<SavedItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -104,17 +106,18 @@ export default function SavedScreen() {
       <ScreenHeader />
 
       {loading ? (
-        <View style={styles.centered}>
+        <View testID="saved-loading" style={[styles.centered, { paddingBottom: tabBarClearance }]}>
           <FitsyLoader size="md" />
         </View>
       ) : savedItems.length === 0 ? (
-        <View style={styles.centered}>
+        <View testID="saved-content" style={[styles.centered, { paddingBottom: tabBarClearance }]}>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
             No saved meals yet.{'\n'}Bookmark items from restaurant menus.
           </Text>
         </View>
       ) : (
         <SectionList
+          testID="saved-content"
           sections={sections}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={
@@ -133,6 +136,7 @@ export default function SavedScreen() {
             const sectionIndex = sections.findIndex((s) => s.restaurantId === section.restaurantId);
             return (
               <Pressable
+                testID={`saved-restaurant-${section.restaurantId}`}
                 style={styles.sectionHeader}
                 onPress={() => handleRestaurantTap(section, sectionIndex)}
                 accessibilityRole="button"
@@ -149,7 +153,8 @@ export default function SavedScreen() {
           renderItem={({ item }) => (
             <SavedItemCompact item={item} onUnsave={handleUnsave} />
           )}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 32 + tabBarClearance }]}
+          scrollIndicatorInsets={{ bottom: tabBarClearance }}
           stickySectionHeadersEnabled
         />
       )}
