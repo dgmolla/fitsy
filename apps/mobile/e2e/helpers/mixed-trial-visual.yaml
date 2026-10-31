@@ -37,7 +37,8 @@ appId: com.fitsy.mobile
     visible:
       id: trial-reminder-note
     timeout: 15000
-- assertVisible: "If you choose the ${LONG_NAME} plan.*free trial of 7 days ends.*"
+- runScript: mixed-trial-default.mjs
+- assertVisible: "If you choose the ${output.trialFixture.name} plan.*free trial of ${output.trialFixture.days} days ends.*"
 - assertVisible: "Synthetic trial eligibility for visual testing.*"
 - takeScreenshot: synthetic-${SCENARIO}-reminder
 - tapOn:
@@ -46,7 +47,7 @@ appId: com.fitsy.mobile
     visible:
       id: paywall-offer-timeline
     timeout: 15000
-- assertVisible: "In 7 days"
+- assertVisible: "In ${output.trialFixture.days} days"
 - assertNotVisible: "Reminder unavailable"
 # Read the selected default before tapping either plan.
 - scrollUntilVisible:
@@ -56,11 +57,37 @@ appId: com.fitsy.mobile
 - assertVisible: "Synthetic .* for visual testing.*"
 - scrollUntilVisible:
     element:
-      id: paywall-price-${LONG_PLAN}
+      id: paywall-price-${output.trialFixture.plan}
     direction: DOWN
+- copyTextFrom:
+    id: paywall-price-${output.trialFixture.plan}
+- evalScript: ${output.defaultPrice = maestro.copiedText}
+- scrollUntilVisible:
+    element:
+      id: paywall-terms
+    direction: DOWN
+- copyTextFrom:
+    id: paywall-terms
+- assertTrue: ${maestro.copiedText.includes(output.trialFixture.days + ' days free, then ' + output.defaultPrice + '/' + output.trialFixture.period) && maestro.copiedText.includes('Renews automatically')}
+- tapOn:
+    id: welcome-continue
+- assertVisible: "Visual preview only"
+- tapOn: "OK"
+# Check both plans explicitly after verifying the automatic checkout default.
+- scrollUntilVisible:
+    element:
+      id: paywall-plan-${LONG_PLAN}
+    direction: UP
+- tapOn:
+    id: paywall-plan-${LONG_PLAN}
 - copyTextFrom:
     id: paywall-price-${LONG_PLAN}
 - evalScript: ${output.longPrice = maestro.copiedText}
+- scrollUntilVisible:
+    element:
+      id: paywall-step-charge
+    direction: UP
+- assertVisible: "In 7 days"
 - scrollUntilVisible:
     element:
       id: paywall-terms
@@ -68,11 +95,7 @@ appId: com.fitsy.mobile
 - copyTextFrom:
     id: paywall-terms
 - assertTrue: ${maestro.copiedText.includes('7 days free, then ' + output.longPrice + '/' + LONG_PERIOD) && maestro.copiedText.includes('Renews automatically')}
-- tapOn:
-    id: welcome-continue
-- assertVisible: "Visual preview only"
-- tapOn: "OK"
-# A short selection must remove the opt-in invitation even without prior consent.
+# A short offer must keep its own calendar-dependent reminder eligibility.
 - scrollUntilVisible:
     element:
       id: paywall-plan-${SHORT_PLAN}
@@ -86,9 +109,10 @@ appId: com.fitsy.mobile
     element:
       id: paywall-step-reminder
     direction: UP
-- assertVisible: "Reminder unavailable"
-- assertVisible: "This trial is too short for a reminder before the cancellation deadline."
-- assertNotVisible: "Optional; turn on reminders after purchase."
+- runFlow:
+    file: mixed-trial-reminder.yaml
+    env:
+      REMINDER_ENABLED: '0'
 - takeScreenshot: synthetic-${SCENARIO}-short-opt-in
 - scrollUntilVisible:
     element:
@@ -110,6 +134,12 @@ appId: com.fitsy.mobile
     optional: true
 - scrollUntilVisible:
     element:
+      id: paywall-plan-${LONG_PLAN}
+    direction: DOWN
+- tapOn:
+    id: paywall-plan-${LONG_PLAN}
+- scrollUntilVisible:
+    element:
       id: paywall-step-reminder
     direction: UP
 - extendedWaitUntil:
@@ -126,7 +156,8 @@ appId: com.fitsy.mobile
     element:
       id: paywall-step-reminder
     direction: UP
-- assertVisible: "Reminder unavailable"
-- assertVisible: "This trial is too short for a reminder before the cancellation deadline."
-- assertNotVisible: "We'll send you a reminder.*"
+- runFlow:
+    file: mixed-trial-reminder.yaml
+    env:
+      REMINDER_ENABLED: '1'
 - takeScreenshot: synthetic-${SCENARIO}-short-enabled

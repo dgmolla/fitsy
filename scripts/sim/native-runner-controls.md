@@ -42,6 +42,21 @@ On macOS, the poller's temporary worktree can have a `/var/...` pathname that No
 Native CLI entrypoint guards must compare real paths so that selection, builds and acceptance actually execute through that alias; a zero exit with empty output is a setup failure.
 The selector regressions launch the real CLIs through an aliased checkout and cover Vercel listings without deployment IDs and immutable `fitsy-<hash>` preview URLs.
 
+The expired Test Store fixture uses the same selected backend, including this project's verified preview URLs.
+Its canonical implementation is `scripts/sim/expired-fixture.mjs`; it retains the persistent seed UUID, real purchase history, 35-minute expiry window and purchase-disabled lapsed login.
+It does not authorize an arbitrary preview, change a real offering or replace the host's deployment/source verification.
+Both existing host callers import `~/fitsy-refactor/sim-review/expired-fixture.mjs`.
+After reviewed integration, their existing owner installs the main implementation at an idle boundary:
+
+```sh
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node scripts/sim/install-expired-fixture.mjs ~/fitsy-refactor/sim-review
+```
+
+The installer requires a clean checkout matching `origin/main`, preserves the previous module and additive installation receipts, and snapshots the exact source and backend guard behind that existing import.
+It leaves fixture state and runner scheduling intact; use a fresh host process to load the installed module.
+The installer regressions exercise the real host import in a fresh process, including preview login and unchanged history, and refuse busy runners, candidate source and modified snapshots.
+Worker sandbox restrictions on the host directory or shared lock require installation and replay by that owner; repository tests alone do not establish live adoption.
+
 ## Optional Slack previews
 
 The local scripted gate accepts `--record-video` or `FITSY_SIM_RECORD_VIDEO=1` to add best-effort preview evidence around each selected Maestro invocation.

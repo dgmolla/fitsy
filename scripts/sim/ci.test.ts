@@ -75,6 +75,53 @@ test.each([
   });
 });
 
+test('widget return dismisses the non-accessible Debug overlay and retains the named action and Search assertion', () => {
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/widget-setup.yaml'), 'utf8')) as [unknown, {
+    tapOn?: { id?: string; point?: string };
+    runFlow?: { when: { visible: string }; commands: object[] };
+    scrollUntilVisible?: object;
+  }[]];
+  const tap = commands.findIndex(step => step.tapOn?.id === 'widget-search');
+  expect(tap).toBeGreaterThan(-1);
+  expect(commands[tap - 2]).toEqual({ scrollUntilVisible: {
+    element: { id: 'widget-search' }, direction: 'DOWN',
+  } });
+  const dismiss = commands.findIndex(step => step.tapOn?.point === '93%,93%');
+  expect(dismiss).toBeGreaterThan(-1);
+  expect(commands[dismiss + 1]).toEqual({ runFlow: {
+    when: { visible: 'Search restaurants or dishes' }, commands: [
+      { openLink: 'com.fitsy.mobile://widget' }, { tapOn: { text: '^Open$', optional: true } },
+    ],
+  } });
+  expect(commands[dismiss + 2]).toEqual({ extendedWaitUntil: { visible: { id: 'widget-step-1' }, timeout: 15000 } });
+  expect(commands[tap + 1]).toEqual({ extendedWaitUntil: {
+    visible: 'Search restaurants or dishes', timeout: 15000,
+  } });
+});
+
+test.each([false, true].flatMap(available => ['0', '1'].map(enabled => ({ available, enabled }))))(
+  'mixed-trial reminder asserts both positive and negative copy (schedulable: $available, opted in: $enabled)', ({ available, enabled }) => {
+    type Step = { runFlow?: { when: { true: string }; commands: Step[] }; assertVisible?: string; assertNotVisible?: string; assertTrue?: string };
+    const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/helpers/mixed-trial-reminder.yaml'), 'utf8')) as [unknown, Step[]];
+    const context = { output: { trialFixture: { shortReminderAvailable: available } }, REMINDER_ENABLED: enabled };
+    const evaluate = (source: string) => runInNewContext(source.slice(2, -1), context);
+    const visible: string[] = [], absent: string[] = [];
+    const drive = (steps: Step[]) => {
+      for (const step of steps) {
+        if (step.assertTrue) expect(evaluate(step.assertTrue)).toBe(true);
+        if (step.assertVisible) visible.push(step.assertVisible);
+        if (step.assertNotVisible) absent.push(step.assertNotVisible);
+        if (step.runFlow && evaluate(step.runFlow.when.true)) drive(step.runFlow.commands);
+      }
+    };
+    drive(commands);
+    const optIn = 'Optional; turn on reminders after purchase.', optedIn = "We'll send you a reminder.*";
+    const unavailable = ['Reminder unavailable', 'This trial is too short for a reminder before the cancellation deadline.'];
+    expect(visible).toEqual(available ? [enabled === '1' ? optedIn : optIn] : unavailable);
+    expect(absent).toEqual(available ? [...unavailable, enabled === '1' ? optIn : optedIn] : [optIn, optedIn]);
+  },
+);
+
 test.each([
   ['map-search', 'inuse'],
   ['map-search-location-denied', 'never'],

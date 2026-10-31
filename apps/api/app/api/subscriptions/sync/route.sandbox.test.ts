@@ -159,6 +159,23 @@ it('accepts a production store purchase without a sandbox acceptance log', async
   expect(info).toHaveBeenCalledWith('[subscription] status none -> active (sync)');
 });
 
+it('rechecks a restored sandbox entitlement and its real expiry in production mode', async () => {
+  process.env = { ...process.env, NODE_ENV: 'production' };
+  expect(await (await POST(request('restore_history'))).json()).toMatchObject({
+    active: true, verdict: 'active', synced: true, stale: false,
+  });
+  expect(row).toMatchObject({ status: 'active' });
+  jest.setSystemTime(Date.now() + 2 * 86_400_000);
+  expect(await (await POST(request('restore_history'))).json()).toMatchObject({
+    active: false, verdict: 'expired', synced: true, stale: false,
+    lastRcVerifiedAt: new Date().toISOString(),
+  });
+  expect(row).toMatchObject({ status: 'expired', expiresAt: new Date(expires) });
+  expect(global.fetch).toHaveBeenCalledWith(revenueCatUrl, expect.objectContaining({
+    headers: { authorization: 'Bearer appl_fixture', 'x-platform': 'ios' },
+  }));
+});
+
 it.each(['unavailable', 'test_store'])('retains unknown for a lapsed row when RevenueCat is %s', async failure => {
   const previous = {
     status: 'active', expiresAt: new Date(Date.now() - 60_000), lastEventAt: new Date(Date.now() - 120_000),
