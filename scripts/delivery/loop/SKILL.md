@@ -23,7 +23,8 @@ Retain the concrete blocker, selected skill/tool, attempted recovery and next ac
 
 Install reviewed recovery controls and their imports outside every candidate's writable roots before starting workers.
 The installer freezes the canonical simulator controls, policy files and JavaScript dependencies alongside the Python driver.
-The runner reads the synthetic Test Store fixture as JSON data from the selected `FITSY_PRODUCT_ROOT`, with current-source checks intact; an archived installation fixture cannot replace the candidate's catalog.
+Saved paywall flows load the selected source's plain Test Store catalog through `runScript` inside native isolation, with current-source checks intact.
+When a saved flow fails at fixture loading, replay its actual script sequence without wrapper-injected variables before changing app behavior; the Mac poller invokes Maestro directly.
 It records canonical dependency directories in the installed `controls/dependency-roots.json` before workers start and refuses linked installation directories.
 Candidate dependency links may resolve only within their workspace or to those exact recorded roots; a missing manifest requires reviewed reinstallation, never a candidate-derived grant.
 Privileged backend selection runs only that installed snapshot, with core environment and Vercel authentication; it never evaluates candidate JavaScript or inherits startup selectors.

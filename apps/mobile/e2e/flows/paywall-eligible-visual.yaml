@@ -37,6 +37,7 @@ env:
       id: trial-reminder-note
     timeout: 15000
 - assertVisible: "Synthetic trial eligibility for visual testing.*"
+- runScript: ../../lib/testStoreFixtures.cjs
 - runScript: ../helpers/mixed-trial-default.mjs
 - tapOn:
     id: trial-reminder-allow

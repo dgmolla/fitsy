@@ -37,6 +37,7 @@ appId: com.fitsy.mobile
     visible:
       id: trial-reminder-note
     timeout: 15000
+- runScript: ../../lib/testStoreFixtures.cjs
 - runScript: mixed-trial-default.mjs
 - assertVisible: "If you choose the ${output.trialFixture.name} plan.*free trial of ${output.trialFixture.days} days ends.*"
 - assertVisible: "Synthetic trial eligibility for visual testing.*"

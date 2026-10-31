@@ -1,10 +1,13 @@
-**TL;DR:** Repository repairs are locally tested; host acceptance and live-driver installation remain pending.
-Execution stopped before native launch: lockf cannot open ~/fitsy-refactor/loop/sim.lock (Operation not permitted, exit 73).
-The canonical cheap gate also stopped at the required disposable database: Docker socket access is denied.
-Eight static checks and relevant unit/regression suites passed; full native/media and database acceptance remain unverified.
-No human action is required now; the existing loop/simulator host owner owns recovery against this exact candidate.
-Read .evidence/ship-process-hardening/handoff.json for source identity, failures, test results and the concrete recovery commands.
+**TL;DR:** The fixture regression is repaired; host permissions still prevent native and database acceptance.
+Original Simulator failure: CODE - the Mac poller invokes Maestro directly without TEST_STORE_FIXTURES, breaking both saved paywall scripts on PR #692 head 495f22eee2e8.
+The source-bound native screenshots show the expected reminder screen; saved-script regressions reproduced the missing-variable error before repair.
+Both saved flows now load the same authored CommonJS catalog as the Debug app, with no injected variable or poller update required.
+Execution stopped before native launch: lockf cannot open ~/fitsy-refactor/loop/sim.lock (Operation not permitted, exit 73, ENVIRONMENT).
+The canonical cheap gate passes all eight static checks but cannot start its required disposable database because Docker socket access is denied (ENVIRONMENT).
+No checks or assertions were weakened; full native/media and database acceptance remain unverified.
+No human action is required now; the existing loop/simulator host owner owns the exact-source replay under the unchanged shared lock.
+Read .evidence/ship-process-hardening/handoff.json for additive failure history, source identity, test results and concrete recovery commands.
 Selected recovery skills: scripts/delivery/loop/SKILL.md and /Users/dawitmolla/.codex/skills/verify-fitsy/SKILL.md.
-The local driver exists outside writable roots; its reviewed installer dry run is prepared, and live installation awaits an idle owner restart.
-GitHub lookup failed at api.github.com; issue comments and live TestFlight calls remain unverified.
+The original live-driver installation still awaits independent review and an idle owner restart outside worker writable roots.
+GitHub CLI access failed, the public fetch failed, and browser access timed out; latest issue comments remain unread and no product/design decisions changed.
 Do not commit, push, weaken checks or bypass the shared lock from this worker.

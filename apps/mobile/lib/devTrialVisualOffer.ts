@@ -1,6 +1,6 @@
 import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 import { TRIAL_CATALOG_POLICY } from '../../../packages/shared/src/contracts/trialPolicy';
-import testStoreFixtures from './testStoreFixtures.json';
+import testStoreFixtures from './testStoreFixtures.cjs';
 
 export type DevTrialVisualScenario = 7 | 14 | 'annual-short' | 'monthly-short';
 
