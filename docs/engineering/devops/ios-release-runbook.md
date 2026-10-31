@@ -29,7 +29,8 @@ Record actual returned IDs, statuses and timestamps; preserve unknown source/nat
 Compare that submission with current served main/backend, intervening OTA updates and the intended embedded production binary.
 A processed build, Git tag, OTA publication or repository listing draft does not prove an App Review submission or public release.
 
-The current [TestFlight binary receipt](../../../scripts/deploy/ios-binary-baseline.json) records version `1.0.0`, build `6`, fingerprint runtime `fd98d93926901555764ba66490c9bd9ca170454d`, channel `testflight`, and source `44f8280051535cf07d09687f598baf2ebca97076`.
+The current [uploaded binary receipt](../../../scripts/deploy/ios-binary-baseline.json) records version `1.0.0`, build `7`, fingerprint runtime `58699659d0433dd381a23a994c7ee97f41a97902`, channel `production`, and a dirty checkout at source `c28460d3f857ef113819fa81c08fcb77a18e4148`.
+Its embedded channel differs from automatic `testflight` OTA, and IPA verification remains incomplete; the compatibility guard continues to block publication.
 The [historical production receipt](../../../scripts/deploy/ios-production-binary-baseline.json) preserves build `5` and runtime `1.0.0` for the separate production channel.
 Its [provenance](ios-ota-baseline.md) establishes historical EAS/Apple processing and actual IPA identity, not the last submission.
 Use [app.config.ts](../../../apps/mobile/app.config.ts) and [eas.json](../../../apps/mobile/eas.json) for current repository identity; preserve the established bundle instead of matching obsolete `app.fitsy.mobile` drafts.
@@ -60,7 +61,7 @@ Prepare its EAS public configuration with the [explicit-source uploader](staging
 Review the default dry run before an authorized `--apply`; never copy local DEV credentials into production EAS configuration.
 Confirm the evaluated configuration and actual embedded IPA, including Google sign-in scheme, signing/team, bundle, version/build, SDK, runtime and production updates channel.
 Do not expose credentials when recording identities.
-Build 6 uses `runtimeVersion.policy = fingerprint`; build 5 keeps its embedded runtime `1.0.0`.
+Build 7 uses `runtimeVersion.policy = fingerprint`; build 5 keeps its embedded runtime `1.0.0`.
 Record the actual build fingerprint and separate channel baseline using the [native compatibility and channel cutover contract](ios-ota-baseline.md).
 Verify both embedded startup and applicable update behavior; an OTA in the same project does not prove the installed store binary received it.
 
