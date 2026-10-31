@@ -10,6 +10,10 @@ tags: [billing, onboarding, changed-journey, 'fixture:expired-subscription', 'st
     timeout: 30000
 - assertVisible:
     id: resubscribe-restore
+- assertVisible: "Sample meal"
+- assertVisible:
+    id: paywall-search-item-card
+    text: "Chick-fil-A, best match: 8 ct Grilled Nuggets"
 - assertNotVisible:
     id: paywall-logo
 - tapOn:
@@ -29,11 +33,14 @@ tags: [billing, onboarding, changed-journey, 'fixture:expired-subscription', 'st
     timeout: 30000
 - assertVisible:
     id: resubscribe-restore
+- assertVisible: "Sample meal"
+- assertVisible:
+    id: paywall-search-item-card
 - assertNotVisible:
     id: paywall-logo
 - takeScreenshot: subscription-expired-relaunch
-# Leaving win-back cancels its optional restaurant teaser. Signing the same
-# expired account back in must return to win-back, without discovery recovery.
+# Signing the same expired account back in must return to the bundled sample
+# on win-back, without a restaurant request or discovery recovery.
 - openLink: com.fitsy.mobile://welcome/signin?returnTo=resubscribe
 - tapOn:
     text: "^Open$"
@@ -43,6 +50,9 @@ tags: [billing, onboarding, changed-journey, 'fixture:expired-subscription', 'st
     env:
       DESTINATION: resubscribe-restore
 - assertVisible: "Welcome back."
+- assertVisible: "Sample meal"
+- assertVisible:
+    id: paywall-search-item-card
 - assertNotVisible:
     id: paywall-logo
 - assertNotVisible:

@@ -306,6 +306,7 @@ Use the same Sign in with Apple identity, including its private-relay address wh
 The flow retains receipt and login state, restores through the visible control, checks Welcome back, and repeats the routing check after cold launch.
 `subscription-restore-empty` is the negative control for a signed-in never-subscribed account whose store account has no Fitsy receipt.
 `subscription-expired-routing` starts with an already expired subscription linked to the current Fitsy account and covers inactive Restore from Welcome back plus cold launch.
+It also requires the bundled Chick-fil-A sample search card on entry, relaunch and sign-in return; restaurant data and imagery render locally while the existing RevenueCat checks remain active.
 It also leaves win-back for sign-in and returns with the same expired account, retaining win-back routing while optional restaurant requests are cancelled.
 That same-account journey can use RevenueCat Test Store without requiring history transfer.
 All flows require their documented starting state and fail if that state is absent.
