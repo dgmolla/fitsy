@@ -53,7 +53,7 @@ struct WidgetDataTests {
         try expect(WidgetData.nextRefresh(configuration: config, now: now.addingTimeInterval(86300)) == now.addingTimeInterval(86400), "refresh at credential expiry when it comes first")
 
         let restaurant = """
-        {"id":"restaurant-first","name":"First restaurant","bestMatch":{"menuItemId":"first-dish","name":"Chicken bowl","calories":600,"proteinG":40,"carbsG":60,"fatG":20,"confidence":"HIGH"}}
+        {"id":"restaurant-first","name":"First restaurant","photoUrl":"https://images.example.test/first.jpg","bestMatch":{"menuItemId":"first-dish","name":"Chicken bowl","calories":600,"proteinG":40,"carbsG":60,"fatG":20,"confidence":"HIGH"}}
         """
         let second = restaurant.replacingOccurrences(of: "first", with: "second")
         let payload = "{\"data\":[\(restaurant),\(second)],\"meta\":{\"locked\":false}}"
@@ -62,6 +62,16 @@ struct WidgetDataTests {
         try expect(selected.dish?.proteinG == 40 && selected.updatedAt == now, "retain nutrition and freshness")
         try expect(selected.dish?.link.absoluteString == "fitsy:///restaurant/restaurant-first?selectedItemId=first-dish", "open the selected dish")
         try expect(selected.dish?.range(600) == "540-660", "show estimated ranges instead of false precision")
+        try expect(selected.dish?.photoUrl == "https://images.example.test/first.jpg", "select the first restaurant photo, not a later result or dish photo")
+        let shared = try JSONDecoder().decode(WidgetSnapshot.self, from: JSONEncoder().encode(selected))
+        try expect(shared == selected && shared.dish?.photoUrl == selected.dish?.photoUrl, "App Group snapshot round trip retains the photo URL")
+        let legacy = payload.replacingOccurrences(of: "\"photoUrl\":\"https://images.example.test/first.jpg\",", with: "")
+        let noPhoto = try WidgetData.select(Data(legacy.utf8), configuration: config, now: now)
+        try expect(noPhoto.dish?.photoUrl == nil && noPhoto.dish?.name == "Chicken bowl", "restaurants without photos retain their dish")
+        let oldSnapshot = try JSONEncoder().encode(noPhoto)
+        try expect(try JSONDecoder().decode(WidgetSnapshot.self, from: oldSnapshot).dish?.photoUrl == nil, "older App Group snapshots remain decodable")
+        let nullPhoto = payload.replacingOccurrences(of: "\"https://images.example.test/first.jpg\"", with: "null")
+        try expect(try WidgetData.select(Data(nullPhoto.utf8), configuration: config, now: now).dish?.photoUrl == nil, "null photos use the solid dark fallback")
         let empty = try WidgetData.select(Data("{\"data\":[],\"meta\":{\"locked\":false}}".utf8), configuration: config, now: now)
         try expect(empty.state == .empty && empty.dish == nil, "empty results")
         let noFirstDish = payload.replacingOccurrences(of: restaurant, with: "{\"id\":\"no-dish\",\"name\":\"No dish\",\"bestMatch\":null}")

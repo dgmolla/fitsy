@@ -13,7 +13,7 @@ final class FitsyWidgetBridge: NSObject {
             let old = WidgetStore.configuration
             guard next != old else { resolve(nil); return }
             // A different account, target or area must not inherit an old dish.
-            if next.locked || next.context != old?.context { WidgetStore.remove("snapshot.json") }
+            if next.locked || next.context != old?.context { WidgetStore.clearSnapshot() }
             try WidgetStore.write(next, to: "configuration.json")
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.kind)
             resolve(nil)
@@ -23,7 +23,7 @@ final class FitsyWidgetBridge: NSObject {
     @objc(clear:rejecter:)
     func clear(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         WidgetStore.remove("configuration.json")
-        WidgetStore.remove("snapshot.json")
+        WidgetStore.clearSnapshot()
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetStore.kind)
         resolve(nil)
     }

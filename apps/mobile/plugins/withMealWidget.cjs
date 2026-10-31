@@ -18,8 +18,8 @@ function addWidget(project, iosRoot, config) {
   const app = IOSConfig.XcodeUtils.getApplicationNativeTarget({ project, projectName: 'Fitsy' });
   const sourceRoot = join(__dirname, 'widget');
   for (const [folder, targetUuid, files] of [
-    [name, target.uuid, ['WidgetData.swift', 'WidgetStore.swift', 'FitsyMealWidget.swift']],
-    ['FitsyWidgetBridge', app.uuid, ['FitsyWidgetBridge.swift', 'FitsyWidgetBridge.m', 'WidgetData.swift', 'WidgetStore.swift']],
+    [name, target.uuid, ['WidgetData.swift', 'WidgetImage.swift', 'WidgetStore.swift', 'FitsyMealWidget.swift']],
+    ['FitsyWidgetBridge', app.uuid, ['FitsyWidgetBridge.swift', 'FitsyWidgetBridge.m', 'WidgetData.swift', 'WidgetImage.swift', 'WidgetStore.swift']],
   ]) {
     IOSConfig.XcodeUtils.ensureGroupRecursively(project, folder);
     mkdirSync(join(iosRoot, folder), { recursive: true });
