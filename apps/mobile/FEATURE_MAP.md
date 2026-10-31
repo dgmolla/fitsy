@@ -36,12 +36,13 @@ signed in without targets -> `/macro-setup`.
 | `/macro-setup` | signed in, no targets | `macro-setup-save`, `macro-setup-skip` | daily target editor; assisted-targets flow covers render, Save and Skip |
 | `/(tabs)/search` | cold start when entitled; tab bar | "Search restaurants or dishes" | same discovery component as preview; tabs require entitlement; hard paywall after decline by default |
 | `/(tabs)/saved` | tab bar | - | saved restaurants/items |
-| `/(tabs)/profile` | tab bar | "YOUR GOAL" | targets, plan, sign out |
+| `/(tabs)/profile` | tab bar | "YOUR GOAL" | profile facts, meal targets, legacy macro-target recovery, feedback, sign out and account deletion; notification/widget management stays in iOS Settings and the Home Screen |
 | `/restaurant/[id]` | tapping a search result | restaurant name | menu + macro detail |
 | `/welcome/leave-review` | legacy links only | redirects to permission/out-of-area | no rating prompt in onboarding |
 | `/welcome/resubscribe` | cold start when lapsed | - | win-back screen |
 | out-of-area state | search preview returns 0 nearby | "Keep me posted" (inline on the search screen, not a separate route) | LA-only launch teaser; `/welcome/out-of-area` also exists in the onboarding flow |
-| `/notification-settings` | Profile -> Notifications; trial reminder | `reminder-permission`, `reminders-device-settings` | Device notification settings and actual upcoming schedule; no per-reminder configuration |
+| `/notification-settings` | trial notification tap; existing deep links | `reminder-permission`, `reminders-device-settings` | Device notification settings and actual upcoming schedule; no per-reminder configuration |
+| `/widget` | WidgetKit empty/locked state deep links | `widget-step-1`, `widget-unlock` | Setup guidance and existing paywall routing; add and manage the widget from the Home Screen |
 | `/feedback-board` | profile | - | feedback list |
 
 Known flake: first cold start after install animates for ~2s before "continue"

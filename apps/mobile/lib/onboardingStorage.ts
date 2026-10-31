@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { TriedApproach } from './onboardingPersonalization';
 import { supabase } from './supabase';
-import { validateProfileFact } from './profileFactValidation';
 
 const KEY = '@fitsy/onboarding';
 const LEGACY_KEY = '@fitsy/onboarding_unowned';
@@ -59,49 +58,10 @@ function ownedData(record: OwnedOnboarding | null, owner: string | null): Onboar
 }
 
 async function retainLegacy(record: OwnedOnboarding | null): Promise<void> {
+  // Preserve unowned facts when newer account data replaces the active record.
   if (record && record._owner === undefined && !await AsyncStorage.getItem(LEGACY_KEY)) {
     await AsyncStorage.setItem(LEGACY_KEY, JSON.stringify(record));
   }
-}
-
-/** Old records have ambiguous ownership and require an explicit account restore. */
-export async function getLegacyOnboardingData(): Promise<OnboardingData | null> {
-  const active = await readRecord();
-  const raw = active?._owner === undefined && active ? active : null;
-  let record = raw;
-  if (!record) {
-    try { record = JSON.parse(await AsyncStorage.getItem(LEGACY_KEY) ?? 'null'); } catch { return null; }
-  }
-  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
-  const { birthday, heightCm, weightKg, sex, activity, goal } = record;
-  const facts = Object.fromEntries(Object.entries({ birthday, heightCm, weightKg, sex, activity, goal })
-    .filter(([, value]) => value !== undefined)) as OnboardingData;
-  return Object.keys(facts).length ? facts : null;
-}
-
-export async function restoreLegacyOnboardingData(): Promise<{ owner: string; profile: OnboardingData }> {
-  const owner = await currentOwner();
-  if (!owner) throw new Error('Sign in before restoring profile facts');
-  return serialize(async () => {
-    const legacy = await getLegacyOnboardingData();
-    if (!legacy || await currentOwner() !== owner) throw new Error('Older profile is unavailable');
-    const record = await readRecord();
-    await retainLegacy(record);
-    const existing = ownedData(record, owner);
-    const facts = Object.fromEntries(Object.entries(legacy).filter(([, value]) => value !== undefined));
-    for (const [field, value] of Object.entries(facts)) validateProfileFact(field as keyof OnboardingData, value);
-    const restored = { ...existing, ...facts };
-    await AsyncStorage.setItem(KEY, JSON.stringify({ ...restored, _owner: owner }));
-    if (await currentOwner() !== owner) throw new Error('Account changed while restoring profile');
-    return { owner, profile: restored };
-  });
-}
-
-export async function retireLegacyOnboardingData(owner: string): Promise<void> {
-  await serialize(async () => {
-    if (await currentOwner() !== owner) throw new Error('Account changed while restoring profile');
-    await AsyncStorage.removeItem(LEGACY_KEY);
-  });
 }
 
 function serialize<T>(write: () => Promise<T>): Promise<T> {
