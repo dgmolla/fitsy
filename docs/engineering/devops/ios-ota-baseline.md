@@ -104,6 +104,28 @@ The first OTA on an empty channel compares mobile inputs with its verified embed
 The existing `rollback.sh mobile` is production-only, and the bundle identity helper defaults to the historical production receipt.
 For TestFlight recovery, the release owner must separately authorize a channel-specific recovery, retain the shared hold/lease protections and verify the TestFlight runtime and immutable manifest identity; do not run the production rollback against a TestFlight-only failure.
 
+## Complete a TestFlight upload
+
+The protected EAS Build workflow captures the exact finished build ID and production source fingerprint, submits that build, and invokes `scripts/deploy/testflight-post-submit`.
+Its preflight checks `ASC_API_KEY_P8`, `TESTFLIGHT_GH_TOKEN` supplied as `GH_TOKEN`, the configured Apple key identity, GitHub write access, EAS CLI and Python before starting a build.
+Use a GitHub credential that triggers normal PR workflows; the default Actions token suppresses those events.
+Local execution can reuse the Apple API key path and identity in `apps/mobile/eas.json` and the existing `gh` login.
+
+```sh
+node scripts/deploy/testflight-post-submit --preflight
+# Save native-fingerprint.mjs output under the exact build's production environment.
+node scripts/deploy/testflight-post-submit --build=<EAS-BUILD-UUID> --fingerprint=<SOURCE-FINGERPRINT-JSON>
+```
+
+The helper downloads and hashes the EAS IPA, reads its actual bundle/build/version, runtime, update channel and Google URL scheme, and matches those identities to the source fingerprint and EAS record.
+It polls the exact Apple app/build/marketing version until processing is `VALID`, adds it to the existing internal `Internal` group and confirms membership by reading it back.
+It opens a baseline PR updating `ios-binary-baseline.json` and `app.config.ts` buildNumber, retaining a receipt under `.evidence/testflight/`.
+Repeated execution reuses an identical existing branch or PR and refuses downgrades, conflicting branches and explicitly closed PRs.
+Processing failure, timeout, identity mismatch or unconfirmed membership withholds the PR.
+Native compatibility, independent review, Verify and product acceptance remain required before protected merge.
+TestFlight distribution uses this exact build; App Review submission and public release retain their separate approvals, and real platform SDK keys continue to support production-mode RevenueCat sandbox entitlements.
+The [Apple processing API](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds) and [beta-group API](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-betagroups-_id_-relationships-builds) define the external operations.
+
 ## Publication and recovery protections
 
 The canonical production helper requires a clean commit on main's first-parent history, verifies source and production environment, and exports iOS only.

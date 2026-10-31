@@ -28,14 +28,50 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
-      - name: Build iOS (TestFlight channel, fingerprint runtime)
+      - name: Preflight TestFlight post-submit credentials and tools
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          GH_TOKEN: ${{ secrets.TESTFLIGHT_GH_TOKEN }}
+        run: node scripts/deploy/testflight-post-submit --preflight
+
+      - name: Record the production source fingerprint
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform ios --profile testflight --non-interactive
+        run: eas env:exec production "mkdir -p ../../.evidence && node ../../scripts/deploy/native-fingerprint.mjs > ../../.evidence/testflight-fingerprint.json" --non-interactive
+
+      - name: Build iOS (TestFlight channel, fingerprint runtime)
+        id: native
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas build --platform ios --profile testflight --non-interactive --json > "$RUNNER_TEMP/testflight-build.json"
+          node -e 'const fs=require("node:fs"); const [build]=JSON.parse(fs.readFileSync(process.argv[1])); if(build.status!=="FINISHED" || !/^[a-f0-9-]{36}$/.test(build.id)) process.exit(1); fs.appendFileSync(process.env.GITHUB_OUTPUT, "id="+build.id+"\n");' "$RUNNER_TEMP/testflight-build.json"
 
       - name: Submit to TestFlight
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas submit --platform ios --profile testflight --latest --non-interactive
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          TESTFLIGHT_BUILD_ID: ${{ steps.native.outputs.id }}
+        run: |
+          trap 'rm -f "$RUNNER_TEMP/testflight-key.p8"' EXIT
+          node -e 'const fs=require("node:fs"), path=require("node:path"); const key=path.join(process.env.RUNNER_TEMP,"testflight-key.p8"); fs.writeFileSync(key,process.env.ASC_API_KEY_P8,{mode:0o600}); const config=JSON.parse(fs.readFileSync("eas.json")); config.submit.production.ios.ascApiKeyPath=key; fs.writeFileSync("eas.json",JSON.stringify(config));'
+          eas submit --platform ios --profile testflight --id "$TESTFLIGHT_BUILD_ID" --non-interactive
+
+      - name: Wait for processing, distribute internally and open baseline PR
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          GH_TOKEN: ${{ secrets.TESTFLIGHT_GH_TOKEN }}
+          TESTFLIGHT_BUILD_ID: ${{ steps.native.outputs.id }}
+        run: node scripts/deploy/testflight-post-submit --build="$TESTFLIGHT_BUILD_ID" --fingerprint=.evidence/testflight-fingerprint.json
+
+      - name: Retain TestFlight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-post-submit
+          path: .evidence/
+          if-no-files-found: ignore

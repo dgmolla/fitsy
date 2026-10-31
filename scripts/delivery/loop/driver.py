@@ -141,8 +141,8 @@ def repair_sim(name, wt, st, s, ev, meta, prompt):
     save(s)
     if triage in ('env','unknown'):
         # The host owns environment reproduction. Never ask sandboxed Codex to fix setup.
-        retries=st.get('env_retries',0)
-        if retries<MAX_RERUNS:
+        retries=max(st.get('env_retries',0),ev.get('environment_retries',0))
+        if retries<1:
             st['env_retries']=retries+1
             replay=context.host_replay(wt,L+'/sim.lock',ev,ENV)
             record_attempt(st,'environment-replay',outcome=replay['status'],logs=replay.get('logs',''))
@@ -545,8 +545,8 @@ def main():
                     s.setdefault('_picks',[]).append({'issue':n,'lane':lane,'reason':reason,'at':time.strftime('%H:%M')})
                     save(s); log('PLANNER picked',n,lane,reason); continue
                 else: s['_noplan_until']=time.time()+900
-            blocked=any(s.get(Path(f).stem,{}).get('blocked') for f in files)
-            if not todo and not busy and not blocked and s.get('_planner_off'): break
+            if not todo and not busy:
+                task_log('IDLE', 'polling task queue every 30 seconds')
             for f in todo:
                 n=Path(f).stem; lane=lane_of(f); g=group(lane)
                 if len(busy)>=MAX: break
@@ -554,7 +554,6 @@ def main():
                 thread=threading.Thread(target=work,args=(f,n),name=n,daemon=False)
                 busy[g]=thread; running.add(n); thread.start(); log('START',n,'lane',lane,'group',g)
             time.sleep(30)
-        log('ALL DONE')
 
 
 if __name__=='__main__':

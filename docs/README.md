@@ -51,6 +51,8 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 [Performance measurement and budgets](engineering/devops/performance.md) records the #563 baseline, stable checks, dev request sampling and native profiling protocol.
 
+[Shipping lessons](engineering/devops/shipping-lessons.md) records incident causes and prevention.
+
 **`archive/`** — historical ticket specs, spikes, and superseded specs.
 
 [tuning-guide.md](engineering/tuning-guide.md) — Shipyard Settings knobs (referenced by `CLAUDE.md`)

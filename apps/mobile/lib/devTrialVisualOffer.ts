@@ -1,5 +1,6 @@
 import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 import { TRIAL_CATALOG_POLICY } from '../../../packages/shared/src/contracts/trialPolicy';
+import testStoreFixtures from './testStoreFixtures.cjs';
 
 export type DevTrialVisualScenario = 7 | 14 | 'annual-short' | 'monthly-short';
 
@@ -20,14 +21,15 @@ export function devTrialVisualOffer(offering: PurchasesOffering | null, requeste
       periodUnit: days === 2 ? 'DAY' : 'WEEK', periodNumberOfUnits: days === 2 ? 2 : days / 7,
     } } }
     : null;
-  const annualDays = scenario === 'annual-short' ? 2 : scenario === 'monthly-short' ? 7 : scenario;
-  const monthlyDays = scenario === 'monthly-short' ? 2 : scenario === 'annual-short' ? 7 : scenario;
+  const catalog = testStoreFixtures.catalogs[String(scenario) as keyof typeof testStoreFixtures.catalogs];
+  const annualDays = catalog.yearly as 2 | 7 | 14;
+  const monthlyDays = catalog.monthly as 2 | 7 | 14;
   const annual = preview(offering.annual, annualDays);
   const monthly = preview(offering.monthly, monthlyDays);
   if (!annual && !monthly) return null;
   const packages = new Map([annual, monthly].filter((pkg): pkg is PurchasesPackage => !!pkg).map(pkg => [pkg.identifier, pkg]));
   return {
-    label: typeof scenario === 'number' ? `${scenario}-day trial` : `${annualDays}-day annual and ${monthlyDays}-day monthly trials`,
+    label: annualDays === monthlyDays ? `${annualDays}-day trial` : `${annualDays}-day annual and ${monthlyDays}-day monthly trials`,
     offering: { ...offering, annual, monthly, availablePackages: offering.availablePackages.map(pkg => packages.get(pkg.identifier) ?? pkg) },
     eligibility: Object.fromEntries([...packages.values()].map(pkg => [pkg.product.identifier, true])) as Record<string, boolean>,
   };
