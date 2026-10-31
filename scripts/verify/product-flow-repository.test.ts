@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSyn
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { copyProductFlowControls } from './product-flow-fixture';
 
 const modulePath = resolve(__dirname, 'product-flow.mjs');
 let dir: string;
@@ -47,11 +48,11 @@ test('a test-only split retains product acceptance while a flow edit invalidates
 
 test('the canonical product-flow check blocks missing evidence but permits explicit non-product applicability', () => {
   const verify = join(dir, 'scripts/verify'); mkdirSync(verify, { recursive: true });
-  for (const name of ['run.mjs', 'impact-plan.mjs', 'product-flow.mjs', 'product-flow.sh', 'registry.yml']) {
+  // Reuse the complete CLI fixture, including the screenshot guard's imports.
+  copyProductFlowControls(dir);
+  for (const name of ['run.mjs', 'product-flow.sh', 'registry.yml']) {
     copyFileSync(join(__dirname, name), join(verify, name));
   }
-  mkdirSync(join(dir, 'scripts/sim'), { recursive: true });
-  copyFileSync(resolve(__dirname, '../sim/backend-identity.mjs'), join(dir, 'scripts/sim/backend-identity.mjs'));
   symlinkSync(resolve(__dirname, '../../node_modules'), join(dir, 'node_modules'));
   writeFileSync(join(dir, '.gitignore'), 'node_modules\n.evidence/\n');
   fixtureGit(['init', '-q', dir]);

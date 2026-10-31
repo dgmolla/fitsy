@@ -115,6 +115,9 @@ deterministicTest('final candidate accepts complete native proof without video w
 
 deterministicTest.each(['missing', 'expired', 'wrong-hash'])('publication rejects %s screenshot content proof', kind => {
   const report = fixture(), flow = report.flows[2]!;
+  // Hosted L2 exercises screenshot proof without the local video decoders.
+  report.videoRequested = false;
+  for (const entry of report.flows) { delete (entry as { video?: string }).video; delete (entry as { videoHash?: string }).videoHash; }
   if (kind === 'missing') delete (flow as { screenCheck?: unknown }).screenCheck;
   if (kind === 'expired') flow.screenCheck.expired = true;
   if (kind === 'wrong-hash') flow.screenCheck.screenshotHash = 'unrelated';
@@ -125,6 +128,8 @@ deterministicTest.each(['missing', 'expired', 'wrong-hash'])('publication reject
 
 deterministicTest('walkthrough cannot claim success after observing an unrelated expired subscription screen', () => {
   const report = fixture(), observation = report.exploration[0]!;
+  report.videoRequested = false;
+  for (const flow of report.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
   const trace = ['tap_on', 'inspect_view_hierarchy'].map(name => JSON.stringify({
     at: new Date().toISOString(), command: { name }, result: { content: [{ type: 'text', text: 'resubscribe-restore' }] },
   })).join('\n');
