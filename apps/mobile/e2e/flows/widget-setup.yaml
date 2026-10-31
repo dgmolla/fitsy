@@ -78,6 +78,27 @@ env:
     id: widget-unlock
 - assertNotVisible:
     id: widget-unavailable
+# Debug LogBox can cover this action without appearing in XCTest's hierarchy.
+# Its close point can activate the footer when no banner exists, so return to
+# setup in that case before capturing and exercising the named control.
+- tapOn:
+    point: "93%,93%"
+- runFlow:
+    when:
+      visible: "Search restaurants or dishes"
+    commands:
+      - openLink: com.fitsy.mobile://widget
+      - tapOn:
+          text: "^Open$"
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: widget-step-1
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: widget-search
+    direction: DOWN
 - takeScreenshot: widget-setup
 - tapOn:
     id: widget-search

@@ -288,6 +288,10 @@ Syntax checks and component tests do not establish a passing native journey or d
 
 `widget-setup` checks that Settings omits older profile-facts recovery, Notifications and Home Screen widget rows, then captures `settings-after`.
 It opens `/widget` directly, matching WidgetKit's retained empty-state route, and verifies setup guidance plus return to search.
+Before the bottom action, it dismisses the observed Debug LogBox banner at its native close point, then scrolls the named action into view.
+The banner can be absent from XCTest's hierarchy while covering the action.
+If the banner is already absent, that point can open Search; the flow returns to widget setup before its screenshot and named-control test.
+The setup checkpoint and final return-to-Search assertion remain mandatory.
 The `entitled-dev` fixture and native Home Screen checks in `plugins/widget/README.md` still apply; Settings no longer links to setup.
 
 ## Mixed-duration trial reminders
@@ -296,7 +300,12 @@ The `entitled-dev` fixture and native Home Screen checks in `plugins/widget/READ
 Each catalog clears app state and keychain once, then retries only bounded startup observations and conditional local Metro reconnection before requiring `welcome-start`.
 The second catalog can otherwise hit XCTest `kAXErrorInvalidUIElement` while the welcome screen animates in; that is an accessibility read failure before the trial journey starts.
 Permanent hierarchy failures and an incorrect screen still fail, and billing actions and outcome assertions never run inside the startup retry.
-Its shared helper checks the named reminder offer, the schedulable purchase default, live prices and renewal copy, plan switching, unavailable reminders for short trials with and without simulated opt-in, and the visual-only checkout guard.
+Its shared helper checks the configured reminder offer and purchase default, live prices and renewal copy, both plan selections, reminder availability with and without simulated opt-in, and the visual-only checkout guard.
+`mixed-trial-default.mjs` derives the expected default from each synthetic catalog and the host's local calendar before any plan is selected.
+The simulator must use that same local timezone.
+Two calendar days can span 49 elapsed hours at the autumn clock change, making the annual two-day reminder schedulable and preserving the annual default.
+The helper records its clock and timezone offset, and deterministic tests cover ordinary dates, both clock changes, quiet hours and UTC against the real application projections.
+These visual periods overlay the live Test Store `default` offering's prices; they do not describe real catalog trial eligibility.
 Run it with `paywall-eligible-visual` through `scripts/sim/product-flow.mjs run <UDID> ... --mode=development` on an owned development build.
 The `annual-short` and `monthly-short` visual parameters propagate unchanged between screens.
 Every screenshot is labeled synthetic, and these flows request no notification permission, schedule nothing and cannot purchase or restore.

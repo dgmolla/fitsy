@@ -6,6 +6,9 @@ const active = { isActive: true, periodType: 'TRIAL' as const, willRenew: true,
   latestPurchaseDate: new Date(2026, 8, 7, 8).toISOString(), expirationDate: new Date(2026, 8, 14, 12).toISOString() };
 const input = { now, userId: 'synthetic-account', entitled: true, preferences: { meals: true, trial: true }, subscription: active };
 
+beforeEach(() => { jest.useFakeTimers({ now }); });
+afterEach(() => { jest.useRealTimers(); });
+
 test('reminder choice follows eligible store trial length', () => {
   const product = { priceString: '$59.99', subscriptionPeriod: 'P1Y', introPrice: { price: 0, priceString: '$0', period: 'P1W', periodUnit: 'WEEK', periodNumberOfUnits: 1, cycles: 1 } };
   expect(canOfferTrialReminder(purchaseTerms(product, true))).toBe(true);
