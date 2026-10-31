@@ -1,7 +1,7 @@
 import type { CaptureEvent, JsonType } from '@posthog/core';
 
-// Only operational metadata may leave the device. Unknown fields, nested
-// objects, error strings, identity, location and nutrition values are denied.
+// Operational events deny unknown fields, nested objects, error strings,
+// location and nutrition values. Account identification permits only email.
 const allowed = new Set([
   'screen_name', 'screen', 'cuisine_filter', 'location_source', 'restaurant_id', 'menu_item_id', 'feedback_id',
   'action', 'entry_point', 'provider', 'tab', 'field', 'link', 'source', 'outcome', 'reason', 'kind',
@@ -16,14 +16,22 @@ const allowed = new Set([
 ]);
 
 export function sanitizeAnalyticsEvent(event: CaptureEvent | null): CaptureEvent | null {
-  if (!event || (event.event.startsWith('$') && event.event !== '$feature_flag_called')) return null;
+  if (!event) return null;
+  const identityEvent = event.event === '$identify' || event.event === '$set';
+  if (event.event.startsWith('$') && !identityEvent && event.event !== '$feature_flag_called') return null;
   const properties: Record<string, JsonType> = {};
   for (const [key, value] of Object.entries(event.properties ?? {})) {
-    if (!allowed.has(key)) continue;
+    if (!allowed.has(key) && !(identityEvent && key === '$anon_distinct_id')) continue;
     if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) ||
         (typeof value === 'string' && value.length <= 128 && !/[@\s]|Bearer|eyJ/i.test(value))) {
       properties[key] = value;
     }
   }
-  return { event: event.event, uuid: event.uuid, timestamp: event.timestamp, properties };
+  // The SDK exposes person properties at the top level of before_send events.
+  const email = identityEvent ? event.$set?.['email'] : undefined;
+  return {
+    event: event.event, uuid: event.uuid, timestamp: event.timestamp, properties,
+    ...(typeof email === 'string' && email.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(email)
+      ? { $set: { email } } : {}),
+  };
 }
