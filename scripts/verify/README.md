@@ -25,7 +25,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 
 | Check | Layer | What it proves |
 |---|---|---|
-| `structural.sh` | 0 | the growing invariant checklist (`scripts/structural-tests.sh`); local diff checks include tracked edits before commit, while CI checks committed source; loopback literals require `// loopback test fixture` in `.test.ts`/`.test.tsx`, while private-network literals remain blocked |
+| `structural.sh` | 0 | the growing invariant checklist (`scripts/structural-tests.sh`), including workspace manifest JSON; local diff checks include tracked edits before commit, while CI checks committed source; loopback literals require `// loopback test fixture` in `.test.ts`/`.test.tsx`, while private-network literals remain blocked |
 | `secrets.sh` | 0 | no hardcoded keys, committed .env, or build output in the diff |
 | `lint.sh` | 1 | eslint clean across workspaces |
 | `typecheck.sh` | 1 | workspace type-check scripts pass; API generates the current Prisma client before tsc |

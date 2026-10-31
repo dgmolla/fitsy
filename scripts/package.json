@@ -5,7 +5,7 @@
   "scripts": {
     "test": "jest",
     "type-check": "tsc --noEmit",
-    "lint": "eslint --config eval/jev-macro/eslint.config.mjs eval/jev-macro eval/chain-match eval/lib/jev-experiment.ts pipeline-v2 preload-v2.ts pipeline-cloud-worker.ts deploy/pipeline-worker-preflight.ts && npm run lint:pdf-finder && npm run lint:suite",
+    "lint": "eslint --config eval/jev-macro/eslint.config.mjs eval/jev-macro eval/chain-match eval/lib/jev-experiment.ts maintenance dev/provision-audit-role.ts pipeline-v2 preload-v2.ts pipeline-cloud-worker.ts deploy/pipeline-worker-preflight.ts && npm run lint:pdf-finder && npm run lint:suite",
     "eval:pdf-finder": "node --import tsx eval/pdf-finder/run.ts",
     "test:pdf-finder": "jest --runInBand eval/pdf-finder",
     "lint:pdf-finder": "eslint --config eval/jev-macro/eslint.config.mjs eval/pdf-finder",
@@ -14,7 +14,8 @@
     "lint:jev-macro": "eslint --config eval/jev-macro/eslint.config.mjs eval/jev-macro",
     "lint:suite": "eslint --config eval/jev-macro/eslint.config.mjs eval/suite",
     "eval:suite": "node --import tsx eval/suite/run.ts",
-    "eval:suite:check": "node --import tsx eval/suite/build.ts --check"
+    "eval:suite:check": "node --import tsx eval/suite/build.ts --check",
+    "db:provision-prod-readonly": "tsx maintenance/provision-prod-readonly-role.ts"
   },
   "dependencies": {
     "@fitsy/shared": "*",
