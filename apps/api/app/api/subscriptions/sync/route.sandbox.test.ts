@@ -102,6 +102,19 @@ it.each(['purchase', 'restore', 'sign_in'])('confirms a production sandbox %s th
   expect(info).toHaveBeenCalledWith(JSON.stringify({ event: 'revenuecat.sandbox_entitlement_accepted', userId: 'subscriber-uuid' }));
 });
 
+it('keeps production sandbox sign-in bound to the backend id for an Apple relay email', async () => {
+  process.env = { ...process.env, NODE_ENV: 'production' };
+  mockJwtVerify.mockResolvedValueOnce({ payload: {
+    sub: 'subscriber-uuid', email: 'fixture@privaterelay.appleid.com', role: 'authenticated',
+    app_metadata: { provider: 'apple' }, amr: [{ method: 'oauth' }],
+  } });
+  const response = await POST(request('sign_in'));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ active: true, verdict: 'active', synced: true });
+  expect(global.fetch).toHaveBeenCalledWith(revenueCatUrl, expect.anything());
+  expect(mockCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: 'subscriber-uuid' }) });
+});
+
 it.each([
   { reason: 'sign_in', storedStatus: 'active' },
   { reason: 'mismatch', storedStatus: 'active' },
