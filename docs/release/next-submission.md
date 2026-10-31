@@ -23,11 +23,12 @@ The existing Fitsy Delivery owner retains release execution; prerequisite owners
 | Anchor IPA SHA-256 | `e31663a3f57f715a357ffbd487f4d912fe46ed9b5ac82543d3a87724ed506c56` |
 | Native identity | `com.fitsy.mobile`; ASC app `6763851364`; runtime `1.0.0`; channel `production`; EAS project `a204190c-0b71-4c31-b126-f3bc62d1c4ee` |
 | Inspected source snapshot | `5f9831add945c26004442c678ac2a4917580c191`, tree `783f53e1ecf61bcc54b28e5dd6d457bc5e3bcecb`, branch `codex/issue-444`, equal to local `origin/main` when inspection began; remote freshness, CI, deployment, and device uptake were not established |
-| Current version files | [app.config.ts](../../apps/mobile/app.config.ts): `1.0.0` / `5`, next-build `runtimeVersion.policy = fingerprint`, iPhone only; [eas.json](../../apps/mobile/eas.json): separate production and TestFlight store profiles/channels and ASC app ID; no tracked `app.json` exists; workspace package version `0.1.0` is not the iOS marketing version |
+| Current version files | [app.config.ts](../../apps/mobile/app.config.ts): `1.0.0` / `6`, `runtimeVersion.policy = fingerprint`, iPhone only; [eas.json](../../apps/mobile/eas.json): separate production and TestFlight store profiles/channels and ASC app ID; no tracked `app.json` exists; workspace package version `0.1.0` is not the iOS marketing version |
 | Proposed final source / binary | **Unknown:** no release freeze, new build ID, IPA hash, native fingerprint, embedded JS identity, or processed Apple build exists for this packet |
 | Intervening OTA | **Unknown:** production update group(s), runtime, manifest/bundle hashes, rollout dates, rollback state, and actual device uptake must be read and compared with both the embedded build-5 bundle and the next binary |
 
-Native-anchor evidence: [reviewed binary receipt](../../scripts/deploy/ios-binary-baseline.json), [OTA baseline and provenance](../engineering/devops/ios-ota-baseline.md), and [#243](https://github.com/dgmolla/fitsy/issues/243).
+Historical build-5 evidence: [production binary receipt](../../scripts/deploy/ios-production-binary-baseline.json), [OTA baseline and provenance](../engineering/devops/ios-ota-baseline.md), and [#243](https://github.com/dgmolla/fitsy/issues/243).
+The later [TestFlight build-6 receipt](../../scripts/deploy/ios-binary-baseline.json) records the October 30 upload and matching fingerprint; its Apple build ID remains unverified.
 History inspected with `git tag`, `git log --all -- apps/mobile/app.config.ts apps/mobile/app.json apps/mobile/eas.json`, and `git show v1.0.0:apps/mobile/app.config.ts`.
 The September 23 history explicitly describes “TestFlight build 5”; that also does not identify the last App Review submission.
 

@@ -28,9 +28,21 @@ function run(args: string[] = [], extra: Record<string, string> = {}, publish = 
   });
 }
 test('preserves the prelaunch production route and selects the separate TestFlight receipt at cutover', () => {
-  expect(JSON.parse(run().stdout)).toEqual({ channel: 'production', baseline_file: 'scripts/deploy/ios-binary-baseline.json' });
+  expect(JSON.parse(run().stdout)).toEqual({ channel: 'production', baseline_file: 'scripts/deploy/ios-production-binary-baseline.json' });
   policy('testflight', true);
-  expect(JSON.parse(run().stdout)).toEqual({ channel: 'testflight', baseline_file: 'scripts/deploy/ios-testflight-binary-baseline.json' });
+  expect(JSON.parse(run().stdout)).toEqual({ channel: 'testflight', baseline_file: 'scripts/deploy/ios-binary-baseline.json' });
+});
+test('the installed policy routes automatic OTA to build 6 and manual production to the historical binary', () => {
+  copyFileSync(resolve(__dirname, 'ota-policy.json'), join(root, 'scripts/deploy/ota-policy.json'));
+  const automatic = JSON.parse(run().stdout);
+  const manual = JSON.parse(run(['--manual-production']).stdout);
+  const baseline = (target: { baseline_file: string }) =>
+    JSON.parse(readFileSync(resolve(__dirname, '../..', target.baseline_file), 'utf8'));
+  expect(automatic.channel).toBe('testflight');
+  expect(baseline(automatic)).toMatchObject({ channel: 'testflight', build_number: '6',
+    runtime_version: 'fd98d93926901555764ba66490c9bd9ca170454d' });
+  expect(manual.channel).toBe('production');
+  expect(baseline(manual)).toMatchObject({ channel: 'production', build_number: '5', runtime_version: '1.0.0' });
 });
 test.each(['production', 'preview', 'arbitrary;command'])('rejects App Store automatic channel %s before publication', channel => {
   policy(channel, true);

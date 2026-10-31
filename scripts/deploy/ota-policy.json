@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "automatic_channel": "production",
+  "automatic_channel": "testflight",
   "app_store_launched": false
 }
