@@ -38,6 +38,7 @@ function fixture() {
     const closeout = JSON.stringify({ udid: 'test-device', generated: { videos: 0 }, deleted: [] }) + '\n';
     writeFileSync(join(dir, `${name}-closeout.json`), closeout);
     return { name, source, sourceHash: sha(yaml), commands: `${name}.json`, sha256: sha(data), screenshot: `${name}.png`, screenshotHash: sha(png),
+      screenCheck: { version: 1, screenshotHash: sha(png), expired: false, expectedExpired: false },
       captureReceipt: `${name}-capture.jsonl`, captureReceiptHash: sha(capture),
       attachmentCloseout: `${name}-closeout.json`, attachmentCloseoutHash: sha(closeout), video: `${name}.mp4`, videoHash: sha(video) };
   });
@@ -110,6 +111,32 @@ deterministicTest('final candidate accepts complete native proof without video w
   const result = validate(report);
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout).status).toBe('pass');
+});
+
+deterministicTest.each(['missing', 'expired', 'wrong-hash'])('publication rejects %s screenshot content proof', kind => {
+  const report = fixture(), flow = report.flows[2]!;
+  // Hosted L2 exercises screenshot proof without the local video decoders.
+  report.videoRequested = false;
+  for (const entry of report.flows) { delete (entry as { video?: string }).video; delete (entry as { videoHash?: string }).videoHash; }
+  if (kind === 'missing') delete (flow as { screenCheck?: unknown }).screenCheck;
+  if (kind === 'expired') flow.screenCheck.expired = true;
+  if (kind === 'wrong-hash') flow.screenCheck.screenshotHash = 'unrelated';
+  const result = validate(report);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('screenshot content check');
+});
+
+deterministicTest('walkthrough cannot claim success after observing an unrelated expired subscription screen', () => {
+  const report = fixture(), observation = report.exploration[0]!;
+  report.videoRequested = false;
+  for (const flow of report.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
+  const trace = ['tap_on', 'inspect_view_hierarchy'].map(name => JSON.stringify({
+    at: new Date().toISOString(), command: { name }, result: { content: [{ type: 'text', text: 'resubscribe-restore' }] },
+  })).join('\n');
+  writeFileSync(join(dir, observation.trace), trace); observation.sha256 = sha(trace);
+  const result = validate(report);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('Unexpected subscription-expired screen');
 });
 
 deterministicTest.each([

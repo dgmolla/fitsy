@@ -139,6 +139,11 @@ Adopt a new runner commit only when the current simulator owner has finished its
 Record the exact commit for acceptance, and rebuild only when the resolved native inputs, required profile or verified artifact integrity demands it.
 Runner and test changes invalidate evidence bound to a prior PR head, so generate a fresh report and publish `product-flow/local` for the exact PR head when the shipping plan requires product evidence.
 The publisher rejects development and requested-video reports when final proof is required.
+It also rejects missing or changed screenshot-content checks and unintended expired-screen walkthrough observations.
+The local media lane uses `tesseract` with English data against retained native expired and active screenshot fixtures.
+External pollers must call `prepareActiveEntitlement` from `active-entitlement.mjs` before each entitled group and again before ordinary walkthroughs, propagate preparation failures, and sign into the active account with owned Metro credentials.
+Call `inspectScreenshotDirectory` from `screen-guard.mjs` separately for each maintained flow before marking capture successful, and use the same guard on selected publication images.
+Keep intentional expired-screen evidence associated with its maintained source rather than treating the whole billing category as exempt.
 It rejects symlinked artifacts and parent directories, then compares each archived file's extracted bytes with the validated source, including every complete flow video when recording was requested.
 An existing worker has not adopted these controls until its own runner timeline and source-bound receipt show the new commit.
 Repeat identity includes flow, command kind, and normalized direct or nested targets; target and error text are hashed in derived history while original command receipts remain available for diagnosis.

@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import { parseEnv } from 'node:util';
 import { comparison, isMain, mappedCategories, simulatorContext, simulatorSelection, verificationScriptsOnly } from './impact-plan.mjs';
 import { backendOrigin } from '../sim/backend-identity.mjs';
+import { assertScreenCheck, inspectWalkthrough } from '../sim/screen-guard.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 
 export const root = resolve(process.env.FITSY_PRODUCT_ROOT || fileURLToPath(new URL('../..', import.meta.url)));
@@ -247,6 +248,7 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     const assertions = assertFlowCommands(source, commands, flow.name);
     const screen = artifact(flow.screenshot, directory);
     insist(digest(screen) === flow.screenshotHash && screen.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')), `missing/changed/non-PNG screenshot: ${flow.name}`);
+    assertScreenCheck(flow.screenCheck, screen, source);
     const capture = artifact(flow.captureReceipt, directory);
     insist(digest(capture) === flow.captureReceiptHash, `changed XCTest capture receipt: ${flow.name}`);
     const captures = capture.toString().trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
@@ -293,6 +295,9 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     const trace = artifact(observation.trace, directory);
     insist(digest(trace) === observation.sha256, `changed walkthrough trace: ${category}`);
     const events = trace.toString().trim().split('\n').map(line => JSON.parse(line));
+    const observationSource = observation.flow && report.flows.find(flow => flow.name === observation.flow)?.source;
+    insist(!observation.flow || observationSource, 'walkthrough expired-screen exception requires an executed maintained flow');
+    inspectWalkthrough(events, observationSource ? readFileSync(resolve(cwd, observationSource)) : '');
     insist(events.every(e => Date.parse(e.at) >= Date.parse(report.startedAt) && Date.parse(e.at) <= time && !e.result?.isError && e.result?.content?.length), `invalid/failed/stale walkthrough events: ${category}`);
     const maestro = events.some(e => ['tap_on', 'input_text', 'back', 'launch_app'].includes(e.command?.name)) &&
       events.some(e => e.command?.name === 'inspect_view_hierarchy');

@@ -64,12 +64,14 @@ export async function runLocal(args = process.argv.slice(2)) {
   if (process.platform !== 'darwin') throw new Error('Simulator execution requires macOS with Xcode');
   const udid = options.udid || process.env.FITSY_XCTEST_SIM_UDID;
   if (!/^[a-f0-9-]{36}$/i.test(udid || '')) throw new Error('Pass --udid=<owned booted simulator UDID> or set FITSY_XCTEST_SIM_UDID');
-  const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro } = await import('./product-flow.mjs');
+  const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro, prepareEntitledEvidence } = await import('./product-flow.mjs');
   const { admitDisk, runOwnedMaestro } = await import('./runner-controls.mjs');
+  const { inspectScreenshotDirectory, requireScreenRecognition } = await import('./screen-guard.mjs');
   const { inputHash, assertFlowCommands } = await import('../verify/product-flow.mjs');
   const maestro = process.env.MAESTRO_BIN || 'maestro';
   const command = (binary, argv) => execFileSync(binary, argv, { cwd: repository, env: gitEnv(), stdio: 'inherit', timeout: 30000 });
   const yaml = createRequire(import.meta.url)('js-yaml');
+  requireScreenRecognition();
   // Parse checkpoints and check syntax before acquiring the shared native driver.
   const journeys = selection.mode === 'render' ? selection.smoke.map((smoke, index) => ({
     name: `render-${index}-${smoke.flow}`,
@@ -112,6 +114,8 @@ export async function runLocal(args = process.argv.slice(2)) {
           assertJourneyStore(fixture, session.built);
           writeFileSync(resolve(dir, 'identity.json'), JSON.stringify({ ...session, fixture: fixture.name }, null, 2) + '\n');
           if (session.built.metroPort) { metroStarted = true; await startMetro(session.built); }
+          if (fixture.name === 'entitled-dev')
+            await prepareEntitledEvidence(session.built, udid, resolve(dir, 'active-setup'));
           const loginArgs = ['EXPO_PUBLIC_DEV_LOGIN_EMAIL', 'EXPO_PUBLIC_DEV_LOGIN_PASSWORD'].flatMap(key => {
             if (fixture.name === 'entitled-dev' && !process.env[key]?.trim()) throw new Error(`Local ${key} is required for log-meal`);
             return process.env[key] ? ['-e', `${key}=${process.env[key]}`] : [];
@@ -126,9 +130,10 @@ export async function runLocal(args = process.argv.slice(2)) {
             diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', resolve(dir, 'failure.png')]),
           }));
           if (result.code !== 0 || result.reason) throw new Error(`Maestro flow ${name} failed; inspect ${dir}`);
-          const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file));
+          const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file) && !file.startsWith('active-setup/'));
           if (reports.length !== 1) throw new Error(`Expected exactly one command report: ${name}`);
           assertFlowCommands(readFileSync(path), JSON.parse(readFileSync(resolve(dir, reports[0]), 'utf8')), name);
+          writeFileSync(resolve(dir, 'screen-checks.json'), JSON.stringify(inspectScreenshotDirectory(dir, readFileSync(path)), null, 2) + '\n');
           if (inputHash() !== sourceHash || environment().configHash !== session.configHash)
             throw new Error('Candidate source or public configuration changed during simulator execution');
         } finally {
