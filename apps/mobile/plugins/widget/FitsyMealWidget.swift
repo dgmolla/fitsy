@@ -56,32 +56,17 @@ struct MealWidgetView: View {
     private let secondary = Color.white.opacity(0.9)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: small ? 5 : 6) {
-            HStack {
-                Text("FITSY").font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(2)
-                Spacer()
-                Image(systemName: entry.snapshot.state == .locked ? "lock.fill" : "shuffle")
-                    .font(.system(size: 10)).accessibilityHidden(true)
-            }.foregroundStyle(secondary)
+        VStack(alignment: .leading, spacing: small ? 8 : 10) {
             if let dish = entry.snapshot.dish {
                 Spacer(minLength: 0)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(dish.name).font(.system(size: small ? 15 : 19, weight: .semibold, design: .serif))
-                        .lineLimit(2).minimumScaleFactor(0.85)
-                    Text(dish.restaurantName).font(.system(size: 10)).foregroundStyle(secondary).lineLimit(1)
-                }
+                Text(dish.name).font(.system(size: small ? 16 : 20, weight: .semibold, design: .serif))
+                    .lineLimit(2).minimumScaleFactor(0.85)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: small ? 2 : 4), spacing: 4) {
-                    macro(dish.range(dish.calories), "kcal", "Calories", "kcal")
-                    macro(dish.range(dish.proteinG), "P", "Protein", "g")
-                    macro(dish.range(dish.carbsG), "C", "Carbs", "g")
-                    macro(dish.range(dish.fatG), "F", "Fat", "g")
+                    macro(dish.proteinG, "P", "Protein", "g")
+                    macro(dish.carbsG, "C", "Carbs", "g")
+                    macro(dish.fatG, "F", "Fat", "g")
+                    macro(dish.calories, "kcal", "Calories", "kcal")
                 }
-                if entry.snapshot.offline {
-                    HStack(spacing: 3) {
-                        Text("Offline ·")
-                        Text(entry.snapshot.updatedAt, style: .time)
-                    }.font(.system(size: 8)).foregroundStyle(secondary)
-                } else { Text("Estimated nutrition").font(.system(size: 8)).foregroundStyle(secondary) }
             } else {
                 Spacer(minLength: 0)
                 Text(message.title).font(.system(.headline, design: .serif)).lineLimit(2)
@@ -107,18 +92,19 @@ struct MealWidgetView: View {
             }
         }
     }
-    private func macro(_ value: String, _ label: String, _ accessibleLabel: String, _ unit: String) -> some View {
+    private func macro(_ amount: Double, _ label: String, _ accessibleLabel: String, _ unit: String) -> some View {
+        let value = WidgetDish.number(amount)
         let number = value + (unit == "g" ? "g" : "")
         return HStack(alignment: .firstTextBaseline, spacing: 3) {
             if unit == "g" { Text(label).foregroundStyle(secondary) }
             Text(number).fontWeight(.semibold)
             if unit == "kcal" { Text(label).foregroundStyle(secondary) }
         }
-        .font(.system(size: small ? 11 : 13))
+        .font(.system(size: small ? 13 : 15))
         .lineLimit(1).minimumScaleFactor(0.75)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(accessibleLabel), \(value) \(unit), estimated")
+        .accessibilityLabel("\(accessibleLabel), \(value) \(unit)")
     }
     private var message: (title: String, detail: String) {
         switch entry.snapshot.state {

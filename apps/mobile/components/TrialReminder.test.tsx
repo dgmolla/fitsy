@@ -117,6 +117,7 @@ test('a failed permission read falls back to the optional reminder choice', asyn
 test('a two-day trial does not offer an unschedulable reminder', async () => {
   mockOffering = { annual: shortAnnual, monthly: null };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  jest.setSystemTime(new Date(2026, 8, 7, 12)); // Keep the fixture outside a daylight-saving transition.
   await waitFor(() => expect(screen.getByText('Review your trial')).toBeTruthy());
   expect(screen.queryByText('Get a trial reminder')).toBeNull();
   await screen.findByTestId('trial-reminder-allow');
@@ -157,6 +158,7 @@ test('an ineligible long offer cannot make the sole short eligible trial look sc
   mockOffering = { annual, monthly: shortMonthly };
   mockEligibility = { annual: false, monthly: true };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  jest.setSystemTime(new Date(2026, 8, 7, 12));
   await waitFor(() => expect(screen.getByText('Review your trial')).toBeTruthy());
   expect(screen.queryByTestId('trial-reminder-skip')).toBeNull();
 });
@@ -165,6 +167,7 @@ test('two short eligible trials do not offer an unschedulable reminder', async (
   mockOffering = { annual: shortAnnual, monthly: shortMonthly };
   mockEligibility = { annual: true, monthly: true };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
+  jest.setSystemTime(new Date(2026, 8, 7, 12));
   await waitFor(() => expect(screen.getByText('Review your trial')).toBeTruthy());
   expect(screen.queryByTestId('trial-reminder-skip')).toBeNull();
 });

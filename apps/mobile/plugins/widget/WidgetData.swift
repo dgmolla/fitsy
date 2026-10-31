@@ -51,9 +51,11 @@ struct WidgetDish: Codable, Equatable {
         return url.url!
     }
 
-    func range(_ value: Double) -> String {
-        let tolerance = confidence == "HIGH" ? 0.1 : confidence == "MEDIUM" ? 0.2 : 0.3
-        return "\(Int(floor(value * (1 - tolerance))))-\(Int(ceil(value * (1 + tolerance))))"
+    static func number(_ value: Double) -> String {
+        // Match the app's raw numbers, keeping decimals without adding a trailing .0.
+        if value == 0 { return "0" }
+        let number = String(value)
+        return number.hasSuffix(".0") ? String(number.dropLast(2)) : number
     }
 }
 
