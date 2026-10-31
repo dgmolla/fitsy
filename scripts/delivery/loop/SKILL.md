@@ -53,6 +53,8 @@ Route Git's `pre-push died of signal N` diagnostic to the existing host owner be
 Retain the Git output and matching host crash report, diagnose the launcher, and replay the unchanged hook against the same source before publication.
 Only trusted scope `none` permits publication without native execution; a pending failed journey still requires a real replay.
 Keep validation bound to the current source after requeue, merges and hook repairs.
+When a pre-push structural check rejects a root-level docs file, move it under the appropriate existing domain and update every reference without changing the hook or validator.
+Record the cause and prevention in [shipping lessons](../../../docs/engineering/devops/shipping-lessons.md) and rerun the canonical check before resuming publication.
 The driver attaches failure screenshots or extracted video frames through Codex's image argument and includes failing commands, logs, diff and prior outcomes in the prompt.
 
 Task frontmatter requires `branch`, `title`, a closing `---` and a body.
