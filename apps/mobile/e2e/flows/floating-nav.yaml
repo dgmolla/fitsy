@@ -1,0 +1,110 @@
+# Debug-only local switches capture both variants without changing PostHog.
+# Use the host's entitled fixture and compatible Debug Test Store binary.
+appId: com.fitsy.mobile
+tags: [discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
+---
+- assertTrue: ${!!LOGIN_EMAIL && !!LOGIN_PASSWORD}
+- evalScript: ${output.apiPaths = ['/api/restaurants?lat=34.0407&lng=-118.2468']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Candidate at ${EXPO_PUBLIC_API_URL} must reject missing/invalid sessions (HTTP ${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}, expected 401/401); fixture login must succeed (HTTP ${output.dataApiLoginStatus}, expected 200)"
+- assertTrue: ${output.dataApiResponses[0].status === 200 && json(output.dataApiResponses[0].body).meta.locked === false}
+- setLocation:
+    latitude: 34.0407
+    longitude: -118.2468
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      location: inuse
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
+- tapOn:
+    id: welcome-login
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 15000
+- tapOn: ".*Dev Login.*"
+- extendedWaitUntil:
+    visible:
+      id: discovery-location
+    timeout: 30000
+- assertNotVisible: "Dev Login Failed"
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: discovery-view-toggle
+- openLink: com.fitsy.mobile://search?floatingNavDebug=0
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: discovery-list
+    timeout: 15000
+- assertNotVisible:
+    id: floating-tab-bar
+- assertVisible: SAVED
+- assertVisible: PROFILE
+- takeScreenshot: floating-nav-off-search
+- openLink: com.fitsy.mobile://search?floatingNavDebug=1
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: floating-tab-bar
+    timeout: 15000
+- assertVisible:
+    id: discovery-list
+- assertNotVisible: SAVED
+- assertNotVisible: PROFILE
+- takeScreenshot: floating-nav-on-search
+- tapOn:
+    id: tab-saved
+- extendedWaitUntil:
+    visible:
+      id: saved-content
+    timeout: 15000
+- assertVisible:
+    id: floating-tab-bar
+- takeScreenshot: floating-nav-on-saved
+- tapOn:
+    id: tab-profile
+- extendedWaitUntil:
+    visible:
+      id: profile-scroll
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: profile-terms
+    direction: DOWN
+    visibilityPercentage: 100
+- assertVisible:
+    id: floating-tab-bar
+- takeScreenshot: floating-nav-on-profile
+- tapOn:
+    id: tab-search
+- assertVisible:
+    id: discovery-list
+- assertVisible:
+    id: floating-tab-bar

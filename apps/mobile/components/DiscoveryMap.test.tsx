@@ -2,7 +2,7 @@ import { act, deferred, ExpoLocation, fireEvent, installPurchasedAccount, render
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import PostHog from 'posthog-react-native';
 import type { RestaurantResult } from '@fitsy/shared';
 import Search from '../app/(tabs)/search';
@@ -11,6 +11,7 @@ import { DiscoveryScreen } from './DiscoveryScreen';
 import { saveDiscoveryMacroTargets } from '../lib/macroStorage';
 import { FALLBACK_LAT, FALLBACK_LNG, MANUAL_LOCATION_KEY } from '../lib/useLocation';
 import { __resetForTesting } from '../lib/analytics';
+import { FloatingNavClearanceContext } from '../lib/floatingNav';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
@@ -87,6 +88,18 @@ afterEach(() => {
   Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
 });
 const open = (url = '/search?query=meal') => renderJourney(url, { ...routes, '(tabs)/search': () => <Search /> });
+
+it.each([0, 106])('keeps the map tray and camera clear of a %spt floating overlay', async clearance => {
+  const Root = routes._layout;
+  const screen = renderJourney('/search?query=meal', { ...routes,
+    _layout: () => <FloatingNavClearanceContext.Provider value={clearance}><Root /></FloatingNavClearanceContext.Provider>,
+    '(tabs)/search': () => <Search />,
+  });
+  await screen.findByTestId('map-pin-0');
+  expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).marginBottom).toBe(clearance);
+  expect(screen.getByTestId('discovery-map-surface').props.mapPadding.bottom).toBe(220 + clearance + 12);
+  expect(screen.getByTestId('map-filter-protein')).toBeTruthy();
+});
 
 it('opens a photo pin preview, then returns from the real detail using the saved iOS flow control', async () => {
   const screen = renderJourney('/search?query=meal', {
