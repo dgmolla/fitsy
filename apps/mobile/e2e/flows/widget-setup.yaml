@@ -1,4 +1,4 @@
-# Covers in-app discovery/setup. The actual Home Screen widget also needs the
+# Covers Settings cleanup and WidgetKit's setup deep link. The widget also needs the
 # manual WidgetKit checks in plugins/widget/README.md; Maestro cannot add it.
 appId: com.fitsy.mobile
 tags: [billing, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
@@ -43,14 +43,29 @@ env:
 - tapOn:
     text: "^Open$"
     optional: true
+- extendedWaitUntil:
+    visible:
+      id: profile-edit-goal
+    timeout: 15000
 - scrollUntilVisible:
     element:
-      id: profile-widget
+      id: profile-logout
     direction: DOWN
-- tapOn:
+- assertNotVisible:
+    id: profile-restore-older-facts
+- assertNotVisible:
+    id: profile-reminders
+- assertNotVisible:
     id: profile-widget
-- assertVisible:
-    id: widget-step-1
+- takeScreenshot: settings-after
+- openLink: com.fitsy.mobile://widget
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: widget-step-1
+    timeout: 15000
 - assertVisible:
     id: widget-step-2
 - scrollUntilVisible:

@@ -260,8 +260,15 @@ Every oracle flow reads the configured `EXPO_PUBLIC_DEV_LOGIN_EMAIL/PASSWORD`; o
 `lib/api.auth.test.ts` covers token attachment, account cache isolation and sign-in recovery.
 
 A restricted worker that cannot open local ports or access CoreSimulator must retain that failure and the planned scope for the existing host owner.
+The shared simulator lock must also be writable; a `lockf` denial before launch is an environment failure, not a native test result.
+Keep the baseline source and screenshot requirement in that owner's assignment so the host can capture matching before/after Settings images.
+Do not substitute another lock file or run without the shared lock.
 Run the canonical `node scripts/sim/ci.mjs --scope=full --udid=<owned-UDID>` on the authorized host against the candidate backend and Metro source.
 Syntax checks and component tests do not establish a passing native journey or deployed 401s.
+
+`widget-setup` checks that Settings omits older profile-facts recovery, Notifications and Home Screen widget rows, then captures `settings-after`.
+It opens `/widget` directly, matching WidgetKit's retained empty-state route, and verifies setup guidance plus return to search.
+The `entitled-dev` fixture and native Home Screen checks in `plugins/widget/README.md` still apply; Settings no longer links to setup.
 
 ## Mixed-duration trial reminders
 

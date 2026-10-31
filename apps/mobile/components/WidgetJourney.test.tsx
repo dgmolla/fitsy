@@ -1,5 +1,5 @@
 import { act, fireEvent, installPurchasedAccount, mockState, renderJourney, response, routes, saveMacroTargets,
-  withAccountProfile, waitFor } from './OnboardingNavigationHarness';
+  withAccountProfile, waitFor, router } from './OnboardingNavigationHarness';
 import React from 'react';
 import { NativeModules } from 'react-native';
 import { Stack } from 'expo-router';
@@ -28,13 +28,15 @@ function transport(active: boolean, verdict = active ? 'active' : 'never_subscri
       lastRcVerifiedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 86400_000).toISOString() })));
 }
 
-it('offers illustrated setup from Profile and synchronizes real account data through the root consumer', async () => {
+it('keeps widget deep links and root synchronization working without a Settings row', async () => {
   await installPurchasedAccount(); transport(true);
   await saveMacroTargets({ protein: '40', carbs: '60', fat: '20', calories: '580' });
   await saveWidgetLocation(34, -118);
   const screen = renderJourney('/profile', routeMap);
-  await screen.findByTestId('profile-widget');
-  await act(async () => fireEvent.press(screen.getByTestId('profile-widget')));
+  await screen.findByTestId('profile-edit-goal');
+  expect(screen.queryByTestId('profile-widget')).toBeNull();
+  // WidgetKit's empty-state URL still targets this route without Settings.
+  await act(async () => { router.push('/widget'); });
   await screen.findByTestId('widget-step-3');
   expect(screen.getByTestId('widget-step-1')).toBeTruthy();
   expect(screen.getByTestId('widget-step-2')).toBeTruthy();
