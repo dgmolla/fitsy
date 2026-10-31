@@ -127,6 +127,8 @@ The real-navigator replay checks both rendered text and accessibility labels wit
 Full navigation scope automatically includes this saved flow through the existing flow catalog; use the required shared simulator lock for host execution.
 If the managed worker cannot open `~/fitsy-refactor/loop/sim.lock`, retain the denial and send this complete flow to the existing host simulator owner rather than using another lock or driver.
 Component navigation tests cover the same on/off selectors, all three tab destinations, live flag updates, safe-area clearance, haptics, and accessibility state; they do not substitute for simulator screenshots.
+The floating capsule sits above scene content with an explicit z-index; its blur background and icon decoration ignore touches so each tab owns its whole hit area.
+The capture replay uses responder grant/release events with both empty and populated Saved data, but it cannot model UIKit hit testing; the native Saved and Profile navigation assertions remain required.
 
 The `map-search` and `map-search-location-denied` journeys require an iOS Debug binary rebuilt with the Expo-compatible `react-native-maps` dependency.
 An OTA cannot add this native module to an older binary.

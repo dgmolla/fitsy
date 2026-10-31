@@ -20,8 +20,10 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   return (
     <View testID="floating-tab-bar-position" pointerEvents="box-none" style={[styles.position, { bottom: insets.bottom + FLOATING_TAB_BAR_GAP }]}>
       <View style={styles.shadow}>
-        <BlurView testID="floating-tab-bar" tint="light" intensity={60}
-          experimentalBlurMethod="dimezisBlurView" style={styles.capsule}>
+        <View testID="floating-tab-bar" style={styles.capsule}>
+          {/* The native blur is decoration; only the foreground tabs own touches. */}
+          <BlurView pointerEvents="none" tint="light" intensity={60}
+            experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
           {state.routes.map((route, index) => {
             const { options } = descriptors[route.key];
             const focused = state.index === index;
@@ -37,21 +39,21 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
                   if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
                 }}
                 onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}>
-                <View style={styles.icon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <View pointerEvents="none" style={styles.icon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                   <ActiveTab focused={focused} />
                   {options.tabBarIcon?.({ focused, color, size: 24 })}
                 </View>
               </Pressable>
             );
           })}
-        </BlurView>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  position: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  position: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 1 },
   shadow: { borderRadius: RADII.pill, shadowColor: EDITORIAL.green,
     shadowOpacity: 0.16, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
   capsule: { height: FLOATING_TAB_BAR_HEIGHT, flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 7,

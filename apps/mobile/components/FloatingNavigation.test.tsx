@@ -3,11 +3,12 @@ import React, { useEffect } from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { StyleSheet, Text } from 'react-native';
-import { renderHook, waitFor } from '@testing-library/react-native';
+import { renderHook, userEvent, waitFor } from '@testing-library/react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
 import PostHog from 'posthog-react-native';
 import Purchases, { type CustomerInfo } from 'react-native-purchases';
 import type { SavedItemResponse } from '@fitsy/shared';
@@ -29,6 +30,7 @@ const savedItem: SavedItemResponse = {
   id: 'saved-meal', menuItemId: 'bowl', restaurantId: 'kitchen', itemType: 'menu_item', createdAt: '2026-01-01T12:00:00Z',
   menuItem: { id: 'bowl', name: 'Rice bowl', macros: null, restaurant: { id: 'kitchen', name: 'Kitchen', address: 'Test St' } },
 };
+let savedItemsFixture: SavedItemResponse[];
 
 beforeEach(async () => {
   Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
@@ -36,6 +38,7 @@ beforeEach(async () => {
   __resetForTesting();
   flag = true;
   flagError = false;
+  savedItemsFixture = [savedItem];
   listeners = new Set();
   capture.mockClear();
   jest.mocked(PostHog).mockImplementation(() => ({ capture, identify() {},
@@ -48,7 +51,7 @@ beforeEach(async () => {
   jest.spyOn(Haptics, 'selectionAsync').mockResolvedValue(undefined);
   global.fetch = jest.fn(withAccountProfile(async input => {
     const path = new URL(input).pathname;
-    if (path === '/api/saved-items') return response({ data: [savedItem] });
+    if (path === '/api/saved-items') return response({ data: savedItemsFixture });
     if (path === '/api/restaurants') return response({ data: [], meta: { locked: false, nextCursor: null } });
     return response({ active: true, verdict: 'active', synced: true, stale: false,
       lastRcVerifiedAt: new Date().toISOString(), expiresAt: '2030-01-08T12:00:00Z' });
@@ -97,6 +100,12 @@ it.each([0, 21, 34])('keeps every tab reachable and its last content above the c
   const position = screen.getByTestId('floating-tab-bar-position');
   expect(position.props.pointerEvents).toBe('box-none');
   expect(StyleSheet.flatten(position.props.style).bottom).toBe(bottom + 8);
+  // Native hit testing must reach the controls above the screen, while the
+  // animated blur stays decorative. Calling onPress directly cannot prove this.
+  expect(StyleSheet.flatten(position.props.style).zIndex).toBeGreaterThan(0);
+  const blur = screen.UNSAFE_getByType(BlurView);
+  expect(blur.props.pointerEvents).toBe('none');
+  expect(blur.findAllByProps({ accessibilityRole: 'tab' })).toHaveLength(0);
   await act(async () => fireEvent.press(screen.getByRole('tab', { name: 'Saved' })));
   await screen.findByText('Rice bowl');
   expect(screen.getPathname()).toBe('/saved');
@@ -216,7 +225,8 @@ it('retains entitled navigation for a sandbox entitlement in production mode', a
   expect(screen.queryByText('Payment plans')).toBeNull();
 });
 
-it('replays the saved capture flow through the actual tab navigator', async () => {
+it.each([0, 1])('replays the saved capture flow through the actual tab navigator with %i saved meals', async count => {
+  savedItemsFixture = count ? [savedItem] : [];
   Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
   flag = false;
   type Target = string | { id: string };
@@ -232,6 +242,7 @@ it('replays the saved capture flow through the actual tab navigator', async () =
   const start = steps.findIndex(step => step.openLink?.endsWith('floatingNavDebug=0'));
   expect(start).toBeGreaterThan(0);
   const screen = open('/search?floatingNavDebug=0');
+  const user = userEvent.setup();
   const find = (target: Target) => {
     if (typeof target !== 'string') return screen.queryByTestId(target.id);
     // Maestro text selectors match accessibility labels too, ignoring case by
@@ -246,7 +257,7 @@ it('replays the saved capture flow through the actual tab navigator', async () =
       const url = step.openLink.replace('com.fitsy.mobile://', '/');
       await act(async () => router.navigate(url as '/search'));
     }
-    if (step.tapOn?.id) await act(async () => fireEvent.press(screen.getByTestId(step.tapOn!.id!)));
+    if (step.tapOn?.id) await user.press(screen.getByTestId(step.tapOn.id));
     const visible = step.extendedWaitUntil?.visible ?? step.assertVisible ?? step.scrollUntilVisible?.element;
     checkpoints.push(JSON.stringify({ step, url: screen.getPathnameWithParams() }));
     if (visible) {
