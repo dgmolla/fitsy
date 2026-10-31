@@ -1,7 +1,7 @@
 // Maestro's local clock follows the simulator's host timezone.
 // These are synthetic trial periods on live prices, not RevenueCat catalog edits.
 (function () {
-  var config = JSON.parse(TEST_STORE_FIXTURES);
+  var config = output.testStoreFixtures;
   var days = config.catalogs[SCENARIO];
   if (config.version !== 1 || !days) {
     throw new Error('Unknown mixed-trial fixture');

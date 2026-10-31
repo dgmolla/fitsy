@@ -14,7 +14,6 @@ import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArti
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
 import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
-import { testStoreArgs } from './test-store-fixtures.mjs';
 import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 import { prepareActiveEntitlement } from './active-entitlement.mjs';
 import { inspectScreenshot, inspectScreenshotDirectory, requireScreenRecognition } from './screen-guard.mjs';
@@ -609,7 +608,7 @@ async function execute(udid, names, mode) {
         let recorded, attachment;
         try { recorded = await runFlow({
           maestroCommand: process.env.MAESTRO_BIN || 'maestro',
-          maestroArgs: ['test', '--udid', udid, ...maestroApiArgs(), ...testStoreArgs(), join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
+          maestroArgs: ['test', '--udid', udid, ...maestroApiArgs(), join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
           udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,
           env: { ...repoEnv(), PATH: `${controlDirectory}${delimiter}${process.env.PATH || ''}`,
             FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },

@@ -1,0 +1,19 @@
+// Authored CommonJS lets Metro and Maestro load the same synthetic catalog.
+// Keep this file free of Node/native APIs so saved flows need no CLI injection.
+var testStoreFixtures = {
+  version: 1,
+  plans: {
+    yearly: { name: 'Annual', period: 'year' },
+    monthly: { name: 'Monthly', period: 'month' },
+  },
+  catalogs: {
+    '7': { yearly: 7, monthly: 7 },
+    '14': { yearly: 14, monthly: 14 },
+    'annual-short': { yearly: 2, monthly: 7 },
+    'monthly-short': { yearly: 7, monthly: 2 },
+  },
+  reminderLeadHours: 48,
+  cancellationLeadHours: 24,
+};
+if (typeof module !== 'undefined') module.exports = testStoreFixtures;
+else output.testStoreFixtures = testStoreFixtures;

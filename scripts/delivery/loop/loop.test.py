@@ -1134,21 +1134,6 @@ if (denied.some(value => !value)) process.exit(1);
         self.assertEqual(json.loads((host / 'source-receipt.json').read_text())['source'], plan['source'])
         installed = Path(receipt['version']) / 'controls/scripts/sim/preview-backend.mjs'
         self.assertEqual(installed.read_bytes(), (SOURCE.parents[2] / 'scripts/sim/preview-backend.mjs').read_bytes())
-        fixture = Path(receipt['version']) / 'controls/apps/mobile/lib/testStoreFixtures.json'
-        self.assertEqual(fixture.read_bytes(), (SOURCE.parents[2] / 'apps/mobile/lib/testStoreFixtures.json').read_bytes())
-        fixture_module = Path(receipt['version']) / 'controls/scripts/sim/test-store-fixtures.mjs'
-        argv = subprocess.check_output([self.service_state()['real_node'], '--input-type=module', '-e',
-            f'import {{testStoreArgs}} from {json.dumps(fixture_module.as_uri())}; console.log(JSON.stringify(testStoreArgs()));'], text=True)
-        self.assertEqual(json.loads(json.loads(argv)[1].split('=', 1)[1]), json.loads(fixture.read_text()))
-        candidate_fixture = self.wt / 'apps/mobile/lib/testStoreFixtures.json'
-        candidate_fixture.parent.mkdir(parents=True, exist_ok=True)
-        candidate_data = json.loads(fixture.read_text())
-        candidate_data['catalogs']['annual-short']['yearly'] = 7
-        candidate_fixture.write_text(json.dumps(candidate_data))
-        argv = subprocess.check_output([self.service_state()['real_node'], '--input-type=module', '-e',
-            f'import {{testStoreArgs}} from {json.dumps(fixture_module.as_uri())}; console.log(JSON.stringify(testStoreArgs()));'],
-            env={**self.env, 'FITSY_PRODUCT_ROOT': str(self.wt)}, text=True)
-        self.assertEqual(json.loads(json.loads(argv)[1].split('=', 1)[1]), candidate_data)
         dependencies = Path(receipt['version']) / 'controls/dependency-roots.json'
         self.assertEqual(json.loads(dependencies.read_text()),
                          [str(SOURCE.resolve().parents[2] / name) for name in
