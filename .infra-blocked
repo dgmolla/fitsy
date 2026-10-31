@@ -1,0 +1,7 @@
+Original native task remains stopped by the workspace boundary, separate from the now-resolved dependency failure.
+The supplied checkout is fix/floating-nav-saved-tab at c28460d3 (main), while PR #684 is codex/floating-nav-a at d7eb69bb outside writable roots.
+The earlier required shared-lock denial is unchanged; no alternate lock or simulator tool was used, and no new native run is claimed.
+Existing simulator host owner: continue on PR #684 under lockf -t 3600 ~/fitsy-refactor/loop/sim.lock, diagnose native Saved touch/navigation delivery, fix the demonstrated cause, and obtain three consecutive green floating-nav runs.
+The unchanged pre-push hook now exits 0 in the supplied checkout after locked offline npm ci, supported Prisma engine/cache generation and selection of the existing 65-test dependency/pre-push regression suite.
+No hook, lockfile, tracked source or wait changed. No commit or push.
+Evidence: .evidence/saved-navigation/hook-recovery/handoff.md, recovery.json and pre-push-final.log; original native evidence remains in .evidence/saved-navigation/handoff.md.
