@@ -59,7 +59,7 @@ WidgetKit controls actual refresh scheduling; two hours is a requested cadence.
 ## Verification
 
 `npm run test:widget -w apps/mobile` tests the real Xcode target model and, on macOS, compiles and executes the actual Swift fetcher with a URLSession HTTP fixture.
-The photo suite uses a real encoded image and URLSession fixtures to verify downsampling, persisted offline reuse, credential-free requests, corrupt/missing images and download limits.
+The photo suite uses a real encoded image and URLSession fixtures to verify downsampling, persisted offline reuse, requests without credentials, corrupt or missing images and download limits.
 Three negative controls mutate production code in temporary files: choosing the last result, sending an unscoped credential and borrowing another restaurant's photo must fail those same assertions.
 `lib/widgetNative.test.ts` runs this entrypoint during the existing mobile Jest suite; Linux still checks target generation while macOS executes the native regressions.
 `lib/widgetSync.test.ts`, `components/WidgetJourney.test.tsx`, and `apps/api/app/api/widget/widget.test.ts` cover account transitions, saved inputs, the actual root consumer, guidance/paywall routing, capability scope, expiry, rotation, revocation and live RevenueCat reconciliation.

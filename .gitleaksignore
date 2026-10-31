@@ -2,3 +2,5 @@
 d42d290d88ddbd063b8b8d6dbbe59bf3b11b1cbb:scripts/eval/suite/suite.test.ts:generic-api-key:405
 # Synthetic provider-error sentinel, not a credential; retain the exact historical finding for branch scans.
 d0eb9735551727a6811b24cdb42880f390c6ec6e:apps/mobile/lib/supabase.test.ts:generic-api-key:105
+# Widget test documentation prose, not an API key; CI also scans the original branch commit.
+769e0d625d9ba12cb2083539abaf79dfea073369:apps/mobile/plugins/widget/README.md:generic-api-key:62
