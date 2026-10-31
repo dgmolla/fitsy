@@ -14,6 +14,8 @@ import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArti
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
 import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
+import { testStoreArgs } from './test-store-fixtures.mjs';
+import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 import { prepareActiveEntitlement } from './active-entitlement.mjs';
 import { inspectScreenshot, inspectScreenshotDirectory, requireScreenRecognition } from './screen-guard.mjs';
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
@@ -582,97 +584,98 @@ async function execute(udid, names, mode) {
     run('xcrun', ['simctl', 'install', udid, app]);
     installedApp(udid, r.appHash);
     for (const flow of flowSources) {
-      assert(hash === inputHash() && r.appHash === treeHash(app) && report.configHash === environment().configHash,
-        'Acceptance inputs, artifact or public configuration changed before Maestro; start a fresh run');
-      installedApp(udid, r.appHash);
-      if (r.buildMode === 'owned-metro-test-store') await requireMetro(report.metro, { processIdentity,
-        sourceHash: report.jsHash, configHash: report.configHash, route: report.metro.route });
-      const dir = join(out, flow.name); mkdirSync(dir);
-      const flowBytes = readFileSync(join(root, flow.source), 'utf8');
-      if (flow.tags.includes('fixture:entitled-dev'))
-        await prepareEntitledEvidence(r, udid, join(dir, 'active-setup'));
-      event(timeline, { type: 'flow-start', flow: flow.name, expected: 'all required commands complete', sourceHash: flow.sourceHash });
-      let diagnosticCount = 0;
-      const diagnostic = async (reason, details) => {
-        const diagnosticName = `diagnostic-${++diagnosticCount}-${reason.replace(/[^a-z0-9-]/gi, '-')}`;
-        const screenshot = join(dir, `${diagnosticName}-screen.png`);
-        try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* explicitly recorded below */ }
-        save(join(dir, `${diagnosticName}.json`), { reason, ...details, screenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
-          ax: 'unavailable until Maestro writes a failed command hierarchy', networkTiming: 'unavailable' });
-      };
-      const video = join(dir, 'flow-untrimmed.mp4');
-      const captureReceipt = join(dir, 'xctest-capture-policy.jsonl');
-      writeFileSync(captureReceipt, '');
-      const attachmentBefore = snapshotXCTestAttachments(udid);
-      let recorded, attachment;
-      try { recorded = await runFlow({
-        maestroCommand: process.env.MAESTRO_BIN || 'maestro',
-        maestroArgs: ['test', '--udid', udid, ...maestroApiArgs(), join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
-        udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,
-        env: { ...repoEnv(), PATH: `${controlDirectory}${delimiter}${process.env.PATH || ''}`,
-          FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },
-        dir, timeline, flow: flowBytes, diagnostic });
-      } finally {
-        attachment = writeAttachmentCloseout({ before: attachmentBefore, after: () => snapshotXCTestAttachments(udid),
-          udid, dir, timeline, flow: flow.name });
-      }
-      const { result, recorderResult } = recorded;
-      let captureEvents = [], captureError = null;
-      try { captureEvents = readFileSync(captureReceipt, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); }
-      catch (error) { captureError = error.message; }
-      if (attachment.error) captureError = `XCTest attachment closeout failed: ${attachment.error}`;
-      else if (attachment.receipt.generated.videos) captureError = `XCTest created ${attachment.receipt.generated.videos} unexpected video attachment(s); exact files were retired after writer-idle proof`;
-      const captureVerified = !captureError && captureEvents.length > 0 &&
-        captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
-      event(timeline, { type: 'xctest-capture-check', flow: flow.name, outcome: captureVerified ? 'verified' : 'missing-or-invalid',
-        expected: 'owned xcodebuild uses screenshots, never screenRecording', receipt: relative(out, captureReceipt) });
-      const commands = files(dir).filter(f => /commands-.*\.json$/.test(f) && !f.startsWith(join(dir, 'active-setup') + '/'));
-      let parsed = null, commandParseError = null;
-      if (commands.length === 1) {
-        try { parsed = read(commands[0]); }
-        catch (error) { commandParseError = error.message; }
-      }
-      const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
-      const outcome = verifyRecordedFlow({ dir, recorded, captureVerified, captureError, commands: parsed, videoPath: mode.recordVideo ? video : null,
-        videoReceipt: mode.recordVideo ? relative(out, video) : null,
-        flowName: flow.name, report, reportFile: join(out, 'report.json'), timeline,
-        commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null,
-        failureDetail: failureReason => {
-          const screenshot = join(dir, 'failure-screen.png');
-          try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* absence recorded below */ }
-          const log = latestMaestroLog(dir);
-          // Retain raw log; expose only status and duration pairs in the derived summary.
-          const networkTiming = log ? [...readFileSync(log, 'utf8').matchAll(/\bHTTP\s+(\d{3})\b[^\n]{0,100}?\b(\d+)\s*ms\b/g)].map(match => ({ status: Number(match[1]), durationMs: Number(match[2]) })) : [];
-          return { flow: flow.name, failureReason, exitCode: result.code,
-            watchdog: ['inactivity-deadline', 'wall-deadline'].find(reason => reason === (result.priorReason || result.reason)) || null,
-            runnerError: result.error || null, capturePolicyFailure: result.capturePolicyFailure || null,
-            commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null, commandParseError,
-            recorder: { ...recorderResult, file: mode.recordVideo ? relative(out, video) : null },
-            failedCommand: failure && { command: failure.command, expected: failure.expected, deadlineMs: failure.deadlineMs, error: failure.error },
-            nearestScreenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
-            nearestAX: failure?.hierarchy ? 'raw failed command metadata.error.hierarchyRoot' : null,
-            networkTiming: networkTiming.length ? networkTiming : null, networkTimingAbsence: networkTiming.length ? null : 'No structured network status/duration in Maestro log' };
-        } });
-      if (outcome.failureReason) {
-        appendRecordedFlowFailure(history, failure, flow.name, outcome, result,
-          { at: new Date().toISOString(), evidence: relative(root, dir), head: run('git', ['rev-parse', 'HEAD']) });
-        save(failuresFile, history);
-        throw new Error(`Native flow ${flow.name} failed; inspect ${relative(root, join(dir, 'failure.json'))} and raw Maestro receipt before retry`);
-      }
-      assert(commands.length === 1, `Expected exactly one command report: ${flow.name}`);
-      const screenshot = join(dir, 'outcome.png');
-      run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot]);
-      const screenCheck = inspectScreenshot(screenshot, flowBytes);
-      const screenshots = inspectScreenshotDirectory(dir, flowBytes);
-      save(join(dir, 'screen-checks.json'), screenshots);
-      report.flows.push({ ...flow, commands: relative(out, commands[0]), sha256: digest(readFileSync(commands[0])),
-        screenshot: relative(out, screenshot), screenshotHash: digest(readFileSync(screenshot)), screenCheck,
-        captureReceipt: relative(out, captureReceipt), captureReceiptHash: digest(readFileSync(captureReceipt)),
-        attachmentCloseout: relative(out, join(dir, 'xctest-attachment-closeout.json')),
-        attachmentCloseoutHash: digest(readFileSync(join(dir, 'xctest-attachment-closeout.json'))),
-        ...(mode.recordVideo ? { video: relative(out, video), videoHash: digest(readFileSync(video)) } : {}) });
-      save(join(out, 'report.json'), report);
-      event(timeline, { type: 'flow-end', flow: flow.name, outcome: 'pass', elapsedMs: result.elapsedMs, commandReceipt: relative(out, commands[0]) });
+      await withEnvironmentRetry(async dir => {
+        assert(hash === inputHash() && r.appHash === treeHash(app) && report.configHash === environment().configHash,
+          'Acceptance inputs, artifact or public configuration changed before Maestro; start a fresh run');
+        installedApp(udid, r.appHash);
+        if (r.buildMode === 'owned-metro-test-store') await requireMetro(report.metro, { processIdentity,
+          sourceHash: report.jsHash, configHash: report.configHash, route: report.metro.route });
+        const flowBytes = readFileSync(join(root, flow.source), 'utf8');
+        if (flow.tags.includes('fixture:entitled-dev'))
+          await prepareEntitledEvidence(r, udid, join(dir, 'active-setup'));
+        event(timeline, { type: 'flow-start', flow: flow.name, expected: 'all required commands complete', sourceHash: flow.sourceHash });
+        let diagnosticCount = 0;
+        const diagnostic = async (reason, details) => {
+          const diagnosticName = `diagnostic-${++diagnosticCount}-${reason.replace(/[^a-z0-9-]/gi, '-')}`;
+          const screenshot = join(dir, `${diagnosticName}-screen.png`);
+          try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* explicitly recorded below */ }
+          save(join(dir, `${diagnosticName}.json`), { reason, ...details, screenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
+            ax: 'unavailable until Maestro writes a failed command hierarchy', networkTiming: 'unavailable' });
+        };
+        const video = join(dir, 'flow-untrimmed.mp4');
+        const captureReceipt = join(dir, 'xctest-capture-policy.jsonl');
+        writeFileSync(captureReceipt, '');
+        const attachmentBefore = snapshotXCTestAttachments(udid);
+        let recorded, attachment;
+        try { recorded = await runFlow({
+          maestroCommand: process.env.MAESTRO_BIN || 'maestro',
+          maestroArgs: ['test', '--udid', udid, ...maestroApiArgs(), ...testStoreArgs(), join(root, flow.source), '--format', 'junit', '--output', join(dir, 'junit.xml'), '--debug-output', dir, '--test-output-dir', dir],
+          udid, video, recorderLog: join(dir, 'recorder.log'), cwd: root,
+          env: { ...repoEnv(), PATH: `${controlDirectory}${delimiter}${process.env.PATH || ''}`,
+            FITSY_XCTEST_CAPTURE_RECEIPT: captureReceipt, FITSY_XCTEST_SIM_UDID: udid },
+          dir, timeline, flow: flowBytes, diagnostic });
+        } finally {
+          attachment = writeAttachmentCloseout({ before: attachmentBefore, after: () => snapshotXCTestAttachments(udid),
+            udid, dir, timeline, flow: flow.name });
+        }
+        const { result, recorderResult } = recorded;
+        let captureEvents = [], captureError = null;
+        try { captureEvents = readFileSync(captureReceipt, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); }
+        catch (error) { captureError = error.message; }
+        if (attachment.error) captureError = `XCTest attachment closeout failed: ${attachment.error}`;
+        else if (attachment.receipt.generated.videos) captureError = `XCTest created ${attachment.receipt.generated.videos} unexpected video attachment(s); exact files were retired after writer-idle proof`;
+        const captureVerified = !captureError && captureEvents.length > 0 &&
+          captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
+        event(timeline, { type: 'xctest-capture-check', flow: flow.name, outcome: captureVerified ? 'verified' : 'missing-or-invalid',
+          expected: 'owned xcodebuild uses screenshots, never screenRecording', receipt: relative(out, captureReceipt) });
+        const commands = files(dir).filter(f => /commands-.*\.json$/.test(f) && !f.startsWith(join(dir, 'active-setup') + '/'));
+        let parsed = null, commandParseError = null;
+        if (commands.length === 1) {
+          try { parsed = read(commands[0]); }
+          catch (error) { commandParseError = error.message; }
+        }
+        const failure = Array.isArray(parsed) ? nearestFailure(parsed) : null;
+        const outcome = verifyRecordedFlow({ dir, recorded, captureVerified, captureError, commands: parsed, videoPath: mode.recordVideo ? video : null,
+          videoReceipt: mode.recordVideo ? relative(out, video) : null,
+          flowName: flow.name, report, reportFile: join(out, 'report.json'), timeline,
+          commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null,
+          failureDetail: failureReason => {
+            const screenshot = join(dir, 'failure-screen.png');
+            try { run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot], { timeout: 15000 }); } catch { /* absence recorded below */ }
+            const log = latestMaestroLog(dir);
+            // Retain raw log; expose only status and duration pairs in the derived summary.
+            const networkTiming = log ? [...readFileSync(log, 'utf8').matchAll(/\bHTTP\s+(\d{3})\b[^\n]{0,100}?\b(\d+)\s*ms\b/g)].map(match => ({ status: Number(match[1]), durationMs: Number(match[2]) })) : [];
+            return { flow: flow.name, failureReason, exitCode: result.code,
+              watchdog: ['inactivity-deadline', 'wall-deadline'].find(reason => reason === (result.priorReason || result.reason)) || null,
+              runnerError: result.error || null, capturePolicyFailure: result.capturePolicyFailure || null,
+              commandReceipt: commands.length === 1 ? relative(out, commands[0]) : null, commandParseError,
+              recorder: { ...recorderResult, file: mode.recordVideo ? relative(out, video) : null },
+              failedCommand: failure && { command: failure.command, expected: failure.expected, deadlineMs: failure.deadlineMs, error: failure.error },
+              nearestScreenshot: existsSync(screenshot) ? relative(out, screenshot) : null,
+              nearestAX: failure?.hierarchy ? 'raw failed command metadata.error.hierarchyRoot' : null,
+              networkTiming: networkTiming.length ? networkTiming : null, networkTimingAbsence: networkTiming.length ? null : 'No structured network status/duration in Maestro log' };
+          } });
+        if (outcome.failureReason) {
+          appendRecordedFlowFailure(history, failure, flow.name, outcome, result,
+            { at: new Date().toISOString(), evidence: relative(root, dir), head: run('git', ['rev-parse', 'HEAD']) });
+          save(failuresFile, history);
+          throw maestroFailure(`Native flow ${flow.name} failed; inspect ${relative(root, join(dir, 'failure.json'))} and raw Maestro receipt before retry`, result, failure);
+        }
+        assert(commands.length === 1, `Expected exactly one command report: ${flow.name}`);
+        const screenshot = join(dir, 'outcome.png');
+        run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot]);
+        const screenCheck = inspectScreenshot(screenshot, flowBytes);
+        const screenshots = inspectScreenshotDirectory(dir, flowBytes);
+        save(join(dir, 'screen-checks.json'), screenshots);
+        report.flows.push({ ...flow, commands: relative(out, commands[0]), sha256: digest(readFileSync(commands[0])),
+          screenshot: relative(out, screenshot), screenshotHash: digest(readFileSync(screenshot)), screenCheck,
+          captureReceipt: relative(out, captureReceipt), captureReceiptHash: digest(readFileSync(captureReceipt)),
+          attachmentCloseout: relative(out, join(dir, 'xctest-attachment-closeout.json')),
+          attachmentCloseoutHash: digest(readFileSync(join(dir, 'xctest-attachment-closeout.json'))),
+          ...(mode.recordVideo ? { video: relative(out, video), videoHash: digest(readFileSync(video)) } : {}) });
+        save(join(out, 'report.json'), report);
+        event(timeline, { type: 'flow-end', flow: flow.name, outcome: 'pass', elapsedMs: result.elapsedMs, commandReceipt: relative(out, commands[0]) });
+      }, { dir: join(out, flow.name), canRetry: () => hash === inputHash() && r.appHash === treeHash(app) && report.configHash === environment().configHash });
     }
     assert(hash === inputHash() && r.appHash === treeHash(app), 'Candidate changed during tests');
     assert(server.backendDeployment === backend().backendDeployment, 'Dev deployment changed during tests');
@@ -751,6 +754,6 @@ try {
   else if (command === 'stop-metro') await stopMetro();
   else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] | prepare-walkthrough UDID | finish [walkthrough.json]');
 } catch (e) {
-  console.error(e.message); process.exitCode = 1;
+  console.error(JSON.stringify({ status: 'fail', classification: classifySimulatorFailure(e), environmentRetries: e.environmentRetries || 0, summary: e.message })); process.exitCode = 1;
 }
 }

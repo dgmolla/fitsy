@@ -57,7 +57,8 @@ elif name=='node':
     s.setdefault('native_environment_keys',[]).append(sorted(os.environ))
     status=s.get('replays',['pass']).pop(0) if s.get('replays') else 'pass'
     if status=='failure':
-        print(json.dumps({'status':'fail','summary':'Maestro flow shuffle failed; inspect '+s['artifacts']}))
+        print(json.dumps({'status':'fail','summary':'Maestro flow shuffle failed; inspect '+s['artifacts'],
+                          'classification':s.get('replay_classification'), 'environmentRetries':s.get('environment_retries',0)}))
     elif status=='error':
         print(json.dumps({'status':'fail','summary':'CoreSimulator unavailable'}))
     else:
@@ -1064,6 +1065,50 @@ if (denied.some(value => !value)) process.exit(1);
         self.assertEqual(read_task(path)[0]['branch'], 'codex/issue-608')
         self.assertTrue(Path(path).read_text().startswith('---\n'))
 
+    def test_empty_queue_polls_and_discovers_task_with_planner_disabled_or_empty(self):
+        tasks = self.root / 'tasks'; tasks.mkdir()
+        task = tasks / '00999-idle-arrival.md'
+        class ImmediateThread:
+            def __init__(self, target, args, name, **kwargs):
+                self.target, self.args, self.name = target, args, name
+            def start(self): self.target(*self.args)
+            def is_alive(self): return False
+        for planner_off in (True, False):
+            with self.subTest(planner_off=planner_off):
+                task.unlink(missing_ok=True)
+                state = {'_planner_off': planner_off}
+                sleeps = []
+                def tick(seconds):
+                    sleeps.append(seconds)
+                    if len(sleeps) == 1:
+                        task.write_text('---\nbranch: codex/idle-arrival\ntitle: New task\nlane: mobile\n---\nImplement task\n')
+                    if len(sleeps) == 3: raise StopIteration('end polling fixture')
+                def complete(path, current): current[Path(path).stem] = {'done': True}
+                with mock.patch.object(driver, 'state', return_value=state), \
+                     mock.patch.object(driver, 'run_task', side_effect=complete) as work, \
+                     mock.patch.object(driver.threading, 'Thread', ImmediateThread), \
+                     mock.patch.object(planner, 'pick', return_value=None) as pick, \
+                     mock.patch.object(driver.subprocess, 'run'), mock.patch('time.sleep', side_effect=tick):
+                    with self.assertRaises(StopIteration): driver.main()
+                work.assert_called_once_with(str(task), state)
+                self.assertEqual(sleeps, [30, 30, 30])
+                if planner_off: pick.assert_not_called()
+                self.assertTrue(state[task.stem]['done'])
+
+    def test_runner_exhausted_environment_retry_does_not_start_another_replay_or_model(self):
+        st = {}
+        with mock.patch.object(context, 'host_replay') as replay:
+            self.assertEqual(self.repair(st, failure(sim_state='error', environment_retries=1)), 'blocked')
+        replay.assert_not_called()
+        self.assertFalse(any(call['tool'] == 'codex' for call in self.service_state()['calls']))
+
+    def test_host_consumes_runner_environment_classification_even_with_a_failed_command(self):
+        self.service_state(replays=['failure'], replay_classification='environment', environment_retries=1)
+        result = context.host_replay(self.wt, self.root / 'sim.lock', self.ev, self.env)
+        self.assertTrue(result['step'])
+        self.assertEqual(result['status'], 'error')
+        self.assertEqual(result['environment_retries'], 1)
+
     def test_install_preserves_state_and_old_caller_consumes_recovery(self):
         host = self.root / 'loop'; (host / 'tasks').mkdir(parents=True)
         original = '# original driver\n'
@@ -1077,16 +1122,33 @@ if (denied.some(value => !value)) process.exit(1);
         self.assertEqual((host / 'driver.py').read_text(), original)
         receipt = install.install(host, apply=True)
         self.assertEqual(receipt['status'], 'installed')
-        result = subprocess.run([sys.executable, '-B', str(host / 'driver.py')],
+        code = ('import runpy, sys; loaded=runpy.run_path(sys.argv[1],run_name="fixture"); '
+                'loaded["time"].sleep=lambda seconds: sys.exit(0); loaded["main"]()')
+        result = subprocess.run([sys.executable, '-B', '-c', code, str(host / 'driver.py')],
                                 env={**self.env, 'FITSY_LOOP_ROOT': str(self.root)}, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((host / 'tasks/notes/NOTES-priority.md').exists())
         self.assertEqual(json.loads((host / 'state.json').read_text()), state)
-        self.assertIn('ALL DONE', (host / 'driver.log').read_text())
+        self.assertIn('IDLE', (host / 'driver.log').read_text())
         self.assertTrue(list(host.glob('driver.py.*.bak')))
         self.assertEqual(json.loads((host / 'source-receipt.json').read_text())['source'], plan['source'])
         installed = Path(receipt['version']) / 'controls/scripts/sim/preview-backend.mjs'
         self.assertEqual(installed.read_bytes(), (SOURCE.parents[2] / 'scripts/sim/preview-backend.mjs').read_bytes())
+        fixture = Path(receipt['version']) / 'controls/apps/mobile/lib/testStoreFixtures.json'
+        self.assertEqual(fixture.read_bytes(), (SOURCE.parents[2] / 'apps/mobile/lib/testStoreFixtures.json').read_bytes())
+        fixture_module = Path(receipt['version']) / 'controls/scripts/sim/test-store-fixtures.mjs'
+        argv = subprocess.check_output([self.service_state()['real_node'], '--input-type=module', '-e',
+            f'import {{testStoreArgs}} from {json.dumps(fixture_module.as_uri())}; console.log(JSON.stringify(testStoreArgs()));'], text=True)
+        self.assertEqual(json.loads(json.loads(argv)[1].split('=', 1)[1]), json.loads(fixture.read_text()))
+        candidate_fixture = self.wt / 'apps/mobile/lib/testStoreFixtures.json'
+        candidate_fixture.parent.mkdir(parents=True, exist_ok=True)
+        candidate_data = json.loads(fixture.read_text())
+        candidate_data['catalogs']['annual-short']['yearly'] = 7
+        candidate_fixture.write_text(json.dumps(candidate_data))
+        argv = subprocess.check_output([self.service_state()['real_node'], '--input-type=module', '-e',
+            f'import {{testStoreArgs}} from {json.dumps(fixture_module.as_uri())}; console.log(JSON.stringify(testStoreArgs()));'],
+            env={**self.env, 'FITSY_PRODUCT_ROOT': str(self.wt)}, text=True)
+        self.assertEqual(json.loads(json.loads(argv)[1].split('=', 1)[1]), candidate_data)
         dependencies = Path(receipt['version']) / 'controls/dependency-roots.json'
         self.assertEqual(json.loads(dependencies.read_text()),
                          [str(SOURCE.resolve().parents[2] / name) for name in

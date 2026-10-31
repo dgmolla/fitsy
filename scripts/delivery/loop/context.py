@@ -201,8 +201,9 @@ def host_replay(wt, lock, evidence, env):
             # Only a real failing Maestro report establishes an application/test failure.
             match = re.search(r'inspect (.+)', result.get('summary', ''))
             artifacts = local_artifacts(match[1]) if match else {}
-            status = 'failure' if artifacts.get('step') else 'error'
+            status = 'failure' if artifacts.get('step') and result.get('classification') != 'environment' else 'error'
             return {**artifacts, 'status': status, 'head': head, 'source': source,
+                    'classification': result.get('classification'), 'environment_retries': result.get('environmentRetries', 0),
                     'logs': redact((artifacts.get('logs', '') + '\n' + output + process.stderr)[-16000:])}
         if result.get('status') != 'pass' or result.get('name') != 'mobile-e2e':
             raise ValueError('Host runner did not produce a passing canonical result')

@@ -160,6 +160,10 @@ Keep that server running through walkthrough, publication and merge; the gate re
 Use `node scripts/sim/product-flow.mjs stop-metro` after shipping.
 It only stops the recorded process; the usual development server is untouched.
 Test Store evidence does not establish Apple sandbox billing behavior.
+Synthetic plan names and trial periods come from `apps/mobile/lib/testStoreFixtures.json` in both Debug offering setup and the canonical Maestro entrypoints.
+The runners retain every attempt, classify failures as environment or code, and retry diagnosed environment failures once against unchanged inputs after owned-process cleanup.
+Assertions, unknown failures and lost ownership cannot earn a pass through retry; failed recovery keeps the gate closed.
+Native uploads follow the [TestFlight post-submit transaction](ios-ota-baseline.md#complete-a-testflight-upload), and recurring incidents belong in [shipping lessons](../../shipping-lessons.md).
 
 Both configurations use local simulator signing with Xcode's application entitlement so SecureStore can read and persist sessions.
 Use a disposable simulator: iOS app reinstalls preserve keychain sessions.

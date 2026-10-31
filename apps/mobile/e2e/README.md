@@ -302,6 +302,9 @@ The second catalog can otherwise hit XCTest `kAXErrorInvalidUIElement` while the
 Permanent hierarchy failures and an incorrect screen still fail, and billing actions and outcome assertions never run inside the startup retry.
 Its shared helper checks the configured reminder offer and purchase default, live prices and renewal copy, both plan selections, reminder availability with and without simulated opt-in, and the visual-only checkout guard.
 `mixed-trial-default.mjs` derives the expected default from each synthetic catalog and the host's local calendar before any plan is selected.
+`apps/mobile/lib/testStoreFixtures.json` is the shared synthetic Test Store catalog consumed by the Debug offering and these assertions.
+Both canonical runners pass it to Maestro as `TEST_STORE_FIXTURES`; direct Maestro invocations must supply the same serialized fixture with `-e`.
+Expected plan names, renewal periods, trial lengths and reminder dates come from that fixture, including `paywall-eligible-visual`.
 The simulator must use that same local timezone.
 Two calendar days can span 49 elapsed hours at the autumn clock change, making the annual two-day reminder schedulable and preserving the annual default.
 The helper records its clock and timezone offset, and deterministic tests cover ordinary dates, both clock changes, quiet hours and UTC against the real application projections.

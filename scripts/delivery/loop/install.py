@@ -30,6 +30,7 @@ def sources():
             dependencies.append(str(path))
     files['controls/dependency-roots.json'] = (json.dumps(dependencies) + '\n').encode()
     paths = [*sorted((root / 'scripts/sim').glob('*.mjs')), root / 'scripts/sim/sim', root / 'scripts/sim/xcodebuild',
+             root / 'apps/mobile/lib/testStoreFixtures.json',
              *(root / name for name in ('scripts/verify/product-flow.mjs', 'scripts/verify/impact-plan.mjs',
                                        'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh'))]
     for path in paths:

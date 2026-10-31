@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm';
 import { TRIAL_CATALOG_POLICY } from '../../packages/shared/src/contracts/trialPolicy';
 
 const helper = resolve(__dirname, '../../apps/mobile/e2e/helpers/mixed-trial-default.mjs');
+const fixture = readFileSync(resolve(__dirname, '../../apps/mobile/lib/testStoreFixtures.json'), 'utf8');
 
 function observe(at: string, scenario: string, timezone = 'America/Los_Angeles') {
   // Execute the exact Maestro script and the real application projections in
@@ -23,7 +24,7 @@ function observe(at: string, scenario: string, timezone = 'America/Los_Angeles')
     global.Date=Clock;
     const output={};
     runInNewContext(readFileSync(${JSON.stringify(helper)},'utf8'),
-      {SCENARIO:${JSON.stringify(scenario)},Date:Clock,output,console:{log(){}}});
+      {SCENARIO:${JSON.stringify(scenario)},TEST_STORE_FIXTURES:${JSON.stringify(fixture)},Date:Clock,output,console:{log(){}}});
     const pkg=(identifier,subscriptionPeriod)=>({identifier,product:{identifier,priceString:'€12,34',subscriptionPeriod}});
     const annual=pkg('yearly','P1Y'), monthly=pkg('monthly','P1M');
     const visual=devTrialVisualOffer({annual,monthly,availablePackages:[annual,monthly]},true,true,${JSON.stringify(scenario)});
@@ -56,8 +57,22 @@ test('UTC has no autumn clock extension and unknown synthetic catalogs fail', ()
   expect(observe('2026-10-31T13:02:00Z', 'annual-short', 'UTC').fixture).toMatchObject({
     plan: 'monthly', days: 7, shortReminderAvailable: false,
   });
-  expect(() => runInNewContext(readFileSync(helper, 'utf8'), { SCENARIO: 'unknown' })).toThrow('Unknown mixed-trial fixture');
+  expect(() => runInNewContext(readFileSync(helper, 'utf8'), { SCENARIO: 'unknown', TEST_STORE_FIXTURES: fixture })).toThrow('Unknown mixed-trial fixture');
   // Changes to the shared policy must update Maestro's independent oracle too.
   expect(TRIAL_CATALOG_POLICY.reminderLeadHours).toBe(48);
   expect(TRIAL_CATALOG_POLICY.cancellationLeadHours).toBe(24);
+});
+
+test('Maestro derives both plan names and changed durations from the supplied fixture', () => {
+  const config = JSON.parse(fixture);
+  config.catalogs['annual-short'] = { yearly: 7, monthly: 14 };
+  config.plans.yearly.name = 'Yearly fixture';
+  const output: { trialFixture?: object } = {};
+  runInNewContext(readFileSync(helper, 'utf8'), {
+    SCENARIO: 'annual-short', TEST_STORE_FIXTURES: JSON.stringify(config), output, console: { log() {} },
+  });
+  expect(output.trialFixture).toMatchObject({ plan: 'yearly', name: 'Yearly fixture', days: 7,
+    shortPlan: 'yearly', shortDays: 7, longPlan: 'monthly', longDays: 14 });
+  expect(config.reminderLeadHours).toBe(TRIAL_CATALOG_POLICY.reminderLeadHours);
+  expect(config.cancellationLeadHours).toBe(TRIAL_CATALOG_POLICY.cancellationLeadHours);
 });

@@ -1,5 +1,11 @@
 # Native runner controls
 
+Both canonical entrypoints retain per-flow `attempts.json` receipts and put a second attempt in its own directory.
+Positive infrastructure diagnostics, including transient XCTest hierarchy errors, receive one automatic retry; assertions and unknown failures remain code failures.
+Interruption, incomplete cleanup, lost ownership and changed inputs stop replay, and a second failure keeps acceptance closed.
+The loop consumes the emitted classification and retry count instead of multiplying the runner's retries or sending environment failures to a code-repair worker.
+The Debug offering and Maestro plan/trial expectations share `apps/mobile/lib/testStoreFixtures.json` from the selected source; installed controls read it as JSON data through `FITSY_PRODUCT_ROOT` while preserving source checks.
+
 Use the build, run and finish sequence in [shipping.md](../../docs/engineering/devops/shipping.md).
 Set `FITSY_SIM_OWNER` and pass the owned simulator UDID.
 The runner checks resolved native/profile identity, app and installed-app hashes, separate JavaScript and public configuration hashes, simulator state, disk headroom and the owned Metro process before starting each Maestro flow.

@@ -15,7 +15,7 @@ beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'fitsy-local-scope-'));
   copyProductFlowControls(directory);
   mkdirSync(join(directory, 'scripts/sim'), { recursive: true });
-  for (const file of ['ci.mjs', 'journey-fixtures.mjs', 'slack-video.mjs']) copyFileSync(join(__dirname, file), join(directory, 'scripts/sim', file));
+  for (const file of ['ci.mjs', 'journey-fixtures.mjs', 'slack-video.mjs', 'failure-policy.mjs']) copyFileSync(join(__dirname, file), join(directory, 'scripts/sim', file));
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, env: cleanEnv });
   git('init', '-q'); git('config', 'user.name', 'Local scope fixture'); git('config', 'user.email', 'fixture@example.test');
   git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'baseline');
