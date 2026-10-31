@@ -1,0 +1,45 @@
+# Called only after the runner verifies a Debug RevenueCat Test Store build.
+# Establish real purchase history for the current disposable account.
+appId: com.fitsy.mobile
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-login
+    timeout: 60000
+- tapOn:
+    id: welcome-login
+- extendedWaitUntil:
+    visible: Welcome back
+    timeout: 15000
+- tapOn: ".*Dev Login.*"
+- extendedWaitUntil:
+    visible: ".*(Search restaurants or dishes|subscription ended|Continue to purchase).*"
+    timeout: 30000
+- assertNotVisible: Dev Login Failed
+- runFlow:
+    when:
+      notVisible: Search restaurants or dishes
+    commands:
+      - assertTrue: ${ALLOW_TEST_PURCHASE === '1'}
+      # Native LogBox can cover the purchase control on Debug builds.
+      - runFlow:
+          when:
+            visible: ".*Open debugger to view warnings.*"
+          commands:
+            - tapOn:
+                point: "93%,93%"
+      - tapOn:
+          id: welcome-continue
+      - extendedWaitUntil:
+          visible: Test Store Purchase
+          timeout: 20000
+      - assertNotVisible: Sign in with Apple ID
+      - tapOn: Test valid purchase
+- extendedWaitUntil:
+    visible: Search restaurants or dishes
+    timeout: 30000
+- assertNotVisible:
+    id: resubscribe-restore

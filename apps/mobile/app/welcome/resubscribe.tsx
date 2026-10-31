@@ -3,17 +3,16 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { openPurchasedDestination, resetWelcomeJourney } from '@/lib/paywallJourney';
 import { Redirect, useNavigation } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { PurchaseIdentityRecovery } from '@/components/PurchaseIdentityRecovery';
-import { RestaurantCard, SkeletonCard } from '@/components/PreviewRestaurantCard';
+import { HeroCard } from '@/components/DiscoveryCards';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { rememberPaywallDecline } from '@/lib/paywallAccess';
 import { useRedirectOnceEntitled } from '@/lib/useRedirectOnceEntitled';
 import { ensureSessionForPurchase } from '@/lib/purchaseSession';
-import { fetchPreviewRestaurants, type PreviewRestaurant } from '@/lib/previewSearch';
+import { RESUBSCRIBE_SAMPLE, RESUBSCRIBE_SAMPLE_IMAGE } from '@/lib/resubscribeSample';
 import { openLegalLink } from '@/lib/legalLinks';
 import { purchaseTerms } from '@/lib/purchaseTerms';
 import { supabase } from '@/lib/supabase';
@@ -87,25 +86,6 @@ export default function ResubscribeScreen() {
     busy: loading || restoring || !focused || !ready,
     onEntitled: () => { void openPurchasedDestination(navigation, { requireTargets: true }); },
   });
-  // A locked teaser of what resubscribing unlocks, same cards + fetch as the
-  // onboarding teaser (welcome/results.tsx). A fetch failure just hides the
-  // section - this is illustrative, not required to resubscribe.
-  const [teaser, setTeaser] = useState<{ userId: string; restaurants: PreviewRestaurant[]; loading: boolean } | null>(null);
-  const restaurants = focused && teaser?.userId === userId ? teaser.restaurants : [];
-  const teaserLoading = focused && teaser?.userId === userId && teaser.loading;
-
-  useEffect(() => {
-    setTeaser(null);
-    if (!focused || !userId) return;
-    const controller = new AbortController();
-    setTeaser({ userId, restaurants: [], loading: true });
-    // The optional teaser must not replace win-back sign-in or expire a newer session.
-    void fetchPreviewRestaurants(undefined, { signal: controller.signal, expectedUserId: userId })
-      .then(restaurants => { if (!controller.signal.aborted) setTeaser({ userId, restaurants, loading: false }); })
-      .catch(() => { if (!controller.signal.aborted) setTeaser({ userId, restaurants: [], loading: false }); });
-    return () => controller.abort();
-  }, [focused, userId]);
-
   // Retry the boot-time offering fetch when arriving without one (see payment.tsx).
   useEffect(() => {
     if (!offering) void refreshOffering();
@@ -187,23 +167,10 @@ export default function ResubscribeScreen() {
       showBack
       onBack={() => { void exitPlans(); }}
     >
-      {(teaserLoading || restaurants.length > 0) && (
-        <View style={s.teaserWrap}>
-          <View style={s.teaserList}>
-            {teaserLoading &&
-              [0, 1].map((i) => <SkeletonCard key={i} delay={i * 60} />)}
-            {!teaserLoading &&
-              restaurants.slice(0, 2).map((r, i) => (
-                <RestaurantCard key={r.id} restaurant={r} delay={i * 80} />
-              ))}
-          </View>
-          <View style={s.lockOverlay} pointerEvents="none">
-            <View style={s.lockBadge}>
-              <Ionicons name="lock-closed" size={20} color={EDITORIAL.cream} />
-            </View>
-          </View>
-        </View>
-      )}
+      <View style={s.sample}>
+        <Text style={s.sampleLabel}>Sample meal</Text>
+        <HeroCard result={RESUBSCRIBE_SAMPLE} locked={false} paywallPreview hideDistance imageSource={RESUBSCRIBE_SAMPLE_IMAGE} />
+      </View>
 
       <Pressable
         style={s.restore}
@@ -237,23 +204,8 @@ export default function ResubscribeScreen() {
 }
 
 const s = StyleSheet.create({
-  teaserWrap: { position: 'relative', marginBottom: 20 },
-  teaserList: { gap: 10 },
-  lockOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lockBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  sample: { marginBottom: 20, gap: 8 },
+  sampleLabel: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 12, color: EDITORIAL.textSoft },
   restore: { alignItems: 'center', paddingVertical: 10, marginBottom: 8 },
   restoreTxt: { fontFamily: FONTS.nunitoSans, fontSize: 14, color: EDITORIAL.textSoft },
   disclosure: {

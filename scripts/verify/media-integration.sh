@@ -24,7 +24,11 @@ for tool in ffprobe ffmpeg; do
     exit 1
   fi
 done
-if ! FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- --runInBand --runTestsByPath verify/product-flow.test.ts sim/xctest-attachments.test.ts sim/slack-video.test.ts >&2; then
+if ! command -v tesseract >/dev/null 2>&1 || ! tesseract --version >/dev/null 2>&1; then
+  printf '{"name":"media-integration","status":"fail","summary":"required screenshot OCR is unavailable","fix":"install tesseract with English data, then rerun npm run verify"}\n'
+  exit 1
+fi
+if ! FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- --runInBand --runTestsByPath verify/product-flow.test.ts sim/xctest-attachments.test.ts sim/slack-video.test.ts sim/evidence-access.test.ts >&2; then
   printf '{"name":"media-integration","status":"fail","summary":"real-media integration tests failed","fix":"run the named local suites with FFmpeg and fix the failure"}\n'
   exit 1
 fi

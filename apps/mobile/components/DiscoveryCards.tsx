@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle, type ImageRequireSource } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import type { RestaurantResult } from '@fitsy/shared';
@@ -90,7 +90,7 @@ export async function openRestaurantOrPaywall(
 
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
-export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false, hideDistance = false }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: (result: RestaurantResult) => void; paywallPreview?: boolean; hideDistance?: boolean }) {
+export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false, hideDistance = false, imageSource }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: (result: RestaurantResult) => void; paywallPreview?: boolean; hideDistance?: boolean; imageSource?: ImageRequireSource }) {
   const bm = result.bestMatch;
   return (
     <View ref={containerRef} collapsable={false} testID={paywallPreview ? 'paywall-restaurant-card' : 'preview-pick-1'}>
@@ -117,7 +117,7 @@ export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking
       accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
       accessibilityRole={paywallPreview ? 'text' : 'button'}
     >
-      <RestaurantPhoto uri={result.photoUrl} name={result.name} style={hero.image} />
+      <RestaurantPhoto uri={result.photoUrl} source={imageSource} name={result.name} style={hero.image} />
       <LinearGradient
         colors={['transparent', EDITORIAL.heroGrad]}
         style={[hero.gradient, paywallPreview && paywallCard.gradient]}

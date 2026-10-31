@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 export function copyProductFlowControls(directory: string) {
   const root = resolve(__dirname, '../..');
   const files = ['scripts/verify/product-flow.mjs', 'scripts/verify/impact-plan.mjs', 'scripts/sim/backend-identity.mjs',
+    'scripts/sim/screen-guard.mjs',
     'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh',
     ...readdirSync(join(root, 'apps/mobile/e2e/flows')).filter(name => name.endsWith('.yaml'))
       .map(name => `apps/mobile/e2e/flows/${name}`)];
