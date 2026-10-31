@@ -76,8 +76,13 @@ env:
     timeout: 15000
 - assertVisible:
     id: discovery-list
-- assertNotVisible: SAVED
-- assertNotVisible: PROFILE
+# Maestro matches VoiceOver labels as text, ignoring case by default.
+# Keep those labels accessible while rejecting the uppercase visual labels.
+- assertVisible: '(?-i)^Saved$'
+- assertVisible: '(?-i)^Search$'
+- assertVisible: '(?-i)^Profile$'
+- assertNotVisible: '(?-i)^SAVED$'
+- assertNotVisible: '(?-i)^PROFILE$'
 - takeScreenshot: floating-nav-on-search
 - tapOn:
     id: tab-saved

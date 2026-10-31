@@ -122,6 +122,8 @@ It uses the `entitled-dev` fixture and the existing Debug Test Store binary, wit
 That selection persists across tab switches until the tab layout unmounts; release builds ignore the parameter and require the boolean PostHog `floating-nav` flag to be `true`.
 No remote flag changes are needed.
 The journey saves `floating-nav-on-search`, `floating-nav-on-saved`, `floating-nav-on-profile`, and `floating-nav-off-search` screenshots for the PR and checks the Profile footer above the capsule.
+Maestro text selectors also match VoiceOver labels and ignore case by default, so the icon-only checks use `(?-i)` to distinguish the required `Saved` / `Profile` accessibility labels from uppercase `SAVED` / `PROFILE` visual labels.
+The real-navigator replay checks both rendered text and accessibility labels with the same case behavior, so an unqualified negative text assertion reproduces the native failure locally.
 Full navigation scope automatically includes this saved flow through the existing flow catalog; use the required shared simulator lock for host execution.
 If the managed worker cannot open `~/fitsy-refactor/loop/sim.lock`, retain the denial and send this complete flow to the existing host simulator owner rather than using another lock or driver.
 Component navigation tests cover the same on/off selectors, all three tab destinations, live flag updates, safe-area clearance, haptics, and accessibility state; they do not substitute for simulator screenshots.

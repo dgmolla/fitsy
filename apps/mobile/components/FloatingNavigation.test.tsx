@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { StyleSheet, Text } from 'react-native';
-import { renderHook } from '@testing-library/react-native';
+import { renderHook, waitFor } from '@testing-library/react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -232,7 +232,13 @@ it('replays the saved capture flow through the actual tab navigator', async () =
   const start = steps.findIndex(step => step.openLink?.endsWith('floatingNavDebug=0'));
   expect(start).toBeGreaterThan(0);
   const screen = open('/search?floatingNavDebug=0');
-  const find = (target: Target) => typeof target === 'string' ? screen.queryByText(target) : screen.queryByTestId(target.id);
+  const find = (target: Target) => {
+    if (typeof target !== 'string') return screen.queryByTestId(target.id);
+    // Maestro text selectors match accessibility labels too, ignoring case by
+    // default. Translate the Java case flag used by this flow for the replay.
+    const regex = target.startsWith('(?-i)') ? new RegExp(target.slice(5)) : new RegExp(target, 'i');
+    return screen.queryAllByText(regex)[0] ?? screen.queryAllByLabelText(regex)[0] ?? null;
+  };
   const captures: string[] = [];
   const checkpoints: string[] = [];
   for (const step of steps.slice(start)) {
@@ -245,7 +251,7 @@ it('replays the saved capture flow through the actual tab navigator', async () =
     checkpoints.push(JSON.stringify({ step, url: screen.getPathnameWithParams() }));
     if (visible) {
       try {
-        if (typeof visible === 'string') await screen.findByText(visible);
+        if (typeof visible === 'string') await waitFor(() => expect(find(visible)).not.toBeNull());
         else await screen.findByTestId(visible.id);
       } catch (error) {
         throw new Error(checkpoints.join('\n') + '\n' + JSON.stringify(screen.getRouterState()), { cause: error });
