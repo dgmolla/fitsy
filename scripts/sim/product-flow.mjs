@@ -13,7 +13,9 @@ import { backendOrigin, backendRevision, maestroApiArgs } from './backend-identi
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
 import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
-import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow } from './runner-controls.mjs';
+import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
+import { prepareActiveEntitlement } from './active-entitlement.mjs';
+import { inspectScreenshot, inspectScreenshotDirectory, requireScreenRecognition } from './screen-guard.mjs';
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
@@ -76,6 +78,39 @@ export function claimDevice() {
   run('bash', [join(controlDirectory, 'sim'), 'claim', '--minutes', minutes], { stdio: 'inherit' });
 }
 export const releaseDevice = () => run('bash', [join(controlDirectory, 'sim'), 'release'], { stdio: 'inherit' });
+export async function prepareEntitledEvidence(built, udid, directory, { signIn = false } = {}) {
+  mkdirSync(directory, { recursive: true });
+  const setup = async allowPurchase => {
+    const dir = join(directory, allowPurchase ? 'renew' : 'signin'); mkdirSync(dir, { recursive: true });
+    const flow = join(mobile, 'e2e/helpers/active-entitlement.yaml');
+    const result = await runOwnedMaestro(process.env.MAESTRO_BIN || 'maestro', ['--device', udid, 'test',
+      ...maestroApiArgs(), '-e', `ALLOW_TEST_PURCHASE=${allowPurchase ? '1' : '0'}`,
+      '--test-output-dir', dir, '--debug-output', dir, flow], {
+      cwd: root, dir, timeline: join(dir, 'timeline.jsonl'), flow: readFileSync(flow, 'utf8'), wallMs: 300_000,
+      env: { ...repoEnv(), PATH: `${controlDirectory}${delimiter}${process.env.PATH || ''}`,
+        FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: join(dir, 'capture.jsonl') },
+      diagnostic: () => run('xcrun', ['simctl', 'io', udid, 'screenshot', join(dir, 'failure.png')]),
+    });
+    assert(result.code === 0 && !result.reason, 'Active Test Store fixture preparation failed; inspect its raw evidence');
+  };
+  const proof = await prepareActiveEntitlement({ built, renew: () => setup(true) });
+  // A preceding expired/history journey can leave another account in keychain.
+  // The walkthrough must enter the active account even when no renewal is due.
+  if (signIn && built.storeMode === 'test-store') await setup(false);
+  save(join(directory, 'entitlement.json'), proof);
+  return proof;
+}
+async function prepareWalkthrough(udid) {
+  environment(); backend();
+  const built = receipt(udid);
+  assert(built.storeMode === 'test-store', 'Automatic walkthrough login requires a Debug Test Store build');
+  claimDevice();
+  try {
+    device(udid); installedApp(udid, built.appHash);
+    await startMetro(built);
+    await prepareEntitledEvidence(built, udid, join(out, 'walkthrough-setup', String(Date.now())), { signIn: true });
+  } finally { releaseDevice(); }
+}
 const metroFile = join(buildDir, 'metro.json');
 const processIdentity = pid => run('ps', ['-p', String(pid), '-o', 'lstart=,command=']);
 export function runSelectedRecordedFlow(mode, options) {
@@ -458,6 +493,7 @@ async function execute(udid, names, mode) {
     try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
   }
+  requireScreenRecognition();
   const r = receipt(udid), identity = device(udid), server = backend();
   const embedded = embeddedBundleCompatibility(r, inputHash(root, 'js'), environment().configHash);
   assert(embedded.compatible,
@@ -553,6 +589,8 @@ async function execute(udid, names, mode) {
         sourceHash: report.jsHash, configHash: report.configHash, route: report.metro.route });
       const dir = join(out, flow.name); mkdirSync(dir);
       const flowBytes = readFileSync(join(root, flow.source), 'utf8');
+      if (flow.tags.includes('fixture:entitled-dev'))
+        await prepareEntitledEvidence(r, udid, join(dir, 'active-setup'));
       event(timeline, { type: 'flow-start', flow: flow.name, expected: 'all required commands complete', sourceHash: flow.sourceHash });
       let diagnosticCount = 0;
       const diagnostic = async (reason, details) => {
@@ -588,7 +626,7 @@ async function execute(udid, names, mode) {
         captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
       event(timeline, { type: 'xctest-capture-check', flow: flow.name, outcome: captureVerified ? 'verified' : 'missing-or-invalid',
         expected: 'owned xcodebuild uses screenshots, never screenRecording', receipt: relative(out, captureReceipt) });
-      const commands = files(dir).filter(f => /commands-.*\.json$/.test(f));
+      const commands = files(dir).filter(f => /commands-.*\.json$/.test(f) && !f.startsWith(join(dir, 'active-setup') + '/'));
       let parsed = null, commandParseError = null;
       if (commands.length === 1) {
         try { parsed = read(commands[0]); }
@@ -624,8 +662,11 @@ async function execute(udid, names, mode) {
       assert(commands.length === 1, `Expected exactly one command report: ${flow.name}`);
       const screenshot = join(dir, 'outcome.png');
       run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot]);
+      const screenCheck = inspectScreenshot(screenshot, flowBytes);
+      const screenshots = inspectScreenshotDirectory(dir, flowBytes);
+      save(join(dir, 'screen-checks.json'), screenshots);
       report.flows.push({ ...flow, commands: relative(out, commands[0]), sha256: digest(readFileSync(commands[0])),
-        screenshot: relative(out, screenshot), screenshotHash: digest(readFileSync(screenshot)),
+        screenshot: relative(out, screenshot), screenshotHash: digest(readFileSync(screenshot)), screenCheck,
         captureReceipt: relative(out, captureReceipt), captureReceiptHash: digest(readFileSync(captureReceipt)),
         attachmentCloseout: relative(out, join(dir, 'xctest-attachment-closeout.json')),
         attachmentCloseoutHash: digest(readFileSync(join(dir, 'xctest-attachment-closeout.json'))),
@@ -701,10 +742,14 @@ try {
     await build(args[0], args.includes('--test-store'), reason, refresh);
   }
   else if (command === 'run') { const selected = runSelection(args); await execute(selected.udid, selected.names, selected.mode); }
+  else if (command === 'prepare-walkthrough') {
+    assert(args.length === 1, 'prepare-walkthrough requires one owned simulator UDID');
+    await prepareWalkthrough(args[0]);
+  }
   else if (command === 'finish') await finish(args[0]);
   else if (command === 'check') await check();
   else if (command === 'stop-metro') await stopMetro();
-  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] | finish [walkthrough.json]');
+  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] | prepare-walkthrough UDID | finish [walkthrough.json]');
 } catch (e) {
   console.error(e.message); process.exitCode = 1;
 }
