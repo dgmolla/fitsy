@@ -74,3 +74,4 @@ Stop and report if recovery requires account, secret or service-setting changes.
 - 2026-11-01: macOS Java ignores TMPDIR; sandboxed Maestro needs -Djava.io.tmpdir pointed at the sandbox scratch dir or jansi fails with UnsatisfiedLinkError.
 - 2026-11-01: The host-replay sandbox must also read the Xcode license plist, ~/.gitconfig (ci.mjs strips GIT_* overrides) and the tracked .env.example, or replay dies before Maestro runs.
 - 2026-11-01: sandbox-exec #"..." regexes are raw: never json.dumps them, and avoid re.escape (its \- is invalid POSIX).
+- 2026-11-01: never grant the sandbox ~/.gitconfig (http.extraHeader can hold tokens); give candidates a scratch GIT_CONFIG_GLOBAL with allowlisted keys.

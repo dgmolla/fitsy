@@ -44,6 +44,23 @@ def posix_escape(text):
     return re.sub(r'([.^$*+?()\[\]{}|\\])', r'\\\1', text)
 
 
+GITCONFIG_ALLOW = ('user.name', 'user.email', 'filter.lfs.clean', 'filter.lfs.smudge',
+                   'filter.lfs.process', 'filter.lfs.required')
+
+
+def scratch_gitconfig(directory, env):
+    """Write a global git config holding only allowlisted, non-secret keys."""
+    path = Path(directory) / 'gitconfig'
+    path.write_text('')
+    host = {k: v for k, v in env.items() if k in ('HOME', 'PATH')}
+    for key in GITCONFIG_ALLOW:
+        found = subprocess.run(['git', 'config', '--global', '--get', key], env=host,
+                               capture_output=True, text=True)
+        if found.returncode == 0 and '\n' not in found.stdout.strip():
+            subprocess.run(['git', 'config', '--file', str(path), key, found.stdout.strip()], check=True)
+    return path
+
+
 def profile(wt, directory, env):
     """Permit native tools and this DEV workspace, never host credential stores.
 
@@ -61,9 +78,7 @@ def profile(wt, directory, env):
                                # Public TLS config and CA roots for curl/openssl in fixture prep.
                                '/private/etc/ssl')]
     reads += [wt, directory, CONTROLS.resolve(), simulator, *claim,
-              home / '.maestro/bin', home / '.maestro/lib',
-              # git aborts when the global config is unreadable, and ci.mjs strips GIT_* overrides.
-              home / '.gitconfig']
+              home / '.maestro/bin', home / '.maestro/lib']
     for key in ('JAVA_HOME', 'DEVELOPER_DIR', 'MAESTRO_BIN'):
         if env.get(key):
             reads.append(Path(env[key]).resolve())
@@ -155,6 +170,10 @@ def isolated(wt, env, backend=None):
                               f'print({json.dumps(backend["deployment"])!r})\n')
             binary.chmod(0o700)
             selected['PATH'] = str(directory) + os.pathsep + selected.get('PATH', os.defpath)
+        # Never expose the host ~/.gitconfig (it may hold http.extraHeader
+        # credentials). Candidates get a scratch global config with allowlisted keys.
+        selected['GIT_CONFIG_GLOBAL'] = str(scratch_gitconfig(directory, env))
+        selected['GIT_CONFIG_NOSYSTEM'] = '1'
         policy = directory / 'native.sb'
         policy.write_text(profile(wt, directory, selected))
         selected['TMPDIR'] = str(directory)
