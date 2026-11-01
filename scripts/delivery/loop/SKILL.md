@@ -88,9 +88,9 @@ Run `node scripts/verify/run.mjs --only=structural --scope=changed --runs=local`
 Run `python3 -B scripts/delivery/loop/loop.test.py` after any recovery-policy change.
 Run `python3 -B scripts/delivery/loop/worktrees.test.py` for the real Git branch and terminal-cleanup journeys.
 Run `python3 -B scripts/delivery/loop/open_prs.test.py` for open-PR ownership, update, merge, conflict-task and pacing behavior.
-Install the reviewed source using `python3 scripts/delivery/loop/install.py --directory ~/fitsy-refactor/loop --apply` at an idle owner restart.
+Install the reviewed source and load its LaunchAgent using `python3 scripts/delivery/loop/install.py --directory ~/fitsy-refactor/loop --apply` at a stopped owner boundary.
 The default command only plans the installation.
-The installer preserves state and evidence, backs up old entrypoints and refuses an active or uncertain owner.
+The installer preserves state and evidence, backs up old entrypoints and refuses source changes under an active or uncertain owner; repeating an unchanged installation is safe.
 Verify `source-receipt.json` and replay the actual compatibility entrypoint before reporting adoption.
 The canonical verifier runs all three behavior suites through `scripts/verify/test.sh`; focused selection uses the same Python test runner.
 
@@ -101,5 +101,8 @@ Require matching branch and persisted PR number plus a creation marker or legacy
 Preserve the existing check-failure, simulator and GitHub merge gates, and retain one pending or blocked existing-branch conflict follow-up per PR.
 Install the helper with the driver through the frozen source installer; do not run candidate-controlled sweep code with host credentials.
 `STOP`, `SIGINT` and `SIGTERM` stop new dispatch, drain current workers under the owner lock and exit zero.
-Use the existing source installer before loading the crash-only LaunchAgent template; verify its PID, idle log and later task pickup through the original entrypoint.
+Merged loop runtime changes request installation through both merge paths, drain workers under the owner lock, sync fetched main and exit 75 for the LaunchAgent to restart the original entrypoint.
+Self-install preserves the frozen controls and dependency grants; use manual reviewed installation for changes to those controls outside the loop directory.
+On installation failure, retain the pending request and its logged cause; the scheduler retries after three minutes while normal task dispatch continues.
+Use the source installer's one-command LaunchAgent setup; verify its PID, idle log and later task pickup through the original entrypoint.
 Retire the old restart command at that owner boundary, keep both log streams in `loop/driver.log`, and preserve clean stops and all merge gates.
