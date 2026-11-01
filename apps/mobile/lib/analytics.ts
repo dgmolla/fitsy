@@ -32,7 +32,7 @@ export function getPostHogClient(): PostHog {
       host: HOST,
       before_send: sanitizeAnalyticsEvent,
       disableGeoip: true,
-      personProfiles: 'never',
+      personProfiles: 'identified_only',
       persistence: 'memory',
       captureAppLifecycleEvents: false,
       enableSessionReplay: false,
@@ -59,6 +59,16 @@ export function resetAnalyticsSession(): void {
     getPostHogClient().reset();
   } catch (err) {
     logCaptureError('reset', err);
+  }
+}
+
+export function identifyAnalyticsUser(user: { id: string; email?: string }): void {
+  try {
+    const client = getPostHogClient();
+    client.identify(user.id, user.email ? { email: user.email } : {});
+    client.reloadFeatureFlags();
+  } catch (err) {
+    logCaptureError('identify', err);
   }
 }
 
@@ -450,8 +460,8 @@ export function trackAuthFailure(props: AuthFailureProps): void {
 }
 
 // ─── Session lifecycle (S-228) ────────────────────────────────────────────────
-// Emitted from the supabase.auth.onAuthStateChange subscription wired in
-// app/_layout.tsx. `session_refreshed` fires every time the SDK rotates the
+// Emitted from the useAuthAnalytics subscription mounted by app/_layout.tsx.
+// `session_refreshed` fires every time the SDK rotates the
 // access token in the background; `session_refresh_failed` fires when the
 // refresh token has expired or was reused, forcing a SIGNED_OUT.
 
