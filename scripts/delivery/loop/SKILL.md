@@ -58,7 +58,10 @@ Hold its branch lease across preparation, execution and cleanup so the two lanes
 Discover the fetched origin branch and open same-repository PR even when task headers omit `existing` and `pr`; adopt the PR, preserve local commits and merge main without resetting any branch.
 An unavailable GitHub lookup stops preparation rather than establishing that a branch is new.
 Remove clean loop-owned holders of the branch or its legacy `loop/` alias before a successor starts and after merged, blocked or errored execution.
-Only the untracked regular root `.infra-blocked` marker is disposable; retain tracked changes, other untracked or ignored files, linked markers, unfinished Git operations, locked checkouts and active workers, and report the concrete path.
+Ignored (`!!`) paths do not make a checkout dirty; tracked changes and non-ignored untracked files still block cleanup except the regular root `.infra-blocked` marker.
+Before removal, copy `.evidence/` into a fresh private `loop/evidence/<worktree-name>/cleanup-*/.evidence/` snapshot and log its location; preserve nested links without following them, reject linked roots or archive directories, and retain the checkout if archiving fails.
+Retain linked markers, unfinished Git operations, locked checkouts and active workers, and report the concrete path.
+The existing re-triage sweep retries recorded cleanup failures under the branch lease before native recovery, retaining attempt history and all product gates; unchanged failures wait fifteen minutes.
 Keep branch refs and external evidence; a removed parked checkout is recreated for current-head re-triage before main is merged for implementation.
 This explicit task-lifecycle cleanup is separate from historical resource cleanup and its four-hour cutoff.
 For missing dependencies in a restricted worker, use the [documented same-lock installation recovery](../../../docs/engineering/devops/performance.md#restricted-worker-recovery) without changing peer policy or the lockfile.
