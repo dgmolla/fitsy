@@ -5,6 +5,7 @@ from contextlib import nullcontext
 from pathlib import Path
 import context
 import worktrees
+from lifecycle import Lifecycle, IDLE_SECONDS, ACTIVE_SECONDS
 from taskfiles import read_task, task_files, migrate_notes, issue_number
 from recovery import (MAX_ROUNDS, MAX_SIM_REPAIRS, MAX_RERUNS, RETRIAGE_SECONDS,
                       classify_failure, gating_failures, repair_prompt, record_attempt,
@@ -536,11 +537,11 @@ def lane_of(f):
     try: lm=re.search(r'^lane: (.*)$',Path(f).read_text(),re.M)
     except OSError: lm=None
     return lm.group(1).strip() if lm else LANES.get(n[:2],n)
-def main():
+def main(*, idle_seconds=IDLE_SECONDS, active_seconds=ACTIVE_SECONDS):
     import fcntl
     import planner
     # The compatibility entrypoint and canonical entrypoint share one host lock.
-    with open(L+'/driver.lock','a') as owner:
+    with open(L+'/driver.lock','a') as owner, Lifecycle(L).signals() as lifecycle:
         try: fcntl.flock(owner,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError: raise RuntimeError('Existing loop owner is already running')
         s=state(); busy={}; MAX=2
@@ -557,12 +558,14 @@ def main():
                       {'sim_state':'error','logs':redact(str(error))},meta)
             try: subprocess.run(['python3',L+'/progress.py'],env=ENV)
             except OSError: pass
-        while True:
+        idle=False
+        while not lifecycle.stopping():
             for lane,thread in list(busy.items()):
                 if not thread.is_alive(): del busy[lane]; s.pop('_noplan_until',None)
             files=task_files(L+'/tasks',task_log)
             running={thread.name for thread in busy.values()}
             retriage([f for f in files if Path(f).stem not in running],s)
+            if lifecycle.stopping(): break
             todo=[f for f in files if not (s.get(Path(f).stem,{}).get('done') or s.get(Path(f).stem,{}).get('blocked'))]
             pending=[f for f in todo if Path(f).stem not in running]
             free=[g for g in ('app','data') if g not in busy]
@@ -580,16 +583,20 @@ def main():
                     s.setdefault('_picks',[]).append({'issue':n,'lane':lane,'reason':reason,'at':time.strftime('%H:%M')})
                     save(s); log('PLANNER picked',n,lane,reason); continue
                 else: s['_noplan_until']=time.time()+900
-            blocked=any(s.get(Path(f).stem,{}).get('blocked') for f in files)
-            if not todo and not busy and not blocked and s.get('_planner_off'): break
             for f in todo:
                 n=Path(f).stem; lane=lane_of(f); g=group(lane)
-                if len(busy)>=MAX: break
+                if lifecycle.stopping() or len(busy)>=MAX: break
                 if g in busy or n in running: continue
                 thread=threading.Thread(target=work,args=(f,n),name=n,daemon=False)
                 busy[g]=thread; running.add(n); thread.start(); log('START',n,'lane',lane,'group',g)
-            time.sleep(30)
-        log('ALL DONE')
+            empty=not todo and not busy
+            if empty and not idle: log('IDLE queue empty; re-scan in',idle_seconds,'seconds')
+            idle=empty
+            lifecycle.wait(idle_seconds if empty else active_seconds)
+        log('STOPPING',lifecycle.reason)
+        # Retain the owner lock while in-flight tasks finish their existing gates.
+        for thread in busy.values(): thread.join()
+        log('STOPPED',lifecycle.reason)
 
 
 if __name__=='__main__':

@@ -5,11 +5,14 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import plistlib
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -20,6 +23,7 @@ import driver
 import host
 import install
 import planner
+from lifecycle import Lifecycle
 from recovery import (classify_failure, repair_prompt, requeue, park, gating_failures,
                       parking_body, MAX_REQUEUES_PER_DAY, RETRIAGE_SECONDS, redact)
 from taskfiles import read_task, task_files, priority_notes, migrate_notes
@@ -193,6 +197,156 @@ class ClassificationTest(unittest.TestCase):
 
     def test_redaction_before_published_diagnostics(self):
         self.assertNotIn('private', redact('Bearer private token=private password=private'))
+
+
+class LifecycleTest(unittest.TestCase):
+    # Exercise the real scheduler, scanner, threads, waits, signals and owner lock.
+    # Only GitHub re-triage, planning and the task worker are external fixtures.
+    PROCESS = '''
+import json, os, sys, time
+from pathlib import Path
+config=json.loads(sys.argv[1]); sys.path.insert(0,config['source'])
+import driver, planner
+loop=Path(driver.L)
+scan=driver.task_files
+def task_files(*args):
+    with (loop/'scans').open('a') as output: output.write('.')
+    return scan(*args)
+def execute_task(path,state):
+    with (loop/'started').open('a') as output: print(Path(path).stem,file=output)
+    while (loop/'hold').exists() and not (loop/'release').exists(): time.sleep(0.01)
+    state.setdefault(Path(path).stem,{})['done']=1; driver.save(state)
+    with (loop/'completed').open('a') as output: print(Path(path).stem,file=output)
+def pick(*args):
+    with (loop/'picks').open('a') as output: output.write('.')
+    return config.get('planner_result')
+driver.task_files=task_files; driver.execute_task=execute_task
+driver.retriage=lambda *args: None; planner.pick=pick
+if config.get('fast'): driver.main(idle_seconds=0.04,active_seconds=0.02)
+else: driver.main()
+'''
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='fitsy-loop-lifecycle-')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def start(self, name='loop', *, planner_off=True, **config):
+        loop = self.root / name
+        (loop / 'tasks').mkdir(parents=True, exist_ok=True)
+        (loop / 'progress.py').write_text('# No external publishing in lifecycle fixtures.\n')
+        (loop / 'state.json').write_text(json.dumps({'_planner_off': planner_off}))
+        process = subprocess.Popen([sys.executable, '-B', '-c', self.PROCESS,
+                                    json.dumps({'source': str(SOURCE.resolve()), **config})],
+                                   env={**os.environ, 'FITSY_LOOP_DIR': str(loop),
+                                        'FITSY_LOOP_ROOT': str(self.root)},
+                                   text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        def close():
+            if process.poll() is None: process.kill()
+            process.communicate(timeout=5)
+        self.addCleanup(close)
+        return loop, process
+
+    def contents(self, loop, name):
+        path = loop / name
+        return path.read_text() if path.exists() else ''
+
+    def until(self, predicate):
+        deadline = time.monotonic() + 5
+        while not predicate() and time.monotonic() < deadline: time.sleep(0.01)
+        self.assertTrue(predicate(), 'Lifecycle checkpoint not reached within five seconds')
+
+    def enqueue(self, loop, name):
+        (loop / 'tasks' / (name + '.md')).write_text(
+            f'branch: fix/{name}\ntitle: {name}\nlane: infra\n---\nImplement {name}\n')
+
+    def clean_exit(self, process):
+        stdout, stderr = process.communicate(timeout=3)
+        self.assertEqual(process.returncode, 0, stdout + stderr)
+        self.assertEqual(stderr, '')
+
+    def test_empty_queue_rescans_and_dispatches_new_tasks_after_drain(self):
+        for mode in ('planner-off', 'no-pick', 'failed-pick'):
+            with self.subTest(mode=mode):
+                loop, process = self.start(mode, fast=True, planner_off=mode == 'planner-off',
+                                           planner_result='fail' if mode == 'failed-pick' else None)
+                self.until(lambda: len(self.contents(loop, 'scans')) >= 3)
+                self.assertIsNone(process.poll(), self.contents(loop, 'driver.log'))
+                self.assertEqual(self.contents(loop, 'picks'), '' if mode == 'planner-off' else '.')
+                for name in ('first', 'second'):
+                    self.enqueue(loop, name)
+                    self.until(lambda: name in self.contents(loop, 'completed').splitlines())
+                    self.until(lambda: self.contents(loop, 'driver.log').count('IDLE') >=
+                               (2 if name == 'first' else 3))
+                (loop / 'STOP').touch()
+                self.clean_exit(process)
+                self.assertEqual(self.contents(loop, 'completed').splitlines(), ['first', 'second'])
+                self.assertNotIn('ALL DONE', self.contents(loop, 'driver.log'))
+
+    def test_stop_file_interrupts_the_default_three_minute_idle(self):
+        loop, process = self.start()
+        self.until(lambda: 'IDLE' in self.contents(loop, 'driver.log'))
+        self.assertIn('re-scan in 180 seconds', self.contents(loop, 'driver.log'))
+        (loop / 'STOP').touch()
+        self.clean_exit(process)
+        self.assertIn('STOPPED stop file:', self.contents(loop, 'driver.log'))
+
+    def test_existing_stop_file_prevents_planning_and_dispatch(self):
+        loop = self.root / 'loop'; (loop / 'tasks').mkdir(parents=True)
+        self.enqueue(loop, 'pending')
+        (loop / 'STOP').touch()
+        loop, process = self.start(planner_off=False)
+        self.clean_exit(process)
+        self.assertEqual(self.contents(loop, 'started'), '')
+        self.assertEqual(self.contents(loop, 'picks'), '')
+        self.assertEqual(self.contents(loop, 'scans'), '')
+
+    def test_signals_interrupt_idle_with_successful_exit(self):
+        for number in (signal.SIGTERM, signal.SIGINT):
+            with self.subTest(number=number):
+                loop, process = self.start(number.name)
+                self.until(lambda: 'IDLE' in self.contents(loop, 'driver.log'))
+                process.send_signal(number)
+                self.clean_exit(process)
+                self.assertIn('STOPPED ' + number.name, self.contents(loop, 'driver.log'))
+
+    def test_stop_drains_current_worker_under_owner_lock_without_starting_more(self):
+        import fcntl
+        loop = self.root / 'loop'; (loop / 'tasks').mkdir(parents=True)
+        self.enqueue(loop, 'current')
+        (loop / 'hold').touch()
+        loop, process = self.start(fast=True)
+        self.until(lambda: self.contents(loop, 'started') == 'current\n')
+        (loop / 'STOP').touch()
+        self.until(lambda: 'STOPPING' in self.contents(loop, 'driver.log'))
+        self.enqueue(loop, 'later')
+        self.assertIsNone(process.poll())
+        with (loop / 'driver.lock').open('a') as owner:
+            with self.assertRaises(BlockingIOError):
+                fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        (loop / 'release').touch()
+        self.clean_exit(process)
+        self.assertEqual(self.contents(loop, 'completed'), 'current\n')
+
+    def test_signal_handlers_are_restored_even_when_scheduler_raises(self):
+        previous = {number: signal.getsignal(number) for number in (signal.SIGINT, signal.SIGTERM)}
+        with self.assertRaisesRegex(RuntimeError, 'scheduler crashed'):
+            with Lifecycle(self.root).signals():
+                raise RuntimeError('scheduler crashed')
+        self.assertEqual({number: signal.getsignal(number) for number in previous}, previous)
+
+    def test_launchagent_restarts_failed_exits_and_uses_existing_driver_and_log(self):
+        agent = plistlib.loads((SOURCE / 'org.fitsy.loop-driver.plist').read_bytes())
+        self.assertEqual(agent['ProgramArguments'], ['__PYTHON__', '-u', '-B', '__LOOP_DIR__/driver.py'])
+        self.assertEqual(agent['WorkingDirectory'], '__LOOP_DIR__')
+        self.assertEqual(agent['EnvironmentVariables']['FITSY_LOOP_DIR'], '__LOOP_DIR__')
+        self.assertIn('__HOME__/.local/bin', agent['EnvironmentVariables']['PATH'])
+        self.assertEqual(agent['KeepAlive'], {'SuccessfulExit': False})
+        self.assertTrue(agent['RunAtLoad'])
+        self.assertGreaterEqual(agent['ThrottleInterval'], 10)
+        for key in ('StandardOutPath', 'StandardErrorPath'):
+            self.assertEqual(agent[key], '__LOOP_DIR__/driver.log')
+        self.assertNotIn('StartInterval', agent)
 
 
 class DriverTest(unittest.TestCase):
@@ -1079,12 +1233,35 @@ if (denied.some(value => !value)) process.exit(1);
         self.assertEqual((host / 'driver.py').read_text(), original)
         receipt = install.install(host, apply=True)
         self.assertEqual(receipt['status'], 'installed')
-        result = subprocess.run([sys.executable, '-B', str(host / 'driver.py')],
-                                env={**self.env, 'FITSY_LOOP_ROOT': str(self.root)}, text=True, capture_output=True, timeout=10)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        process = subprocess.Popen([sys.executable, '-B', str(host / 'driver.py')],
+                                   env={**self.env, 'FITSY_LOOP_ROOT': str(self.root)},
+                                   text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if (host / 'driver.log').exists() and 'IDLE' in (host / 'driver.log').read_text(): break
+                if process.poll() is not None: break
+                time.sleep(0.01)
+            self.assertIsNone(process.poll(), 'Installed driver must remain alive on an empty queue')
+            self.assertIn('IDLE', (host / 'driver.log').read_text())
+            (host / 'STOP').touch()
+            _, stderr = process.communicate(timeout=3)
+            self.assertEqual(process.returncode, 0, stderr)
+        finally:
+            if process.poll() is None: process.kill()
+            process.communicate(timeout=5)
         self.assertTrue((host / 'tasks/notes/NOTES-priority.md').exists())
         self.assertEqual(json.loads((host / 'state.json').read_text()), state)
-        self.assertIn('ALL DONE', (host / 'driver.log').read_text())
+        self.assertIn('STOPPED stop file:', (host / 'driver.log').read_text())
+        self.assertEqual((Path(receipt['version']) / 'lifecycle.py').read_bytes(),
+                         (SOURCE / 'lifecycle.py').read_bytes())
+        # The PR's one-line legacy-driver change must consume that same snapshot.
+        documentation = (SOURCE.parents[2] / 'docs/engineering/devops/loop-driver.md').read_text()
+        delegation = documentation.split('```python\n', 1)[1].split('```', 1)[0]
+        self.assertEqual(len(delegation.strip().splitlines()), 1)
+        delegated = subprocess.run([sys.executable, '-B', '-c', 'import json, sys; L = sys.argv[1]\n' + delegation,
+                                    str(host)], env=self.env, text=True, capture_output=True, timeout=3)
+        self.assertEqual(delegated.returncode, 0, delegated.stderr)
         self.assertTrue(list(host.glob('driver.py.*.bak')))
         self.assertEqual(json.loads((host / 'source-receipt.json').read_text())['source'], plan['source'])
         installed = Path(receipt['version']) / 'controls/scripts/sim/preview-backend.mjs'

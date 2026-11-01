@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 
 SOURCE = Path(__file__).parent
-FILES = ('driver.py', 'planner.py', 'progress.py', 'taskfiles.py', 'recovery.py', 'context.py', 'host.py', 'worktrees.py', 'SKILL.md')
+FILES = ('driver.py', 'planner.py', 'progress.py', 'taskfiles.py', 'recovery.py', 'context.py', 'host.py', 'worktrees.py', 'lifecycle.py', 'SKILL.md')
 
 
 def sources():
