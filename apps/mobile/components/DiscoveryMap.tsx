@@ -15,12 +15,14 @@ import { RestaurantPhoto } from './RestaurantPhoto';
 import { DiscoveryViewToggle } from './DiscoveryViewToggle';
 import { ShuffleButton } from './ShuffleButton';
 import { s } from './DiscoveryMap.styles';
+import { useFloatingNavClearance } from '@/lib/floatingNav';
 
 type Discovery = ReturnType<typeof useDiscoveryState>;
 const DELTA = { latitudeDelta: 0.09, longitudeDelta: 0.09 };
 
 export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: Discovery; onShowList: () => void }) {
   const insets = useSafeAreaInsets();
+  const tabBarClearance = useFloatingNavClearance();
   const map = useRef<MapView>(null);
   const [selectedId, setSelectedId] = useState<string>();
   const [trayHeight, setTrayHeight] = useState(220);
@@ -51,7 +53,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     {!d.location.loading && <MapView ref={map} style={s.map} testID="discovery-map-surface"
       initialRegion={{ latitude: lat, longitude: lng, ...DELTA }}
       onMapReady={() => map.current?.animateToRegion({ latitude: lat, longitude: lng, ...DELTA }, 0)}
-      mapPadding={{ top: insets.top + 72, right: 24, bottom: trayHeight + 12, left: 24 }}
+      mapPadding={{ top: insets.top + 72, right: 24, bottom: trayHeight + tabBarClearance + 12, left: 24 }}
       showsUserLocation={d.location.source === 'gps'} showsMyLocationButton={false}
       showsCompass={false} showsPointsOfInterest={false} rotateEnabled={false}
       onPress={() => setSelectedId(undefined)}>
@@ -80,7 +82,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     </View>
     <KeyboardAvoidingView style={s.foreground} behavior="padding" pointerEvents="box-none">
       <View style={s.spacer} pointerEvents="none" />
-      <View style={s.tray} onLayout={event => setTrayHeight(event.nativeEvent.layout.height)}>
+      <View testID="map-tray" style={[s.tray, { marginBottom: tabBarClearance }]} onLayout={event => setTrayHeight(event.nativeEvent.layout.height)}>
         {fallback && <Text style={s.fallback} testID="map-location-fallback">
           {d.location.source === 'fallback-denied' ? 'Location off' : 'Location unavailable'} · Showing {d.locationLabel}. Change area above.
         </Text>}
