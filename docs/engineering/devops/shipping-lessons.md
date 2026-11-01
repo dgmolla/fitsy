@@ -31,7 +31,7 @@ The earlier #685 `b1ce6297b8e0` error was different: the installed expired fixtu
 #691 added a preview-capable module and installer, but the host import remained on its older implementation.
 A merged helper is not installed behavior.
 
-The lasting prevention is implemented in [the maintained status lifecycle](../scripts/sim/poller-status.mjs) and [its host installer](../scripts/sim/install-poller-status.mjs):
+The lasting prevention is implemented in [the maintained status lifecycle](../../../scripts/sim/poller-status.mjs) and [its host installer](../../../scripts/sim/install-poller-status.mjs):
 
 - Persist the head, attempt, classification and redacted reason before posting.
 - Publish assertion failures as `failure` and runner problems as `error`, with a nonempty description capped at 140 characters.

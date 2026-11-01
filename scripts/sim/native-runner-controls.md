@@ -78,7 +78,7 @@ Comment failure cannot prevent the final status from being posted or turn comple
 
 Run `node --test scripts/sim/poller-status.test.mjs scripts/sim/install-poller-status.test.mjs` for the status and installed-caller regressions.
 The existing scripts Jest suite also consumes them through `poller-status.test.ts`; no workflow, hook, registry or package-script change is needed.
-See [shipping lessons](../../docs/shipping-lessons.md) for the incident diagnosis and recovery requirements.
+See [shipping lessons](../../docs/engineering/devops/shipping-lessons.md) for the incident diagnosis and recovery requirements.
 
 ## Optional Slack previews
 
