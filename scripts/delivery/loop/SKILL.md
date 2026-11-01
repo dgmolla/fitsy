@@ -82,6 +82,9 @@ Read worker `.infra-blocked` diagnoses through a bounded, nonblocking, no-follow
 Linked or nonregular markers produce a fixed rejection diagnosis without reading or publishing their contents.
 Human or release approval boundaries remain unchanged.
 
+Record shipping lessons in [the existing domain document](../../../docs/engineering/devops/shipping-lessons.md); do not create files directly under `docs/`.
+Run `node scripts/verify/run.mjs --only=structural --scope=changed --runs=local` after documentation changes before the ordinary pre-push verification.
+
 Run `python3 -B scripts/delivery/loop/loop.test.py` after any recovery-policy change.
 Run `python3 -B scripts/delivery/loop/worktrees.test.py` for the real Git branch and terminal-cleanup journeys.
 Run `python3 -B scripts/delivery/loop/open_prs.test.py` for open-PR ownership, update, merge, conflict-task and pacing behavior.

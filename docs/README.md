@@ -49,8 +49,7 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 **`devops/`** — [production-deployment](engineering/devops/production-deployment.md) · [staging-environment](engineering/devops/staging-environment.md) · [monitoring-alerting](engineering/devops/monitoring-alerting.md) · [costs](engineering/devops/costs.md) · [ios-release-runbook](engineering/devops/ios-release-runbook.md)
 
-[Shipping lessons](engineering/devops/shipping-lessons.md) records simulator status diagnosis and durable recovery requirements.
-[Loop PR sweep lesson](shipping-lessons.md) records prevention for PRs stalled after task completion.
+[Shipping lessons](engineering/devops/shipping-lessons.md) records driver lifecycle, open-PR sweeps, simulator status diagnosis and durable recovery requirements.
 
 [Loop driver lifecycle](engineering/devops/loop-driver.md) covers empty-queue rescanning, clean stops and the existing owner's crash-restart LaunchAgent.
 
