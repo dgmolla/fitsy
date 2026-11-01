@@ -5,11 +5,14 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import plistlib
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -20,6 +23,7 @@ import driver
 import host
 import install
 import planner
+from lifecycle import Lifecycle
 from recovery import (classify_failure, repair_prompt, requeue, park, gating_failures,
                       parking_body, MAX_REQUEUES_PER_DAY, RETRIAGE_SECONDS, redact)
 from taskfiles import read_task, task_files, priority_notes, migrate_notes
@@ -83,6 +87,7 @@ elif name=='gh':
     elif args[:2]==['pr','view']: print(s.get('dependency','OPEN'))
     elif args[:2]==['issue','list']: print('[]')
     elif args[:2]==['issue','create']: print('https://github.com/dgmolla/fitsy/issues/999')
+    elif args[:1]==['api'] and '/pulls?' in args[1]: print(json.dumps(s.get('open_prs',[])))
     elif args[:1]==['api'] and '/statuses' in args[1]: print(json.dumps(s.get('statuses',[])))
     elif 'comments' in args[1] if len(args)>1 else False: print('[]')
     elif '--body-file' in args:
@@ -193,6 +198,367 @@ class ClassificationTest(unittest.TestCase):
 
     def test_redaction_before_published_diagnostics(self):
         self.assertNotIn('private', redact('Bearer private token=private password=private'))
+
+
+class LifecycleTest(unittest.TestCase):
+    # Exercise the real scheduler, scanner, threads, waits, signals and owner lock.
+    # Only GitHub re-triage, planning and the task worker are external fixtures.
+    PROCESS = '''
+import json, os, sys, time
+from pathlib import Path
+config=json.loads(sys.argv[1]); sys.path.insert(0,config['source'])
+import driver, planner
+loop=Path(driver.L)
+scan=driver.task_files
+def task_files(*args):
+    with (loop/'scans').open('a') as output: output.write('.')
+    return scan(*args)
+def execute_task(path,state):
+    with (loop/'started').open('a') as output: print(Path(path).stem,file=output)
+    while (loop/'hold').exists() and not (loop/'release').exists(): time.sleep(0.01)
+    state.setdefault(Path(path).stem,{})['done']=1; driver.save(state)
+    with (loop/'completed').open('a') as output: print(Path(path).stem,file=output)
+def pick(*args):
+    with (loop/'picks').open('a') as output: output.write('.')
+    return config.get('planner_result')
+driver.task_files=task_files; driver.execute_task=execute_task
+driver.retriage=lambda *args: None; planner.pick=pick
+if config.get('install_error'):
+    def merged_source(*args): raise OSError('Fetch unavailable')
+    driver.merged_source=merged_source
+if config.get('install_race'):
+    state=driver.state(); driver.state=lambda: state
+    def merged_source(*args):
+        path=loop/'install-scans'; old=path.read_text() if path.exists() else ''
+        path.write_text(old+'.')
+        if not old: driver.request_install(state)
+        return None
+    driver.merged_source=merged_source
+if config.get('sweep'):
+    import open_prs
+    open_prs.SWEEP_SECONDS=0.04; open_prs.REQUEST_SECONDS=0
+    driver.ENV['PATH']=config['bin']+':'+os.environ['PATH']
+    driver.ENV['SWEEP_SERVICE']=str(loop/'service.json')
+if config.get('fast'): driver.main(idle_seconds=0.04,active_seconds=0.02)
+else: driver.main()
+'''
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='fitsy-loop-lifecycle-')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def start(self, name='loop', *, planner_off=True, task_state=None, **config):
+        loop = self.root / name
+        (loop / 'tasks').mkdir(parents=True, exist_ok=True)
+        (loop / 'progress.py').write_text('# No external publishing in lifecycle fixtures.\n')
+        (loop / 'state.json').write_text(json.dumps({'_planner_off': planner_off, **(task_state or {})}))
+        process = subprocess.Popen([sys.executable, '-B', '-c', self.PROCESS,
+                                    json.dumps({'source': str(SOURCE.resolve()), **config})],
+                                   env={**os.environ, 'FITSY_LOOP_DIR': str(loop),
+                                        'FITSY_LOOP_ROOT': str(self.root)},
+                                   text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        def close():
+            if process.poll() is None: process.kill()
+            process.communicate(timeout=5)
+        self.addCleanup(close)
+        return loop, process
+
+    def contents(self, loop, name):
+        path = loop / name
+        return path.read_text() if path.exists() else ''
+
+    def until(self, predicate):
+        deadline = time.monotonic() + 5
+        while not predicate() and time.monotonic() < deadline: time.sleep(0.01)
+        self.assertTrue(predicate(), 'Lifecycle checkpoint not reached within five seconds')
+
+    def enqueue(self, loop, name):
+        (loop / 'tasks' / (name + '.md')).write_text(
+            f'branch: fix/{name}\ntitle: {name}\nlane: infra\n---\nImplement {name}\n')
+
+    def clean_exit(self, process):
+        stdout, stderr = process.communicate(timeout=3)
+        self.assertEqual(process.returncode, 0, stdout + stderr)
+        self.assertEqual(stderr, '')
+
+    def test_empty_queue_rescans_and_dispatches_new_tasks_after_drain(self):
+        for mode in ('planner-off', 'no-pick', 'failed-pick'):
+            with self.subTest(mode=mode):
+                loop, process = self.start(mode, fast=True, planner_off=mode == 'planner-off',
+                                           planner_result='fail' if mode == 'failed-pick' else None)
+                self.until(lambda: len(self.contents(loop, 'scans')) >= 3)
+                self.assertIsNone(process.poll(), self.contents(loop, 'driver.log'))
+                self.assertEqual(self.contents(loop, 'picks'), '' if mode == 'planner-off' else '.')
+                for name in ('first', 'second'):
+                    self.enqueue(loop, name)
+                    self.until(lambda: name in self.contents(loop, 'completed').splitlines())
+                    self.until(lambda: self.contents(loop, 'driver.log').count('IDLE') >=
+                               (2 if name == 'first' else 3))
+                (loop / 'STOP').touch()
+                self.clean_exit(process)
+                self.assertEqual(self.contents(loop, 'completed').splitlines(), ['first', 'second'])
+                self.assertNotIn('ALL DONE', self.contents(loop, 'driver.log'))
+
+    def test_stop_file_interrupts_the_default_three_minute_idle(self):
+        loop, process = self.start()
+        self.until(lambda: 'IDLE' in self.contents(loop, 'driver.log'))
+        self.assertIn('re-scan in 180 seconds', self.contents(loop, 'driver.log'))
+        (loop / 'STOP').touch()
+        self.clean_exit(process)
+        self.assertIn('STOPPED stop file:', self.contents(loop, 'driver.log'))
+
+    def test_failed_install_retains_request_without_stopping_dispatch_or_spinning(self):
+        loop, process = self.start(fast=True, install_error=True, task_state={'_loop_install': 0})
+        self.until(lambda: 'SELF-INSTALL deferred: Fetch unavailable' in self.contents(loop, 'driver.log'))
+        self.enqueue(loop, 'later')
+        self.until(lambda: 'later' in self.contents(loop, 'completed'))
+        (loop / 'STOP').touch(); self.clean_exit(process)
+        self.assertGreater(json.loads((loop / 'state.json').read_text())['_loop_install'], time.time())
+        self.assertEqual(self.contents(loop, 'driver.log').count('SELF-INSTALL deferred:'), 1)
+
+    def test_merge_arriving_during_source_check_keeps_its_install_request(self):
+        loop, process = self.start(fast=True, install_race=True, task_state={'_loop_install': 0})
+        self.until(lambda: len(self.contents(loop, 'install-scans')) >= 2)
+        (loop / 'STOP').touch(); self.clean_exit(process)
+        self.assertNotIn('_loop_install', json.loads((loop / 'state.json').read_text()))
+
+    def test_open_pr_sweep_repeats_while_idle_and_between_task_dispatches(self):
+        spec = importlib.util.spec_from_file_location('sweep_fixture', SOURCE / 'open_prs.test.py')
+        sweep_tests = importlib.util.module_from_spec(spec); spec.loader.exec_module(sweep_tests)
+        loop = self.root / 'loop'; (loop / 'tasks').mkdir(parents=True)
+        self.enqueue(loop, 'ended')
+        tools = self.root / 'bin'; tools.mkdir()
+        gh = tools / 'gh'; gh.write_text('#!' + sys.executable + '\n' + sweep_tests.GH); gh.chmod(0o700)
+        (loop / 'service.json').write_text(json.dumps({'pages': [[{
+            'number': 700, 'head': {'ref': 'fix/ended', 'repo': {'full_name': 'dgmolla/fitsy'}}}]],
+            'views': {'700': {'number': 700, 'headRefName': 'fix/ended', 'headRefOid': 'a'*40,
+                'isCrossRepository': False, 'isDraft': False, 'state': 'OPEN',
+                'mergeStateStatus': 'BEHIND'}}, 'calls': []}))
+        loop, process = self.start(fast=True, sweep=True, bin=str(tools),
+                                   task_state={'ended': {'done': 1, 'pr': 700, 'opened_by_loop': True}})
+        def updates():
+            try:
+                data = json.loads((loop / 'service.json').read_text())
+                return sum(args[:2] == ['pr', 'update-branch'] for args in data['calls'])
+            except json.JSONDecodeError:
+                return 0
+        self.until(lambda: updates() >= 2)
+        self.enqueue(loop, 'first')
+        self.until(lambda: 'first' in self.contents(loop, 'completed'))
+        before = updates()
+        self.until(lambda: updates() > before)
+        self.enqueue(loop, 'second')
+        self.until(lambda: 'second' in self.contents(loop, 'completed'))
+        (loop / 'STOP').touch(); self.clean_exit(process)
+        self.assertEqual(self.contents(loop, 'started').splitlines(), ['first', 'second'])
+
+    def test_existing_stop_file_prevents_planning_and_dispatch(self):
+        loop = self.root / 'loop'; (loop / 'tasks').mkdir(parents=True)
+        self.enqueue(loop, 'pending')
+        (loop / 'STOP').touch()
+        loop, process = self.start(planner_off=False)
+        self.clean_exit(process)
+        self.assertEqual(self.contents(loop, 'started'), '')
+        self.assertEqual(self.contents(loop, 'picks'), '')
+        self.assertEqual(self.contents(loop, 'scans'), '')
+
+    def test_signals_interrupt_idle_with_successful_exit(self):
+        for number in (signal.SIGTERM, signal.SIGINT):
+            with self.subTest(number=number):
+                loop, process = self.start(number.name)
+                self.until(lambda: 'IDLE' in self.contents(loop, 'driver.log'))
+                process.send_signal(number)
+                self.clean_exit(process)
+                self.assertIn('STOPPED ' + number.name, self.contents(loop, 'driver.log'))
+
+    def test_stop_drains_current_worker_under_owner_lock_without_starting_more(self):
+        import fcntl
+        loop = self.root / 'loop'; (loop / 'tasks').mkdir(parents=True)
+        self.enqueue(loop, 'current')
+        (loop / 'hold').touch()
+        loop, process = self.start(fast=True)
+        self.until(lambda: self.contents(loop, 'started') == 'current\n')
+        (loop / 'STOP').touch()
+        self.until(lambda: 'STOPPING' in self.contents(loop, 'driver.log'))
+        self.enqueue(loop, 'later')
+        self.assertIsNone(process.poll())
+        with (loop / 'driver.lock').open('a') as owner:
+            with self.assertRaises(BlockingIOError):
+                fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        (loop / 'release').touch()
+        self.clean_exit(process)
+        self.assertEqual(self.contents(loop, 'completed'), 'current\n')
+
+    def test_signal_handlers_are_restored_even_when_scheduler_raises(self):
+        previous = {number: signal.getsignal(number) for number in (signal.SIGINT, signal.SIGTERM)}
+        with self.assertRaisesRegex(RuntimeError, 'scheduler crashed'):
+            with Lifecycle(self.root).signals():
+                raise RuntimeError('scheduler crashed')
+        self.assertEqual({number: signal.getsignal(number) for number in previous}, previous)
+
+    def test_launchagent_restarts_failed_exits_and_uses_existing_driver_and_log(self):
+        agent = plistlib.loads((SOURCE / 'org.fitsy.loop-driver.plist').read_bytes())
+        self.assertEqual(agent['ProgramArguments'], ['__PYTHON__', '-u', '-B', '__LOOP_DIR__/driver.py'])
+        self.assertEqual(agent['WorkingDirectory'], '__LOOP_DIR__')
+        self.assertEqual(agent['EnvironmentVariables']['FITSY_LOOP_DIR'], '__LOOP_DIR__')
+        self.assertIn('__HOME__/.local/bin', agent['EnvironmentVariables']['PATH'])
+        self.assertEqual(agent['KeepAlive'], {'SuccessfulExit': False})
+        self.assertTrue(agent['RunAtLoad'])
+        self.assertGreaterEqual(agent['ThrottleInterval'], 10)
+        for key in ('StandardOutPath', 'StandardErrorPath'):
+            self.assertEqual(agent[key], '__LOOP_DIR__/driver.log')
+        self.assertNotIn('StartInterval', agent)
+
+
+class InstallTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='fitsy-loop-install-')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.loop = self.root / 'loop'; (self.loop / 'tasks').mkdir(parents=True)
+        (self.loop / 'driver.py').write_text('# Legacy driver\n')
+        self.home = self.root / 'home'; tools = self.home / '.local/bin'; tools.mkdir(parents=True)
+        script = '''import json, os, sys
+from pathlib import Path
+p=Path(os.environ['HOME'])/'launchctl.json'
+s=json.loads(p.read_text()) if p.exists() else {'calls': [], 'loaded': False}
+args=sys.argv[1:]; s['calls'].append(args)
+if args[0]=='bootstrap': s['loaded']=True
+p.write_text(json.dumps(s))
+sys.exit(0 if args[0]!='print' or s['loaded'] else 1)
+'''
+        for name, code in (('launchctl', script), ('ps', ''), ('lsof', '')):
+            path = tools / name; path.write_text('#!' + sys.executable + '\n' + code); path.chmod(0o700)
+        self.env = {**os.environ, 'HOME': str(self.home), 'PATH': str(tools) + ':' + os.environ['PATH']}
+        environment = mock.patch.dict(os.environ, self.env)
+        environment.start(); self.addCleanup(environment.stop)
+
+    def test_manual_command_installs_and_loads_agent_idempotently_without_touching_state(self):
+        import fcntl
+        retained = {'tasks/pending.md': 'queued task', 'state.json': '{"task":{"pr":700}}',
+                    'driver.log': 'existing history\n', 'progress.json': 'existing progress',
+                    'evidence/receipt.json': 'retained evidence'}
+        for name, data in retained.items():
+            path = self.loop / name; path.parent.mkdir(exist_ok=True); path.write_text(data)
+        command = [sys.executable, '-B', str(SOURCE / 'install.py'), '--directory', str(self.loop), '--apply']
+        first = subprocess.run(command, env=self.env, capture_output=True, text=True)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        agent_path = self.home / 'Library/LaunchAgents/org.fitsy.loop-driver.plist'
+        self.assertTrue(agent_path.exists(), 'The one-command installer must install the LaunchAgent')
+        agent = plistlib.loads(agent_path.read_bytes())
+        self.assertEqual(agent['ProgramArguments'][-1], str((self.loop / 'driver.py').resolve()))
+        before = {str(p.relative_to(self.loop)): p.read_bytes() for p in self.loop.rglob('*') if p.is_file()}
+        with (self.loop / 'driver.lock').open('a') as owner:
+            fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            second = subprocess.run(command, env=self.env, capture_output=True, text=True)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual({str(p.relative_to(self.loop)): p.read_bytes() for p in self.loop.rglob('*') if p.is_file()}, before)
+        for name, data in retained.items(): self.assertEqual((self.loop / name).read_text(), data)
+        calls = json.loads((self.home / 'launchctl.json').read_text())['calls']
+        self.assertEqual(sum(call[0] == 'bootstrap' for call in calls), 1)
+
+    def merged_source(self):
+        repository = self.root / 'wt3'; repository.mkdir()
+        def git(*args):
+            return subprocess.check_output(['git', '-C', str(repository), *args], env=self.env, stderr=subprocess.PIPE).decode().strip()
+        git('init', '-q', '-b', 'main')
+        git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.test')
+        source = repository / 'scripts/delivery/loop'; source.mkdir(parents=True)
+        for name in install.FILES: shutil.copyfile(SOURCE / name, source / name)
+        git('add', '.'); git('commit', '-qm', 'baseline')
+        origin = self.root / 'origin.git'
+        subprocess.run(['git', 'init', '-q', '--bare', str(origin)], check=True)
+        git('remote', 'add', 'origin', str(origin)); git('push', '-q', 'origin', 'main')
+        receipt = install.install(self.loop, apply=True)
+        (source / 'lifecycle.py').write_text((source / 'lifecycle.py').read_text() + '\n# Merged lifecycle fix\n')
+        (source / 'driver.py').write_text((source / 'driver.py').read_text() + '\nlog("RUNNING MERGED LOOP SOURCE")\n')
+        (source / 'new_helper.py').write_text('# New merged runtime module\n')
+        (source / 'ignored.test.py').write_text('# Never install tests\n')
+        (source / 'state.json').write_text('{"never":"replace local state"}')
+        (repository / 'unrelated.txt').write_text('Never install this repository file\n')
+        git('add', '.'); git('commit', '-qm', 'merged loop fix'); git('push', '-q', 'origin', 'main')
+        # The updater must read the fetched commit, never these working-tree bytes.
+        (source / 'lifecycle.py').write_text('uncommitted candidate code\n')
+        return repository, Path(receipt['version'])
+
+    def test_sync_uses_merged_loop_files_and_preserves_runtime_state_and_controls(self):
+        import fcntl
+        repository, previous = self.merged_source()
+        retained = {'tasks/pending.md': 'queued', 'state.json': '{"task":{"pr":700}}',
+                    'driver.log': 'history', 'progress.md': 'progress', 'STOP': 'intentional stop'}
+        for name, data in retained.items(): (self.loop / name).write_text(data)
+        with (self.loop / 'driver.lock').open('a') as owner, mock.patch.object(install, 'SOURCE', previous):
+            fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            update = install.merged_source(repository, self.env)
+            self.assertTrue(install.install_merged(self.loop, update, self.env, owner))
+        current = Path(json.loads((self.loop / 'source-receipt.json').read_text())['version'])
+        self.assertIn(b'Merged lifecycle fix', (current / 'lifecycle.py').read_bytes())
+        self.assertNotIn(b'uncommitted candidate', (current / 'lifecycle.py').read_bytes())
+        self.assertFalse((current / 'unrelated.txt').exists())
+        self.assertTrue((current / 'new_helper.py').is_file())
+        self.assertFalse((current / 'ignored.test.py').exists())
+        self.assertFalse((current / 'state.json').exists())
+        self.assertFalse((self.loop / 'unrelated.txt').exists())
+        for name, data in retained.items(): self.assertEqual((self.loop / name).read_text(), data)
+        controls = {str(p.relative_to(previous)): p.read_bytes() for p in (previous / 'controls').rglob('*') if p.is_file()}
+        self.assertEqual({str(p.relative_to(current)): p.read_bytes() for p in (current / 'controls').rglob('*') if p.is_file()}, controls)
+        with (self.loop / 'driver.lock').open('a') as owner, mock.patch.object(install, 'SOURCE', current):
+            fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.assertIsNone(install.merged_source(repository, self.env))
+
+    def test_installed_scheduler_drains_workers_restarts_and_consumes_new_source_without_losing_queue(self):
+        self.merged_source()
+        (self.loop / 'state.json').write_text('{"_planner_off":true}')
+        for name, lane in (('current', 'infra'), ('data', 'pipeline'), ('later', 'infra')):
+            (self.loop / 'tasks' / (name + '.md')).write_text(f'branch: fix/{name}\ntitle: {name}\nlane: {lane}\n---\nDo work\n')
+        program = '''import os, runpy, sys, time
+from pathlib import Path
+loop=Path(os.environ['FITSY_LOOP_DIR'])
+loaded=runpy.run_path(str(loop/'driver.py'),run_name='fixture')
+driver=loaded['main'].__globals__
+def work(path,state):
+    name=Path(path).stem
+    with (loop/'started').open('a') as f: print(name,file=f)
+    if sys.argv[1]=='update':
+        if name=='data':
+            (loop/'data-started').touch()
+            while not (loop/'release').exists(): time.sleep(0.01)
+        if name=='current':
+            while not (loop/'data-started').exists(): time.sleep(0.01)
+            driver['request_install'](state)
+            (loop/'merged').touch()
+    state.setdefault(name,{})['done']=1; driver['save'](state)
+    if sys.argv[1]=='resume': (loop/'STOP').touch()
+driver['execute_task']=work; driver['retriage']=lambda *args: None
+raise SystemExit(loaded['main'](idle_seconds=0.02,active_seconds=0.02))
+'''
+        env = {**self.env, 'FITSY_LOOP_DIR': str(self.loop), 'FITSY_LOOP_ROOT': str(self.root)}
+        process = subprocess.Popen([sys.executable, '-B', '-c', program, 'update'], env=env,
+                                   text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5
+            while not (self.loop / 'merged').exists() and time.monotonic() < deadline: time.sleep(0.01)
+            self.assertTrue((self.loop / 'merged').exists())
+            self.assertIsNone(process.poll())
+            self.assertNotIn('later', (self.loop / 'started').read_text())
+            (self.loop / 'release').touch()
+            stdout, stderr = process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 75, stdout + stderr)
+        finally:
+            if process.poll() is None: process.kill()
+            process.communicate(timeout=5)
+        state = json.loads((self.loop / 'state.json').read_text())
+        self.assertTrue(state['current']['done'] and state['data']['done'])
+        self.assertNotIn('later', state)
+        self.assertNotIn('_loop_install', state)
+        # Emulate launchd's unsuccessful-exit restart through the same external entrypoint.
+        resumed = subprocess.run([sys.executable, '-B', '-c', program, 'resume'], env=env,
+                                 capture_output=True, text=True, timeout=10)
+        self.assertEqual(resumed.returncode, 0, resumed.stderr)
+        self.assertIn('RUNNING MERGED LOOP SOURCE', (self.loop / 'driver.log').read_text())
+        self.assertTrue(json.loads((self.loop / 'state.json').read_text())['later']['done'])
+        self.assertEqual((self.loop / 'started').read_text().splitlines().count('current'), 1)
 
 
 class DriverTest(unittest.TestCase):
@@ -742,6 +1108,8 @@ if (denied.some(value => !value)) process.exit(1);
     def test_failed_initial_fetch_recovers_preparation_before_worktree_exists(self):
         task, s = self.task_checkout(simrepair=3, fix_rounds=5, reruns=2, env_retries=2,
                                      attempts=[{'kind': 'code-repair', 'strategy': 'targeted'}])
+        self.git('branch', 'codex/issue-583')
+        self.git('push', '-q', 'origin', 'codex/issue-583')
         task.write_text('---\nbranch: codex/issue-583\ntitle: Shuffle\npr: 585\n---\nImplement shuffle\n')
         wt = self.root / 'loop' / ('wt-' + task.stem)
         wt.unlink()
@@ -1077,12 +1445,37 @@ if (denied.some(value => !value)) process.exit(1);
         self.assertEqual((host / 'driver.py').read_text(), original)
         receipt = install.install(host, apply=True)
         self.assertEqual(receipt['status'], 'installed')
-        result = subprocess.run([sys.executable, '-B', str(host / 'driver.py')],
-                                env={**self.env, 'FITSY_LOOP_ROOT': str(self.root)}, text=True, capture_output=True, timeout=10)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        process = subprocess.Popen([sys.executable, '-B', str(host / 'driver.py')],
+                                   env={**self.env, 'FITSY_LOOP_ROOT': str(self.root)},
+                                   text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if (host / 'driver.log').exists() and 'IDLE' in (host / 'driver.log').read_text(): break
+                if process.poll() is not None: break
+                time.sleep(0.01)
+            self.assertIsNone(process.poll(), 'Installed driver must remain alive on an empty queue')
+            self.assertIn('IDLE', (host / 'driver.log').read_text())
+            (host / 'STOP').touch()
+            _, stderr = process.communicate(timeout=3)
+            self.assertEqual(process.returncode, 0, stderr)
+        finally:
+            if process.poll() is None: process.kill()
+            process.communicate(timeout=5)
         self.assertTrue((host / 'tasks/notes/NOTES-priority.md').exists())
         self.assertEqual(json.loads((host / 'state.json').read_text()), state)
-        self.assertIn('ALL DONE', (host / 'driver.log').read_text())
+        self.assertIn('STOPPED stop file:', (host / 'driver.log').read_text())
+        self.assertEqual((Path(receipt['version']) / 'lifecycle.py').read_bytes(),
+                         (SOURCE / 'lifecycle.py').read_bytes())
+        self.assertEqual((Path(receipt['version']) / 'open_prs.py').read_bytes(),
+                         (SOURCE / 'open_prs.py').read_bytes())
+        # The PR's one-line legacy-driver change must consume that same snapshot.
+        documentation = (SOURCE.parents[2] / 'docs/engineering/devops/loop-driver.md').read_text()
+        delegation = documentation.split('```python\n', 1)[1].split('```', 1)[0]
+        self.assertEqual(len(delegation.strip().splitlines()), 1)
+        delegated = subprocess.run([sys.executable, '-B', '-c', 'import json, sys; L = sys.argv[1]\n' + delegation,
+                                    str(host)], env=self.env, text=True, capture_output=True, timeout=3)
+        self.assertEqual(delegated.returncode, 0, delegated.stderr)
         self.assertTrue(list(host.glob('driver.py.*.bak')))
         self.assertEqual(json.loads((host / 'source-receipt.json').read_text())['source'], plan['source'])
         installed = Path(receipt['version']) / 'controls/scripts/sim/preview-backend.mjs'
@@ -1118,6 +1511,44 @@ if (denied.some(value => !value)) process.exit(1);
                                   env=self.env,text=True,capture_output=True,timeout=10)
         self.assertNotEqual(rejected.returncode, 0)
         self.assertIn('Unapproved dependency root', rejected.stderr)
+
+    def test_installed_entrypoint_sweeps_prs_after_their_original_tasks_ended(self):
+        loop = self.root / 'loop'; (loop / 'tasks').mkdir(parents=True)
+        (self.root / 'wt3').symlink_to(self.wt, target_is_directory=True)
+        (loop / 'driver.py').write_text('# Legacy entrypoint\n')
+        (loop / 'tasks/original.md').write_text('branch: fix/ended\ntitle: Ended work\n---\nKeep acceptance.\n')
+        state = {'_planner_off': True, 'original': {'done': 1, 'pr': 700}}
+        (loop / 'state.json').write_text(json.dumps(state))
+        (loop / 'driver.log').write_text('12:00:00 original PR https://github.com/dgmolla/fitsy/pull/700\n')
+        self.service_state(open_prs=[{'number': 700, 'head': {
+            'ref': 'fix/ended', 'repo': {'full_name': 'dgmolla/fitsy'}}}],
+            pr={'number': 700, 'headRefName': 'fix/ended', 'headRefOid': 'a'*40,
+                'isCrossRepository': False, 'isDraft': False, 'state': 'OPEN',
+                'mergeStateStatus': 'BEHIND', 'statusCheckRollup': []})
+        # The installed owner's normal PATH discovers this isolated CLI at HOME.
+        home = self.root / 'fixture-home'; tools = home / '.local/bin'; tools.mkdir(parents=True)
+        (tools / 'gh').symlink_to(self.root / 'bin/gh')
+        install.install(loop, apply=True)
+        process = subprocess.Popen([sys.executable, '-B', str(loop / 'driver.py')],
+                                   env={**self.env, 'HOME': str(home), 'FITSY_LOOP_ROOT': str(self.root)},
+                                   text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if 'updated BEHIND PR 700' in (loop / 'driver.log').read_text(): break
+                if process.poll() is not None: break
+                time.sleep(0.01)
+            self.assertIn('updated BEHIND PR 700', (loop / 'driver.log').read_text())
+            (loop / 'STOP').touch()
+            _, stderr = process.communicate(timeout=3)
+            self.assertEqual(process.returncode, 0, stderr)
+        finally:
+            if process.poll() is None: process.kill()
+            process.communicate(timeout=5)
+        self.assertEqual(json.loads((loop / 'state.json').read_text()), state)
+        calls = self.service_state()['calls']
+        self.assertIn(['pr', 'update-branch', '700', '-R', 'dgmolla/fitsy'],
+                      [call['args'] for call in calls if call['tool'] == 'gh'])
 
     def test_installer_rejects_dependency_symlinks_before_recording_permissions(self):
         source = self.root / 'installation/scripts/delivery/loop'; source.mkdir(parents=True)

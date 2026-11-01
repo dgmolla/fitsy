@@ -137,6 +137,19 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
+`floating-nav` captures all three tabs with variant A enabled and Search with the existing bar.
+It uses the `entitled-dev` fixture and the existing Debug Test Store binary, with `floatingNavDebug=1` / `0` selecting only the local walkthrough state.
+That selection persists across tab switches until the tab layout unmounts; release builds ignore the parameter and require the boolean PostHog `floating-nav` flag to be `true`.
+No remote flag changes are needed.
+The journey saves `floating-nav-on-search`, `floating-nav-on-saved`, `floating-nav-on-profile`, and `floating-nav-off-search` screenshots for the PR and checks the Profile footer above the capsule.
+Maestro text selectors also match VoiceOver labels and ignore case by default, so the icon-only checks use `(?-i)` to distinguish the required `Saved` / `Profile` accessibility labels from uppercase `SAVED` / `PROFILE` visual labels.
+The real-navigator replay checks both rendered text and accessibility labels with the same case behavior, so an unqualified negative text assertion reproduces the native failure locally.
+Full navigation scope automatically includes this saved flow through the existing flow catalog; use the required shared simulator lock for host execution.
+If the managed worker cannot open `~/fitsy-refactor/loop/sim.lock`, retain the denial and send this complete flow to the existing host simulator owner rather than using another lock or driver.
+Component navigation tests cover the same on/off selectors, all three tab destinations, live flag updates, safe-area clearance, haptics, and accessibility state; they do not substitute for simulator screenshots.
+The floating capsule sits above scene content with an explicit z-index; its blur background and icon decoration ignore touches so each tab owns its whole hit area.
+The capture replay uses responder grant/release events with both empty and populated Saved data, but it cannot model UIKit hit testing; the native Saved and Profile navigation assertions remain required.
+
 The `map-search` and `map-search-location-denied` journeys require an iOS Debug binary rebuilt with the Expo-compatible `react-native-maps` dependency.
 An OTA cannot add this native module to an older binary.
 Both flows use the existing `entitled-dev` fixture and real search/shuffle API with no purchases or remote flag changes.
@@ -288,6 +301,10 @@ Syntax checks and component tests do not establish a passing native journey or d
 
 `widget-setup` checks that Settings omits older profile-facts recovery, Notifications and Home Screen widget rows, then captures `settings-after`.
 It opens `/widget` directly, matching WidgetKit's retained empty-state route, and verifies setup guidance plus return to search.
+Before the bottom action, it dismisses the observed Debug LogBox banner at its native close point, then scrolls the named action into view.
+The banner can be absent from XCTest's hierarchy while covering the action.
+If the banner is already absent, that point can open Search; the flow returns to widget setup before its screenshot and named-control test.
+The setup checkpoint and final return-to-Search assertion remain mandatory.
 The `entitled-dev` fixture and native Home Screen checks in `plugins/widget/README.md` still apply; Settings no longer links to setup.
 
 ## Mixed-duration trial reminders
@@ -296,7 +313,15 @@ The `entitled-dev` fixture and native Home Screen checks in `plugins/widget/READ
 Each catalog clears app state and keychain once, then retries only bounded startup observations and conditional local Metro reconnection before requiring `welcome-start`.
 The second catalog can otherwise hit XCTest `kAXErrorInvalidUIElement` while the welcome screen animates in; that is an accessibility read failure before the trial journey starts.
 Permanent hierarchy failures and an incorrect screen still fail, and billing actions and outcome assertions never run inside the startup retry.
-Its shared helper checks the named reminder offer, the schedulable purchase default, live prices and renewal copy, plan switching, unavailable reminders for short trials with and without simulated opt-in, and the visual-only checkout guard.
+Its shared helper checks the configured reminder offer and purchase default, live prices and renewal copy, both plan selections, reminder availability with and without simulated opt-in, and the visual-only checkout guard.
+`mixed-trial-default.mjs` derives the expected default from each synthetic catalog and the host's local calendar before any plan is selected.
+The development visual paywall supplies synthetic opt-in by default and synthetic enabled state with `devReminderEnabled=1`, including anonymous launches.
+Those visual states never read an anonymous account's unavailable notification state as evidence of opt-in, and never request permission or schedule a notification.
+Release builds ignore both visual parameters and keep the real account's permission and reminder preferences.
+The simulator must use that same local timezone.
+Two calendar days can span 49 elapsed hours at the autumn clock change, making the annual two-day reminder schedulable and preserving the annual default.
+The helper records its clock and timezone offset, and deterministic tests cover ordinary dates, both clock changes, quiet hours and UTC against the real application projections.
+These visual periods overlay the live Test Store `default` offering's prices; they do not describe real catalog trial eligibility.
 Run it with `paywall-eligible-visual` through `scripts/sim/product-flow.mjs run <UDID> ... --mode=development` on an owned development build.
 The `annual-short` and `monthly-short` visual parameters propagate unchanged between screens.
 Every screenshot is labeled synthetic, and these flows request no notification permission, schedule nothing and cannot purchase or restore.

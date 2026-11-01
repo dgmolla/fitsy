@@ -2,12 +2,23 @@ import { useRef } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs, Redirect, useLocalSearchParams } from 'expo-router';
+import { useNavigationState, type NavigationState, type PartialState } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { useIsReviewer } from '@/lib/reviewAccess';
 import { trackTabSwitched, type TabId } from '@/lib/analytics';
+import { FloatingTabBar } from '@/components/FloatingTabBar';
+import { FloatingNavClearanceContext, floatingTabBarClearance } from '@/lib/floatingNav';
+import { useFloatingNavFlag } from '@/lib/useFloatingNavFlag';
+
+function focusedDebugParam(state?: NavigationState | PartialState<NavigationState>): string | undefined {
+  const route = state?.routes[state.index ?? 0];
+  if (route?.state) return focusedDebugParam(route.state);
+  const value = (route?.params as { floatingNavDebug?: unknown } | undefined)?.floatingNavDebug;
+  return typeof value === 'string' ? value : undefined;
+}
 
 export default function TabLayout() {
   // We track tab switches at the layout level so the event fires once per
@@ -36,6 +47,10 @@ export default function TabLayout() {
   // `preview` while this layout is merely backgrounded and fire a spurious
   // redirect underneath the screen the user is actually looking at.
   const { preview } = useLocalSearchParams<{ preview?: string }>();
+  // Read only the focused leaf's explicit Debug parameter. Ancestor query
+  // params can retain an older selection after a deep link or tab switch.
+  const floatingNavDebug = useNavigationState(state => __DEV__ ? focusedDebugParam(state) : undefined);
+  const floatingNav = useFloatingNavFlag(floatingNavDebug);
 
   // Keep the onboarding sample; post-decline browsing requires the explicit
   // live offering experiment. The launch baseline is a hard paywall.
@@ -57,7 +72,7 @@ export default function TabLayout() {
     lastTabRef.current = next;
   }
 
-  // Preview redirects above. Tabs own the bottom inset for the main app;
+  // Preview redirects above. The default bar owns the main app's bottom inset;
   // reserve a full icon row independently of the device's home indicator.
   const bottomPadding = Math.max(insets.bottom, 8);
   const tabBarStyle = {
@@ -71,7 +86,9 @@ export default function TabLayout() {
   };
 
   return (
+    <FloatingNavClearanceContext.Provider value={floatingNav ? floatingTabBarClearance(insets.bottom) : 0}>
     <Tabs
+      tabBar={floatingNav ? (props) => <FloatingTabBar {...props} /> : undefined}
       screenOptions={{
         headerShown: false,
         tabBarStyle,
@@ -90,8 +107,10 @@ export default function TabLayout() {
         name="saved"
         options={{
           title: 'SAVED',
+          tabBarAccessibilityLabel: 'Saved',
+          tabBarButtonTestID: 'tab-saved',
           tabBarIcon: ({ color, focused }: { color: string; size: number; focused: boolean }) => (
-            <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} size={22} color={color} />
+            <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} size={floatingNav ? 24 : 22} color={color} />
           ),
         }}
         listeners={{ tabPress: () => emitTabSwitched('saved') }}
@@ -101,10 +120,11 @@ export default function TabLayout() {
         options={{
           title: 'Search',
           tabBarAccessibilityLabel: 'Search',
+          tabBarButtonTestID: 'tab-search',
           // showLabel belongs to the whole active bar. Hide only this label.
           tabBarLabel: () => null,
           tabBarIconStyle: { width: 44, height: 44 },
-          tabBarIcon: () => (
+          tabBarIcon: ({ color }: { color: string }) => floatingNav ? <Ionicons name="search" size={24} color={color} /> : (
             <View style={{
               width: 44,
               height: 44,
@@ -128,12 +148,15 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'PROFILE',
+          tabBarAccessibilityLabel: 'Profile',
+          tabBarButtonTestID: 'tab-profile',
           tabBarIcon: ({ color, focused }: { color: string; size: number; focused: boolean }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={floatingNav ? 24 : 22} color={color} />
           ),
         }}
         listeners={{ tabPress: () => emitTabSwitched('profile') }}
       />
     </Tabs>
+    </FloatingNavClearanceContext.Provider>
   );
 }

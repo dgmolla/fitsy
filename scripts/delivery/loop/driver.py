@@ -4,6 +4,10 @@ import json, os, subprocess, time, re, threading, shlex, tempfile
 from contextlib import nullcontext
 from pathlib import Path
 import context
+import worktrees
+from install import merged_source, install_merged
+from lifecycle import Lifecycle, IDLE_SECONDS, ACTIVE_SECONDS
+from open_prs import OpenPRSweep
 from taskfiles import read_task, task_files, migrate_notes, issue_number
 from recovery import (MAX_ROUNDS, MAX_SIM_REPAIRS, MAX_RERUNS, RETRIAGE_SECONDS,
                       classify_failure, gating_failures, repair_prompt, record_attempt,
@@ -42,6 +46,9 @@ def save(s):
         t=L+'/state.json.tmp'
         with open(t,'w') as f: json.dump(s,f,indent=1); f.flush(); os.fsync(f.fileno())
         os.replace(t,L+'/state.json')
+def request_install(s):
+    with LOCK:
+        s['_loop_install']=time.time(); save(s)
 def checks(pr):
     j=json.loads(sh(f'gh pr view {pr} -R {REPO} --json statusCheckRollup,headRefOid,mergeable,state,mergeStateStatus'))
     res={}
@@ -235,16 +242,14 @@ def file_flake(name,st,ev):
         log(name,'flake issue pending:',redact(str(error))[:500])
 
 
-def prepare_task(wt,meta):
+def prepare_task(wt,meta,merge_main=True):
     """Retry the same bounded source prerequisite before implementation or requeue."""
-    with LOCK:
-        sh('git fetch -q origin',cwd=ROOT+'/wt3',timeout=60)
-        if not os.path.isdir(wt):
-            br=meta['branch']
-            if meta.get('existing'):
-                sh(f'git worktree add -f {shlex.quote(wt)} -B loop/{br} origin/{br}',cwd=ROOT+'/wt3',timeout=120)
-                sh('git merge -q --no-edit origin/main',cwd=wt,check=False,timeout=120)
-            else: sh(f'git worktree add -f {shlex.quote(wt)} -B {br} origin/main',cwd=ROOT+'/wt3',timeout=120)
+    with LOCK, worktrees.lease(L,meta['branch']):
+        def merge(path, ref):
+            result=context.host.git(path,['merge','-q','--no-edit',ref],ENV)
+            if result.returncode:
+                raise RuntimeError(f'Merge {ref} stopped: {(result.stderr or result.stdout)[-1500:]}')
+        worktrees.prepare(ROOT+'/wt3',L,wt,meta,ENV,log,merge,merge_main)
 
 
 def refresh_pr_head(wt, branch, head):
@@ -295,6 +300,10 @@ def retriage(files,s):
             record_attempt(st,'preparation-retriage',outcome='ready' if ev['preparation_ready'] else 'error',logs=ev['logs'])
         else:
             try:
+                if st.get('checkout_removed') and not Path(wt).is_dir():
+                    # Replay the published PR head before merging main for new work.
+                    prepare_task(wt,meta,merge_main=False)
+                    st.pop('checkout_removed',None)
                 if st.get('pr'):
                     j,res=checks(st['pr'])
                     refresh_pr_head(wt,meta['branch'],j['headRefOid'])
@@ -334,6 +343,36 @@ def review_text(pr):
 def failed_log(pr,sha):
     ids=sh(f"gh run list -R {REPO} --commit {sha} --json databaseId,conclusion --jq '.[]|select(.conclusion==\"failure\")|.databaseId'",check=False).split()
     return '\n'.join(sh(f'gh run view {i} -R {REPO} --log-failed',check=False)[-5000:] for i in ids[:2])
+
+
+def execute_task(f,s):
+    """Keep branch ownership through all terminal outcomes, including exceptions."""
+    task=read_task(f)
+    name=Path(f).stem
+    if not task or s.get(name,{}).get('done') or s.get(name,{}).get('blocked'):
+        return run_task(f,s)
+    meta,_=task
+    with worktrees.lease(L,meta['branch']):
+        try:
+            return run_task(f,s)
+        except Exception as error:
+            record_attempt(s.setdefault(name,{}),'execution-error',reason=redact(str(error)))
+            save(s)
+            raise
+        finally:
+            with LOCK:
+                try:
+                    removed=worktrees.cleanup(ROOT+'/wt3',L,meta['branch'],ENV,log)
+                    if f'{ROOT}/loop/wt-{name}' in removed:
+                        s.setdefault(name,{})['checkout_removed']=True
+                        save(s)
+                except (RuntimeError,OSError,subprocess.TimeoutExpired) as error:
+                    log(name,'STOPPED worktree cleanup:',redact(str(error)))
+                    s.setdefault(name,{})['cleanup_error']=redact(str(error))
+                    save(s)
+                    raise
+
+
 def run_task(f,s):
     task=read_task(f)
     if not task: log('SKIP non-task',os.path.basename(f)); return 'skipped'
@@ -358,6 +397,8 @@ def run_task(f,s):
         if orphan.returncode!=0: raise RuntimeError('Cannot establish whether an orphan worker owns this checkout')
         time.sleep(30)
     pr=st.get('pr') or (int(meta['pr']) if meta.get('pr') else None)
+    if pr and st.get('pr')!=pr:
+        st['pr']=pr; save(s)
     if not st.get('implemented') and os.path.exists(f'{L}/{name}-impl.log') and sh('git status --porcelain',cwd=wt):
         st['implemented']=1; st['summary']=Path(f'{L}/{name}-impl.log').read_text()[-1500:]; save(s); log(name,'adopted finished implementation')
     if not st.get('implemented'):
@@ -422,7 +463,7 @@ def run_task(f,s):
     if not pr:
         body=f"**TL;DR:** {meta['title']}\n\n{meta.get('body','')}\n\nCodex summary:\n```\n{st['summary'][-1200:]}\n```"
         url=sh(f"gh pr create -R {REPO} --base main --head {br} --title {shlex.quote(meta['title'])} --body-file -",inp=body,cwd=wt)
-        pr=int(url.rstrip('/').split('/')[-1]); st['pr']=pr; save(s); log(name,'PR',url)
+        pr=int(url.rstrip('/').split('/')[-1]); st['pr']=pr; st['opened_by_loop']=True; save(s); log(name,'PR',url)
     def refresh():
         sh(f'git fetch -q origin && git merge -q --ff-only origin/{br}',cwd=wt,check=False)
         if context.host.git(wt,['merge','-q','--no-edit','origin/main'],ENV).returncode:
@@ -434,7 +475,7 @@ def run_task(f,s):
         j,res,bad=wait(pr,sh('git rev-parse HEAD',cwd=wt)); log(name,'checks',res,j.get('mergeStateStatus'),bad)
         sh(f'git fetch -q origin && git merge -q --ff-only origin/{br}',cwd=wt,check=False)
         if subprocess.run(f"gh pr view {pr} -R {REPO} --json state -q .state",shell=True,env=ENV,capture_output=True,text=True).stdout.strip()=='MERGED':
-            st['done']=1; save(s); log(name,'already MERGED',pr); return
+            st['done']=1; request_install(s); log(name,'already MERGED',pr); return
         if res.get('Simulator')=='ERROR':
             ev=current_repair_evidence(wt,evidence(wt,j['headRefOid'],res),st)
             result=repair_sim(name,wt,st,s,ev,meta,prompt)
@@ -464,9 +505,9 @@ def run_task(f,s):
             if r.returncode:
                 log(name,'merge refused, refreshing from main and retrying:',r.stderr[-300:].replace('\n',' '))
                 refresh(); continue
-            st['done']=1; save(s); log(name,'MERGED',pr)
+            st['done']=1; request_install(s); log(name,'MERGED',pr)
             subprocess.Popen(f'python3 {L}/evidence.py {pr} >> {L}/evidence.log 2>&1',shell=True,env=ENV)
-            log(name,'retained checkout and evidence for owned resource cleanup'); return
+            return
         if 'DIRTY' in bad: refresh(); continue
         fb=''
         if res.get('AI review')!='SUCCESS': fb+='AI review (fix every CONFIRMED P0/P1; address cheap P2s):\n'+review_text(pr)+'\n'
@@ -501,20 +542,22 @@ def lane_of(f):
     try: lm=re.search(r'^lane: (.*)$',Path(f).read_text(),re.M)
     except OSError: lm=None
     return lm.group(1).strip() if lm else LANES.get(n[:2],n)
-def main():
+def main(*, idle_seconds=IDLE_SECONDS, active_seconds=ACTIVE_SECONDS):
     import fcntl
     import planner
     # The compatibility entrypoint and canonical entrypoint share one host lock.
-    with open(L+'/driver.lock','a') as owner:
+    with open(L+'/driver.lock','a') as owner, Lifecycle(L).signals() as lifecycle:
         try: fcntl.flock(owner,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError: raise RuntimeError('Existing loop owner is already running')
         s=state(); busy={}; MAX=2
+        pr_sweep=OpenPRSweep(L,env=ENV,gate=sim_gate,merge_lock=MERGE_LOCK,log=log,
+                            on_merge=lambda: request_install(s))
         migrate_notes(L+'/tasks')
         skipped=set()
         def task_log(*args):
             if args not in skipped: log(*args); skipped.add(args)
         def work(f,n):
-            try: run_task(f,s)
+            try: execute_task(f,s)
             except Exception as error:
                 log(n,'ERROR',redact(str(error))[-2000:])
                 meta,_=read_task(f)
@@ -522,12 +565,36 @@ def main():
                       {'sim_state':'error','logs':redact(str(error))},meta)
             try: subprocess.run(['python3',L+'/progress.py'],env=ENV)
             except OSError: pass
-        while True:
+        idle=False
+        while not lifecycle.stopping():
             for lane,thread in list(busy.items()):
                 if not thread.is_alive(): del busy[lane]; s.pop('_noplan_until',None)
+            pr_sweep(s, running={thread.name for thread in busy.values()})
+            requested=s.get('_loop_install',float('inf'))
+            if requested<=time.time():
+                changed=False
+                try:
+                    update=merged_source(ROOT+'/wt3',ENV)
+                    if update and busy:
+                        lifecycle.wait(active_seconds); continue
+                    if update: changed=install_merged(L,update,ENV,owner)
+                except (OSError,ValueError,subprocess.SubprocessError) as error:
+                    with LOCK:
+                        if s.get('_loop_install')==requested: s['_loop_install']=time.time()+IDLE_SECONDS
+                    detail=getattr(error,'stderr',None) or str(error)
+                    if isinstance(detail,bytes): detail=detail.decode(errors='replace')
+                    log('SELF-INSTALL deferred:',redact(detail)[-800:])
+                else:
+                    with LOCK:
+                        if s.get('_loop_install')==requested: s.pop('_loop_install',None)
+                save(s)
+                if changed:
+                    log('SELF-INSTALL installed merged loop source; restarting through LaunchAgent')
+                    return 0 if lifecycle.stopping() else 75
             files=task_files(L+'/tasks',task_log)
             running={thread.name for thread in busy.values()}
             retriage([f for f in files if Path(f).stem not in running],s)
+            if lifecycle.stopping(): break
             todo=[f for f in files if not (s.get(Path(f).stem,{}).get('done') or s.get(Path(f).stem,{}).get('blocked'))]
             pending=[f for f in todo if Path(f).stem not in running]
             free=[g for g in ('app','data') if g not in busy]
@@ -545,17 +612,21 @@ def main():
                     s.setdefault('_picks',[]).append({'issue':n,'lane':lane,'reason':reason,'at':time.strftime('%H:%M')})
                     save(s); log('PLANNER picked',n,lane,reason); continue
                 else: s['_noplan_until']=time.time()+900
-            blocked=any(s.get(Path(f).stem,{}).get('blocked') for f in files)
-            if not todo and not busy and not blocked and s.get('_planner_off'): break
             for f in todo:
                 n=Path(f).stem; lane=lane_of(f); g=group(lane)
-                if len(busy)>=MAX: break
+                if lifecycle.stopping() or len(busy)>=MAX: break
                 if g in busy or n in running: continue
                 thread=threading.Thread(target=work,args=(f,n),name=n,daemon=False)
                 busy[g]=thread; running.add(n); thread.start(); log('START',n,'lane',lane,'group',g)
-            time.sleep(30)
-        log('ALL DONE')
+            empty=not todo and not busy
+            if empty and not idle: log('IDLE queue empty; re-scan in',idle_seconds,'seconds')
+            idle=empty
+            lifecycle.wait(idle_seconds if empty else active_seconds)
+        log('STOPPING',lifecycle.reason)
+        # Retain the owner lock while in-flight tasks finish their existing gates.
+        for thread in busy.values(): thread.join()
+        log('STOPPED',lifecycle.reason)
 
 
 if __name__=='__main__':
-    main()
+    raise SystemExit(main())

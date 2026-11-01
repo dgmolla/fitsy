@@ -53,6 +53,16 @@ Legacy metadata followed by `---` remains supported.
 Put human ordering notes under `tasks/notes/`; both planner prompts and driver ordering consume them.
 Use `#583 BEFORE #547` or `order: #608 > #583 > #547` for deterministic ordering among eligible tasks.
 
+Branch preparation and terminal cleanup use the installed `worktrees.py` helper through `execute_task`.
+Hold its branch lease across preparation, execution and cleanup so the two lanes cannot reuse one branch concurrently.
+Discover the fetched origin branch and open same-repository PR even when task headers omit `existing` and `pr`; adopt the PR, preserve local commits and merge main without resetting any branch.
+An unavailable GitHub lookup stops preparation rather than establishing that a branch is new.
+Remove clean loop-owned holders of the branch or its legacy `loop/` alias before a successor starts and after merged, blocked or errored execution.
+Only the untracked regular root `.infra-blocked` marker is disposable; retain tracked changes, other untracked or ignored files, linked markers, unfinished Git operations, locked checkouts and active workers, and report the concrete path.
+Keep branch refs and external evidence; a removed parked checkout is recreated for current-head re-triage before main is merged for implementation.
+This explicit task-lifecycle cleanup is separate from historical resource cleanup and its four-hour cutoff.
+For missing dependencies in a restricted worker, use the [documented same-lock installation recovery](../../../docs/engineering/devops/performance.md#restricted-worker-recovery) without changing peer policy or the lockfile.
+
 Park with a concrete condition such as `PR#587`, `check:Simulator`, `env:api-config` or `env:preparation`.
 Re-triage every fifteen minutes or when main advances.
 Only changed evidence or a resolved dependency/check can requeue work, with three requeues per rolling day.
@@ -72,9 +82,27 @@ Read worker `.infra-blocked` diagnoses through a bounded, nonblocking, no-follow
 Linked or nonregular markers produce a fixed rejection diagnosis without reading or publishing their contents.
 Human or release approval boundaries remain unchanged.
 
+Record shipping lessons in [the existing domain document](../../../docs/engineering/devops/shipping-lessons.md); do not create files directly under `docs/`.
+Run `node scripts/verify/run.mjs --only=structural --scope=changed --runs=local` after documentation changes before the ordinary pre-push verification.
+
 Run `python3 -B scripts/delivery/loop/loop.test.py` after any recovery-policy change.
-Install the reviewed source using `python3 scripts/delivery/loop/install.py --directory ~/fitsy-refactor/loop --apply` at an idle owner restart.
+Run `python3 -B scripts/delivery/loop/worktrees.test.py` for the real Git branch and terminal-cleanup journeys.
+Run `python3 -B scripts/delivery/loop/open_prs.test.py` for open-PR ownership, update, merge, conflict-task and pacing behavior.
+Install the reviewed source and load its LaunchAgent using `python3 scripts/delivery/loop/install.py --directory ~/fitsy-refactor/loop --apply` at a stopped owner boundary.
 The default command only plans the installation.
-The installer preserves state and evidence, backs up old entrypoints and refuses an active or uncertain owner.
+The installer preserves state and evidence, backs up old entrypoints and refuses source changes under an active or uncertain owner; repeating an unchanged installation is safe.
 Verify `source-receipt.json` and replay the actual compatibility entrypoint before reporting adoption.
-The canonical verifier runs this behavior suite through `scripts/verify/test.sh`; focused selection uses the same Python test runner.
+The canonical verifier runs all three behavior suites through `scripts/verify/test.sh`; focused selection uses the same Python test runner.
+
+For an empty queue or unexpected driver exit, follow [driver lifecycle and LaunchAgent installation](../../../docs/engineering/devops/loop-driver.md).
+The installed `lifecycle.py` idles for three minutes and re-scans even with planning disabled or unavailable.
+The installed `open_prs.py` sweeps recorded original-task PRs every three minutes, including finished or parked originals, while leaving active branch leases with their workers.
+Require matching branch and persisted PR number plus a creation marker or legacy PR-creation log event; an adopted PR is ineligible.
+Preserve the existing check-failure, simulator and GitHub merge gates, and retain one pending or blocked existing-branch conflict follow-up per PR.
+Install the helper with the driver through the frozen source installer; do not run candidate-controlled sweep code with host credentials.
+`STOP`, `SIGINT` and `SIGTERM` stop new dispatch, drain current workers under the owner lock and exit zero.
+Merged loop runtime changes request installation through both merge paths, drain workers under the owner lock, sync fetched main and exit 75 for the LaunchAgent to restart the original entrypoint.
+Self-install preserves the frozen controls and dependency grants; use manual reviewed installation for changes to those controls outside the loop directory.
+On installation failure, retain the pending request and its logged cause; the scheduler retries after three minutes while normal task dispatch continues.
+Use the source installer's one-command LaunchAgent setup; verify its PID, idle log and later task pickup through the original entrypoint.
+Retire the old restart command at that owner boundary, keep both log streams in `loop/driver.log`, and preserve clean stops and all merge gates.

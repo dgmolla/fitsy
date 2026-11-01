@@ -42,6 +42,44 @@ On macOS, the poller's temporary worktree can have a `/var/...` pathname that No
 Native CLI entrypoint guards must compare real paths so that selection, builds and acceptance actually execute through that alias; a zero exit with empty output is a setup failure.
 The selector regressions launch the real CLIs through an aliased checkout and cover Vercel listings without deployment IDs and immutable `fitsy-<hash>` preview URLs.
 
+The expired Test Store fixture uses the same selected backend, including this project's verified preview URLs.
+Its canonical implementation is `scripts/sim/expired-fixture.mjs`; it retains the persistent seed UUID, real purchase history, 35-minute expiry window and purchase-disabled lapsed login.
+It does not authorize an arbitrary preview, change a real offering or replace the host's deployment/source verification.
+Both existing host callers import `~/fitsy-refactor/sim-review/expired-fixture.mjs`.
+After reviewed integration, their existing owner installs the main implementation at an idle boundary:
+
+```sh
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node scripts/sim/install-expired-fixture.mjs ~/fitsy-refactor/sim-review
+```
+
+The installer requires a clean checkout matching `origin/main`, preserves the previous module and additive installation receipts, and snapshots the exact source and backend guard behind that existing import.
+It leaves fixture state and runner scheduling intact; use a fresh host process to load the installed module.
+The installer regressions exercise the real host import in a fresh process, including preview login and unchanged history, and refuse busy runners, candidate source and modified snapshots.
+Worker sandbox restrictions on the host directory or shared lock require installation and replay by that owner; repository tests alone do not establish live adoption.
+
+## Simulator status reasons and retries
+
+The external Mac poller posts `Simulator`; `.github/workflows/sim-scope.yml` only posts the separate `Sim scope` classification.
+After reviewed integration, the existing host owner installs the maintained status lifecycle from a clean checkout matching fresh `origin/main` at an idle boundary:
+
+```sh
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node scripts/sim/install-poller-status.mjs ~/fitsy-refactor/sim-review
+```
+
+The installer patches the existing caller, saves its previous source and an additive installation receipt, and loads an immutable `poller-status.mjs` snapshot in the next host process.
+It refuses an active runner, dirty or unmerged source, modified snapshots and an unrecognized caller contract.
+It adds no scheduler and changes no account, secret, domain, backend safety check, required flow or assertion.
+Each attempt appends its exact head, outcome and redacted reason to `evidence/<head-prefix>/attempts.jsonl` before publication.
+Assertions publish `failure`; infrastructure problems publish `error`; both retain their cause while one automatic retry is queued.
+A blank error gets an explicit diagnostic description rather than an empty string.
+Every status requires GitHub's acknowledgment of its ID, state, context and description and logs a `simulator-status-posted` receipt.
+A failed status write remains pending in the existing state file and resumes publication before any further native work.
+Comment failure cannot prevent the final status from being posted or turn completed native work into another attempt.
+
+Run `node --test scripts/sim/poller-status.test.mjs scripts/sim/install-poller-status.test.mjs` for the status and installed-caller regressions.
+The existing scripts Jest suite also consumes them through `poller-status.test.ts`; no workflow, hook, registry or package-script change is needed.
+See [shipping lessons](../../docs/engineering/devops/shipping-lessons.md) for the incident diagnosis and recovery requirements.
+
 ## Optional Slack previews
 
 The local scripted gate accepts `--record-video` or `FITSY_SIM_RECORD_VIDEO=1` to add best-effort preview evidence around each selected Maestro invocation.

@@ -102,6 +102,19 @@ it.each(['purchase', 'restore', 'sign_in'])('confirms a production sandbox %s th
   expect(info).toHaveBeenCalledWith(JSON.stringify({ event: 'revenuecat.sandbox_entitlement_accepted', userId: 'subscriber-uuid' }));
 });
 
+it('keeps production sandbox sign-in bound to the backend id for an Apple relay email', async () => {
+  process.env = { ...process.env, NODE_ENV: 'production' };
+  mockJwtVerify.mockResolvedValueOnce({ payload: {
+    sub: 'subscriber-uuid', email: 'fixture@privaterelay.appleid.com', role: 'authenticated',
+    app_metadata: { provider: 'apple' }, amr: [{ method: 'oauth' }],
+  } });
+  const response = await POST(request('sign_in'));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ active: true, verdict: 'active', synced: true });
+  expect(global.fetch).toHaveBeenCalledWith(revenueCatUrl, expect.anything());
+  expect(mockCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: 'subscriber-uuid' }) });
+});
+
 it.each([
   { reason: 'sign_in', storedStatus: 'active' },
   { reason: 'mismatch', storedStatus: 'active' },
@@ -144,6 +157,23 @@ it('accepts a production store purchase without a sandbox acceptance log', async
   expect(await response.json()).toMatchObject({ active: true, verdict: 'active', synced: true });
   expect(info).toHaveBeenCalledTimes(1); // Existing subscription status-change log only.
   expect(info).toHaveBeenCalledWith('[subscription] status none -> active (sync)');
+});
+
+it('rechecks a restored sandbox entitlement and its real expiry in production mode', async () => {
+  process.env = { ...process.env, NODE_ENV: 'production' };
+  expect(await (await POST(request('restore_history'))).json()).toMatchObject({
+    active: true, verdict: 'active', synced: true, stale: false,
+  });
+  expect(row).toMatchObject({ status: 'active' });
+  jest.setSystemTime(Date.now() + 2 * 86_400_000);
+  expect(await (await POST(request('restore_history'))).json()).toMatchObject({
+    active: false, verdict: 'expired', synced: true, stale: false,
+    lastRcVerifiedAt: new Date().toISOString(),
+  });
+  expect(row).toMatchObject({ status: 'expired', expiresAt: new Date(expires) });
+  expect(global.fetch).toHaveBeenCalledWith(revenueCatUrl, expect.objectContaining({
+    headers: { authorization: 'Bearer appl_fixture', 'x-platform': 'ios' },
+  }));
 });
 
 it.each(['unavailable', 'test_store'])('retains unknown for a lapsed row when RevenueCat is %s', async failure => {

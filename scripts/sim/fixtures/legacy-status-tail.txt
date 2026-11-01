@@ -1,0 +1,13 @@
+  const failed = error?.gateFail || verdict?.verdict === 'fail';
+  if (error && !error.gateFail || failed) {
+    st.tries++; save();
+    if (st.tries < 2) { setStatus(sha, 'error', `Attempt ${st.tries} ${failed ? 'failed' : 'errored'}; retrying next poll`); log(`#${pr.number} retry: ${scrub(error?.message || verdict.blocking, env || {})}`); continue; }
+  }
+  const final = failed ? 'failure' : error ? 'error' : 'success';
+  const why = scrub(error ? error.message.split('\n')[0].slice(0, 300) : verdict.verdict === 'fail' ? verdict.blocking : 'No clear functional or visual break', env);
+  comment(pr.number, `**Simulator (local, ${scope}):** ${final === 'success' ? 'passed' : final}. ${why}\nHead: ${sha}\n` +
+    (verdict ? `\nSteps:\n${(verdict.steps || []).slice(0, 40).map(s => `- ${s}`).join('\n')}\n\nScreenshots (on the Mac): ${ev}\n` +
+      ((verdict.advisory || []).length ? `\nAdvisory:\n${verdict.advisory.map(s => `- ${s}`).join('\n')}` : '') +
+      ((verdict.proposed_flows || []).length ? `\nProposed new Maestro flows (saved as proposed-*.yaml in the evidence dir; add in this PR or a follow-up): ${verdict.proposed_flows.map(f => f.name).join(', ')}` : '') : ''));
+  setStatus(sha, final, final === 'success' ? `Local ${scope} run + exploration passed` : why);
+  st.final = final; save(); log(`#${pr.number} ${final}`);

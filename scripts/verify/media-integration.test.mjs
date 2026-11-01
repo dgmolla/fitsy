@@ -12,6 +12,7 @@ test('media lane selects changed native controls without selecting unrelated app
   for (const path of ['scripts/sim/runner-controls.mjs', 'scripts/sim/xctest-attachments.test.mjs',
     'scripts/delivery/loop/host.py', 'scripts/delivery/loop/context.py', 'scripts/delivery/loop/driver.py', 'scripts/delivery/loop/install.py',
     'scripts/delivery/loop/loop.test.py',
+    'scripts/delivery/loop/worktrees.py', 'scripts/delivery/loop/worktrees.test.py',
     'scripts/verify/product-flow.mjs', 'scripts/verify/test.sh', 'scripts/verify/registry.yml'])
     assert.equal(mediaIntegrationRequired([path]), true, path);
 });

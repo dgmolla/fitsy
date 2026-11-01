@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Install this source into the existing loop only, preserving state and old entrypoints."""
 import argparse
+from contextlib import nullcontext
 import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
+import plistlib
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 SOURCE = Path(__file__).parent
-FILES = ('driver.py', 'planner.py', 'progress.py', 'taskfiles.py', 'recovery.py', 'context.py', 'host.py', 'SKILL.md')
+FILES = ('driver.py', 'planner.py', 'progress.py', 'taskfiles.py', 'recovery.py', 'context.py', 'host.py', 'worktrees.py', 'lifecycle.py', 'open_prs.py', 'install.py', 'org.fitsy.loop-driver.plist', 'SKILL.md')
 
 
 def sources():
@@ -72,28 +75,91 @@ globals().update(runpy.run_path({str(version / (module + '.py'))!r}, run_name=__
 '''
 
 
-def install(directory, apply=False):
+def launchagent(directory, template, env=None):
+    directory, home = Path(directory).resolve(), Path.home()
+    tokens = {'__HOME__': str(home), '__LOOP_DIR__': str(directory), '__PYTHON__': str(Path(sys.executable).resolve())}
+    def expand(value):
+        if isinstance(value, dict): return {key: expand(item) for key, item in value.items()}
+        if isinstance(value, list): return [expand(item) for item in value]
+        if isinstance(value, str):
+            for key, replacement in tokens.items(): value = value.replace(key, replacement)
+        return value
+    agent = expand(plistlib.loads(template))
+    target = home / 'Library/LaunchAgents' / (agent['Label'] + '.plist')
+    target.parent.mkdir(parents=True, exist_ok=True)
+    data = plistlib.dumps(agent)
+    if not target.exists() or target.read_bytes() != data:
+        temporary = target.with_suffix('.tmp')
+        temporary.write_bytes(data); temporary.chmod(0o600); os.replace(temporary, target)
+    domain = f'gui/{os.getuid()}'
+    service = domain + '/' + agent['Label']
+    if subprocess.run(['launchctl', 'print', service], env=env, capture_output=True, timeout=30).returncode:
+        subprocess.run(['launchctl', 'enable', service], env=env, capture_output=True, timeout=30, check=True)
+        subprocess.run(['launchctl', 'bootstrap', domain, str(target)], env=env, capture_output=True, timeout=30, check=True)
+
+
+def merged_source(repository, env):
+    """Read committed runtime files, without disturbing either worker lane."""
+    def git(*args):
+        return subprocess.run(['git', '-C', str(repository), *args], env=env,
+                              capture_output=True, timeout=60, check=True).stdout
+    git('fetch', '-q', 'origin', 'main:refs/remotes/origin/main')
+    ref = git('rev-parse', 'refs/remotes/origin/main').decode().strip()
+    prefix = 'scripts/delivery/loop/'
+    names = git('ls-tree', '-rz', '--name-only', ref, '--', prefix).decode().split('\0')
+    loop = {Path(name).name: git('show', ref + ':' + name) for name in names
+            if str(Path(name).parent) == prefix.rstrip('/') and
+            (name.endswith('.py') and not name.endswith('.test.py') or Path(name).name in FILES)}
+    current = {path.name: path.read_bytes() for path in SOURCE.iterdir()
+               if path.is_file() and (path.name in FILES or path.suffix == '.py' and not path.name.endswith('.test.py'))}
+    return loop if loop != current else None
+
+
+def install_merged(directory, loop, env, owner):
+    """Called by the owner after draining workers; never install a candidate checkout."""
+    required = {'driver.py', 'planner.py', 'progress.py', 'install.py', 'org.fitsy.loop-driver.plist'}
+    if not required <= loop.keys() or not (SOURCE / 'controls/dependency-roots.json').is_file():
+        raise ValueError('Merged loop source or installed controls missing; use the manual installer')
+    # Retain the previously reviewed controls and dependency grants, outside candidate roots.
+    frozen = {str(path.relative_to(SOURCE)): path.read_bytes() for path in (SOURCE / 'controls').rglob('*') if path.is_file()}
+    install(directory, apply=True, frozen={**frozen, **loop}, owner=owner)
+    launchagent(directory, loop['org.fitsy.loop-driver.plist'], env)
+    return True
+
+
+def install(directory, apply=False, *, frozen=None, owner=None):
     directory = Path(directory).resolve()
     if not (directory / 'driver.py').is_file() or not (directory / 'tasks').is_dir():
         raise ValueError('Select the existing loop directory, not a new dispatcher')
     state = directory / 'state.json'
     if state.exists() and not isinstance(json.loads(state.read_text()), dict):
         raise ValueError('Existing loop state is invalid')
-    frozen = sources()
+    frozen = sources() if frozen is None else frozen
     digest = hashlib.sha256(b''.join(name.encode() + data for name, data in sorted(frozen.items()))).hexdigest()
     result = {'status': 'planned', 'directory': str(directory), 'source': digest,
               'entrypoints': ['driver.py', 'planner.py', 'progress.py']}
     if not apply:
         return result
-    with (directory / 'driver.lock').open('a') as owner:
+    version = directory / 'source' / digest
+    receipt = {**result, 'status': 'installed', 'version': str(version)}
+    # Repeating the same installation is read-only, even while its owner runs.
+    if (version.is_dir() and (directory / 'source-receipt.json').is_file() and
+            json.loads((directory / 'source-receipt.json').read_text()) == receipt and
+            all((version / name).is_file() and (version / name).read_bytes() == data for name, data in frozen.items()) and
+            all((directory / (module + '.py')).is_file() and
+                (directory / (module + '.py')).read_text() == launcher(version, module, directory)
+                for module in ('driver', 'planner', 'progress'))):
+        return receipt
+    if owner is not None and not os.path.samestat(os.fstat(owner.fileno()), (directory / 'driver.lock').stat()):
+        raise ValueError('Self-install requires the existing driver owner lock')
+    with nullcontext(owner) if owner is not None else (directory / 'driver.lock').open('a') as held:
         try:
-            fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise ValueError('Existing loop owner is active; install at its next idle restart') from None
-        if running_legacy_owner(directory):
+        if owner is None and running_legacy_owner(directory):
             raise ValueError('Existing legacy loop owner is active or uncertain; retain its custody')
         versions = directory / 'source'; versions.mkdir(exist_ok=True)
-        version = versions / digest
         if not version.exists():
             stage = Path(tempfile.mkdtemp(prefix='.install-', dir=versions))
             try:
@@ -110,15 +176,17 @@ def install(directory, apply=False):
             raise ValueError('Installed source digest does not match its contents')
         for module in ('driver', 'planner', 'progress'):
             path = directory / (module + '.py')
+            entrypoint = launcher(version, module, directory).encode()
+            if path.exists() and path.read_bytes() == entrypoint:
+                continue
             if path.exists():
                 previous = path.read_bytes()
                 backup = directory / (path.name + '.' + hashlib.sha256(previous).hexdigest()[:16] + '.bak')
                 if not backup.exists(): backup.write_bytes(previous)
             temporary = path.with_suffix('.py.tmp')
-            temporary.write_text(launcher(version, module, directory))
+            temporary.write_bytes(entrypoint)
             os.replace(temporary, path)
         # Existing progress/evidence publishers and restart scripts still call the same paths.
-        receipt = {**result, 'status': 'installed', 'version': str(version)}
         (directory / 'source-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
         return receipt
 
@@ -129,6 +197,8 @@ if __name__ == '__main__':
     parser.add_argument('--apply', action='store_true')
     args = parser.parse_args()
     try:
-        print(json.dumps(install(args.directory, args.apply)))
+        receipt = install(args.directory, args.apply)
+        if args.apply: launchagent(args.directory, (SOURCE / 'org.fitsy.loop-driver.plist').read_bytes())
+        print(json.dumps(receipt))
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         parser.exit(1, str(error) + '\n')
