@@ -142,8 +142,11 @@ def isolated(wt, env, backend=None):
         policy.write_text(profile(wt, directory, selected))
         selected['TMPDIR'] = str(directory)
         # Maestro's JVM stores its per-user state here, away from host cloud auth.
+        # macOS Java ignores TMPDIR, so point java.io.tmpdir (native libs such as
+        # jansi unpack there) at the sandbox scratch directory too.
         (directory / 'java-home').mkdir()
-        selected['JAVA_TOOL_OPTIONS'] = '-Duser.home=' + str(directory / 'java-home')
+        selected['JAVA_TOOL_OPTIONS'] = ('-Duser.home=' + str(directory / 'java-home') +
+                                         ' -Djava.io.tmpdir=' + str(directory))
         yield [SANDBOX, '-f', str(policy)], selected
 
 

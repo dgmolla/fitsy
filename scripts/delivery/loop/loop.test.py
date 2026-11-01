@@ -904,6 +904,7 @@ print(json.dumps(result))
         # lane and prevents its receipt; the ordinary portable suite skips it.
         with host.isolated(self.wt, self.env) as (_, selected):
             temporary = Path(selected['TMPDIR'])
+            self.assertIn('-Djava.io.tmpdir=' + str(temporary), selected['JAVA_TOOL_OPTIONS'])
             result = subprocess.run(['/usr/bin/sandbox-exec', '-f', str(temporary / 'native.sb'),
                                      sys.executable, '-I', '-c', attempt, str(credential), str(dotenv), str(link),
                                      str(private_credential), *(str(path) for path in dependency_secrets)],
