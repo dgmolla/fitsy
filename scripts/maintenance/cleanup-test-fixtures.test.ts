@@ -1,16 +1,18 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import { chainItemMatches, checkpointMatches, cleanupReadTarget, parseOptions, restaurantMatches, tables } from './cleanup-test-fixtures';
 import { DEV_PROJECT_REF, PROD_PROJECT_REF } from '../lib/db-target-guard';
 import { compileChainProductBatch } from '../../apps/api/services/chainProductBatch';
+const load = createRequire(__filename);
+const april: typeof import('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json') = load('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json');
+const qualityInput: typeof import('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json') = load('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json');
 
 const counts = Object.fromEntries(tables.map(table => [table, 0]));
 const prod = `postgresql://readonly:synthetic@db.${PROD_PROJECT_REF}.supabase.co/postgres`;
 const dev = `postgresql://readonly:synthetic@db.${DEV_PROJECT_REF}.supabase.co/postgres`;
-const april: typeof import('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json') = require('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json');
-const qualityInput: typeof import('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json') = require('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json');
 
 test('defaults to dry run and requires a complete, exact count manifest for apply', () => {
   expect(parseOptions([]).apply).toBe(false);

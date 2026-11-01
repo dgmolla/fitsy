@@ -1,11 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import { assertDatabaseWriteAllowed, PROD_PROJECT_REF } from '../lib/db-target-guard';
 import { parseOptions, tables } from './cleanup-test-fixtures';
 
-const yaml = require('js-yaml') as { load(value: string): unknown };
+const yaml = createRequire(__filename)('js-yaml') as { load(value: string): unknown };
 type Step = { uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> };
 const root = resolve(__dirname, '../..');
 const workflow = yaml.load(readFileSync(join(root, '.github/workflows/prod-fixture-cleanup.yml'), 'utf8')) as {

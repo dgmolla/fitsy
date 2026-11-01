@@ -6,8 +6,10 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import stat
 import subprocess
+import tempfile
 import threading
 import host
 
@@ -76,6 +78,8 @@ def removable(entry, directory, env):
     markers = []
     for record in filter(None, output.split('\0')):
         code, name = record[:2], record[3:]
+        if code == '!!' and name.split('/', 1)[0] not in MARKERS:
+            continue
         marker = path / name
         if code not in ('??', '!!') or name not in MARKERS:
             raise RuntimeError(f'Retain worktree {path}: uncommitted work {record!r}')
@@ -84,6 +88,31 @@ def removable(entry, directory, env):
             raise RuntimeError(f'Retain worktree {path}: unsafe loop marker {name}')
         markers.append(marker)
     return markers
+
+
+def archive_evidence(path, directory, log):
+    """Copy evidence outside the checkout before Git removes ignored output."""
+    evidence = Path(path) / '.evidence'
+    try:
+        metadata = evidence.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise RuntimeError(f'Retain worktree {path}: evidence root must be an unlinked directory')
+    archive = Path(directory).resolve()
+    try:
+        for name in ('evidence', Path(path).name):
+            archive = archive / name
+            if archive.is_symlink():
+                raise OSError(f'Linked evidence archive directory: {archive}')
+            archive.mkdir(mode=0o700, exist_ok=True)
+        # Fresh private snapshots never overwrite earlier attempts or follow
+        # evidence links into host files; relative links within evidence survive.
+        archive = Path(tempfile.mkdtemp(prefix='cleanup-', dir=archive))
+        shutil.copytree(evidence, archive / '.evidence', symlinks=True)
+    except OSError as error:
+        raise RuntimeError(f'Retain worktree {path}: evidence archive failed at {archive}: {error}') from error
+    log('archived loop evidence', str(evidence), 'to', str(archive / '.evidence'))
 
 
 def cleanup(repo, directory, branch, env, log, keep=None):
@@ -100,7 +129,9 @@ def cleanup(repo, directory, branch, env, log, keep=None):
         path = entry['worktree']
         if entry not in registrations(repo, env):
             raise RuntimeError(f'Worktree registration changed before cleanup: {path}')
-        for marker in removable(entry, directory, env):
+        markers = removable(entry, directory, env)
+        archive_evidence(path, directory, log)
+        for marker in markers:
             marker.unlink()
         # No force: Git independently refuses new dirty changes or locks.
         run(['git', 'worktree', 'remove', path], repo, env)

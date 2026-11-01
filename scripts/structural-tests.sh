@@ -73,7 +73,28 @@ else
   echo "PASS"
 fi
 
-
+echo -n "4. Workspace package manifests are valid JSON... "
+if MANIFEST_ERRORS=$(node --input-type=commonjs - "$REPO_ROOT" "${SOURCE_DIRS[@]}" 2>&1 <<'NODE'
+const { existsSync, readFileSync } = require('node:fs');
+const { join, relative } = require('node:path');
+const [root, ...workspaces] = process.argv.slice(2);
+for (const directory of [root, ...workspaces]) {
+  const file = join(directory, 'package.json');
+  if (!existsSync(file)) continue;
+  try { JSON.parse(readFileSync(file, 'utf8')); }
+  catch {
+    console.error(`Invalid package manifest: ${relative(root, file)}`);
+    process.exitCode = 1;
+  }
+}
+NODE
+); then
+  echo "PASS"
+else
+  echo "FAIL"
+  printf '%s\n' "$MANIFEST_ERRORS" | sed 's/^/  /'
+  ERRORS=$((ERRORS + 1))
+fi
 
 # ─── Grandfather allowlist (shrink-only) ────────────────────────────────────
 # Checks 6/7/8 block NEW offenders; existing ones are grandfathered in

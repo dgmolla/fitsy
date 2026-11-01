@@ -71,6 +71,18 @@ test('the signed recovery target is awaited and scoped to its one maintenance ca
   expect(check('scripts/deploy/other.ts', source + guarded)).not.toEqual([]);
 });
 
+test('the interactive PROD audit target is scoped to its operator entrypoint and actual datasource', () => {
+  const source = prisma + "import { confirmedProdAuditUrl as confirmed } from './prod-audit-target';\n";
+  const client = "new Database({datasourceUrl: confirmed(process.env.URL, 'typed-project')});";
+  expect(check('scripts/maintenance/provision-prod-readonly-role.ts', source + client)).toEqual([]);
+  expect(check('scripts/maintenance/other.ts', source + client)).not.toEqual([]);
+  expect(check('scripts/maintenance/provision-prod-readonly-role.test.ts', source + client)).not.toEqual([]);
+  expect(check('scripts/maintenance/provision-prod-readonly-role.ts',
+    source.replace("'./prod-audit-target'", "'./fake'") + client)).not.toEqual([]);
+  expect(check('scripts/maintenance/provision-prod-readonly-role.ts', source +
+    "const validated = confirmed(process.env.URL, 'typed-project'); new Database({datasourceUrl: process.env.OTHER});")).not.toEqual([]);
+});
+
 test('implicit Prisma test clients require the actual disposable-DB Jest setup; explicit overrides need their own guard', () => {
   expect(check('scripts/new.test.ts', prisma + 'new Database();')).toEqual([]);
   expect(check('scripts/new.test.ts', prisma + 'new Database();', [['scripts/jest.config.js', 'module.exports = {};']])).not.toEqual([]);

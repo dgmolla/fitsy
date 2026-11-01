@@ -276,19 +276,41 @@ def retriage(files,s):
     main=sh('git rev-parse origin/main',cwd=ROOT+'/wt3',check=False)
     for f in files:
         name=Path(f).stem; st=s.get(name,{})
-        if not st.get('blocked') or st.get('done'): continue
+        if not st.get('cleanup_error') and (not st.get('blocked') or st.get('done')): continue
         meta,_=read_task(f)
         ev=st.get('blocked_evidence',{})
-        if not st.get('park_notice'):
-            block(name,st,s,st['blocked'],ev,meta,st.get('blocked_on','environment'))
-        notify_park(name,st,ev,meta)
+        if st.get('blocked') and not st.get('done'):
+            if not st.get('park_notice'):
+                block(name,st,s,st['blocked'],ev,meta,st.get('blocked_on','environment'))
+            notify_park(name,st,ev,meta)
+        if st.get('cleanup_error'):
+            if time.time()-st.get('cleanup_retried_at',0)<RETRIAGE_SECONDS: continue
+            wt=ROOT+'/loop/wt-'+name
+            st['cleanup_retried_at']=time.time()
+            try:
+                with LOCK, worktrees.lease(L,meta['branch']):
+                    removed=worktrees.cleanup(ROOT+'/wt3',L,meta['branch'],ENV,log)
+                    if Path(wt).exists() or Path(wt).is_symlink():
+                        raise RuntimeError(f'Retain worktree {wt}: cleanup did not remove the task checkout')
+                    st['checkout_removed']=True
+                    previous=st.pop('cleanup_error')
+                    record_attempt(st,'cleanup-retriage',outcome='recovered',previous_error=previous,removed=removed)
+                    log(name,'worktree cleanup recovered:',removed)
+            except (RuntimeError,OSError,subprocess.TimeoutExpired) as error:
+                detail=redact(str(error))
+                if detail!=st['cleanup_error']: log(name,'worktree cleanup pending:',detail)
+                st['cleanup_error']=detail
+                st['triaged_at']=st['cleanup_retried_at']
+                record_attempt(st,'cleanup-retriage',outcome='error',logs=detail)
+            save(s)
+            continue
         if main==st.get('triaged_main',st.get('parked_main')) and time.time()-st.get('triaged_at',0)<RETRIAGE_SECONDS: continue
         dependency=None; passed=False
         condition=st.get('blocked_on','')
         wt=ROOT+'/loop/wt-'+name
         if re.fullmatch(r'PR#\d+',condition):
             dependency=sh(f'gh pr view {condition[3:]} -R {REPO} --json state -q .state',check=False)
-        elif condition=='env:preparation' or (condition=='environment' and not Path(wt).is_dir()):
+        elif condition=='env:preparation' or (condition=='environment' and not st.get('checkout_removed') and not Path(wt).is_dir()):
             # Older preparation failures were parked as generic environment errors.
             st['blocked_on']='env:preparation'
             ev={**ev,'sim_state':'error','preparation_ready':False}
