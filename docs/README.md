@@ -49,6 +49,8 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 **`devops/`** — [production-deployment](engineering/devops/production-deployment.md) · [staging-environment](engineering/devops/staging-environment.md) · [monitoring-alerting](engineering/devops/monitoring-alerting.md) · [costs](engineering/devops/costs.md) · [ios-release-runbook](engineering/devops/ios-release-runbook.md)
 
+[Shipping lessons](engineering/devops/shipping-lessons.md) records simulator status diagnosis and durable recovery requirements.
+
 [Performance measurement and budgets](engineering/devops/performance.md) records the #563 baseline, stable checks, dev request sampling and native profiling protocol.
 
 **`archive/`** — historical ticket specs, spikes, and superseded specs.

@@ -315,6 +315,9 @@ The second catalog can otherwise hit XCTest `kAXErrorInvalidUIElement` while the
 Permanent hierarchy failures and an incorrect screen still fail, and billing actions and outcome assertions never run inside the startup retry.
 Its shared helper checks the configured reminder offer and purchase default, live prices and renewal copy, both plan selections, reminder availability with and without simulated opt-in, and the visual-only checkout guard.
 `mixed-trial-default.mjs` derives the expected default from each synthetic catalog and the host's local calendar before any plan is selected.
+The development visual paywall supplies synthetic opt-in by default and synthetic enabled state with `devReminderEnabled=1`, including anonymous launches.
+Those visual states never read an anonymous account's unavailable notification state as evidence of opt-in, and never request permission or schedule a notification.
+Release builds ignore both visual parameters and keep the real account's permission and reminder preferences.
 The simulator must use that same local timezone.
 Two calendar days can span 49 elapsed hours at the autumn clock change, making the annual two-day reminder schedulable and preserving the annual default.
 The helper records its clock and timezone offset, and deterministic tests cover ordinary dates, both clock changes, quiet hours and UTC against the real application projections.

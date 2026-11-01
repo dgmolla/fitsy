@@ -742,6 +742,8 @@ if (denied.some(value => !value)) process.exit(1);
     def test_failed_initial_fetch_recovers_preparation_before_worktree_exists(self):
         task, s = self.task_checkout(simrepair=3, fix_rounds=5, reruns=2, env_retries=2,
                                      attempts=[{'kind': 'code-repair', 'strategy': 'targeted'}])
+        self.git('branch', 'codex/issue-583')
+        self.git('push', '-q', 'origin', 'codex/issue-583')
         task.write_text('---\nbranch: codex/issue-583\ntitle: Shuffle\npr: 585\n---\nImplement shuffle\n')
         wt = self.root / 'loop' / ('wt-' + task.stem)
         wt.unlink()

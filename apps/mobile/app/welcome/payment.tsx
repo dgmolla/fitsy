@@ -264,7 +264,7 @@ export default function PaymentScreen() {
         annualSavingPercent={annualSavingPercent(shownOffering?.annual?.product, shownOffering?.monthly?.product)}
         discovery={discovery}
         variant={paywallVariant}
-        reminderAvailability={simulatedReminder ? 'enabled' : reminderAvailability}
+        reminderAvailability={visual ? (simulatedReminder ? 'enabled' : 'opt-in') : reminderAvailability}
         loading={loading}
         restoring={restoring}
         checkingPlans={checkingPlans}
