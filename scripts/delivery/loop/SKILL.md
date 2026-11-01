@@ -53,6 +53,16 @@ Legacy metadata followed by `---` remains supported.
 Put human ordering notes under `tasks/notes/`; both planner prompts and driver ordering consume them.
 Use `#583 BEFORE #547` or `order: #608 > #583 > #547` for deterministic ordering among eligible tasks.
 
+Branch preparation and terminal cleanup use the installed `worktrees.py` helper through `execute_task`.
+Hold its branch lease across preparation, execution and cleanup so the two lanes cannot reuse one branch concurrently.
+Discover the fetched origin branch and open same-repository PR even when task headers omit `existing` and `pr`; adopt the PR, preserve local commits and merge main without resetting any branch.
+An unavailable GitHub lookup stops preparation rather than establishing that a branch is new.
+Remove clean loop-owned holders of the branch or its legacy `loop/` alias before a successor starts and after merged, blocked or errored execution.
+Only the untracked regular root `.infra-blocked` marker is disposable; retain tracked changes, other untracked or ignored files, linked markers, unfinished Git operations, locked checkouts and active workers, and report the concrete path.
+Keep branch refs and external evidence; a removed parked checkout is recreated for current-head re-triage before main is merged for implementation.
+This explicit task-lifecycle cleanup is separate from historical resource cleanup and its four-hour cutoff.
+For missing dependencies in a restricted worker, use the [documented same-lock installation recovery](../../../docs/engineering/devops/performance.md#restricted-worker-recovery) without changing peer policy or the lockfile.
+
 Park with a concrete condition such as `PR#587`, `check:Simulator`, `env:api-config` or `env:preparation`.
 Re-triage every fifteen minutes or when main advances.
 Only changed evidence or a resolved dependency/check can requeue work, with three requeues per rolling day.
@@ -73,8 +83,9 @@ Linked or nonregular markers produce a fixed rejection diagnosis without reading
 Human or release approval boundaries remain unchanged.
 
 Run `python3 -B scripts/delivery/loop/loop.test.py` after any recovery-policy change.
+Run `python3 -B scripts/delivery/loop/worktrees.test.py` for the real Git branch and terminal-cleanup journeys.
 Install the reviewed source using `python3 scripts/delivery/loop/install.py --directory ~/fitsy-refactor/loop --apply` at an idle owner restart.
 The default command only plans the installation.
 The installer preserves state and evidence, backs up old entrypoints and refuses an active or uncertain owner.
 Verify `source-receipt.json` and replay the actual compatibility entrypoint before reporting adoption.
-The canonical verifier runs this behavior suite through `scripts/verify/test.sh`; focused selection uses the same Python test runner.
+The canonical verifier runs both behavior suites through `scripts/verify/test.sh`; focused selection uses the same Python test runner.

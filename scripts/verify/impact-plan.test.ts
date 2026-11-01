@@ -89,14 +89,18 @@ test('scripts-only actual runner executes its whole group without API or mobile'
   expect(fixture.calls()).not.toContain('mobile');
 });
 
-test('the whole scripts group runs loop recovery and propagates its failure', () => {
+test.each([
+  ['loop.test.py', 'loop-recovery'],
+  ['worktrees.test.py', 'loop-worktrees'],
+])('the whole scripts group runs %s and propagates its failure', (name, group) => {
   const fixture = wholeGroupFixture();
   write('scripts/delivery/loop/recovery.py', 'changed = True\n'); const head = commit();
+  const testPath = `scripts/delivery/loop/${name}`;
   const result = fixture.run({ CI: 'true', FITSY_DIFF_BASE: fixture.base, FITSY_DIFF_HEAD: head,
-    FAIL_PYTHON_TEST: 'scripts/delivery/loop/loop.test.py' });
+    FAIL_PYTHON_TEST: testPath });
   expect(result.status).not.toBe(0);
-  expect(readFileSync(join(directory, '.evidence/python-tests'), 'utf8')).toContain('scripts/delivery/loop/loop.test.py');
-  expect(result.stdout).toContain('loop-recovery');
+  expect(readFileSync(join(directory, '.evidence/python-tests'), 'utf8')).toContain(testPath);
+  expect(result.stdout).toContain(group);
 });
 
 test.each([
