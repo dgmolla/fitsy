@@ -13,10 +13,7 @@ import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { WidgetSync } from '@/components/WidgetSync';
 import { recordSession } from '@/lib/ratingPrompt';
 import { supabase } from '@/lib/supabase';
-import {
-  trackSessionRefreshed,
-  trackSessionRefreshFailed,
-} from '@/lib/analytics';
+import { useAuthAnalytics } from '@/lib/useAuthAnalytics';
 
 // Module scope so uncaught errors during the very first render are captured.
 installGlobalErrorReporting();
@@ -79,26 +76,7 @@ export default function RootLayout() {
     };
   }, []);
 
-  // ─── PostHog: session refresh lifecycle ─────────────────────────────────────
-  // TOKEN_REFRESHED → SDK successfully rotated the access token.
-  // SIGNED_OUT with a prior session → refresh failed (reuse detection or
-  // refresh token expired) and the SDK forced a sign-out. Both are useful
-  // signals for retention dashboards.
-  useEffect(() => {
-    let priorSessionUserId: string | null = null;
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'TOKEN_REFRESHED' && session) {
-        trackSessionRefreshed();
-        priorSessionUserId = session.user.id;
-      } else if (event === 'SIGNED_OUT' && priorSessionUserId) {
-        trackSessionRefreshFailed();
-        priorSessionUserId = null;
-      } else if (event === 'SIGNED_IN' && session) {
-        priorSessionUserId = session.user.id;
-      }
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
+  useAuthAnalytics();
 
   if (!fontsLoaded) return null;
 
