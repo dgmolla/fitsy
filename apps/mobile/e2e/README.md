@@ -137,6 +137,19 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=fu
 
 ## Native helper checks
 
+`floating-nav` captures all three tabs with variant A enabled and Search with the existing bar.
+It uses the `entitled-dev` fixture and the existing Debug Test Store binary, with `floatingNavDebug=1` / `0` selecting only the local walkthrough state.
+That selection persists across tab switches until the tab layout unmounts; release builds ignore the parameter and require the boolean PostHog `floating-nav` flag to be `true`.
+No remote flag changes are needed.
+The journey saves `floating-nav-on-search`, `floating-nav-on-saved`, `floating-nav-on-profile`, and `floating-nav-off-search` screenshots for the PR and checks the Profile footer above the capsule.
+Maestro text selectors also match VoiceOver labels and ignore case by default, so the icon-only checks use `(?-i)` to distinguish the required `Saved` / `Profile` accessibility labels from uppercase `SAVED` / `PROFILE` visual labels.
+The real-navigator replay checks both rendered text and accessibility labels with the same case behavior, so an unqualified negative text assertion reproduces the native failure locally.
+Full navigation scope automatically includes this saved flow through the existing flow catalog; use the required shared simulator lock for host execution.
+If the managed worker cannot open `~/fitsy-refactor/loop/sim.lock`, retain the denial and send this complete flow to the existing host simulator owner rather than using another lock or driver.
+Component navigation tests cover the same on/off selectors, all three tab destinations, live flag updates, safe-area clearance, haptics, and accessibility state; they do not substitute for simulator screenshots.
+The floating capsule sits above scene content with an explicit z-index; its blur background and icon decoration ignore touches so each tab owns its whole hit area.
+The capture replay uses responder grant/release events with both empty and populated Saved data, but it cannot model UIKit hit testing; the native Saved and Profile navigation assertions remain required.
+
 The `map-search` and `map-search-location-denied` journeys require an iOS Debug binary rebuilt with the Expo-compatible `react-native-maps` dependency.
 An OTA cannot add this native module to an older binary.
 Both flows use the existing `entitled-dev` fixture and real search/shuffle API with no purchases or remote flag changes.
