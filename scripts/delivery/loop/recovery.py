@@ -35,6 +35,7 @@ def classify_failure(evidence):
     if (status == 'error' or evidence.get('free_disk_gb', 100) < 5 or
             evidence.get('simulator_booted') is False or
             evidence.get('missing_env') or
+            re.search(r'^error: [^\n]*/pre-push died of signal [1-9]\d*[ \t]*$', logs, re.MULTILINE) or
             re.search(r'enospc|no space left|missing.*(?:env|upstash|redis)|'
                       r'(?:env|upstash|redis).*not (?:set|configured)|sandbox.*(?:denied|operation not permitted)|'
                       r'coresimulator.*(?:unavailable|refused)|no ready fitsy-api preview|'

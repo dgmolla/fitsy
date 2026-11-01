@@ -44,6 +44,8 @@ Every push entrypoint reselects native coverage for changed source, including ge
 Host Git operations, including commit and merge preparation, use the installed owner's private hook directory outside candidate writable roots.
 That hook runs both canonical pre-push verifier selections inside the same enforced isolation with allowlisted DEV configuration.
 Never execute the candidate hook or verifier with host credentials, skip either required selection, or fall back to unsandboxed verification.
+Route Git's `pre-push died of signal N` diagnostic to the existing host owner before dispatching candidate code repair.
+Retain the Git output and matching host crash report, diagnose the launcher, and replay the unchanged hook against the same source before publication.
 Only trusted scope `none` permits publication without native execution; a pending failed journey still requires a real replay.
 Keep validation bound to the current source after requeue, merges and hook repairs.
 The driver attaches failure screenshots or extracted video frames through Codex's image argument and includes failing commands, logs, diff and prior outcomes in the prompt.
