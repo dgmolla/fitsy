@@ -1,6 +1,6 @@
 # Database guardrails
 
-**TL;DR:** Script writes require validated targets; DEV has separate audit credentials and legacy landing writes are disabled.
+**TL;DR:** Script writes validate targets; credential provisioners activate migration-owned roles and keep audit credentials private.
 
 Audited on 2026-10-27 from the isolated `fitsy-guardrails` clone.
 PROD is `zaxkmjqozvmbifiwbxps`; DEV is `kegycybiruksmrzvniha`.
@@ -14,8 +14,12 @@ flowchart LR
     B --> C{Target}
     C -->|DEV or loopback| D[Script-specific plan and write guards]
     C -->|PROD| E[Explicit flag plus environment intent plus CI or pinned deploy]
+    C -->|Dedicated PROD audit provisioner| H[Shell-only admin URL plus --prod plus typed project ref]
     C -->|Unknown or ambiguous| F[Refuse before connection]
     E --> D
+    H --> I[Completed approved migration plus safe disabled role]
+    I --> J[Activate login then SELECT plus denied zero-row INSERT]
+    J --> K[Atomic private credential upsert]
     D --> G[Database permissions and RLS]
 ```
 
@@ -124,6 +128,7 @@ Auth mutations independently require the exact DEV Supabase API origin.
 | `phase0-populate-brands.ts`, `preload-chain-identity.ts`, `preload-chain-pilot.ts` | Explicit guarded direct URL; existing plan hashes, journals and chain write guards remain required |
 | `prisma/seed.ts`, `scripts/dev/reset.ts`, `snapshot.ts`, `preload-chain-quality-fixture.ts` | DEV-only destination; snapshot source remains session-read-only |
 | `provision-audit-role.ts`, `audit-readonly.ts` | Exact DEV project; the audit performs only metadata reads and optional zero-row denial probes |
+| `scripts/maintenance/provision-prod-readonly-role.ts` | Dedicated operator-only exception: exact PROD project, shell-only admin URL, `--prod`, interactive typed project ref before client construction; completed role migration and safe NOLOGIN role before activation |
 | `scripts/dev/provision-supabase.sh`, `vercel-build.sh` | Shared DEV-only guard before database migrations |
 | `scripts/deploy/migrate-prod.sh` | Shared guard plus existing exact production deploy identity/URL checks |
 | `scripts/verify/local-db-control.mjs` | Existing exclusive Docker ownership checks plus shared DEV-only preflight before reset/migration/seed |
@@ -202,7 +207,7 @@ Preparing code and tests does not establish owner approval, production applicati
 
 Once provisioned, the audit role has LOGIN, NOINHERIT, no role memberships added, no superuser/role-creation/database-creation/replication/RLS-bypass attributes, schema USAGE and table SELECT grants only.
 It has `default_transaction_read_only=on`, a 15-second statement timeout and a fixed search path.
-Role-specific SELECT policies preserve RLS while enabling DEV auditing; no anon/authenticated policies are added.
+Migration-owned role-specific SELECT policies preserve RLS while enabling auditing; no anon/authenticated policies are added.
 Default SELECT grants apply to future tables created by postgres, but future RLS tables still require a reviewed role-specific policy before their rows become visible.
 New-role privilege defaults are checked against `pg_roles`; no superuser-only ALTER of role attributes is attempted.
 See [PostgreSQL role creation](https://www.postgresql.org/docs/current/sql-createrole.html) and [read-only transaction defaults](https://www.postgresql.org/docs/current/runtime-config-client.html).
@@ -226,8 +231,58 @@ Use reviewed `chainWriteGuard` / `chainPilotPlan` application through `preload-c
 
 ## PROD changes awaiting Dawit
 
-No production audit role, credential change or role migration is included.
-Creating a production read-only role or rotating/replacing production database/service credentials needs Dawit OK and a separately reviewed PR left open until approval.
+The reviewed code adds an operator command; implementation and tests do not connect to production or activate a live credential.
+This PR remains open for Dawit and must not be merged or executed against PROD by the implementing agent.
+This command never applies migrations, creates roles, changes grants/policies, calls management APIs or rotates an active login.
+The existing deployment approval and general production-write guards remain unchanged.
 Live PROD RLS/role verification remains a follow-up once an authorized read-only credential exists.
 Do not use the Supabase CLI full-account keychain token to obtain that evidence.
 This Phase A change does not authorize preload execution or any paid provider call.
+
+### Provision PROD read-only access
+
+Only after Dawit approves and the existing deploy completes `20261028120000_pipeline_writer_roles`, run from the reviewed checkout in an interactive terminal.
+The command refuses an absent or incomplete migration and does not apply it.
+`PROD_DB_ADMIN_URL` is an operator-only input, never a required deployment environment variable.
+Use a trusted direct or Supavisor PostgreSQL admin URL for `zaxkmjqozvmbifiwbxps`, with the `postgres` database and credentials embedded in the URL.
+The provisioner accepts only `PROD_DB_ADMIN_URL` from that command's environment; application database variables and local env files are never used as fallbacks.
+The following one-line zsh command reads the URL without echo or shell-history exposure, exports it only inside a subshell, and clears inherited copies outside that subshell:
+
+```sh
+unset PROD_DB_ADMIN_URL; (set +x; trap 'unset PROD_DB_ADMIN_URL' EXIT; read -rs 'PROD_DB_ADMIN_URL?PROD admin URL (hidden): ' && printf '\n' && export PROD_DB_ADMIN_URL && npm run db:provision-prod-readonly -w scripts -- --prod)
+```
+
+At the second prompt, type exactly `zaxkmjqozvmbifiwbxps`.
+Both input and output must be terminals; piped confirmation, extra flags, missing `--prod`, a mismatched reference and ambiguous or unknown routes refuse before database client construction.
+The admin URL is consumed and removed from the provisioner's environment immediately, and neither it nor the generated password is printed or saved in the output file.
+TLS is required for both database connections.
+Supavisor transaction-pooler URLs on port `6543` enable `pgbouncer=true` for both connections, and an explicitly supplied `pgbouncer=true` is preserved in the saved credential, following [Supavisor's Prisma guidance](https://supabase.github.io/supavisor/orms/prisma/).
+
+The command uses `node:crypto` to generate a fresh 32-byte password and activates only the migrated `fitsy_audit_readonly` NOLOGIN role.
+It serializes concurrent activations, verifies the completed migration, and refuses missing roles, active logins, privileged attributes, memberships and database/schema/relation ownership before changing a password.
+The role migration owns its SELECT grants, `fitsy_audit_select` policies, defaults and future-table limitations.
+The retired standalone grant SQL is not restored, and DEV retains its three-role credential provisioner.
+
+After committing login activation, a separate Prisma client authenticates with the generated login, verifies its unprivileged identity and read-only default, and SELECTs from `public."MacroEstimate"` without displaying rows.
+A second transaction explicitly sets `READ WRITE`, attempts a zero-row INSERT into that table, and requires SQLSTATE `42501` (permission denied).
+The transaction rolls back on both the expected denial and an unexpectedly allowed write; the probe cannot insert data even if a grant regresses.
+A default-read-only error, connection failure, missing table, wrong role or successful INSERT does not pass verification.
+
+Only after those checks pass does the command atomically upsert `prod_db_readonly_url` into `~/Desktop/secrets.env`, creating the file if necessary and preserving other credential keys.
+The Desktop directory must already exist.
+The destination and private pending file use mode `0600`; symlink destinations, hard-linked files, files owned by another user, existing pending files and detected concurrent edits refuse safely.
+Duplicate assignments of the target key are consolidated into one entry.
+The admin URL is never persisted, and the final status reports verification outcomes and the key name only.
+
+Before database work, the generated URL is staged in `~/Desktop/secrets.env.prod-readonly-pending` with mode `0600`.
+Any failure after database execution starts retains that unverified file and leaves existing credential contents unchanged, because a lost connection can make transaction outcome uncertain.
+Do not blindly rerun, delete the recovery file or assume its password was applied.
+Dawit must privately reconcile the role's migration and login outcome, preserve any valid existing credential, and then either finish the verified upsert or remove the unused pending file before another activation attempt.
+The original file is also tightened to mode `0600` when read.
+
+Role creation and privilege changes have one supported path: the approved deployment migration.
+There is no standalone SQL Editor provisioning alternative.
+
+The focused tests mock only the external Prisma database boundary and exercise the real confirmation, migration/disabled-role gates, filesystem updates, URL construction, failure recovery and denial logic.
+An actual CLI subprocess also proves that piped confirmation is refused without printing its synthetic credential.
+No test connects to PROD.

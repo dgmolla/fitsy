@@ -3,13 +3,15 @@
  */
 import { Prisma, PrismaClient } from '@prisma/client';
 import { realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { chainPilot } from '../../apps/api/services/chainPilotData';
 import { compileChainProductBatch } from '../../apps/api/services/chainProductBatch';
 import { assertDatabaseWriteAllowed, databaseTarget, DEV_PROJECT_REF, PROD_PROJECT_REF } from '../lib/db-target-guard';
+const load = createRequire(__filename);
+const batch: typeof import('../../apps/api/services/chainCatalogs/waba-yoshinoya-2026-09.json') = load('../../apps/api/services/chainCatalogs/waba-yoshinoya-2026-09.json');
+const april: typeof import('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json') = load('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json');
+const qualityInput: typeof import('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json') = load('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json');
 
-const batch: typeof import('../../apps/api/services/chainCatalogs/waba-yoshinoya-2026-09.json') = require('../../apps/api/services/chainCatalogs/waba-yoshinoya-2026-09.json');
-const april: typeof import('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json') = require('../../apps/api/tests/fixtures/__snapshots__/chain-pilot-april.json');
-const qualityInput: typeof import('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json') = require('../../apps/api/services/chainCatalogs/chain-quality-2026-09-input.json');
 // chainDefaults uses the expansion brand identity and the same compiler, preserving each binding's chain.
 const expansionCatalog = [...batch.changes, ...compileChainProductBatch(qualityInput).changes];
 
