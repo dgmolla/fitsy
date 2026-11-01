@@ -39,6 +39,28 @@ def dev_environment(wt, env):
     return result
 
 
+def posix_escape(text):
+    """Escape for the sandbox's POSIX regex; re.escape emits \\- which it rejects."""
+    return re.sub(r'([.^$*+?()\[\]{}|\\])', r'\\\1', text)
+
+
+GITCONFIG_ALLOW = ('user.name', 'user.email', 'filter.lfs.clean', 'filter.lfs.smudge',
+                   'filter.lfs.process', 'filter.lfs.required')
+
+
+def scratch_gitconfig(directory, env):
+    """Write a global git config holding only allowlisted, non-secret keys."""
+    path = Path(directory) / 'gitconfig'
+    path.write_text('')
+    host = {k: v for k, v in env.items() if k in ('HOME', 'PATH')}
+    for key in GITCONFIG_ALLOW:
+        found = subprocess.run(['git', 'config', '--global', '--get', key], env=host,
+                               capture_output=True, text=True)
+        if found.returncode == 0 and '\n' not in found.stdout.strip():
+            subprocess.run(['git', 'config', '--file', str(path), key, found.stdout.strip()], check=True)
+    return path
+
+
 def profile(wt, directory, env):
     """Permit native tools and this DEV workspace, never host credential stores.
 
@@ -50,7 +72,11 @@ def profile(wt, directory, env):
     simulator = home / 'Library/Developer/CoreSimulator'
     claim = [home / '.fitsy-sim-claim.json', home / '.fitsy-sim-claim.lock']
     reads = [Path(p) for p in ('/System', '/Library/Developer', '/Library/Apple', '/Library/Java', '/usr', '/bin',
-                               '/sbin', '/opt/homebrew', '/Applications/Xcode.app', '/dev')]
+                               '/sbin', '/opt/homebrew', '/Applications/Xcode.app', '/dev',
+                               # xcrun refuses to run unless it can read the accepted license.
+                               '/Library/Preferences/com.apple.dt.Xcode.plist',
+                               # Public TLS config and CA roots for curl/openssl in fixture prep.
+                               '/private/etc/ssl')]
     reads += [wt, directory, CONTROLS.resolve(), simulator, *claim,
               home / '.maestro/bin', home / '.maestro/lib']
     for key in ('JAVA_HOME', 'DEVELOPER_DIR', 'MAESTRO_BIN'):
@@ -94,7 +120,11 @@ def profile(wt, directory, env):
     excluded = ' '.join(f'(require-not (subpath {literal(path)}))' for path in reads)
     # Atomic claim replacement stages only these names on HOME's filesystem.
     # Directory read access permits the parent's fsync, never its descendants.
-    staging = '(regex #' + json.dumps('^' + re.escape(str(claim[0]) + '.') + r'[a-z0-9_]+\.tmp$') + ')'
+    # #"..." is a raw regex literal: json.dumps would double every backslash.
+    pattern = '^' + posix_escape(str(claim[0]) + '.') + r'[a-z0-9_]+\.tmp$'
+    if '"' in pattern:
+        raise ValueError('Simulator claim path cannot contain a quote')
+    staging = '(regex #"' + pattern + '")'
     # dyld reads the root directory entry itself at process start on macOS 26;
     # denying it aborts every sandboxed process (pre-push died of signal 6).
     # A literal grant exposes only the root listing, never its descendants.
@@ -105,12 +135,14 @@ def profile(wt, directory, env):
     # Standard character devices only (Maestro's launcher redirects to /dev/null).
     write_excluded += ' ' + ' '.join(f'(require-not (literal {literal(device)}))' for device in DEVICES)
     write_excluded += ' (require-not (regex #"^/dev/fd/"))'
+    # The tracked .env.example is a secret-free template the app config reads.
     # deny rules take precedence over the broad workspace permission, including
     # symlink targets. Process environment inspection and Keychain IPC stay denied.
     return f'''(version 1)
 (allow default)
 (deny file-read-data (require-all {excluded}))
-(deny file-read-data (require-all (regex #"(^|/)\\.env($|\\.)") (require-not (literal {literal(public)}))))
+(deny file-read-data (require-all (regex #"(^|/)\\.env($|\\.)") (require-not (literal {literal(public)}))
+                                   (require-not (literal {literal(wt / ".env.example")}))))
 (deny file-write* (require-all {write_excluded}))
 (deny process-info*)
 (allow process-info* (target same-sandbox))
@@ -138,12 +170,19 @@ def isolated(wt, env, backend=None):
                               f'print({json.dumps(backend["deployment"])!r})\n')
             binary.chmod(0o700)
             selected['PATH'] = str(directory) + os.pathsep + selected.get('PATH', os.defpath)
+        # Never expose the host ~/.gitconfig (it may hold http.extraHeader
+        # credentials). Candidates get a scratch global config with allowlisted keys.
+        selected['GIT_CONFIG_GLOBAL'] = str(scratch_gitconfig(directory, env))
+        selected['GIT_CONFIG_NOSYSTEM'] = '1'
         policy = directory / 'native.sb'
         policy.write_text(profile(wt, directory, selected))
         selected['TMPDIR'] = str(directory)
         # Maestro's JVM stores its per-user state here, away from host cloud auth.
+        # macOS Java ignores TMPDIR, so point java.io.tmpdir (native libs such as
+        # jansi unpack there) at the sandbox scratch directory too.
         (directory / 'java-home').mkdir()
-        selected['JAVA_TOOL_OPTIONS'] = '-Duser.home=' + str(directory / 'java-home')
+        selected['JAVA_TOOL_OPTIONS'] = ('-Duser.home=' + str(directory / 'java-home') +
+                                         ' -Djava.io.tmpdir=' + str(directory))
         yield [SANDBOX, '-f', str(policy)], selected
 
 
