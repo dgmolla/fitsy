@@ -57,6 +57,29 @@ It leaves fixture state and runner scheduling intact; use a fresh host process t
 The installer regressions exercise the real host import in a fresh process, including preview login and unchanged history, and refuse busy runners, candidate source and modified snapshots.
 Worker sandbox restrictions on the host directory or shared lock require installation and replay by that owner; repository tests alone do not establish live adoption.
 
+## Simulator status reasons and retries
+
+The external Mac poller posts `Simulator`; `.github/workflows/sim-scope.yml` only posts the separate `Sim scope` classification.
+After reviewed integration, the existing host owner installs the maintained status lifecycle from a clean checkout matching fresh `origin/main` at an idle boundary:
+
+```sh
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node scripts/sim/install-poller-status.mjs ~/fitsy-refactor/sim-review
+```
+
+The installer patches the existing caller, saves its previous source and an additive installation receipt, and loads an immutable `poller-status.mjs` snapshot in the next host process.
+It refuses an active runner, dirty or unmerged source, modified snapshots and an unrecognized caller contract.
+It adds no scheduler and changes no account, secret, domain, backend safety check, required flow or assertion.
+Each attempt appends its exact head, outcome and redacted reason to `evidence/<head-prefix>/attempts.jsonl` before publication.
+Assertions publish `failure`; infrastructure problems publish `error`; both retain their cause while one automatic retry is queued.
+A blank error gets an explicit diagnostic description rather than an empty string.
+Every status requires GitHub's acknowledgment of its ID, state, context and description and logs a `simulator-status-posted` receipt.
+A failed status write remains pending in the existing state file and resumes publication before any further native work.
+Comment failure cannot prevent the final status from being posted or turn completed native work into another attempt.
+
+Run `node --test scripts/sim/poller-status.test.mjs scripts/sim/install-poller-status.test.mjs` for the status and installed-caller regressions.
+The existing scripts Jest suite also consumes them through `poller-status.test.ts`; no workflow, hook, registry or package-script change is needed.
+See [shipping lessons](../../docs/engineering/devops/shipping-lessons.md) for the incident diagnosis and recovery requirements.
+
 ## Optional Slack previews
 
 The local scripted gate accepts `--record-video` or `FITSY_SIM_RECORD_VIDEO=1` to add best-effort preview evidence around each selected Maestro invocation.
