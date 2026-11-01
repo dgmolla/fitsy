@@ -6,8 +6,15 @@ on:
     workflows: [Verify]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      approve_production_ota:
+        description: "Dawit approves this exact main revision for a production iOS OTA"
+        type: boolean
+        required: true
+        default: false
 
-run-name: 'Release Verify ${{ github.event.workflow_run.id }}'
+run-name: 'Release ${{ github.event_name }} ${{ github.event.workflow_run.id || github.sha }}'
 
 concurrency:
   group: deploy-production
@@ -77,20 +84,7 @@ jobs:
         env:
           RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cat > "$RUNNER_TEMP/production-incident.md" <<EOF
-          **TL;DR:** Production verification stopped; inspect the exact failed deployment before resuming.
-
-          Source: [$RELEASE_SHA]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$RELEASE_SHA).
-          [Deploy logs]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) identify the failed Vercel deployment, build/migration logs and observed fitsy.org serving source.
-          A healthy older source does not establish recovery.
-          For Prisma P3009, retain failed history and follow [the read-only migration audit and separately authorized recovery]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$RELEASE_SHA/docs/engineering/devops/routine-production.md).
-          Do not automatically resolve or retry failed migrations.
-          The manual production-migration-recovery.yml workflow defaults to audit and retains production-release approval for the exact #643 recovery.
-          If rollback is needed, use the retained verified deployment URL with scripts/deploy/rollback.sh api.
-          EOF
-          gh issue create --label incident --title "incident: prod release failed at ${RELEASE_SHA:0:7}" \
-            --body-file "$RUNNER_TEMP/production-incident.md"
+        run: python3 scripts/deploy/production-incident.py
 
   ota:
     # Trusted main release jobs coordinate with local rollback through a Git ref.
@@ -117,12 +111,16 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [ -n "$EXPO_TOKEN" ]; then echo "has=true" >> "$GITHUB_OUTPUT"; else echo "has=false" >> "$GITHUB_OUTPUT"; fi
-      - name: Compare native inputs to the verified production iOS binary
+      - name: Install release dependencies without release credentials
+        run: |
+          npm ci
+          npx --yes eas-cli@18 --version
+      - name: Compare Expo fingerprint to the verified channel iOS binary
         id: nativecheck
         run: |
           if ! node scripts/deploy/native-compatibility.mjs; then
             echo "unsafe=true" >> "$GITHUB_OUTPUT"
-            echo "reason=native inputs differ from the verified iOS binary or its baseline is unavailable; ship and verify a binary before any OTA" >> "$GITHUB_OUTPUT"
+            echo "reason=This iOS app needs a new verified build, or its native fingerprint is missing. JavaScript updates cannot add native features. See the compatibility check above for the exact cause" >> "$GITHUB_OUTPUT"
           else
             echo "unsafe=false" >> "$GITHUB_OUTPUT"
           fi
@@ -138,14 +136,9 @@ jobs:
           else
             gh issue create --label release \
               --title "release: OTA blocked at ${RELEASE_SHA:0:7}" \
-              --body "OTA skipped: ${REASON}. Do NOT eas update until resolved." || true
+              --body "**TL;DR:** OTA is blocked; a new verified iOS build or its fingerprint is needed. ${REASON}. Follow docs/engineering/devops/ios-ota-baseline.md before resuming." || true
           fi
           echo "OTA unsafe: ${REASON}"
-      - name: Install release dependencies without release credentials
-        if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'true'
-        run: |
-          npm ci
-          npx --yes eas-cli@18 --version
       - name: Publish OTA
         if: steps.nativecheck.outputs.unsafe != 'true' && steps.tok.outputs.has == 'true'
         env:
@@ -175,3 +168,53 @@ jobs:
           gh issue create --label incident \
             --title "incident: OTA publish failed at ${RELEASE_SHA:0:7}" \
             --body "The OTA job failed for $RELEASE_SHA (see Deploy workflow logs). A partial publish is possible; verify with eas update:list, and if a broken group is live (\`scripts/deploy/rollback.sh mobile\`). Closing PR must add fix + detector + constraint." || true
+
+  production-ota:
+    # Automatic OTA targets TestFlight. App Store production updates retain
+    # their separate binary baseline and use only this approved route.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'dgmolla' && inputs.approve_production_ota
+    environment: production-native
+    permissions:
+      contents: write
+      issues: write
+      actions: read
+      deployments: read
+      statuses: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install release dependencies without release credentials
+        run: |
+          npm ci
+          npx --yes eas-cli@18 --version
+      - name: Require approved current main and successful Verify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/deploy/manual-ota-release.py
+      - name: Observe the exact successful Vercel deployment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/deploy/routine-release.py observe "$GITHUB_SHA" > "$RUNNER_TEMP/vercel-deployment.json"
+      - name: Prod-safe API smoke
+        env:
+          PROD_SMOKE_EMAIL: ${{ secrets.PROD_SMOKE_EMAIL }}
+          PROD_SMOKE_PASSWORD: ${{ secrets.PROD_SMOKE_PASSWORD }}
+        run: bash scripts/verify/api-e2e.sh --base=https://fitsy.org --prod-safe
+      - name: Verify serving identity after smoke
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/deploy/routine-release.py health "$GITHUB_SHA" "$RUNNER_TEMP/vercel-deployment.json"
+      - name: Publish approved production OTA
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash scripts/deploy/ota.sh --manual-production "$(git log -1 --format='%h: %s')"

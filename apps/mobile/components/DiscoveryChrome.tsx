@@ -107,12 +107,14 @@ export function SearchBar({
   onClear,
   containerRef,
   action,
+  placeholder = 'Search restaurants or dishes',
 }: {
   value: string;
   onChangeText: (text: string) => void;
   onClear: () => void;
   containerRef?: React.RefObject<View | null>;
   action?: React.ReactNode;
+  placeholder?: string;
 }) {
   return (
     <View ref={containerRef} collapsable={false} style={s.search} testID="discovery-search-bar">
@@ -121,7 +123,7 @@ export function SearchBar({
         style={s.searchInput}
         value={value}
         onChangeText={onChangeText}
-        placeholder="Search restaurants or dishes"
+        placeholder={placeholder}
         placeholderTextColor={EDITORIAL.textSoft}
         returnKeyType="search"
         maxLength={100}

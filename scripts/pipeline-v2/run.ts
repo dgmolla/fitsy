@@ -107,14 +107,13 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
     if (!restaurants.length) throw new Error('Selected hex has no discovered UE restaurants');
     coverage.restaurants = restaurants.length;
     const results: HexRestaurantData[] = [];
+    const pdfBrands = new Set<string>();
     for (const restaurant of restaurants) {
       journal.signal?.throwIfAborted();
       const brandId = catalog.identity(restaurant), hasPublished = brandId !== undefined && catalog.published.has(brandId);
       if (hasPublished) coverage.chainsWithPublishedData++;
       else if (brandId) {
         coverage.chainsWithoutPublishedData++;
-        await new PdfJobQueue(prisma).enqueue(brandId);
-        await journal.enqueuePdf(catalog.brands.find(b => b.id === brandId)!);
       }
       else coverage.independentRestaurants++;
       const savedMenu = journal.events.find(e => e.event === 'ue_menu' && e.restaurantId === restaurant.id && e.storeUuid === restaurant.storeUuid);
@@ -155,6 +154,10 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
       rejections.push(...validated.rejected.map(item => ({ restaurantId: restaurant.id, ...item })));
       if (!validated.valid.length) throw new Error('Menu has no valid sourced food; leave the hex pending');
       results.push({ restaurantId: restaurant.id, ...(brandId ? { brandId } : {}), items: validated.valid, menuHash: computeMenuHash(menu.items) });
+      if (brandId && !hasPublished) {
+        pdfBrands.add(brandId);
+        await journal.enqueuePdf(catalog.brands.find(b => b.id === brandId)!);
+      }
     }
     if (!results.length) throw new Error('No sourced menus; leave the hex pending');
     coverage.persistedItems = results.reduce((sum, r) => sum + r.items.length, 0);
@@ -162,7 +165,13 @@ export async function runV2Hex(prisma: PrismaClient, options: V2Options, journal
     const prepared = { ...report('prepared'), catalog: { brands: catalog.brands.length, publishedBrands: catalog.published.size, reviewedBrands: catalog.reviewedBrands } };
     await journal.append({ event: 'prepared', at: new Date().toISOString(), report: prepared });
     await persistence.beforePersist?.();
-    await persistHex(options.runId, options.hexId, results, prisma, { ...persistence, validateInTx: validateHexInTx });
+    await persistHex(options.runId, options.hexId, results, prisma, { ...persistence, validateInTx: validateHexInTx,
+      checkpointInTx: async tx => {
+        // Research workers must see the corroborating menu and job together, including on rollback.
+        const queue = new PdfJobQueue(tx);
+        for (const brandId of [...pdfBrands].sort()) await queue.enqueue(brandId);
+        await persistence.checkpointInTx?.(tx);
+      } });
     const complete = { ...prepared, ...report('completed') };
     await journal.append({ event: 'completed', at: new Date().toISOString(), report: complete });
     return complete;

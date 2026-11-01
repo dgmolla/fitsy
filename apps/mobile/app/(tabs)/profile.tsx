@@ -1,7 +1,6 @@
 import React, { type ComponentProps, useCallback, useRef, useState } from 'react';
 import {
   Alert,
-  Platform,
   Pressable,
   ActivityIndicator,
   ScrollView,
@@ -19,7 +18,7 @@ import { decodeEmailFromToken } from '@/lib/jwtUtils';
 import type { MacroValues } from '@/lib/macroPresets';
 import { getMacroTargets, getQuarantinedLegacyTarget, restoreQuarantinedLegacyTarget,
   saveMacroTargets, type MacroTargetMode } from '@/lib/macroStorage';
-import { getOnboardingData, getLegacyOnboardingData, restoreLegacyOnboardingData, retireLegacyOnboardingData,
+import { getOnboardingData,
   type OnboardingData, type ActivityLevel, type Goal } from '@/lib/onboardingStorage';
 import { calculateAge } from '@fitsy/shared/utils/dateUtils';
 import { syncSavedProfileToServer, queueSavedProfileToServer, deliverQueuedProfile } from '@/lib/profileSync';
@@ -27,7 +26,7 @@ import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
 import { MACRO_COLORS } from '@/lib/macroColors';
-import { updateProfileFieldAndTargets, refreshAutomaticProfileTargets } from '@/lib/profileTargetUpdate';
+import { updateProfileFieldAndTargets } from '@/lib/profileTargetUpdate';
 import { openLegalLink } from '@/lib/legalLinks';
 import {
   trackMacroTargetsEdited,
@@ -76,7 +75,6 @@ export default function ProfileScreen() {
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
   const [legacyTargetMode, setLegacyTargetMode] = useState<MacroTargetMode | null>(null);
-  const [hasLegacyProfile, setHasLegacyProfile] = useState(false);
   const [filterVisible, setFilterVisible] = useState(false);
   const [profile, setProfile] = useState<OnboardingData>({});
   const [editField, setEditField] = useState<EditField>(null);
@@ -94,7 +92,6 @@ export default function ProfileScreen() {
           if (token) setEmail(decodeEmailFromToken(token));
           if (stored) setMacroTargets(stored as unknown as MacroValues);
           setLegacyTargetMode((await getQuarantinedLegacyTarget())?.mode ?? null);
-          setHasLegacyProfile(Boolean(await getLegacyOnboardingData()));
           setProfile(onboarding);
           const snapshot = JSON.stringify(onboarding);
           if (prevProfile.current && prevProfile.current !== snapshot) {
@@ -181,24 +178,6 @@ export default function ProfileScreen() {
               setMacroTargets(snapshot.targets);
             }
           }).catch(() => Alert.alert("Save failed", "Please try restoring again."));
-        } },
-      ]);
-  }
-
-  function offerLegacyProfileRestore() {
-    Alert.alert('Restore older profile facts?',
-      'This device has older measurements and goals without an account label. Restore them to this account, replacing its current facts?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Restore', onPress: () => {
-          void restoreLegacyOnboardingData().then(async restored => {
-            const updated = await refreshAutomaticProfileTargets(restored.owner);
-            await queueSavedProfileToServer();
-            await retireLegacyOnboardingData(restored.owner);
-            deliverQueuedProfile();
-            setProfile(updated.profile);
-            if (updated.targets) setMacroTargets(updated.targets);
-            setHasLegacyProfile(false);
-          }).catch(() => Alert.alert('Restore failed', 'Your older facts are still available. Please try again.'));
         } },
       ]);
   }
@@ -366,14 +345,6 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
           </Pressable>
         )}
-        {hasLegacyProfile && (
-          <Pressable testID="profile-restore-older-facts" style={s.feedbackBanner}
-            accessibilityRole="button" onPress={offerLegacyProfileRestore}>
-            <Text style={s.feedbackValue}>Restore older profile facts</Text>
-            <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
-          </Pressable>
-        )}
-
         {/* Feedback */}
         <Pressable testID="profile-feedback" style={s.feedbackBanner} onPress={() => router.push('/feedback-board')}>
           <View style={s.goalIconCircle}>
@@ -386,17 +357,7 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
         </Pressable>
 
-        {/* Reminders */}
-        <Pressable style={s.feedbackBanner} onPress={() => router.push('/notification-settings')} accessibilityRole="button" testID="profile-reminders">
-          <Text style={s.feedbackValue}>Notifications</Text>
-          <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
-        </Pressable>
         {/* Logout */}
-        {Platform.OS === 'ios' && <Pressable style={s.feedbackBanner} onPress={() => router.push('/widget')}
-          accessibilityRole="button" testID="profile-widget">
-          <Text style={s.feedbackValue}>Home Screen widget</Text>
-          <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
-        </Pressable>}
         <Pressable testID="profile-logout" style={s.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={16} color="#B85450" />
           <Text style={s.logoutText}>Log out</Text>

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { assertTestDatabase } from '../../../../scripts/lib/test-database-guard';
+import { requiredRuntimeMigration } from '../../../../scripts/deploy/runtime-migrations-preflight';
 
 const suite = process.env['POSTGRES_PRISMA_URL'] ? describe : describe.skip;
 const root = resolve(__dirname, '../../../..');
@@ -11,11 +12,49 @@ const audit = readFileSync(resolve(root, 'scripts/deploy/migration-failure-audit
 const migrationName = '20261028130000_hex_jobs';
 const checksum = createHash('sha256')
   .update(readFileSync(resolve(root, `prisma/migrations/${migrationName}/migration.sql`))).digest('hex');
+const runtimeMigration = requiredRuntimeMigration;
+const runtimeChecksum = createHash('sha256')
+  .update(readFileSync(resolve(root, `prisma/migrations/${runtimeMigration}/migration.sql`))).digest('hex');
 
 suite('failed-migration recovery evidence (disposable PostgreSQL only)', () => {
   const url = process.env['POSTGRES_PRISMA_URL'];
   const admin = url ? new PrismaClient({ datasourceUrl: assertTestDatabase(url) }) : new PrismaClient();
   afterAll(() => admin.$disconnect());
+
+  test('audit exposes the runtime prerequisite that still blocks release after hex-jobs recovery', async () => {
+    const rollback = new Error('rollback runtime-schema audit fixture');
+    await expect(admin.$transaction(async tx => {
+      const report = async () => {
+        const [row] = await tx.$queryRawUnsafe<{ migration_failure_audit: {
+          runtime_schema: {
+            migration_name: string; relation_present: boolean;
+            migration_history: { id: string; checksum: string; finished_at: string | null;
+              rolled_back_at: string | null }[];
+          };
+        } }[]>(audit);
+        return row!.migration_failure_audit.runtime_schema;
+      };
+      const applied = await report();
+      expect(applied).toEqual({ migration_name: runtimeMigration, relation_present: true,
+        migration_history: [{ id: expect.any(String), checksum: runtimeChecksum,
+          finished_at: expect.any(String), rolled_back_at: null }] });
+
+      await tx.$executeRaw`DELETE FROM public._prisma_migrations WHERE migration_name = ${runtimeMigration}`;
+      await tx.$executeRawUnsafe('DROP TABLE public."WidgetToken"');
+      expect(await report()).toEqual({ migration_name: runtimeMigration, relation_present: false, migration_history: [] });
+
+      const id = randomUUID();
+      await tx.$executeRaw`INSERT INTO public._prisma_migrations
+        (id, checksum, migration_name, started_at, applied_steps_count)
+        VALUES (${id}, ${runtimeChecksum}, ${runtimeMigration}, CURRENT_TIMESTAMP, 0)`;
+      const history = () => tx.$queryRaw`SELECT * FROM public._prisma_migrations ORDER BY id`;
+      const before = await history();
+      expect(await report()).toEqual({ migration_name: runtimeMigration, relation_present: false,
+        migration_history: [{ id, checksum: runtimeChecksum, finished_at: null, rolled_back_at: null }] });
+      expect(await history()).toEqual(before);
+      throw rollback;
+    }, { timeout: 15_000 })).rejects.toBe(rollback);
+  });
 
   test('reports unresolved attempts and partial objects without changing history or disclosing driver logs', async () => {
     const rollback = new Error('rollback isolated migration audit fixture');

@@ -134,6 +134,8 @@ No live LLM call, provider bill or fresh-menu cache hit ratio was measured in th
 ## Restricted-worker recovery
 
 If dependencies are absent and npm networking is denied, copy the existing npm cache to checkout-owned evidence and run `npm ci --offline --ignore-scripts` with that private cache.
+If offline resolution reports uncached registry metadata, retain the failure without changing peer policy or the lockfile.
+A verified existing installation with the identical lockfile can supply a task-owned copy of root and workspace-local `node_modules`; preserve relative workspace links and validate it through current-source Prisma generation and canonical checks.
 Then generate the current Prisma client before tests; if Prisma cannot touch the shared cache, copy it into checkout-owned cache storage and set the supported `XDG_CACHE_HOME` for generation/checks.
 Preserve failed logs and the successful recovery logs separately.
 When GitHub CLI networking is denied, authenticated browser access can recover issue reading and the explicitly requested issue report.

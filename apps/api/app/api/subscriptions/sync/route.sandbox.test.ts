@@ -28,9 +28,11 @@ let expires: string;
 let sandbox: boolean;
 let revenueCatStatus: number;
 let info: jest.SpyInstance;
+let warn: jest.SpyInstance;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.useFakeTimers({ now: new Date('2026-10-30T12:00:00Z') });
   process.env = {
     ...env,
     VERCEL_ENV: 'production',
@@ -70,12 +72,13 @@ beforeEach(() => {
     }, { status: revenueCatStatus });
   }) as typeof fetch;
   info = jest.spyOn(console, 'info').mockImplementation(() => {});
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
+  warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 });
 
 afterEach(() => {
   process.env = env;
   global.fetch = realFetch;
+  jest.useRealTimers();
   jest.restoreAllMocks();
 });
 
@@ -99,14 +102,40 @@ it.each(['purchase', 'restore', 'sign_in'])('confirms a production sandbox %s th
   expect(info).toHaveBeenCalledWith(JSON.stringify({ event: 'revenuecat.sandbox_entitlement_accepted', userId: 'subscriber-uuid' }));
 });
 
-it('does not confirm an expired production sandbox purchase or write new proof', async () => {
+it.each([
+  { reason: 'sign_in', storedStatus: 'active' },
+  { reason: 'mismatch', storedStatus: 'active' },
+  { reason: 'restore_history', storedStatus: 'active' },
+  { reason: 'sign_in', storedStatus: null },
+])('returns expired after a production sandbox $reason sync from $storedStatus', async ({ reason, storedStatus }) => {
   expires = new Date(Date.now() - 60_000).toISOString();
-  const response = await POST(request());
+  row = storedStatus ? {
+    status: storedStatus, expiresAt: new Date(expires), lastEventAt: new Date(Date.now() - 120_000),
+  } : null;
+  const response = await POST(request(reason));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    active: false, verdict: 'expired', synced: true, stale: false, expiresAt: expires,
+    lastRcVerifiedAt: new Date().toISOString(),
+  });
+  expect(global.fetch).toHaveBeenCalledWith(revenueCatUrl, expect.objectContaining({
+    headers: { authorization: 'Bearer appl_fixture', 'x-platform': 'ios' },
+  }));
+  expect(row).toMatchObject({ status: 'expired', expiresAt: new Date(expires), lastEventAt: new Date() });
+  expect(info).toHaveBeenCalledWith(JSON.stringify({ event: 'revenuecat.sandbox_entitlement_expired', userId: 'subscriber-uuid' }));
+  expect(info).not.toHaveBeenCalledWith(JSON.stringify({ event: 'revenuecat.sandbox_entitlement_accepted', userId: 'subscriber-uuid' }));
+});
+
+it('keeps a new sandbox purchase unconfirmed while the server still reports expired', async () => {
+  expires = new Date(Date.now() - 60_000).toISOString();
+  const pending = POST(request());
+  await jest.runAllTimersAsync();
+  const response = await pending;
   expect(response.status).toBe(200);
   expect(await response.json()).toMatchObject({ active: false, verdict: 'unknown', synced: false });
   expect(row).toBeNull();
   expect(mockCreate).not.toHaveBeenCalled();
-  expect(info).not.toHaveBeenCalled();
+  expect(info).not.toHaveBeenCalledWith(JSON.stringify({ event: 'revenuecat.sandbox_entitlement_accepted', userId: 'subscriber-uuid' }));
 });
 
 it('accepts a production store purchase without a sandbox acceptance log', async () => {
@@ -117,11 +146,39 @@ it('accepts a production store purchase without a sandbox acceptance log', async
   expect(info).toHaveBeenCalledWith('[subscription] status none -> active (sync)');
 });
 
-it('keeps the purchase unconfirmed when the RevenueCat server re-check fails', async () => {
-  revenueCatStatus = 503;
-  expect(await (await POST(request())).json()).toMatchObject({ active: false, verdict: 'unknown', synced: false });
+it('rechecks a restored sandbox entitlement and its real expiry in production mode', async () => {
+  process.env = { ...process.env, NODE_ENV: 'production' };
+  expect(await (await POST(request('restore_history'))).json()).toMatchObject({
+    active: true, verdict: 'active', synced: true, stale: false,
+  });
+  expect(row).toMatchObject({ status: 'active' });
+  jest.setSystemTime(Date.now() + 2 * 86_400_000);
+  expect(await (await POST(request('restore_history'))).json()).toMatchObject({
+    active: false, verdict: 'expired', synced: true, stale: false,
+    lastRcVerifiedAt: new Date().toISOString(),
+  });
+  expect(row).toMatchObject({ status: 'expired', expiresAt: new Date(expires) });
+  expect(global.fetch).toHaveBeenCalledWith(revenueCatUrl, expect.objectContaining({
+    headers: { authorization: 'Bearer appl_fixture', 'x-platform': 'ios' },
+  }));
+});
+
+it.each(['unavailable', 'test_store'])('retains unknown for a lapsed row when RevenueCat is %s', async failure => {
+  const previous = {
+    status: 'active', expiresAt: new Date(Date.now() - 60_000), lastEventAt: new Date(Date.now() - 120_000),
+  };
+  row = previous;
+  if (failure === 'test_store') process.env['REVENUECAT_PUBLIC_API_KEY'] = 'test_fixture';
+  else revenueCatStatus = 503;
+  expect(await (await POST(request('sign_in'))).json()).toMatchObject({ active: false, verdict: 'unknown', synced: false, stale: true });
+  expect(row).toBe(previous);
   expect(mockCreate).not.toHaveBeenCalled();
+  expect(mockUpdateMany).not.toHaveBeenCalled();
   expect(info).not.toHaveBeenCalled();
+  if (failure === 'test_store') {
+    expect(global.fetch).not.toHaveBeenCalledWith(revenueCatUrl, expect.anything());
+    expect(warn).toHaveBeenCalledWith(JSON.stringify({ event: 'revenuecat.test_store_lookup_unknown', userId: 'subscriber-uuid' }));
+  }
 });
 
 it('requires authentication before consulting RevenueCat', async () => {

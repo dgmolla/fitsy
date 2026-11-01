@@ -4,7 +4,7 @@
 
 This command enriches one explicitly selected resolution-7 LA hex already discovered by the UE-first pipeline.
 It does not change the ordinary preload command or deploy either application.
-No migration, DB write-lock rollout, PDF worker, shared job queue or App Store action is part of this proof.
+Runtime deployment and DB role activation follow their separate acceptance contracts.
 The separate [shared hex queue](pipeline-v2-queue.md) uses this hex implementation with database-backed replay and leased workers.
 Both entrypoints reserve Jev calls against the [fleet daily budgets](pipeline-v2-budgets.md) in addition to the per-hex cap.
 Both entrypoints use its shared PostgreSQL UE limiter, rate configuration and global 403/429 backoff.
@@ -18,12 +18,11 @@ flowchart TD
   Brand -->|yes| Exact[Existing exact reviewed serving matcher]
   Exact -->|unique approved binding| Official[Official macros and catalog proof]
   Exact -->|unmatched or ambiguous| Jev[Jev v3 estimate with LOW confidence]
-  Brand -->|chain without data| Outbox[Durable PDF-search outbox, once per brand]
-  Outbox --> Jev
+  Brand -->|chain without data| Jev
   Brand -->|independent| Jev
   Official --> Validate[Food validation and complete source coverage]
   Jev --> Validate
-  Validate --> Tx[Existing atomic menu persistence and checkpoint]
+  Validate --> Tx[Atomic menus, missing-brand PDF jobs and checkpoint]
   Tx --> Report
   Jev -->|failure or spend cap| Pending[Keep hex pending; retain usage and responses]
 ```
@@ -92,10 +91,12 @@ A changed serving, revoked approval, ambiguous binding, changed restaurant ident
 Both paths recompute winning macros after estimate upsert.
 The real-database regression exercises both writers, stable menu IDs, retained official estimate IDs/proof, Jev source rows and official winning macros.
 
-Chains without published nutrition enqueue `pdf_search_enqueued` records in `journal.jsonl`, deduplicated by brand with a stable job ID.
-This is the POC's durable local outbox for the future #595 worker, not an installed shared worker pool.
-No PDF request is performed or charged in this command.
-Keep the outbox with its run identity when adopting those requests into the worker queue.
+Chains without published nutrition retain `pdf_search_enqueued` intent records in `journal.jsonl`, deduplicated by brand with a stable job ID.
+Their shared PDF jobs commit atomically with successfully sourced menus and the hex checkpoint.
+The separate [background PDF worker](pipeline-v2-queue.md#background-chain-nutrition) can then claim one job per brand across runs and locations.
+Failed sourcing, rejected menus and rolled-back checkpoints publish no new research work.
+No PDF request is performed or charged in the hex command.
+Keep the journal with its run identity for recovery and accounting; an intent record alone does not establish a committed job.
 
 ## Evidence and acceptance
 

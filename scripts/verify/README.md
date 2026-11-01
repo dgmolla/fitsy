@@ -44,7 +44,7 @@ A check without a registry entry, or an entry without a script, is itself a fail
 | `build.sh` | 3 | offline production API compilation, no stray compiled output; actual store bindings are checked by the guarded Vercel build preflight |
 | `mobile-bundle.sh` | 3 | production iOS minified JS and gzip budgets; offline local export only |
 | `dev-drift.sh` | 3 | the dev environment has every migration on `main` and holds seed data |
-| `api-e2e.sh` | 6 | a deployed API serves health + data-route 401s + authenticated entitlement locks (read-only by default; `--write` adds registration only on the exact dev origin or loopback HTTP) |
+| `api-e2e.sh` | 6 | a deployed API serves health + missing/invalid-session 401s + authenticated entitlement locks; healthy-DB/invalid-session 503 failures direct shared-store readiness inspection (read-only by default; `--write` adds registration only on the exact dev origin or loopback HTTP) |
 
 Callers: `.githooks/pre-push` (size/domain checks plus cheap layers 0-1, changed scope), `npm run verify` (0-2), `npm run verify:all`, and `.github/workflows/verify.yml` (one thin job per layer).
 
@@ -104,6 +104,16 @@ Replay the audit capture regressions with:
 ```sh
 npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/dependency-audit.test.ts
 ```
+
+## OTA vs native build
+
+For mobile release verification, use `node scripts/deploy/native-compatibility.mjs` after installing the frozen lockfile.
+It compares Expo's iOS native fingerprint with a verified binary receipt, then repeats with the production environment before OTA export.
+JS, styles and bundle-only assets use OTA when the fingerprint and runtime match.
+Native modules, permissions, plugins, icon/splash, Expo SDK and widget/Swift changes require a new binary.
+Missing binary fingerprints, incomplete collection, changed native configuration and incompatible runtimes block publication.
+Follow [the OTA baseline runbook](../../docs/engineering/devops/ios-ota-baseline.md) for build evidence, the TestFlight channel cutover and Dawit's manual App Store production approval.
+These release checks do not change the affected Maestro journey requirements below.
 
 ## Simulator coverage
 

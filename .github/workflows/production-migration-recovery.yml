@@ -36,6 +36,7 @@ jobs:
       - run: npm ci
       - run: npx prisma generate --schema prisma/schema.prisma
       - name: Audit or perform the separately approved one-off recovery
+        # The guard prints the failed check and redacted shapes; never echo database or OIDC bindings.
         env:
           POSTGRES_URL_NON_POOLING: ${{ secrets.PROD_DATABASE_URL }}
           RECOVERY_MODE: ${{ inputs.mode }}

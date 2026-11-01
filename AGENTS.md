@@ -234,8 +234,17 @@ Existing GitHub merge requirements remain authoritative; local tooling cleanup d
 
 - **API**: Vercel project `fitsy-api` (Next.js). **Landing**: Vercel project `fitsy` (fitsy.org).
 - **Database**: Supabase managed PostgreSQL.
-- **Mobile**: Expo EAS Build → App Store.
+- **Mobile**: Expo EAS Update for compatible JavaScript; EAS Build for native changes and approved store distribution.
 - **Preload**: local commands target DEV or disposable fixtures; production ingestion requires an approved cloud worker and signed workload identity. See [the execution boundary](docs/engineering/pipeline/runbook.md#environment-variables).
+
+### OTA vs native build
+
+JS, styles and assets bundled by JavaScript can reach compatible TestFlight binaries through EAS Update after green Verify and production smoke.
+New native modules, permissions, config plugins, icon/splash changes, Expo SDK upgrades and widget/Swift changes require a new verified binary.
+Run `node scripts/deploy/native-compatibility.mjs`; a missing baseline fingerprint fails closed.
+Build 6 uses the fingerprint runtime and `testflight` channel; the [binary baseline contract](docs/engineering/devops/ios-ota-baseline.md) retains separate TestFlight and historical production evidence.
+The [OTA channel policy](scripts/deploy/ota-policy.json) targets automatic `testflight`; set `app_store_launched: true` before an actual App Store launch.
+App Store production OTA requires Dawit's explicit manual Deploy dispatch and existing protected release approval; see [binary evidence and channel cutover](docs/engineering/devops/ios-ota-baseline.md).
 
 ## Project Management
 

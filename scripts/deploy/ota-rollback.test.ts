@@ -11,7 +11,7 @@ beforeEach(() => {
   mkdirSync(join(root, 'scripts/deploy'), { recursive: true });
   mkdirSync(join(root, 'apps/mobile'), { recursive: true });
   const bin = join(root, 'bin'); mkdirSync(bin);
-  for (const file of ['rollback.sh', 'ota-lock.sh', 'ota-hold.sh', 'ota-bundle-identity.py', 'ios-binary-baseline.json'])
+  for (const file of ['rollback.sh', 'ota-lock.sh', 'ota-hold.sh', 'ota-bundle-identity.py', 'ios-binary-baseline.json', 'ios-production-binary-baseline.json'])
     copyFileSync(join(repo, 'scripts/deploy', file), join(root, 'scripts/deploy', file));
   const hold = join(root, 'hold'); writeFileSync(hold, '[[]]');
   installGithubFixture(bin, hold, join(root, 'lease'));

@@ -28,14 +28,14 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
-      - name: Build iOS (production)
+      - name: Build iOS (TestFlight channel, fingerprint runtime)
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform ios --profile production --non-interactive
+        run: eas build --platform ios --profile testflight --non-interactive
 
       - name: Submit to TestFlight
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas submit --platform ios --latest --non-interactive
+        run: eas submit --platform ios --profile testflight --latest --non-interactive

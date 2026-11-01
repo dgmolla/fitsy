@@ -1,0 +1,70 @@
+# An entitled fixture and candidate-native Debug binary are supplied by the host runner.
+appId: com.fitsy.mobile
+---
+- assertTrue: ${!!LOGIN_EMAIL && !!LOGIN_PASSWORD}
+- evalScript: ${output.apiPaths = ['/api/restaurants?lat=34.0407&lng=-118.2468&calories=600&protein=40&carbs=60&fat=20']}
+- runScript: data-api.mjs
+- assertTrue:
+    condition: ${output.dataApiLoginStatus === 200 && output.dataApiUnauthStatus === 401 && output.dataApiInvalidStatus === 401}
+    label: "Map preflight requires login 200 and missing/invalid sessions 401/401; got ${output.dataApiLoginStatus}/${output.dataApiUnauthStatus}/${output.dataApiInvalidStatus}"
+- assertTrue: ${output.dataApiResponses[0].status === 200 && json(output.dataApiResponses[0].body).meta.locked === false && json(output.dataApiResponses[0].body).data.length > 0}
+- runScript: shuffle-subscriber.mjs
+- assertTrue:
+    condition: ${output.shuffleApiValidationStatus === 400 && output.shuffleApiLoginStatus === 200 && output.shuffleApiStatus === 200 && output.shuffleApiUnlocked && output.shuffleApiVerified && output.shuffleApiListChanged}
+    label: "Map uses the verified subscriber search and shuffle API; deployment ${output.shuffleApiDeploymentSha}, validation ${output.shuffleApiValidationStatus}, shuffle ${output.shuffleApiStatus}"
+- setLocation:
+    latitude: 34.0407
+    longitude: -118.2468
+- assertTrue: ${LOCATION_PERMISSION === 'inuse' || LOCATION_PERMISSION === 'never'}
+# iOS location uses inuse/never, not allow/deny; launchApp also requires literal values.
+- runFlow:
+    when:
+      true: ${LOCATION_PERMISSION === 'inuse'}
+    commands:
+      - launchApp:
+          clearState: true
+          clearKeychain: true
+          permissions:
+            location: inuse
+- runFlow:
+    when:
+      true: ${LOCATION_PERMISSION === 'never'}
+    commands:
+      - launchApp:
+          clearState: true
+          clearKeychain: true
+          permissions:
+            location: never
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
+- tapOn:
+    id: welcome-login
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 15000
+- tapOn: ".*Dev Login.*"
+- extendedWaitUntil:
+    visible:
+      id: discovery-search
+    timeout: 30000
+- assertNotVisible: "Dev Login Failed"
+- openLink: com.fitsy.mobile://search?mapDebug=1&shuffleDebug=1
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: discovery-map
+    timeout: 15000

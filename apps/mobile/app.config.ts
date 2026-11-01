@@ -102,7 +102,7 @@ const config: ExpoConfig = {
   ios: {
     // Must match App Store Connect (and the RevenueCat App Store app) exactly.
     bundleIdentifier: "com.fitsy.mobile",
-    buildNumber: "5",
+    buildNumber: "6",
     supportsTablet: false,
     splash: {
       backgroundColor: "#FDFBF7",
@@ -133,7 +133,8 @@ const config: ExpoConfig = {
     url: "https://u.expo.dev/a204190c-0b71-4c31-b126-f3bc62d1c4ee",
   },
   runtimeVersion: {
-    policy: "appVersion",
+    // Build 6 and subsequent compatible updates use the native fingerprint.
+    policy: "fingerprint",
   },
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000",

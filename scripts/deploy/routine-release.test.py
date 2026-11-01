@@ -395,36 +395,6 @@ class GitDeploymentTests(unittest.TestCase):
                 self.assertNotIn('private-provider-detail', message)
                 self.assertNotIn('other-project', message)
 
-    def test_failure_workflow_files_actionable_incident_using_the_exact_run_and_source(self):
-        command = next(step['run'] for step in self.steps if step.get('name') == 'File incident on failure')
-        with tempfile.TemporaryDirectory(prefix='fitsy-incident-') as directory:
-            root = Path(directory)
-            gh = root / 'gh'
-            gh.write_text('''#!/usr/bin/env python3
-import json, os, sys
-from pathlib import Path
-args = sys.argv[1:]
-assert args[:2] == ['issue', 'create']
-body = Path(args[args.index('--body-file') + 1]).read_text()
-Path(os.environ['INCIDENT_CAPTURE']).write_text(json.dumps({'args': args, 'body': body}))
-''')
-            gh.chmod(0o700)
-            result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', command], text=True, capture_output=True,
-                                    env={**os.environ, 'PATH': directory + ':' + os.environ['PATH'],
-                                         'RUNNER_TEMP': directory, 'RELEASE_SHA': self.source,
-                                         'GITHUB_SERVER_URL': 'https://github.com', 'GITHUB_REPOSITORY': gate.REPO,
-                                         'GITHUB_RUN_ID': '40823525184', 'INCIDENT_CAPTURE': str(root / 'capture')})
-            self.assertEqual(result.returncode, 0, result.stderr)
-            captured = json.loads((root / 'capture').read_text())
-            self.assertIn(f'incident: prod release failed at {self.source[:7]}', captured['args'])
-            body = captured['body']
-            self.assertTrue(body.startswith('**TL;DR:**'))
-            self.assertIn('https://github.com/dgmolla/fitsy/actions/runs/40823525184', body)
-            self.assertIn(f'https://github.com/dgmolla/fitsy/commit/{self.source}', body)
-            self.assertIn('P3009', body)
-            self.assertIn('separately authorized', body)
-            self.assertNotIn('KNOWN_GOOD_URL', body)
-
     def test_public_health_must_report_exact_source_and_connected_database(self):
         import io
         healthy = {'status': 'ok', 'db': 'connected', 'deploymentSha': self.source}
@@ -439,6 +409,182 @@ Path(os.environ['INCIDENT_CAPTURE']).write_text(json.dumps({'args': args, 'body'
                 else:
                     gate.health(self.source)
                 self.assertEqual(read.call_args.args[0].full_url, 'https://fitsy.org/api/health')
+
+
+class ProductionIncidentTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='fitsy-incident-')
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        command = "process.stdout.write(JSON.stringify(require('yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))))"
+        workflow = json.loads(subprocess.check_output(['node', '-e', command,
+                              str(ROOT / '.github/workflows/deploy.yml')], cwd=ROOT, text=True))
+        step = next(step for step in workflow['jobs']['smoke']['steps'] if step.get('name') == 'File incident on failure')
+        self.assertEqual(step['if'], 'failure()')
+        self.command = step['run']
+        self.source = '1d479eabe7ee293280229a1e55a8471dd8a290c4'
+        self.state = self.root / 'github.json'
+        self.write_state({'issues': [], 'comments': {}, 'calls': []})
+        gh = self.root / 'gh'
+        gh.write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+path = Path(os.environ['INCIDENT_FIXTURE'])
+state = json.loads(path.read_text())
+args = sys.argv[1:]
+state['calls'].append(args)
+path.write_text(json.dumps(state))
+if args[0] == 'api':
+    endpoint = args[1]
+    assert args[2:] == ['--paginate', '--slurp'], args
+    assert endpoint.startswith('repos/dgmolla/fitsy/issues'), endpoint
+    if state.get('read_error') == 'all' or state.get('read_error', 'never-match') in endpoint:
+        sys.exit(1)
+    if '/comments?' in endpoint:
+        number = endpoint.split('/')[4]
+        rows = state['comments'].get(number, [])
+    else:
+        assert endpoint == 'repos/dgmolla/fitsy/issues?state=open&labels=incident&per_page=100', endpoint
+        rows = [row for row in state['issues'] if row['state'] == 'open']
+    print(json.dumps([rows[i:i+100] for i in range(0, len(rows), 100)] or [[]]))
+else:
+    assert args[:2] in (['issue', 'create'], ['issue', 'comment']), args
+    repository = args[args.index('--repo')+1] if '--repo' in args else os.environ['GITHUB_REPOSITORY']
+    assert repository == 'dgmolla/fitsy', args
+    body = Path(args[args.index('--body-file')+1]).read_text()
+    if args[1] == 'create':
+        number = max([row['number'] for row in state['issues']] + [659]) + 1
+        state['issues'].append({'number': number, 'state': 'open', 'body': body,
+                                'title': args[args.index('--title')+1]})
+    else:
+        number = int(args[2])
+        state['comments'].setdefault(str(number), []).append({'body': body})
+    path.write_text(json.dumps(state))
+    if state.get('write_error'):
+        sys.exit(1)
+    print(f'https://github.com/dgmolla/fitsy/issues/{number}')
+''')
+        gh.chmod(0o700)
+
+    def write_state(self, state):
+        self.state.write_text(json.dumps(state))
+
+    def read_state(self):
+        return json.loads(self.state.read_text())
+
+    def drive(self, **env):
+        return subprocess.run(['bash', '--noprofile', '--norc', '-euo', 'pipefail', '-c', self.command],
+                              cwd=ROOT, text=True, capture_output=True, timeout=15,
+                              env={**os.environ, 'PATH': str(self.root) + ':' + os.environ['PATH'],
+                                   'RUNNER_TEMP': str(self.root), 'RELEASE_SHA': self.source,
+                                   'GITHUB_SERVER_URL': 'https://github.com', 'GITHUB_REPOSITORY': gate.REPO,
+                                   'GITHUB_RUN_ID': '40991993679', 'GITHUB_RUN_ATTEMPT': '1',
+                                   'INCIDENT_FIXTURE': str(self.state), **env})
+
+    def test_same_failed_release_is_reported_once_through_the_actual_workflow(self):
+        for _ in range(2):
+            result = self.drive()
+            self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.read_state()
+        self.assertEqual(len(state['issues']), 1)
+        self.assertEqual(state['comments'], {})
+        body = state['issues'][0]['body']
+        self.assertTrue(body.startswith('**TL;DR:**'))
+        self.assertIn('https://github.com/dgmolla/fitsy/actions/runs/40991993679', body)
+        self.assertIn(f'https://github.com/dgmolla/fitsy/commit/{self.source}', body)
+        self.assertIn('P3009', body)
+        self.assertIn('separately authorized', body)
+        self.assertIn('production-migration-recovery.yml', body)
+        self.assertNotIn('KNOWN_GOOD_URL', body)
+
+    def test_later_sources_and_rerun_attempts_append_evidence_without_rewriting_history(self):
+        self.assertEqual(self.drive().returncode, 0)
+        original = copy.deepcopy(self.read_state()['issues'])
+        next_source = 'cc16ffb62d1b08cfaac8721436a1435b2ea5f86e'
+        for attempt in ('1', '2', '2'):
+            result = self.drive(RELEASE_SHA=next_source, GITHUB_RUN_ID='40992500000', GITHUB_RUN_ATTEMPT=attempt)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.read_state()
+        self.assertEqual(state['issues'], original)
+        comments = state['comments']['660']
+        self.assertEqual(len(comments), 2)
+        for index, row in enumerate(comments, 1):
+            self.assertTrue(row['body'].startswith('**TL;DR:**'))
+            self.assertIn(f'/commit/{next_source}', row['body'])
+            self.assertIn(f'/actions/runs/40992500000/attempts/{index}', row['body'])
+        self.assertEqual(sum(call[:2] == ['issue', 'create'] for call in state['calls']), 1)
+
+    def test_legacy_incident_is_adopted_without_duplicating_its_original_run(self):
+        issue = {'number': 660, 'state': 'open', 'title': 'incident: prod release failed at 1d479ea',
+                 'body': f'Source: {self.source}\n[Deploy logs](https://github.com/dgmolla/fitsy/actions/runs/40991993679)'}
+        unrelated = {'number': 640, 'state': 'open', 'title': 'incident: OTA publish failed', 'body': ''}
+        closed = {**issue, 'number': 643, 'state': 'closed'}
+        pull = {**issue, 'number': 639, 'pull_request': {}}
+        original = [unrelated, issue, closed, pull]
+        self.write_state({'issues': original, 'comments': {}, 'calls': []})
+        self.assertEqual(self.drive().returncode, 0)
+        self.assertEqual(self.read_state()['comments'], {})
+        result = self.drive(GITHUB_RUN_ID='40992500000')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.read_state()
+        self.assertEqual(state['issues'], original)
+        self.assertEqual(list(state['comments']), ['660'])
+
+    def test_paginated_incidents_and_comments_preserve_a_later_page_receipt(self):
+        self.assertEqual(self.drive().returncode, 0)
+        state = self.read_state()
+        incident = state['issues'][0]
+        state['issues'] = [{'number': number, 'state': 'open', 'title': 'unrelated incident', 'body': ''}
+                           for number in range(100, 200)] + [incident]
+        state['issues'].insert(0, {**incident, 'number': 50, 'title': 'incident: prod release failed at bfd87f8',
+                                   'body': 'Legacy issue without a reporting marker'})
+        state['comments']['660'] = [{'body': 'Historical evidence'} for _ in range(100)]
+        self.write_state(state)
+        self.assertEqual(self.drive(GITHUB_RUN_ID='40992500000').returncode, 0)
+        self.assertEqual(self.drive(GITHUB_RUN_ID='40992500000').returncode, 0)
+        state = self.read_state()
+        self.assertEqual(len(state['issues']), 102)
+        self.assertEqual(list(state['comments']), ['660'])
+        self.assertEqual(len(state['comments']['660']), 101)
+
+    def test_closed_incident_starts_a_new_report_without_reopening_or_editing_it(self):
+        self.assertEqual(self.drive().returncode, 0)
+        state = self.read_state()
+        state['issues'][0]['state'] = 'closed'
+        original = copy.deepcopy(state['issues'][0])
+        self.write_state(state)
+        result = self.drive(GITHUB_RUN_ID='40992500000')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.read_state()
+        self.assertEqual(state['issues'][0], original)
+        self.assertEqual(len(state['issues']), 2)
+        self.assertEqual(state['issues'][1]['state'], 'open')
+
+    def test_failed_reads_or_uncertain_writes_never_create_a_fallback_or_repeat_a_write(self):
+        self.assertEqual(self.drive().returncode, 0)
+        original = self.read_state()
+        for error in ('all', '/comments?'):
+            with self.subTest(error=error):
+                self.write_state({**original, 'calls': [], 'read_error': error})
+                result = self.drive(GITHUB_RUN_ID='40992500000')
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn('inspect the GitHub outcome', result.stderr)
+                self.assertFalse(any(call[0] == 'issue' for call in self.read_state()['calls']))
+        for issues in ([], original['issues']):
+            with self.subTest(existing=bool(issues)):
+                self.write_state({'issues': issues, 'comments': {}, 'calls': [], 'write_error': True})
+                result = self.drive(GITHUB_RUN_ID='40992500000')
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(sum(call[0] == 'issue' for call in self.read_state()['calls']), 1)
+
+    def test_invalid_source_run_or_repository_is_refused_before_github_access(self):
+        for env in ({'RELEASE_SHA': 'bad;source'}, {'GITHUB_RUN_ID': '1/other'},
+                    {'GITHUB_RUN_ATTEMPT': '0'}, {'GITHUB_REPOSITORY': 'other/fitsy'},
+                    {'GITHUB_SERVER_URL': 'https://attacker.invalid'}):
+            with self.subTest(env=env):
+                result = self.drive(**env)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(self.read_state()['calls'], [])
 
 
 class VercelBuildTests(unittest.TestCase):
@@ -461,6 +607,7 @@ process.stdout.write(JSON.stringify({
         for name in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh', 'scripts/lib/db-target-guard.ts',
                      'apps/api/services/rateLimitStoreConfig.ts', 'scripts/deploy/pipeline-roles-approval.mjs',
                      'scripts/deploy/activate-runtime-role.ts', 'scripts/deploy/runtime-migrations-preflight.ts',
+                     'scripts/deploy/migration-failure-audit.ts', 'scripts/deploy/migration-failure-audit.sql',
                      'prisma/schema.prisma', 'prisma/migrations/migration_lock.toml',
                      'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql',
                      'prisma/migrations/20261028130000_hex_jobs/migration.sql',
@@ -504,9 +651,28 @@ Module._load = function(name, ...args) {
       }
     }
     async $transaction(fn) {
-      return fn({ $queryRaw: async () => [], $executeRawUnsafe: async () => {
+      return fn({ $queryRaw: async () => [], $executeRawUnsafe: async sql => {
+        if (sql === 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY') {
+          appendFileSync(process.env.CALLS, 'audit read only\\n');
+          return 0;
+        }
+        if (sql === "SET LOCAL statement_timeout = '5s'") {
+          appendFileSync(process.env.CALLS, 'audit statement timeout\\n');
+          return 0;
+        }
         if (process.env.ROLE_ACTIVATION_EXIT === '1') throw Error('private-fixture-password');
         return 0;
+      }, $queryRawUnsafe: async sql => {
+        assert.equal(sql, readFileSync('scripts/deploy/migration-failure-audit.sql', 'utf8')
+          .split(';').find(statement => statement.includes('AS migration_failure_audit')));
+        const preflight = process.argv.includes('--preflight');
+        appendFileSync(process.env.CALLS, preflight ? 'migration history preflight\\n' : 'migration failure audit\\n');
+        switch (process.env[preflight ? 'PREFLIGHT_AUDIT_STATE' : 'AUDIT_STATE']) {
+          case 'driver-error': throw Error('private-fixture-database-detail');
+          case 'missing': return [];
+          case 'timeout': return new Promise(() => {});
+          default: return [{ migration_failure_audit: JSON.parse(process.env[preflight ? 'PREFLIGHT_AUDIT_REPORT' : 'AUDIT_REPORT']) }];
+        }
       } });
     }
     async $disconnect() {}
@@ -567,6 +733,7 @@ if args[:3] == ['prisma', 'migrate', 'deploy']:
     schema = Path(args[args.index('--schema') + 1])
     migrations = sorted(path.parent.name for path in (schema.parent / 'migrations').glob('*/migration.sql'))
     Path(os.environ['MIGRATIONS']).write_text(json.dumps(migrations))
+    sys.stderr.write(os.environ.get('MIGRATE_STDERR', ''))
     sys.exit(int(os.environ.get('MIGRATE_EXIT', '0')))
 ''')
         command.chmod(0o700)
@@ -582,16 +749,20 @@ exit "${BUILD_EXIT:-0}"
         command.chmod(0o700)
         self.calls = self.root / 'calls'
         self.migrations = self.root / 'migrations.json'
+        self.incident = json.loads((ROOT / 'scripts/deploy/fixtures/incident-661.json').read_text())
+        self.audit = self.incident['migration_failure_audit']
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith(('VERCEL', 'POSTGRES', 'SUPABASE', 'PIPELINE_DATABASE_URL', 'PROD_', 'FITSY_ALLOW_PROD', 'FITSY_PIPELINE_ROLES', 'GITHUB_ACTIONS', 'UPSTASH', 'NODE_OPTIONS'))}
         self.env.update(PATH=str(self.bin) + ':' + os.environ['PATH'], CALLS=str(self.calls),
                         MIGRATIONS=str(self.migrations),
+                        AUDIT_REPORT=json.dumps(self.audit),
+                        PREFLIGHT_AUDIT_REPORT=json.dumps({**self.audit, 'migration_history': []}),
                         NODE_OPTIONS=f'--require={database_transport} --import={transport}', REDIS_RESULT='ok',
                         UPSTASH_REDIS_REST_URL='https://quota.example.test',
                         UPSTASH_REDIS_REST_TOKEN='private-fixture-token',
                         VERCEL='1', VERCEL_ENV='production', VERCEL_PROJECT_ID='prj_z1QTfOgbj4tlm91U2Hf8JXr5k4v4',
                         VERCEL_GIT_PROVIDER='github', VERCEL_GIT_REPO_OWNER='dgmolla', VERCEL_GIT_REPO_SLUG='fitsy',
-                        VERCEL_GIT_COMMIT_REF='main', VERCEL_GIT_COMMIT_SHA='a' * 40,
+                        VERCEL_GIT_COMMIT_REF='main', VERCEL_GIT_COMMIT_SHA=self.incident['source'],
                         SUPABASE_URL='https://zaxkmjqozvmbifiwbxps.supabase.co',
                         FITSY_PIPELINE_ROLES_APPROVED_SHA256=hashlib.sha256((ROOT / 'prisma/migrations/20261028120000_pipeline_writer_roles/migration.sql').read_bytes()).hexdigest(),
                         POSTGRES_URL_NON_POOLING='postgresql://postgres.zaxkmjqozvmbifiwbxps:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres',
@@ -606,7 +777,7 @@ exit "${BUILD_EXIT:-0}"
         env = {**self.env, **changes}
         env = {key: value for key, value in env.items() if value is not None}
         result = subprocess.run(['bash', 'scripts/dev/vercel-build.sh'], cwd=self.root,
-                                env=env, text=True, capture_output=True)
+                                env=env, text=True, capture_output=True, timeout=30)
         calls = self.calls.read_text().splitlines()
         # Production uses a disposable filtered schema. Keep existing order
         # assertions while also proving the actual CLI input was removed.
@@ -655,18 +826,36 @@ exit "${BUILD_EXIT:-0}"
         self.assertNotIn('private-fixture-password', result.stdout + result.stderr)
 
     def test_unapproved_role_migration_is_held_while_other_migrations_and_build_proceed(self):
+        self.assert_unapproved_role_build(626)
+
+    def test_incident_622_build_proceeds_with_unapproved_role_sql_held(self):
+        self.assert_unapproved_role_build(622)
+
+    def test_incident_617_build_proceeds_with_unapproved_role_sql_held(self):
+        self.assert_unapproved_role_build(617)
+
+    def assert_unapproved_role_build(self, number):
+        # These incidents stopped before migrations or API compilation.
+        # Replay each source without executing unapproved controlled SQL.
+        incident = json.loads((ROOT / f'scripts/deploy/__fixtures__/incident-{number}.json').read_text())
         role = '20261028120000_pipeline_writer_roles'
         original = {path: path.read_bytes() for path in (self.root / 'prisma/migrations').glob('*/migration.sql')}
         for approval in (None, '', 'a' * 64, 'true'):
             for runtime in (self.env['POSTGRES_PRISMA_URL'], self.env['POSTGRES_PRISMA_URL'].replace('fitsy_app.', 'postgres.')):
                 with self.subTest(approval=approval, role='legacy' if 'postgres.' in runtime else 'fitsy_app'):
-                    result, calls = self.drive(FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval, POSTGRES_PRISMA_URL=runtime,
+                    result, calls = self.drive(VERCEL_GIT_COMMIT_SHA=incident['source'],
+                                               FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval, POSTGRES_PRISMA_URL=runtime,
                                                ROLE_ACTIVATION_EXIT='1' if 'postgres.' in runtime else '0')
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(calls[-1], 'npm run build -w apps/api')
+                    self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout',
+                                             'migration history preflight',
+                                             'npx prisma migrate status --schema prisma/schema.prisma',
+                                             'npx prisma migrate deploy --schema prisma/schema.prisma',
+                                             'runtime migration preflight', 'npm run build -w apps/api'])
                     self.assertEqual(json.loads(self.migrations.read_text()),
                                      ['20261028110000_unrelated_before', '20261028130000_unrelated_after'])
                     self.assertIn('holding ' + role, result.stderr)
+                    self.assertNotIn(incident['build_stderr'], result.stderr)
                     self.assertEqual({path: path.read_bytes() for path in original}, original)
 
     def test_held_widget_migration_withholds_build_until_its_schema_is_applied(self):
@@ -725,7 +914,8 @@ exit "${BUILD_EXIT:-0}"
         for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
             result, calls = self.drive(FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
             self.assertNotEqual(result.returncode, 0)
-            self.assertEqual(calls, ['redis EVAL'])
+            self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight',
+                                     'audit read only', 'audit statement timeout', 'migration failure audit'])
             self.assertFalse(self.migrations.exists())
 
     def test_pipeline_and_audit_credentials_cannot_become_the_app_runtime_binding(self):
@@ -751,6 +941,48 @@ exit "${BUILD_EXIT:-0}"
                     self.assertIn('UPSTASH_REDIS_REST_URL', result.stderr)
                     self.assertIn('UPSTASH_REDIS_REST_TOKEN', result.stderr)
                     self.assertNotIn('private-fixture-token', result.stdout + result.stderr)
+
+    def test_incident_602_store_recovery_preserves_guarded_build_order(self):
+        self.assert_store_recovery(602)
+
+    def test_incident_580_runtime_outage_is_withheld_before_migrations_or_build(self):
+        self.assert_store_recovery(580)
+
+    def test_incident_584_runtime_outage_is_withheld_before_migrations_or_build(self):
+        self.assert_store_recovery(584)
+
+    def assert_store_recovery(self, number):
+        incident = json.loads((ROOT / f'scripts/deploy/__fixtures__/incident-{number}.json').read_text())
+        dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
+        for environment in ('production', 'preview'):
+            bindings = {} if environment == 'production' else {
+                'SUPABASE_URL': 'https://kegycybiruksmrzvniha.supabase.co',
+                'POSTGRES_URL_NON_POOLING': dev, 'POSTGRES_PRISMA_URL': dev.replace('postgres.', 'fitsy_app.')}
+            source = {'VERCEL_ENV': environment, 'VERCEL_GIT_COMMIT_SHA': incident['source'], **bindings}
+            # The retained diagnostic does not reveal which binding failed.
+            # Cover absent configuration and a configured but unwritable store.
+            for failure, expected_calls in (({'UPSTASH_REDIS_REST_URL': '', 'UPSTASH_REDIS_REST_TOKEN': ''}, []),
+                                            ({'REDIS_RESULT': 'readonly'}, ['redis EVAL'])):
+                with self.subTest(environment=environment, failure=list(failure)):
+                    result, calls = self.drive(**source, **failure)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn('Shared rate-limit store preflight failed', result.stderr)
+                    if 'build_stderr' in incident:
+                        self.assertIn(incident['build_stderr'], result.stderr)
+                    self.assertEqual(calls, expected_calls)
+                    self.assertFalse(self.migrations.exists())
+                    self.assertNotIn('private-fixture', result.stdout + result.stderr)
+
+            # A separately restored provider permits the same source to build;
+            # readiness must not bypass migration/history/runtime-schema gates.
+            result, calls = self.drive(**source)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Shared rate-limit store preflight passed', result.stdout)
+            history = ['audit read only', 'audit statement timeout', 'migration history preflight',
+                       'npx prisma migrate status --schema prisma/schema.prisma'] if environment == 'production' else []
+            self.assertEqual(calls, ['redis EVAL', *history,
+                                     'npx prisma migrate deploy --schema prisma/schema.prisma',
+                                     'runtime migration preflight', 'npm run build -w apps/api'])
 
     def test_invalid_shared_store_configuration_is_private_and_withholds_build(self):
         dev = 'postgresql://postgres.kegycybiruksmrzvniha:fixture@aws-1-us-east-1.pooler.supabase.com:5432/postgres'
@@ -780,7 +1012,8 @@ exit "${BUILD_EXIT:-0}"
         for path in ('scripts/dev/vercel-build.sh', 'scripts/deploy/migrate-prod.sh',
                      'scripts/deploy/rate-limit-preflight.ts', 'scripts/lib/db-target-guard.ts',
                      'scripts/deploy/pipeline-roles-approval.mjs', 'scripts/deploy/activate-runtime-role.ts',
-                     'scripts/deploy/runtime-migrations-preflight.ts'):
+                     'scripts/deploy/runtime-migrations-preflight.ts',
+                     'scripts/deploy/migration-failure-audit.ts', 'scripts/deploy/migration-failure-audit.sql'):
             self.assertIn(path, paths)
 
     def test_actual_production_build_migrates_before_build_using_existing_bindings(self):
@@ -789,7 +1022,8 @@ exit "${BUILD_EXIT:-0}"
             with self.subTest(route='direct' if bindings else 'qualified pooler'):
                 result, calls = self.drive(**bindings)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate status --schema prisma/schema.prisma',
+                self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight',
+                                         'npx prisma migrate status --schema prisma/schema.prisma',
                                          'npx prisma migrate deploy --schema prisma/schema.prisma',
                                          'runtime migration preflight', 'npm run build -w apps/api'])
 
@@ -799,7 +1033,8 @@ exit "${BUILD_EXIT:-0}"
         result, calls = self.drive(POSTGRES_URL_NON_POOLING=route.format(port=5432),
                                    POSTGRES_PRISMA_URL=route.format(port=6543).replace('postgres:', 'fitsy_app:') + '&pgbouncer=true')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls, ['redis EVAL', 'npx prisma migrate status --schema prisma/schema.prisma',
+        self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight',
+                                 'npx prisma migrate status --schema prisma/schema.prisma',
                                  'npx prisma migrate deploy --schema prisma/schema.prisma',
                                  'runtime migration preflight', 'npm run build -w apps/api'])
 
@@ -933,6 +1168,228 @@ exit "${BUILD_EXIT:-0}"
         self.assertEqual(result.returncode, 9)
         self.assertEqual(calls[-1], 'npm run build -w apps/api')
 
+    def test_incident_prisma_failure_is_preserved_even_when_audit_is_unavailable(self):
+        # A concurrent failed attempt can appear after the read-only preflight.
+        # Replay the original provider diagnostic at the real build boundary;
+        # holding its SQL must neither hide the error nor authorize recovery.
+        for number, audit_state in ((number, state) for number in (628, 634, 635) for state in ('ok', 'driver-error')):
+            with self.subTest(incident=number, audit_state=audit_state):
+                incident = json.loads((ROOT / f'scripts/deploy/__fixtures__/incident-{number}.json').read_text())
+                result, calls = self.drive(VERCEL_GIT_COMMIT_SHA=incident['source'], MIGRATE_EXIT='1',
+                                           MIGRATE_STDERR=incident['prisma_stderr'], AUDIT_STATE=audit_state,
+                                           FITSY_PIPELINE_ROLES_APPROVED_SHA256=None)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn(incident['prisma_stderr'], result.stderr)
+                self.assertIn('production-migration-recovery.yml', result.stderr)
+                self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+                self.assertEqual(calls[-3:], ['audit read only', 'audit statement timeout', 'migration failure audit'])
+                self.assertFalse(any('resolve' in call or call.startswith('npm') for call in calls))
+                self.assertNotIn('runtime migration preflight', calls)
+                self.assertNotIn('20261028130000_hex_jobs', json.loads(self.migrations.read_text()))
+                reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+                self.assertEqual(reports, [{'migration_failure_audit': self.audit}] if audit_state == 'ok' else [])
+                self.assertNotIn('private-fixture-database-detail', result.stdout + result.stderr)
+
+    def test_original_and_later_incidents_name_the_retained_attempt_before_prisma(self):
+        # The later read-only #661 snapshot identifies the retained attempt from
+        # #628's aborted transaction, subsequently reported as P3009 by #634.
+        attempt = self.audit['migration_history'][0]
+        for number, approval in ((number, approval) for number in (628, 634)
+                                 for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256'])):
+            with self.subTest(incident=number, approved=approval is not None):
+                incident = json.loads((ROOT / f'scripts/deploy/__fixtures__/incident-{number}.json').read_text())
+                self.assertIn(attempt['migration_name'], incident['prisma_stderr'])
+                result, calls = self.drive(VERCEL_GIT_COMMIT_SHA=incident['source'],
+                                           PREFLIGHT_AUDIT_REPORT=json.dumps(self.audit),
+                                           FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout',
+                                         'migration history preflight'])
+                self.assertIn(attempt['migration_name'], result.stderr)
+                self.assertIn(attempt['id'], result.stderr)
+                self.assertIn(attempt['started_at'], result.stderr)
+                self.assertIn('production-migration-recovery.yml', result.stderr)
+                self.assertNotIn('private-fixture', result.stdout + result.stderr)
+                self.assertFalse(self.migrations.exists())
+
+    def test_unresolved_history_stops_before_prisma_even_when_failed_sql_is_held(self):
+        # Replay #661's exact Vercel audit. Held SQL and role approval cannot
+        # authorize another Prisma invocation against this retained failure.
+        for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
+            with self.subTest(approved=approval is not None):
+                result, calls = self.drive(MIGRATE_EXIT='7', PREFLIGHT_AUDIT_REPORT=json.dumps(self.audit),
+                                           FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout',
+                                         'migration history preflight'])
+                reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+                self.assertEqual(reports, [{'migration_failure_audit': self.audit}])
+                self.assertIn('unresolved migration history', result.stderr)
+                self.assertIn('production-migration-recovery.yml', result.stderr)
+                self.assertFalse(self.migrations.exists())
+
+    def test_other_unresolved_attempts_and_partial_objects_also_withhold_prisma(self):
+        audit = copy.deepcopy(self.audit)
+        audit['migration_history'][0].update(id='other-attempt', migration_name='other_failed_migration')
+        audit['migration_history'].append({**self.audit['migration_history'][0], 'id': 'settled-attempt',
+                                           'finished_at': '2026-10-29T12:00:00+00:00', 'unresolved': False})
+        audit['migration_history'].append({**self.audit['migration_history'][0],
+                                           'id': 'interrupted-attempt', 'migration_name': 'interrupted\nfixture'})
+        audit['relations'][0]['present'] = True
+        result, calls = self.drive(PREFLIGHT_AUDIT_REPORT=json.dumps(audit))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight'])
+        reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+        self.assertEqual(reports, [{'migration_failure_audit': audit}])
+        diagnostics = [json.loads(line.removeprefix('Unresolved migration attempt: '))
+                       for line in result.stderr.splitlines() if line.startswith('Unresolved migration attempt: ')]
+        self.assertEqual(diagnostics, [
+            {'migration_name': 'other_failed_migration', 'id': 'other-attempt',
+             'started_at': audit['migration_history'][0]['started_at']},
+            {'migration_name': 'interrupted\nfixture', 'id': 'interrupted-attempt',
+             'started_at': audit['migration_history'][2]['started_at']},
+        ])
+        self.assertFalse(self.migrations.exists())
+
+    def test_incomplete_or_inconsistent_history_evidence_cannot_authorize_deploy(self):
+        for change in ({'unresolved': None}, {'unresolved': False}):
+            with self.subTest(change=change):
+                audit = copy.deepcopy(self.audit)
+                audit['migration_history'][0].update(change)
+                result, calls = self.drive(PREFLIGHT_AUDIT_REPORT=json.dumps(audit))
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertFalse(self.migrations.exists())
+                self.assertFalse(any(call.startswith(('npx', 'npm')) for call in calls))
+                self.assertIn('Migration failure audit unavailable', result.stderr)
+
+    def test_missing_snapshot_fields_or_duplicate_objects_cannot_authorize_deploy(self):
+        invalid = []
+        for field in ('database', 'inspected_at', 'migration_history', 'roles', 'relations', 'runtime_schema'):
+            audit = copy.deepcopy(self.audit)
+            del audit[field]
+            invalid.append(audit)
+        for field in ('roles', 'relations'):
+            audit = copy.deepcopy(self.audit)
+            audit[field][0] = audit[field][1]
+            invalid.append(audit)
+        audit = copy.deepcopy(self.audit)
+        del audit['relations'][0]['acl']
+        invalid.append(audit)
+        for audit in invalid:
+            with self.subTest(audit=audit):
+                result, calls = self.drive(PREFLIGHT_AUDIT_REPORT=json.dumps(audit))
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertFalse(self.migrations.exists())
+                self.assertFalse(any(call.startswith(('npx', 'npm')) for call in calls))
+                self.assertIn('Migration failure audit unavailable', result.stderr)
+                self.assertEqual(result.stdout, 'Shared rate-limit store preflight passed\n')
+
+    def test_invalid_post_failure_snapshot_preserves_the_original_migration_failure(self):
+        audit = copy.deepcopy(self.audit)
+        audit['runtime_schema'] = {'private-fixture-database-detail': 'fixture@'}
+        result, calls = self.drive(MIGRATE_EXIT='7', AUDIT_REPORT=json.dumps(audit))
+        self.assertEqual(result.returncode, 7, result.stderr)
+        self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+        self.assertFalse(any('resolve' in call or call.startswith('npm') for call in calls))
+        self.assertEqual(result.stdout, 'Shared rate-limit store preflight passed\n')
+        self.assertIn('Migration failure audit unavailable', result.stderr)
+        self.assertNotIn('private-fixture-database-detail', result.stderr)
+        self.assertNotIn('fixture@', result.stderr)
+
+    def test_valid_additional_audit_evidence_is_preserved_for_recovery_comparison(self):
+        audit = copy.deepcopy(self.audit)
+        audit['additional_evidence'] = {'reviewed': True}
+        audit['relations'][0]['additional_metadata'] = 'retained object evidence'
+        audit['runtime_schema']['additional_metadata'] = 'retained runtime evidence'
+        result, calls = self.drive(MIGRATE_EXIT='7', AUDIT_REPORT=json.dumps(audit))
+        self.assertEqual(result.returncode, 7, result.stderr)
+        reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+        self.assertEqual(reports, [{'migration_failure_audit': audit}])
+        self.assertFalse(any('resolve' in call or call.startswith('npm') for call in calls))
+
+    def test_settled_history_allows_deploy_but_does_not_establish_runtime_schema_readiness(self):
+        for field in ('finished_at', 'rolled_back_at'):
+            audit = copy.deepcopy(self.audit)
+            audit['migration_history'][0].update({field: '2026-10-29T12:00:00+00:00', 'unresolved': False})
+            for runtime in ('applied', 'missing'):
+                with self.subTest(field=field, runtime=runtime):
+                    result, calls = self.drive(PREFLIGHT_AUDIT_REPORT=json.dumps(audit),
+                                               FITSY_PIPELINE_ROLES_APPROVED_SHA256=None, RUNTIME_MIGRATION_STATE=runtime)
+                    self.assertEqual(result.returncode, 0 if runtime == 'applied' else 1, result.stderr)
+                    self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+                    self.assertEqual(calls.count('runtime migration preflight'), 1)
+                    self.assertEqual(any(call.startswith('npm') for call in calls), runtime == 'applied')
+                    self.assertNotIn('migration_failure_audit', result.stdout)
+                    self.assertNotIn('20261028130000_hex_jobs', json.loads(self.migrations.read_text()))
+
+    def test_unavailable_history_preflight_withholds_prisma_without_retry_or_private_errors(self):
+        for state in ('driver-error', 'missing', 'timeout'):
+            with self.subTest(state=state):
+                result, calls = self.drive(PREFLIGHT_AUDIT_STATE=state)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(calls, ['redis EVAL', 'audit read only', 'audit statement timeout', 'migration history preflight'])
+                self.assertIn('Migration failure audit unavailable', result.stderr)
+                self.assertNotIn('private-fixture-database-detail', result.stdout + result.stderr)
+                self.assertNotIn('fixture@', result.stdout + result.stderr)
+                self.assertEqual(result.stdout, 'Shared rate-limit store preflight passed\n')
+                self.assertFalse(self.migrations.exists())
+
+    def test_failed_migration_emits_read_only_evidence_without_resolving_or_retrying(self):
+        for approval in (None, self.env['FITSY_PIPELINE_ROLES_APPROVED_SHA256']):
+            result, calls = self.drive(MIGRATE_EXIT='7', FITSY_PIPELINE_ROLES_APPROVED_SHA256=approval)
+            self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertEqual(calls[-3:], ['audit read only', 'audit statement timeout', 'migration failure audit'])
+            reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+            self.assertEqual(reports, [{'migration_failure_audit': self.audit}])
+            self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+            self.assertFalse(any('resolve' in call or call.startswith('npm') for call in calls))
+            self.assertNotIn('runtime migration preflight', calls)
+
+    def test_failed_audit_preserves_migration_failure_and_withholds_private_errors(self):
+        for state in ('driver-error', 'missing', 'timeout'):
+            with self.subTest(state=state):
+                result, calls = self.drive(MIGRATE_EXIT='7', AUDIT_STATE=state)
+                self.assertEqual(result.returncode, 7, result.stderr)
+                self.assertEqual(calls[-3:], ['audit read only', 'audit statement timeout', 'migration failure audit'])
+                self.assertIn('Migration failure audit unavailable', result.stderr)
+                self.assertEqual(result.stdout, 'Shared rate-limit store preflight passed\n')
+                self.assertNotIn('private-fixture-database-detail', result.stderr)
+                self.assertNotIn('fixture@', result.stderr)
+                self.assertEqual(sum(call.startswith('npx prisma migrate deploy ') for call in calls), 1)
+                self.assertFalse(any('resolve' in call or call.startswith('npm') for call in calls))
+
+    def test_build_audit_cli_requires_production_target_and_trusted_identity(self):
+        for changes in ({'VERCEL_GIT_COMMIT_REF': 'dev'}, {'VERCEL_PROJECT_ID': 'other-project'},
+                        {'VERCEL_ENV': 'preview'}, {'FITSY_ALLOW_PROD_WRITE': ''},
+                        {'POSTGRES_URL_NON_POOLING': self.env['POSTGRES_URL_NON_POOLING'].replace(
+                            'zaxkmjqozvmbifiwbxps', 'kegycybiruksmrzvniha')}):
+            with self.subTest(changes=changes):
+                for args in (['--prod'], ['--prod', '--preflight']):
+                    self.calls.write_text('')
+                    result = subprocess.run(['node', '--import', 'tsx', 'scripts/deploy/migration-failure-audit.ts', *args],
+                                            cwd=self.root, env={**self.env, 'FITSY_ALLOW_PROD_WRITE': '1', **changes},
+                                            text=True, capture_output=True, timeout=15)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(self.calls.read_text(), '')
+                    self.assertEqual(result.stdout, '')
+                    self.assertIn('Migration failure audit unavailable', result.stderr)
+                    self.assertNotIn('fixture@', result.stderr)
+
+    def test_build_audit_cli_refuses_recovery_and_unknown_arguments(self):
+        for args in ([], ['--preflight'], ['--prod', '--resolve'], ['--prod', '--preflight', '--resolve']):
+            with self.subTest(args=args):
+                self.calls.write_text('')
+                result = subprocess.run(['node', '--import', 'tsx', 'scripts/deploy/migration-failure-audit.ts', *args],
+                                        cwd=self.root, env={**self.env, 'FITSY_ALLOW_PROD_WRITE': '1'},
+                                        text=True, capture_output=True, timeout=15)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(self.calls.read_text(), '')
+                self.assertEqual(result.stdout, '')
+
 
 if __name__ == '__main__':
-    unittest.main()
+    if sys.argv[1:] == ['--list-tests']:
+        suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
+        print(json.dumps([test.id().removeprefix('__main__.') for group in suite for test in group]))
+    else:
+        unittest.main()

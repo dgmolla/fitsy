@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "platform": "ios",
+  "source_sha": "2e515fdc339d27e33110e128379fb16bd3a2d3a5",
+  "eas_build_id": "3391d4bf-905e-4c78-8ae3-4f88f7cbf51b",
+  "asc_build_id": "cc103859-443d-43d9-a165-da04534c952b",
+  "bundle_id": "com.fitsy.mobile",
+  "build_number": "5",
+  "runtime_version": "1.0.0",
+  "channel": "production",
+  "google_ios_client_id": "56878207179-voo8iloc0si51ae7n8illrsu3hapks4d.apps.googleusercontent.com",
+  "ipa_sha256": "e31663a3f57f715a357ffbd487f4d912fe46ed9b5ac82543d3a87724ed506c56",
+  "verified_at": "2026-10-07T21:37:49.968550+00:00",
+  "evidence": "https://github.com/dgmolla/fitsy/issues/243"
+}

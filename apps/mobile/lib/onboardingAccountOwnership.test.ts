@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearToken } from './authClient';
 import { claimAnonymousOnboardingData, getOnboardingData, replaceAccountOnboardingData,
-  saveOnboardingField, getLegacyOnboardingData, restoreLegacyOnboardingData, retireLegacyOnboardingData } from './onboardingStorage';
+  saveOnboardingField } from './onboardingStorage';
 import { buildProfileBody } from './profileTargetBody';
 import { pullProfileFromServer } from './profileSync';
 
@@ -64,21 +64,23 @@ it('does not relabel legacy measurements when a logged-out user edits only their
   expect(await getOnboardingData()).toEqual({ goal: 'performance' });
   expect(user.weightKg).toBeNull();
   expect(user.heightCm).toBeNull();
-  expect(await getLegacyOnboardingData()).toMatchObject({ weightKg: 140, heightCm: 200 });
-  // Only explicit account restoration recovers these retained intentional edits.
-  expect(await restoreLegacyOnboardingData()).toMatchObject({ owner: 'b', profile: { weightKg: 140, heightCm: 200, goal: 'build_muscle' } });
-  await retireLegacyOnboardingData('b');
-  expect(await getLegacyOnboardingData()).toBeNull();
+  expect(JSON.parse((await AsyncStorage.getItem('@fitsy/onboarding_unowned'))!))
+    .toEqual({ weightKg: 140, heightCm: 200, goal: 'build_muscle' });
 });
 
-it('retains legacy facts through an empty profile reconciliation and rejects anonymous restoration', async () => {
-  await AsyncStorage.setItem('@fitsy/onboarding', JSON.stringify({ weightKg: 140 }));
+it('retains legacy facts through an empty profile reconciliation without exposing them to another account', async () => {
+  const legacy = JSON.stringify({ weightKg: 140 });
+  await AsyncStorage.setItem('@fitsy/onboarding', legacy);
   await replaceAccountOnboardingData('a', {});
   expect(await getOnboardingData()).toEqual({});
-  expect(await getLegacyOnboardingData()).toMatchObject({ weightKg: 140 });
+  expect(await AsyncStorage.getItem('@fitsy/onboarding_unowned')).toBe(legacy);
   mockSession = null;
-  await expect(restoreLegacyOnboardingData()).rejects.toThrow('Sign in');
-  expect(await getLegacyOnboardingData()).toMatchObject({ weightKg: 140 });
+  expect(await getOnboardingData()).toEqual({});
+  useB();
+  await saveOnboardingField('weightKg', 70);
+  expect(await getOnboardingData()).toEqual({ weightKg: 70 });
+  expect(await buildProfileBody()).toEqual({ weightKg: 70 });
+  expect(await AsyncStorage.getItem('@fitsy/onboarding_unowned')).toBe(legacy);
 });
 
 it('claims explicitly saved anonymous onboarding facts and sends them through real profile synchronization', async () => {

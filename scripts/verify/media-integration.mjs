@@ -12,7 +12,7 @@ const command = 'bash scripts/verify/media-integration.sh';
 const head = () => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', env: repoEnv() }).trim();
 
 export function mediaIntegrationRequired(paths) {
-  return paths.some(path => /^scripts\/sim\/|^scripts\/delivery\/loop\/(?:host|context|driver|install|loop\.test)\.py$|^scripts\/verify\/(?:product-flow|media-integration|test\.sh|registry\.yml)/.test(path));
+  return paths.some(path => /^scripts\/sim\/|^scripts\/delivery\/loop\/(?:host|context|driver|install|loop\.test|worktrees(?:\.test)?)\.py$|^scripts\/verify\/(?:product-flow|media-integration|test\.sh|registry\.yml)/.test(path));
 }
 
 export function writeMediaReceipt(file = receiptFile, sourceSha = head(), sourceHash = inputHash()) {

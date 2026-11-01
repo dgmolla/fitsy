@@ -43,20 +43,24 @@ test('Expo plugin embeds and compiles a WidgetKit target and the app bridge, ide
     const target = Object.values(project.pbxNativeTargetSection()).find(value => value?.name === '"FitsyMealWidget"');
     assert.equal(target.productType, '"com.apple.product-type.app-extension"');
     const sourcePhase = target.buildPhases.find(phase => phase.comment === 'Sources');
-    assert.equal(project.hash.project.objects.PBXSourcesBuildPhase[sourcePhase.value].files.length, 3);
+    assert.equal(project.hash.project.objects.PBXSourcesBuildPhase[sourcePhase.value].files.length, 4);
     const configs = project.hash.project.objects.XCConfigurationList[target.buildConfigurationList].buildConfigurations;
     for (const { value } of configs) {
       const settings = project.pbxXCBuildConfigurationSection()[value].buildSettings;
       assert.equal(settings.CODE_SIGN_ENTITLEMENTS, 'FitsyMealWidget/FitsyMealWidget.entitlements');
       assert.equal(settings.APPLICATION_EXTENSION_API_ONLY, 'YES');
       assert.equal(settings.IPHONEOS_DEPLOYMENT_TARGET, '17.0');
+      assert.equal(settings.PRODUCT_BUNDLE_IDENTIFIER.replaceAll('"', ''), 'com.fitsy.mobile.widget');
     }
     const embed = Object.values(project.hash.project.objects.PBXCopyFilesBuildPhase).find(value => value?.files);
     assert.equal(embed.dstSubfolderSpec, 13);
     assert.equal(embed.files.length, 1);
     const app = project.getTarget('com.apple.product-type.application').target;
     assert.equal(app.dependencies.length, 1);
-    assert.equal(project.hash.project.objects.PBXSourcesBuildPhase[app.buildPhases[0].value].files.length, 4);
+    assert.equal(project.hash.project.objects.PBXSourcesBuildPhase[app.buildPhases[0].value].files.length, 5);
+    for (const file of ['FitsyMealWidget/WidgetImage.swift', 'FitsyWidgetBridge/AppWidgetImage.swift']) {
+      assert.equal(readFileSync(join(dir, file), 'utf8'), readFileSync(join(__dirname, 'widget/WidgetImage.swift'), 'utf8'));
+    }
     assert.match(readFileSync(join(dir, 'FitsyMealWidget/FitsyMealWidget.entitlements'), 'utf8'), /group\.com\.fitsy\.mobile\.widget/);
     assert.match(readFileSync(join(dir, 'FitsyMealWidget/FitsyMealWidget-Info.plist'), 'utf8'), /com\.apple\.widgetkit-extension/);
     const before = project.writeSync();
@@ -68,16 +72,17 @@ test('Expo plugin embeds and compiles a WidgetKit target and the app bridge, ide
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-function nativeSuite(mutate) {
+function nativeSuite(mutate, suite = 'WidgetData') {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-widget-data-'));
   try {
-    const source = readFileSync(join(__dirname, 'widget/WidgetData.swift'), 'utf8');
+    const source = readFileSync(join(__dirname, `widget/${suite === 'WidgetImage' ? 'WidgetImage' : 'WidgetData'}.swift`), 'utf8');
     const candidate = mutate ? mutate(source) : source;
     if (mutate) assert.notEqual(candidate, source, 'negative control must actually change production code');
-    const model = join(dir, 'WidgetData.swift'); writeFileSync(model, candidate);
+    const model = join(dir, `${suite}.swift`); writeFileSync(model, candidate);
     mkdirSync(join(dir, 'cache'));
     const built = spawnSync('xcrun', ['swiftc', '-swift-version', '5', '-module-cache-path', join(dir, 'cache'), model,
-      join(__dirname, 'widget/tests/WidgetDataTests.swift'), '-o', join(dir, 'tests')], { encoding: 'utf8', timeout: 60_000 });
+      ...(suite === 'WidgetImage' ? [join(__dirname, 'widget/WidgetData.swift')] : []),
+      join(__dirname, `widget/tests/${suite}Tests.swift`), '-o', join(dir, 'tests')], { encoding: 'utf8', timeout: 60_000 });
     assert.equal(built.status, 0, built.stderr);
     return spawnSync(join(dir, 'tests'), [], { encoding: 'utf8', timeout: 20_000 });
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -86,7 +91,7 @@ function nativeSuite(mutate) {
 test('actual Swift fetch, first-result selection and cache/access regressions', { skip: process.platform !== 'darwin' }, () => {
   const result = nativeSuite();
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Widget data: 27 checks passed/);
+  assert.match(result.stdout, /Widget data: 32 checks passed/);
 });
 test('negative control: selecting the last result fails the native suite', { skip: process.platform !== 'darwin' }, () => {
   const result = nativeSuite(source => source.replace('.data.first', '.data.last'));
@@ -97,4 +102,14 @@ test('negative control: an unscoped data-fetch credential fails the native suite
   const result = nativeSuite(source => source.replace('setValue("Widget ', 'setValue("Bearer '));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /scoped authorization/);
+});
+test('actual Swift photo download, bounded disk cache, offline reuse and dark fallback', { skip: process.platform !== 'darwin' }, () => {
+  const result = nativeSuite(null, 'WidgetImage');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Widget photo: 19 checks passed/);
+});
+test('negative control: a photo from a different restaurant fails the native suite', { skip: process.platform !== 'darwin' }, () => {
+  const result = nativeSuite(source => source.replace('cached.url == rawURL', 'true'), 'WidgetImage');
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /different restaurant/);
 });

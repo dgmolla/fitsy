@@ -40,6 +40,7 @@ struct WidgetDish: Codable, Equatable {
     let carbsG: Double
     let fatG: Double
     let confidence: String
+    var photoUrl: String? = nil
 
     var link: URL {
         var url = URLComponents()
@@ -86,6 +87,7 @@ private struct SearchEnvelope: Decodable {
         }
         let id: String
         let name: String
+        let photoUrl: String?
         let bestMatch: Match?
     }
     let data: [Restaurant]
@@ -117,7 +119,8 @@ enum WidgetData {
         }
         let dish = WidgetDish(restaurantID: restaurant.id, restaurantName: restaurant.name, menuItemID: match.menuItemId,
                               name: match.name, calories: match.calories, proteinG: match.proteinG,
-                              carbsG: match.carbsG, fatG: match.fatG, confidence: match.confidence)
+                              carbsG: match.carbsG, fatG: match.fatG, confidence: match.confidence,
+                              photoUrl: restaurant.photoUrl)
         return WidgetSnapshot(state: .dish, dish: dish, updatedAt: now, context: configuration.context)
     }
 

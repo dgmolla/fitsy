@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearToken } from './authClient';
 import { queueSavedProfileToServer, replayPendingProfileSync } from './profileSync';
 import { getMacroTargets, getQuarantinedLegacyTarget } from './macroStorage';
-import { getLegacyOnboardingData, replaceAccountOnboardingData } from './onboardingStorage';
+import { replaceAccountOnboardingData } from './onboardingStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 type Session = { access_token: string; user: { id: string } } | null;
@@ -64,7 +64,7 @@ it('a delayed write and stale delivery cannot recreate or send a deleted account
   expect(global.fetch).not.toHaveBeenCalled();
 });
 
-it.each([true, false])('deletion purges ambiguous upgrade records while ordinary logout retains explicit recovery (delete=%s)', async deleting => {
+it.each([true, false])('deletion purges ambiguous upgrade records while ordinary logout retains them (delete=%s)', async deleting => {
   await AsyncStorage.clear();
   mockSession = { access_token: 'legacy-token', user: { id: `legacy-${deleting}` } };
   await AsyncStorage.setItem('@fitsy/onboarding', JSON.stringify({ weightKg: 140 }));
@@ -74,7 +74,7 @@ it.each([true, false])('deletion purges ambiguous upgrade records while ordinary
   await replaceAccountOnboardingData(`legacy-${deleting}`, {});
   await clearToken({ forgetTargets: deleting });
   mockSession = { access_token: 'next-token', user: { id: `next-${deleting}` } };
-  expect(Boolean(await getLegacyOnboardingData())).toBe(!deleting);
+  expect(await AsyncStorage.getItem('@fitsy/onboarding_unowned')).toBe(deleting ? null : JSON.stringify({ weightKg: 140 }));
   expect(Boolean(await getQuarantinedLegacyTarget())).toBe(!deleting);
   expect(await AsyncStorage.getItem('@fitsy/macro_targets:other-owner')).toBe('preserved other account');
 });

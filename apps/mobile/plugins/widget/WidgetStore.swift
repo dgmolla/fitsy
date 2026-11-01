@@ -19,4 +19,10 @@ enum WidgetStore {
     }
     static var configuration: MealWidgetConfiguration? { read("configuration.json", as: MealWidgetConfiguration.self) }
     static var cached: WidgetSnapshot? { read("snapshot.json", as: WidgetSnapshot.self) }
+    static var photo: WidgetPhoto? { read("photo.json", as: WidgetPhoto.self) }
+
+    static func clearSnapshot() {
+        remove("snapshot.json")
+        remove("photo.json")
+    }
 }

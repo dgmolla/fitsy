@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { assertTestDatabase } from '../../../../scripts/lib/test-database-guard';
-import { failedAttempt, migrationAudit, resolveHexJobs } from '../../../../scripts/deploy/recover-hex-jobs';
+import { failedAttempt, resolveHexJobs } from '../../../../scripts/deploy/recover-hex-jobs';
+import { migrationAudit } from '../../../../scripts/deploy/migration-failure-audit';
 
 const suite = process.env['POSTGRES_PRISMA_URL'] ? describe : describe.skip;
 const root = resolve(__dirname, '../../../..');
@@ -67,6 +68,9 @@ suite('incident #643 recovery with the real Prisma engine (disposable PostgreSQL
       expect(await ledger()).toEqual(before);
       const receipt = await resolveHexJobs(client, target, schema);
       expect(receipt.after.migration_history[0]).toMatchObject({ ...failedAttempt, unresolved: false });
+      expect(receipt.before.runtime_schema).toEqual({ migration_name: '20261029010000_widget_search_tokens',
+        migration_history: [], relation_present: false });
+      expect(receipt.after.runtime_schema).toEqual(receipt.before.runtime_schema);
       expect(await ledger()).toEqual(before.map(row => row.id === failedAttempt.id
         ? { ...row, rolled_back_at: expect.any(Date) } : row));
       const recovered = await ledger();

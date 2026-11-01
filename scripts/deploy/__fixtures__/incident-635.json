@@ -1,0 +1,6 @@
+{
+  "source": "9a066dc4ee6a471b4073a4e9fafcae5708cadf6c",
+  "deploy_run": "https://github.com/dgmolla/fitsy/actions/runs/40809953739",
+  "build_logs": "https://vercel.com/dawits-projects-74b6e00f/fitsy-api/2pnZTSTtsDy5N39FTFmSJNVk8Dbe",
+  "prisma_stderr": "Error: P3009\nmigrate found failed migrations in the target database, new migrations will not be applied. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\nThe `20261028130000_hex_jobs` migration started at 2026-10-28 18:56:48.891157 UTC failed\n"
+}

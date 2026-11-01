@@ -70,7 +70,11 @@ Private per-attempt exports under `--out` are optional recovery evidence; the da
 
 ## Background chain nutrition
 
-Verified restaurant brands without published data enter one shared PDF job per chain before menu estimation.
+Verified restaurant brands without published data receive Jev estimates immediately.
+After source validation, their shared PDF jobs commit in the same transaction as the menus, hex checkpoint and fenced hex-job completion.
+Other workers cannot claim the research until a corroborating menu exists, and a failed hex leaves no new shared PDF work.
+Empty location menus do not enqueue research.
+The journal's deduplicated PDF records retain intent for recovery; only the committed shared queue authorizes a research claim.
 Discovery runs only in the background worker, after the database claim reserves that chain's retry window.
 The fixed three-attempt limit and hourly exponential backoff apply across every worker and location.
 
@@ -98,6 +102,9 @@ Database-free regressions exercise real discovery, extraction, approval planning
 npm test -w scripts -- --runInBand --runTestsByPath \
   pipeline-v2/pdf.test.ts eval/pdf-finder/discover.test.ts
 ```
+
+The [roadmap acceptance guide](pipeline-v2-roadmap.md) adds the real-database journey from queued Jev menus through background official upgrades and exact-match refresh.
+It also checks transaction visibility, rollback and paid-response replay through the existing owned-database verifier.
 
 ## Shared Uber Eats rate and backoff
 

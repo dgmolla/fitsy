@@ -1,0 +1,170 @@
+# Real iOS Apple Maps with the existing subscriber API; no PostHog changes or purchases.
+appId: com.fitsy.mobile
+tags: [billing, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
+---
+- runFlow:
+    file: ../helpers/map-search-setup.yaml
+    env:
+      LOCATION_PERMISSION: inuse
+- tapOn:
+    id: discovery-location
+- scrollUntilVisible:
+    element: "Search near DTLA"
+    direction: DOWN
+- tapOn: "Search near DTLA"
+- tapOn:
+    id: preview-edit-targets
+- runFlow:
+    when:
+      visible:
+        id: meal-filter-unlink
+    commands:
+      - tapOn:
+          id: meal-filter-unlink
+- tapOn: "Protein grams"
+- eraseText: 7
+- inputText: "40"
+- tapOn: "Carbs grams"
+- eraseText: 7
+- inputText: "60"
+- tapOn: "Fat grams"
+- eraseText: 7
+- inputText: "20"
+- tapOn: "Calories per meal"
+- eraseText: 7
+- inputText: "600"
+- tapOn:
+    id: meal-filter-apply
+- extendedWaitUntil:
+    visible:
+      id: map-pin-0
+    timeout: 30000
+- assertNotVisible:
+    id: map-preview
+- tapOn:
+    id: map-pin-0
+- assertVisible:
+    id: map-preview-open
+- takeScreenshot: map-search-preview
+- tapOn:
+    id: map-preview-open
+- extendedWaitUntil:
+    visible:
+      id: menu-search
+    timeout: 30000
+- tapOn:
+    id: restaurant-back
+- extendedWaitUntil:
+    visible:
+      id: discovery-map
+    timeout: 15000
+- tapOn:
+    id: discovery-search
+- inputText: pizza
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: map-pin-0
+    timeout: 30000
+- runFlow: ../helpers/map-first-spot.yaml
+- copyTextFrom:
+    id: map-preview-open
+- evalScript: ${output.mapBeforeToggle = maestro.copiedText}
+- tapOn:
+    id: discovery-view-toggle
+- assertNotVisible:
+    id: discovery-map
+- assertVisible:
+    id: discovery-hero
+- assertVisible:
+    id: discovery-search
+    text: pizza
+- tapOn:
+    id: discovery-view-toggle
+- assertVisible:
+    id: discovery-map
+- assertVisible:
+    id: discovery-search
+    text: pizza
+- assertVisible:
+    id: map-filter-protein
+    text: "Edit protein grams, 40"
+- runFlow: ../helpers/map-first-spot.yaml
+- copyTextFrom:
+    id: map-preview-open
+- assertTrue: ${maestro.copiedText === output.mapBeforeToggle}
+# Edit the same filters after toggling and retain the craving.
+- tapOn:
+    id: preview-edit-targets
+- tapOn: "Protein grams"
+- eraseText: 7
+- inputText: "45"
+- tapOn:
+    id: meal-filter-apply
+- assertVisible:
+    id: map-filter-protein
+    text: "Edit protein grams, 45"
+- assertVisible:
+    id: discovery-search
+    text: pizza
+- extendedWaitUntil:
+    visible:
+      id: map-pin-0
+    timeout: 30000
+# Ranked pizza rows need not satisfy Shuffle's close-fit nutrition filter.
+# Clear the craving and restore the exact targets verified by the subscriber
+# preflight before requiring a nonempty, changed shuffle page.
+- tapOn:
+    id: discovery-clear-search
+- extendedWaitUntil:
+    visible:
+      id: map-pin-0
+    timeout: 30000
+- assertVisible:
+    id: discovery-search
+- assertNotVisible:
+    id: discovery-search
+    text: pizza
+- tapOn:
+    id: preview-edit-targets
+- tapOn: "Protein grams"
+- eraseText: 7
+- inputText: "40"
+- tapOn:
+    id: meal-filter-apply
+- assertVisible:
+    id: map-filter-protein
+    text: "Edit protein grams, 40"
+- extendedWaitUntil:
+    visible:
+      id: shuffle-button
+      enabled: true
+    timeout: 30000
+- runFlow: ../helpers/map-first-spot.yaml
+- copyTextFrom:
+    id: map-preview-open
+- evalScript: ${output.mapBeforeShuffle = maestro.copiedText}
+- tapOn:
+    id: shuffle-button
+- extendedWaitUntil:
+    visible:
+      id: shuffle-button
+      enabled: true
+    timeout: 30000
+- runFlow: ../helpers/map-first-spot.yaml
+- copyTextFrom:
+    id: map-preview-open
+- assertTrue: ${maestro.copiedText !== output.mapBeforeShuffle}
+- assertVisible:
+    id: discovery-search
+- assertNotVisible:
+    id: discovery-search
+    text: pizza
+- assertVisible:
+    id: map-filter-protein
+    text: "Edit protein grams, 40"
+- assertVisible: "Location: DTLA"
+- takeScreenshot: map-search-shuffle

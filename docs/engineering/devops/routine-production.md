@@ -10,7 +10,11 @@ flowchart LR
     R[Independent PR review and acceptance] --> M[Protected main merge]
     M --> G[Existing Vercel Git production build]
     G --> P[Project and database guards plus Redis write preflight]
-    P --> D[Guarded additive migration]
+    P --> L[Read-only migration history preflight]
+    L -->|unresolved or unavailable| H
+    L --> D[Guarded additive migration]
+    D -->|failure| F[Bounded read-only migration audit]
+    F --> H[Withhold build and retain original failure]
     D --> Q[Required runtime migration preflight]
     Q --> B[API build and Vercel promotion]
     M --> V[Exact main Verify]
@@ -18,6 +22,8 @@ flowchart LR
     B --> O[Observe trusted Git deployment and serving health]
     A --> O
     O --> S[Production-safe API smoke]
+    O -->|failure| I[Create or append open production incident]
+    S -->|failure| I
     S --> E[Applicable compatible iOS OTA and readback]
 ```
 
@@ -48,9 +54,22 @@ Missing or partial configuration, read-only credentials, unavailable transport, 
 Provider errors, tokens and URLs never enter preflight diagnostics.
 The existing release regression suite executes the real build scripts with synthetic signed identity and external transports, checks Prisma's exact migration input and cleanup, and runs the runtime binding guard at the build boundary.
 Run `python3 -B scripts/deploy/routine-release.test.py` to verify approved, held, changed-SQL, legacy preview and fail-closed deployment paths without contacting production.
+The existing Jest wrapper discovers these cases with `--list-tests` and runs each with its own bounded deadline, retaining every release guard as the suite grows.
 Run `node --test scripts/deploy/pipeline-roles-approval.test.mjs` for an installed-Prisma regression against disposable SQLite dependency migrations, including delayed approval, future role references, unchanged ledger entries and migration failures.
 Already-applied role SQL needs no repeated approval; Prisma's [production deployment contract](https://docs.prisma.io/docs/orm/v6/prisma-migrate/workflows/development-and-production#production-and-testing-environments) permits an applied migration to be absent from the deploy input.
 Wrong identity, missing binding or failed migration also withholds the build; failed API build cannot succeed.
+Before invoking Prisma, `migrate-prod.sh` runs `scripts/deploy/migration-failure-audit.ts --prod --preflight` through the existing signed identity and exact production-target guards.
+Any unresolved migration attempt withholds Prisma status/deploy and the API build, emits the read-only snapshot, and leaves recovery with the separately approved maintenance owner.
+The stop message names each unresolved migration, attempt ID and start time from that validated snapshot, so repeated application releases can be traced to the original failure without disclosing driver logs.
+Unavailable history also withholds deployment, without retrying the read or disclosing database errors.
+Completed or rolled-back history permits the existing guarded migration selection; the subsequent runtime-schema preflight must still pass.
+After a new guarded production migration fails, `migrate-prod.sh` invokes the same helper without `--preflight` once to retain the audit in that Vercel build log.
+The helper revalidates production workload identity and target, uses a read-only repeatable-read transaction with a five-second statement timeout, and caps the entire diagnostic process at ten seconds.
+Both build and protected recovery validate the complete audit snapshot, including unique relation/role evidence and agreement between ledger timestamps and unresolved flags, before consuming it.
+Missing or contradictory evidence is unavailable evidence: it withholds Prisma/build, preserves an existing migration failure, and never authorizes recovery.
+It prints only the existing audit's ledger, object, role and runtime-schema evidence, without raw database logs or credentials.
+Unavailable diagnostics retain a private error summary and the original migration exit status; they cannot start the API build, resolve history, grant roles or retry migrations.
+Protected maintenance shares the same audit function and SQL, while its separate recovery identity and approval remain required.
 Preview/development builds refuse either production binding and preview migrations retain the development route.
 Preview runs the same Redis preflight after the DEV database guard and before migrations; undeployed development remains usable without Redis.
 The existing dev mirror watches the preflight and database guard inputs so changes reach the stable dev deployment.
@@ -72,6 +91,11 @@ When Vercel supplies an app URL as `log_url`, only the deployment ID from its co
 Unknown or malformed descriptions fall back to the project's deployments list.
 Raw provider descriptions, command text, arbitrary log URLs and raw health errors are excluded from this diagnostic.
 The failure incident links the exact Deploy run and source plus the existing separately authorized migration recovery procedure, without emitting a success receipt or retrying the deployment.
+The smoke job calls `scripts/deploy/production-incident.py` to reuse one open production-verification incident and append each later source/run/attempt with its own evidence.
+The reporter reads every incident/comment page, prefers its stable marker, and can adopt the oldest open legacy production-release report without rewriting historical evidence.
+The same run attempt is recorded once; a closed incident permits a new report, and failed reads or uncertain writes stop without a fallback issue or write retry.
+This groups reporting while leaving each failure's diagnosis and protected recovery separate; keep the incident open until exact-source production verification succeeds.
+Run `python3 -B scripts/deploy/routine-release.test.py ProductionIncidentTests` to exercise the actual workflow publisher with an isolated GitHub fixture.
 The health endpoint already consumes Vercel's system `VERCEL_GIT_COMMIT_SHA`.
 No custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval is required.
 Keep the existing repository Expo/smoke credential route.
@@ -88,11 +112,37 @@ Before the pilot, retain the actual known-good serving deployment URL and applic
 Use `bash scripts/deploy/rollback.sh api https://KNOWN_GOOD_URL` for an authorized API rollback.
 Do not infer the known-good target from second-newest deployment ordering.
 After a failed or uncertain release, read the actual project/deployment/alias and health before resuming.
+Incident [#602](https://github.com/dgmolla/fitsy/issues/602) stopped at Redis readiness before migrations or compilation: [Deploy run 40627648987](https://github.com/dgmolla/fitsy/actions/runs/40627648987) observed failed production build [HRjjY8pR4ThJLd2dU9yP7mHjWdM7](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/HRjjY8pR4ThJLd2dU9yP7mHjWdM7) at `bd306a15f72455042bb408f89dc5d1f261f9b5d2`.
+Its sanitized diagnostic establishes unavailable shared-store readiness, without identifying a missing binding, token permission or transport failure.
+The later production [retry 4PEAcjpZeFAyQ6twB4vQ41eqixa3](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/4PEAcjpZeFAyQ6twB4vQ41eqixa3) reached Ready on the same source; changing application code or weakening the preflight was unnecessary.
+The [retained #602 diagnostic](../../../scripts/deploy/__fixtures__/incident-602.json) now drives the actual production and preview build regression through missing configuration, an unwritable store and restored readiness, requiring migrations and runtime-schema checks before compilation.
+These synthetic provider responses prove the build contract, while current serving identity and production smoke remain separate release evidence.
+Incident [#617](https://github.com/dgmolla/fitsy/issues/617) stopped before Prisma: [Deploy run 40723804394](https://github.com/dgmolla/fitsy/actions/runs/40723804394) at `8881bb6184325d2e3b0d407de7e83963ad2e11bc` observed failed Vercel production deployment [4xyVQJCwXY3V5tvJmV4SHCPQZNmM](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/4xyVQJCwXY3V5tvJmV4SHCPQZNmM).
+Its build refused missing exact role approval before any migration or API compilation, the same failure repaired by #627 and the dependent-SQL filter in #632.
+The [retained #617 diagnostic](../../../scripts/deploy/__fixtures__/incident-617.json) runs through the existing build regression with absent or invalid approval and both legacy and app runtime bindings, proving unrelated migrations and API compilation can proceed while controlled SQL stays held and deployment guards remain active.
+Incident [#622](https://github.com/dgmolla/fitsy/issues/622) stopped before Prisma: [Deploy run 40733284116](https://github.com/dgmolla/fitsy/actions/runs/40733284116) at `9bb3d167b410891e96dc3cec87f69a97690dd64b` observed failed Vercel production deployment [CNHHrWguhaydhBtQCTNVA2zbRdEg](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/CNHHrWguhaydhBtQCTNVA2zbRdEg).
+Its build refused missing exact role approval before any migration or API compilation; it did not create the later failed hex-jobs migration attempt.
+The [retained #622 diagnostic](../../../scripts/deploy/__fixtures__/incident-622.json) now runs through the same build regression as #626, preserving the original source and refusal while proving unrelated migrations and API compilation can proceed with controlled SQL held.
+Incident [#626](https://github.com/dgmolla/fitsy/issues/626) stopped before Prisma: [Deploy run 40744571501](https://github.com/dgmolla/fitsy/actions/runs/40744571501) at `b47915a15cc3b027de952b118ba41ef901608d4a` observed failed Vercel deployment [2VxCGquGpsGoXe186GiQSa4bDstS](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/2VxCGquGpsGoXe186GiQSa4bDstS), whose build required role approval for every production deployment.
+The selection repair in #627 and dependency filter in #632 supersede that whole-build gate while retaining exact approval for controlled SQL.
+The [retained #626 diagnostic](../../../scripts/deploy/__fixtures__/incident-626.json) binds the build regression to its original source: absent or invalid role approval must still permit unrelated migrations and API compilation, with controlled SQL held, source SQL unchanged, and database, Redis, history and runtime-schema guards executed.
+This regression does not authorize role application, failed-migration recovery or a production redeploy.
 If Prisma reports `P3009`, the failed migration ledger still blocks deployment even when the failed file is held from the temporary input.
+The release regression suite replays the original Vercel diagnostics from [#628](../../../scripts/deploy/__fixtures__/incident-628.json), [#634](../../../scripts/deploy/__fixtures__/incident-634.json) and [#635](../../../scripts/deploy/__fixtures__/incident-635.json) through the actual build caller, including a failure appearing after the history preflight and an unavailable follow-up audit.
+The original Prisma failure must remain visible, with no build, automatic resolve or migration retry.
 The role filter never resolves failures, deletes ledger rows, marks unexecuted SQL applied, or retries with unfiltered migrations.
+Incident [#628](https://github.com/dgmolla/fitsy/issues/628) is the original failed hex-jobs attempt: [Deploy run 40753740475](https://github.com/dgmolla/fitsy/actions/runs/40753740475) at `63a36dfb787968141e42630f0bd11aad70806102` stopped on exact Vercel production deployment [2DcDdaK24gTAb4wro7NMziFpLFEA](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/2DcDdaK24gTAb4wro7NMziFpLFEA).
+Its build held only `20261028120000_pipeline_writer_roles`, then attempted `20261028130000_hex_jobs` and reported `current transaction is aborted`; that message alone does not identify the original PostgreSQL error.
+The dependency filter corrected in #629 prevents that selection by holding dependent role SQL as well; it does not repair the retained attempt or authorize production recovery.
+The regression suite preserves #628's transaction-aborted diagnostic even if the follow-up audit fails, and proves the retained attempt stops the current build before Prisma regardless of role approval.
 For incident [#629](https://github.com/dgmolla/fitsy/issues/629), Vercel deployment `H3t9dcTY75kXmgPvmtpizY6oQZ2J` at `b28c630` reported a retained failure of `20261028130000_hex_jobs` from the preceding `63a36df` build.
+Incident [#634](https://github.com/dgmolla/fitsy/issues/634) is the same retained failure: [Deploy run 40805701103](https://github.com/dgmolla/fitsy/actions/runs/40805701103) at `7e0b5e90b0b03d1b0a1c6c147e43e7398a08b515` stopped on exact Vercel deployment [Gf6p9wJ4siLnQYKmctJFFhup6mdw](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/Gf6p9wJ4siLnQYKmctJFFhup6mdw), which reported P3009 for the hex-jobs attempt started at `2026-10-28 18:56:48.891157 UTC`.
+Its [retained diagnostic](../../../scripts/deploy/__fixtures__/incident-634.json) is replayed through the actual build entrypoint by the release regression suite, including unavailable audit evidence and the current pre-Prisma stop with the failed attempt's identity.
 Incident [#647](https://github.com/dgmolla/fitsy/issues/647) is the same retained failure: exact Vercel deployment [aei8rXsjyWKEhiAywALkLrF5yr1f](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/aei8rXsjyWKEhiAywALkLrF5yr1f) at `6f6d579` stopped with P3009 before building the widget API.
 Incident [#650](https://github.com/dgmolla/fitsy/issues/650) repeats that unresolved attempt: [Deploy run 40858904921](https://github.com/dgmolla/fitsy/actions/runs/40858904921) observed GitHub deployment `7409367502` at `605560241b8c076bef45585457175317d491f2b0`, and exact Vercel deployment [7coDSBVrAKVpB5zT45D2aUufd3LT](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/7coDSBVrAKVpB5zT45D2aUufd3LT) stopped with P3009.
+Incident [#657](https://github.com/dgmolla/fitsy/issues/657) repeats the same failure at `706e930e601f83aa6200594a6ee8460781bbe614`: [Deploy run 40986927219](https://github.com/dgmolla/fitsy/actions/runs/40986927219) observed GitHub deployment `7428295367`, and exact Vercel deployment [BX7QMc6Go5PccVBSdkMzUs9a1aug](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/BX7QMc6Go5PccVBSdkMzUs9a1aug) reported P3009 for the hex-jobs attempt started at `2026-10-28 18:56:48.891157 UTC`.
+That run observed older source `bfd87f8fbd7ee9863554e973870f6988248d102f` serving; it did not establish recovery.
+The history preflight prevents another Prisma invocation against that unresolved ledger, without resolving it, granting roles or retrying the failed SQL.
 The 2026-10-29 10:58 UTC read-only audit again found attempt `c4b89b99-d4a5-49d9-9664-4699383e5f81`, its matching checksum, zero completed steps, NULL logs and absent hex tables; `fitsy_app` and `pipeline_writer` were absent, while `fitsy_audit_readonly` was present.
 The existing production maintenance owner still owns separately approved #643 recovery, followed by guarded deployment and exact-source smoke; the diagnostic correction does not establish production recovery.
 The 2026-10-29 10:12 UTC read-only audit found the original unresolved attempt, absent hex tables, absent `fitsy_app` and `pipeline_writer`, and absent `WidgetToken`.
@@ -103,6 +153,9 @@ The correction prevents new attempts without approved roles; it does not repair 
 The existing production maintenance owner must inspect the failed row and checksum, transaction rollback and actual table/ACL state before separately authorizing any Prisma recovery.
 Run the complete read-only [migration failure audit](../../../scripts/deploy/migration-failure-audit.sql) through that owner's existing SQL connection or Supabase SQL editor and retain its JSON with the incident.
 It reports every unresolved attempt, the hex-jobs history, remaining tables/ACLs and controlled-role presence in one bounded read-only snapshot without disclosing raw driver logs.
+Its `runtime_schema` field also reports every widget migration attempt and whether `WidgetToken` exists, so the owner can distinguish ledger recovery from the API's remaining runtime prerequisite.
+The protected recovery command compares every audit field except the snapshot timestamp and expected rollback marker, so new evidence cannot be silently omitted from recovery verification.
+Resolving hex-jobs cannot establish widget schema readiness or authorize its role prerequisite.
 Compare the failed checksum with `shasum -a 256 prisma/migrations/20261028130000_hex_jobs/migration.sql`; a matching checksum or zero applied steps alone does not prove rollback.
 Compare the recorded failure with the original build evidence, confirm both hex tables are absent, and diagnose any other unresolved attempt or partial effect.
 Missing ledger logs remain unknown; role absence alone does not establish the original error.
@@ -127,7 +180,13 @@ The disposable Prisma regression explicitly resolves its failed fixture through 
 Run `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath deploy/recover-hex-jobs.test.ts` for signed identity, target, state and actual workflow-shell refusal coverage.
 Its post-recovery comparison tests accept independently parsed snapshots and reject changes beyond the rollback marker while preserving the original evidence.
 The owned database verifier also runs `apps/api/tests/db/hexJobsRecovery.db.test.ts`, which recreates the observed ledger in a disposable PostgreSQL database, proves P3009 and partial-state refusal, and rehearses real Prisma recovery followed by filtered deployment.
-If smoke reports `invalid-session=503` while database health and missing-session checks pass, inspect shared-store configuration and runtime `[rate-limit] Shared store unavailable` logs.
+Incident [#580](https://github.com/dgmolla/fitsy/issues/580) first exposed the shared-store runtime outage at `27b7bfc3cd2b61e74c967a03bad85c98e1492466`.
+Production deployment [DN5PyHWKKRSEKcP1or4H2WzwV5Vn](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/DN5PyHWKKRSEKcP1or4H2WzwV5Vn) reached Ready, but its [Deploy smoke](https://github.com/dgmolla/fitsy/actions/runs/40566188200/job/122408065380) recorded database health 200 and missing-session 401s, then `invalid-session=503`.
+Incident [#584](https://github.com/dgmolla/fitsy/issues/584) repeated that outage on production deployment [5kfvNLjY41uiWSsTEHaLFowTnLEc](https://vercel.com/dawits-projects-74b6e00f/fitsy-api/5kfvNLjY41uiWSsTEHaLFowTnLEc) at `fa2779028de4e6160c1548ea36c5d9c27c176474`; its migration and build succeeded.
+The [Deploy smoke log](https://github.com/dgmolla/fitsy/actions/runs/40589809610/job/122490847803) recorded database health 200 and missing-session 401s, then `invalid-session=503`; this is the runtime outage covered by #587's guarded Redis preflight.
+The retained [#580 diagnostic](../../../scripts/deploy/__fixtures__/incident-580.json) and [#584 diagnostic](../../../scripts/deploy/__fixtures__/incident-584.json) drive both smoke failure/recovery and the existing production/preview build regressions, preserving the distinction between a Ready deployment and working authentication.
+If smoke reports `invalid-session=503` while database health passes, its failure result now directs inspection of shared-store configuration and runtime `[rate-limit] Shared store unavailable` logs.
+The status alone does not distinguish a missing binding, an unwritable token or a provider outage.
 Missing-session 401s return before Redis, and `/api/health` probes only the database; neither establishes authentication readiness.
 Restore both store variables in the existing `fitsy-api` Vercel environment with a writable token and verify `EVAL` access.
 Use the supported Vercel environment controls without printing credential values, and keep production and nonproduction stores separate.

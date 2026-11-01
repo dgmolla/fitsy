@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { runInNewContext } from 'node:vm';
 import { copyProductFlowControls } from '../verify/product-flow-fixture';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
@@ -53,6 +54,108 @@ test('menu startup retries only observations and authenticates once before readi
   const [, signIn] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/helpers/discovery-signin.yaml'), 'utf8')) as [unknown, Record<string, unknown>[]];
   expect(signIn.some(step => step.retry || step.launchApp || step.openLink)).toBe(false);
   expect(commands[launch + 2]).toEqual({ openLink: "${'fitsy://restaurant/' + output.seed.id}" });
+});
+
+test.each([
+  'map-search', 'map-search-location-denied',
+])('%s submits search through the iOS return key before requiring a result pin', flow => {
+  type Step = string | {
+    inputText?: string;
+    pressKey?: string;
+    extendedWaitUntil?: { visible: { id: string }; timeout: number };
+  };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, Step[]];
+  const search = commands.findIndex(step => typeof step === 'object' && step.inputText === 'pizza');
+  expect(search).toBeGreaterThan(-1);
+  // Use the input's native Search action instead of heuristic iOS keyboard
+  // dismissal, and keep the result gate after submission.
+  expect(commands[search + 1]).toEqual({ pressKey: 'Enter' });
+  expect(commands[search + 2]).toEqual({
+    extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 },
+  });
+});
+
+test('widget return dismisses the non-accessible Debug overlay and retains the named action and Search assertion', () => {
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/widget-setup.yaml'), 'utf8')) as [unknown, {
+    tapOn?: { id?: string; point?: string };
+    runFlow?: { when: { visible: string }; commands: object[] };
+    scrollUntilVisible?: object;
+  }[]];
+  const tap = commands.findIndex(step => step.tapOn?.id === 'widget-search');
+  expect(tap).toBeGreaterThan(-1);
+  expect(commands[tap - 2]).toEqual({ scrollUntilVisible: {
+    element: { id: 'widget-search' }, direction: 'DOWN',
+  } });
+  const dismiss = commands.findIndex(step => step.tapOn?.point === '93%,93%');
+  expect(dismiss).toBeGreaterThan(-1);
+  expect(commands[dismiss + 1]).toEqual({ runFlow: {
+    when: { visible: 'Search restaurants or dishes' }, commands: [
+      { openLink: 'com.fitsy.mobile://widget' }, { tapOn: { text: '^Open$', optional: true } },
+    ],
+  } });
+  expect(commands[dismiss + 2]).toEqual({ extendedWaitUntil: { visible: { id: 'widget-step-1' }, timeout: 15000 } });
+  expect(commands[tap + 1]).toEqual({ extendedWaitUntil: {
+    visible: 'Search restaurants or dishes', timeout: 15000,
+  } });
+});
+
+test.each([false, true].flatMap(available => ['0', '1'].map(enabled => ({ available, enabled }))))(
+  'mixed-trial reminder asserts both positive and negative copy (schedulable: $available, opted in: $enabled)', ({ available, enabled }) => {
+    type Step = { runFlow?: { when: { true: string }; commands: Step[] }; assertVisible?: string; assertNotVisible?: string; assertTrue?: string };
+    const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/helpers/mixed-trial-reminder.yaml'), 'utf8')) as [unknown, Step[]];
+    const context = { output: { trialFixture: { shortReminderAvailable: available } }, REMINDER_ENABLED: enabled };
+    const evaluate = (source: string) => runInNewContext(source.slice(2, -1), context);
+    const visible: string[] = [], absent: string[] = [];
+    const drive = (steps: Step[]) => {
+      for (const step of steps) {
+        if (step.assertTrue) expect(evaluate(step.assertTrue)).toBe(true);
+        if (step.assertVisible) visible.push(step.assertVisible);
+        if (step.assertNotVisible) absent.push(step.assertNotVisible);
+        if (step.runFlow && evaluate(step.runFlow.when.true)) drive(step.runFlow.commands);
+      }
+    };
+    drive(commands);
+    const optIn = 'Optional; turn on reminders after purchase.', optedIn = "We'll send you a reminder.*";
+    const unavailable = ['Reminder unavailable', 'This trial is too short for a reminder before the cancellation deadline.'];
+    expect(visible).toEqual(available ? [enabled === '1' ? optedIn : optIn] : unavailable);
+    expect(absent).toEqual(available ? [...unavailable, enabled === '1' ? optIn : optedIn] : [optIn, optedIn]);
+  },
+);
+
+test.each([
+  ['map-search', 'inuse'],
+  ['map-search-location-denied', 'never'],
+])('%s launches once with a literal %s location permission before observing readiness', (flow, permission) => {
+  type Step = {
+    launchApp?: object;
+    assertTrue?: string | object;
+    runFlow?: { file?: string; env?: Record<string, string>; when?: { true: string }; commands: Step[] };
+    retry?: { maxRetries: number; commands: object[] };
+  };
+  const read = (path: string) => loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e', path), 'utf8'))[1] as Step[];
+  const setup = read(`flows/${flow}.yaml`)[0]?.runFlow;
+  if (!setup?.file) throw new Error('Map journey must use the shared setup');
+  expect(setup.env?.LOCATION_PERMISSION).toBe(permission);
+  const commands = read(join('flows', setup.file));
+  const evaluate = (expression: string) => runInNewContext(expression.slice(2, -1), setup.env);
+  const selected = commands.flatMap(step => step.runFlow?.when?.true
+    ? evaluate(step.runFlow.when.true) ? step.runFlow.commands : []
+    : [step]);
+  // Maestro's iOS driver accepts inuse/never for location, not generic allow/deny.
+  // launchApp permission values reach that driver without variable expansion.
+  expect(selected.filter(step => step.launchApp)).toEqual([{
+    launchApp: { clearState: true, clearKeychain: true, permissions: { location: permission } },
+  }]);
+  const launch = selected.findIndex(step => step.launchApp);
+  const readiness = selected[launch + 1]?.retry;
+  expect(readiness?.maxRetries).toBe(2);
+  expect(readiness?.commands).toEqual([
+    { runFlow: { when: { visible: 'Development Build' }, commands: [
+      { tapOn: '^http://(localhost|127\\.0\\.0\\.1):[0-9]+$' },
+    ] } },
+    { waitForAnimationToEnd: { timeout: 10000 } },
+    { extendedWaitUntil: { visible: { id: 'welcome-start' }, timeout: 30000 } },
+  ]);
 });
 
 test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-energy-sync', 'menu-load-recovery',

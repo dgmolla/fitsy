@@ -110,12 +110,59 @@ An optional `default` entry can restore a baseline build/state before journeys w
 All selected journeys still run; missing preparation or a store mismatch fails the selection.
 Apple history transfer retains the real-store requirements below and cannot pass on a Test Store build.
 
+Entitled journeys also verify the current login UUID against RevenueCat, require a dated Test Store or Apple sandbox subscription, and run the ordinary API sync/status checks before capture.
+Expired or recreated Test Store accounts use `helpers/active-entitlement.yaml` for one real simulated purchase; a failed purchase or unverified server verdict stops evidence.
+Apple sandbox accounts must already have active real sandbox history; the runner never automatically confirms an Apple purchase.
+Use a persistent `seed-%@fitsy.dev` account to preserve RevenueCat identity across DEV resets.
+Profile setup and a subscription database row alone cannot establish this prerequisite.
+
+Before an ordinary Debug Test Store walkthrough, reload the active account's public environment and reset the session with the following command.
+This restarts owned Metro with those credentials and signs into the active account even when a previous expired journey left another account in keychain.
+
+```sh
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs prepare-walkthrough <UDID>
+```
+
+Install local `tesseract` with English data for evidence capture and the media integration lane.
+Every successful flow screenshot is inspected from its pixels; unreadable captures and unintended subscription-expired screens fail.
+Final publication also requires a content check bound to the outcome screenshot hash, and walkthrough validation inspects returned screenshots and native hierarchy observations.
+An intentional expired-screen walkthrough must set `flow` to its executed `subscription-expired-routing` or `subscription-restore-expired` journey in the walkthrough JSON.
+Only the maintained expired/history fixture plus its mandatory `resubscribe-restore` assertion permits that screen; a billing tag or prose claim does not.
+Standalone host captures can use `node scripts/sim/screen-guard.mjs <capture-directory> [maintained-expired-flow.yaml]` before publication.
+
 ```sh
 export FITSY_E2E_FIXTURES=/absolute/local/fitsy-fixtures.json
 node --env-file=apps/mobile/.env.development.local scripts/sim/ci.mjs --scope=full --udid=<UDID>
 ```
 
 ## Native helper checks
+
+The `map-search` and `map-search-location-denied` journeys require an iOS Debug binary rebuilt with the Expo-compatible `react-native-maps` dependency.
+An OTA cannot add this native module to an older binary.
+Both flows use the existing `entitled-dev` fixture and real search/shuffle API with no purchases or remote flag changes.
+The boolean PostHog `map-search` flag enables the experiment only in development iOS builds; `mapDebug=1` is the local walkthrough opt-in.
+Production builds and Android ignore both opt-ins and keep the list.
+The first flow opens a pin, enters the restaurant menu, searches pizza, edits meal targets, switches map/list without losing state, shuffles, and clears search.
+The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
+Both map journeys submit the single-line search field with `pressKey: Enter`, which uses its native Search return key to dismiss the keyboard.
+The detail round trip taps `restaurant-back`; generic Maestro `back` does not activate the iOS screen's custom Back control.
+Map filter assertions require the chip ID and its exact accessibility label, such as `map-filter-protein` with `Edit protein grams, 40`.
+An explicit label hides the nested `40g protein` text from iOS accessibility; `DiscoveryMap.test.tsx` exercises the saved selectors against the rendered controls after switching views, editing targets and shuffling.
+Dense photo pins overlap, and MapKit can dispatch Maestro's coordinate tap to a neighboring pin despite the requested accessibility ID.
+Both journeys retain pin-to-preview coverage; `map-search` compares toggle and shuffle results through `helpers/map-first-spot.yaml`, which closes any preview and uses the existing carousel to require the first result.
+The real-screen regression replays that helper with different native pin hit targets and a previously selected restaurant, requiring the same first result after toggling and a new one after shuffling.
+Ranked search can return pizza restaurants whose meals do not satisfy Shuffle's close-fit nutrition filter.
+After checking pizza and the 45g protein edit, the positive Shuffle phase clears the craving and restores the exact 600 kcal, 40g protein, 60g carbs and 20g fat context verified by `shuffle-subscriber.mjs`.
+It still requires a changed first result and preserved area and targets; a disabled Shuffle button after a successful empty response is expected behavior.
+`DiscoveryMap.test.tsx` replays those saved edits against a boundary with no qualified pizza results and separately verifies empty-shuffle state and Clear search recovery.
+`helpers/map-search-setup.yaml` shares the authenticated API preflight and bounded startup reconnection.
+Maestro passes `launchApp.permissions` values to iOS without expanding variables, so this helper selects literal `inuse` or `never` launches through `runFlow.when.true`.
+The installed iOS location driver rejects generic `allow`/`deny`; `inuse` grants foreground location and `never` exercises denial.
+Keep both permission scenarios covered by `scripts/sim/ci.test.ts` before host replay.
+The planner and product acceptance entrypoint consume both saved flows; the native dependency change requires the full selection.
+Run `lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node scripts/sim/ci.mjs --scope=full --udid=<owned-UDID>` with the documented host fixture configuration.
+If the managed worker cannot open that shared lock, stop native execution and preserve the exact denial for the existing host owner.
+Do not substitute another lock or drive the device through another tool; YAML parsing and component tests do not establish a native pass.
 
 For syntax-only checks in a restricted worker, Maestro may fail while changing permissions on its shared `~/.maestro/deps` cache.
 The installed CLI supports `MAESTRO_OPTS="-Duser.home=$PWD/.evidence/maestro-runtime" maestro check-syntax apps/mobile/e2e/flows/shuffle.yaml` to put its Java runtime cache inside the owned checkout without changing `HOME` or shared binaries.
@@ -233,8 +280,19 @@ Every oracle flow reads the configured `EXPO_PUBLIC_DEV_LOGIN_EMAIL/PASSWORD`; o
 `lib/api.auth.test.ts` covers token attachment, account cache isolation and sign-in recovery.
 
 A restricted worker that cannot open local ports or access CoreSimulator must retain that failure and the planned scope for the existing host owner.
+The shared simulator lock must also be writable; a `lockf` denial before launch is an environment failure, not a native test result.
+Keep the baseline source and screenshot requirement in that owner's assignment so the host can capture matching before/after Settings images.
+Do not substitute another lock file or run without the shared lock.
 Run the canonical `node scripts/sim/ci.mjs --scope=full --udid=<owned-UDID>` on the authorized host against the candidate backend and Metro source.
 Syntax checks and component tests do not establish a passing native journey or deployed 401s.
+
+`widget-setup` checks that Settings omits older profile-facts recovery, Notifications and Home Screen widget rows, then captures `settings-after`.
+It opens `/widget` directly, matching WidgetKit's retained empty-state route, and verifies setup guidance plus return to search.
+Before the bottom action, it dismisses the observed Debug LogBox banner at its native close point, then scrolls the named action into view.
+The banner can be absent from XCTest's hierarchy while covering the action.
+If the banner is already absent, that point can open Search; the flow returns to widget setup before its screenshot and named-control test.
+The setup checkpoint and final return-to-Search assertion remain mandatory.
+The `entitled-dev` fixture and native Home Screen checks in `plugins/widget/README.md` still apply; Settings no longer links to setup.
 
 ## Mixed-duration trial reminders
 
@@ -242,7 +300,15 @@ Syntax checks and component tests do not establish a passing native journey or d
 Each catalog clears app state and keychain once, then retries only bounded startup observations and conditional local Metro reconnection before requiring `welcome-start`.
 The second catalog can otherwise hit XCTest `kAXErrorInvalidUIElement` while the welcome screen animates in; that is an accessibility read failure before the trial journey starts.
 Permanent hierarchy failures and an incorrect screen still fail, and billing actions and outcome assertions never run inside the startup retry.
-Its shared helper checks the named reminder offer, the schedulable purchase default, live prices and renewal copy, plan switching, unavailable reminders for short trials with and without simulated opt-in, and the visual-only checkout guard.
+Its shared helper checks the configured reminder offer and purchase default, live prices and renewal copy, both plan selections, reminder availability with and without simulated opt-in, and the visual-only checkout guard.
+`mixed-trial-default.mjs` derives the expected default from each synthetic catalog and the host's local calendar before any plan is selected.
+The development visual paywall supplies synthetic opt-in by default and synthetic enabled state with `devReminderEnabled=1`, including anonymous launches.
+Those visual states never read an anonymous account's unavailable notification state as evidence of opt-in, and never request permission or schedule a notification.
+Release builds ignore both visual parameters and keep the real account's permission and reminder preferences.
+The simulator must use that same local timezone.
+Two calendar days can span 49 elapsed hours at the autumn clock change, making the annual two-day reminder schedulable and preserving the annual default.
+The helper records its clock and timezone offset, and deterministic tests cover ordinary dates, both clock changes, quiet hours and UTC against the real application projections.
+These visual periods overlay the live Test Store `default` offering's prices; they do not describe real catalog trial eligibility.
 Run it with `paywall-eligible-visual` through `scripts/sim/product-flow.mjs run <UDID> ... --mode=development` on an owned development build.
 The `annual-short` and `monthly-short` visual parameters propagate unchanged between screens.
 Every screenshot is labeled synthetic, and these flows request no notification permission, schedule nothing and cannot purchase or restore.
@@ -272,6 +338,7 @@ Use the same Sign in with Apple identity, including its private-relay address wh
 The flow retains receipt and login state, restores through the visible control, checks Welcome back, and repeats the routing check after cold launch.
 `subscription-restore-empty` is the negative control for a signed-in never-subscribed account whose store account has no Fitsy receipt.
 `subscription-expired-routing` starts with an already expired subscription linked to the current Fitsy account and covers inactive Restore from Welcome back plus cold launch.
+It also requires the bundled Chick-fil-A sample search card on entry, relaunch and sign-in return; restaurant data and imagery render locally while the existing RevenueCat checks remain active.
 It also leaves win-back for sign-in and returns with the same expired account, retaining win-back routing while optional restaurant requests are cancelled.
 That same-account journey can use RevenueCat Test Store without requiring history transfer.
 All flows require their documented starting state and fail if that state is absent.
