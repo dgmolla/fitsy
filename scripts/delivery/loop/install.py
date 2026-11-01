@@ -15,7 +15,7 @@ import sys
 import tempfile
 
 SOURCE = Path(__file__).parent
-FILES = ('driver.py', 'planner.py', 'progress.py', 'taskfiles.py', 'recovery.py', 'context.py', 'host.py', 'worktrees.py', 'lifecycle.py', 'open_prs.py', 'install.py', 'org.fitsy.loop-driver.plist', 'SKILL.md')
+FILES = ('driver.py', 'planner.py', 'progress.py', 'taskfiles.py', 'recovery.py', 'context.py', 'host.py', 'worktrees.py', 'lifecycle.py', 'open_prs.py', 'preflight.py', 'install.py', 'org.fitsy.loop-driver.plist', 'SKILL.md')
 
 
 def sources():
