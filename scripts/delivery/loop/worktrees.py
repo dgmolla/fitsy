@@ -154,7 +154,11 @@ def link_dependencies(wt, roots=None):
     for name in ('node_modules', 'apps/mobile/node_modules'):
         target = next((Path(root) for root in roots if root.endswith('/' + name)), None)
         path = Path(wt) / name
-        if target and target.is_dir() and path.parent.is_dir() and not (path.exists() or path.is_symlink()):
+        if not (target and target.is_dir() and path.parent.is_dir()) or path.exists() or path.is_symlink():
+            continue
+        # A link must never make the checkout dirty or enter a commit.
+        if subprocess.run(['git', 'check-ignore', '-q', '--no-index', name], cwd=wt,
+                          capture_output=True).returncode == 0:
             path.symlink_to(target, target_is_directory=True)
 
 

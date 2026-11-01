@@ -518,6 +518,10 @@ class LinkDependenciesTest(unittest.TestCase):
             roots = [temp / 'canon/node_modules', temp / 'canon/apps/mobile/node_modules']
             for root in roots: root.mkdir(parents=True)
             wt = temp / 'wt'; (wt / 'apps/mobile').mkdir(parents=True)
+            subprocess.run(['git', 'init', '-q', str(wt)], check=True)
+            worktrees.link_dependencies(wt, [str(root) for root in roots])
+            self.assertFalse((wt / 'node_modules').is_symlink(), 'unignored links would dirty the checkout')
+            (wt / '.gitignore').write_text('node_modules\n')
             worktrees.link_dependencies(wt, [str(root) for root in roots])
             self.assertEqual((wt / 'node_modules').resolve(), roots[0])
             self.assertEqual((wt / 'apps/mobile/node_modules').resolve(), roots[1])
