@@ -1,5 +1,7 @@
 # Shipping lessons
 
+- 2026-10-31: A follow-up task without `existing`/`pr` headers tried to recreate an open PR's branch from main and was stopped by a stale worktree; prevent recurrence with a branch-exists guard and clean stale-worktree cleanup before reuse and after merged, blocked or errored tasks.
+
 ## Simulator errors after #691, 2026-10-31
 
 **TL;DR:** A retry status hid real assertion failures, and the synthetic reminder fixture depended on anonymous account state.
