@@ -92,6 +92,7 @@ test('scripts-only actual runner executes its whole group without API or mobile'
 test.each([
   ['loop.test.py', 'loop-recovery'],
   ['worktrees.test.py', 'loop-worktrees'],
+  ['open_prs.test.py', 'loop-open-prs'],
 ])('the whole scripts group runs %s and propagates its failure', (name, group) => {
   const fixture = wholeGroupFixture();
   write('scripts/delivery/loop/recovery.py', 'changed = True\n'); const head = commit();

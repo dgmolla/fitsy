@@ -6,6 +6,7 @@ from pathlib import Path
 import context
 import worktrees
 from lifecycle import Lifecycle, IDLE_SECONDS, ACTIVE_SECONDS
+from open_prs import OpenPRSweep
 from taskfiles import read_task, task_files, migrate_notes, issue_number
 from recovery import (MAX_ROUNDS, MAX_SIM_REPAIRS, MAX_RERUNS, RETRIAGE_SECONDS,
                       classify_failure, gating_failures, repair_prompt, record_attempt,
@@ -458,7 +459,7 @@ def run_task(f,s):
     if not pr:
         body=f"**TL;DR:** {meta['title']}\n\n{meta.get('body','')}\n\nCodex summary:\n```\n{st['summary'][-1200:]}\n```"
         url=sh(f"gh pr create -R {REPO} --base main --head {br} --title {shlex.quote(meta['title'])} --body-file -",inp=body,cwd=wt)
-        pr=int(url.rstrip('/').split('/')[-1]); st['pr']=pr; save(s); log(name,'PR',url)
+        pr=int(url.rstrip('/').split('/')[-1]); st['pr']=pr; st['opened_by_loop']=True; save(s); log(name,'PR',url)
     def refresh():
         sh(f'git fetch -q origin && git merge -q --ff-only origin/{br}',cwd=wt,check=False)
         if context.host.git(wt,['merge','-q','--no-edit','origin/main'],ENV).returncode:
@@ -545,6 +546,7 @@ def main(*, idle_seconds=IDLE_SECONDS, active_seconds=ACTIVE_SECONDS):
         try: fcntl.flock(owner,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError: raise RuntimeError('Existing loop owner is already running')
         s=state(); busy={}; MAX=2
+        pr_sweep=OpenPRSweep(L,env=ENV,gate=sim_gate,merge_lock=MERGE_LOCK,log=log)
         migrate_notes(L+'/tasks')
         skipped=set()
         def task_log(*args):
@@ -562,6 +564,7 @@ def main(*, idle_seconds=IDLE_SECONDS, active_seconds=ACTIVE_SECONDS):
         while not lifecycle.stopping():
             for lane,thread in list(busy.items()):
                 if not thread.is_alive(): del busy[lane]; s.pop('_noplan_until',None)
+            pr_sweep(s, running={thread.name for thread in busy.values()})
             files=task_files(L+'/tasks',task_log)
             running={thread.name for thread in busy.values()}
             retriage([f for f in files if Path(f).stem not in running],s)
