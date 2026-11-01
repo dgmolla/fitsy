@@ -190,6 +190,67 @@ function offerBothPlans() {
   const both = { ...offering, monthly, availablePackages: [annual, monthly] } as unknown as PurchasesOffering;
   jest.spyOn(Purchases, 'getOfferings').mockResolvedValue({ current: both, all: { default: both } });
 }
+test.each(['0', '1'])('anonymous mixed-trial visual isolates reminder opt-in %s from account notification state', async enabled => {
+  mockAuthSession = null;
+  offerBothPlans();
+  const screen = renderRouter(routes, { initialUrl: `/welcome/payment?devTrialVisual=annual-short&devReminderEnabled=${enabled}` });
+  jest.setSystemTime(new Date(2026, 9, 31, 15, 53));
+  await waitFor(() => expect(screen.getByTestId('dev-trial-visual-note')).toBeTruthy());
+  await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-monthly')); });
+  expect(screen.getByText('In 7 days')).toBeTruthy();
+  expect(screen.getByText(enabled === '1'
+    ? /We'll send you a reminder that your trial is ending soon/
+    : 'Optional; turn on reminders after purchase.')).toBeTruthy();
+  expect(screen.queryByText(/Unavailable; check your trial end/)).toBeNull();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+  expect(Purchases.restorePurchases).not.toHaveBeenCalled();
+  expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+  expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('production mode honors a sandbox entitlement and ignores synthetic reminder and trial parameters', async () => {
+  const development = __DEV__;
+  try {
+    Object.assign(global, { __DEV__: false });
+    const sandbox = { entitlements: { active: { pro: { ...pro, isSandbox: true } },
+      all: { pro: { ...pro, isSandbox: true } } } } as unknown as CustomerInfo;
+    jest.spyOn(Purchases, 'getCustomerInfo').mockResolvedValue(sandbox);
+    jest.spyOn(Purchases, 'logIn').mockImplementation(async userId => {
+      nativeUserId = userId;
+      return { customerInfo: sandbox, created: false };
+    });
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      active: true, synced: true, verdict: 'active', lastRcVerifiedAt: new Date().toISOString(), stale: false,
+    }) });
+    const screen = renderRouter(routes, { initialUrl: '/welcome/payment?devTrialVisual=annual-short&devReminderEnabled=1' });
+    await waitFor(() => expect(screen.getPathname()).toBe('/restaurant/varilla'));
+    expect(screen.queryByTestId('dev-trial-visual-note')).toBeNull();
+    expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+  } finally { Object.assign(global, { __DEV__: development }); }
+});
+
+test.each(['0', '1'])('production checkout keeps real reminder permission with synthetic override %s', async enabled => {
+  const development = __DEV__;
+  try {
+    Object.assign(global, { __DEV__: false });
+    offerBothPlans();
+    jest.spyOn(Purchases, 'checkTrialOrIntroductoryPriceEligibility').mockResolvedValue({
+      annual: { status: 3, description: 'No introductory offer' },
+      monthly: { status: 2, description: 'Eligible for the store trial' },
+    });
+    jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: 'denied' } as Notifications.NotificationPermissionsStatus);
+    const screen = renderRouter(routes, { initialUrl: `/welcome/payment?devTrialVisual=annual-short&devReminderEnabled=${enabled}` });
+    await waitFor(() => expect(screen.getByText('Notifications off. Enable them in settings.')).toBeTruthy());
+    expect(screen.queryByTestId('dev-trial-visual-note')).toBeNull();
+    expect(screen.queryByText(/We'll send you a reminder/)).toBeNull();
+    expect(screen.getByTestId('paywall-terms').props.children).toContain('7 days free');
+    expect(Purchases.purchasePackage).not.toHaveBeenCalled();
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+  } finally { Object.assign(global, { __DEV__: development }); }
+});
+
 test.each(visualScenarios)('development visual $scenario uses live prices but never enters checkout or restore', async ({ scenario, days, plan }) => {
   offerBothPlans();
   const alert = jest.spyOn(Alert, 'alert');
