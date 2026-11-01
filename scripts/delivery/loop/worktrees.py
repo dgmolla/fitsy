@@ -140,7 +140,35 @@ def cleanup(repo, directory, branch, env, log, keep=None):
     return removed
 
 
+def link_dependencies(wt, roots=None):
+    """Point a fresh checkout at the installer-approved dependency roots.
+
+    Recreated worktrees have no node_modules, so the isolated pre-push failed
+    with "verification dependencies are missing". host.profile already grants
+    exactly these roots; never replace an existing directory or link."""
+    if roots is None:
+        approved = host.CONTROLS / 'dependency-roots.json'
+        if not approved.is_file():
+            return
+        roots = json.loads(approved.read_text())
+    for name in ('node_modules', 'apps/mobile/node_modules'):
+        target = next((Path(root) for root in roots if root.endswith('/' + name)), None)
+        path = Path(wt) / name
+        if not (target and target.is_dir() and path.parent.is_dir()) or path.exists() or path.is_symlink():
+            continue
+        # A link must never make the checkout dirty or enter a commit.
+        if subprocess.run(['git', 'check-ignore', '-q', '--no-index', name], cwd=wt,
+                          capture_output=True).returncode == 0:
+            path.symlink_to(target, target_is_directory=True)
+
+
 def prepare(repo, directory, wt, meta, env, log, merge, merge_main=True):
+    """Prepare the task checkout, then link approved dependencies."""
+    _prepare(repo, directory, wt, meta, env, log, merge, merge_main)
+    link_dependencies(wt)
+
+
+def _prepare(repo, directory, wt, meta, env, log, merge, merge_main=True):
     """An origin branch, open PR or local branch can never enter a reset path."""
     branch = meta['branch']
     run(['git', 'check-ref-format', '--branch', branch], repo, env)
