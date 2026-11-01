@@ -144,7 +144,7 @@ test('accepts a fingerprint TestFlight upload with an explicitly unknown Apple b
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ compatible: true, channel: 'testflight', runtime_version: native.hash });
   for (const invalid of [{ eas_submission_status: 'IN_PROGRESS' }, { eas_submission_id: 'unknown' },
-    { asc_build_id: 'invented' }, { ipa_sha256: null }, { verified_at: null }]) {
+    { asc_build_id: 'invented' }, { ipa_sha256: null }, { verified_at: null }, { channel: 'production' }]) {
     writeFileSync(path, JSON.stringify({ ...receipt, ...invalid }));
     expect(check().status).toBe(1);
   }
