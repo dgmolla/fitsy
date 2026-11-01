@@ -1817,6 +1817,13 @@ class SandboxProfileTest(unittest.TestCase):
         self.assertNotEqual(denied.returncode, 0)
 
 
+class SandboxRegexTest(unittest.TestCase):
+    def test_claim_staging_regex_is_raw_posix(self):
+        escaped = host.posix_escape('/Users/a-b/.fitsy-sim-claim.json.')
+        self.assertEqual(escaped, '/Users/a-b/\\.fitsy-sim-claim\\.json\\.')
+        self.assertNotIn('\\-', escaped)
+
+
 class PreflightTest(unittest.TestCase):
     def setUp(self):
         import preflight

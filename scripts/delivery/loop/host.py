@@ -39,6 +39,11 @@ def dev_environment(wt, env):
     return result
 
 
+def posix_escape(text):
+    """Escape for the sandbox's POSIX regex; re.escape emits \\- which it rejects."""
+    return re.sub(r'([.^$*+?()\[\]{}|\\])', r'\\\1', text)
+
+
 def profile(wt, directory, env):
     """Permit native tools and this DEV workspace, never host credential stores.
 
@@ -52,7 +57,9 @@ def profile(wt, directory, env):
     reads = [Path(p) for p in ('/System', '/Library/Developer', '/Library/Apple', '/Library/Java', '/usr', '/bin',
                                '/sbin', '/opt/homebrew', '/Applications/Xcode.app', '/dev',
                                # xcrun refuses to run unless it can read the accepted license.
-                               '/Library/Preferences/com.apple.dt.Xcode.plist')]
+                               '/Library/Preferences/com.apple.dt.Xcode.plist',
+                               # Public TLS config and CA roots for curl/openssl in fixture prep.
+                               '/private/etc/ssl')]
     reads += [wt, directory, CONTROLS.resolve(), simulator, *claim,
               home / '.maestro/bin', home / '.maestro/lib',
               # git aborts when the global config is unreadable, and ci.mjs strips GIT_* overrides.
@@ -98,7 +105,11 @@ def profile(wt, directory, env):
     excluded = ' '.join(f'(require-not (subpath {literal(path)}))' for path in reads)
     # Atomic claim replacement stages only these names on HOME's filesystem.
     # Directory read access permits the parent's fsync, never its descendants.
-    staging = '(regex #' + json.dumps('^' + re.escape(str(claim[0]) + '.') + r'[a-z0-9_]+\.tmp$') + ')'
+    # #"..." is a raw regex literal: json.dumps would double every backslash.
+    pattern = '^' + posix_escape(str(claim[0]) + '.') + r'[a-z0-9_]+\.tmp$'
+    if '"' in pattern:
+        raise ValueError('Simulator claim path cannot contain a quote')
+    staging = '(regex #"' + pattern + '")'
     # dyld reads the root directory entry itself at process start on macOS 26;
     # denying it aborts every sandboxed process (pre-push died of signal 6).
     # A literal grant exposes only the root listing, never its descendants.
