@@ -1754,5 +1754,30 @@ if (fs.existsSync('.evidence/reject-hook')) process.exit(1);
         self.assertEqual(st['attempts'][-1]['kind'], 'pre-push-validation')
 
 
+
+class SandboxProfileTest(unittest.TestCase):
+    def setUp(self):
+        controls = tempfile.TemporaryDirectory(); self.addCleanup(controls.cleanup)
+        (Path(controls.name) / 'dependency-roots.json').write_text('[]')
+        patcher = mock.patch.object(host, 'CONTROLS', Path(controls.name)); patcher.start(); self.addCleanup(patcher.stop)
+        repo = tempfile.TemporaryDirectory(); self.addCleanup(repo.cleanup)
+        subprocess.run(['git', 'init', '-q', repo.name], check=True)
+        self.repo = Path(repo.name)
+
+    def test_profile_permits_root_listing_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            policy = host.profile(self.repo, Path(d), {'HOME': d, 'PATH': os.environ['PATH']})
+        self.assertIn('(require-not (literal "/"))', policy)
+        self.assertNotIn('(require-not (subpath "/"))', policy)
+
+    @unittest.skipUnless(sys.platform == 'darwin' and Path(host.SANDBOX).exists(), 'macOS sandbox only')
+    def test_sandboxed_process_starts_without_dyld_abort(self):
+        # Regression: denying "/" made dyld abort every hook (signal 6).
+        with tempfile.TemporaryDirectory() as d:
+            policy = Path(d) / 'p.sb'
+            policy.write_text(host.profile(self.repo, Path(d), {'HOME': d, 'PATH': os.environ['PATH']}))
+            result = subprocess.run([host.SANDBOX, '-f', str(policy), '/bin/bash', '-p', '-c', 'true'], timeout=30)
+        self.assertEqual(result.returncode, 0)
+
 if __name__ == '__main__':
     unittest.main()

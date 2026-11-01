@@ -94,7 +94,10 @@ def profile(wt, directory, env):
     # Atomic claim replacement stages only these names on HOME's filesystem.
     # Directory read access permits the parent's fsync, never its descendants.
     staging = '(regex #' + json.dumps('^' + re.escape(str(claim[0]) + '.') + r'[a-z0-9_]+\.tmp$') + ')'
-    excluded += f' (require-not (literal {literal(home)})) (require-not {staging})'
+    # dyld reads the root directory entry itself at process start on macOS 26;
+    # denying it aborts every sandboxed process (pre-push died of signal 6).
+    # A literal grant exposes only the root listing, never its descendants.
+    excluded += f' (require-not (literal "/")) (require-not (literal {literal(home)})) (require-not {staging})'
     writable = [wt, directory, simulator, *claim]
     write_excluded = ' '.join(f'(require-not (subpath {literal(path)}))' for path in writable)
     write_excluded += f' (require-not {staging})'
