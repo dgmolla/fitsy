@@ -117,11 +117,7 @@ test('a failed permission read falls back to the optional reminder choice', asyn
 test('a two-day trial does not offer an unschedulable reminder', async () => {
   mockOffering = { annual: shortAnnual, monthly: null };
   const screen = renderRouter(routes, { initialUrl: '/welcome/trial-reminder' });
-<<<<<<< HEAD
-  jest.setSystemTime(new Date(2026, 8, 7, 12)); // Keep the fixture outside a daylight-saving transition.
-=======
   jest.setSystemTime(new Date(2026, 8, 7, 12));
->>>>>>> origin/main
   await waitFor(() => expect(screen.getByText('Review your trial')).toBeTruthy());
   expect(screen.queryByText('Get a trial reminder')).toBeNull();
   await screen.findByTestId('trial-reminder-allow');

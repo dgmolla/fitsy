@@ -237,11 +237,7 @@ test('a short annual offer defaults to the schedulable monthly trial and plan sw
     annual: { status: 2, description: 'Eligible' }, monthly: { status: 2, description: 'Eligible' },
   });
   const screen = renderRouter(routes, { initialUrl: '/welcome/payment' });
-<<<<<<< HEAD
-  jest.setSystemTime(new Date(2026, 8, 7, 12)); // Two calendar days are 48 hours away from DST changes.
-=======
   jest.setSystemTime(new Date(2026, 8, 7, 12));
->>>>>>> origin/main
   await waitFor(() => expect(screen.getByTestId('paywall-terms').props.children).toContain('14 days free'));
   expect(screen.getByTestId('paywall-plan-monthly').props.accessibilityState.checked).toBe(true);
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-plan-yearly')); });
