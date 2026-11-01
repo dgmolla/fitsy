@@ -68,6 +68,35 @@ test("a cohesive source module passes the canonical structural caller regardless
 });
 
 test.each([
+  { runs: "local", staged: false, content: '{"scripts":' },
+  { runs: "local", staged: true, content: '{\n<<<<<<< HEAD\n"name": "fixture"\n=======\n"name": "incoming"\n>>>>>>> incoming\n}' },
+  { runs: "ci", staged: true, content: '{"scripts":' },
+])("the structural check rejects invalid workspace JSON ($runs, staged=$staged)", ({ runs, staged, content }) => {
+  writeFileSync(join(directory, "scripts/package.json"), content);
+  if (staged) git("add", ".");
+  if (runs === "ci") git("commit", "-qm", "invalid manifest fixture");
+  // Invalid package metadata can prevent Node from importing the full verifier.
+  // Exercise its actual Bash check entrypoint before Node loads that metadata.
+  const result = spawnSync("bash", [join(directory, "scripts/verify/structural.sh")], {
+    cwd: directory, env: { ...environment, CI: runs === "ci" ? "true" : "" }, encoding: "utf8", timeout: 10000,
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: "fail" });
+  expect(result.stderr).toContain("Invalid package manifest: scripts/package.json");
+});
+
+test("valid workspace manifests pass the canonical structural caller", () => {
+  for (const path of ["apps/api/package.json", "apps/mobile/package.json", "packages/shared/package.json", "scripts/package.json"]) {
+    writeFileSync(join(directory, path), JSON.stringify({ name: "fixture", private: true }));
+  }
+  const result = verify();
+  expect(result.error).toBeUndefined();
+  if (result.status !== 0) throw new Error(result.stdout + "\n" + result.stderr);
+  expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: "pass", blocking: true });
+});
+
+test.each([
   { path: "scripts/local.test.ts", octets: [127, 0, 0, 1], note: " // loopback test fixture", status: 0 },
   { path: "apps/mobile/local.test.tsx", octets: [127, 0, 0, 1], note: " // loopback test fixture", status: 0 },
   { path: "scripts/local.test.ts", octets: [127, 0, 0, 1], note: "", status: 1 },

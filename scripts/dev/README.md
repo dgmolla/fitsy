@@ -9,7 +9,7 @@ The retired `FITSY_ALLOW_PROD=1` override has no effect.
 | Script | What it does | When |
 |---|---|---|
 | `provision-supabase.sh` | validate the allowlisted existing DEV target before credential lookup or Vercel Preview/Development updates, then migrate, seed, snapshot | once |
-| `provision-audit-role.ts` | create the DEV-only SELECT role and privately save credential names | once, with `--apply` |
+| `provision-audit-role.ts` | activate migrated DEV app, pipeline or audit roles and privately save credentials | after the role migration, with `--apply [--role=...]` |
 | `audit-readonly.ts` | verify saved DEV audit access and optional zero-row write denials | after audit provisioning |
 | `write-local-env.sh` | pull dev creds into `apps/api/.env.local`, `.env.dev`, `apps/mobile/.env.development.local` | after provisioning; whenever creds rotate |
 | `../../prisma/seed.ts` (`npx prisma db seed`) | deterministic fixture: 3 users, 50 restaurants, 400 items | on a fresh DB; safe to re-run |
