@@ -19,6 +19,8 @@
         <string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <key>FITSY_LOOP_DIR</key>
         <string>__LOOP_DIR__</string>
+        <key>FITSY_LOOP_SETTINGS</key>
+        <string>__HOME__/.config/fitsy-loop/loop.env</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>

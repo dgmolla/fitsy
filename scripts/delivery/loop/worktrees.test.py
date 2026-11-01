@@ -10,6 +10,8 @@ import unittest
 from unittest import mock
 
 SOURCE = Path(__file__).parent
+# Driver fixtures run without a real simulator host; PreflightTest covers the check.
+os.environ['FITSY_LOOP_FIXTURE_SKIP_PREFLIGHT'] = '1'
 sys.path.insert(0, str(SOURCE))
 import driver
 import install

@@ -14,6 +14,7 @@ SANDBOX = '/usr/bin/sandbox-exec'
 CORE = {'PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'TMPDIR'}
 DEV = {'FITSY_XCTEST_SIM_UDID', 'FITSY_SIM_OWNER', 'FITSY_E2E_FIXTURES', 'MAESTRO_BIN',
        'JAVA_HOME', 'DEVELOPER_DIR'}
+DEVICES = ('/dev/null', '/dev/zero', '/dev/tty', '/dev/dtracehelper')
 
 
 def control(name):
@@ -101,6 +102,9 @@ def profile(wt, directory, env):
     writable = [wt, directory, simulator, *claim]
     write_excluded = ' '.join(f'(require-not (subpath {literal(path)}))' for path in writable)
     write_excluded += f' (require-not {staging})'
+    # Standard character devices only (Maestro's launcher redirects to /dev/null).
+    write_excluded += ' ' + ' '.join(f'(require-not (literal {literal(device)}))' for device in DEVICES)
+    write_excluded += ' (require-not (regex #"^/dev/fd/"))'
     # deny rules take precedence over the broad workspace permission, including
     # symlink targets. Process environment inspection and Keychain IPC stay denied.
     return f'''(version 1)
