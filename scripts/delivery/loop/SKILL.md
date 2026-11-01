@@ -44,6 +44,8 @@ Every push entrypoint reselects native coverage for changed source, including ge
 Host Git operations, including commit and merge preparation, use the installed owner's private hook directory outside candidate writable roots.
 That hook runs both canonical pre-push verifier selections inside the same enforced isolation with allowlisted DEV configuration.
 Never execute the candidate hook or verifier with host credentials, skip either required selection, or fall back to unsandboxed verification.
+Route Git's `pre-push died of signal N` diagnostic to the existing host owner before dispatching candidate code repair.
+Retain the Git output and matching host crash report, diagnose the launcher, and replay the unchanged hook against the same source before publication.
 Only trusted scope `none` permits publication without native execution; a pending failed journey still requires a real replay.
 Keep validation bound to the current source after requeue, merges and hook repairs.
 The driver attaches failure screenshots or extracted video frames through Codex's image argument and includes failing commands, logs, diff and prior outcomes in the prompt.
@@ -58,7 +60,10 @@ Hold its branch lease across preparation, execution and cleanup so the two lanes
 Discover the fetched origin branch and open same-repository PR even when task headers omit `existing` and `pr`; adopt the PR, preserve local commits and merge main without resetting any branch.
 An unavailable GitHub lookup stops preparation rather than establishing that a branch is new.
 Remove clean loop-owned holders of the branch or its legacy `loop/` alias before a successor starts and after merged, blocked or errored execution.
-Only the untracked regular root `.infra-blocked` marker is disposable; retain tracked changes, other untracked or ignored files, linked markers, unfinished Git operations, locked checkouts and active workers, and report the concrete path.
+Ignored (`!!`) paths do not make a checkout dirty; tracked changes and non-ignored untracked files still block cleanup except the regular root `.infra-blocked` marker.
+Before removal, copy `.evidence/` into a fresh private `loop/evidence/<worktree-name>/cleanup-*/.evidence/` snapshot and log its location; preserve nested links without following them, reject linked roots or archive directories, and retain the checkout if archiving fails.
+Retain linked markers, unfinished Git operations, locked checkouts and active workers, and report the concrete path.
+The existing re-triage sweep retries recorded cleanup failures under the branch lease before native recovery, retaining attempt history and all product gates; unchanged failures wait fifteen minutes.
 Keep branch refs and external evidence; a removed parked checkout is recreated for current-head re-triage before main is merged for implementation.
 This explicit task-lifecycle cleanup is separate from historical resource cleanup and its four-hour cutoff.
 For missing dependencies in a restricted worker, use the [documented same-lock installation recovery](../../../docs/engineering/devops/performance.md#restricted-worker-recovery) without changing peer policy or the lockfile.

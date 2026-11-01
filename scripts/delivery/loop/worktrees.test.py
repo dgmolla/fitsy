@@ -30,6 +30,7 @@ class WorktreesTest(unittest.TestCase):
         self.git(self.repo, 'config', 'user.name', 'Fixture')
         self.git(self.repo, 'config', 'user.email', 'fixture@example.test')
         (self.repo / 'main.txt').write_text('main\n')
+        (self.repo / '.gitignore').write_text('.evidence/\nnode_modules/\n.env.local\n')
         self.commit(self.repo, 'baseline')
         self.git(self.repo, 'remote', 'add', 'origin', str(self.remote))
         self.git(self.repo, 'push', '-q', 'origin', 'main')
@@ -168,14 +169,90 @@ print(json.dumps(s['prs']))
                 self.assertEqual(self.git(self.repo, 'rev-parse', self.branch), head)
                 self.assertFalse(self.target.exists())
 
-    def test_real_edits_untracked_and_ignored_data_stop_cleanup(self):
+    def test_ignored_only_evidence_is_archived_before_cleanup(self):
+        head = self.branch_worktree()
+        evidence = self.old / '.evidence/pr607'
+        evidence.mkdir(parents=True)
+        (evidence / 'commands.json').write_bytes(b'{"status":"FAILED"}\n')
+        (evidence / 'screen.png').write_bytes(bytes(range(256)))
+        (self.old / 'node_modules').mkdir()
+        (self.old / 'node_modules/cache').write_text('disposable dependency output')
+        (self.old / '.env.local').write_text('fixture-only environment')
+        self.assertIn('!! .evidence/', self.git(self.old, 'status', '--porcelain', '--ignored'))
+        original = worktrees.run
+        def removing(args, *rest, **kwargs):
+            if args[:3] == ['git', 'worktree', 'remove']:
+                copies = list((self.loop / 'evidence' / self.old.name).glob('*/.evidence/pr607/commands.json'))
+                self.assertEqual(len(copies), 1)
+                self.assertEqual(copies[0].read_bytes(), b'{"status":"FAILED"}\n')
+                self.assertEqual(copies[0].with_name('screen.png').read_bytes(), bytes(range(256)))
+            return original(args, *rest, **kwargs)
+        with mock.patch.object(worktrees, 'run', side_effect=removing):
+            self.assertEqual(self.cleanup(), [str(self.old)])
+        self.assertFalse(self.old.exists())
+        self.assertEqual(self.git(self.repo, 'rev-parse', self.branch), head)
+        self.assertIn('archived loop evidence', str(self.logs))
+
+    def test_archive_failure_retains_evidence_and_loop_marker(self):
         self.branch_worktree()
-        for name, staged in (('pr.txt', False), ('new \nfile.txt', False), ('new.txt', True), ('.env.local', False)):
+        evidence = self.old / '.evidence/run.log'
+        evidence.parent.mkdir(); evidence.write_text('original evidence')
+        marker = self.old / '.infra-blocked'; marker.write_text('retain until archived')
+        with mock.patch.object(worktrees.shutil, 'copytree', side_effect=OSError('disk full')):
+            with self.assertRaisesRegex(RuntimeError, 'evidence archive failed.*disk full'):
+                self.cleanup()
+        self.assertEqual(evidence.read_text(), 'original evidence')
+        self.assertTrue(marker.exists())
+        self.assertNotIn('removed clean loop worktree', str(self.logs))
+        self.cleanup()
+        self.assertFalse(self.old.exists())
+        self.assertEqual(len(list((self.loop / 'evidence' / self.old.name).glob('*/.evidence/run.log'))), 1)
+
+    def test_evidence_links_are_copied_without_following_host_files(self):
+        self.branch_worktree()
+        evidence = self.old / '.evidence'; evidence.mkdir()
+        (evidence / 'run.log').write_text('original evidence')
+        private = self.root / 'private'; private.mkdir()
+        (private / 'keep.txt').write_text('external data')
+        (evidence / 'host-link').symlink_to(private, target_is_directory=True)
+        (evidence / 'local-link').symlink_to('run.log')
+        self.cleanup()
+        archived = next((self.loop / 'evidence' / self.old.name).glob('*/.evidence'))
+        self.assertTrue((archived / 'host-link').is_symlink())
+        self.assertEqual((archived / 'host-link').readlink(), private)
+        self.assertEqual((archived / 'local-link').read_text(), 'original evidence')
+        self.assertEqual((private / 'keep.txt').read_text(), 'external data')
+        self.git(self.repo, 'worktree', 'add', '-q', str(self.old), self.branch)
+        (self.old / '.evidence').mkdir()
+        (self.old / '.evidence/run.log').write_text('later evidence')
+        self.cleanup()
+        copies = list((self.loop / 'evidence' / self.old.name).glob('*/.evidence/run.log'))
+        self.assertEqual(sorted(p.read_text() for p in copies), ['later evidence', 'original evidence'])
+
+    def test_linked_evidence_root_or_archive_retains_checkout(self):
+        self.branch_worktree()
+        private = self.root / 'private'; private.mkdir()
+        (private / 'keep.txt').write_text('external data')
+        # Ignore the link itself as well as directories, as Git does on the host.
+        (self.old / '.gitignore').write_text('.evidence\n')
+        self.commit(self.old, 'ignore evidence root')
+        (self.old / '.evidence').symlink_to(private, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, 'evidence root'):
+            self.cleanup()
+        (self.old / '.evidence').unlink(); (self.old / '.evidence').mkdir()
+        (self.loop / 'evidence').symlink_to(private, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, 'Linked evidence archive'):
+            self.cleanup()
+        self.assertTrue(self.old.exists())
+        self.assertEqual(list(private.iterdir()), [private / 'keep.txt'])
+
+    def test_real_edits_and_untracked_data_stop_cleanup(self):
+        self.branch_worktree()
+        (self.old / '.evidence').mkdir()
+        (self.old / '.evidence/keep.log').write_text('ignored evidence alongside real edits')
+        for name, staged in (('pr.txt', False), ('new \nfile.txt', False), ('new.txt', True)):
             with self.subTest(name=name):
                 path = self.old / name
-                if name == '.env.local':
-                    exclude = Path(self.git(self.old, 'rev-parse', '--path-format=absolute', '--git-path', 'info/exclude'))
-                    exclude.write_text('.env.local\n')
                 original = path.read_bytes() if path.exists() else None
                 path.write_text('unfinished work')
                 if staged:
@@ -184,6 +261,7 @@ print(json.dumps(s['prs']))
                     self.prepare()
                 self.assertEqual(path.read_text(), 'unfinished work')
                 self.assertFalse(self.target.exists())
+                self.assertFalse((self.loop / 'evidence').exists())
                 if staged:
                     self.git(self.old, 'restore', '--staged', name)
                 if original is None: path.unlink()
@@ -313,9 +391,55 @@ print(json.dumps(s['prs']))
         self.assertEqual((self.target / 'main.txt').read_text(), 'unfinished')
         self.assertIn('uncommitted work', state['new']['cleanup_error'])
         self.assertIn('STOPPED worktree cleanup', (self.loop / 'driver.log').read_text())
+        state['new'].update(blocked='worker stopped', blocked_on='environment',
+                            park_notice={'id': 'original-park', 'sent': []})
+        with mock.patch.multiple(driver, ROOT=str(self.root), L=str(self.loop), ENV=self.env), \
+                mock.patch.object(driver, 'notify_park') as notify, \
+                mock.patch.object(driver, 'sh', wraps=driver.sh) as command:
+            driver.retriage([str(task)], state)
+            attempts = len(state['new']['attempts'])
+            driver.retriage([str(task)], state)
+        self.assertEqual(notify.call_count, 2)
+        self.assertEqual(command.call_args_list.count(
+            mock.call('git fetch -q origin main', cwd=str(self.repo), check=False)), 1)
+        self.assertEqual(len(state['new']['attempts']), attempts)
+        self.assertIn('uncommitted work', state['new']['cleanup_error'])
+        self.assertTrue(self.target.exists())
+
+    def test_next_retriage_cleans_all_four_ignored_only_retained_tasks(self):
+        head = self.branch_worktree()
+        for name in ('00104-floating-nav-a', '00105-posthog-identify', '00607-unblock-pr-607', '50645-issue-645'):
+            with self.subTest(task=name):
+                if not self.old.exists():
+                    self.git(self.repo, 'worktree', 'add', '-q', str(self.old), self.branch)
+                wt = self.loop / ('wt-' + name)
+                self.git(self.repo, 'worktree', 'move', str(self.old), str(wt))
+                (wt / '.evidence').mkdir(); (wt / '.evidence/run.log').write_text(name)
+                task = self.loop / (name + '.md')
+                task.write_text(f'branch: {self.branch}\ntitle: Retained task\n---\nContinue\n')
+                error = f'Retain worktree {wt}: uncommitted work \'!! .evidence/\''
+                state = {name: {'blocked': error, 'blocked_on': 'environment', 'cleanup_error': error,
+                                'park_notice': {'id': 'original-park', 'sent': []},
+                                'attempts': [{'kind': 'original-failure'}]}}
+                with mock.patch.multiple(driver, ROOT=str(self.root), L=str(self.loop), ENV=self.env), \
+                        mock.patch.object(driver, 'notify_park'), \
+                        mock.patch.object(driver, 'checks') as checks, \
+                        mock.patch.object(driver.context, 'host_replay') as replay:
+                    driver.retriage([str(task)], state)
+                checks.assert_not_called(); replay.assert_not_called()
+                self.assertFalse(wt.exists())
+                self.assertNotIn('cleanup_error', state[name])
+                self.assertTrue(state[name]['checkout_removed'])
+                self.assertEqual(state[name]['attempts'][0], {'kind': 'original-failure'})
+                self.assertEqual(state[name]['attempts'][-1]['previous_error'], error)
+                self.assertIn('blocked', state[name])  # Cleanup is not product acceptance.
+                archived = next((self.loop / 'evidence' / wt.name).glob('*/.evidence/run.log'))
+                self.assertEqual(archived.read_text(), name)
+                self.assertEqual(self.git(self.repo, 'rev-parse', self.branch), head)
 
     def test_installed_compatibility_driver_consumes_frozen_helper_and_terminal_hook(self):
         self.branch_worktree()
+        (self.old / '.evidence').mkdir(); (self.old / '.evidence/stale.log').write_text('stale evidence')
         (self.loop / 'tasks').mkdir()
         (self.loop / 'driver.py').write_text('# legacy driver\n')
         (self.loop / 'state.json').write_text(json.dumps({'_planner_off': True}))
@@ -337,6 +461,8 @@ meta={'branch':'fix/followup'}
 loaded['prepare_task'](sys.argv[2],meta)
 def finish(f,state):
     state.setdefault('new',{})['done']=True; loaded['save'](state)
+    evidence=Path(sys.argv[2],'.evidence'); evidence.mkdir()
+    (evidence/'terminal.log').write_text('terminal evidence')
     Path(loaded['L'],'STOP').touch()
 loaded['execute_task'].__globals__['run_task']=finish
 loaded['main'](idle_seconds=0.005,active_seconds=0.005)
@@ -352,6 +478,9 @@ print(json.dumps({'meta':meta,'state':loaded['state'](),'helper':loaded['worktre
         self.assertEqual(Path(output['helper']).parent, Path(receipt['version']))
         self.assertFalse(self.old.exists())
         self.assertFalse(self.target.exists())
+        for wt, name in ((self.old, 'stale'), (self.target, 'terminal')):
+            archived = next((self.loop / 'evidence' / wt.name).glob('*/.evidence/' + name + '.log'))
+            self.assertEqual(archived.read_text(), name + ' evidence')
         self.assertIn('STOPPED stop file:', (self.loop / 'driver.log').read_text())
 
     def test_clean_blocked_checkout_is_recreated_before_current_head_retriage(self):

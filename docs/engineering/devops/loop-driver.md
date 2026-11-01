@@ -18,6 +18,11 @@ An unfinished queued or blocked follow-up suppresses duplicates; a later conflic
 A queued original retains the work, while a parked original may receive its first conflict follow-up.
 API or merge failures are logged and wait for the normal sweep interval; they do not stop task dispatch.
 
+Git's `pre-push died of signal N` diagnostic requires recovery by the existing host owner before candidate code repair.
+It does not establish a failed candidate assertion or authorize another identical publication attempt.
+The owner retains Git output and the matching host crash report, diagnoses the launcher, and replays the unchanged hook with both required verifier selections against the same source.
+Keep candidate sandbox permissions and release gates unchanged.
+
 ```mermaid
 flowchart TD
     A[Existing driver entrypoint and owner lock] --> B{STOP file or signal?}

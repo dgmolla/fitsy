@@ -44,6 +44,10 @@ elif name=='sandbox-exec':
     s.setdefault('sandbox_profiles',[]).append(Path(args[1]).read_text())
     p.write_text(json.dumps(s))
     if s.get('sandbox_error'): print(s['sandbox_error'],file=sys.stderr); sys.exit(71)
+    if s.get('sandbox_signal'):
+        import resource
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+        os.kill(os.getpid(), s['sandbox_signal'])
     os.execvp(args[2],args[2:])
 elif name=='node' and 'preview-backend.mjs' in args[0]:
     s.setdefault('backend_environment_keys',[]).append(sorted(os.environ))
@@ -132,6 +136,19 @@ class ClassificationTest(unittest.TestCase):
             with self.subTest(changed=changed):
                 self.assertEqual(classify_failure(failure(**changed)), 'env')
         self.assertEqual(classify_failure(failure(api_status=503, candidate_stack=True)), 'app_bug')
+
+    def test_git_pre_push_signal_requires_host_recovery(self):
+        for number in (6, 9, 11, 15):
+            with self.subTest(signal=number):
+                logs = (f'error: /private/tmp/fitsy-loop-publish-test/pre-push died of signal {number}\n'
+                        "error: failed to push some refs to 'github.com:dgmolla/fitsy.git'\n")
+                self.assertEqual(classify_failure({'logs': logs}), 'env')
+                self.assertEqual(classify_failure(failure(logs=logs)), 'env')
+        for logs in ('error: /private/tmp/pre-commit died of signal 6',
+                     'Assertion failed: pre-push died of signal 6',
+                     'error: /private/tmp/pre-push exited with code 1'):
+            with self.subTest(logs=logs):
+                self.assertEqual(classify_failure(failure(logs=logs)), 'app_bug')
 
     def test_main_failure_and_rerun_are_not_candidate_bugs(self):
         self.assertEqual(classify_failure(failure(main_same_failure=True)), 'stale_test')
@@ -1646,6 +1663,19 @@ if (denied.some(value => !value)) process.exit(1);
         with mock.patch('time.sleep'), self.assertRaisesRegex(RuntimeError, 'Isolated pre-push environment recovery'):
             driver.run_task(str(task), s)
         self.assertFalse(any(call['tool']=='codex' for call in self.service_state()['calls']))
+        self.assertEqual(self.git('ls-remote', 'origin', 'refs/heads/main').split()[0], before)
+
+    def test_pre_push_signal_never_invokes_a_code_repair_or_publishes(self):
+        task, s = self.task_checkout()
+        before = self.git('rev-parse', 'origin/main')
+        (self.wt / 'file.txt').write_text('Pending tooling repair\n')
+        self.service_state(sandbox_signal=signal.SIGABRT)
+        with mock.patch('time.sleep'), self.assertRaisesRegex(RuntimeError, 'Isolated pre-push environment recovery') as raised:
+            driver.run_task(str(task), s)
+        self.assertIn('pre-push died of signal 6', str(raised.exception))
+        calls = self.service_state()['calls']
+        self.assertFalse(any(call['tool']=='codex' for call in calls))
+        self.assertEqual(len([call for call in calls if call['tool']=='git' and call['args'][:1]==['push']]), 1)
         self.assertEqual(self.git('ls-remote', 'origin', 'refs/heads/main').split()[0], before)
 
     def test_actual_driver_isolates_verifier_credentials_and_preserves_both_hook_checks(self):
