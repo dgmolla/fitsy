@@ -329,16 +329,17 @@ print(json.dumps(s['prs']))
         hostile.parent.mkdir(parents=True)
         hostile.write_text('raise RuntimeError("candidate helper executed")\n')
         code = '''
-import json, os, runpy, sys, time
+import json, os, runpy, sys
+from pathlib import Path
 loaded=runpy.run_path(sys.argv[1],run_name='fixture')
 loaded['prepare_task'].__globals__['ENV']=dict(os.environ)
 meta={'branch':'fix/followup'}
 loaded['prepare_task'](sys.argv[2],meta)
-def finish(f,state): state.setdefault('new',{})['done']=True; loaded['save'](state)
+def finish(f,state):
+    state.setdefault('new',{})['done']=True; loaded['save'](state)
+    Path(loaded['L'],'STOP').touch()
 loaded['execute_task'].__globals__['run_task']=finish
-pause=time.sleep
-loaded['time'].sleep=lambda seconds: pause(0.005)
-loaded['main']()
+loaded['main'](idle_seconds=0.005,active_seconds=0.005)
 print(json.dumps({'meta':meta,'state':loaded['state'](),'helper':loaded['worktrees'].__file__}))
 '''
         result = subprocess.run([sys.executable, '-B', '-c', code, str(self.loop / 'driver.py'),
@@ -351,6 +352,7 @@ print(json.dumps({'meta':meta,'state':loaded['state'](),'helper':loaded['worktre
         self.assertEqual(Path(output['helper']).parent, Path(receipt['version']))
         self.assertFalse(self.old.exists())
         self.assertFalse(self.target.exists())
+        self.assertIn('STOPPED stop file:', (self.loop / 'driver.log').read_text())
 
     def test_clean_blocked_checkout_is_recreated_before_current_head_retriage(self):
         head = self.branch_worktree()
