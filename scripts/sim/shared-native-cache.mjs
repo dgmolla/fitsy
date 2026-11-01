@@ -62,7 +62,7 @@ export function sharedNativeCacheDirectory(root, env = process.env) {
     if (!isAbsolute(env.FITSY_NATIVE_CACHE_DIR)) throw new Error('FITSY_NATIVE_CACHE_DIR must be absolute or off');
     return resolve(env.FITSY_NATIVE_CACHE_DIR);
   }
-  const gitEnv = Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('GIT_')));
+  const gitEnv = Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('GIT_') || key === 'GIT_CONFIG_GLOBAL' || key === 'GIT_CONFIG_NOSYSTEM'));
   const common = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'],
     { cwd: root, env: gitEnv, encoding: 'utf8' }).trim();
   return join(common, 'fitsy-native-binary-cache');

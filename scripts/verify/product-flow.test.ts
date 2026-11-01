@@ -400,3 +400,10 @@ deterministicTest.each([
     status: pass ? 0 : 1, error: pass ? '' : expect.stringMatching(/walkthrough needs actual interactions|invalid\/failed\/stale walkthrough/),
   });
 });
+
+test('repoEnv keeps the isolated scratch git config selection but drops repository pointers', () => {
+  const env = { ...fixtureEnv(), GIT_CONFIG_GLOBAL: '/scratch/gitconfig', GIT_CONFIG_NOSYSTEM: '1', GIT_DIR: '/hook/repo', GIT_INDEX_FILE: '/hook/index' };
+  const result = evaluate('Object.fromEntries(Object.entries(gate.repoEnv()).filter(([key]) => key.startsWith("GIT_")))', env);
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toEqual({ GIT_CONFIG_GLOBAL: '/scratch/gitconfig', GIT_CONFIG_NOSYSTEM: '1' });
+});
