@@ -66,12 +66,14 @@ class SweepTest(unittest.TestCase):
         self.state = {}
         self.logs = []
         self.clock = Clock()
+        self.install_requests = []
         clock = mock.patch.object(open_prs, 'time', self.clock)
         clock.start(); self.addCleanup(clock.stop)
         environment = mock.patch.object(driver, 'ENV', self.env)
         environment.start(); self.addCleanup(environment.stop)
         self.sweep = open_prs.OpenPRSweep(self.root, env=self.env, gate=driver.sim_gate,
-                                         merge_lock=threading.Lock(), log=lambda *args: self.logs.append(args))
+                                         merge_lock=threading.Lock(), log=lambda *args: self.logs.append(args),
+                                         on_merge=lambda: self.install_requests.append('merged'))
 
     def service_data(self):
         return json.loads(self.service.read_text())
@@ -121,6 +123,7 @@ class SweepTest(unittest.TestCase):
         self.assertEqual(self.mutations(), [['pr', 'merge', '700', '-R', 'dgmolla/fitsy',
                                             '--squash', '--match-head-commit', 'a' * 40]])
         self.assertTrue(any('/statuses' in args[1] for args in self.service_data()['calls'] if args[0] == 'api'))
+        self.assertEqual(self.install_requests, ['merged'])
 
     def test_dirty_queues_one_existing_branch_task_and_inherits_lane(self):
         name = self.pr(status='DIRTY')
@@ -209,6 +212,7 @@ class SweepTest(unittest.TestCase):
                 data = self.service_data(); data['views']['700']['statusCheckRollup'] = rollup; self.change(**data)
                 self.sweep(self.state); self.clock.now += 180
                 self.assertEqual(self.mutations(), [])
+                self.assertEqual(self.install_requests, [])
 
     def test_existing_simulator_gate_still_blocks_missing_scope_pending_failure_and_error(self):
         self.pr(status='CLEAN')

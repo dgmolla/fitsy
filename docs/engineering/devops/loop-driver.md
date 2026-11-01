@@ -32,6 +32,10 @@ flowchart TD
     H --> B
     A -->|Uncaught failure| I[LaunchAgent restarts failed exit]
     I --> A
+    J -->|PR merged| K[Check fetched main loop source]
+    E -->|PR merged| K
+    K -->|Changed: drain workers| L[Sync loop source and ensure LaunchAgent]
+    L -->|Source changed: exit 75| I
 ```
 
 ## Install reviewed driver source
@@ -39,15 +43,16 @@ flowchart TD
 Use a clean reviewed checkout on the host, with its normal dependencies installed.
 Coordinate with the existing owner at a task boundary and retire its old driver restart command before starting the LaunchAgent.
 The legacy driver does not understand `STOP`; its owner must arrange the initial shutdown.
-The installer refuses an active or uncertain owner and preserves tasks, state, logs, old entrypoints and a source receipt.
-Plan first, then install at that stopped boundary:
+The installer refuses to change source under an active or uncertain owner and preserves tasks, state, logs, old entrypoints and a source receipt.
+Install the source and load the per-user LaunchAgent with one command at that stopped boundary:
 
 ```sh
-python3 scripts/delivery/loop/install.py --directory "$HOME/fitsy-refactor/loop"
 python3 scripts/delivery/loop/install.py --directory "$HOME/fitsy-refactor/loop" --apply
 ```
 
-The installer changes the external `loop/driver.py` to delegate to its frozen reviewed source, including `lifecycle.py` and `open_prs.py`.
+Omit `--apply` to preview the source installation without changing anything.
+Repeating the same installation preserves the source, backups and state, and does not bootstrap a second loaded agent, including while the installed owner runs.
+The installer changes the external `loop/driver.py` to delegate to its frozen reviewed source, including `lifecycle.py`, `open_prs.py`, `install.py` and the plist template.
 For the PR body, include the one-line driver integration below, placed first inside the legacy `if __name__ == '__main__':` block after installation has written `source-receipt.json`.
 The supported installer already supplies the equivalent compatibility entrypoint, so no live hand edit is needed:
 
@@ -55,49 +60,34 @@ The supported installer already supplies the equivalent compatibility entrypoint
 import os, runpy; os.environ['FITSY_LOOP_DIR'] = L; v = json.load(open(L + '/source-receipt.json'))['version']; sys.path.insert(0, v); runpy.run_path(v + '/driver.py', run_name='__main__'); raise SystemExit(0)
 ```
 
-## Install the per-user LaunchAgent
+## Automatic installation after merge
+
+Both task workers and the open-PR sweep persist an installation request after a successful merge, including an already-merged task PR.
+The scheduler fetches `origin/main` through the host's `wt3` checkout and reads only the committed loop runtime files.
+Changed source pauses new dispatch and drains both workers under the existing owner lock before installation.
+It installs changed Python modules, `SKILL.md` and the plist in a new frozen version, preserving tasks, state, logs, progress files and the previously installed controls and dependency grants.
+It never installs the candidate worktree's uncommitted source or copies unrelated repository files.
+Changes to controls outside `scripts/delivery/loop/` still require the manual reviewed installation above.
+After ensuring the LaunchAgent is installed and loaded, the driver saves the queue and exits 75 so launchd restarts the original entrypoint into the new version.
+Unchanged runtime source continues without restarting; installation failures retain the request for another attempt after 180 seconds and allow normal task dispatch meanwhile.
+
+## Verify the per-user LaunchAgent
 
 The [plist template](../../../scripts/delivery/loop/org.fitsy.loop-driver.plist) starts the same `loop/driver.py` at login and restarts unsuccessful exits, with a 60-second crash throttle.
 `KeepAlive.SuccessfulExit=false` permits a clean stop to remain stopped.
 Both standard output and errors append to `loop/driver.log`, alongside the driver's own log entries.
 This is a per-user agent that runs while the user is logged in; see [Apple's launchd guide](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html) and `man launchd.plist`.
-Render absolute paths with `plistlib` so spaces and XML characters in the home directory are escaped correctly:
+The installer renders absolute paths with `plistlib`, enables and bootstraps an unloaded service, and leaves an already-loaded service running.
+Verify the installed service:
 
 ```sh
-python3 - <<'PY'
-from pathlib import Path
-import plistlib
-import shutil
-
-home = Path.home()
-loop = home / 'fitsy-refactor/loop'
-python = shutil.which('python3')
-if not python or not (loop / 'driver.py').is_file():
-    raise SystemExit('Install the existing driver and Python first')
-template = Path('scripts/delivery/loop/org.fitsy.loop-driver.plist')
-agent = plistlib.loads(template.read_bytes())
-tokens = {'__HOME__': str(home), '__LOOP_DIR__': str(loop), '__PYTHON__': str(Path(python).resolve())}
-def expand(value):
-    if isinstance(value, dict): return {key: expand(item) for key, item in value.items()}
-    if isinstance(value, list): return [expand(item) for item in value]
-    if isinstance(value, str):
-        for key, replacement in tokens.items(): value = value.replace(key, replacement)
-    return value
-target = home / 'Library/LaunchAgents/org.fitsy.loop-driver.plist'
-target.parent.mkdir(parents=True, exist_ok=True)
-target.write_bytes(plistlib.dumps(expand(agent)))
-target.chmod(0o600)
-print(target)
-PY
 plutil -lint "$HOME/Library/LaunchAgents/org.fitsy.loop-driver.plist"
-launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/org.fitsy.loop-driver.plist"
 launchctl print "gui/$(id -u)/org.fitsy.loop-driver"
 tail -n 30 "$HOME/fitsy-refactor/loop/driver.log"
 ```
 
 Check `source-receipt.json`, the service PID and `IDLE queue empty` in the log before claiming host adoption.
 Queue a normal authorized task and confirm the same driver starts it after an idle scan.
-If the agent was already loaded, stop and unload it using the procedure below before replacing the plist and bootstrapping again.
 
 ## Stop, resume or remove
 
@@ -131,6 +121,7 @@ python3 -B scripts/delivery/loop/open_prs.test.py
 
 The lifecycle tests run the real scheduler in subprocesses with temporary task folders, exercise repeated empty scans and later tasks, drain an active worker under the owner lock, and verify zero exits for `STOP`, `SIGINT` and `SIGTERM`.
 The installer regression exercises the original external entrypoint and verifies that its frozen source contains the helper.
+The self-install regressions fetch a real Git remote, preserve state and controls, verify repeat installation under an active owner lock, drain both lanes and resume the queued task through the updated compatibility entrypoint.
 The sweep suite exercises real task files, branch leases and the GitHub CLI boundary for branch updates, protected merges, conflict-task deduplication, ownership exclusions, pagination, pacing and failure recovery.
 The scheduler regression proves repeated idle sweeps and continued task pickup around finished work.
 Host-only media validation and current-head independent review and CI retain their existing requirements.

@@ -5,6 +5,7 @@ from contextlib import nullcontext
 from pathlib import Path
 import context
 import worktrees
+from install import merged_source, install_merged
 from lifecycle import Lifecycle, IDLE_SECONDS, ACTIVE_SECONDS
 from open_prs import OpenPRSweep
 from taskfiles import read_task, task_files, migrate_notes, issue_number
@@ -45,6 +46,9 @@ def save(s):
         t=L+'/state.json.tmp'
         with open(t,'w') as f: json.dump(s,f,indent=1); f.flush(); os.fsync(f.fileno())
         os.replace(t,L+'/state.json')
+def request_install(s):
+    with LOCK:
+        s['_loop_install']=time.time(); save(s)
 def checks(pr):
     j=json.loads(sh(f'gh pr view {pr} -R {REPO} --json statusCheckRollup,headRefOid,mergeable,state,mergeStateStatus'))
     res={}
@@ -471,7 +475,7 @@ def run_task(f,s):
         j,res,bad=wait(pr,sh('git rev-parse HEAD',cwd=wt)); log(name,'checks',res,j.get('mergeStateStatus'),bad)
         sh(f'git fetch -q origin && git merge -q --ff-only origin/{br}',cwd=wt,check=False)
         if subprocess.run(f"gh pr view {pr} -R {REPO} --json state -q .state",shell=True,env=ENV,capture_output=True,text=True).stdout.strip()=='MERGED':
-            st['done']=1; save(s); log(name,'already MERGED',pr); return
+            st['done']=1; request_install(s); log(name,'already MERGED',pr); return
         if res.get('Simulator')=='ERROR':
             ev=current_repair_evidence(wt,evidence(wt,j['headRefOid'],res),st)
             result=repair_sim(name,wt,st,s,ev,meta,prompt)
@@ -501,7 +505,7 @@ def run_task(f,s):
             if r.returncode:
                 log(name,'merge refused, refreshing from main and retrying:',r.stderr[-300:].replace('\n',' '))
                 refresh(); continue
-            st['done']=1; save(s); log(name,'MERGED',pr)
+            st['done']=1; request_install(s); log(name,'MERGED',pr)
             subprocess.Popen(f'python3 {L}/evidence.py {pr} >> {L}/evidence.log 2>&1',shell=True,env=ENV)
             return
         if 'DIRTY' in bad: refresh(); continue
@@ -546,7 +550,8 @@ def main(*, idle_seconds=IDLE_SECONDS, active_seconds=ACTIVE_SECONDS):
         try: fcntl.flock(owner,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError: raise RuntimeError('Existing loop owner is already running')
         s=state(); busy={}; MAX=2
-        pr_sweep=OpenPRSweep(L,env=ENV,gate=sim_gate,merge_lock=MERGE_LOCK,log=log)
+        pr_sweep=OpenPRSweep(L,env=ENV,gate=sim_gate,merge_lock=MERGE_LOCK,log=log,
+                            on_merge=lambda: request_install(s))
         migrate_notes(L+'/tasks')
         skipped=set()
         def task_log(*args):
@@ -565,6 +570,27 @@ def main(*, idle_seconds=IDLE_SECONDS, active_seconds=ACTIVE_SECONDS):
             for lane,thread in list(busy.items()):
                 if not thread.is_alive(): del busy[lane]; s.pop('_noplan_until',None)
             pr_sweep(s, running={thread.name for thread in busy.values()})
+            requested=s.get('_loop_install',float('inf'))
+            if requested<=time.time():
+                changed=False
+                try:
+                    update=merged_source(ROOT+'/wt3',ENV)
+                    if update and busy:
+                        lifecycle.wait(active_seconds); continue
+                    if update: changed=install_merged(L,update,ENV,owner)
+                except (OSError,ValueError,subprocess.SubprocessError) as error:
+                    with LOCK:
+                        if s.get('_loop_install')==requested: s['_loop_install']=time.time()+IDLE_SECONDS
+                    detail=getattr(error,'stderr',None) or str(error)
+                    if isinstance(detail,bytes): detail=detail.decode(errors='replace')
+                    log('SELF-INSTALL deferred:',redact(detail)[-800:])
+                else:
+                    with LOCK:
+                        if s.get('_loop_install')==requested: s.pop('_loop_install',None)
+                save(s)
+                if changed:
+                    log('SELF-INSTALL installed merged loop source; restarting through LaunchAgent')
+                    return 0 if lifecycle.stopping() else 75
             files=task_files(L+'/tasks',task_log)
             running={thread.name for thread in busy.values()}
             retriage([f for f in files if Path(f).stem not in running],s)
@@ -603,4 +629,4 @@ def main(*, idle_seconds=IDLE_SECONDS, active_seconds=ACTIVE_SECONDS):
 
 
 if __name__=='__main__':
-    main()
+    raise SystemExit(main())

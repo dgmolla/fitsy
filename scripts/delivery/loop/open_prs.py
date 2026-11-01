@@ -17,11 +17,12 @@ REQUEST_SECONDS = 1
 
 
 class OpenPRSweep:
-    def __init__(self, directory, *, env, gate, merge_lock, log):
+    def __init__(self, directory, *, env, gate, merge_lock, log, on_merge=None):
         self.directory = Path(directory)
         self.env, self.gate, self.merge_lock, self.log = env, gate, merge_lock, log
         self.next_run = 0
         self.last_request = None
+        self.on_merge = on_merge
 
     def pace(self):
         if self.last_request is not None:
@@ -167,6 +168,7 @@ class OpenPRSweep:
                                     self.gh('pr', 'merge', str(number), '-R', REPO, '--squash',
                                             '--match-head-commit', pr['headRefOid'])
                                     self.log('OPEN-PR SWEEP merged PR', number)
+                                    if self.on_merge: self.on_merge()
                 except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
                     detail = getattr(error, 'stderr', None) or str(error)
                     self.log('OPEN-PR SWEEP PR', number, 'deferred:', redact(detail)[-800:])
