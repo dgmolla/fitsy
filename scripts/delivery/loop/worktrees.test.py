@@ -30,7 +30,7 @@ class WorktreesTest(unittest.TestCase):
         self.git(self.repo, 'config', 'user.name', 'Fixture')
         self.git(self.repo, 'config', 'user.email', 'fixture@example.test')
         (self.repo / 'main.txt').write_text('main\n')
-        (self.repo / '.gitignore').write_text('.evidence/\nnode_modules/\n.env.local\n')
+        (self.repo / '.gitignore').write_text('.evidence/\nnode_modules\n.env.local\n')
         self.commit(self.repo, 'baseline')
         self.git(self.repo, 'remote', 'add', 'origin', str(self.remote))
         self.git(self.repo, 'push', '-q', 'origin', 'main')
@@ -509,6 +509,26 @@ print(json.dumps({'meta':meta,'state':loaded['state'](),'helper':loaded['worktre
         self.assertNotIn('blocked', state['new'])
         self.assertNotIn('checkout_removed', state['new'])
 
+
+
+class LinkDependenciesTest(unittest.TestCase):
+    def test_links_missing_roots_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            temp = Path(temp).resolve()
+            roots = [temp / 'canon/node_modules', temp / 'canon/apps/mobile/node_modules']
+            for root in roots: root.mkdir(parents=True)
+            wt = temp / 'wt'; (wt / 'apps/mobile').mkdir(parents=True)
+            subprocess.run(['git', 'init', '-q', str(wt)], check=True)
+            worktrees.link_dependencies(wt, [str(root) for root in roots])
+            self.assertFalse((wt / 'node_modules').is_symlink(), 'unignored links would dirty the checkout')
+            (wt / '.gitignore').write_text('node_modules\n')
+            worktrees.link_dependencies(wt, [str(root) for root in roots])
+            self.assertEqual((wt / 'node_modules').resolve(), roots[0])
+            self.assertEqual((wt / 'apps/mobile/node_modules').resolve(), roots[1])
+            other = temp / 'other'; other.mkdir()
+            (wt / 'node_modules').unlink(); (wt / 'node_modules').mkdir()
+            worktrees.link_dependencies(wt, [str(root) for root in roots])
+            self.assertFalse((wt / 'node_modules').is_symlink())
 
 if __name__ == '__main__':
     unittest.main()
