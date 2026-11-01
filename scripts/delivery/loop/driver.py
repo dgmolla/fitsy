@@ -3,6 +3,8 @@
 import json, os, subprocess, time, re, threading, shlex, tempfile
 from contextlib import nullcontext
 from pathlib import Path
+import preflight
+if os.environ.get('FITSY_LOOP_SETTINGS'): preflight.load_settings()
 import context
 import worktrees
 from install import merged_source, install_merged
@@ -571,6 +573,18 @@ def main(*, idle_seconds=IDLE_SECONDS, active_seconds=ACTIVE_SECONDS):
     with open(L+'/driver.lock','a') as owner, Lifecycle(L).signals() as lifecycle:
         try: fcntl.flock(owner,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError: raise RuntimeError('Existing loop owner is already running')
+        # Fail closed: run nothing until every gate prerequisite is present.
+        reported=None
+        # Only hermetic test fixtures skip this; the LaunchAgent never sets it.
+        if os.environ.get('FITSY_LOOP_FIXTURE_SKIP_PREFLIGHT')=='1': log('PREFLIGHT skipped for test fixture')
+        while not lifecycle.stopping() and os.environ.get('FITSY_LOOP_FIXTURE_SKIP_PREFLIGHT')!='1':
+            if ENV.get('FITSY_LOOP_SETTINGS'): preflight.load_settings(ENV)
+            problems=preflight.check(ROOT+'/wt3',ENV)
+            if not problems: break
+            if problems!=reported: log(preflight.message(problems)); reported=problems
+            lifecycle.wait(idle_seconds)
+        if lifecycle.stopping(): return 0
+        if reported: log('PREFLIGHT passed; starting tasks')
         s=state(); busy={}; MAX=2
         pr_sweep=OpenPRSweep(L,env=ENV,gate=sim_gate,merge_lock=MERGE_LOCK,log=log,
                             on_merge=lambda: request_install(s))

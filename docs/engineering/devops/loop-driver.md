@@ -130,3 +130,7 @@ The self-install regressions fetch a real Git remote, preserve state and control
 The sweep suite exercises real task files, branch leases and the GitHub CLI boundary for branch updates, protected merges, conflict-task deduplication, ownership exclusions, pagination, pacing and failure recovery.
 The scheduler regression proves repeated idle sweeps and continued task pickup around finished work.
 Host-only media validation and current-head independent review and CI retain their existing requirements.
+
+## Settings and startup check
+
+The LaunchAgent sets `FITSY_LOOP_SETTINGS=~/.config/fitsy-loop/loop.env`, a local, untracked `KEY=VALUE` file (chmod 600, no secrets) with `FITSY_XCTEST_SIM_UDID`, `FITSY_SIM_OWNER`, `MAESTRO_BIN`, `JAVA_HOME`, `EXPO_PUBLIC_API_URL=https://dev.fitsy.org` and `FITSY_E2E_FIXTURES` (in `~/.config/fitsy-e2e/`). The driver reloads it before each startup check. `preflight.py` verifies the simulator exists, Java and Maestro run, the fixture config parses, `wt3` has `node_modules`, both iOS fingerprint baselines parse, and the native sandbox can start a shell that writes `/dev/null`. If anything is missing, no task runs and `driver.log` shows one `PREFLIGHT FAILED` line naming every problem.

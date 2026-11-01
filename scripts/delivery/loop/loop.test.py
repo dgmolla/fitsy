@@ -17,6 +17,8 @@ import unittest
 from unittest import mock
 
 SOURCE = Path(__file__).parent
+# Driver fixtures run without a real simulator host; PreflightTest covers the check.
+os.environ['FITSY_LOOP_FIXTURE_SKIP_PREFLIGHT'] = '1'
 sys.path.insert(0, str(SOURCE))
 import context
 import driver
@@ -239,6 +241,10 @@ def pick(*args):
     with (loop/'picks').open('a') as output: output.write('.')
     return config.get('planner_result')
 driver.task_files=task_files; driver.execute_task=execute_task
+def preflight_check(*args):
+    if config.get('preflight') and not (loop/'preflight-ok').exists(): return config['preflight']
+    return []
+driver.preflight.check=preflight_check
 driver.retriage=lambda *args: None; planner.pick=pick
 if config.get('install_error'):
     def merged_source(*args): raise OSError('Fetch unavailable')
@@ -272,7 +278,9 @@ else: driver.main()
         (loop / 'state.json').write_text(json.dumps({'_planner_off': planner_off, **(task_state or {})}))
         process = subprocess.Popen([sys.executable, '-B', '-c', self.PROCESS,
                                     json.dumps({'source': str(SOURCE.resolve()), **config})],
-                                   env={**os.environ, 'FITSY_LOOP_DIR': str(loop),
+                                   env={**{k: v for k, v in os.environ.items()
+                                           if not (config.get('preflight') and k == 'FITSY_LOOP_FIXTURE_SKIP_PREFLIGHT')},
+                                        'FITSY_LOOP_DIR': str(loop),
                                         'FITSY_LOOP_ROOT': str(self.root)},
                                    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         def close():
@@ -316,6 +324,19 @@ else: driver.main()
                 self.clean_exit(process)
                 self.assertEqual(self.contents(loop, 'completed').splitlines(), ['first', 'second'])
                 self.assertNotIn('ALL DONE', self.contents(loop, 'driver.log'))
+
+    def test_failed_preflight_runs_no_task_and_reports_once(self):
+        loop, process = self.start(fast=True, preflight=['simulator X does not exist'])
+        self.enqueue(loop, 'blocked')
+        self.until(lambda: 'PREFLIGHT FAILED' in self.contents(loop, 'driver.log'))
+        time.sleep(0.3)
+        self.assertEqual(self.contents(loop, 'started'), '')
+        self.assertEqual(self.contents(loop, 'driver.log').count('PREFLIGHT FAILED'), 1)
+        self.assertIn('simulator X does not exist', self.contents(loop, 'driver.log'))
+        (loop / 'preflight-ok').touch()
+        self.until(lambda: 'blocked' in self.contents(loop, 'completed'))
+        self.assertIn('PREFLIGHT passed', self.contents(loop, 'driver.log'))
+        (loop / 'STOP').touch(); self.clean_exit(process)
 
     def test_stop_file_interrupts_the_default_three_minute_idle(self):
         loop, process = self.start()
@@ -1778,6 +1799,90 @@ class SandboxProfileTest(unittest.TestCase):
             policy.write_text(host.profile(self.repo, Path(d), {'HOME': d, 'PATH': os.environ['PATH']}))
             result = subprocess.run([host.SANDBOX, '-f', str(policy), '/bin/bash', '-p', '-c', 'true'], timeout=30)
         self.assertEqual(result.returncode, 0)
+
+    @unittest.skipUnless(sys.platform == 'darwin' and Path(host.SANDBOX).exists(), 'macOS sandbox only')
+    def test_sandbox_writes_dev_null_but_not_home(self):
+        # Regression: Maestro's launcher died on "/dev/null: Operation not permitted".
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory(dir=Path.home()) as outside:
+            policy = Path(d) / 'p.sb'
+            policy.write_text(host.profile(self.repo, Path(d), {'HOME': str(Path.home()), 'PATH': os.environ['PATH']}))
+            ok = subprocess.run([host.SANDBOX, '-f', str(policy), '/bin/bash', '-p', '-c', ': > /dev/null'], timeout=30)
+            denied = subprocess.run([host.SANDBOX, '-f', str(policy), '/bin/bash', '-p', '-c',
+                                     ': > ' + shlex.quote(str(Path(outside) / 'x'))], timeout=30, capture_output=True)
+        self.assertEqual(ok.returncode, 0)
+        self.assertNotEqual(denied.returncode, 0)
+
+
+class PreflightTest(unittest.TestCase):
+    def setUp(self):
+        import preflight
+        self.preflight = preflight
+        d = tempfile.TemporaryDirectory(); self.addCleanup(d.cleanup)
+        self.dir = Path(d.name).resolve()
+        home = mock.patch.dict(os.environ, HOME=str(self.dir)); home.start(); self.addCleanup(home.stop)
+        self.root = self.dir / 'repo'
+        for name in ('node_modules', 'apps/mobile/node_modules', 'scripts/deploy', '.config/fitsy-e2e', 'jdk/bin'):
+            (self.root / name if not name.startswith(('.', 'jdk')) else self.dir / name).mkdir(parents=True)
+        for name in preflight.BASELINES:
+            (self.root / name).write_text('{"build_number": "7"}')
+        (self.dir / '.config/fitsy-e2e/fitsy-fixtures.json').write_text('{"fixtures": {"entitled": {}}}')
+        for path in (self.dir / 'maestro', self.dir / 'jdk/bin/java'):
+            path.write_text('#!/bin/sh\n'); path.chmod(0o755)
+        self.settings = self.dir / 'loop.env'
+        self.settings.write_text('# loop\nFITSY_XCTEST_SIM_UDID=SIM-1\nexport FITSY_SIM_OWNER="loop"\n'
+                                 f'MAESTRO_BIN={self.dir}/maestro\nJAVA_HOME={self.dir}/jdk\n'
+                                 'EXPO_PUBLIC_API_URL=https://dev.fitsy.org\n'
+                                 'FITSY_E2E_FIXTURES=~/.config/fitsy-e2e/fitsy-fixtures.json\n')
+        self.env = {'FITSY_LOOP_SETTINGS': str(self.settings)}
+        preflight.load_settings(self.env)
+        self.sims = mock.Mock(return_value=mock.Mock(stdout='iPhone 15 (SIM-1) (Booted)'))
+
+    def check(self, **overrides):
+        return self.preflight.check(self.root, {**self.env, **overrides}, run=self.sims, sandbox=lambda *a: None)
+
+    def test_settings_file_parses_quotes_exports_and_home(self):
+        self.assertEqual(self.env['FITSY_SIM_OWNER'], 'loop')
+        self.assertTrue(self.env['FITSY_E2E_FIXTURES'].startswith(str(Path.home())))
+        self.assertTrue(self.preflight.read_settings(self.settings))
+
+    def test_complete_host_passes(self):
+        self.assertEqual(self.check(), [])
+
+    def test_each_missing_prerequisite_fails_closed(self):
+        cases = {
+            'FITSY_XCTEST_SIM_UDID': ({'FITSY_XCTEST_SIM_UDID': 'SIM-404'}, 'does not exist'),
+            'owner': ({'FITSY_SIM_OWNER': ''}, 'FITSY_SIM_OWNER is not set'),
+            'maestro': ({'MAESTRO_BIN': str(self.dir / 'nope')}, 'MAESTRO_BIN'),
+            'java': ({'JAVA_HOME': str(self.root)}, 'JAVA_HOME'),
+            'prod api': ({'EXPO_PUBLIC_API_URL': 'https://api.fitsy.org'}, 'must be https://dev.fitsy.org'),
+            'fixtures outside config': ({'FITSY_E2E_FIXTURES': str(self.dir / 'f.json')}, '~/.config/fitsy-e2e'),
+            'settings file': ({'FITSY_LOOP_SETTINGS': str(self.dir / 'none.env')}, 'settings file'),
+        }
+        for name, (overrides, expected) in cases.items():
+            with self.subTest(name):
+                problems = self.check(**overrides)
+                self.assertTrue(any(expected in problem for problem in problems), problems)
+
+    def test_missing_dependencies_and_baseline_fail(self):
+        shutil.rmtree(self.root / 'node_modules')
+        (self.root / self.preflight.BASELINES[1]).unlink()
+        problems = ' '.join(self.check())
+        self.assertIn('npm ci', problems)
+        self.assertIn('fingerprint baseline', problems)
+
+    def test_sandbox_runs_last_and_its_failure_is_reported(self):
+        sandbox = mock.Mock(return_value='sandbox cannot start a shell that writes /dev/null')
+        self.preflight.check(self.root, {**self.env, 'FITSY_SIM_OWNER': ''}, run=self.sims, sandbox=sandbox)
+        sandbox.assert_not_called()
+        problems = self.preflight.check(self.root, self.env, run=self.sims, sandbox=sandbox)
+        self.assertEqual(problems, ['sandbox cannot start a shell that writes /dev/null'])
+        self.assertIn('no tasks will run', self.preflight.message(problems))
+
+    def test_launchagent_template_points_at_settings_file(self):
+        agent = plistlib.loads((SOURCE / 'org.fitsy.loop-driver.plist').read_bytes())
+        self.assertEqual(agent['EnvironmentVariables']['FITSY_LOOP_SETTINGS'], '__HOME__/.config/fitsy-loop/loop.env')
+        self.assertIn('preflight.py', install.FILES)
+
 
 if __name__ == '__main__':
     unittest.main()
