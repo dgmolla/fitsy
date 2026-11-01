@@ -14,7 +14,9 @@ const yaml = createRequire(import.meta.url)('js-yaml');
 
 export const root = resolve(process.env.FITSY_PRODUCT_ROOT || fileURLToPath(new URL('../..', import.meta.url)));
 // Explicit worktree identity must win over a surrounding Git hook's pointers.
-export const repoEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+// Keep the isolated runner's scratch git config; without it git reads the
+// sandbox-denied ~/.gitconfig and every native replay fails before Maestro.
+export const repoEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_') || key === 'GIT_CONFIG_GLOBAL' || key === 'GIT_CONFIG_NOSYSTEM'));
 const git = (args, cwd = root) => execFileSync('git', args, { cwd, encoding: 'utf8', env: repoEnv() }).trim();
 export const digest = value => createHash('sha256').update(value).digest('hex');
 export const baseline = ['cold-start-welcome', 'signin-options'];
