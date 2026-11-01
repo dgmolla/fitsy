@@ -87,6 +87,7 @@ elif name=='gh':
     elif args[:2]==['pr','view']: print(s.get('dependency','OPEN'))
     elif args[:2]==['issue','list']: print('[]')
     elif args[:2]==['issue','create']: print('https://github.com/dgmolla/fitsy/issues/999')
+    elif args[:1]==['api'] and '/pulls?' in args[1]: print(json.dumps(s.get('open_prs',[])))
     elif args[:1]==['api'] and '/statuses' in args[1]: print(json.dumps(s.get('statuses',[])))
     elif 'comments' in args[1] if len(args)>1 else False: print('[]')
     elif '--body-file' in args:
@@ -222,6 +223,11 @@ def pick(*args):
     return config.get('planner_result')
 driver.task_files=task_files; driver.execute_task=execute_task
 driver.retriage=lambda *args: None; planner.pick=pick
+if config.get('sweep'):
+    import open_prs
+    open_prs.SWEEP_SECONDS=0.04; open_prs.REQUEST_SECONDS=0
+    driver.ENV['PATH']=config['bin']+':'+os.environ['PATH']
+    driver.ENV['SWEEP_SERVICE']=str(loop/'service.json')
 if config.get('fast'): driver.main(idle_seconds=0.04,active_seconds=0.02)
 else: driver.main()
 '''
@@ -231,11 +237,11 @@ else: driver.main()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
 
-    def start(self, name='loop', *, planner_off=True, **config):
+    def start(self, name='loop', *, planner_off=True, task_state=None, **config):
         loop = self.root / name
         (loop / 'tasks').mkdir(parents=True, exist_ok=True)
         (loop / 'progress.py').write_text('# No external publishing in lifecycle fixtures.\n')
-        (loop / 'state.json').write_text(json.dumps({'_planner_off': planner_off}))
+        (loop / 'state.json').write_text(json.dumps({'_planner_off': planner_off, **(task_state or {})}))
         process = subprocess.Popen([sys.executable, '-B', '-c', self.PROCESS,
                                     json.dumps({'source': str(SOURCE.resolve()), **config})],
                                    env={**os.environ, 'FITSY_LOOP_DIR': str(loop),
@@ -290,6 +296,36 @@ else: driver.main()
         (loop / 'STOP').touch()
         self.clean_exit(process)
         self.assertIn('STOPPED stop file:', self.contents(loop, 'driver.log'))
+
+    def test_open_pr_sweep_repeats_while_idle_and_between_task_dispatches(self):
+        spec = importlib.util.spec_from_file_location('sweep_fixture', SOURCE / 'open_prs.test.py')
+        sweep_tests = importlib.util.module_from_spec(spec); spec.loader.exec_module(sweep_tests)
+        loop = self.root / 'loop'; (loop / 'tasks').mkdir(parents=True)
+        self.enqueue(loop, 'ended')
+        tools = self.root / 'bin'; tools.mkdir()
+        gh = tools / 'gh'; gh.write_text('#!' + sys.executable + '\n' + sweep_tests.GH); gh.chmod(0o700)
+        (loop / 'service.json').write_text(json.dumps({'pages': [[{
+            'number': 700, 'head': {'ref': 'fix/ended', 'repo': {'full_name': 'dgmolla/fitsy'}}}]],
+            'views': {'700': {'number': 700, 'headRefName': 'fix/ended', 'headRefOid': 'a'*40,
+                'isCrossRepository': False, 'isDraft': False, 'state': 'OPEN',
+                'mergeStateStatus': 'BEHIND'}}, 'calls': []}))
+        loop, process = self.start(fast=True, sweep=True, bin=str(tools),
+                                   task_state={'ended': {'done': 1, 'pr': 700, 'opened_by_loop': True}})
+        def updates():
+            try:
+                data = json.loads((loop / 'service.json').read_text())
+                return sum(args[:2] == ['pr', 'update-branch'] for args in data['calls'])
+            except json.JSONDecodeError:
+                return 0
+        self.until(lambda: updates() >= 2)
+        self.enqueue(loop, 'first')
+        self.until(lambda: 'first' in self.contents(loop, 'completed'))
+        before = updates()
+        self.until(lambda: updates() > before)
+        self.enqueue(loop, 'second')
+        self.until(lambda: 'second' in self.contents(loop, 'completed'))
+        (loop / 'STOP').touch(); self.clean_exit(process)
+        self.assertEqual(self.contents(loop, 'started').splitlines(), ['first', 'second'])
 
     def test_existing_stop_file_prevents_planning_and_dispatch(self):
         loop = self.root / 'loop'; (loop / 'tasks').mkdir(parents=True)
@@ -1255,6 +1291,8 @@ if (denied.some(value => !value)) process.exit(1);
         self.assertIn('STOPPED stop file:', (host / 'driver.log').read_text())
         self.assertEqual((Path(receipt['version']) / 'lifecycle.py').read_bytes(),
                          (SOURCE / 'lifecycle.py').read_bytes())
+        self.assertEqual((Path(receipt['version']) / 'open_prs.py').read_bytes(),
+                         (SOURCE / 'open_prs.py').read_bytes())
         # The PR's one-line legacy-driver change must consume that same snapshot.
         documentation = (SOURCE.parents[2] / 'docs/engineering/devops/loop-driver.md').read_text()
         delegation = documentation.split('```python\n', 1)[1].split('```', 1)[0]
@@ -1297,6 +1335,44 @@ if (denied.some(value => !value)) process.exit(1);
                                   env=self.env,text=True,capture_output=True,timeout=10)
         self.assertNotEqual(rejected.returncode, 0)
         self.assertIn('Unapproved dependency root', rejected.stderr)
+
+    def test_installed_entrypoint_sweeps_prs_after_their_original_tasks_ended(self):
+        loop = self.root / 'loop'; (loop / 'tasks').mkdir(parents=True)
+        (self.root / 'wt3').symlink_to(self.wt, target_is_directory=True)
+        (loop / 'driver.py').write_text('# Legacy entrypoint\n')
+        (loop / 'tasks/original.md').write_text('branch: fix/ended\ntitle: Ended work\n---\nKeep acceptance.\n')
+        state = {'_planner_off': True, 'original': {'done': 1, 'pr': 700}}
+        (loop / 'state.json').write_text(json.dumps(state))
+        (loop / 'driver.log').write_text('12:00:00 original PR https://github.com/dgmolla/fitsy/pull/700\n')
+        self.service_state(open_prs=[{'number': 700, 'head': {
+            'ref': 'fix/ended', 'repo': {'full_name': 'dgmolla/fitsy'}}}],
+            pr={'number': 700, 'headRefName': 'fix/ended', 'headRefOid': 'a'*40,
+                'isCrossRepository': False, 'isDraft': False, 'state': 'OPEN',
+                'mergeStateStatus': 'BEHIND', 'statusCheckRollup': []})
+        # The installed owner's normal PATH discovers this isolated CLI at HOME.
+        home = self.root / 'fixture-home'; tools = home / '.local/bin'; tools.mkdir(parents=True)
+        (tools / 'gh').symlink_to(self.root / 'bin/gh')
+        install.install(loop, apply=True)
+        process = subprocess.Popen([sys.executable, '-B', str(loop / 'driver.py')],
+                                   env={**self.env, 'HOME': str(home), 'FITSY_LOOP_ROOT': str(self.root)},
+                                   text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if 'updated BEHIND PR 700' in (loop / 'driver.log').read_text(): break
+                if process.poll() is not None: break
+                time.sleep(0.01)
+            self.assertIn('updated BEHIND PR 700', (loop / 'driver.log').read_text())
+            (loop / 'STOP').touch()
+            _, stderr = process.communicate(timeout=3)
+            self.assertEqual(process.returncode, 0, stderr)
+        finally:
+            if process.poll() is None: process.kill()
+            process.communicate(timeout=5)
+        self.assertEqual(json.loads((loop / 'state.json').read_text()), state)
+        calls = self.service_state()['calls']
+        self.assertIn(['pr', 'update-branch', '700', '-R', 'dgmolla/fitsy'],
+                      [call['args'] for call in calls if call['tool'] == 'gh'])
 
     def test_installer_rejects_dependency_symlinks_before_recording_permissions(self):
         source = self.root / 'installation/scripts/delivery/loop'; source.mkdir(parents=True)
