@@ -905,6 +905,9 @@ print(json.dumps(result))
         with host.isolated(self.wt, self.env) as (_, selected):
             temporary = Path(selected['TMPDIR'])
             self.assertIn('-Djava.io.tmpdir=' + str(temporary), selected['JAVA_TOOL_OPTIONS'])
+            policy = (temporary / 'native.sb').read_text()
+            for granted in ('/Library/Preferences/com.apple.dt.Xcode.plist', '.gitconfig', '.env.example'):
+                self.assertIn(granted, policy)
             result = subprocess.run(['/usr/bin/sandbox-exec', '-f', str(temporary / 'native.sb'),
                                      sys.executable, '-I', '-c', attempt, str(credential), str(dotenv), str(link),
                                      str(private_credential), *(str(path) for path in dependency_secrets)],

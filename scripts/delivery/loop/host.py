@@ -50,9 +50,13 @@ def profile(wt, directory, env):
     simulator = home / 'Library/Developer/CoreSimulator'
     claim = [home / '.fitsy-sim-claim.json', home / '.fitsy-sim-claim.lock']
     reads = [Path(p) for p in ('/System', '/Library/Developer', '/Library/Apple', '/Library/Java', '/usr', '/bin',
-                               '/sbin', '/opt/homebrew', '/Applications/Xcode.app', '/dev')]
+                               '/sbin', '/opt/homebrew', '/Applications/Xcode.app', '/dev',
+                               # xcrun refuses to run unless it can read the accepted license.
+                               '/Library/Preferences/com.apple.dt.Xcode.plist')]
     reads += [wt, directory, CONTROLS.resolve(), simulator, *claim,
-              home / '.maestro/bin', home / '.maestro/lib']
+              home / '.maestro/bin', home / '.maestro/lib',
+              # git aborts when the global config is unreadable, and ci.mjs strips GIT_* overrides.
+              home / '.gitconfig']
     for key in ('JAVA_HOME', 'DEVELOPER_DIR', 'MAESTRO_BIN'):
         if env.get(key):
             reads.append(Path(env[key]).resolve())
@@ -105,12 +109,14 @@ def profile(wt, directory, env):
     # Standard character devices only (Maestro's launcher redirects to /dev/null).
     write_excluded += ' ' + ' '.join(f'(require-not (literal {literal(device)}))' for device in DEVICES)
     write_excluded += ' (require-not (regex #"^/dev/fd/"))'
+    # The tracked .env.example is a secret-free template the app config reads.
     # deny rules take precedence over the broad workspace permission, including
     # symlink targets. Process environment inspection and Keychain IPC stay denied.
     return f'''(version 1)
 (allow default)
 (deny file-read-data (require-all {excluded}))
-(deny file-read-data (require-all (regex #"(^|/)\\.env($|\\.)") (require-not (literal {literal(public)}))))
+(deny file-read-data (require-all (regex #"(^|/)\\.env($|\\.)") (require-not (literal {literal(public)}))
+                                   (require-not (literal {literal(wt / ".env.example")}))))
 (deny file-write* (require-all {write_excluded}))
 (deny process-info*)
 (allow process-info* (target same-sandbox))
