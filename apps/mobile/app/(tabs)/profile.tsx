@@ -37,6 +37,7 @@ import {
 } from '@/lib/analytics';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
+import { useFloatingNavClearance } from '@/lib/floatingNav';
 
 const GOAL_OPTIONS = [
   { id: 'lose_fat', label: 'Lose Weight', icon: 'flame-outline', description: 'Calorie deficit for fat loss' },
@@ -71,6 +72,7 @@ type EditField = 'goal' | 'activity' | 'height' | 'weight' | 'age' | null;
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
+  const tabBarClearance = useFloatingNavClearance();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string>('—');
   const [macroTargets, setMacroTargets] = useState<MacroValues | null>(null);
@@ -270,7 +272,8 @@ export default function ProfileScreen() {
     <>
     <ScreenBackground>
       <ScreenHeader />
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView testID="profile-scroll" contentContainerStyle={[s.scroll, { paddingBottom: Math.max(100, tabBarClearance + 24) }]}
+        scrollIndicatorInsets={{ bottom: tabBarClearance }} keyboardShouldPersistTaps="handled">
 
         {/* Hero identity card */}
         <View style={s.heroCard}>

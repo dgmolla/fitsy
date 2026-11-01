@@ -20,10 +20,12 @@ import { HeroCard, RestaurantSection } from './DiscoveryCards';
 import { ShuffleButton } from './ShuffleButton';
 import { DiscoveryViewToggle } from './DiscoveryViewToggle';
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
+import { useFloatingNavClearance } from '@/lib/floatingNav';
 // Keep the native map module out of the disabled experiment's execution path.
 const DiscoveryMap = React.lazy(async () => require('./DiscoveryMap') as typeof import('./DiscoveryMap'));
 const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { onboardingPreview?: boolean; onPreviewBack?: () => void }) {
+  const tabBarClearance = useFloatingNavClearance();
   const { mapDebug } = useLocalSearchParams<{ mapDebug?: string }>();
   const mapEnabled = useMapSearchFlag(mapDebug === '1') && !onboardingPreview;
   const [view, setView] = useState<'map' | 'list'>('map');
@@ -186,13 +188,13 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
         </View>
       )}
       <View ref={viewportRef} collapsable={false} onLayout={onTourLayoutChange} style={{ flex: 1 }}><FlatList
+          testID="discovery-list"
           ref={listRef}
           onScroll={event => { scrollOffset.current = event.nativeEvent.contentOffset.y; onTourLayoutChange(); }}
           onContentSizeChange={onTourLayoutChange}
           scrollEventThrottle={16}
           style={{ flex: 1 }}
-          // The tab navigator occupies its own layout space below this list.
-          contentContainerStyle={{ paddingBottom: 28 }}
+          contentContainerStyle={{ paddingBottom: 28 + tabBarClearance }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets

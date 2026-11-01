@@ -68,6 +68,10 @@ export const EDITORIAL = {
   whiteTintLow:    'rgba(255,255,255,0.12)' as string, // white @ 12% — button on dark sort bar
 } as const;
 
+export const RADII = {
+  pill: 999,
+} as const;
+
 // ─── Fonts ───────────────────────────────────────────────────────────────────
 // Aligned with the webapp font stack (apps/api/app/layout.tsx):
 // Fraunces is the display/headline serif, Newsreader regular/italic carry the
