@@ -115,7 +115,7 @@ checks:
     layer: 2
     blocking: true
     runs: [local, ci]
-    why: Shared pure contracts plus complete affected API, scripts and mobile tests, including Python cleanup and loop recovery; API and scripts Jest refuse shared database targets before suites load. Retain all diagnostics through run.mjs even when later workspaces pass (incident 267).
+    why: Shared pure contracts plus complete affected API, scripts and mobile tests, including Python cleanup, loop recovery and open-PR sweeps; API and scripts Jest refuse shared database targets before suites load. Retain all diagnostics through run.mjs even when later workspaces pass (incident 267).
 
   - name: rate-limit-store
     script: rate-limit-store.sh
