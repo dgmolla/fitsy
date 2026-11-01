@@ -32,15 +32,15 @@ test('preserves the prelaunch production route and selects the separate TestFlig
   policy('testflight', true);
   expect(JSON.parse(run().stdout)).toEqual({ channel: 'testflight', baseline_file: 'scripts/deploy/ios-binary-baseline.json' });
 });
-test('the installed policy routes automatic OTA to build 6 and manual production to the historical binary', () => {
+test('the installed policy retains TestFlight routing while build 7 records its actual production channel', () => {
   copyFileSync(resolve(__dirname, 'ota-policy.json'), join(root, 'scripts/deploy/ota-policy.json'));
   const automatic = JSON.parse(run().stdout);
   const manual = JSON.parse(run(['--manual-production']).stdout);
   const baseline = (target: { baseline_file: string }) =>
     JSON.parse(readFileSync(resolve(__dirname, '../..', target.baseline_file), 'utf8'));
   expect(automatic.channel).toBe('testflight');
-  expect(baseline(automatic)).toMatchObject({ channel: 'testflight', build_number: '6',
-    runtime_version: 'fd98d93926901555764ba66490c9bd9ca170454d' });
+  expect(baseline(automatic)).toMatchObject({ channel: 'production', build_number: '7',
+    runtime_version: '58699659d0433dd381a23a994c7ee97f41a97902' });
   expect(manual.channel).toBe('production');
   expect(baseline(manual)).toMatchObject({ channel: 'production', build_number: '5', runtime_version: '1.0.0' });
 });

@@ -28,7 +28,7 @@ The existing Fitsy Delivery owner retains release execution; prerequisite owners
 | Intervening OTA | **Unknown:** production update group(s), runtime, manifest/bundle hashes, rollout dates, rollback state, and actual device uptake must be read and compared with both the embedded build-5 bundle and the next binary |
 
 Historical build-5 evidence: [production binary receipt](../../scripts/deploy/ios-production-binary-baseline.json), [OTA baseline and provenance](../engineering/devops/ios-ota-baseline.md), and [#243](https://github.com/dgmolla/fitsy/issues/243).
-The later [TestFlight build-6 receipt](../../scripts/deploy/ios-binary-baseline.json) records the October 30 upload and matching fingerprint; its Apple build ID remains unverified.
+The later [build-7 receipt](../../scripts/deploy/ios-binary-baseline.json) records the October 31 upload, fingerprint runtime and embedded `production` channel; its IPA SHA-256 and Apple build ID remain unverified.
 History inspected with `git tag`, `git log --all -- apps/mobile/app.config.ts apps/mobile/app.json apps/mobile/eas.json`, and `git show v1.0.0:apps/mobile/app.config.ts`.
 The September 23 history explicitly describes “TestFlight build 5”; that also does not identify the last App Review submission.
 
