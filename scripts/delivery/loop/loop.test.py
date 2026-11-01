@@ -435,13 +435,13 @@ else: driver.main()
                 raise RuntimeError('scheduler crashed')
         self.assertEqual({number: signal.getsignal(number) for number in previous}, previous)
 
-    def test_launchagent_restarts_failed_exits_and_uses_existing_driver_and_log(self):
+    def test_launchagent_always_restarts_and_uses_existing_driver_and_log(self):
         agent = plistlib.loads((SOURCE / 'org.fitsy.loop-driver.plist').read_bytes())
         self.assertEqual(agent['ProgramArguments'], ['__PYTHON__', '-u', '-B', '__LOOP_DIR__/driver.py'])
         self.assertEqual(agent['WorkingDirectory'], '__LOOP_DIR__')
         self.assertEqual(agent['EnvironmentVariables']['FITSY_LOOP_DIR'], '__LOOP_DIR__')
         self.assertIn('__HOME__/.local/bin', agent['EnvironmentVariables']['PATH'])
-        self.assertEqual(agent['KeepAlive'], {'SuccessfulExit': False})
+        self.assertIs(agent['KeepAlive'], True)
         self.assertTrue(agent['RunAtLoad'])
         self.assertGreaterEqual(agent['ThrottleInterval'], 10)
         for key in ('StandardOutPath', 'StandardErrorPath'):
@@ -904,6 +904,12 @@ print(json.dumps(result))
         # lane and prevents its receipt; the ordinary portable suite skips it.
         with host.isolated(self.wt, self.env) as (_, selected):
             temporary = Path(selected['TMPDIR'])
+            self.assertIn('-Djava.io.tmpdir=' + str(temporary), selected['JAVA_TOOL_OPTIONS'])
+            policy = (temporary / 'native.sb').read_text()
+            for granted in ('/Library/Preferences/com.apple.dt.Xcode.plist', '.env.example'):
+                self.assertIn(granted, policy)
+            self.assertNotIn('.gitconfig', policy)
+            self.assertEqual(selected['GIT_CONFIG_NOSYSTEM'], '1')
             result = subprocess.run(['/usr/bin/sandbox-exec', '-f', str(temporary / 'native.sb'),
                                      sys.executable, '-I', '-c', attempt, str(credential), str(dotenv), str(link),
                                      str(private_credential), *(str(path) for path in dependency_secrets)],
@@ -1811,6 +1817,23 @@ class SandboxProfileTest(unittest.TestCase):
                                      ': > ' + shlex.quote(str(Path(outside) / 'x'))], timeout=30, capture_output=True)
         self.assertEqual(ok.returncode, 0)
         self.assertNotEqual(denied.returncode, 0)
+
+
+class SandboxRegexTest(unittest.TestCase):
+    def test_claim_staging_regex_is_raw_posix(self):
+        escaped = host.posix_escape('/Users/a-b/.fitsy-sim-claim.json.')
+        self.assertEqual(escaped, '/Users/a-b/\\.fitsy-sim-claim\\.json\\.')
+        self.assertNotIn('\\-', escaped)
+
+
+class GitconfigIsolationTest(unittest.TestCase):
+    def test_scratch_gitconfig_drops_host_credentials(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as scratch:
+            Path(home, '.gitconfig').write_text('[user]\n\tname = Dev\n[http]\n\textraHeader = Authorization: Bearer SYNTHETIC\n')
+            env = {'HOME': home, 'PATH': os.environ['PATH']}
+            config = host.scratch_gitconfig(scratch, env).read_text()
+            self.assertIn('Dev', config)
+            self.assertNotIn('SYNTHETIC', config)
 
 
 class PreflightTest(unittest.TestCase):
