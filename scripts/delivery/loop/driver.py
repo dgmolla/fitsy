@@ -4,6 +4,7 @@ import json, os, subprocess, time, re, threading, shlex, tempfile
 from contextlib import nullcontext
 from pathlib import Path
 import context
+import worktrees
 from taskfiles import read_task, task_files, migrate_notes, issue_number
 from recovery import (MAX_ROUNDS, MAX_SIM_REPAIRS, MAX_RERUNS, RETRIAGE_SECONDS,
                       classify_failure, gating_failures, repair_prompt, record_attempt,
@@ -235,16 +236,14 @@ def file_flake(name,st,ev):
         log(name,'flake issue pending:',redact(str(error))[:500])
 
 
-def prepare_task(wt,meta):
+def prepare_task(wt,meta,merge_main=True):
     """Retry the same bounded source prerequisite before implementation or requeue."""
-    with LOCK:
-        sh('git fetch -q origin',cwd=ROOT+'/wt3',timeout=60)
-        if not os.path.isdir(wt):
-            br=meta['branch']
-            if meta.get('existing'):
-                sh(f'git worktree add -f {shlex.quote(wt)} -B loop/{br} origin/{br}',cwd=ROOT+'/wt3',timeout=120)
-                sh('git merge -q --no-edit origin/main',cwd=wt,check=False,timeout=120)
-            else: sh(f'git worktree add -f {shlex.quote(wt)} -B {br} origin/main',cwd=ROOT+'/wt3',timeout=120)
+    with LOCK, worktrees.lease(L,meta['branch']):
+        def merge(path, ref):
+            result=context.host.git(path,['merge','-q','--no-edit',ref],ENV)
+            if result.returncode:
+                raise RuntimeError(f'Merge {ref} stopped: {(result.stderr or result.stdout)[-1500:]}')
+        worktrees.prepare(ROOT+'/wt3',L,wt,meta,ENV,log,merge,merge_main)
 
 
 def refresh_pr_head(wt, branch, head):
@@ -295,6 +294,10 @@ def retriage(files,s):
             record_attempt(st,'preparation-retriage',outcome='ready' if ev['preparation_ready'] else 'error',logs=ev['logs'])
         else:
             try:
+                if st.get('checkout_removed') and not Path(wt).is_dir():
+                    # Replay the published PR head before merging main for new work.
+                    prepare_task(wt,meta,merge_main=False)
+                    st.pop('checkout_removed',None)
                 if st.get('pr'):
                     j,res=checks(st['pr'])
                     refresh_pr_head(wt,meta['branch'],j['headRefOid'])
@@ -334,6 +337,36 @@ def review_text(pr):
 def failed_log(pr,sha):
     ids=sh(f"gh run list -R {REPO} --commit {sha} --json databaseId,conclusion --jq '.[]|select(.conclusion==\"failure\")|.databaseId'",check=False).split()
     return '\n'.join(sh(f'gh run view {i} -R {REPO} --log-failed',check=False)[-5000:] for i in ids[:2])
+
+
+def execute_task(f,s):
+    """Keep branch ownership through all terminal outcomes, including exceptions."""
+    task=read_task(f)
+    name=Path(f).stem
+    if not task or s.get(name,{}).get('done') or s.get(name,{}).get('blocked'):
+        return run_task(f,s)
+    meta,_=task
+    with worktrees.lease(L,meta['branch']):
+        try:
+            return run_task(f,s)
+        except Exception as error:
+            record_attempt(s.setdefault(name,{}),'execution-error',reason=redact(str(error)))
+            save(s)
+            raise
+        finally:
+            with LOCK:
+                try:
+                    removed=worktrees.cleanup(ROOT+'/wt3',L,meta['branch'],ENV,log)
+                    if f'{ROOT}/loop/wt-{name}' in removed:
+                        s.setdefault(name,{})['checkout_removed']=True
+                        save(s)
+                except (RuntimeError,OSError,subprocess.TimeoutExpired) as error:
+                    log(name,'STOPPED worktree cleanup:',redact(str(error)))
+                    s.setdefault(name,{})['cleanup_error']=redact(str(error))
+                    save(s)
+                    raise
+
+
 def run_task(f,s):
     task=read_task(f)
     if not task: log('SKIP non-task',os.path.basename(f)); return 'skipped'
@@ -358,6 +391,8 @@ def run_task(f,s):
         if orphan.returncode!=0: raise RuntimeError('Cannot establish whether an orphan worker owns this checkout')
         time.sleep(30)
     pr=st.get('pr') or (int(meta['pr']) if meta.get('pr') else None)
+    if pr and st.get('pr')!=pr:
+        st['pr']=pr; save(s)
     if not st.get('implemented') and os.path.exists(f'{L}/{name}-impl.log') and sh('git status --porcelain',cwd=wt):
         st['implemented']=1; st['summary']=Path(f'{L}/{name}-impl.log').read_text()[-1500:]; save(s); log(name,'adopted finished implementation')
     if not st.get('implemented'):
@@ -466,7 +501,7 @@ def run_task(f,s):
                 refresh(); continue
             st['done']=1; save(s); log(name,'MERGED',pr)
             subprocess.Popen(f'python3 {L}/evidence.py {pr} >> {L}/evidence.log 2>&1',shell=True,env=ENV)
-            log(name,'retained checkout and evidence for owned resource cleanup'); return
+            return
         if 'DIRTY' in bad: refresh(); continue
         fb=''
         if res.get('AI review')!='SUCCESS': fb+='AI review (fix every CONFIRMED P0/P1; address cheap P2s):\n'+review_text(pr)+'\n'
@@ -514,7 +549,7 @@ def main():
         def task_log(*args):
             if args not in skipped: log(*args); skipped.add(args)
         def work(f,n):
-            try: run_task(f,s)
+            try: execute_task(f,s)
             except Exception as error:
                 log(n,'ERROR',redact(str(error))[-2000:])
                 meta,_=read_task(f)
