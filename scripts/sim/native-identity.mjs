@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, readlinkSync, lstatSync, realpathSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
+// Keep the isolated runner's scratch git config selection; without it git falls
+// back to ~/.gitconfig, which the native sandbox correctly denies.
+const TRUSTED_GIT_SELECTORS = new Set(['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM']);
+
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const stable = value => JSON.stringify(value, (_, item) => item && !Array.isArray(item) && typeof item === 'object'
   ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
@@ -55,7 +59,7 @@ function localNativeResources(value, mobile, root, found = new Set()) {
 // does not affect this identity; an autolinked package version or Pod does.
 export function nativeIdentity(root, env = process.env, execute = command) {
   const mobile = join(root, 'apps/mobile');
-  const cleanEnv = { ...Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('GIT_'))),
+  const cleanEnv = { ...Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('GIT_') || TRUSTED_GIT_SELECTORS.has(key))),
     EXPO_NO_DOTENV: '1', NODE_ENV: env.NODE_ENV || 'development', FITSY_ALLOW_MISSING_PUBLIC_ENV: '1' };
   const expo = JSON.parse(execute('node', [join(root, 'node_modules/expo/bin/cli'), 'config', '--type', 'introspect', '--json'], mobile, cleanEnv));
   const expoGraph = JSON.parse(execute('node', [join(root, 'node_modules/expo-modules-autolinking/bin/expo-modules-autolinking'), 'resolve', '--platform', 'ios', '--json'], mobile, cleanEnv));
