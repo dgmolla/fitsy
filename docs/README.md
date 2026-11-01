@@ -51,6 +51,8 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 
 [Shipping lessons](engineering/devops/shipping-lessons.md) records simulator status diagnosis and durable recovery requirements.
 
+[Loop driver lifecycle](engineering/devops/loop-driver.md) covers empty-queue rescanning, clean stops and the existing owner's crash-restart LaunchAgent.
+
 [Performance measurement and budgets](engineering/devops/performance.md) records the #563 baseline, stable checks, dev request sampling and native profiling protocol.
 
 **`archive/`** — historical ticket specs, spikes, and superseded specs.

@@ -89,3 +89,9 @@ The default command only plans the installation.
 The installer preserves state and evidence, backs up old entrypoints and refuses an active or uncertain owner.
 Verify `source-receipt.json` and replay the actual compatibility entrypoint before reporting adoption.
 The canonical verifier runs both behavior suites through `scripts/verify/test.sh`; focused selection uses the same Python test runner.
+
+For an empty queue or unexpected driver exit, follow [driver lifecycle and LaunchAgent installation](../../../docs/engineering/devops/loop-driver.md).
+The installed `lifecycle.py` idles for three minutes and re-scans even with planning disabled or unavailable.
+`STOP`, `SIGINT` and `SIGTERM` stop new dispatch, drain current workers under the owner lock and exit zero.
+Use the existing source installer before loading the crash-only LaunchAgent template; verify its PID, idle log and later task pickup through the original entrypoint.
+Retire the old restart command at that owner boundary, keep both log streams in `loop/driver.log`, and preserve clean stops and all merge gates.
