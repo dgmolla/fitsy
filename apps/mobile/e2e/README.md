@@ -29,8 +29,9 @@ Both out-of-area cold resumes retry only bounded animation and accessibility obs
 After Test Store cancellation, it requires the discount modal to disappear before retrying a failed purchase; the welcome screen's warning-dismissal coordinate would tap Not now here and reopen the modal.
 `PaymentCompletionCheckout.test.tsx` replays those saved recovery commands against the real paywall and native SDK boundary, retaining the cancellation, safe failure message and incomplete-onboarding assertions.
 CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
-The read-only classifier supplies data to the protected `sim-scope.yml` publisher; the bounded status description contains scope and flow count, and the poller reads exact names from the artifact.
-Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
+The read-only classifier supplies data to the protected `sim-scope.yml` publisher for manual acceptance planning; the bounded status description contains scope and flow count.
+The required `Simulator` check now comes from [GitHub Actions on the self-hosted Mac](../../../docs/ci-simulator.md).
+Its smoke/full Test Store policy is separate from the impact-selected manual acceptance commands below; keep the old publisher paused.
 The pre-push hook stays free of simulator execution.
 Use `node scripts/sim/ci.mjs --scope=<none|smoke|flow|full> --flows=<comma-list> --udid=<UDID>` with environment configuration loaded from the Mac.
 Add `--record-video` or set `FITSY_SIM_RECORD_VIDEO=1` for optional short Slack previews beside the screenshots; recording failures do not fail a journey.

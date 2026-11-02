@@ -161,7 +161,7 @@ async function metroBundle(m) {
   assert(response.ok, `Metro bundle failed: HTTP ${response.status}`);
   return digest(Buffer.from(await response.arrayBuffer()));
 }
-export async function startMetro(r) {
+export async function startMetro(r, { maxWorkers } = {}) {
   await stopMetro();
   // Refuse a busy port; never attach to or terminate another task's server.
   await new Promise((resolvePort, reject) => {
@@ -169,7 +169,8 @@ export async function startMetro(r) {
     server.listen(r.metroPort, '127.0.0.1', () => server.close(resolvePort));
   });
   const fd = openSync(join(buildDir, 'metro.log'), 'w');
-  const child = spawn(process.execPath, [join(root, 'node_modules/expo/bin/cli'), 'start', '--dev-client', '--localhost', '--port', String(r.metroPort)], {
+  const child = spawn(process.execPath, [join(root, 'node_modules/expo/bin/cli'), 'start', '--dev-client', '--localhost', '--port', String(r.metroPort),
+    ...(maxWorkers ? ['--max-workers', String(maxWorkers)] : [])], {
     cwd: mobile, detached: true, stdio: ['ignore', fd, fd],
     env: { ...repoEnv(), CI: '1', EXPO_NO_DOTENV: '1', NODE_ENV: 'development', EXPO_OFFLINE: '1' },
   });
@@ -339,12 +340,12 @@ export function prepareNative(profile, testStore) {
   run('pod', ['install'], { cwd: join(mobile, 'ios'), env, stdio: 'inherit' });
   return env;
 }
-export function compileNative(profile, udid, env) {
+export function compileNative(profile, udid, env, jobs = 4) {
   const log = join(buildDir, 'build.log');
   const fd = openSync(log, 'w');
   try {
     run('xcodebuild', ['-workspace', 'ios/Fitsy.xcworkspace', '-scheme', 'Fitsy', '-configuration', profile.configuration,
-      '-sdk', 'iphonesimulator', '-destination', `id=${udid}`, '-derivedDataPath', buildDir, '-jobs', '4',
+      '-sdk', 'iphonesimulator', '-destination', `id=${udid}`, '-derivedDataPath', buildDir, '-jobs', String(jobs),
       'ONLY_ACTIVE_ARCH=YES', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'build'],
     { cwd: mobile, env, stdio: ['ignore', fd, fd] });
   } finally { closeSync(fd); }

@@ -1,0 +1,117 @@
+name: Simulator CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Superseded pushes cancel only their own PR, including a queued Mac job.
+concurrency:
+  group: simulator-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      required: ${{ steps.plan.outputs.required }}
+      scope: ${{ steps.plan.outputs.scope }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: plan
+        run: node scripts/verify/simulator-actions.mjs
+
+  mac:
+    name: Maestro on Mac
+    needs: select
+    # Never execute fork code with the daily Mac's access or fixture secrets.
+    if: >-
+      needs.select.outputs.required == 'true' &&
+      (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, macOS, fitsy-sim]
+    timeout-minutes: 30
+    concurrency:
+      group: fitsy-simulator
+      cancel-in-progress: false
+      queue: max
+    env:
+      CI: '1'
+      EXPO_NO_DOTENV: '1'
+      NODE_ENV: development
+      NODE_OPTIONS: --max-old-space-size=2048
+      _JAVA_OPTIONS: -Xmx768m -XX:ActiveProcessorCount=2
+      EXTRA_PACKAGER_ARGS: --max-workers 1
+      FITSY_XCTEST_SIM_UDID: ${{ vars.FITSY_SIM_UDID }}
+      FITSY_SIM_OWNER: actions-${{ github.run_id }}-${{ github.run_attempt }}
+      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: '1800'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Fingerprint native inputs without runtime secrets
+        id: native
+        run: node scripts/sim/actions.mjs fingerprint
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          path: .evidence/product-build/Build/Products/Debug-iphonesimulator/Fitsy.app
+          key: fitsy-sim-${{ runner.os }}-${{ runner.arch }}-${{ steps.native.outputs.key }}
+      - name: Claim and boot the reused iPhone 15
+        run: node scripts/sim/actions.mjs boot
+      - name: Build only on native cache miss
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: node scripts/sim/actions.mjs build
+      - uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: .evidence/product-build/Build/Products/Debug-iphonesimulator/Fitsy.app
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - name: Run maintained Maestro flows
+        env:
+          SIM_SCOPE: ${{ needs.select.outputs.scope }}
+          EXPO_PUBLIC_API_URL: https://dev.fitsy.org
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.DEV_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.DEV_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_REVENUECAT_TEST_KEY: ${{ secrets.REVENUECAT_TEST_KEY }}
+          SIM_E2E_FIXTURES: ${{ secrets.SIM_E2E_FIXTURES }}
+        run: node scripts/sim/actions.mjs run
+      - name: Stop owned processes, shut down simulator, and remove job data
+        if: ${{ always() }}
+        run: node scripts/sim/actions.mjs cleanup
+
+  simulator:
+    name: Simulator
+    needs: [select, mac]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require the applicable result
+        env:
+          SELECT_RESULT: ${{ needs.select.result }}
+          REQUIRED: ${{ needs.select.outputs.required }}
+          MAC_RESULT: ${{ needs.mac.result }}
+        run: |
+          test "$SELECT_RESULT" = success
+          if [ "$REQUIRED" = false ]; then
+            test "$MAC_RESULT" = skipped
+            echo 'No mobile or simulator changes; Simulator passes without using the Mac.'
+          else
+            test "$REQUIRED" = true
+            test "$MAC_RESULT" = success
+          fi
