@@ -140,8 +140,10 @@ export async function main(action) {
   const work = join(resolve(process.env.RUNNER_TEMP), `fitsy-simulator-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`);
   const marker = join(work, 'device.json');
   if (action === 'cleanup') {
+    let metroStopped = false;
     try {
       if (existsSync(join(buildDirectory, 'metro.json'))) await (await import('./product-flow.mjs')).stopMetro();
+      metroStopped = true;
     } finally {
       if (existsSync(marker)) {
         const { udid } = JSON.parse(readFileSync(marker, 'utf8'));
@@ -150,7 +152,9 @@ export async function main(action) {
           command('xcrun', ['simctl', 'erase', udid]);
         } finally { command('bash', [join(controlDirectory, 'sim'), 'release']); }
       }
-      for (const dir of [work, buildDirectory, join(repository, 'apps/mobile/ios'), join(repository, 'apps/mobile/.expo')])
+      // stopMetro deliberately retains ownership evidence when termination fails.
+      // Keep its files and temporary data until the live consumer is recovered.
+      if (metroStopped) for (const dir of [work, buildDirectory, join(repository, 'apps/mobile/ios'), join(repository, 'apps/mobile/.expo')])
         rmSync(dir, { recursive: true, force: true });
     }
     return;

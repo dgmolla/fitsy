@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -137,4 +138,27 @@ if(args.includes('boot')) process.exit(1);\n`;
   assert(calls.some(args => args.join(' ') === `simctl erase ${udid}`));
   assert(calls.some(args => args.at(-1) === 'release'));
   assert.equal(calls.some(args => args.includes('all') || args.includes('delete')), false);
+});
+
+test('CLI cleanup fails and retains ownership when an owned Metro ignores SIGTERM', async t => {
+  const dir = temporary(t), bin = join(dir, 'bin'), build = join(dir, '.evidence/product-build');
+  mkdirSync(bin); mkdirSync(build, { recursive: true });
+  const child = spawn(process.execPath, ['-e', 'process.on("SIGTERM",()=>{}); console.log("ready"); setInterval(()=>{},1000);'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  try {
+    await once(child.stdout, 'data');
+    const receipt = join(build, 'metro.json');
+    writeFileSync(receipt, JSON.stringify({ pid: child.pid, processIdentity: 'owned fixture process' }));
+    writeFileSync(join(bin, 'ps'), `#!${process.execPath}\ntry { process.kill(${child.pid},0); console.log('owned fixture process'); } catch { process.exit(1); }\n`, { mode: 0o755 });
+    const result = spawnSync(process.execPath, [join(root, 'scripts/sim/actions.mjs'), 'cleanup'], { cwd: dir, encoding: 'utf8', timeout: 20000,
+      env: { ...env, PATH: `${bin}:${env.PATH}`, FITSY_PRODUCT_ROOT: dir, GITHUB_WORKSPACE: dir, GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS',
+        RUNNER_TEMP: dir, GITHUB_RUN_ID: '13', GITHUB_RUN_ATTEMPT: '1' } });
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /Owned Metro did not stop/);
+    assert.equal(existsSync(receipt), true);
+    assert.doesNotThrow(() => process.kill(child.pid, 0));
+  } finally {
+    const ended = once(child, 'exit');
+    child.kill('SIGKILL');
+    await ended;
+  }
 });
