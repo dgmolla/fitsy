@@ -1,8 +1,12 @@
-# UGC Playbook — End-to-End Creator Deals
+# UGC Playbook - End-to-End Creator Deals
 
-> **Status:** Draft · **Last verified:** 2026-06-12
+> **TL;DR:** Creator acquisition is deferred under the [LA launch strategy](la-launch-strategy.md).
+> The historical outreach, spending and conversion assumptions below are not authorization or verified launch benchmarks.
+
+> **Status:** Historical draft; deferred for this launch · **Last verified:** 2026-06-12
 >
-> This is the single runnable playbook for UGC influencer acquisition: sourcing → outreach → negotiation → contracting → tracking → payout. Relationship-building is the moat; everything else is plumbing that should be automated.
+> This retained design describes sourcing, outreach, negotiation, contracting, tracking and payout for a possible future creator program.
+> It is not the current launch playbook.
 
 ---
 

@@ -2,7 +2,7 @@
 
 - After `npm ci`, require `npm ls --depth=0 --workspaces` and the actual renderer caller: a stale nested renderer can violate the manifest and React peer versions even while installation and focused tests pass; repair the generated lockfile with npm and recheck the native fingerprint before reusing a release binary (#711).
 
-- 2026-11-03: Two background Codex workers exited before logging when their launch tool sessions ended; keep each launch session open while its background worker runs, and verify its PID and log before claiming startup.
+- 2026-11-03: Background Codex workers exited before logging when their launch tool sessions ended; keep the launch session open or detach with `subprocess.Popen(..., start_new_session=True)` and redirected stdin/stdout/stderr, then verify the live PID and nonempty log before claiming startup (#720 confirmed the detached path).
 - 2026-10-31: Empty queues and empty planner responses stopped the loop; retain the owner lock, rescan task files on interruptible idle waits, and test task arrival after an idle poll.
 - 2026-10-31: Paywall assertions duplicated synthetic plan names and trial lengths and disagreed across the autumn clock change; derive both the Debug offering and Maestro expectations from the Test Store fixture and test calendar boundaries.
 - 2026-10-31: Simulator infrastructure failures reached code-repair workers; classify infrastructure and assertions separately, retain both attempts, retry infrastructure once, and consume the retry count in the driver.

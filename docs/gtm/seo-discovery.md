@@ -1,6 +1,9 @@
 # Organic + LLM Discovery
 
-> **Status:** Active spec — largely **unimplemented** · **Last verified:** 2026-06-12
+> **TL;DR:** The [LA launch strategy](la-launch-strategy.md) supersedes this proposal's launch sequencing and social-channel instructions.
+> SEO implementation, cross-platform posting and community engagement below are deferred for the current experiment.
+
+> **Status:** Historical proposal; largely unimplemented · **Last verified:** 2026-06-12
 >
 > All four layers described here require Next.js routes and/or SSG pages. These live on the `fitsy` landing project (Vercel). Data source is the preloaded Postgres (restaurants + menu items + MacroEstimates). None are live as of this writing.
 
