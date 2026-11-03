@@ -35,6 +35,18 @@ function baseProject() {
 }
 const config = { version: '1.0.0', ios: { bundleIdentifier: 'com.fitsy.mobile', buildNumber: '5' } };
 
+test('dish cards contain only the name and exact nutrition values over the photo fade', () => {
+  const view = readFileSync(join(__dirname, 'widget/FitsyMealWidget.swift'), 'utf8');
+  assert.match(view, /Text\(dish\.name\)/);
+  for (const nutrient of ['proteinG', 'carbsG', 'fatG', 'calories']) {
+    assert.match(view, new RegExp(`macro\\(dish\\.${nutrient},`));
+  }
+  assert.match(view, /let value = WidgetDish\.number\(amount\)/);
+  assert.doesNotMatch(view, /dish\.range\(|Text\("FITSY"\)|"shuffle"|dish\.restaurantName|Estimated nutrition|, estimated|snapshot\.offline|"~"/);
+  assert.match(view, /Image\(decorative: photo, scale: 1\)\.resizable\(\)\.scaledToFill\(\)/);
+  assert.match(view, /LinearGradient\(colors: \[\.black\.opacity/);
+});
+
 test('Expo plugin embeds and compiles a WidgetKit target and the app bridge, idempotently', () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-widget-project-'));
   try {
@@ -91,7 +103,12 @@ function nativeSuite(mutate, suite = 'WidgetData') {
 test('actual Swift fetch, first-result selection and cache/access regressions', { skip: process.platform !== 'darwin' }, () => {
   const result = nativeSuite();
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Widget data: 32 checks passed/);
+  assert.match(result.stdout, /Widget data: 37 checks passed/);
+});
+test('negative control: rounding API nutrition fails the native suite', { skip: process.platform !== 'darwin' }, () => {
+  const result = nativeSuite(source => source.replace('let number = String(value)', 'let number = String(value.rounded())'));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /exact API decimals/);
 });
 test('negative control: selecting the last result fails the native suite', { skip: process.platform !== 'darwin' }, () => {
   const result = nativeSuite(source => source.replace('.data.first', '.data.last'));

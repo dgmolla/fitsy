@@ -53,15 +53,27 @@ struct WidgetDataTests {
         try expect(WidgetData.nextRefresh(configuration: config, now: now.addingTimeInterval(86300)) == now.addingTimeInterval(86400), "refresh at credential expiry when it comes first")
 
         let restaurant = """
-        {"id":"restaurant-first","name":"First restaurant","photoUrl":"https://images.example.test/first.jpg","bestMatch":{"menuItemId":"first-dish","name":"Chicken bowl","calories":600,"proteinG":40,"carbsG":60,"fatG":20,"confidence":"HIGH"}}
+        {"id":"restaurant-first","name":"First restaurant","photoUrl":"https://images.example.test/first.jpg","bestMatch":{"menuItemId":"first-dish","name":"Chicken bowl","calories":617.5,"proteinG":40.25,"carbsG":62.125,"fatG":18.75,"confidence":"HIGH"}}
         """
         let second = restaurant.replacingOccurrences(of: "first", with: "second")
         let payload = "{\"data\":[\(restaurant),\(second)],\"meta\":{\"locked\":false}}"
         let selected = try WidgetData.select(Data(payload.utf8), configuration: config, now: now)
         try expect(selected.dish?.restaurantID == "restaurant-first" && selected.dish?.menuItemID == "first-dish", "select data[0], never a later or random row")
-        try expect(selected.dish?.proteinG == 40 && selected.updatedAt == now, "retain nutrition and freshness")
+        try expect(selected.dish?.calories == 617.5 && selected.dish?.proteinG == 40.25 &&
+                   selected.dish?.carbsG == 62.125 && selected.dish?.fatG == 18.75 && selected.updatedAt == now,
+                   "retain all four exact API nutrition values and freshness")
         try expect(selected.dish?.link.absoluteString == "fitsy:///restaurant/restaurant-first?selectedItemId=first-dish", "open the selected dish")
-        try expect(selected.dish?.range(600) == "540-660", "show estimated ranges instead of false precision")
+        for confidence in ["HIGH", "MEDIUM", "LOW", "UNKNOWN"] {
+            let data = Data(payload.replacingOccurrences(of: "HIGH", with: confidence).utf8)
+            let dish = try WidgetData.select(data, configuration: config, now: now).dish!
+            try expect([dish.proteinG, dish.carbsG, dish.fatG, dish.calories].map(WidgetDish.number) ==
+                       ["40.25", "62.125", "18.75", "617.5"],
+                       "display exact API decimals without confidence padding: \(confidence)")
+        }
+        try expect([600.0, 40.0, 60.0, 20.0].map(WidgetDish.number) == ["600", "40", "60", "20"],
+                   "whole API values have no trailing decimal, ranges or approximation prefix")
+        try expect([0.0, -0.0, 0.125].map(WidgetDish.number) == ["0", "0", "0.125"],
+                   "zero and sub-gram API values are displayed without rounding")
         try expect(selected.dish?.photoUrl == "https://images.example.test/first.jpg", "select the first restaurant photo, not a later result or dish photo")
         let shared = try JSONDecoder().decode(WidgetSnapshot.self, from: JSONEncoder().encode(selected))
         try expect(shared == selected && shared.dish?.photoUrl == selected.dish?.photoUrl, "App Group snapshot round trip retains the photo URL")
