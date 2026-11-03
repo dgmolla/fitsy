@@ -1,8 +1,8 @@
 # Verified iOS OTA baseline
 
 The OTA gate compares Expo's iOS native fingerprint with the actual verified binary for the selected channel.
-Uploaded build 7 uses fingerprint runtime `58699659d0433dd381a23a994c7ee97f41a97902` and the embedded `production` channel.
-Automatic OTA still targets `testflight`, so the channel mismatch blocks publication independently of the incomplete IPA verification.
+Verified TestFlight build 8 uses fingerprint runtime `05a067de6cbc8fc428618da9634baae069eb745b` and the embedded `testflight` channel.
+Its actual IPA, production source fingerprint, EAS build and processed Apple build agree.
 Build 5 has no verified Expo fingerprint and remains blocked on its separate production channel.
 An incomplete binary receipt, including a missing IPA hash or verification timestamp, still blocks OTA.
 Issue #243 reproduced the false positive in main Deploy run [37685925003](https://github.com/dgmolla/fitsy/actions/runs/37685925003), at source `89c23ce6e5272f7fdc9a599131329e4034b23037`.
@@ -21,7 +21,30 @@ flowchart LR
 
 ## Actual binary evidence
 
-### Uploaded build 7
+### Verified TestFlight build 8
+
+Issue [#711](https://github.com/dgmolla/fitsy/issues/711#issuecomment-6598200471) contains Dawit's native build and TestFlight authorization.
+The existing `testflight` profile built and uploaded this exact binary on November 3, 2026.
+Apple processing is `VALID`, the build is unexpired, and its membership in the existing `Internal` group was confirmed by readback.
+
+| Identity | Verified value |
+| --- | --- |
+| EAS build | [`838f650d-590b-4dda-8591-f93e72e29a5e`](https://expo.dev/accounts/dgmolla/projects/fitsy/builds/838f650d-590b-4dda-8591-f93e72e29a5e), FINISHED, iOS store, testflight profile/channel |
+| Build source | `38f1e61b73d3dc279c2ea7facb13cc1766517ce8`, dirty checkout with the build-number increment and release-helper parser correction |
+| App identity | `com.fitsy.mobile`, version `1.0.0`, build `8` |
+| Runtime and fingerprint | `05a067de6cbc8fc428618da9634baae069eb745b`, fingerprint package `0.15.4` |
+| IPA SHA-256 | `467796d6ff2613f0d6a4454abbd43305dcb49380b543588f211d11a64f38aef3` |
+| EAS submission | [`286676e1-cd27-43c0-887b-cf6bb6ecd33d`](https://expo.dev/accounts/dgmolla/projects/fitsy/submissions/286676e1-cd27-43c0-887b-cf6bb6ecd33d), successful upload |
+| Apple build | `36d656b3-0fb5-4e3e-8545-9a709a9975bc`, VALID, unexpired |
+| Internal group | `f7232ff7-0937-4137-8ba1-2ca0cc78d6f8`, exact build membership confirmed |
+
+The sole native source delta from the recorded base is `app.config.ts` build number `7` to `8`.
+The uploaded release-helper correction is outside native and bundle inputs.
+The complete uploaded tracked patch SHA-256 is `527ed2b3d93775dc885732727589acebc305956aee07841611c729054b01051b`.
+The later npm lockfile repair removes the stale test renderer without changing this fingerprint.
+This receipt establishes TestFlight distribution, not App Review submission, public release or device uptake of an OTA.
+
+### Historical uploaded build 7
 
 Read-only EAS build and submission pages on October 31, 2026 confirmed the completed build and upload.
 The build's runtime-resolution log records the fingerprint below, and its Expo.plist configuration log explicitly records `expo-channel-name: production`.
@@ -36,9 +59,9 @@ EAS marks the source checkout dirty; the recorded Git commit alone does not iden
 | Runtime and fingerprint | `58699659d0433dd381a23a994c7ee97f41a97902`, fingerprint package `0.15.4` |
 | EAS submission | `4109aff6-e456-43b6-a30c-3a7fb9bb5923`, succeeded upload to App Store Connect |
 | Apple build ID | Unknown; the EAS submission ID is not an Apple build ID |
-| IPA SHA-256 | See the binary receipt; `null` means artifact verification is incomplete and OTA remains blocked |
+| IPA SHA-256 | Unverified in the original build 7 receipt retained in Git history |
 
-The artifact URL and build evidence are retained in `scripts/deploy/ios-binary-baseline.json`.
+The prior artifact URL and incomplete build evidence remain in the Git history of `scripts/deploy/ios-binary-baseline.json`.
 A completed EAS upload establishes upload evidence; it does not establish App Review acceptance or public release.
 Read `eas build:view <id> --json` for the actual build identity, fingerprint and channel.
 If shell networking is unavailable, read the authenticated EAS build/submission pages and runtime/configuration logs, and record that fallback in the task evidence.
@@ -64,8 +87,8 @@ The app config's other environment variables affect JavaScript configuration rat
 
 ## Fingerprint compatibility contract
 
-`scripts/deploy/ios-binary-baseline.json` records the current uploaded binary, including its actual embedded channel.
-Build 7's `production` channel does not satisfy the automatic `testflight` target; recording its upload does not authorize changing channel policy or production's historical receipt.
+`scripts/deploy/ios-binary-baseline.json` records verified TestFlight build 8, including its actual embedded channel.
+Historical build 7's `production` channel cannot satisfy the automatic `testflight` target; its upload does not authorize changing channel policy or production's historical receipt.
 `scripts/deploy/ios-production-binary-baseline.json` preserves the historical production binary without substituting TestFlight evidence.
 `ota-target.mjs` selects the matching receipt for both the compatibility guard and publication helper.
 Each receipt retains the source SHA, EAS build ID, IPA SHA-256, bundle/build/runtime/channel identities, Google client ID, verification timestamp and evidence.
@@ -87,9 +110,9 @@ The check repeats inside EAS's production environment and rejects a missing or c
 
 ## TestFlight baseline and channel policy
 
-The next protected EAS Build workflow uses the `testflight` store profile, production environment and `testflight` channel.
-`app.config.ts` selects build number `7` and `runtimeVersion.policy = fingerprint`.
-The already uploaded build 7 used the production profile/channel, so it cannot receive updates published only to `testflight`.
+The protected EAS Build workflow uses the `testflight` store profile, production environment and `testflight` channel.
+`app.config.ts` selects build number `8` and `runtimeVersion.policy = fingerprint`.
+Build 8 can receive compatible TestFlight updates; historical build 7 uses the production profile/channel and cannot receive them.
 This cannot change build 5's embedded runtime `1.0.0` or add its missing widget.
 No build, upload, channel/settings mutation, production OTA or Apple submission is authorized by this runbook.
 
@@ -126,6 +149,7 @@ node scripts/deploy/testflight-post-submit --build=<EAS-BUILD-UUID> --fingerprin
 ```
 
 The helper downloads and hashes the EAS IPA, reads its actual bundle/build/version, runtime, update channel and Google URL scheme, and matches those identities to the source fingerprint and EAS record.
+For `file:fingerprint`, it resolves the main app's `EXUpdates.bundle/fingerprint` and rejects missing or malformed hashes.
 It polls the exact Apple app/build/marketing version until processing is `VALID`, adds it to the existing internal `Internal` group and confirms membership by reading it back.
 It opens a baseline PR updating `ios-binary-baseline.json` and `app.config.ts` buildNumber, retaining a receipt under `.evidence/testflight/`.
 Repeated execution reuses an identical existing branch or PR and refuses downgrades, conflicting branches and explicitly closed PRs.

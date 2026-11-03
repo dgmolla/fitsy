@@ -105,7 +105,11 @@ with zipfile.ZipFile(sys.argv[1]) as z:
  info=plistlib.loads(z.read(names[0])); expo=plistlib.loads(z.read(names[0].replace('Info.plist','Expo.plist')))
  schemes=[s for item in info.get('CFBundleURLTypes',[]) for s in item.get('CFBundleURLSchemes',[]) if s.startswith('com.googleusercontent.apps.')]
  if len(schemes)!=1: raise ValueError('Expected one Google iOS scheme')
- print(json.dumps(dict(bundle_id=info['CFBundleIdentifier'], build_number=info['CFBundleVersion'], app_version=info['CFBundleShortVersionString'], runtime_version=expo['EXUpdatesRuntimeVersion'], channel=expo['EXUpdatesRequestHeaders']['expo-channel-name'], google_ios_client_id=schemes[0].removeprefix('com.googleusercontent.apps.')+'.apps.googleusercontent.com')))
+ runtime=expo['EXUpdatesRuntimeVersion']
+ if runtime=='file:fingerprint':
+  runtime=z.read(names[0].replace('Info.plist','EXUpdates.bundle/fingerprint')).decode('utf-8').strip()
+  if not re.fullmatch('[a-f0-9]{40}',runtime): raise ValueError('Invalid embedded Expo fingerprint')
+ print(json.dumps(dict(bundle_id=info['CFBundleIdentifier'], build_number=info['CFBundleVersion'], app_version=info['CFBundleShortVersionString'], runtime_version=runtime, channel=expo['EXUpdatesRequestHeaders']['expo-channel-name'], google_ios_client_id=schemes[0].removeprefix('com.googleusercontent.apps.')+'.apps.googleusercontent.com')))
 `, file]));
     return { ...identity, ipa_sha256: hash.digest('hex') };
   } finally { rmSync(directory, { recursive: true, force: true }); }
