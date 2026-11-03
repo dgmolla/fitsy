@@ -22,13 +22,11 @@ flowchart LR
     External --> State[One GitHub monitoring state issue]
     State --> Warning[Warning channel]
     State --> Urgent[P1 channel and Dawit direct Slack]
-    Smoke[Failed Release Verify smoke] --> Recover[Verify explicit previous production target]
-    Recover --> Rollback[Existing rollback.sh api]
-    Rollback --> Verify[Verify restored source and probes]
+    Workflows[Completed main release outcomes] --> External
 ```
 
 The app lane owns route/client instrumentation, health checks, policy, and probe implementation.
-The existing release owner owns recovery execution and activation of GitHub credentials/routing.
+The existing release owner owns incident response and activation of GitHub credentials/routing.
 Fitsy Data retains pipeline emitters, paid-call budgets, queue leases, and pipeline heartbeat implementation.
 The sole delivery coordinator retains Mac/simulator/loop notifications; this monitor does not introduce another delivery publisher.
 
@@ -89,7 +87,7 @@ Shallow public health remains a database/source check and can remain 200 during 
 
 ## Configuration and activation
 
-The [environment manifest](../../../scripts/deploy/env-manifest.json) declares required bindings for development, preview, production, monitor, and recovery execution.
+The [environment manifest](../../../scripts/deploy/env-manifest.json) declares required bindings for development, preview, production, and monitor execution.
 Development and Preview require database, authentication, RevenueCat lookup, and writable Redis bindings for app journeys.
 Production additionally requires `REVENUECAT_WEBHOOK_AUTH`, `AXIOM_TOKEN`, `CRON_SECRET`, and `SLACK_BOT_TOKEN` for its webhook, scheduled work, and alert delivery.
 These production operations bindings are optional in Development and Preview, where unconfigured webhook/cron endpoints remain closed and safe request telemetry still reaches stdout.
@@ -112,11 +110,15 @@ The existing release/cloud owner configures the following through the existing G
 
 The workflow receives only the GitHub permissions needed to read source/workflows and update its single monitoring state issue.
 It checks out the protected workflow revision, never failed-release artifacts or candidate PR code.
-The shared `fitsy-production-monitor` concurrency group serializes scheduled monitoring and release recovery.
+Every trigger requires `refs/heads/main` before checkout or credential-bearing steps.
+The `fitsy-production-monitor` concurrency group serializes monitoring state updates.
+Every wakeup polls the latest 100 completed main runs for each monitored workflow and uses the most recently updated meaningful outcome.
+A replaced pending wakeup therefore cannot lose the current failed outcome, including a rerun of the same run ID.
+Unavailable or malformed history preserves incidents for that workflow while other sources still report their outcomes.
 Issue state records each channel/direct delivery separately so a failed DM retries without repeating the successful channel message.
 Failures receive reminders at most every 30 minutes; observed recovery sends one resolved transition.
 An unavailable metric source cannot resolve an incident from that source.
-Skipped, neutral, missing, or unknown workflow conclusions likewise preserve open incidents and reminders until success or a verified release recovery is observed.
+Skipped, neutral, missing, or unknown workflow conclusions likewise preserve open incidents and reminders until a completed success is observed.
 Slack errors remain pending and fail execution; a failed state/query/transport cannot be reported healthy.
 A crash between Slack acceptance and persistence can still repeat a delivery; deterministic message IDs reduce this unavoidable transport ambiguity.
 
@@ -141,18 +143,14 @@ Ten deliberate requests in one window exercise the count threshold even when nor
 Bind the receipt to the deployed source and actual destinations without including credentials.
 Source tests prove these transitions with external HTTP fixtures; they do not prove live installation.
 
-## Release recovery
+## Release response
 
-A failed actual production-safe smoke invokes `production-recovery.mjs` from the trusted workflow revision.
-It pages first and continues restoration if alert transport fails.
-It checks that production still serves the failed release SHA, selects an explicit older READY production deployment from the correct Vercel project, and runs the same expected 200/401 probes against that immutable URL.
-It rechecks serving identity immediately before calling the unchanged `scripts/deploy/rollback.sh api <verified-url>`.
-A newer serving source, unknown source, unsafe URL, or unhealthy prior target withholds promotion.
-After promotion, public health must report the previous SHA and all probes must pass before a resolved transition is recorded.
-Recovery also reruns the existing `api-e2e.sh --prod-safe` contract with the same optional production smoke account as Release Verify.
-A failed login, locked or empty entitled search, or unavailable smoke command withholds the recovery receipt even when basic 200/401 probes pass.
-A successfully recovered Deploy run does not generate a second generic workflow-failure page.
-Failed observation before smoke still pages through the external workflow observer, but does not guess a rollback source.
+The monitor reports failed Release Verify outcomes through the same shared channel/direct alert transitions.
+It reads deployment state and never promotes or rolls back a deployment.
+Automatic rollback is deferred on #605 to the existing release owner, together with strict staged promotion.
+The candidate's automatic recovery helper and its workflow job were removed from this pass.
+GitHub supports queued concurrency, but pinned Actionlint 1.7.12 rejects that syntax; the canonical lint gate remains intact.
+Any future automatic recovery requires independent review of source identity, previous-target health, migration compatibility, queued execution and verified recovery before installation.
 
 The existing Git integration still owns normal API production promotion.
 This change does not turn Release Verify into a pre-promotion dev/preview/prod gate or change its admission contract.
@@ -164,17 +162,18 @@ No App Store, TestFlight submission, native build, or production configuration m
 
 | Area | Disposition and next owner |
 | --- | --- |
+| Automatic rollback and staged promotion | Existing release owner implements and independently reviews these in a follow-up; core monitoring only observes and alerts. |
 | Pipeline cost/quota/heartbeat | Fitsy Data connects its existing Axiom emitter and paid-call journal to the inventory thresholds; app lane does not edit pipeline-owned files. |
 | Mac/loop/simulator capacity | Existing sole coordinator and resource helpers retain ownership and notifications. |
 | Supabase pool utilization and slow-query details | Bounded health and request latency detect user impact; cloud owner adds provider-level 80%/95% capacity signals when a supported read-only metrics source is available. |
 | Native crashes | Existing JS errors are covered; a native SDK requires the next separately approved binary. |
-| Widget refresh | No widget implementation exists in this checkout; app owner adds refresh outcome/age instrumentation when that consumer ships. |
+| Widget refresh | Widget token routes now emit API telemetry; app owner retains native refresh outcome/age instrumentation. |
 | Other provider spend/quota | Existing provider budgets remain authoritative; cloud/Data owners bind actual allowances and counters before claiming 80%/95% coverage. |
 
 ## Verification
 
 ```sh
-node --test scripts/verify/production-monitor.test.mjs scripts/deploy/production-recovery.test.mjs
+node --test scripts/verify/production-monitor.test.mjs
 node scripts/deploy/env-manifest.mjs
 python3 -B scripts/deploy/routine-release.test.py
 npm test -w apps/api -- --runInBand --runTestsByPath app/api/monitoring.test.ts app/api/health/deep.test.ts lib/apiTelemetry.test.ts lib/rateLimit.test.ts app/api/subscriptions/sync/route.sandbox.test.ts
@@ -182,7 +181,7 @@ npm test -w apps/mobile -- --runInBand --runTestsByPath lib/monitoringEnvironmen
 ```
 The Jest release bridge discovers every Python test and runs each with its own bounded deadline, so adding guarded build cases cannot exhaust one aggregate timeout.
 
-The scripts workspace bridge runs the monitoring and recovery regressions through the existing test group.
+The scripts workspace bridge runs monitoring, workflow admission and alert-transition regressions through the existing test group.
 The initial Oct 27 reproduction must fail if the handled-503 telemetry emission is removed.
-The external monitor replay must fail if probe alerting, threshold evaluation, Slack delivery, state deduplication/recovery, or rollback invocation is removed.
+The external monitor replay must fail if probe alerting, threshold evaluation, Slack delivery, state deduplication/recovery, protected-main admission, or durable workflow polling is removed.
 Production-mode sandbox entitlement tests retain TestFlight/App Review/RevenueCat sandbox acceptance while asserting the new telemetry.

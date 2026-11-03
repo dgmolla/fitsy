@@ -100,7 +100,7 @@ This groups reporting while leaving each failure's diagnosis and protected recov
 Run `python3 -B scripts/deploy/routine-release.test.py ProductionIncidentTests` to exercise the actual workflow publisher with an isolated GitHub fixture.
 The health endpoint already consumes Vercel's system `VERCEL_GIT_COMMIT_SHA`.
 Normal Git deployment and smoke observation need no custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval.
-Failure recovery is a separate path: [production monitoring](monitoring-alerting.md) describes its existing-owner Vercel credential, explicit verified previous target, and unchanged rollback helper.
+Failure alerts use [production monitoring](monitoring-alerting.md); automatic rollback and strict staged promotion remain follow-ups owned by the existing release owner.
 Keep the existing repository Expo/smoke credential route.
 Sensitive maintenance retains `production-release`; native/Apple release decisions retain `production-native`.
 This revision does not migrate unrelated secret custody.

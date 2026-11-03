@@ -1,13 +1,12 @@
-import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { policy } from './production-policy.mjs';
 import { collectObservations } from './production-providers.mjs';
 import { dispatchAlerts, loadAlertState, saveAlertState, sendSlack } from './production-alerts.mjs';
 import { assertRequiredEnvironment } from '../deploy/env-manifest.mjs';
 
-export async function runMonitor({ env = process.env, fetchImpl = fetch, now = Date.now(), event } = {}) {
+export async function runMonitor({ env = process.env, fetchImpl = fetch, now = Date.now() } = {}) {
   const store = await loadAlertState({ env, fetchImpl, policy });
-  const observations = await collectObservations({ env, fetchImpl, now, event, state: store.state });
+  const observations = await collectObservations({ env, fetchImpl, now, state: store.state });
   try { assertRequiredEnvironment('monitor', env); }
   catch (error) { observations.find(item => item.scope === 'observer').alerts.push({
     key: 'observer:configuration', scope: 'observer', severity: 'P2', summary: error.message,
@@ -21,8 +20,7 @@ export async function runMonitor({ env = process.env, fetchImpl = fetch, now = D
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    const event = process.env.GITHUB_EVENT_PATH ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : undefined;
-    const alerts = await runMonitor({ event });
+    const alerts = await runMonitor();
     console.log(JSON.stringify({ status: alerts.length ? 'alerting' : 'healthy', alerts: alerts.map(item => item.key) }));
     if (alerts.length) process.exitCode = 1;
   } catch {

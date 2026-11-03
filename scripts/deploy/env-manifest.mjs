@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -61,7 +61,8 @@ export async function checkEnvironmentSources(files, manifest = readManifest()) 
 export function sourceFiles(root = process.cwd()) {
   const paths = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: root, encoding: 'utf8' }).split('\0');
   return [...new Set(paths)].filter(file => /^(apps|packages|scripts)\//.test(file) && /\.(c?[jt]sx?|mjs)$/.test(file)
-    && !/(\.test\.|\.d\.ts$|\/(__mocks__|fixtures|node_modules)\/)/.test(file))
+    && !/(\.test\.|\.d\.ts$|\/(__mocks__|fixtures|node_modules)\/)/.test(file)
+    && existsSync(resolve(root, file)))
     .map(file => ({ file, source: readFileSync(resolve(root, file), 'utf8') }));
 }
 

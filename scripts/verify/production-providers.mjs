@@ -140,13 +140,33 @@ export async function expiryMetrics({ fetchImpl, now, state }, readCertificate =
   return [...evaluateExpiry('TLS certificate', state.expiry.certificate, now), ...evaluateExpiry('domain', state.expiry.domain, now)];
 }
 
-export async function collectObservations({ env, fetchImpl, now, event, state }) {
+export async function workflowMetrics(file, name, context) {
+  // Every wakeup reads durable outcomes. Replacing a pending wakeup cannot
+  // discard its failure, and a rerun of the same run ID is observed afresh.
+  const result = await github(`actions/workflows/${file}/runs?branch=main&status=completed&per_page=100`, context);
+  if (!Array.isArray(result.workflow_runs)) throw new Error('Invalid workflow history');
+  const runs = result.workflow_runs.filter(run => !['skipped', 'neutral', null, undefined].includes(run.conclusion));
+  if (!runs.length || runs.some(run => run.name !== name || run.head_branch !== 'main' || run.status !== 'completed'
+      || !Number.isSafeInteger(run.id) || run.id <= 0 || !Number.isSafeInteger(run.run_attempt) || run.run_attempt <= 0
+      || !Number.isFinite(Date.parse(run.updated_at))
+      || !['success', 'failure', 'timed_out', 'action_required', 'cancelled'].includes(run.conclusion))) {
+    throw new Error('Completed workflow identity unavailable');
+  }
+  const run = runs.sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0];
+  const scope = `workflow:${name}`;
+  return run.conclusion === 'success' ? []
+    : [alert(scope, scope, name === 'Dev maintenance' ? 'P2' : 'P1', `${name} failed; inspect Actions run ${run.id}, attempt ${run.run_attempt}.`)];
+}
+
+export async function collectObservations({ env, fetchImpl, now, state }) {
   const context = { env, fetchImpl, now, state, policy };
   const probes = await probeApi(context);
   const sources = [
     ['api', () => apiMetrics(context)], ['mobile', () => mobileMetrics(context)],
     ['deploy', () => deploymentMetrics(context, probes.servingSha)], ['quota', () => quotaMetrics(context)],
     ['crons', () => cronMetrics(context)], ['expiry', () => expiryMetrics(context)],
+    ...Object.entries({ 'deploy.yml': 'Deploy', 'eas-build.yml': 'EAS Build + TestFlight', 'dev-maintenance.yml': 'Dev maintenance' })
+      .map(([file, name]) => [`workflow:${name}`, () => workflowMetrics(file, name, context)]),
   ];
   const results = await Promise.allSettled(sources.map(([, read]) => read()));
   const observations = [{ scope: 'probes', alerts: probes.alerts }];
@@ -157,17 +177,5 @@ export async function collectObservations({ env, fetchImpl, now, event, state })
     else observerAlerts.push(alert(`observer:${scope}`, 'observer', 'P2', `${scope} monitoring failed or is unconfigured; inspect the monitoring setup contract.`));
   });
   observations.push({ scope: 'observer', alerts: observerAlerts });
-  if (event?.workflow_run) {
-    const run = event.workflow_run;
-    const scope = `workflow:${run.name}`;
-    // A skipped, neutral or missing conclusion does not verify recovery.
-    // Omit its scope so existing failures and reminder state remain active.
-    if (['Deploy', 'EAS Build + TestFlight', 'Dev maintenance'].includes(run.name) &&
-        ['success', 'failure', 'timed_out', 'action_required', 'cancelled'].includes(run.conclusion)) {
-      observations.push({ scope, alerts: state.recoveredReleaseRunId !== Number(run.id) && ['failure', 'timed_out', 'action_required', 'cancelled'].includes(run.conclusion)
-        ? [alert(scope, scope, run.name === 'Dev maintenance' ? 'P2' : 'P1', `${run.name} failed; inspect Actions run ${Number(run.id)}.`)] : [] });
-      if (run.name === 'Deploy' && run.conclusion === 'success') observations.push({ scope: 'release-smoke', alerts: [] });
-    }
-  }
   return observations;
 }

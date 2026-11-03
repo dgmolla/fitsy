@@ -6,10 +6,29 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { policy, alert, evaluateApi, evaluateDeployment, evaluateMobile, evaluateQuota, evaluateExpiry, evaluateCrons } from './production-policy.mjs';
-import { axiomRows, probeApi, queryAxiom, apiMetrics } from './production-providers.mjs';
+import { axiomRows, probeApi, queryAxiom, apiMetrics, workflowMetrics } from './production-providers.mjs';
 import { dispatchAlerts, loadAlertState, saveAlertState, sendSlack } from './production-alerts.mjs';
 import { assertRequiredEnvironment, checkEnvironmentSources, readManifest } from '../deploy/env-manifest.mjs';
 import { runMonitor } from './production-monitor.mjs';
+import { runInNewContext } from 'node:vm';
+
+test('production monitoring admits only protected main and retains schedule opt-in', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/production-monitor.yml', import.meta.url), 'utf8');
+  const condition = workflow.match(/^    if: (.+)$/m)?.[1];
+  assert.ok(condition, 'monitor job must have an admission condition');
+  const admitted = (ref, event, enabled = 'false') => runInNewContext(condition, {
+    github: { ref, event_name: event }, vars: { FITSY_MONITOR_SCHEDULE_ENABLED: enabled },
+  });
+  for (const event of ['workflow_dispatch', 'workflow_run', 'schedule']) {
+    assert.equal(admitted('refs/heads/codex/issue-605', event, 'true'), false, event);
+    assert.equal(admitted('refs/tags/main', event, 'true'), false, event);
+  }
+  assert.equal(admitted('refs/heads/main', 'workflow_dispatch'), true);
+  assert.equal(admitted('refs/heads/main', 'workflow_run'), true);
+  assert.equal(admitted('refs/heads/main', 'schedule'), false);
+  assert.equal(admitted('refs/heads/main', 'schedule', 'true'), true);
+  assert.match(workflow, /ref: \$\{\{ github\.workflow_sha \}\}/);
+});
 
 const now = Date.parse('2026-10-28T19:00:00Z');
 const row = overrides => ({ route: '/api/subscriptions/status', method: 'GET', requests: 100, errors: 0,
@@ -216,6 +235,10 @@ test('the registry-wired CLI rejects an actual fixture checkout with an unlisted
     assert.match(failed.stderr, /unlisted variable UNLISTED_DEPENDENCY_TOKEN/);
     writeFileSync(fixture, "const token = process.env['AXIOM_TOKEN'];\n");
     assert.equal(spawnSync(process.execPath, ['scripts/deploy/env-manifest.mjs'], { cwd: root }).status, 0);
+    assert.equal(spawnSync('git', ['add', 'apps/api/lib/future.ts'], { cwd: root }).status, 0);
+    rmSync(fixture);
+    assert.equal(spawnSync(process.execPath, ['scripts/deploy/env-manifest.mjs'], { cwd: root }).status, 0,
+      'an unstaged deletion must not prevent pre-push source validation');
     const registry = readFileSync(new URL('./registry.yml', import.meta.url), 'utf8');
     assert.match(registry, /name: env-manifest\n\s+script: env-manifest.sh\n\s+layer: 1\n\s+blocking: true\n\s+runs: \[local, ci\]/);
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -236,12 +259,36 @@ test('every required environment fails on a missing/blank binding, with names on
   }
 });
 
+test('workflow polling catches reruns and retained failures without relying on trigger payloads', async () => {
+  const run = overrides => ({ id: 123, run_attempt: 1, name: 'Deploy', head_branch: 'main', status: 'completed',
+    conclusion: 'failure', updated_at: new Date(now).toISOString(), ...overrides });
+  let runs = [run({ id: 200, conclusion: 'success' }), run({ run_attempt: 2, updated_at: new Date(now + 1_000).toISOString() })];
+  const context = { env: { GITHUB_TOKEN: 'fixture' }, policy, fetchImpl: async url => {
+    assert.equal(url, 'https://api.github.com/repos/dgmolla/fitsy/actions/workflows/deploy.yml/runs?branch=main&status=completed&per_page=100');
+    return Response.json({ workflow_runs: runs });
+  } };
+  assert.match((await workflowMetrics('deploy.yml', 'Deploy', context))[0].summary, /run 123, attempt 2/);
+  runs = [run({ conclusion: 'skipped', updated_at: new Date(now + 2_000).toISOString() }), run({})];
+  assert.equal((await workflowMetrics('deploy.yml', 'Deploy', context))[0].key, 'workflow:Deploy');
+  runs = [run({ conclusion: 'success' })];
+  assert.deepEqual(await workflowMetrics('deploy.yml', 'Deploy', context), []);
+  for (const overrides of [{ head_branch: 'candidate' }, { status: 'in_progress' }, { id: null },
+    { run_attempt: undefined }, { updated_at: 'invalid' }, { name: 'Untrusted workflow' }, { conclusion: 'unknown' }]) {
+    runs = [run(overrides)];
+    await assert.rejects(workflowMetrics('deploy.yml', 'Deploy', context), /workflow identity/);
+  }
+});
+
 test('the scheduled entrypoint preserves incidents until provider or workflow recovery is observed', async () => {
   const external = transport();
   const env = { ...external.context.env, AXIOM_TOKEN: 'private', CRON_SECRET: 'private', VERCEL_TOKEN: 'private',
     POSTHOG_PERSONAL_API_KEY: 'private', POSTHOG_PROJECT_ID: '1', UPSTASH_EMAIL: 'private@example.test',
     UPSTASH_API_KEY: 'private', UPSTASH_DATABASE_ID: 'fixture', UPSTASH_DAILY_COMMAND_LIMIT: '10000' };
   let apiBroken = true, queryDenied = false;
+  const workflowFiles = { Deploy: 'deploy.yml', 'EAS Build + TestFlight': 'eas-build.yml', 'Dev maintenance': 'dev-maintenance.yml' };
+  const completedRun = (name, conclusion, overrides = {}) => ({ id: 123, name, conclusion, run_attempt: 1,
+    status: 'completed', head_branch: 'main', updated_at: new Date(now).toISOString(), ...overrides });
+  const workflowRuns = Object.fromEntries(Object.entries(workflowFiles).map(([name, file]) => [file, [completedRun(name, 'success')]]));
   const store = await loadAlertState(external.context);
   store.state.expiry = { checkedAt: now, certificate: new Date(now + 90 * 86_400_000).toISOString(), domain: new Date(now + 365 * 86_400_000).toISOString() };
   await saveAlertState(store.number, store.state, external.context);
@@ -258,7 +305,18 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
       return Response.json(table([row({ errors: apiBroken ? 10 : 0 })]));
     }
     if (url.includes('posthog.com')) return Response.json({ results: [[10, 0, 100, 0, 0]] });
-    if (url.includes('api.vercel.com')) return Response.json({ deployments: [{ readyState: 'READY' }] });
+    if (url.includes('api.vercel.com')) {
+      assert.equal(init.method ?? 'GET', 'GET', 'monitoring must never mutate a deployment');
+      return Response.json({ deployments: [{ readyState: 'READY' }] });
+    }
+    if (url.includes('/actions/workflows/')) {
+      assert.equal(init.method ?? 'GET', 'GET');
+      const path = new URL(url);
+      assert.equal(path.searchParams.get('branch'), 'main');
+      assert.equal(path.searchParams.get('status'), 'completed');
+      const file = path.pathname.split('/workflows/')[1].split('/')[0];
+      return Response.json({ workflow_runs: workflowRuns[file] });
+    }
     if (url.includes('api.upstash.com')) return Response.json({ daily_net_commands: 10 });
     if (url.endsWith('/commits/main')) return Response.json({ sha: 'a'.repeat(40) });
     return external.context.fetchImpl(url, init);
@@ -275,16 +333,27 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
 
   for (const name of ['Deploy', 'EAS Build + TestFlight', 'Dev maintenance']) {
     const key = `workflow:${name}`;
-    const event = conclusion => ({ workflow_run: { id: 123, name, conclusion } });
-    await runMonitor({ env, fetchImpl, now: now + 180_000, event: event('failure') });
+    workflowRuns[workflowFiles[name]] = [completedRun(name, 'failure')];
+    await runMonitor({ env, fetchImpl, now: now + 180_000 });
     const recoveries = () => external.messages.filter(message => message.text.includes(`RESOLVED production alert: ${key}.`));
     for (const conclusion of ['skipped', 'neutral', undefined, null, 'unknown']) {
-      await runMonitor({ env, fetchImpl, now: now + 181_000, event: event(conclusion) });
+      workflowRuns[workflowFiles[name]] = [completedRun(name, conclusion)];
+      await runMonitor({ env, fetchImpl, now: now + 181_000 });
       assert.equal((await loadAlertState(external.context)).state.incidents[key].active, true, `${name}: ${conclusion}`);
       assert.equal(recoveries().length, 0, `${name}: ${conclusion} is not recovery`);
     }
-    await runMonitor({ env, fetchImpl, now: now + 182_000, event: event('success') });
+    workflowRuns[workflowFiles[name]] = [completedRun(name, 'success')];
+    await runMonitor({ env, fetchImpl, now: now + 182_000 });
     assert.equal((await loadAlertState(external.context)).state.incidents[key].active, false);
     assert.equal(recoveries().length, name === 'Dev maintenance' ? 1 : 2);
   }
+
+  // A lost workflow_run wakeup and a retry share no in-memory event or receipt.
+  workflowRuns['deploy.yml'] = [completedRun('Deploy', 'failure', { run_attempt: 2 })];
+  const retried = await runMonitor({ env, fetchImpl, now: now + 183_000 });
+  assert.ok(retried.some(item => item.key === 'workflow:Deploy' && item.summary.includes('attempt 2')));
+  workflowRuns['eas-build.yml'] = undefined;
+  const partial = await runMonitor({ env, fetchImpl, now: now + 184_000 });
+  assert.ok(partial.some(item => item.key === 'workflow:Deploy'));
+  assert.ok(partial.some(item => item.key === 'observer:workflow:EAS Build + TestFlight'));
 });

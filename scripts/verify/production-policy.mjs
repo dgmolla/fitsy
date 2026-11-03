@@ -84,4 +84,3 @@ export function evaluateCrons(rows, now = Date.now(), monitoringStartedAt = 0) {
       ? [alert(`cron:${route}`, 'crons', 'P2', `${route} has no successful execution within ${hours} hours.`)] : [];
   });
 }
-

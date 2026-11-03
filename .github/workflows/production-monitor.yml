@@ -20,7 +20,7 @@ jobs:
   monitor:
     # A private repo's five-minute schedule can exceed included Actions minutes.
     # Enable only after credentials/routing and a no-charge budget are verified.
-    if: github.event_name != 'schedule' || vars.FITSY_MONITOR_SCHEDULE_ENABLED == 'true'
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'schedule' || vars.FITSY_MONITOR_SCHEDULE_ENABLED == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
