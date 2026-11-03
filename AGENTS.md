@@ -24,33 +24,73 @@ Read the applicable [API](apps/api/AGENTS.md), [mobile](apps/mobile/AGENTS.md), 
 
 ## Orchestrator
 
-A Codex session is the orchestrator; use `gh` directly, with no daemon or helper script.
-Use one active orchestrator session and preserve existing issue/PR ownership.
+Use `gh` directly, with no daemon, helper script, new tooling, or skills.
 
-1. List all open `codex` issues oldest first, excluding pull requests:
+### Roles
+
+- One orchestrator session at a time; it never edits code and never merges.
+  It only preflights, picks issues, starts workers, watches, and cleans up.
+- One worker per issue owns it end to end until its PR merges or the issue is marked blocked.
+  Preserve existing issue/PR ownership; never start a second worker for an owned issue or branch.
+
+### Orchestrator loop
+
+1. Preflight once at start and after any infrastructure failure: `gh auth status`, `git fetch origin`, dependencies installed with `npm ci`, Docker responding to `docker info`, and adequate disk space (`df -h`).
+   On failure, comment on the pinned/tracking issue or print `PREFLIGHT FAILED: <reason>` and stop; do not start workers.
+2. List open `codex` issues oldest first, excluding PRs and issues labeled `blocked`:
 
    ```sh
-   gh api --paginate 'repos/dgmolla/fitsy/issues?state=open&labels=codex&sort=created&direction=asc&per_page=100' --jq '.[] | select(.pull_request == null) | {number,title,body}'
+   gh api --paginate 'repos/dgmolla/fitsy/issues?state=open&labels=codex&sort=created&direction=asc&per_page=100' --jq '.[] | select(.pull_request == null and ([.labels[].name] | index("blocked") | not)) | {number,title,body}'
    ```
 
-2. For each issue number N, check both open PR references and its branch; skip an issue with an existing open PR:
+   A failed `gh` query is an error, not an empty queue.
+   Check issue comments for unresolved `BLOCKED:` fallback notices before dispatching.
+3. Run at most two workers concurrently on the 16 GB Mac.
+   Only one may run Simulator/Maestro at a time; atomically acquire the shared `~/fitsy-wt/simulator.lock` with issue number and PID, and remove the owned lock on exit.
+   Wait for an occupied lock; reclaim it only after verifying its owner and simulator consumers have stopped.
+4. Check open PR references, the issue's linked PRs, branch, and live ownership before starting worker N:
 
    ```sh
    gh pr list --repo dgmolla/fitsy --state open --search "#N" --json number,title,url
    gh pr list --repo dgmolla/fitsy --state open --head codex/issue-N --json number,title,url
+   git worktree add ~/fitsy-wt/issue-N -b codex/issue-N origin/main
+   codex exec -C ~/fitsy-wt/issue-N -s danger-full-access -
    ```
 
-3. Take the oldest remaining issue; read its title and full body, which must contain an actionable "Done when".
-   If acceptance is missing, request it on the issue and move to the next eligible task.
-   A failed GitHub query is an error, not an empty queue; if no eligible issue remains after successful queries, report `queue empty` and end the session.
-4. Recheck for an open PR, start from current `main`, and create branch `codex/issue-N` (replace N with the issue number).
-   Read before writing, plan the small task, implement it, and run applicable checks with proof.
-5. Commit, push normally with hooks enabled, and open a PR using `gh pr create --repo dgmolla/fitsy` with `Closes #N` in its body.
-   Include Done-when, command/output proof, and skipped work.
-6. Enable squash auto-merge with `gh pr merge --repo dgmolla/fitsy <PR_NUMBER> --auto --squash`; GitHub required checks decide whether it merges.
-   Leave a PR awaiting Dawit's native-build approval unmerged and do not enable auto-merge until approval is recorded.
-7. Record any failure and the next action on its issue or PR, then pick the next eligible issue.
-   If the same failure happens twice, follow the lasting-fix rule in the shipping flow.
+   Fetch current `origin/main` before dispatch; if a branch/PR already exists, check out its branch instead of creating another.
+   Feed stdin a prompt containing the issue number, full body, Worker rules, and Hard rules below.
+   Run in the background, log to `~/fitsy-wt/logs/issue-N.log`, and record the PID and ownership on the issue.
+5. Watch workers about every five minutes, not more frequently.
+   When a worker exits, verify its PR: if merged, close out (the issue auto-closes), remove its worktree and local branch; if blocked, remove its worktree after preserving unfinished work on its branch.
+   If it crashed without either outcome, diagnose and restart it once with the same ownership and log history; a second crash marks the issue blocked with a sanitized log tail.
+6. When no eligible issues and no workers remain, sleep ten minutes and rescan; do not exit on an empty queue.
+   Exit only when told to stop, except for the required preflight failure stop.
 
-If label `codex` is missing, Dawit must create it; do not create labels or change repository settings.
-See [shipping flow](docs/engineering/devops/shipping-flow.md) for the loop and simulator boundary.
+### Worker rules
+
+- Read the issue's Goal / Done when / Proof / Constraints.
+  If Done when is missing, comment asking for it, mark the issue blocked, and exit.
+- Read before writing; make the smallest change meeting Done when, add one test only where real risk exists, and list what was skipped.
+- Run applicable repository checks locally, commit, push normally with hooks enabled, and open a PR with `Closes #N`, Done-when, command/output proof, and skipped work.
+  Reuse an existing PR when present and enable `gh pr merge --repo dgmolla/fitsy <PR_NUMBER> --auto --squash`.
+- Iterate until merged, polling the PR about every five minutes.
+  If BEHIND, run `gh pr update-branch --repo dgmolla/fitsy <PR_NUMBER>`; if a required check (Verify, AI review) fails, read the logs/review, fix, and push.
+  If conflicts occur, rebase on current main and resolve them; use `--force-with-lease` if the rebase requires a rewritten push.
+- Infrastructure failures (runner, simulator, network, GitHub outage) get one retry, then mark the issue blocked with the reason.
+  Code/review failures get up to three fix attempts, then mark the issue blocked with a summary of what was tried.
+  Keep attempt history and the next action on the issue/PR; restarting does not reset limits.
+- If the same failure happens twice anywhere, add a one-line entry to `docs/engineering/devops/shipping-lessons.md` in that PR with the lasting prevention.
+- Done means the PR merged; then exit.
+
+### Hard rules (both roles)
+
+Never merge manually, admin-bypass, weaken/skip required checks, use `--no-verify`, or change repository settings or labels except adding/removing `blocked` on issues.
+Never print secrets/tokens, write production data, submit to the App Store (TestFlight only), use RevenueCat outside sandbox, make the rate limiter fail open, or run `git gc`.
+Native builds (EAS build + TestFlight upload) are pre-approved by Dawit on November 2, 2026 when required to roll out a change, including an OTA fingerprint mismatch; this supersedes the earlier native-build approval rule above.
+Run at most one native build/upload at a time, note it on the issue/PR, then do the OTA; never submit to App Store review.
+Use `~/fitsy-wt/native-build.lock` with the same ownership and stale-lock checks as the simulator lock.
+Do not delete files outside `~/fitsy-wt`.
+
+Do not create missing labels: Dawit must create `codex`; if `blocked` is missing, use an issue comment starting with `BLOCKED:` instead and note the missing label.
+Put the required TL;DR immediately after that marker and treat unresolved fallback comments as blocked until explicitly cleared on the issue.
+See [shipping flow](docs/engineering/devops/shipping-flow.md) for the lifecycle and simulator boundary.
