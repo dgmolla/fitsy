@@ -85,6 +85,26 @@ sys.stdout.buffer.write(b.getvalue())`]);
   assert.deepEqual(result, { ...artifact, ipa_sha256: createHash('sha256').update(zip).digest('hex') });
 });
 
+test('IPA inspection resolves the embedded Expo fingerprint and rejects missing or malformed files', async () => {
+  for (const embedded of [build.runtimeVersion, null, 'invalid']) {
+    const zip = execFileSync('python3', ['-c', `import io, json, plistlib, sys, zipfile
+b=io.BytesIO(); embedded=json.loads(sys.argv[1])
+with zipfile.ZipFile(b,'w') as z:
+ z.writestr('Payload/Fitsy.app/Info.plist',plistlib.dumps(dict(CFBundleIdentifier='com.fitsy.mobile', CFBundleVersion='7', CFBundleShortVersionString='1.0.0', CFBundleURLTypes=[dict(CFBundleURLSchemes=['com.googleusercontent.apps.fixture'])])))
+ z.writestr('Payload/Fitsy.app/Expo.plist',plistlib.dumps(dict(EXUpdatesRuntimeVersion='file:fingerprint', EXUpdatesRequestHeaders={'expo-channel-name':'testflight'})))
+ if embedded is not None: z.writestr('Payload/Fitsy.app/EXUpdates.bundle/fingerprint',embedded)
+sys.stdout.buffer.write(b.getvalue())`, JSON.stringify(embedded)]);
+    const inspect = () => inspectArtifact(build.artifacts.buildUrl, async () => new Response(zip));
+    if (embedded === build.runtimeVersion) {
+      const result = await inspect();
+      assert.deepEqual(result, { ...artifact, ipa_sha256: createHash('sha256').update(zip).digest('hex') });
+      assert.equal(baselineFor(build, fingerprint, result, processed).runtime_version, build.runtimeVersion);
+    } else {
+      await assert.rejects(inspect, /fingerprint/);
+    }
+  }
+});
+
 test('processing waits through absent, transient and processing responses for the exact app version', async () => {
   let at = 0, calls = 0;
   const found = await waitForBuild(async () => {
