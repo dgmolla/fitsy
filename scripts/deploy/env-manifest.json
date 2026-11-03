@@ -65,6 +65,7 @@
     "GITHUB_RUN_ID",
     "GITHUB_RUN_ATTEMPT",
     "GITHUB_OUTPUT",
+    "RUNNER_OS",
     "RUNNER_TEMP",
     "npm_package_version",
     "PATH",
@@ -120,6 +121,7 @@
     "GOAL_BENCH_RESTAURANTS",
     "GOAL_BENCH_TOKEN",
     "GOOGLE_PLACES_API_KEY",
+    "JAVA_TOOL_OPTIONS",
     "JINA_API_KEY",
     "MAESTRO_BIN",
     "OVERTURE_RELEASE",
@@ -146,6 +148,8 @@
     "RESEND_API_KEY",
     "SEARCH_DISTANCE_WEIGHT",
     "SEARCH_TS_CONFIG",
+    "SIM_E2E_FIXTURES",
+    "SIM_SCOPE",
     "SLACK_ALERT_CHANNEL",
     "SLACK_WEBHOOK_URL",
     "SOURCE_REVISION",
@@ -209,6 +213,10 @@
     {
       "file": "scripts/rerun.ts",
       "expression": "v"
+    },
+    {
+      "file": "scripts/sim/actions.mjs",
+      "expression": "key"
     },
     {
       "file": "scripts/sim/ci.mjs",
