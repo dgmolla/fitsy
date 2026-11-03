@@ -1,6 +1,8 @@
 # Synthetic eligibility on live Test Store prices. Visual proof only, never a purchase receipt.
 appId: com.fitsy.mobile
 tags: [billing, onboarding, changed-journey, 'store:test-store']
+env:
+  SCENARIO: '14'
 ---
 - launchApp:
     clearState: true
@@ -16,7 +18,7 @@ tags: [billing, onboarding, changed-journey, 'store:test-store']
     timeout: 3000
 - tapOn:
     point: "92%,93%"
-- openLink: com.fitsy.mobile://welcome/trial?devTrialVisual=1
+- openLink: com.fitsy.mobile://welcome/trial?devTrialVisual=${SCENARIO}
 - tapOn:
     text: "^Open$"
     optional: true
@@ -35,6 +37,8 @@ tags: [billing, onboarding, changed-journey, 'store:test-store']
       id: trial-reminder-note
     timeout: 15000
 - assertVisible: "Synthetic trial eligibility for visual testing.*"
+- runScript: ../../lib/testStoreFixtures.cjs
+- runScript: ../helpers/mixed-trial-default.mjs
 - tapOn:
     id: trial-reminder-allow
 - extendedWaitUntil:
@@ -49,9 +53,9 @@ tags: [billing, onboarding, changed-journey, 'store:test-store']
     id: paywall-step-reminder
 - assertVisible:
     id: paywall-step-charge
-- assertVisible: "In 14 days"
+- assertVisible: "In ${output.trialFixture.days} days"
 # Morning quiet hours can move the reminder onto the preceding calendar day.
-- assertVisible: "In 1[12] days"
+- assertVisible: "In ${output.trialFixture.reminderDays} days"
 - assertNotVisible:
     id: paywall-hero
 - assertVisible: "Start free trial"
@@ -75,7 +79,7 @@ tags: [billing, onboarding, changed-journey, 'store:test-store']
     direction: DOWN
 - copyTextFrom:
     id: paywall-terms
-- assertTrue: ${maestro.copiedText.includes('14 days free') && maestro.copiedText.includes(output.monthlyPrice) && maestro.copiedText.includes('Renews automatically')}
+- assertTrue: ${maestro.copiedText.includes(output.trialFixture.days + ' days free') && maestro.copiedText.includes(output.monthlyPrice) && maestro.copiedText.includes('Renews automatically')}
 - scrollUntilVisible:
     element:
       id: paywall-plan-yearly
@@ -91,7 +95,7 @@ tags: [billing, onboarding, changed-journey, 'store:test-store']
     direction: DOWN
 - copyTextFrom:
     id: paywall-terms
-- assertTrue: ${maestro.copiedText.includes('14 days free') && maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically')}
+- assertTrue: ${maestro.copiedText.includes(output.trialFixture.days + ' days free') && maestro.copiedText.includes(output.annualPrice) && maestro.copiedText.includes('Renews automatically')}
 - tapOn:
     id: welcome-back
 - assertVisible:

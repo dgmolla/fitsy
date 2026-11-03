@@ -9,6 +9,7 @@ import { impactPlan, repository, simulatorFlows, gitEnv, isMain } from '../verif
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
 import { withSlackVideo } from './slack-video.mjs';
 import { maestroApiArgs } from './backend-identity.mjs';
+import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 const controlDirectory = fileURLToPath(new URL('.', import.meta.url));
 
 export function renderSmoke(documents, selector) {
@@ -65,7 +66,7 @@ export async function runLocal(args = process.argv.slice(2)) {
   const udid = options.udid || process.env.FITSY_XCTEST_SIM_UDID;
   if (!/^[a-f0-9-]{36}$/i.test(udid || '')) throw new Error('Pass --udid=<owned booted simulator UDID> or set FITSY_XCTEST_SIM_UDID');
   const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro, prepareEntitledEvidence } = await import('./product-flow.mjs');
-  const { admitDisk, runOwnedMaestro } = await import('./runner-controls.mjs');
+  const { admitDisk, runOwnedMaestro, nearestFailure } = await import('./runner-controls.mjs');
   const { inspectScreenshotDirectory, requireScreenRecognition } = await import('./screen-guard.mjs');
   const { inputHash, assertFlowCommands } = await import('../verify/product-flow.mjs');
   const maestro = process.env.MAESTRO_BIN || 'maestro';
@@ -101,8 +102,7 @@ export async function runLocal(args = process.argv.slice(2)) {
   try {
     for (const { name, flow, path, fixture } of journeys) {
       if (controller.signal.aborted) throw new Error('Simulator run interrupted');
-      const dir = resolve(out, name); mkdirSync(dir, { recursive: true });
-      await withFixtureEnvironment(fixture, async () => {
+      await withEnvironmentRetry(dir => withFixtureEnvironment(fixture, async () => {
         environment(); // Preserve dev-only API and Supabase target protection before setup too.
         prepareJourney(fixture, flow, udid);
         if (controller.signal.aborted) throw new Error('Simulator run interrupted during fixture preparation');
@@ -129,8 +129,10 @@ export async function runLocal(args = process.argv.slice(2)) {
               FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: resolve(dir, 'capture.jsonl') },
             diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', resolve(dir, 'failure.png')]),
           }));
-          if (result.code !== 0 || result.reason) throw new Error(`Maestro flow ${name} failed; inspect ${dir}`);
           const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file) && !file.startsWith('active-setup/'));
+          const parsed = reports.length === 1 ? JSON.parse(readFileSync(resolve(dir, reports[0]), 'utf8')) : null;
+          if (result.code !== 0 || result.reason)
+            throw maestroFailure(`Maestro flow ${name} failed; inspect ${dir}`, result, Array.isArray(parsed) ? nearestFailure(parsed) : null);
           if (reports.length !== 1) throw new Error(`Expected exactly one command report: ${name}`);
           assertFlowCommands(readFileSync(path), JSON.parse(readFileSync(resolve(dir, reports[0]), 'utf8')), name);
           writeFileSync(resolve(dir, 'screen-checks.json'), JSON.stringify(inspectScreenshotDirectory(dir, readFileSync(path)), null, 2) + '\n');
@@ -140,7 +142,7 @@ export async function runLocal(args = process.argv.slice(2)) {
           try { if (metroStarted) await stopMetro(); }
           finally { releaseDevice(); }
         }
-      });
+      }), { dir: resolve(out, name), signal: controller.signal, canRetry: () => inputHash() === sourceHash });
     }
     return { name: 'mobile-e2e', status: 'pass', ...selection, simulator: udid, evidence: out };
   } finally {
@@ -152,7 +154,7 @@ if (isMain(import.meta.url)) {
   try {
     const result = await runLocal(); console.log(JSON.stringify(result));
   } catch (error) {
-    console.log(JSON.stringify({ name: 'mobile-e2e', status: 'fail', summary: error.message,
+    console.log(JSON.stringify({ name: 'mobile-e2e', status: 'fail', classification: classifySimulatorFailure(error), environmentRetries: error.environmentRetries || 0, summary: error.message,
       fix: 'Load local dev configuration and prepare the owned candidate simulator using docs/engineering/devops/shipping.md' }));
     process.exitCode = 1;
   }
