@@ -67,7 +67,8 @@ elif name=='node':
     s.setdefault('native_environment_keys',[]).append(sorted(os.environ))
     status=s.get('replays',['pass']).pop(0) if s.get('replays') else 'pass'
     if status=='failure':
-        print(json.dumps({'status':'fail','summary':'Maestro flow shuffle failed; inspect '+s['artifacts']}))
+        print(json.dumps({'status':'fail','summary':'Maestro flow shuffle failed; inspect '+s['artifacts'],
+                          'classification':s.get('replay_classification'), 'environmentRetries':s.get('environment_retries',0)}))
     elif status=='error':
         print(json.dumps({'status':'fail','summary':'CoreSimulator unavailable'}))
     else:
@@ -1475,6 +1476,51 @@ if (denied.some(value => !value)) process.exit(1);
         self.assertIn('order: #608 > #583 > #547', prompts[0])
         self.assertEqual(read_task(path)[0]['branch'], 'codex/issue-608')
         self.assertTrue(Path(path).read_text().startswith('---\n'))
+
+    def test_empty_queue_polls_and_discovers_task_with_planner_disabled_or_empty(self):
+        tasks = self.root / 'tasks'; tasks.mkdir()
+        task = tasks / '00999-idle-arrival.md'
+        class ImmediateThread:
+            def __init__(self, target, args, name, **kwargs):
+                self.target, self.args, self.name = target, args, name
+            def start(self): self.target(*self.args)
+            def is_alive(self): return False
+        for planner_off in (True, False):
+            with self.subTest(planner_off=planner_off):
+                task.unlink(missing_ok=True)
+                state = {'_planner_off': planner_off}
+                sleeps = []
+                def tick(seconds):
+                    sleeps.append(seconds)
+                    if len(sleeps) == 1:
+                        task.write_text('---\nbranch: codex/idle-arrival\ntitle: New task\nlane: mobile\n---\nImplement task\n')
+                    if len(sleeps) == 3: raise StopIteration('end polling fixture')
+                def complete(path, current): current[Path(path).stem] = {'done': True}
+                with mock.patch.object(driver, 'state', return_value=state), \
+                     mock.patch.object(driver, 'execute_task', side_effect=complete) as work, \
+                     mock.patch.object(driver, 'retriage'), mock.patch.object(driver, 'OpenPRSweep'), \
+                     mock.patch.object(driver.threading, 'Thread', ImmediateThread), \
+                     mock.patch.object(planner, 'pick', return_value=None) as pick, \
+                     mock.patch.object(driver.subprocess, 'run'), mock.patch.object(Lifecycle, 'wait', side_effect=tick):
+                    with self.assertRaises(StopIteration): driver.main()
+                work.assert_called_once_with(str(task), state)
+                self.assertEqual(sleeps, [driver.IDLE_SECONDS, driver.ACTIVE_SECONDS, driver.IDLE_SECONDS])
+                if planner_off: pick.assert_not_called()
+                self.assertTrue(state[task.stem]['done'])
+
+    def test_runner_exhausted_environment_retry_does_not_start_another_replay_or_model(self):
+        st = {}
+        with mock.patch.object(context, 'host_replay') as replay:
+            self.assertEqual(self.repair(st, failure(sim_state='error', environment_retries=1)), 'blocked')
+        replay.assert_not_called()
+        self.assertFalse(any(call['tool'] == 'codex' for call in self.service_state()['calls']))
+
+    def test_host_consumes_runner_environment_classification_even_with_a_failed_command(self):
+        self.service_state(replays=['failure'], replay_classification='environment', environment_retries=1)
+        result = context.host_replay(self.wt, self.root / 'sim.lock', self.ev, self.env)
+        self.assertTrue(result['step'])
+        self.assertEqual(result['status'], 'error')
+        self.assertEqual(result['environment_retries'], 1)
 
     def test_install_preserves_state_and_old_caller_consumes_recovery(self):
         host = self.root / 'loop'; (host / 'tasks').mkdir(parents=True)

@@ -1,0 +1,223 @@
+#!/usr/bin/env node
+// Complete an exact TestFlight upload. Never merge the resulting baseline PR.
+const { createHash, createPrivateKey, sign } = require('node:crypto');
+const { execFileSync } = require('node:child_process');
+const { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const { open } = require('node:fs/promises');
+const { tmpdir } = require('node:os');
+const { join, resolve } = require('node:path');
+const { isDeepStrictEqual } = require('node:util');
+const root = resolve(__dirname, '../..');
+const repo = 'dgmolla/fitsy';
+const baselinePath = 'scripts/deploy/ios-binary-baseline.json';
+const configPath = 'apps/mobile/app.config.ts';
+const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const command = (binary, args, options = {}) => execFileSync(binary, args, {
+  cwd: root, encoding: 'utf8', timeout: 60000, maxBuffer: 4 * 1024 * 1024, ...options,
+});
+function github(path, body) {
+  return JSON.parse(command('gh', ['api', `repos/${repo}/${path}`, ...(body ? ['--input', '-'] : [])],
+    body ? { input: JSON.stringify(body) } : {}));
+}
+
+function preflight(env = process.env, run = command) {
+  const config = JSON.parse(readFileSync(join(root, 'apps/mobile/eas.json'))).submit.production.ios;
+  assert(env.GITHUB_ACTIONS !== 'true' || (env.ASC_API_KEY_P8 && env.GH_TOKEN), 'TestFlight preflight: CI requires ASC_API_KEY_P8 and TESTFLIGHT_GH_TOKEN (passed as GH_TOKEN) before building');
+  let key;
+  try { key = createPrivateKey(env.ASC_API_KEY_P8 || readFileSync(config.ascApiKeyPath, 'utf8')); }
+  catch { throw new Error('TestFlight preflight: configure ASC_API_KEY_P8 or the existing eas.json API key file'); }
+  assert(key.asymmetricKeyDetails?.namedCurve === 'prime256v1', 'TestFlight requires an ES256 App Store Connect API key');
+  assert(config.ascApiKeyId && uuid.test(config.ascApiKeyIssuerId) && /^\d+$/.test(config.ascAppId), 'Invalid App Store Connect submit configuration');
+  const access = JSON.parse(run('gh', ['api', `repos/${repo}`]));
+  assert(access.permissions?.push === true, 'TestFlight preflight: gh needs branch and pull request write access; use a token that triggers Verify');
+  run('eas', ['--version']); run('python3', ['--version']);
+  return { ...config, key };
+}
+
+function appleClient(config, request = fetch) {
+  return async (path, body) => {
+    const url = new URL(path, 'https://api.appstoreconnect.apple.com');
+    assert(url.origin === 'https://api.appstoreconnect.apple.com' && url.pathname.startsWith('/v1/'), 'Unexpected Apple pagination URL');
+    const iat = Math.floor(Date.now() / 1000);
+    const encoded = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const unsigned = `${encoded({ alg: 'ES256', kid: config.ascApiKeyId, typ: 'JWT' })}.${encoded({ iss: config.ascApiKeyIssuerId, iat, exp: iat + 300, aud: 'appstoreconnect-v1' })}`;
+    const jwt = `${unsigned}.${sign('sha256', Buffer.from(unsigned), { key: config.key, dsaEncoding: 'ieee-p1363' }).toString('base64url')}`;
+    const response = await request(url, { method: body ? 'POST' : 'GET',
+      headers: { authorization: `Bearer ${jwt}`, 'content-type': 'application/json' },
+      ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(30000) });
+    if (!response.ok) throw Object.assign(new Error(`App Store Connect HTTP ${response.status}`), { status: response.status });
+    return response.status === 204 ? {} : response.json();
+  };
+}
+async function list(apple, path) {
+  const data = [], included = [];
+  const visited = new Set();
+  while (path) {
+    assert(!visited.has(path), 'Repeated Apple pagination page'); visited.add(path);
+    const page = await apple(path);
+    assert(Array.isArray(page.data), 'Invalid Apple list response');
+    data.push(...page.data); included.push(...(page.included || [])); path = page.links?.next;
+  }
+  return { data, included };
+}
+async function waitForBuild(apple, appId, build, { timeoutSeconds = 1800, now = Date.now,
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  const deadline = now() + timeoutSeconds * 1000;
+  while (now() < deadline) {
+    try {
+      const query = new URLSearchParams({ 'filter[app]': appId, 'filter[version]': build.appBuildVersion,
+        include: 'preReleaseVersion', limit: '200' });
+      const { data, included } = await list(apple, `/v1/builds?${query}`);
+      const matches = data.filter(item => item.attributes?.version === build.appBuildVersion && included.some(version =>
+        version.id === item.relationships?.preReleaseVersion?.data?.id && version.attributes?.version === build.appVersion && version.attributes?.platform === 'IOS'));
+      assert(matches.length <= 1, 'Ambiguous Apple build identity');
+      if (matches.length) {
+        const found = matches[0], state = found.attributes.processingState;
+        assert(uuid.test(found.id), 'Invalid Apple build ID');
+        if (state === 'VALID') return found;
+        assert(state === 'PROCESSING', `Apple build processing failed: ${state}`);
+      }
+    } catch (error) {
+      if (!(error.status === 429 || error.status >= 500 || error.cause?.code === 'ECONNRESET')) throw error;
+    }
+    await sleep(Math.min(30000, Math.max(0, deadline - now())));
+  }
+  throw new Error('Timed out waiting for the exact Apple build to finish processing; no baseline PR opened');
+}
+
+async function inspectArtifact(url, request = fetch) {
+  const origin = new URL(url);
+  assert(origin.protocol === 'https:' && ['expo.dev', 'storage.googleapis.com'].includes(origin.hostname), 'Unexpected EAS IPA URL');
+  const directory = mkdtempSync(join(tmpdir(), 'fitsy-testflight-'));
+  try {
+    const response = await request(url, { signal: AbortSignal.timeout(900000) });
+    assert(response.ok && response.body, 'EAS IPA download failed');
+    const hash = createHash('sha256'), file = join(directory, 'build.ipa');
+    const handle = await open(file, 'wx');
+    try { for await (const chunk of response.body) { hash.update(chunk); await handle.writeFile(chunk); } }
+    finally { await handle.close(); }
+    // plistlib supports both XML and binary plists; inspect only the main app.
+    const identity = JSON.parse(command('python3', ['-c', `import json, plistlib, re, sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as z:
+ names=[n for n in z.namelist() if re.fullmatch(r'Payload/[^/]+[.]app/Info[.]plist', n)]
+ if len(names)!=1: raise ValueError('Expected one main app in IPA')
+ info=plistlib.loads(z.read(names[0])); expo=plistlib.loads(z.read(names[0].replace('Info.plist','Expo.plist')))
+ schemes=[s for item in info.get('CFBundleURLTypes',[]) for s in item.get('CFBundleURLSchemes',[]) if s.startswith('com.googleusercontent.apps.')]
+ if len(schemes)!=1: raise ValueError('Expected one Google iOS scheme')
+ print(json.dumps(dict(bundle_id=info['CFBundleIdentifier'], build_number=info['CFBundleVersion'], app_version=info['CFBundleShortVersionString'], runtime_version=expo['EXUpdatesRuntimeVersion'], channel=expo['EXUpdatesRequestHeaders']['expo-channel-name'], google_ios_client_id=schemes[0].removeprefix('com.googleusercontent.apps.')+'.apps.googleusercontent.com')))
+`, file]));
+    return { ...identity, ipa_sha256: hash.digest('hex') };
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+}
+
+function baselineFor(build, fingerprint, artifact, apple, now = new Date()) {
+  assert(build.status === 'FINISHED' && build.platform === 'IOS' && build.distribution === 'STORE' && build.buildProfile === 'testflight', 'Expected a finished iOS TestFlight store build');
+  assert(uuid.test(build.id) && /^[a-f0-9]{40}$/.test(build.gitCommitHash) && /^[1-9]\d*$/.test(build.appBuildVersion), 'Invalid EAS build identity');
+  assert(fingerprint.app?.bundle_id === 'com.fitsy.mobile' && artifact.bundle_id === fingerprint.app.bundle_id &&
+    artifact.build_number === build.appBuildVersion && artifact.app_version === build.appVersion &&
+    artifact.build_number === fingerprint.app.build_number && artifact.app_version === fingerprint.app.version,
+  'IPA, EAS and source fingerprint app identities differ');
+  assert(/^[a-f0-9]{40}$/.test(fingerprint.fingerprint?.hash) && /^\d+\.\d+\.\d+$/.test(fingerprint.fingerprint?.package_version) &&
+    artifact.runtime_version === fingerprint.fingerprint.hash && build.runtimeVersion === artifact.runtime_version && artifact.channel === 'testflight' &&
+    /^[a-f0-9]{64}$/.test(artifact.ipa_sha256) && artifact.google_ios_client_id?.endsWith('.apps.googleusercontent.com'), 'IPA runtime, channel or fingerprint is unverified');
+  assert(uuid.test(apple.id) && apple.attributes?.processingState === 'VALID', 'Apple processing is unverified');
+  return { version: 1, platform: 'ios', source_sha: build.gitCommitHash, eas_build_id: build.id, asc_build_id: apple.id,
+    bundle_id: artifact.bundle_id, build_number: artifact.build_number, runtime_version: artifact.runtime_version,
+    fingerprint: fingerprint.fingerprint, channel: artifact.channel, google_ios_client_id: artifact.google_ios_client_id,
+    ipa_url: build.artifacts.buildUrl, ipa_sha256: artifact.ipa_sha256, verified_at: now.toISOString(),
+    evidence: `https://expo.dev/accounts/dgmolla/projects/fitsy/builds/${build.id}`,
+    verification_note: 'IPA identity and SHA-256 match the source fingerprint and exact EAS build; Apple processing and Internal membership confirmed. Real-device billing acceptance remains separate.' };
+}
+
+function openBaselinePR(baseline, gh = github) {
+  const branch = `chore/testflight-${baseline.build_number}-${baseline.eas_build_id}`;
+  const pulls = gh(`pulls?state=all&head=dgmolla:${branch}&base=main`);
+  assert(Array.isArray(pulls) && pulls.length <= 1, 'Ambiguous baseline PR');
+  const matchesBaseline = receipt => {
+    return isDeepStrictEqual({ ...receipt, verified_at: baseline.verified_at }, baseline);
+  };
+  if (pulls.length) {
+    assert(pulls[0].state === 'open' || pulls[0].merged_at, 'The baseline PR was closed; reconcile that decision before retrying');
+    const existing = gh(`contents/${baselinePath}?ref=${branch}`);
+    const receipt = JSON.parse(Buffer.from(existing.content, 'base64').toString());
+    assert(matchesBaseline(receipt), 'Existing PR differs from the verified build');
+    return pulls[0].html_url;
+  }
+  const main = gh('git/ref/heads/main').object.sha;
+  const comparison = gh(`compare/${baseline.source_sha}...${main}`);
+  assert(['ahead', 'identical'].includes(comparison.status), 'Build source is not integrated on main');
+  const content = path => Buffer.from(gh(`contents/${path}?ref=${main}`).content, 'base64').toString();
+  const old = JSON.parse(content(baselinePath));
+  assert(Number(old.build_number) <= Number(baseline.build_number), 'Refusing to downgrade the TestFlight baseline');
+  const config = content(configPath);
+  assert((config.match(/buildNumber:\s*["']\d+["']/g) || []).length === 1, 'Expected one source buildNumber');
+  const proposed = config.replace(/(buildNumber:\s*)["']\d+["']/, `$1"${baseline.build_number}"`);
+  const refs = gh(`git/matching-refs/heads/${branch}`);
+  assert(Array.isArray(refs), 'Invalid baseline branch response');
+  if (refs.length) {
+    assert(refs.length === 1 && refs[0].ref === `refs/heads/${branch}`, 'Unexpected baseline branch; no force update permitted');
+    assert(matchesBaseline(JSON.parse(contentAt(baselinePath))) && contentAt(configPath) === proposed,
+      'Existing baseline branch differs; no force update permitted');
+  } else {
+    const tree = gh('git/trees', { base_tree: gh(`git/commits/${main}`).tree.sha, tree: [
+      { path: baselinePath, mode: '100644', type: 'blob', content: JSON.stringify(baseline, null, 2) + '\n' },
+      { path: configPath, mode: '100644', type: 'blob', content: proposed },
+    ] });
+    const commit = gh('git/commits', { message: `Record verified TestFlight build ${baseline.build_number}`, tree: tree.sha, parents: [main] });
+    gh('git/refs', { ref: `refs/heads/${branch}`, sha: commit.sha });
+  }
+  return gh('pulls', { title: `Record TestFlight build ${baseline.build_number} baseline`, head: branch, base: 'main',
+    body: `**TL;DR:** Record processed TestFlight build ${baseline.build_number} and its verified native fingerprint.\n\nExact EAS build: ${baseline.eas_build_id}.\nApple build: ${baseline.asc_build_id}; processing VALID and Internal membership confirmed.\nIPA SHA-256: ${baseline.ipa_sha256}.\n\nUpdates buildNumber and the TestFlight baseline only.\nTestFlight: distributes this build to Internal testers.\nApp Review: no review submission or public release.\nRevenueCat: real platform SDK keys and production-mode Apple sandbox entitlements remain required.\n\nRequired Verify, independent review, native compatibility, product acceptance and protected merge remain mandatory.\n` }).html_url;
+  function contentAt(path) { return Buffer.from(gh(`contents/${path}?ref=${branch}`).content, 'base64').toString(); }
+}
+
+async function postSubmit({ buildId, fingerprintFile, timeoutSeconds = 1800 }, { apple, gh = github, run = command,
+  inspect = inspectArtifact, waitOptions = {}, evidenceDirectory = join(root, '.evidence/testflight') } = {}) {
+  assert(uuid.test(buildId), 'Pass the exact EAS --build=<UUID>, never latest');
+  const build = JSON.parse(run('eas', ['build:view', buildId, '--json'], { cwd: join(root, 'apps/mobile') }));
+  assert(build.id === buildId && build.status === 'FINISHED', 'EAS returned a different or unfinished build');
+  const fingerprint = JSON.parse(readFileSync(resolve(fingerprintFile), 'utf8'));
+  const config = JSON.parse(readFileSync(join(root, 'apps/mobile/eas.json'))).submit.production.ios;
+  const app = await apple(`/v1/apps/${config.ascAppId}`);
+  assert(app.data?.attributes?.bundleId === 'com.fitsy.mobile', 'App Store Connect app differs from Fitsy');
+  const artifact = await inspect(build.artifacts.buildUrl);
+  const processed = await waitForBuild(apple, config.ascAppId, build, { timeoutSeconds, ...waitOptions });
+  const baseline = baselineFor(build, fingerprint, artifact, processed);
+  const groups = (await list(apple, `/v1/apps/${config.ascAppId}/betaGroups?limit=200`)).data.filter(group =>
+    group.attributes?.name === 'Internal' && group.attributes?.isInternalGroup === true);
+  assert(groups.length === 1 && uuid.test(groups[0].id), 'Expected exactly one Internal beta group');
+  const membership = `/v1/betaGroups/${groups[0].id}/relationships/builds`;
+  if (!(await list(apple, membership)).data.some(item => item.id === processed.id))
+    await apple(membership, { data: [{ type: 'builds', id: processed.id }] });
+  assert((await list(apple, membership)).data.some(item => item.id === processed.id), 'Internal build membership was not confirmed');
+  const pr = openBaselinePR(baseline, gh);
+  const output = join(evidenceDirectory, buildId + '.json');
+  mkdirSync(resolve(output, '..'), { recursive: true });
+  const receipt = { build: buildId, apple_build: processed.id, group: 'Internal', baseline_pr: pr, baseline };
+  writeFileSync(output, JSON.stringify(receipt, null, 2) + '\n');
+  return { ...receipt, evidence: output };
+}
+
+async function main(args = process.argv.slice(2)) {
+  const options = {};
+  for (const arg of args) {
+    const match = /^--(build|fingerprint|timeout)=(.+)$|^--(preflight)$/.exec(arg);
+    assert(match && !Object.hasOwn(options, match[1] || match[3]), 'Usage: testflight-post-submit --build=UUID --fingerprint=FILE [--timeout=SECONDS] | --preflight');
+    options[match[1] || match[3]] = match[1] ? match[2] : true;
+  }
+  const timeoutSeconds = options.timeout === undefined ? 1800 : Number(options.timeout);
+  assert(Number.isInteger(timeoutSeconds) && timeoutSeconds > 0 && timeoutSeconds <= 7200, 'Timeout must be 1-7200 seconds');
+  assert(options.preflight || (uuid.test(options.build) && options.fingerprint), 'An exact build and source fingerprint receipt are required');
+  const config = preflight();
+  if (options.preflight) {
+    const app = await appleClient(config)(`/v1/apps/${config.ascAppId}`);
+    assert(app.data?.attributes?.bundleId === 'com.fitsy.mobile', 'TestFlight preflight: Apple key cannot identify the configured Fitsy app');
+    return { status: 'ready' };
+  }
+  return postSubmit({ buildId: options.build, fingerprintFile: options.fingerprint, timeoutSeconds }, { apple: appleClient(config) });
+}
+module.exports = { appleClient, preflight, waitForBuild, inspectArtifact, baselineFor, openBaselinePR, postSubmit, main };
+if (require.main === module) main().then(result => console.log(JSON.stringify(result))).catch(error => {
+  console.error(`TestFlight post-submit stopped: ${error.message}`); process.exitCode = 1;
+});

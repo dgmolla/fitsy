@@ -14,6 +14,8 @@ The driver triages errors before code repair; an `error` status, missing API con
 Assess the installed `verify-fitsy` skill for simulator/backend recovery and `cleanup-agent-resources` for measured disk or memory pressure.
 Use available service connectors or the existing network-enabled owner for external configuration; do not widen the candidate sandbox or expose credentials.
 If worker permissions exclude CoreSimulator, databases or the live loop, finish the concrete source repair and tests locally and leave installation/replay with that same host owner.
+When focused API tests require the disposable database, preflight that owner's Docker access before assigning the canonical gate to a restricted worker.
+A Docker socket denial retains the failed gate and its complete test selection for the same-source host run; never remove tests or substitute a database target to obtain a pass.
 The canonical media gate also requires host process ownership inspection with `ps`.
 If that inspection is denied, retain the failed check and source identity, then have the existing authorized host owner run `bash scripts/verify/media-integration.sh` against the same candidate.
 Do not replace the gate's receipt with a manual pass or rerun it in the unchanged restricted worker.
@@ -21,6 +23,8 @@ Retain the concrete blocker, selected skill/tool, attempted recovery and next ac
 
 Install reviewed recovery controls and their imports outside every candidate's writable roots before starting workers.
 The installer freezes the canonical simulator controls, policy files and JavaScript dependencies alongside the Python driver.
+Saved paywall flows load the selected source's plain Test Store catalog through `runScript` inside native isolation, with current-source checks intact.
+When a saved flow fails at fixture loading, replay its actual script sequence without wrapper-injected variables before changing app behavior; the Mac poller invokes Maestro directly.
 It records canonical dependency directories in the installed `controls/dependency-roots.json` before workers start and refuses linked installation directories.
 Candidate dependency links may resolve only within their workspace or to those exact recorded roots; a missing manifest requires reviewed reinstallation, never a candidate-derived grant.
 Privileged backend selection runs only that installed snapshot, with core environment and Vercel authentication; it never evaluates candidate JavaScript or inherits startup selectors.
@@ -40,6 +44,8 @@ Use the canonical backend resolver so Metro, fixtures and Maestro target the PR'
 Keep `dev.fitsy.org` pinned to `dev`.
 Every simulator command must hold `lockf -t 3600 ~/fitsy-refactor/loop/sim.lock`.
 Native repairs need a real local Maestro pass before push; never remove or skip assertions to obtain it.
+Consume the canonical runner's environment/code classification and additive retry count.
+It retains each attempt and retries diagnosed environment failures once; an exhausted runner retry must not start another immediate driver replay or a code-repair worker.
 Every push entrypoint reselects native coverage for changed source, including general review fixes, conflict resolution and hook repairs, independently of simulator attempt counters.
 Host Git operations, including commit and merge preparation, use the installed owner's private hook directory outside candidate writable roots.
 That hook runs both canonical pre-push verifier selections inside the same enforced isolation with allowlisted DEV configuration.
@@ -48,9 +54,13 @@ Route Git's `pre-push died of signal N` diagnostic to the existing host owner be
 Retain the Git output and matching host crash report, diagnose the launcher, and replay the unchanged hook against the same source before publication.
 Only trusted scope `none` permits publication without native execution; a pending failed journey still requires a real replay.
 Keep validation bound to the current source after requeue, merges and hook repairs.
+When a pre-push structural check rejects a root-level docs file, move it under the appropriate existing domain and update every reference without changing the hook or validator.
+Record the cause and prevention in [shipping lessons](../../../docs/engineering/devops/shipping-lessons.md) and rerun the canonical check before resuming publication.
 The driver attaches failure screenshots or extracted video frames through Codex's image argument and includes failing commands, logs, diff and prior outcomes in the prompt.
 
 Task frontmatter requires `branch`, `title`, a closing `---` and a body.
+An empty queue is an idle state, including when planning is disabled or finds nothing.
+The existing driver retains its exclusive lock and reloads task files after each interruptible three-minute idle wait; do not restart it or start another owner to accept new tasks.
 Legacy metadata followed by `---` remains supported.
 Put human ordering notes under `tasks/notes/`; both planner prompts and driver ordering consume them.
 Use `#583 BEFORE #547` or `order: #608 > #583 > #547` for deterministic ordering among eligible tasks.
@@ -67,6 +77,7 @@ The existing re-triage sweep retries recorded cleanup failures under the branch 
 Keep branch refs and external evidence; a removed parked checkout is recreated for current-head re-triage before main is merged for implementation.
 This explicit task-lifecycle cleanup is separate from historical resource cleanup and its four-hour cutoff.
 For missing dependencies in a restricted worker, use the [documented same-lock installation recovery](../../../docs/engineering/devops/performance.md#restricted-worker-recovery) without changing peer policy or the lockfile.
+The installer regressions also require real dependency directories; if the worktree uses approved dependency links, materialize task-owned copies from the identical-lock installation before running those tests, keeping the installer's link rejection intact.
 
 Park with a concrete condition such as `PR#587`, `check:Simulator`, `env:api-config` or `env:preparation`.
 Re-triage every fifteen minutes or when main advances.
