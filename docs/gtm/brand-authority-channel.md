@@ -1,6 +1,9 @@
-# Fitsy Brand Authority Channel — Spec
+# Fitsy Brand Authority Channel - Spec
 
-**Status**: DRAFT — DEFERRED. UGC takes priority for first 1,000 users (see `ugc-playbook.md`). Revisit after install funnel is validated. Near-term carve-out: hand-make 8-10 videos in CapCut as brand legitimacy / social proof for UGC creator outreach — no pipeline build yet.
+> **TL;DR:** The [LA launch strategy](la-launch-strategy.md) replaces this document's launch sequencing and audience assumptions.
+> The historical production pipeline and nutrition lessons below are deferred and are not the launch content brief.
+
+**Status**: Historical draft, deferred; the earlier UGC priority, creator outreach and 8-10-video carve-out are superseded by the current LA strategy.
 **Owner**: CTO
 **Last updated**: 2026-05-12
 

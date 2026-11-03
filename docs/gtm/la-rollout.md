@@ -1,10 +1,13 @@
 # LA Rollout Plan
 
-> **Status:** Active · **Decided:** 2026-08-26 · **Owner:** Founder
+> **TL;DR:** The [LA launch strategy](la-launch-strategy.md) supersedes this document's launch channels, targets and outreach instructions.
+> Retained for historical context; old pricing, trial terms and access claims require revalidation before use.
+
+> **Status:** Historical; superseded for the LA launch · **Decided:** 2026-08-26 · **Owner:** Founder
 > Supersedes the top-10-metro direction in `docs/engineering/pipeline/macro-accuracy-recommendations-2026-08-16.md` § Decision 5.
 > Complements `strategy.md` (positioning, flywheel) and `ugc-playbook.md` (creator mechanics).
 
-## Current status (updated 2026-09-06)
+## Historical status (updated 2026-09-06)
 
 **Release:** app is live in production.
 

@@ -1,7 +1,9 @@
-# GTM Strategy — Fitsy
+# GTM Strategy - Fitsy
 
-> **Status:** Active · **Last verified:** 2026-08-26
-> **Launch phase:** LA-only, 12-16 week test. Channels, first-user plan, feedback loop, and exit criteria live in `la-rollout.md`; this doc is the long-run positioning and portfolio.
+> **Status:** Superseded for the LA launch · **Decision date:** 2026-11-03
+> **TL;DR:** The [LA launch strategy](la-launch-strategy.md) replaces the 500 MAU target and launch channel portfolio.
+> The current goal is 10 LA users who love fitsy and use it on at least two days each week, using one acquisition channel.
+> The strict-tracker positioning, in-person outreach, creator deals, budgets and execution sequence below are historical proposals, not current launch instructions.
 
 ---
 
@@ -67,7 +69,7 @@ flowchart LR
 
 | Metric | Target | Notes |
 |---|---|---|
-| **Monthly Active Users (MAU)** | North star — measures real product engagement | Goal: 500 MAU by end of Month 3 post-launch |
+| **Monthly Active Users (MAU)** | Superseded as the LA launch north star on 2026-11-03 | Historical goal: 500 MAU by Month 3; use the [10-user weekly goal](la-launch-strategy.md#one-metric) instead |
 | CAC via CPM (UGC channel) | < RPM (target $2–3 CPM) | CPM must stay below revenue-per-install |
 | Install → Trial → Paid funnel | Track each drop-off step | 7-day trial → `pro` entitlement (RevenueCat) |
 | Organic installs (SEO/LLM) | Track source in PostHog | Measures compounding return on SEO build |
