@@ -123,6 +123,14 @@ env:
     id: welcome-continue
 - extendedWaitUntil:
     visible:
+      id: onboarding-widget-card
+    timeout: 15000
+- assertVisible:
+    id: onboarding-widget-example
+- tapOn:
+    id: welcome-skip
+- extendedWaitUntil:
+    visible:
       id: coachmark-next
     timeout: 30000
 - tapOn:
