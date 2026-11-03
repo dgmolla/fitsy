@@ -155,6 +155,26 @@ it('keeps the RevenueCat backend re-check, including sandbox entitlement in prod
   expect(row).toMatchObject({ status: 'active', lastEventAt: expect.any(Date) });
 });
 
+it('preserves exact fractional widget nutrition for a sandbox subscriber in production mode', async () => {
+  process.env['VERCEL_ENV'] = 'production';
+  process.env['UPSTASH_REDIS_REST_URL'] = 'https://widget-fixture.upstash.io';
+  process.env['UPSTASH_REDIS_REST_TOKEN'] = 'fixture-redis-token';
+  row = { status: 'never_subscribed', expiresAt: null, lastEventAt: new Date(Date.now() - 1000) };
+  mockQuery.mockResolvedValue([{ restaurantId: 'restaurant', name: 'Test bowls', address: 'Fixture',
+    lat: 34, lng: -118, distanceMiles: 0, cuisineTags: [], dietaryOptions: [], chainFlag: false,
+    photoUrl: null, rating: null, priceLevel: null, menuItemId: 'dish', itemName: 'Chicken bowl',
+    calories: 617.5, proteinG: 40.25, carbsG: 62.125, fatG: 18.75, confidence: 'LOW',
+    source: 'merchant', scoreSum: 0, orderKey: 0 }]);
+  const response = await search(searchRequest(await issue()));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ meta: { locked: false }, data: [{ bestMatch: {
+    menuItemId: 'dish', calories: 617.5, proteinG: 40.25, carbsG: 62.125, fatG: 18.75, confidence: 'LOW',
+  } }] });
+  expect(global.fetch).toHaveBeenCalledWith('https://api.revenuecat.com/v1/subscribers/widget-user', expect.objectContaining({
+    headers: { authorization: 'Bearer appl_fixture', 'x-platform': 'ios' },
+  }));
+});
+
 it('removes all dish data after RevenueCat confirms expiration', async () => {
   const token = await issue();
   row = { status: 'expired', expiresAt: new Date(Date.now() - 1000), lastEventAt: new Date() };
