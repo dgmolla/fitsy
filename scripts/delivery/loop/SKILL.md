@@ -60,7 +60,7 @@ The driver attaches failure screenshots or extracted video frames through Codex'
 
 Task frontmatter requires `branch`, `title`, a closing `---` and a body.
 An empty queue is an idle state, including when planning is disabled or finds nothing.
-The existing driver retains its exclusive lock and reloads task files every thirty seconds; do not restart it or start another owner to accept new tasks.
+The existing driver retains its exclusive lock and reloads task files after each interruptible three-minute idle wait; do not restart it or start another owner to accept new tasks.
 Legacy metadata followed by `---` remains supported.
 Put human ordering notes under `tasks/notes/`; both planner prompts and driver ordering consume them.
 Use `#583 BEFORE #547` or `order: #608 > #583 > #547` for deterministic ordering among eligible tasks.
@@ -77,6 +77,7 @@ The existing re-triage sweep retries recorded cleanup failures under the branch 
 Keep branch refs and external evidence; a removed parked checkout is recreated for current-head re-triage before main is merged for implementation.
 This explicit task-lifecycle cleanup is separate from historical resource cleanup and its four-hour cutoff.
 For missing dependencies in a restricted worker, use the [documented same-lock installation recovery](../../../docs/engineering/devops/performance.md#restricted-worker-recovery) without changing peer policy or the lockfile.
+The installer regressions also require real dependency directories; if the worktree uses approved dependency links, materialize task-owned copies from the identical-lock installation before running those tests, keeping the installer's link rejection intact.
 
 Park with a concrete condition such as `PR#587`, `check:Simulator`, `env:api-config` or `env:preparation`.
 Re-triage every fifteen minutes or when main advances.
