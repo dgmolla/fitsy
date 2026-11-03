@@ -1,23 +1,23 @@
 {
   "version": 1,
   "platform": "ios",
-  "source_sha": "c28460d3f857ef113819fa81c08fcb77a18e4148",
-  "eas_build_id": "b72f175d-07b8-4a8e-a894-2fe33fed7baa",
-  "eas_submission_id": "4109aff6-e456-43b6-a30c-3a7fb9bb5923",
-  "eas_submission_status": "FINISHED",
-  "asc_build_id": null,
+  "source_sha": "38f1e61b73d3dc279c2ea7facb13cc1766517ce8",
+  "eas_build_id": "838f650d-590b-4dda-8591-f93e72e29a5e",
+  "asc_build_id": "36d656b3-0fb5-4e3e-8545-9a709a9975bc",
   "bundle_id": "com.fitsy.mobile",
-  "build_number": "7",
-  "runtime_version": "58699659d0433dd381a23a994c7ee97f41a97902",
+  "build_number": "8",
+  "runtime_version": "05a067de6cbc8fc428618da9634baae069eb745b",
   "fingerprint": {
-    "hash": "58699659d0433dd381a23a994c7ee97f41a97902",
+    "hash": "05a067de6cbc8fc428618da9634baae069eb745b",
     "package_version": "0.15.4"
   },
-  "channel": "production",
+  "channel": "testflight",
   "google_ios_client_id": "56878207179-voo8iloc0si51ae7n8illrsu3hapks4d.apps.googleusercontent.com",
-  "ipa_url": "https://expo.dev/artifacts/eas/33TXlf17M73YaM0WDpGF9ESk6bGC6c8dSd8wzbb7c-c.ipa",
-  "ipa_sha256": null,
-  "verified_at": null,
-  "evidence": "https://expo.dev/accounts/dgmolla/projects/fitsy/builds/b72f175d-07b8-4a8e-a894-2fe33fed7baa",
-  "verification_note": "EAS records a dirty source checkout and a completed upload. The local fingerprint matches the build's runtime. Build logs confirm the production channel, which differs from automatic TestFlight OTA. IPA SHA-256 and Apple build ID remain unverified."
+  "ipa_url": "https://expo.dev/artifacts/eas/hf85CS60WOQEa2JP_IdogANZNSm3VcdA2r4b7e-Nodw.ipa",
+  "ipa_sha256": "467796d6ff2613f0d6a4454abbd43305dcb49380b543588f211d11a64f38aef3",
+  "verified_at": "2026-11-03T09:58:08.127Z",
+  "evidence": "https://expo.dev/accounts/dgmolla/projects/fitsy/builds/838f650d-590b-4dda-8591-f93e72e29a5e",
+  "verification_note": "IPA identity and SHA-256 match the production source fingerprint and exact EAS build; Apple processing is VALID, unexpired and Internal membership was read back. EAS uploaded a dirty checkout at source_sha with app.config.ts buildNumber changed from 7 to 8 and a release-helper parser correction outside native/bundle inputs. The uploaded tracked patch SHA-256 is 527ed2b3d93775dc885732727589acebc305956aee07841611c729054b01051b. The subsequent npm lockfile repair preserves this native fingerprint. Real-device billing acceptance remains separate.",
+  "eas_submission_id": "286676e1-cd27-43c0-887b-cf6bb6ecd33d",
+  "eas_submission_status": "FINISHED"
 }
