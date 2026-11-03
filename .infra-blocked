@@ -1,7 +1,13 @@
-Original native task remains stopped by the workspace boundary, separate from the now-resolved dependency failure.
-The supplied checkout is fix/floating-nav-saved-tab at c28460d3 (main), while PR #684 is codex/floating-nav-a at d7eb69bb outside writable roots.
-The earlier required shared-lock denial is unchanged; no alternate lock or simulator tool was used, and no new native run is claimed.
-Existing simulator host owner: continue on PR #684 under lockf -t 3600 ~/fitsy-refactor/loop/sim.lock, diagnose native Saved touch/navigation delivery, fix the demonstrated cause, and obtain three consecutive green floating-nav runs.
-The unchanged pre-push hook now exits 0 in the supplied checkout after locked offline npm ci, supported Prisma engine/cache generation and selection of the existing 65-test dependency/pre-push regression suite.
-No hook, lockfile, tracked source or wait changed. No commit or push.
-Evidence: .evidence/saved-navigation/hook-recovery/handoff.md, recovery.json and pre-push-final.log; original native evidence remains in .evidence/saved-navigation/handoff.md.
+**TL;DR:** The fixture regression is repaired; host permissions still prevent native and database acceptance.
+Original Simulator failure: CODE - the Mac poller invokes Maestro directly without TEST_STORE_FIXTURES, breaking both saved paywall scripts on PR #692 head 495f22eee2e8.
+The source-bound native screenshots show the expected reminder screen; saved-script regressions reproduced the missing-variable error before repair.
+Both saved flows now load the same authored CommonJS catalog as the Debug app, with no injected variable or poller update required.
+Execution stopped before native launch: lockf cannot open ~/fitsy-refactor/loop/sim.lock (Operation not permitted, exit 73, ENVIRONMENT).
+The canonical cheap gate passes all eight static checks but cannot start its required disposable database because Docker socket access is denied (ENVIRONMENT).
+No checks or assertions were weakened; full native/media and database acceptance remain unverified.
+No human action is required now; the existing loop/simulator host owner owns the exact-source replay under the unchanged shared lock.
+Read .evidence/ship-process-hardening/handoff.json for additive failure history, source identity, test results and concrete recovery commands.
+Selected recovery skills: scripts/delivery/loop/SKILL.md and /Users/dawitmolla/.codex/skills/verify-fitsy/SKILL.md.
+The original live-driver installation still awaits independent review and an idle owner restart outside worker writable roots.
+GitHub CLI access failed, the public fetch failed, and browser access timed out; latest issue comments remain unread and no product/design decisions changed.
+Do not commit, push, weaken checks or bypass the shared lock from this worker.

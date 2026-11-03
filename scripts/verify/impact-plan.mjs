@@ -357,7 +357,7 @@ export function impactPlan(options = {}) {
   const documentationOnly = selection.files !== null && selection.files.every(documentationPath);
   const code = !documentationOnly;
   const simulator = simulatorSelection(selection.files, { ...simulatorContext(options.env || process.env), ...options, comparison: selection.comparison });
-  return { version: 1, ...selection, documentationOnly, code, tests: code, build: code, native: simulator.required, simulator,
+  return { version: 1, ...selection, documentationOnly, code, tests: code || (options.env || process.env).GITHUB_EVENT_NAME === 'push', build: code, native: simulator.required, simulator,
     testGroups: wholeTestGroups(selection.files) };
 }
 

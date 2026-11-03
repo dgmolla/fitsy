@@ -67,7 +67,7 @@ export function hookEnvironment(root: string, directory: string, env: NodeJS.Pro
 
 
 export function installVerificationFixture(root: string, directory: string) {
-  for (const file of ['impact-plan.mjs', 'local-db.mjs', 'local-db-control.mjs', 'docker-runtime.mjs', 'db-lock.py', 'test-results.mjs', 'node-focused-reporter.mjs', 'python-focused.py', 'run.mjs', 'run.sh', 'secrets.sh', 'migration-safety.sh']) {
+  for (const file of ['impact-plan.mjs', 'related-tests.mjs', 'local-db.mjs', 'local-db-control.mjs', 'docker-runtime.mjs', 'db-lock.py', 'test-results.mjs', 'node-focused-reporter.mjs', 'python-focused.py', 'run.mjs', 'run.sh', 'secrets.sh', 'migration-safety.sh']) {
     mkdirSync(join(directory, 'scripts/verify'), { recursive: true });
     copyFileSync(join(root, 'scripts/verify', file), join(directory, 'scripts/verify', file));
   }
