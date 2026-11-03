@@ -71,7 +71,7 @@ deterministicTest('an affected journey passes without unrelated baselines but ca
   expect(missing.stderr).toContain('missing affected flow: billing-recovery');
 });
 
-deterministicTest.each(['truncated', 'skipped', 'optional-required'])('mandatory source assertions reject a %s successful receipt', kind => {
+deterministicTest.each(['truncated', 'skipped', 'optional-required', 'warned', 'warned-optional-required'])('mandatory source assertions reject a %s successful receipt', kind => {
   const report = fixture(), flow = report.flows[2]!;
   report.videoRequested = false;
   for (const entry of report.flows) { delete (entry as { video?: string }).video; delete (entry as { videoHash?: string }).videoHash; }
@@ -79,13 +79,15 @@ deterministicTest.each(['truncated', 'skipped', 'optional-required'])('mandatory
   if (kind === 'truncated') commands.pop();
   if (kind === 'skipped') commands[2].metadata.status = 'SKIPPED';
   if (kind === 'optional-required') { commands[2].metadata.status = 'SKIPPED'; commands[2].command.assertConditionCommand.optional = true; }
+  if (kind.startsWith('warned')) commands[2].metadata.status = 'WARNED';
+  if (kind === 'warned-optional-required') commands[2].command.assertConditionCommand.optional = true;
   const raw = JSON.stringify(commands); writeFileSync(join(dir, flow.commands), raw); flow.sha256 = sha(raw);
   const result = validate(report);
   expect(result.status).toBe(1);
   expect(result.stderr).toContain('missing/skipped/failed assertions');
 });
 
-deterministicTest('conditional startup skips agree across runner and final acceptance without accepting incomplete commands', () => {
+deterministicTest('optional and conditional omissions agree across runner and final acceptance without accepting incomplete commands', () => {
   const source = 'appId: com.fitsy.mobile\n---\n- runFlow:\n    when:\n      visible: Development Build\n    commands:\n      - tapOn: localhost\n- assertVisible: Saved targets\n';
   const required = [
     { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile' } } }, metadata: { status: 'COMPLETED' } },
@@ -100,6 +102,7 @@ deterministicTest('conditional startup skips agree across runner and final accep
     { command: { runFlowCommand: { condition: { scriptCondition: 'false' } } }, status: 'SKIPPED', accepted: true },
     { command: { runFlowCommand: { condition: { platform: 'ANDROID' } } }, status: 'SKIPPED', accepted: true },
     { command: conditional, status: 'FAILED', accepted: false },
+    { command: conditional, status: 'WARNED', accepted: false },
     { command: conditional, status: 'UNKNOWN', accepted: false },
     { command: conditional, status: undefined, accepted: false },
     { command: { runFlowCommand: { commands: conditional.runFlowCommand.commands } }, status: 'SKIPPED', accepted: false },
@@ -108,7 +111,12 @@ deterministicTest('conditional startup skips agree across runner and final accep
     { command: { runFlowCommand: { condition: { unknown: true } } }, status: 'SKIPPED', accepted: false },
     { command: { runFlowCommand: { condition: { visible: null } } }, status: 'SKIPPED', accepted: false },
     { command: required[1]!.command, status: 'SKIPPED', accepted: false },
+    { command: required[1]!.command, status: 'WARNED', accepted: false },
     { command: { tapOnElement: { optional: true } }, status: 'SKIPPED', accepted: true },
+    // Maestro 2.3 warns when iOS omits the optional deep-link Open prompt.
+    { command: { tapOnElement: { selector: { textRegex: '^Open$', optional: true }, optional: true } }, status: 'WARNED', accepted: true },
+    { command: { tapOnElement: { optional: false } }, status: 'WARNED', accepted: false },
+    { command: { tapOnElement: {} }, status: 'WARNED', accepted: false },
     { command: { tapOnElement: { optional: true } }, status: 'FAILED', accepted: false },
     { command: { tapOnElement: { optional: true } }, status: 'UNKNOWN', accepted: false },
   ];

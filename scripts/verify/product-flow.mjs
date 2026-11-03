@@ -132,15 +132,18 @@ export function selectedFlows(plan, additional = []) {
 
 export function isSuccessfulCommand(entry) {
   if (entry.metadata?.status === 'COMPLETED') return true;
-  if (entry.metadata?.status !== 'SKIPPED') return false;
+  const status = entry.metadata?.status;
+  if (status !== 'SKIPPED' && status !== 'WARNED') return false;
   const commands = Object.entries(entry.command || {});
   if (commands.length !== 1) return false;
   const [name, command] = commands[0];
+  // An absent optional element is WARNED by Maestro 2.3, never a required failure.
+  if (command?.optional === true) return true;
   const condition = command?.condition;
   // Maestro skips an entire conditional runFlow when its condition is unmet.
-  return command?.optional === true || (name === 'runFlowCommand' && condition !== null &&
+  return status === 'SKIPPED' && name === 'runFlowCommand' && condition !== null &&
     typeof condition === 'object' && !Array.isArray(condition) &&
-    ['visible', 'notVisible', 'platform', 'scriptCondition'].some(key => condition[key] != null));
+    ['visible', 'notVisible', 'platform', 'scriptCondition'].some(key => condition[key] != null);
 }
 
 export function assertFlowCommands(source, commands, name) {
