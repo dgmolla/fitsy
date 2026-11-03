@@ -219,6 +219,10 @@
       "expression": "key"
     },
     {
+      "file": "scripts/sim/ci.mjs",
+      "expression": "key"
+    },
+    {
       "file": "scripts/sim/journey-fixtures.mjs",
       "expression": "key"
     },
