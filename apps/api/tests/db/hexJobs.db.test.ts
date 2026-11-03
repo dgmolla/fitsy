@@ -108,8 +108,9 @@ suite('shared hex queue (real Postgres and real CLI, only provider HTTP substitu
       const job = (await queue.claim(id.runId, 'worker'))!;
       expect(job.attempts).toBe(attempt);
       await queue.fail(job);
+      // Match TIMESTAMPTZ(3) storage so rounding cannot inflate the remaining delay.
       const [state] = await db.$queryRaw<{ status: string; delay: number }[]>`SELECT status,
-        EXTRACT(EPOCH FROM (next_retry_at - clock_timestamp()))::float8 AS delay FROM public.hex_jobs
+        EXTRACT(EPOCH FROM (next_retry_at - clock_timestamp()::timestamptz(3)))::float8 AS delay FROM public.hex_jobs
         WHERE run_id = ${id.runId} AND hex_id = ${id.hexId}`;
       expect(state!.status).toBe(attempt === 3 ? 'failed' : 'pending');
       expect(state!.delay).toBeGreaterThan(30 * 2 ** (attempt - 1) - 5);
