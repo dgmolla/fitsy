@@ -316,6 +316,10 @@ The second catalog can otherwise hit XCTest `kAXErrorInvalidUIElement` while the
 Permanent hierarchy failures and an incorrect screen still fail, and billing actions and outcome assertions never run inside the startup retry.
 Its shared helper checks the configured reminder offer and purchase default, live prices and renewal copy, both plan selections, reminder availability with and without simulated opt-in, and the visual-only checkout guard.
 `mixed-trial-default.mjs` derives the expected default from each synthetic catalog and the host's local calendar before any plan is selected.
+`apps/mobile/lib/testStoreFixtures.cjs` is the shared synthetic Test Store catalog consumed by the Debug offering and these assertions.
+Each saved paywall flow loads it with `runScript` before projecting expectations, including direct Maestro invocations by the Mac poller.
+The catalog exposes the same plain data through CommonJS for Metro and `output.testStoreFixtures` for Maestro, without caller-injected variables or Node APIs in Maestro.
+Expected plan names, renewal periods, trial lengths and reminder dates come from that fixture, including `paywall-eligible-visual`.
 The development visual paywall supplies synthetic opt-in by default and synthetic enabled state with `devReminderEnabled=1`, including anonymous launches.
 Those visual states never read an anonymous account's unavailable notification state as evidence of opt-in, and never request permission or schedule a notification.
 Release builds ignore both visual parameters and keep the real account's permission and reminder preferences.

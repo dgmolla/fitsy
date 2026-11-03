@@ -142,7 +142,12 @@ jobs:
 
   test:
     needs: [classify, static]
-    if: needs.classify.outputs.tests == 'true'
+    # Main pushes always run the full suite, including documentation-only pushes.
+    if: >-
+      always() && needs.classify.result == 'success' &&
+      needs.classify.outputs.tests == 'true' &&
+      ((needs.classify.outputs.code == 'true' && needs.static.result == 'success') ||
+       (needs.classify.outputs.code == 'false' && needs.static.result == 'skipped'))
     name: Tests (L2)
     runs-on: ubuntu-latest
     steps:

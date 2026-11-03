@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Complete affected API, scripts and mobile groups. With a DB, serialize the
+# Related PR suites, with complete groups for ambiguous inputs. With a DB, serialize the
 # whole API run: shared-schema suites can exhaust each other's SERIALIZABLE retry
 # budget. Explicit concurrency inside a test remains unchanged.
 # Keep workspace output complete for run.mjs's retained stdout/stderr logs.
@@ -15,10 +15,10 @@ for ARG in "$@"; do
     *) printf '{"name":"test","status":"fail","summary":"unsupported test argument"}\n'; exit 1 ;;
   esac
 done
-# Direct invocation remains full. Changed scope derives its own actual Git
-# comparison, never a caller-selected group list or cached focused subset.
+# Direct invocation and pushes remain full. Changed scope derives its own actual
+# Git comparison, never a caller-selected group list or cached focused subset.
 TEST_GROUPS="api scripts mobile"
-if [ "$SCOPE" = changed ]; then
+if [ "$SCOPE" = changed ] && [ "${GITHUB_EVENT_NAME:-}" != push ] && [ "${GITHUB_EVENT_NAME:-}" != pull_request ]; then
   if ! TEST_GROUPS="$(node scripts/verify/impact-plan.mjs "${PLAN_ARGS[@]}")"; then
     printf '{"name":"test","status":"fail","summary":"test group planning failed"}\n'; exit 1
   fi
@@ -31,6 +31,30 @@ esac
 FAIL=""
 REPORTS="$(mktemp -d "${TMPDIR:-/tmp}/fitsy-tests.XXXXXX")" || exit 1
 trap 'rm -rf "$REPORTS"' EXIT
+MODE=whole
+MOBILE_ARGS=()
+SCRIPTS_ARGS=()
+if [ "$SCOPE" = changed ] && [ "${GITHUB_EVENT_NAME:-}" = pull_request ]; then
+  if ! node scripts/verify/related-tests.mjs "${PLAN_ARGS[@]:1}" > "$REPORTS/selection.json"; then
+    printf '{"name":"test","status":"fail","summary":"related test planning failed"}\n'; exit 1
+  fi
+  cat "$REPORTS/selection.json" >&2
+  MODE="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1])).mode)' "$REPORTS/selection.json")" || exit 1
+  if [ "$MODE" = related ]; then
+    TEST_GROUPS=""
+    node scripts/verify/related-tests.mjs --read "$REPORTS/selection.json" mobile > "$REPORTS/mobile.paths" || exit 1
+    node scripts/verify/related-tests.mjs --read "$REPORTS/selection.json" scripts > "$REPORTS/scripts.paths" || exit 1
+    while IFS= read -r -d '' path; do MOBILE_ARGS+=("$path"); done < "$REPORTS/mobile.paths"
+    while IFS= read -r -d '' path; do SCRIPTS_ARGS+=("$path"); done < "$REPORTS/scripts.paths"
+    if [ "${#MOBILE_ARGS[@]}" -gt 0 ]; then TEST_GROUPS="mobile"; MOBILE_ARGS=(--runTestsByPath "${MOBILE_ARGS[@]}"); fi
+    if [ "${#SCRIPTS_ARGS[@]}" -gt 0 ]; then TEST_GROUPS="scripts $TEST_GROUPS"; SCRIPTS_ARGS=(--runTestsByPath "${SCRIPTS_ARGS[@]}"); fi
+    if [ -z "$TEST_GROUPS" ]; then
+      printf '{"name":"test","status":"fail","summary":"empty related test selection"}\n'; exit 1
+    fi
+  elif [ "$MODE" != full ]; then
+    printf '{"name":"test","status":"fail","summary":"invalid related test plan"}\n'; exit 1
+  fi
+fi
 # Each engine must report passing cases from this invocation, even if it exits 0.
 run_jest() {
   local group="$1"; shift
@@ -47,7 +71,9 @@ run_jest shared npm test --workspace=@fitsy/shared --
 if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   unset FITSY_VERIFY_FOCUSED_RECIPE
   # Real decoder and attachment cases retain the required local media lane.
-  run_jest scripts /usr/bin/env FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512 npm test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB
+  run_jest scripts /usr/bin/env FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512 npm test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB ${SCRIPTS_ARGS[@]+"${SCRIPTS_ARGS[@]}"}
+fi
+if [[ " $TEST_GROUPS " == *" scripts "* ]] && [ "$MODE" != related ]; then
   run_node simple-review scripts/review/simple-review.test.mjs
   run_node github scripts/github/*.test.mjs
   run_node performance scripts/perf/*.test.mjs
@@ -76,10 +102,10 @@ fi
 # One Jest worker keeps mobile suites serial while recycling its process after
 # large files; in-band mode retains every suite in one process.
 if [[ " $TEST_GROUPS " == *" mobile "* ]]; then
-  run_jest mobile /usr/bin/env NODE_OPTIONS=--max-old-space-size=768 npm test --workspace=@fitsy/mobile -- --maxWorkers=1 --workerIdleMemoryLimit=256MB
+  run_jest mobile /usr/bin/env NODE_OPTIONS=--max-old-space-size=768 npm test --workspace=@fitsy/mobile -- --maxWorkers=1 --workerIdleMemoryLimit=256MB ${MOBILE_ARGS[@]+"${MOBILE_ARGS[@]}"}
 fi
 if [ -n "$FAIL" ]; then
   printf '{"name":"test","status":"fail","summary":"tests failed in: %s","fix":"inspect the test logs listed by Verify; rerun the failing suite (npm run test:coverage -w apps/api, npm test -w @fitsy/scripts, or npm test -w @fitsy/mobile) and fix"}\n' "$FAIL"
   exit 1
 fi
-printf '{"name":"test","status":"pass","summary":"whole test groups passed: %s","fix":""}\n' "$TEST_GROUPS"
+printf '{"name":"test","status":"pass","summary":"%s test groups passed: %s","fix":""}\n' "$MODE" "$TEST_GROUPS"

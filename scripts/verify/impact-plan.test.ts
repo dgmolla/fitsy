@@ -171,12 +171,12 @@ test('whole groups use the integrated main range and the actual pinned PR range'
   git('update-ref', 'refs/remotes/origin/main', head);
   const main = { CI: 'true', GITHUB_EVENT_NAME: 'push', GITHUB_EVENT_PATH: event('groups-main', { before: fixture.base, after: head }) };
   expect(fixture.run(main).status).toBe(0);
-  expect(fixture.calls()).toEqual(['shared', 'api', 'mobile']);
+  expect(fixture.calls()).toEqual(expect.arrayContaining(['shared', 'scripts', 'api', 'mobile']));
   git('checkout', '--detach', fixture.base);
   const pr = { CI: 'true', GITHUB_EVENT_NAME: 'pull_request',
     GITHUB_EVENT_PATH: event('groups-pr', { pull_request: { base: { sha: fixture.base }, head: { sha: head } } }) };
   expect(fixture.run(pr).status).toBe(0);
-  expect(fixture.calls()).toEqual(['shared', 'api', 'mobile']);
+  expect(fixture.calls()).toEqual(expect.arrayContaining(['shared', 'scripts', 'api', 'mobile']));
 });
 
 test('whole groups retain dirty and untracked changes even with an explicit local head', () => {
@@ -391,7 +391,7 @@ test('the actual workflow baseline stops when its secret check fails', () => {
   expect(existsSync(join(directory, '.evidence/later'))).toBe(false);
 });
 
-test('actual main documentation push selects no code jobs after origin/main advances', () => {
+test('actual main documentation push retains full tests after origin/main advances', () => {
   const before = git('rev-parse', 'HEAD');
   write('docs/guide.md', 'Documentation.\n');
   const after = commit();
@@ -400,8 +400,8 @@ test('actual main documentation push selects no code jobs after origin/main adva
   const extra = { CI: 'true', GITHUB_EVENT_NAME: 'push', GITHUB_EVENT_PATH: event('push', { before, after }), GITHUB_OUTPUT: output };
   const result = cli('impact-plan.mjs', ['--github-output'], extra);
   expect(result.status).toBe(0);
-  expect(plan(extra)).toMatchObject({ documentationOnly: true, code: false, tests: false, build: false, files: ['docs/guide.md'] });
-  expect(readFileSync(output, 'utf8')).toContain('tests=false');
+  expect(plan(extra)).toMatchObject({ documentationOnly: true, code: false, tests: true, build: false, files: ['docs/guide.md'] });
+  expect(readFileSync(output, 'utf8')).toContain('tests=true');
 });
 
 test('PR selection uses pinned head, not the current checkout', () => {

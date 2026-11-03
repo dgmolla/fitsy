@@ -150,8 +150,8 @@ def repair_sim(name, wt, st, s, ev, meta, prompt):
     save(s)
     if triage in ('env','unknown'):
         # The host owns environment reproduction. Never ask sandboxed Codex to fix setup.
-        retries=st.get('env_retries',0)
-        if retries<MAX_RERUNS:
+        retries=max(st.get('env_retries',0),ev.get('environment_retries',0))
+        if retries<1:
             st['env_retries']=retries+1
             replay=context.host_replay(wt,L+'/sim.lock',ev,ENV)
             record_attempt(st,'environment-replay',outcome=replay['status'],logs=replay.get('logs',''))
