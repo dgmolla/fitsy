@@ -1,0 +1,21 @@
+# A pre-provisioned empty or expired Test Store account; never create a purchase.
+appId: com.fitsy.mobile
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-login
+    timeout: 60000
+- tapOn:
+    id: welcome-login
+- extendedWaitUntil:
+    visible: Welcome back
+    timeout: 15000
+- tapOn: ".*Dev Login.*"
+- extendedWaitUntil:
+    visible:
+      id: ${DESTINATION}
+    timeout: 30000
+- assertNotVisible: Dev Login Failed
