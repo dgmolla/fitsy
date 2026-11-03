@@ -93,6 +93,8 @@ When Vercel supplies an app URL as `log_url`, only the deployment ID from its co
 Unknown or malformed descriptions fall back to the project's deployments list.
 Raw provider descriptions, command text, arbitrary log URLs and raw health errors are excluded from this diagnostic.
 The failure incident links the exact Deploy run and source plus the existing separately authorized migration recovery procedure, without emitting a success receipt or retrying the deployment.
+The observer's P3009 diagnostic also names the existing audit-first `production-migration-recovery.yml` workflow and limits that recovery route to the reviewed #643 attempt.
+The release regression replays the retained #645 and #650 status shapes, preserving each failed deployment's source and build-log link even when an older source is healthy.
 The smoke job calls `scripts/deploy/production-incident.py` to reuse one open production-verification incident and append each later source/run/attempt with its own evidence.
 The reporter reads every incident/comment page, prefers its stable marker, and can adopt the oldest open legacy production-release report without rewriting historical evidence.
 The same run attempt is recorded once; a closed incident permits a new report, and failed reads or uncertain writes stop without a fallback issue or write retry.

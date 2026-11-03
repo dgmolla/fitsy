@@ -60,6 +60,7 @@ def deployment_failure(source, row, status):
     return (f'Vercel Git production deployment failed or inactive: state={state}, source={source}, '
             f'deployment={identity}; build/migration logs: {logs}; fitsy.org serving source: {serving}. '
             'For P3009, inspect scripts/deploy/migration-failure-audit.sql; '
+            'the protected production-migration-recovery.yml workflow defaults to audit and supports only the reviewed #643 attempt; '
             'recovery requires separately authorized maintenance, never automatic resolve or retry.')
 
 
