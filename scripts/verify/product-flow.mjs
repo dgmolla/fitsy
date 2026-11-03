@@ -130,6 +130,18 @@ export function selectedFlows(plan, additional = []) {
   return [...new Set([...(plan.flows || []), ...additional])].sort();
 }
 
+export function isSuccessfulCommand(entry) {
+  if (entry.metadata?.status === 'COMPLETED') return true;
+  if (entry.metadata?.status !== 'SKIPPED') return false;
+  const commands = Object.entries(entry.command || {});
+  if (commands.length !== 1) return false;
+  const [name, command] = commands[0];
+  const condition = command?.condition;
+  // Maestro skips an entire conditional runFlow when its condition is unmet.
+  return command?.optional === true || (name === 'runFlowCommand' && condition !== null &&
+    typeof condition === 'object' && !Array.isArray(condition) && Object.keys(condition).length > 0);
+}
+
 export function assertFlowCommands(source, commands, name) {
   const [config, steps] = yaml.loadAll(source.toString());
   insist(config?.appId === 'com.fitsy.mobile' && Array.isArray(steps), `invalid maintained flow: ${name}`);
@@ -147,7 +159,7 @@ export function assertFlowCommands(source, commands, name) {
   const assertions = commands.filter(c => c.command?.assertConditionCommand && !c.command.assertConditionCommand.optional);
   insist(assertions.length >= Math.max(1, minimum(steps)) && assertions.every(c => c.metadata?.status === 'COMPLETED'), `missing/skipped/failed assertions: ${name}`);
   insist(!commands.some(c => c.metadata?.status === 'FAILED'), `failed command: ${name}`);
-  insist(commands.every(c => c.metadata?.status === 'COMPLETED' || Object.values(c.command || {}).some(v => v?.optional === true)), `incomplete required command: ${name}`);
+  insist(commands.every(isSuccessfulCommand), `incomplete required command: ${name}`);
   return assertions;
 }
 

@@ -85,6 +85,43 @@ deterministicTest.each(['truncated', 'skipped', 'optional-required'])('mandatory
   expect(result.stderr).toContain('missing/skipped/failed assertions');
 });
 
+deterministicTest('conditional startup skips agree across runner and final acceptance without accepting incomplete commands', () => {
+  const source = 'appId: com.fitsy.mobile\n---\n- runFlow:\n    when:\n      visible: Development Build\n    commands:\n      - tapOn: localhost\n- assertVisible: Saved targets\n';
+  const required = [
+    { command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile' } } }, metadata: { status: 'COMPLETED' } },
+    { command: { assertConditionCommand: { condition: { visible: { textRegex: 'Saved targets' } } } }, metadata: { status: 'COMPLETED' } },
+  ];
+  // Captured from #443's successful Maestro run in the Debug build without a launcher.
+  const conditional = { runFlowCommand: { commands: [{ tapOnElement: { selector: { textRegex: 'localhost', optional: false } } }],
+    condition: { visible: { textRegex: 'Development Build', optional: false } }, optional: false } };
+  const cases = [
+    { command: conditional, status: 'SKIPPED', accepted: true },
+    { command: { runFlowCommand: { ...conditional.runFlowCommand, condition: { notVisible: { textRegex: 'Saved targets' } } } }, status: 'SKIPPED', accepted: true },
+    { command: conditional, status: 'FAILED', accepted: false },
+    { command: conditional, status: 'UNKNOWN', accepted: false },
+    { command: conditional, status: undefined, accepted: false },
+    { command: { runFlowCommand: { commands: conditional.runFlowCommand.commands } }, status: 'SKIPPED', accepted: false },
+    { command: { runFlowCommand: { condition: {} } }, status: 'SKIPPED', accepted: false },
+    { command: required[1]!.command, status: 'SKIPPED', accepted: false },
+    { command: { tapOnElement: { optional: true } }, status: 'SKIPPED', accepted: true },
+    { command: { tapOnElement: { optional: true } }, status: 'FAILED', accepted: false },
+    { command: { tapOnElement: { optional: true } }, status: 'UNKNOWN', accepted: false },
+  ];
+  for (const sample of cases) {
+    const commands = [...required, { command: sample.command, metadata: { status: sample.status } }];
+    const result = evaluate(`await (async () => {
+      const runner = await import(${JSON.stringify(resolve(__dirname, '../sim/runner-controls.mjs'))});
+      const commands = ${JSON.stringify(commands)};
+      let finalAccepted = true;
+      try { gate.assertFlowCommands(${JSON.stringify(source)}, commands, 'nutrition'); }
+      catch { finalAccepted = false; }
+      return { finalAccepted, runnerAccepted: runner.flowFailureReason({code: 0}, commands, {state: 'skipped'}, 'nutrition') === null };
+    })()`);
+    expect({ status: result.status, ...JSON.parse(result.stdout) }).toEqual({ status: 0,
+      finalAccepted: sample.accepted, runnerAccepted: sample.accepted });
+  }
+});
+
 mediaTest('accepts identified baseline and billing outcomes with matching artifacts', () => {
   const result = validate(fixture()); expect(result.status).toBe(0); expect(JSON.parse(result.stdout).status).toBe('pass');
 });
