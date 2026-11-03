@@ -20,12 +20,36 @@ run_build() {
     npm run build:api -- -- --no-lint
   fi
 }
+SNAPSHOT="$(mktemp "${TMPDIR:-/tmp}/fitsy-build-source.XXXXXX")" || exit 1
+trap 'rm -f "$SNAPSHOT"' EXIT
+check_source_output() {
+  python3 - "$SNAPSHOT" "$1" <<'PY'
+import hashlib, json, pathlib, subprocess, sys
+paths = subprocess.check_output(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard']).decode().split('\0')
+current = {name: hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()
+           for name in set(paths) if name.endswith(('.js', '.js.map'))
+           and 'node_modules' not in pathlib.Path(name).parts and pathlib.Path(name).is_file()}
+snapshot = pathlib.Path(sys.argv[1])
+if sys.argv[2] == 'before':
+    snapshot.write_text(json.dumps(current))
+else:
+    before = json.loads(snapshot.read_text())
+    changed = sorted(name for name in before.keys() | current.keys() if before.get(name) != current.get(name))
+    for name in changed:
+        print(name, file=sys.stderr)
+    sys.exit(1 if changed else 0)
+PY
+}
+if ! check_source_output before; then
+  printf '{"name":"build","status":"fail","summary":"cannot snapshot JavaScript source","fix":"run from an ordinary readable Git checkout"}\n'
+  exit 1
+fi
 if ! run_build >&2; then
   printf '{"name":"build","status":"fail","summary":"next build failed","fix":"run: npm run build:api -- -- --no-lint locally; the build error names the module"}\n'
   exit 1
 fi
-if git status --porcelain | grep -E '\.(js|js\.map)$' | grep -v node_modules >&2; then
-  printf '{"name":"build","status":"fail","summary":"build wrote .js files into the source tree","fix":"add the emitted paths to .gitignore or fix the tsconfig outDir"}\n'
+if ! check_source_output after; then
+  printf '{"name":"build","status":"fail","summary":"build changed JavaScript source or emitted files","fix":"inspect the named paths; fix code generation or the tsconfig outDir"}\n'
   exit 1
 fi
 printf '{"name":"build","status":"pass","summary":"API builds clean, no stray output","fix":""}\n'

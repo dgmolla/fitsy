@@ -47,6 +47,7 @@ The build logs an activation skip for a validated legacy binding; configured `fi
 Names alone do not prove a database target.
 Credentials stay in their existing Vercel bindings; do not copy them into GitHub, files or build arguments.
 After those guards, `scripts/deploy/rate-limit-preflight.ts` exercises the runtime Redis `EVAL` before any migration.
+It first checks required names from `scripts/deploy/env-manifest.json`, which also drives CI source-read validation.
 Production and preview require `UPSTASH_REDIS_REST_URL` and a writable `UPSTASH_REDIS_REST_TOKEN` in their respective Vercel environments, with separate stores for production and nonproduction.
 The preflight uses the same service, URL validation, response validation and one-second deadline as runtime quotas.
 Its separate `deployment-readiness` namespace and unique identities leave user quotas untouched; probe keys expire in one second.
@@ -71,7 +72,8 @@ It prints only the existing audit's ledger, object, role and runtime-schema evid
 Unavailable diagnostics retain a private error summary and the original migration exit status; they cannot start the API build, resolve history, grant roles or retry migrations.
 Protected maintenance shares the same audit function and SQL, while its separate recovery identity and approval remain required.
 Preview/development builds refuse either production binding and preview migrations retain the development route.
-Preview runs the same Redis preflight after the DEV database guard and before migrations; undeployed development remains usable without Redis.
+Preview and guarded development builds run the same manifest and Redis preflight after the DEV database guard and before migrations.
+Ordinary `next dev` requests retain local enforcement when both Redis bindings are absent.
 The existing dev mirror watches the preflight and database guard inputs so changes reach the stable dev deployment.
 Environment checks select the guarded caller; they do not authorize candidate access to production credentials.
 Migrations must remain additive under existing structural SQL checks and independent migration review so the prior API remains compatible during a build.
@@ -99,7 +101,8 @@ The same run attempt is recorded once; a closed incident permits a new report, a
 This groups reporting while leaving each failure's diagnosis and protected recovery separate; keep the incident open until exact-source production verification succeeds.
 Run `python3 -B scripts/deploy/routine-release.test.py ProductionIncidentTests` to exercise the actual workflow publisher with an isolated GitHub fixture.
 The health endpoint already consumes Vercel's system `VERCEL_GIT_COMMIT_SHA`.
-No custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval is required.
+Normal Git deployment and smoke observation need no custom Vercel token, CLI install, stage/promote process, new routine environment, App dispatch or routine human approval.
+Failure alerts use [production monitoring](monitoring-alerting.md); automatic rollback and strict staged promotion remain follow-ups owned by the existing release owner.
 Keep the existing repository Expo/smoke credential route.
 Sensitive maintenance retains `production-release`; native/Apple release decisions retain `production-native`.
 This revision does not migrate unrelated secret custody.

@@ -173,6 +173,7 @@ test("keeps the public typecheck uncapped while scoping the build heap", () => {
   const verify = join(directory, "scripts/verify");
   copyFileSync(join(root, "scripts/verify/typecheck.sh"), join(verify, "typecheck.sh"));
   copyFileSync(join(root, "scripts/verify/build.sh"), join(verify, "build.sh"));
+  expect(spawnSync('git', ['init', '-q'], { cwd: directory }).status).toBe(0);
   writeFileSync(join(verify, "registry.yml"), `checks:
   - name: typecheck
     script: typecheck.sh
@@ -212,6 +213,29 @@ printf '%s:%s\\n' '${command}' "\${NODE_OPTIONS-}" >> "$FITSY_CHILD_STUB_LOG"
     "npm:", "npm:--max-old-space-size=384",
   ]);
 });
+
+test.each(['unchanged', 'new-output', 'changed-source', 'source-map'])(
+  'the real build guard compares source contents before/after: %s', effect => {
+    const build = join(directory, 'scripts/verify/build.sh');
+    copyFileSync(join(root, 'scripts/verify/build.sh'), build);
+    expect(spawnSync('git', ['init', '-q'], { cwd: directory }).status).toBe(0);
+    writeFileSync(join(directory, 'source.js'), 'original source\n');
+    expect(spawnSync('git', ['add', 'source.js'], { cwd: directory }).status).toBe(0);
+    // Preserve a legitimate uncommitted JS edit, exactly like the worker checkout.
+    writeFileSync(join(directory, 'source.js'), 'existing user edit\n');
+    const bin = join(directory, 'bin');
+    mkdirSync(bin);
+    const output = effect === 'new-output' ? 'generated.js' : effect === 'source-map' ? 'generated.js.map' : 'source.js';
+    const command = effect === 'unchanged' ? 'exit 0' : `printf 'build output\\n' > '${output}'`;
+    writeFileSync(join(bin, 'npm'), `#!/bin/sh\n${command}\n`);
+    chmodSync(join(bin, 'npm'), 0o700);
+    const result = spawnSync('/bin/bash', [build], { cwd: directory, encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` }, timeout: 10_000 });
+    expect(result.status).toBe(effect === 'unchanged' ? 0 : 1);
+    if (effect === 'unchanged') expect(readFileSync(join(directory, 'source.js'), 'utf8')).toBe('existing user edit\n');
+    else expect(result.stdout).toContain('build changed JavaScript source or emitted files');
+  },
+);
 
 test.each([true, "shadow"])("retains diagnostics beyond the old buffer limit with blocking=%s", blocking => {
   const payload = "FIRST_DIAGNOSTIC_SENTINEL\n" + "diagnostic detail\n".repeat(1048576) + "FINAL_DIAGNOSTIC_SENTINEL\n";

@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { notifySlack, macroWinnerSqlOrder } from "@fitsy/shared";
@@ -16,7 +17,7 @@ import { prisma } from "@/lib/restaurantService";
  * recent tiebreak) rather than an arbitrary joined row. IS DISTINCT FROM
  * treats NULL on either side as drift.
  */
-export async function GET(req: NextRequest): Promise<NextResponse> {
+async function handleGET(req: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
   const provided = req.headers.get("authorization");
   if (!expected || provided !== `Bearer ${expected}`) {
@@ -58,3 +59,5 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ ok: true, drift_count: 0 });
 }
+
+export const GET = withApiTelemetry('GET', '/api/internal/audit-macro-drift', handleGET);

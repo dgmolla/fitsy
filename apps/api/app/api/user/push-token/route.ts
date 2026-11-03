@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/restaurantService";
@@ -23,7 +24,7 @@ import { prisma } from "@/lib/restaurantService";
 // abuse (multi-MB strings).
 const MAX_PUSH_TOKEN_LENGTH = 512;
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePOST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
@@ -72,3 +73,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }
+
+export const POST = withApiTelemetry('POST', '/api/user/push-token', handlePOST);

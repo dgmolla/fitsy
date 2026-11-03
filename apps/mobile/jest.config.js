@@ -12,6 +12,7 @@ const config = {
         '<rootDir>/lib/useRedirectOnceEntitled.test.ts',
       ],
       moduleNameMapper: {
+        '^posthog-react-native$': '<rootDir>/__mocks__/posthog-react-native.ts',
         '^@fitsy/shared$': '<rootDir>/../../packages/shared/src/index.ts',
         '^@fitsy/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
         '^expo-location$': '<rootDir>/__mocks__/expo-location.ts',
@@ -27,6 +28,7 @@ const config = {
         '^react-native-purchases$': '<rootDir>/__mocks__/react-native-purchases.ts',
         '^react-native-purchases-ui$': '<rootDir>/__mocks__/react-native-purchases-ui.ts',
         '^expo-constants$': '<rootDir>/__mocks__/expo-constants.ts',
+        '^expo-updates$': '<rootDir>/__mocks__/expo-updates.ts',
       },
       transform: {
         '^.+\\.tsx?$': [

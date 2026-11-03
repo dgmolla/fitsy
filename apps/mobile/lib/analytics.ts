@@ -10,6 +10,7 @@
 import PostHog from 'posthog-react-native';
 import type { JsonType } from '@posthog/core';
 import { sanitizeAnalyticsEvent } from './analyticsPrivacy';
+import { monitoringEnvironment } from './monitoringEnvironment';
 
 const API_KEY =
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY ?? 'phc_placeholder_replace_via_vercel_cli';
@@ -60,6 +61,18 @@ export function resetAnalyticsSession(): void {
   } catch (err) {
     logCaptureError('reset', err);
   }
+}
+
+/** One event per completed request, including successful checks for the denominator. */
+export function trackSubscriptionCheck(props: {
+  source: 'status' | 'sync';
+  outcome: 'known' | 'unknown' | 'server_error' | 'client_error' | 'network_error';
+  status_code: number;
+  duration_ms: number;
+}): void {
+  try {
+    getPostHogClient().capture('subscription_check', { ...props, kind: monitoringEnvironment() });
+  } catch (err) { logCaptureError('subscription_check', err); }
 }
 
 export function identifyAnalyticsUser(user: { id: string; email?: string }): void {

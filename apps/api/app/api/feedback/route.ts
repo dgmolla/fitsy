@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { feedbackLimiter, rateLimitResponse } from "@/lib/rateLimit";
@@ -31,7 +32,7 @@ import { buildFeedbackAlert } from "@/lib/feedbackDigest";
 const DAILY_CAP = 20;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export async function POST(
+async function handlePOST(
   request: NextRequest,
 ): Promise<NextResponse<FeedbackApiResponse>> {
   const auth = await requireAuth(request);
@@ -129,7 +130,7 @@ export async function POST(
 // newest). Requires auth only so `hasVoted` can be computed per requester —
 // every signed-in user sees every published post.
 
-export async function GET(
+async function handleGET(
   request: NextRequest,
 ): Promise<NextResponse<FeedbackBoardApiResponse>> {
   const auth = await requireAuth(request);
@@ -180,3 +181,6 @@ export async function GET(
     );
   }
 }
+
+export const POST = withApiTelemetry('POST', '/api/feedback', handlePOST);
+export const GET = withApiTelemetry('GET', '/api/feedback', handleGET);

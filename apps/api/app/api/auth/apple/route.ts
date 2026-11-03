@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { parseRequestInput } from "@/lib/requestInput";
 import { appleAuthSchema, AUTH_BODY_MAX_BYTES, AUTH_INPUT_ERROR, providerDisplayName } from "@/lib/authInput";
 import { NextRequest, NextResponse } from "next/server";
@@ -7,7 +8,7 @@ import { authLimiter, rateLimitResponse } from "@/lib/rateLimit";
 import { trustedClientIp } from "@/lib/clientIp";
 import type { AppleAuthResponse } from "@fitsy/shared";
 
-export async function POST(
+async function handlePOST(
   request: NextRequest,
 ): Promise<NextResponse<AppleAuthResponse | { error: string }>> {
 
@@ -109,3 +110,5 @@ export async function POST(
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withApiTelemetry('POST', '/api/auth/apple', handlePOST);

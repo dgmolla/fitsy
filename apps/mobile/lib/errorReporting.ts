@@ -8,6 +8,7 @@
  * failure users hit) with zero native surface.
  */
 import { getPostHogClient } from './analytics';
+import { monitoringEnvironment } from './monitoringEnvironment';
 
 export interface ClientErrorProps {
   message: string;
@@ -22,6 +23,7 @@ export function trackClientError(props: ClientErrorProps): void {
     client.capture('client_error', {
       source: props.source,
       is_fatal: props.is_fatal,
+      kind: monitoringEnvironment(),
     });
     // A fatal error may tear the app down before the periodic flush — push
     // the event out now, best-effort.

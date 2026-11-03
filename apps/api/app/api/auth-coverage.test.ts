@@ -1,6 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { NextRequest } from 'next/server';
+import { hasApiTelemetry } from '@/lib/apiTelemetry';
 
 // The JWT provider is external. Every discovered route and Fitsy guard is real.
 jest.mock('jose', () => ({
@@ -37,6 +38,10 @@ test('public exceptions refer to existing handlers and discovery covers the API 
   expect(handlers.length).toBeGreaterThan(30);
   const discovered = handlers.map(({ path, method }) => `${path}:${method}`);
   expect(Object.keys(publicHandlers).every(key => discovered.includes(key))).toBe(true);
+});
+
+test.each(handlers)('$method $path reports handled failures and latency', ({ handler }) => {
+  expect(hasApiTelemetry(handler)).toBe(true);
 });
 
 test.each([undefined, 'wrong-secret'])('the webhook rejects an absent/invalid provider credential: %s', async authorization => {

@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { parseRequestInput } from "@/lib/requestInput";
 import { registerSchema, AUTH_BODY_MAX_BYTES, AUTH_INPUT_ERROR } from "@/lib/authInput";
 import { NextRequest, NextResponse } from "next/server";
@@ -9,7 +10,7 @@ import { trustedClientIp } from "@/lib/clientIp";
 import { canRegisterWithPassword } from "@/lib/reviewerAccess";
 import type { AuthApiResponse } from "@fitsy/shared";
 
-export async function POST(
+async function handlePOST(
   request: NextRequest,
 ): Promise<NextResponse<AuthApiResponse | { error: string }>> {
   if (!canRegisterWithPassword()) {
@@ -114,3 +115,5 @@ export async function POST(
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withApiTelemetry('POST', '/api/auth/register', handlePOST);

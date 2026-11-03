@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { notifyLaunch } from "@/lib/launchNotify";
 
@@ -19,7 +20,7 @@ export const maxDuration = 300;
  * Response: { ok, matched, viaPush, viaEmail, notified, suppressed, failed, remaining }
  * Re-run while `remaining` > 0; rows already notified are skipped.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePOST(request: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
   const provided = request.headers.get("authorization");
   if (!expected || provided !== `Bearer ${expected}`) {
@@ -50,3 +51,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const result = await notifyLaunch({ lat, lng, radiusMiles, city, includeUnlocated, dryRun });
   return NextResponse.json({ ok: true, ...result });
 }
+
+export const POST = withApiTelemetry('POST', '/api/internal/waitlist/notify', handlePOST);

@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/restaurantService";
 import { requireAuth } from "@/lib/auth";
@@ -48,7 +49,7 @@ function responseGoal(goal: string | null, request: NextRequest): UserGoalV2 | n
 
 // ─── GET /api/user/profile ──────────────────────────────────────────────────
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGET(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
@@ -109,7 +110,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 // ─── PATCH /api/user/profile ─────────────────────────────────────────────────
 
-export async function PATCH(request: NextRequest): Promise<NextResponse> {
+async function handlePATCH(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
@@ -369,3 +370,6 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
+
+export const GET = withApiTelemetry('GET', '/api/user/profile', handleGET);
+export const PATCH = withApiTelemetry('PATCH', '/api/user/profile', handlePATCH);

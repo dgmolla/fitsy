@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/restaurantService";
@@ -86,7 +87,7 @@ function toSavedItemResponse(item: {
 
 // ─── GET /api/saved-items ─────────────────────────────────────────────────────
 
-export async function GET(
+async function handleGET(
   request: NextRequest,
 ): Promise<NextResponse<SavedItemsResponse | { error: string }>> {
   const auth = await requireAuth(request);
@@ -150,7 +151,7 @@ export async function GET(
 
 // ─── POST /api/saved-items ────────────────────────────────────────────────────
 
-export async function POST(
+async function handlePOST(
   request: NextRequest,
 ): Promise<NextResponse<{ data: SavedItemResponse } | { error: string }>> {
   const auth = await requireAuth(request);
@@ -248,3 +249,6 @@ export async function POST(
     );
   }
 }
+
+export const GET = withApiTelemetry('GET', '/api/saved-items', handleGET);
+export const POST = withApiTelemetry('POST', '/api/saved-items', handlePOST);

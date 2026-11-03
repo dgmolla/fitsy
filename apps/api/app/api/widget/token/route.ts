@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/restaurantService';
 import { widgetTokenHash } from '@/lib/widgetAuth';
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 
 const headers = { 'Cache-Control': 'private, no-store' };
 // Renewed by the foreground app. No Supabase access or refresh token is shared.
@@ -16,7 +17,7 @@ async function installation(request: NextRequest): Promise<string | null> {
   } catch { return null; }
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePOST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
   const installationId = await installation(request);
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-export async function DELETE(request: NextRequest): Promise<NextResponse> {
+async function handleDELETE(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
   const installationId = await installation(request);
@@ -47,3 +48,6 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Could not revoke widget' }, { status: 503, headers });
   }
 }
+
+export const POST = withApiTelemetry('POST', '/api/widget/token', handlePOST);
+export const DELETE = withApiTelemetry('DELETE', '/api/widget/token', handleDELETE);

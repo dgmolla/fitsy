@@ -82,7 +82,11 @@ export function createRateLimiter(opts: RateLimiterOptions) {
       return checkLocal(key);
     }
     try {
-      return await consumeSharedQuota({ ...opts, maxKeys }, key);
+      // Shared infrastructure must never share user counters between environments.
+      const env = process.env['VERCEL_ENV'];
+      const scope = env === 'production' || (!env && process.env['NODE_ENV'] === 'production')
+        ? 'prod' : env === 'preview' ? 'preview' : 'dev';
+      return await consumeSharedQuota({ ...opts, namespace: `${scope}:${opts.namespace}`, maxKeys }, key);
     } catch {
       // Do not log credentials, IPs, user IDs or provider bodies. Bound outage logs.
       if (Date.now() >= nextWarningAt) {

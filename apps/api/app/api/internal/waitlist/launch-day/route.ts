@@ -1,3 +1,4 @@
+import { withApiTelemetry } from '@/lib/apiTelemetry';
 import { NextRequest, NextResponse } from "next/server";
 import { notifySlack } from "@fitsy/shared";
 import { MAX_NOTIFY_ATTEMPTS, notifyLaunch } from "@/lib/launchNotify";
@@ -30,7 +31,7 @@ const BUDGET_MS = 240_000;
  *
  * Auth: CRON_SECRET Bearer (Vercel cron sends it). ?dryRun=1 previews.
  */
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGET(request: NextRequest): Promise<NextResponse> {
   const expected = process.env["CRON_SECRET"];
   const provided = request.headers.get("authorization");
   if (!expected || provided !== `Bearer ${expected}`) {
@@ -106,3 +107,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   return NextResponse.json({ ok: true, launchDate: LAUNCH_DATE_ISO, ...result, ...(stalled ? { stalled } : {}) });
 }
+
+export const GET = withApiTelemetry('GET', '/api/internal/waitlist/launch-day', handleGET);
