@@ -405,7 +405,7 @@ test('pre-push remains main\'s cheap gate and never runs simulator smoke', () =>
 });
 
 
-test('candidate CI only classifies simulator scope with read-only credentials', () => {
+test('Verify only classifies simulator scope with read-only credentials', () => {
   expect(workflow.permissions.statuses).toBeUndefined();
   expect(Object.values(workflow.jobs).some(job => job.permissions?.statuses === 'write')).toBe(false);
   expect(workflow.jobs.classify!.permissions).toEqual({ contents: 'read', 'pull-requests': 'read' });
@@ -416,6 +416,9 @@ test('candidate CI only classifies simulator scope with read-only credentials', 
   expect(upload.uses).toBe('actions/upload-artifact@v4');
   expect(upload.with?.path).toBe('.evidence/sim-scope/selection.json');
   for (const file of readdirSync(join(root, '.github/workflows'))) {
+    // The dedicated self-hosted runner has its own execution/security contract
+    // in sim/actions.test.mjs; every other workflow remains classification-only.
+    if (file === 'simulator.yml') continue;
     const text = readFileSync(join(root, '.github/workflows', file), 'utf8');
     expect(text).not.toMatch(/FITSY_(?:CI_)?SIM_|sim\/ci\.mjs|maestro|simctl|iphonesimulator|macos-15/);
   }

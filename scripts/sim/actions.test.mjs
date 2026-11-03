@@ -66,7 +66,7 @@ test('the actual required-check shell never converts a failed, cancelled or miss
 
 test('workflow isolates PR cancellation from the single Mac queue and always cleans up', () => {
   assert.equal(workflow.concurrency['cancel-in-progress'], true);
-  assert.match(workflow.concurrency.group, /pull_request.number/);
+  assert.equal(workflow.concurrency.group, 'simulator-pr-${{ github.event.pull_request.number || github.sha }}');
   assert.deepEqual(workflow.jobs.mac.concurrency, { group: 'fitsy-simulator', 'cancel-in-progress': false, queue: 'max' });
   assert.deepEqual(workflow.jobs.mac['runs-on'], ['self-hosted', 'macOS', 'fitsy-sim']);
   assert.equal(workflow.jobs.mac['timeout-minutes'], 30);
@@ -76,6 +76,24 @@ test('workflow isolates PR cancellation from the single Mac queue and always cle
   assert.equal(workflow.jobs.mac.steps.some(step => step['continue-on-error']), false);
   const secretSteps = workflow.jobs.mac.steps.filter(step => JSON.stringify(step).includes('secrets.'));
   assert.deepEqual(secretSteps.map(step => step.run), ['node scripts/sim/actions.mjs run']);
+});
+
+test('only the dedicated Mac job executes native work, without GitHub write credentials or fork code', () => {
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  assert.deepEqual(Object.keys(workflow.jobs).sort(), ['mac', 'select', 'simulator']);
+  assert.equal(workflow.on.pull_request_target, undefined);
+  assert.equal(workflow.jobs.select['runs-on'], 'ubuntu-latest');
+  assert.equal(workflow.jobs.simulator['runs-on'], 'ubuntu-latest');
+  assert.equal(workflow.jobs.mac.if.trim(), "needs.select.outputs.required == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)");
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    assert.equal(job.permissions, undefined, name);
+    assert.equal(job['continue-on-error'], undefined, name);
+    for (const step of job.steps) {
+      if (step.uses?.startsWith('actions/checkout@')) assert.equal(step.with['persist-credentials'], false);
+      assert.doesNotMatch(JSON.stringify(step), /github\.token|secrets\.GITHUB_TOKEN|GH_TOKEN|GITHUB_TOKEN/);
+    }
+    if (name !== 'mac') assert.doesNotMatch(JSON.stringify(job), /secrets\.|FITSY_(?:CI_)?SIM_|sim\/(?:ci|actions)\.mjs|maestro|simctl|iphonesimulator|macos-15/);
+  }
 });
 
 test('full Test Store selection includes maintained failures and rejects incomplete account setup', () => {
