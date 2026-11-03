@@ -139,7 +139,8 @@ export function isSuccessfulCommand(entry) {
   const condition = command?.condition;
   // Maestro skips an entire conditional runFlow when its condition is unmet.
   return command?.optional === true || (name === 'runFlowCommand' && condition !== null &&
-    typeof condition === 'object' && !Array.isArray(condition) && Object.keys(condition).length > 0);
+    typeof condition === 'object' && !Array.isArray(condition) &&
+    ['visible', 'notVisible', 'platform', 'scriptCondition'].some(key => condition[key] != null));
 }
 
 export function assertFlowCommands(source, commands, name) {
