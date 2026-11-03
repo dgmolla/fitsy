@@ -114,6 +114,14 @@ describe('confirmed session adoption', () => {
     expect(SecureStore.setItemAsync).not.toHaveBeenCalledWith('fitsy_authToken', 'jwt-token-abc');
   });
 
+  it('remembers a returning device and retires its earlier first-time setup on reauthentication', async () => {
+    await AsyncStorage.multiSet([['@fitsy/onboardingAccount', 'u1'], ['@fitsy/onboardingStep', 'goal']]);
+    await loginAndStore('jane@example.com', 'secret');
+    expect(await AsyncStorage.getItem('@fitsy/hasSignedIn')).toBe('1');
+    expect(await AsyncStorage.getItem('@fitsy/onboardingAccount')).toBeNull();
+    expect(await AsyncStorage.getItem('@fitsy/onboardingStep')).toBe('goal');
+  });
+
   it('refuses development authentication in production before sending credentials', async () => {
     Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
     await expect(devLogin()).rejects.toThrow('development');

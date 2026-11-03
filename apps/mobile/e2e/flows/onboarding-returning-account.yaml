@@ -1,0 +1,89 @@
+# Existing never-subscribed development account; no purchase or provider mock.
+# Clear keychain only on the owned disposable simulator, retaining app storage.
+appId: com.fitsy.mobile
+tags: [auth, onboarding, billing, changed-journey, 'fixture:unsubscribed-dev', 'store:test-store']
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - tapOn: '^http://(localhost|127\.0\.0\.1):[0-9]+$'
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-start
+          timeout: 30000
+- takeScreenshot: returning-account-fresh-welcome
+- tapOn:
+    point: "92%,93%"
+- tapOn:
+    id: welcome-login
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 10000
+- assertVisible: "New here? Start over"
+- tapOn:
+    id: login-dev
+- extendedWaitUntil:
+    visible:
+      id: paywall-logo
+    timeout: 30000
+- assertNotVisible:
+    id: welcome-start
+- assertNotVisible:
+    id: location-use-current
+- takeScreenshot: returning-account-signed-in-payment
+- stopApp
+- launchApp
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: paywall-logo
+          timeout: 30000
+- assertNotVisible:
+    id: signup-apple
+- stopApp
+- launchApp:
+    clearState: false
+    clearKeychain: true
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible: "Welcome back"
+          timeout: 30000
+- assertVisible: "Continue with Apple"
+- assertVisible: "New here? Start over"
+- assertNotVisible:
+    id: signup-apple
+- takeScreenshot: returning-account-welcome-back
+- tapOn:
+    id: login-start-over
+- extendedWaitUntil:
+    visible:
+      id: welcome-start
+    timeout: 10000
+- tapOn:
+    id: welcome-login
+- tapOn:
+    id: login-dev
+- extendedWaitUntil:
+    visible:
+      id: paywall-logo
+    timeout: 30000
+- assertNotVisible:
+    id: location-use-current
+- takeScreenshot: returning-account-reauthenticated-payment

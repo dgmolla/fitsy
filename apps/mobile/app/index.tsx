@@ -23,6 +23,7 @@ import { clearPendingMealClaim, hasPendingMealClaim } from '@/lib/pendingMealCla
 import { withinMs } from '@/lib/async';
 import { PurchaseIdentityRecovery } from '@/components/PurchaseIdentityRecovery';
 import { clearDiscoverySignIn, readDiscoverySignIn } from '@/lib/discoverySignIn';
+import { hasAccountOnboarding, readAccountHistory } from '@/lib/accountHistory';
 
 export default function Index() {
   const navigation = useNavigation();
@@ -43,7 +44,7 @@ export default function Index() {
           getStoredToken(), getOnboardingResume(), readPaywallDecline(),
           AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY), hasSavedMealTargets(), readOnboardingPreviewEntry(),
           hasPaymentSignInContinuation(), hasPendingMealClaim(),
-          readDiscoverySignIn(),
+          readDiscoverySignIn(), readAccountHistory(), hasAccountOnboarding(),
         ]);
         let startup = await withinMs(startupRead, BOOT_VERDICT_CAP_MS);
         if (!current) return;
@@ -55,10 +56,14 @@ export default function Index() {
           if (!current) return;
           setIdentityUnavailable(false);
         }
-        const [token, resume, declined, completed, targets, onboardingPreviewEntry, savedPaymentContinuation, pendingMealClaim, discoverySignIn] = startup;
+        const [token, resume, declined, completed, targets, onboardingPreviewEntry, savedPaymentContinuation, pendingMealClaim, discoverySignIn, hasAccountHistory, newAccountOnboarding] = startup;
         if (!current) return;
         setRecoveryUnavailable(false);
         if (token) void replayPendingProfileSync();
+        if (!token && (hasAccountHistory || completed === 'true')) {
+          setDestination('/auth/login');
+          return;
+        }
         if (resume === '/welcome/out-of-area') {
           // A prior checkout cannot replace a waitlist signup, including
           // after authentication finishes but before its callback navigates.
@@ -67,9 +72,18 @@ export default function Index() {
           return;
         }
         if (discoverySignIn) {
-          if (token) await clearDiscoverySignIn();
-          if (current) setDestination(token ? discoverySignIn : '/welcome/signin');
-          return;
+          if (!token) {
+            if (current) setDestination('/welcome/signin');
+            return;
+          }
+          await clearDiscoverySignIn();
+          if (!current) return;
+          // Keep an explicit app destination, but never replay an old intro
+          // after an account has already authenticated.
+          if (newAccountOnboarding || discoverySignIn !== '/welcome/location-permission' && discoverySignIn !== '/welcome/preview') {
+            setDestination(discoverySignIn);
+            return;
+          }
         }
         let paymentSignInContinuation = savedPaymentContinuation;
         let mealClaim = pendingMealClaim;
@@ -140,12 +154,12 @@ export default function Index() {
           if (!current || resumed) return;
         }
         setDestination(onboardingEntry({
-          signedIn: !!token, resume, declined, completed: completed === 'true',
+          signedIn: !!token, resume, declined, completed: completed === 'true', hasAccountHistory, newAccountOnboarding,
           hasTargets: !!hasTargets, purchasesReady, entitled, isLapsed, onboardingPreviewEntry,
           access: paywallVariants(offering?.metadata).access, paymentSignInContinuation, pendingMealClaim: mealClaim,
         }));
       } catch {
-        if (current) setDestination('/welcome/problem');
+        if (current) setIdentityUnavailable(true);
       }
     }
     void resolve();

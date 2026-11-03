@@ -2,6 +2,7 @@ import { withAccountProfile, seedAccountProfile, mockState, selected, response, 
 import { installHardwareBackFixture } from './hardwareBackHarness';
 import { BOOT_VERDICT_CAP_MS } from '../lib/usePurchases';
 import { storeToken } from '../lib/authClient';
+import { rememberAccountOnboarding } from '../lib/accountHistory';
 import Purchases from 'react-native-purchases';
 import { api } from '../lib/api';
 import { getMacroTargets } from '../lib/macroStorage';
@@ -111,7 +112,7 @@ it('rejects an interrupted checkout and pending meal claim owned by another acco
   mockState.session = { access_token: 'test-token', user: { id: 'account-b' } };
   installEligibleTrialOffer();
   const screen = renderJourney('/');
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/trial'));
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/payment'));
   expect(await getPaywallIntent()).toBeNull();
   expect(await hasPendingMealClaim()).toBe(false);
   expect(await hasPaymentSignInContinuation()).toBe(false);
@@ -122,6 +123,7 @@ it('claims a first-time anonymous meal after sign-in is interrupted without skip
   await rememberPendingMealClaim();
   await AsyncStorage.setItem('@fitsy/onboardingStep', 'signin');
   mockState.session = { access_token: 'test-token', user: { id: 'buyer' } };
+  await rememberAccountOnboarding('buyer');
   installEligibleTrialOffer();
   expect(await getPaywallIntent()).toBeNull();
   const screen = renderJourney('/');

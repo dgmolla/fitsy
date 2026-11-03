@@ -54,10 +54,10 @@ it('claims, synchronizes and restores an intentional anonymous target for a new 
     return Promise.resolve({ ok: true, status: 200, json: async () => body });
   });
   try {
-    const screen = renderRouter({ 'auth/login': Login, '(tabs)/search': () => <Text>Meal search</Text> },
+    const screen = renderRouter({ 'auth/login': Login, index: () => <Text>Account routing</Text> },
       { initialUrl: '/auth/login' });
     fireEvent.press(screen.getByText('Continue with Apple'));
-    await waitFor(() => expect(screen.getByText('Meal search')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Account routing')).toBeTruthy());
     expect(await getMacroTargets()).toEqual(target);
     expect(serverTarget).toEqual({ proteinG: 280, carbsG: 263, fatG: 74, calories: 2838, source: 'manual' });
     await pullProfileFromServer();

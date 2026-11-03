@@ -36,7 +36,7 @@ export default function LoginScreen() {
           trackAuthSuccess({ provider: 'google', is_new_user: result.isNewUser });
           await requireProfileFromServer();
           setGoogleLoading(false);
-          router.replace('/(tabs)/search');
+          router.replace('/');
         })
         .catch((err: Error) => {
           trackAuthFailure({ provider: 'google', error_message: err.message });
@@ -55,7 +55,7 @@ export default function LoginScreen() {
       const result = await appleSignIn();
       trackAuthSuccess({ provider: 'apple', is_new_user: result.isNewUser });
       await requireProfileFromServer();
-      router.replace('/(tabs)/search');
+      router.replace('/');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Apple Sign In failed';
       if (!msg.includes('canceled')) {
@@ -83,7 +83,7 @@ export default function LoginScreen() {
       await devLogin();
       trackAuthSuccess({ provider: 'dev', is_new_user: false });
       await requireProfileFromServer();
-      router.replace('/(tabs)/search');
+      router.replace('/');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Dev login failed';
       trackAuthFailure({ provider: 'dev', error_message: msg });
@@ -108,6 +108,7 @@ export default function LoginScreen() {
 
         <View style={styles.buttons}>
           <Pressable
+            testID="login-apple"
             style={[styles.appleBtn, { backgroundColor: colors.textPrimary }, isLoading && styles.disabled]}
             onPress={handleAppleSignIn}
             disabled={isLoading}
@@ -121,6 +122,7 @@ export default function LoginScreen() {
           </Pressable>
 
           <Pressable
+            testID="login-google"
             style={[styles.googleBtn, { borderColor: colors.border }, isLoading && styles.disabled]}
             onPress={handleGoogleSignIn}
             disabled={isLoading}
@@ -135,6 +137,7 @@ export default function LoginScreen() {
 
           {__DEV__ && (
             <Pressable
+              testID="login-dev"
               style={[styles.googleBtn, { borderColor: colors.border }, isLoading && styles.disabled]}
               onPress={handleDevLogin}
               disabled={isLoading}
@@ -146,6 +149,10 @@ export default function LoginScreen() {
               </Text>
             </Pressable>
           )}
+          <Pressable testID="login-start-over" onPress={() => router.replace('/welcome/problem')}
+            disabled={isLoading} accessibilityRole="button" style={styles.startOver}>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>New here? Start over</Text>
+          </Pressable>
         </View>
       </View>
     </ScreenBackground>
@@ -180,4 +187,5 @@ const styles = StyleSheet.create({
   },
   googleTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600' },
   disabled: { opacity: 0.5 },
+  startOver: { alignItems: 'center', paddingVertical: 12 },
 });

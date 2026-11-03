@@ -37,6 +37,7 @@ it('restores an upgraded independent filter before the existing startup routing 
   expect((await getDiscoveryMacroTargetSnapshot())?.targets).toEqual(legacy);
   expect(await getQuarantinedLegacyTarget()).toBeNull();
   expect(onboardingEntry({ signedIn: true, purchasesReady: true, entitled: true,
+    hasAccountHistory: true, newAccountOnboarding: false,
     isLapsed: false, completed: true, declined: false, resume: null, hasTargets,
     access: 'hard', onboardingPreviewEntry: false, paymentSignInContinuation: false, pendingMealClaim: false })).toBe('/(tabs)/search');
   expect(global.fetch).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PATCH' }));
