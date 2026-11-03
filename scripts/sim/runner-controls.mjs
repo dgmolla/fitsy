@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { createHash } from 'node:crypto';
-import { isPlayableVideo } from '../verify/product-flow.mjs';
+import { isPlayableVideo, isSuccessfulCommand } from '../verify/product-flow.mjs';
 
 const GiB = 1024 ** 3;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -199,8 +199,7 @@ export function flowFailureReason(result, commands, recorder, flowName = null) {
     const assertions = commands.filter(c => c.command?.assertConditionCommand && !c.command.assertConditionCommand.optional);
     if (!assertions.length || assertions.some(c => c.metadata?.status !== 'COMPLETED')) return 'missing-or-failed-required-assertions';
   }
-  if (commands.some(c => c.metadata?.status === 'FAILED' ||
-    (c.metadata?.status !== 'COMPLETED' && !Object.values(c.command || {}).some(v => v?.optional === true)))) return 'command-failure';
+  if (!commands.every(isSuccessfulCommand)) return 'command-failure';
   return null;
 }
 export function recordFlowOutcome({ dir, recorded, commands, videoPath, videoReceipt, flowName,

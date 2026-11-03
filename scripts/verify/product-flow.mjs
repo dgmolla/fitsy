@@ -130,6 +130,22 @@ export function selectedFlows(plan, additional = []) {
   return [...new Set([...(plan.flows || []), ...additional])].sort();
 }
 
+export function isSuccessfulCommand(entry) {
+  if (entry.metadata?.status === 'COMPLETED') return true;
+  const status = entry.metadata?.status;
+  if (status !== 'SKIPPED' && status !== 'WARNED') return false;
+  const commands = Object.entries(entry.command || {});
+  if (commands.length !== 1) return false;
+  const [name, command] = commands[0];
+  // An absent optional element is WARNED by Maestro 2.3, never a required failure.
+  if (command?.optional === true) return true;
+  const condition = command?.condition;
+  // Maestro skips an entire conditional runFlow when its condition is unmet.
+  return status === 'SKIPPED' && name === 'runFlowCommand' && condition !== null &&
+    typeof condition === 'object' && !Array.isArray(condition) &&
+    ['visible', 'notVisible', 'platform', 'scriptCondition'].some(key => condition[key] != null);
+}
+
 export function assertFlowCommands(source, commands, name) {
   const [config, steps] = yaml.loadAll(source.toString());
   insist(config?.appId === 'com.fitsy.mobile' && Array.isArray(steps), `invalid maintained flow: ${name}`);
@@ -147,7 +163,7 @@ export function assertFlowCommands(source, commands, name) {
   const assertions = commands.filter(c => c.command?.assertConditionCommand && !c.command.assertConditionCommand.optional);
   insist(assertions.length >= Math.max(1, minimum(steps)) && assertions.every(c => c.metadata?.status === 'COMPLETED'), `missing/skipped/failed assertions: ${name}`);
   insist(!commands.some(c => c.metadata?.status === 'FAILED'), `failed command: ${name}`);
-  insist(commands.every(c => c.metadata?.status === 'COMPLETED' || Object.values(c.command || {}).some(v => v?.optional === true)), `incomplete required command: ${name}`);
+  insist(commands.every(isSuccessfulCommand), `incomplete required command: ${name}`);
   return assertions;
 }
 

@@ -116,12 +116,10 @@ export async function runLocal(args = process.argv.slice(2)) {
           if (session.built.metroPort) { metroStarted = true; await startMetro(session.built); }
           if (fixture.name === 'entitled-dev')
             await prepareEntitledEvidence(session.built, udid, resolve(dir, 'active-setup'));
-          const loginArgs = ['EXPO_PUBLIC_DEV_LOGIN_EMAIL', 'EXPO_PUBLIC_DEV_LOGIN_PASSWORD'].flatMap(key => {
-            if (fixture.name === 'entitled-dev' && !process.env[key]?.trim()) throw new Error(`Local ${key} is required for log-meal`);
-            return process.env[key] ? ['-e', `${key}=${process.env[key]}`] : [];
-          });
+          if (fixture.name === 'entitled-dev' && (!process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL?.trim() ||
+            !process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD?.trim())) throw new Error('Local fixture login credentials are required for log-meal');
           const result = await withSlackVideo({ enabled: options['record-video'] || process.env.FITSY_SIM_RECORD_VIDEO === '1',
-            udid, dir, signal: controller.signal }, () => runOwnedMaestro(maestro, ['--device', udid, 'test', ...maestroApiArgs(), ...loginArgs, '--format', 'junit',
+            udid, dir, signal: controller.signal }, () => runOwnedMaestro(maestro, ['--device', udid, 'test', ...maestroApiArgs(), '--format', 'junit',
             '--output', resolve(dir, 'report.xml'), '--debug-output', dir, '--test-output-dir', dir, path], {
             cwd: repository, dir, timeline: resolve(out, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'),
             signal: controller.signal, env: { ...gitEnv(),

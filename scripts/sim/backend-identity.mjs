@@ -8,7 +8,13 @@ export function backendOrigin(value) {
   return value;
 }
 
-export const maestroApiArgs = (env = process.env) => ['-e', `EXPO_PUBLIC_API_URL=${backendOrigin(env.EXPO_PUBLIC_API_URL)}`];
+export function maestroApiArgs(env = process.env) {
+  const args = ['-e', `EXPO_PUBLIC_API_URL=${backendOrigin(env.EXPO_PUBLIC_API_URL)}`];
+  const email = env.EXPO_PUBLIC_DEV_LOGIN_EMAIL, password = env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD;
+  if (Boolean(email?.trim()) !== Boolean(password?.trim())) throw new Error('Supply both fixture login credentials to Maestro');
+  if (email?.trim()) args.push('-e', `EXPO_PUBLIC_DEV_LOGIN_EMAIL=${email}`, '-e', `EXPO_PUBLIC_DEV_LOGIN_PASSWORD=${password}`);
+  return args;
+}
 
 export function backendRevision(deployment, origin) {
   if (origin !== undefined) {

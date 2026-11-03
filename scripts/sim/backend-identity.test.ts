@@ -43,6 +43,23 @@ test.each(['https://dev.fitsy.org', preview,
   expect(JSON.parse(result.stdout)).toEqual([origin, ['-e', `EXPO_PUBLIC_API_URL=${origin}`]]);
 });
 
+test('passes the fixture login pair to Maestro API scripts and rejects an incomplete pair', () => {
+  const env = { EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org',
+    EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'seed-fixture@fitsy.dev', EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'fixture password=$1&' };
+  const invoke = (values: Record<string, string>) => spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {maestroApiArgs} from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(maestroApiArgs(${JSON.stringify(values)})));`],
+  { encoding: 'utf8' });
+  const complete = invoke(env);
+  expect(complete.status).toBe(0);
+  expect(JSON.parse(complete.stdout)).toEqual(Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]));
+  for (const missing of ['EXPO_PUBLIC_DEV_LOGIN_EMAIL', 'EXPO_PUBLIC_DEV_LOGIN_PASSWORD']) {
+    const incomplete = invoke({ ...env, [missing]: '' });
+    expect(incomplete.status).not.toBe(0);
+    expect(incomplete.stderr).toContain('both fixture login credentials');
+    expect(incomplete.stderr).not.toContain(env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD);
+  }
+});
+
 test.each(['', 'https://api.fitsy.org', 'https://fitsy.org', 'http://dev.fitsy.org',
   'https://dev.fitsy.org@evil.test', 'https://dev.fitsy.org.evil.test', 'https://dev.fitsy.org:443',
   'https://unrelated.vercel.app', 'https://fitsy-api-branch-other-team.vercel.app',
