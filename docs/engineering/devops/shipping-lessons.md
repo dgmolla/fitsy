@@ -82,3 +82,22 @@ Stop and report if recovery requires account, secret or service-setting changes.
 - 2026-11-01: The host-replay sandbox must also read the Xcode license plist, ~/.gitconfig (ci.mjs strips GIT_* overrides) and the tracked .env.example, or replay dies before Maestro runs.
 - 2026-11-01: sandbox-exec #"..." regexes are raw: never json.dumps them, and avoid re.escape (its \- is invalid POSIX).
 - 2026-11-01: never grant the sandbox ~/.gitconfig (http.extraHeader can hold tokens); give candidates a scratch GIT_CONFIG_GLOBAL with allowlisted keys.
+
+## Conservative PR test routing, 2026-11-02
+
+**TL;DR:** Narrow PR tests with Jest's dependency graph, and run everything when the dependency boundary is uncertain.
+
+Tests (L2) on PR #704 took 21m20s in [the baseline run](https://github.com/dgmolla/fitsy/actions/runs/41577431040/job/125725060653).
+Selecting a workspace still ran every suite in that workspace, including unrelated delivery-loop fixtures.
+The canonical `test.sh` entrypoint now asks `related-tests.mjs` to discover transitive Jest consumers of every changed eligible mobile or scripts input.
+An empty mapping for even one file, failed discovery, deleted input, unknown comparison, shared configuration, non-Jest source or sensitive runtime path expands to all test groups.
+API changes also retain the complete suite and existing global coverage thresholds.
+Main pushes always run every group, including documentation-only pushes.
+The existing fresh engine reports must still prove executed passing tests; an empty selection or failed test cannot become a pass.
+
+Use `node scripts/verify/focused-tests.mjs --set <repository-relative test paths>` for local regressions.
+That existing helper resolves absolute paths before calling a workspace's Jest command; passing repository-relative paths directly to `npm test --workspace=... -- --runTestsByPath` incorrectly repeats the workspace directory.
+The regression fixtures execute the real test entrypoint and installed Jest dependency discovery, including a transitive consumer that actually fails when its source changes.
+
+The routing-control PR itself must use the full fallback because it changes the verification harness.
+Record the next eligible small PR's hosted L2 duration on issue #712 after this control change is integrated; fixture timings alone do not establish hosted performance.
