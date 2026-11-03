@@ -180,6 +180,7 @@ it.each([
   ['fails when the chooser never opens', Infinity],
 ] as const)('replays saved out-of-area recovery after a cold launch: %s', async (_, cancelledTouches) => {
   mockSession = { access_token: 'test-token', user: { id: `area-recovery-${cancelledTouches}` } };
+  await AsyncStorage.setItem('@fitsy/onboardingAccount', mockSession.user.id);
   jest.spyOn(ExpoLocation, 'requestForegroundPermissionsAsync')
     .mockResolvedValue({ status: ExpoLocation.PermissionStatus.GRANTED } as never);
   jest.spyOn(ExpoLocation, 'getCurrentPositionAsync')

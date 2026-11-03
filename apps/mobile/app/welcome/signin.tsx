@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
 import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
+import { rememberAccountOnboarding } from '@/lib/accountHistory';
 import { requireProfileFromServer } from '@/lib/profileSync';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { OnboardingAccountSummary } from '@/components/OnboardingAccountSummary';
@@ -70,7 +71,8 @@ export default function SignInScreen() {
       const destination = await readDiscoverySignIn();
       if (!isCurrent()) return;
       await clearDiscoverySignIn();
-      if (isCurrent()) router.replace(destination ?? '/welcome/location-permission');
+      if (isCurrent()) router.replace(!isNewUser && (!destination || destination === '/welcome/location-permission' || destination === '/welcome/preview')
+        ? '/' : destination ?? '/welcome/location-permission');
       return;
     }
     const trialDestination = previewReturn === '1'
@@ -103,7 +105,7 @@ export default function SignInScreen() {
         await clearPendingMealClaim();
         if (!isCurrent()) return;
         router.replace(verdict === 'never_subscribed'
-          ? ownedCheckout ? '/welcome/payment' : '/welcome/trial'
+          ? ownedCheckout ? '/welcome/payment' : isNewUser ? '/welcome/trial' : '/'
           : '/welcome/subscription-check');
       }
       return;
@@ -149,7 +151,8 @@ export default function SignInScreen() {
         return;
       }
     }
-    const destination = isNewUser || intent ? trialDestination : '/(tabs)/search';
+    // A freshly selected meal retains its live trial terms and preview return.
+    const destination = isNewUser || intent ? trialDestination : '/';
     if (isCurrent()) router.replace(destination);
     await clearPendingMealClaim();
   }, [navigation, outOfArea, returnTo, previewReturn]);
@@ -158,6 +161,8 @@ export default function SignInScreen() {
     trackAuthSuccess({ provider, is_new_user: provider === 'dev' ? false : r.isNewUser });
     // The SDK retains the completed session even if this route was left.
     // A stale continuation must not claim a newer preview's selected meal.
+    if (!isCurrent()) return;
+    await rememberAccountOnboarding(r.isNewUser ? r.user.id : null);
     if (!isCurrent()) return;
     const checkoutRequested = returnTo === 'payment' || (!returnTo && await hasPaymentSignInContinuation());
     if (!isCurrent()) return;

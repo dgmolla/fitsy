@@ -16,6 +16,7 @@ import { clearAccountOnboardingData } from './onboardingStorage';
 import { forgetPendingProfileSync } from './profileSyncStorage';
 import { clearDiscoverySignIn } from './discoverySignIn';
 import { clearWidget } from './widgetSync';
+import { rememberAccountHistory, rememberAccountOnboarding } from './accountHistory';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 // SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
@@ -57,6 +58,8 @@ export async function clearToken({ reason = 'logout', forgetTargets = false }: {
   forgetTargets?: boolean;
 } = {}): Promise<void> {
   const { data } = await supabase.auth.getSession();
+  if (data.session?.user?.id) await rememberAccountHistory();
+  await rememberAccountOnboarding(null);
   await clearWidget(data.session?.access_token).catch(() => undefined);
   if (forgetTargets && data.session?.user?.id) await forgetPendingProfileSync(data.session.user.id);
   await archiveActiveMacroTargets(data.session?.user?.id ?? null, forgetTargets);
@@ -92,6 +95,8 @@ export async function adoptSession(token: string, refreshToken: string | undefin
   // Never let the legacy fallback turn failed adoption into an authenticated
   // cold resume. Adoption can refresh the token, so retain its confirmed value.
   await storeToken(data.session.access_token);
+  await rememberAccountHistory();
+  await rememberAccountOnboarding(null);
 }
 
 // ─── Auth API calls ───────────────────────────────────────────────────────────
