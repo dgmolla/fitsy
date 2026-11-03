@@ -72,8 +72,11 @@ It does not authorize builds, uploads, metadata publication or App Review submis
 
 ## GTM — `gtm/`
 
-- [la-rollout.md](gtm/la-rollout.md) — LA-only launch: trainer program, Meta test, feedback loop, weekly ritual, exit criteria
-- [strategy.md](gtm/strategy.md) — positioning, channel portfolio, growth flywheel
-- [ugc-playbook.md](gtm/ugc-playbook.md) — end-to-end UGC creator pipeline + content hook library
-- [seo-discovery.md](gtm/seo-discovery.md) — organic / LLM discovery (llms.txt, programmatic SEO, JSON-LD)
+- [la-launch-strategy.md](gtm/la-launch-strategy.md) - current LA launch decision: one channel and 10 users who love fitsy and return weekly
+- [la-launch-strategy-review.md](gtm/la-launch-strategy-review.md) - adversarial review, evidence limits and product readiness checks
+- [la-creators.csv](gtm/la-creators.csv) - public creator research with fit evidence and verification gaps
+- [la-rollout.md](gtm/la-rollout.md) - historical launch model; current strategy takes precedence
+- [strategy.md](gtm/strategy.md) - historical channel portfolio and superseded 500 MAU goal
+- [ugc-playbook.md](gtm/ugc-playbook.md) - deferred creator mechanics and historical assumptions
+- [seo-discovery.md](gtm/seo-discovery.md) - deferred organic / LLM discovery proposal; current launch strategy takes precedence
 
