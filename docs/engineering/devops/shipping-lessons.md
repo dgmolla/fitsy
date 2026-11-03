@@ -104,3 +104,4 @@ The routing-control PR itself must use the full fallback because it changes the 
 Record the next eligible small PR's hosted L2 duration on issue #712 after this control change is integrated; fixture timings alone do not establish hosted performance.
 
 - 2026-11-03: Updating the monitoring branch with simulator CI introduced undeclared environment reads and failed both the normal hook and hosted Static check; reconcile incoming names and exact file/expression declarations in the environment manifest, then validate the updated tree through the unchanged source validator and ordinary push hook.
+- 2026-11-03: On #706 and #709, obsolete Verify runs with always-running jobs held the new head's concurrency slot; verify old/new heads and ownership, use bounded supported `gh run cancel --force` only for the superseded run, and confirm current-head checks start without changing workflow or check settings.
