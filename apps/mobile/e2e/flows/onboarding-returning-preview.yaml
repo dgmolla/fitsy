@@ -191,6 +191,20 @@ env:
     id: welcome-continue
 - extendedWaitUntil:
     visible:
+      id: onboarding-widget-card
+    timeout: 15000
+- assertVisible:
+    id: onboarding-widget-example
+- assertVisible: "1. Long-press your Home Screen."
+- assertVisible: "2. Tap \\+ \\(or Edit → Add Widget\\)."
+- assertVisible: "3. Search fitsy and add the widget."
+- assertVisible:
+    id: welcome-skip
+- takeScreenshot: onboarding-widget-card
+- tapOn:
+    id: welcome-skip
+- extendedWaitUntil:
+    visible:
       id: preview-guide
     timeout: 30000
 - tapOn:

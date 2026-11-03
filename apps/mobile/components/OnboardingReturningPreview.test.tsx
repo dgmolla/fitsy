@@ -9,6 +9,7 @@ import Preview from '../app/welcome/preview';
 import Goal from '../app/welcome/goal';
 import Tried from '../app/welcome/tried';
 import HowItWorks from '../app/welcome/how-it-works';
+import WidgetCard from '../app/welcome/widget';
 import Problem from '../app/welcome/problem';
 import { getOnboardingData } from '../lib/onboardingStorage';
 
@@ -68,7 +69,7 @@ test('the saved cancellation-to-preview sequence restores authentication before 
     return response({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false });
   }));
   const resumedRoutes = { ...routeMap, 'welcome/problem': () => <Problem />,
-    'welcome/goal': () => <Goal />, 'welcome/tried': () => <Tried />, 'welcome/how-it-works': () => <HowItWorks /> };
+    'welcome/goal': () => <Goal />, 'welcome/tried': () => <Tried />, 'welcome/how-it-works': () => <HowItWorks />, 'welcome/widget': WidgetCard };
   const screen = renderJourney('/welcome/preview', resumedRoutes);
   await screen.findByTestId('signup-apple');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });

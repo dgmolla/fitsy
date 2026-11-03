@@ -14,8 +14,8 @@ function HowItWorksScreen() {
   return <WelcomeScreen progress={0.61} title={"A little context.\nA better choice."}
     subtitle="Every nutrition label tells you where the numbers come from."
     canContinue onContinue={() => { void rememberOnboardingPreviewEntry()
-      .then(() => router.push('/welcome/preview'))
-      .catch(() => Alert.alert('Could not open preview', 'Please try again.')); }} continueLabel="Explore restaurants">
+      .then(() => router.push('/welcome/widget'))
+      .catch(() => Alert.alert('Could not open preview', 'Please try again.')); }}>
     <View style={s.panels}>
       <View style={s.panel} testID="nutrition-source-published">
         <Text style={s.badge}>Published</Text><Text style={s.title}>From the restaurant.</Text>
