@@ -121,9 +121,10 @@ Paid-ad previews are kept separate from organic reach analysis because those lib
 | Length | 8 | 6 | The Pacific Catch original displayed 22 seconds; the two Instagram originals did not expose reliable duration in this view. |
 | Verified audible voice or music | 0 | 14 | Track labels are recorded, but the listening evidence is insufficient. |
 
-The seven prior-batch lengths range from 10.65 to 31 seconds with a median of 19.16 seconds; the Pacific Catch original adds a 22-second observation.
-Two prior-batch hooks are coded as how-to orders; the other five each use a different observed opening type.
-Four prior-batch rows show a creator-stated numeric nutrition claim, while three do not show a numeric macro in the inspected footage.
+The eight observed lengths range from 10.65 to 31 seconds with a median of 19.69 seconds; six lengths are unknown.
+Across all fourteen rows, two hooks are coded as how-to orders and the other twelve each have a distinct opening label, so no single hook dominates this selected sample.
+Five rows show a clear creator-stated numeric calorie or protein claim, two show numeric labels whose units or referents are unclear, and seven have no numeric nutrition figure verified in inspected frames.
+These categories describe what appears in the video or caption, not whether the nutrition estimate is accurate.
 Seven of fourteen counted videos are LA-focused, and none is a paid ad.
 These descriptive counts identify what this selected batch contains, not which creative choice caused more reach.
 
