@@ -30,6 +30,7 @@ Index of all documentation. Restructured 2026-06-12 (see [`docs-refactor-proposa
 - [auth.md](engineering/architecture/auth.md) — end-to-end auth (Apple/Google via Supabase, JWKS)
 - [api-reference.md](engineering/architecture/api-reference.md) — routes + current LATERAL/denormalized query model
 - [analytics-events.md](engineering/architecture/analytics-events.md) — PostHog event taxonomy
+- [launch-analytics-audit.md](engineering/architecture/launch-analytics-audit.md) - source inventory, read-only PostHog evidence, and LA launch measurement gaps
 - [testing-strategy.md](engineering/architecture/testing-strategy.md)
 
 **`pipeline/`** — UE-first preload pipeline
