@@ -1,6 +1,6 @@
 # Faceless restaurant Reels research and Fitsy templates
 
-**TL;DR:** Twenty-one qualifying Instagram and TikTok videos are documented; the expanded 150-300-example target remains open.
+**TL;DR:** Twenty-two qualifying Instagram and TikTok videos are documented; the expanded 150-300-example target remains open.
 
 > **Status:** partial research, target unmet · **Last verified:** 2026-11-04 · **Owner:** Fitsy Marketing
 > This is creative research and proposed copy, not permission to publish, contact creators, or spend.
@@ -84,14 +84,20 @@ The [Socialpruf Sweetgreen gallery](https://socialpruf.com/tiktok/sweetgreen) wa
 | [Low-calorie Mexican order Reel](https://www.instagram.com/kraftyoufitness/reel/DcJJJ0VxAI8/) | The original Instagram Reel opens on the presenter eating at a restaurant, despite a food-only search thumbnail. |
 | [Hive seed-oil-free spot Reel](https://www.instagram.com/hivehealthyeats/reel/DbL2nRGhsXC/) | Food-only montage frames seed-oil avoidance as "cleanest" without a specific nutrition comparison; excluded as a broad health claim. |
 | [Palms n' Patties smashburger Reel](https://www.instagram.com/laslaywithtracy/reel/De-D4gZyXhQ/) | Food-only burger and griddle shots call no seed oils "healthy" without a specific nutrition comparison; excluded as an unsupported health shortcut. |
+| [Chipotle bodybuilder order mirror](https://www.youtube.com/watch?v=OsI8j_1bNaY) | The footage has a TikTok watermark, but no original TikTok post URL or creator-owned cross-post was verified. It remains supplemental creative evidence and is excluded from the 150-video count. |
+| [The Hive Buddha Bowl](https://www.instagram.com/hivehealthyeats/reel/De94IaehBix/) | Food footage promotes a vegan restaurant bowl under a general wellness frame, without a specific swap, macro, or surprising nutrition comparison. |
+| [California Fish Grill protein hack](https://www.tiktok.com/@derekeatsla/video/7641014055804685599) | The original TikTok opens on the presenter's face. |
+| [Protein Shop 77g wrap](https://www.tiktok.com/@theproteinshop/video/7657914600058326285) | The original TikTok shows the restaurant presenter holding the wrap. |
+| [Summit LA protein sources](https://www.tiktok.com/@summits.life/video/7629475502113246478) | The original TikTok opens on a staff presenter with a microphone. |
+| [El Pollo Loco double protein bowl](https://www.tiktok.com/@mmorganjohnsonn/video/7699981027443363086) | The original TikTok opens on the creator's face. |
 
 ### Coverage achieved and remaining gap
 
-Twenty-eight distinct video pages have footage-backed entries below or in the current-batch tables, but only twenty-one are attributable to Instagram or TikTok originals: six official TikTok brand mirrors, one watermarked TikTok creator mirror, six newly inspected LA TikToks, and eight Instagram Reels.
-The other seven are creator-owned YouTube Shorts that provide short-form restaurant inspiration but have no verified Reel or TikTok cross-post, so they do not fill the expanded Reel/TikTok target.
-At least 129 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
+Thirty distinct video pages have footage-backed entries below or in the current-batch tables, but only twenty-two qualify toward the expanded target: six official TikTok brand mirrors with known original post URLs, six newly inspected LA TikToks, and ten Instagram Reels.
+The other eight are seven creator-owned YouTube Shorts and one watermarked YouTube mirror without a verified original TikTok URL; they remain supplemental and do not fill the Reel/TikTok target.
+At least 128 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
 All six official TikTok mirrors were watched through their public players; the watermarked mirror and the YouTube Shorts were checked at sampled timestamps, with unseen frames explicitly left unknown.
-Six LA-focused TikTok originals and six LA Instagram Reels met the criteria in the new batches; a non-LA Luna Grill Reel also met them; no inspected MenuFit creative, LeanBites creative, or Meta ad has yet met them.
+Six LA-focused TikTok originals and eight LA Instagram Reels met the criteria in the new batches; a non-LA Luna Grill Reel and a non-LA CAVA Reel also met them; no inspected MenuFit creative, LeanBites creative, or Meta ad has yet met them.
 Directly inspected MenuFit and LeanBites partner TikToks opened on faces, while screened MenuFit ads and several other creator clips also showed faces.
 Public searches also checked individual posts and indexes for Just Salad, Mendocino Farms, Tender Greens, Flower Child, Chopt, Chopped Leaf, LA food accounts, and the seven YouTube creators; no additional qualifying individual Reel or TikTok was verified from those routes.
 The current route is slow-paced, signed-in, view-only inspection of Instagram and TikTok public creatives in Dawit's existing Chrome session, plus public TikTok Creative Center and Meta Ad Library assessment.
@@ -101,24 +107,25 @@ Challenges, captchas, try-again-later notices, action blocks, private APIs, and 
 
 | Batch | Source and observed result | Counted qualifying examples | Remaining to 150 |
 | --- | --- | ---: | ---: |
-| B0, prior public pass | Seven attributable TikTok-origin videos with inspected footage; seven YouTube-only Shorts retained as supplemental analogues. | 7 | 143 |
-| B1, 2026-11-04 signed-in Chrome | Instagram loaded as @fitsy.lyfe, but the first inspected Sweetgreen Reel showed a presenter and was excluded. CAVA's Instagram profile displayed about 334K followers. Original CAVA TikTok playback loaded; its profile displayed about 183.3K followers, and the original post displayed a dated caption plus like, comment, favorite, and share counters. The directly inspected MenuFit account URL returned "Couldn't find this account." | 0 new | 143 |
-| B2, 2026-11-04 signed-in Chrome | Five LA TikTok originals passed sampled footage inspection: Pacific Catch Santa Monica, two The Hive Santa Monica creatives, The Window grain bowl, and Summit protein plate. Presenter-led candidates were excluded. | 5 new | 138 |
-| B3, 2026-11-04 signed-in Chrome | Two LA Instagram Reels passed sampled footage inspection: Faregrounds Beverly Hills breakfast burrito and Sweetfin Innovation Kitchen bowls. A general list of healthy LA restaurants was screened but excluded from the count because it did not analyze a specific dish or swap. | 2 new | 136 |
-| B4, 2026-11-04 same-profile view check | The original TikTok profile grids linked the exact Naomi, Kathy, and Summit post URLs to visible view counts. The original direct-post pages alone had not exposed those counts. | 0 new; 3 rows enriched | 136 |
-| B5, 2026-11-04 signed-in Chrome | A hosted The Hive Instagram Reel, Oishi Sushi Glendale's low-carb TikTok, and a CAVA macro-order Instagram Reel passed footage screening. The earlier Oishi clip with a reused opening was excluded after its presenter appeared. | 3 new | 133 |
-| B6, 2026-11-04 signed-in Chrome | A Talo Organic Venice bowl comparison and The Hive Chicken Athena protein Reel passed sampled Instagram footage inspection. TikTok restaurant-order search results repeatedly opened on presenters or photo slideshows; no additional TikTok video passed. | 2 new | 131 |
-| B7, 2026-11-04 signed-in Chrome | A food-only The Girl and The Chicken Burbank Reel passed screening. A presenter-led MenuFit partner TikTok, an LA two-spot Reel with a visible diner face, and generic seed-oil or healthy-spot claims were excluded. | 1 new | 130 |
-| B8, 2026-11-04 signed-in Chrome | A Luna Grill Medi Macro Bowl co-post showed food-only preparation and a 29g protein claim for the base bowl. The caption's double-chicken customization has no revised nutrition total. Presenter-led macro-order results were excluded. | 1 new | 129 |
+| B0, prior public pass, audited now | The prior pass called seven videos TikTok-origin. This audit retains six with original post URLs and inspected mirror footage; seven YouTube-only Shorts and one watermarked mirror without a verified original URL remain supplemental. | 6 | 144 |
+| B1, 2026-11-04 signed-in Chrome | Instagram loaded as @fitsy.lyfe, but the first inspected Sweetgreen Reel showed a presenter and was excluded. CAVA's Instagram profile displayed about 334K followers. Original CAVA TikTok playback loaded; its profile displayed about 183.3K followers, and the original post displayed a dated caption plus like, comment, favorite, and share counters. The directly inspected MenuFit account URL returned "Couldn't find this account." | 0 new | 144 |
+| B2, 2026-11-04 signed-in Chrome | Five LA TikTok originals passed sampled footage inspection: Pacific Catch Santa Monica, two The Hive Santa Monica creatives, The Window grain bowl, and Summit protein plate. Presenter-led candidates were excluded. | 5 new | 139 |
+| B3, 2026-11-04 signed-in Chrome | Two LA Instagram Reels passed sampled footage inspection: Faregrounds Beverly Hills breakfast burrito and Sweetfin Innovation Kitchen bowls. A general list of healthy LA restaurants was screened but excluded from the count because it did not analyze a specific dish or swap. | 2 new | 137 |
+| B4, 2026-11-04 same-profile view check | The original TikTok profile grids linked the exact Naomi, Kathy, and Summit post URLs to visible view counts. The original direct-post pages alone had not exposed those counts. | 0 new; 3 rows enriched | 137 |
+| B5, 2026-11-04 signed-in Chrome | A hosted The Hive Instagram Reel, Oishi Sushi Glendale's low-carb TikTok, and a CAVA macro-order Instagram Reel passed footage screening. The earlier Oishi clip with a reused opening was excluded after its presenter appeared. | 3 new | 134 |
+| B6, 2026-11-04 signed-in Chrome | A Talo Organic Venice bowl comparison and The Hive Chicken Athena protein Reel passed sampled Instagram footage inspection. TikTok restaurant-order search results repeatedly opened on presenters or photo slideshows; no additional TikTok video passed. | 2 new | 132 |
+| B7, 2026-11-04 signed-in Chrome | A food-only The Girl and The Chicken Burbank Reel passed screening. A presenter-led MenuFit partner TikTok, an LA two-spot Reel with a visible diner face, and generic seed-oil or healthy-spot claims were excluded. | 1 new | 131 |
+| B8, 2026-11-04 signed-in Chrome | A Luna Grill Medi Macro Bowl co-post showed food-only preparation and a 29g protein claim for the base bowl. The caption's double-chicken customization has no revised nutrition total. Presenter-led macro-order results were excluded. | 1 new | 130 |
+| B9, 2026-11-04 signed-in Chrome | Two food-only The Hive bowl Reels showed restaurant-stated 38g and 70g protein claims. The original Hive grid also exposed exact post view counts for these and the earlier Chicken Athena Reel. Naomi's TikTok creative was found as an Instagram co-post and kept as one identity. | 2 new; 1 row enriched | 128 |
 
-The CSV holds the twenty-one counted video identities, original links where known, source links, observation batches, visible metrics, unknown fields, and source limitations.
-Its commercial-context field distinguishes nine brand-owned posts with unknown paid amplification, nine posts without a disclosure observed, two restaurant co-posts with unknown terms, and one creator Reel explicitly marked "hosted" in its caption.
+The CSV holds the twenty-two counted video identities, original links where known, source links, observation batches, visible metrics, unknown fields, and source limitations.
+Its commercial-context field distinguishes eleven brand-owned posts with unknown paid amplification, eight posts without a disclosure observed, two restaurant co-posts with unknown terms, and one creator Reel explicitly marked "hosted" in its caption.
 The hosted Reel is retained as creative evidence but excluded from non-ad post performance comparisons; absence of a disclosure in other posts is not proof of purely organic distribution.
 The B1 CAVA post showed 2025-12-15, 17.7K likes, 175 comments, 4,617 favorites, and 2,001 shares on its original TikTok page; its approximate 3.3M view value remains a public-mirror snapshot.
 The original TikTok profile displayed 183.3K followers on 2026-11-04, so its follower snapshot is current rather than a historical follower denominator for the post.
 No view-to-follower ratio is interpreted from the older mixed-source, mixed-time mirror observations.
-Four LA TikTok rows now have original-profile view counts and current follower counts observed on the same day, each tied to the exact post tile; the other seventeen rows lack this matched pair.
-Accordingly, the normalized comparison has **n = 4**, with no comparable Instagram ratio and no paid-ad ratio.
+Four LA TikTok rows and three LA Hive Instagram Reels now have original-profile view counts and current follower counts observed on the same day, each tied to the exact post tile; the other fifteen rows lack this matched pair.
+Accordingly, the normalized comparison has **n = 7**, split by platform, with no paid-ad ratio.
 The ratios use current follower snapshots against cumulative views on posts of different ages, so they cannot be read as reach at posting or a controlled comparison.
 One account-level Reel window now supplies a bounded cadence observation, separate from the selected qualifying-video sample.
 The latest-first [Luna Grill Reels grid](https://www.instagram.com/lunagrill/reels/) showed twelve consecutive tiles without a pinned marker, from the [November 3 offer Reel](https://www.instagram.com/lunagrill/reel/DfSdhcnxXSd/) through the [September 30 Forney opening Reel](https://www.instagram.com/lunagrill/reel/Dd7vmHWxs1u/) when inspected on 2026-11-04.
@@ -130,33 +137,40 @@ TikTok Creative Center's public US Top Ads view showed a login-limited advertise
 Meta Ad Library loaded MenuFit's advertiser page with about 500 active ads on this visit; two additional food-order previews showed presenters, so zero were counted from that screened subset.
 Paid-ad previews are kept separate from organic reach analysis because those libraries do not expose comparable organic performance data.
 
-| Field in the twenty-one-row CSV | Observed | Unknown or source-limited | Interpretation now |
+| Field in the twenty-two-row CSV | Observed | Unknown or source-limited | Interpretation now |
 | --- | ---: | ---: | --- |
-| Views | 11 | 10 | One YouTube mirror, six Urlebird mirror snapshots, and four original TikTok profile tiles bound to exact post URLs. |
-| Follower count | 17 | 4 | Current Instagram or TikTok profile snapshots, not post-date denominators. |
-| Likes and comments | 19 and 15 | 2 and 6 | New rows use original platform counts where visible; older rows include mirror observations. |
-| Saves or favorites | 7 | 14 | Seven original TikToks exposed favorites; the Instagram saves remain unknown. |
-| Exact posted date | 6 | 15 | Six originals displayed full dates; many others displayed month and day without year. |
-| Length | 8 | 13 | The Pacific Catch original displayed 22 seconds; the new Instagram and Oishi originals did not expose reliable duration in this view. |
-| Verified audible voice or music | 0 | 21 | Track labels are recorded, but the listening evidence is insufficient. |
+| Views | 13 | 9 | Six Urlebird mirror snapshots, four original TikTok profile tiles, and three original Instagram Reel tiles bound to exact post URLs. |
+| Follower count | 19 | 3 | Current Instagram or TikTok profile snapshots, not post-date denominators. |
+| Likes and comments | 19 and 14 | 3 and 8 | New rows use original platform counts where visible; older rows include mirror observations. |
+| Saves or favorites | 7 | 15 | Seven original TikToks exposed favorites; the Instagram saves remain unknown. |
+| Exact posted date | 6 | 16 | Six originals displayed full dates; many others displayed month and day without year. |
+| Length | 7 | 15 | The Pacific Catch original displayed 22 seconds; the new Instagram and Oishi originals did not expose reliable duration in this view. |
+| Verified audible voice or music | 0 | 22 | Track labels are recorded, but the listening evidence is insufficient. |
 
-The eight observed lengths range from 10.65 to 31 seconds with a median of 19.69 seconds; thirteen lengths are unknown.
-Across all twenty-one rows, two hooks are coded as how-to orders and the other nineteen each have a distinct opening label, so no single hook dominates this selected sample.
-Eight rows show a clear creator-stated numeric calorie or protein claim, two show numeric labels whose units or referents are unclear, and eleven have no numeric calorie or protein figure verified in inspected frames.
+The seven observed lengths range from 10.65 to 27.05 seconds with a median of 19.16 seconds; fifteen lengths are unknown.
+Across all twenty-two rows, two hooks are coded as how-to orders and the other twenty each have a distinct opening label, so no single hook dominates this selected sample.
+Nine rows show a clear creator-stated numeric calorie or protein claim, two show numeric labels whose units or referents are unclear, and eleven have no numeric calorie or protein figure verified in inspected frames or captions.
 These categories describe what appears in the video or caption, not whether the nutrition estimate is accurate.
-Twelve of twenty-one counted videos are LA-focused; no Ad Library paid ad is included, while one Instagram Reel discloses a hosted restaurant visit.
+Fourteen of twenty-two counted videos are LA-focused; no Ad Library paid ad is included, while one Instagram Reel discloses a hosted restaurant visit.
 These descriptive counts identify what this selected batch contains, not which creative choice caused more reach.
 
-| LA TikTok with original post tile and current profile count | Views | Current followers | Views / current follower | Observed angle |
+| LA original post tile and current profile count | Views | Current followers | Views / current follower | Observed angle |
 | --- | ---: | ---: | ---: | --- |
 | [The Hive by Naomi](https://www.tiktok.com/@naomisnoshes/video/7688912545826000158) | 438 | 1,167 | 0.38 | Surprise 65g protein bowl claim. |
 | [The Hive by Kathy](https://www.tiktok.com/@lawithkathy/video/7675130994252352782) | 7,281 | 3,750 | 1.94 | Broad healthy-lunch discovery. |
 | [Summit protein plate](https://www.tiktok.com/@summits.life/video/7619757946339183886) | 965 | 129 | 7.48 | Customizable protein plate. |
 | [Oishi Sushi low-carb rolls](https://www.tiktok.com/@oishisushiglendale/video/7598811337388494111) | 3,297 | 50 | 65.94 | Food-only low-carb sushi roll close-ups. |
+| [The Hive Chicken Athena bowl](https://www.instagram.com/hivehealthyeats/reel/Der3kWER4AR/) | 363 | 25,200 | 0.014 | Brand claim of 65g protein. |
+| [The Hive Fresh Catch Bowl](https://www.instagram.com/hivehealthyeats/reel/DbtWB8KxfJS/) | 1,085 | 25,200 | 0.043 | Brand claim of 38g protein. |
+| [The Hive Protein Power Bowl](https://www.instagram.com/hivehealthyeats/reel/DbBjwiWMb_U/) | 2,323 | 25,200 | 0.092 | Brand claim of 70g protein. |
 
-In this selected four-post comparison, Naomi's numeric protein hook has the lowest observed views per current follower and Oishi's low-carb sushi has the highest, driven by a very small 50-follower denominator.
-The sample is too small and uneven in account, post age, distribution, and format to call the Naomi angle a general flop or the Oishi angle a repeatable winner.
+The first four rows are TikTok originals and the last three are Instagram Reels from the same brand; their platform ratios should not be pooled into a single ranking.
+Within the three Hive Reels, the 70g Protein Power Bowl has more views per current follower than the 65g Chicken Athena bowl, but post ages and presentation differ.
+Within the selected TikToks, Naomi's numeric protein hook has the lowest observed views per current follower and Oishi's low-carb sushi has the highest, driven by a very small 50-follower denominator.
+The sample is too small and uneven in account, post age, distribution, and format to call any angle a general flop or a repeatable winner.
 No causal claim follows from these ratios.
+The [Naomi TikTok](https://www.tiktok.com/@naomisnoshes/video/7688912545826000158) also appears as an [Instagram co-post](https://www.instagram.com/naomisnoshes/reel/DdoyFWotDIz/) with the same opening bowl and 65g claim.
+Its original Hive Instagram grid showed 840 views and its Reel showed 149 likes on the observation date, but the two uploads count as one creative identity and have different platform audiences and observation surfaces.
 
 ### New inspected Instagram and LA TikTok examples
 
@@ -181,11 +195,13 @@ These are selected examples with different account sizes and ages, so their raw 
 | [The Hive gluten-free choices](https://www.instagram.com/sayimafoodie.rd/reel/DWAt6oLicy-/) | A large italic "healthy gluten-free eats" overlay starts on The Hive sign, followed by shelf and bowl shots. Caption calls the bowls high-protein, recommends a shroom bowl, and discloses that the visit was hosted. | 83 likes, 31 comments; creator profile about 14.5K followers. | Exact year of displayed March 17, views, saves, shares, duration, audio content, and nutrition verification unknown; hosted context is separate from non-ad post performance. |
 | [CAVA half-rice macro order](https://www.instagram.com/macro_habits/reel/Cnm4p6vDjsj/) | Small white serif "macro friendly cava order" text stays over storefront, ingredient assembly, and bowl shots. Caption claims 553 calories and 37g protein with half rice, versus 700 calories and 40g protein with full rice. | 474 likes; creator profile showed about 411K followers. | Posted 2023-01-19; views, total comments, saves, shares, duration, audio content, and nutrition verification unknown. |
 | [Talo Organic Venice bowl](https://www.instagram.com/losangeles_eats/reel/DNkBzWyuiYA/) | A bold outlined "healthiest restaurant in Los Angeles?" question starts over a storefront crowd; food close-ups then call Talo a cleaner Chipotle/CAVA alternative and claim a quarter pound of meat per bowl. | About 28.6K likes; creator profile about 1.4M followers. | Posted 2025-08-19; views, precise engagement and follower totals, duration, audio content, and health/nutrition verification unknown. Incidental patrons are visible, with no presenter face in sampled food sequence. |
-| [The Hive Chicken Athena bowl](https://www.instagram.com/hivehealthyeats/reel/Der3kWER4AR/) | A close bowl shot opens with "Chicken Athena said 65g protein, no problem" in bold white text, followed by gloved-hand ingredient assembly. The 65g figure is the restaurant's claim. | Creator profile about 25.2K followers; the Reel displayed "liked by ... and others" without a total. | October 19 was visible without a year; views, likes, total comments, saves, shares, duration, audio content, and verified protein unknown. |
+| [The Hive Chicken Athena bowl](https://www.instagram.com/hivehealthyeats/reel/Der3kWER4AR/) | A close bowl shot opens with "Chicken Athena said 65g protein, no problem" in bold white text, followed by gloved-hand ingredient assembly. The 65g figure is the restaurant's claim. | 363 views on the exact Reel grid tile; creator profile about 25.2K followers; the Reel displayed "liked by ... and others" without a total. | October 19 was visible without a year; likes, total comments, saves, shares, duration, audio content, and verified protein unknown. |
 | [The Girl and The Chicken Burbank](https://www.instagram.com/daniellabraggtravels/reel/DWkbtKkAWHB/) | An overhead Mediterranean bowl opens under a small white "Healthy Never Tasted THIS Good" banner; food-only cuts show the Caesar wrap and beet side. The healthy framing is the creator's claim without numeric macros. | 198 likes; creator profile about 115K followers. | Posted 2026-03-31; views, comment total, saves, shares, duration, audible voice, and nutrition verification unknown. The restaurant is a collaborator, with commercial terms unknown. |
 | [Luna Grill Medi Macro Bowl](https://www.instagram.com/shef.chelle/reel/DUcBeSdj6mB/) | A large yellow-and-white serif bowl reveal leads to sauce, ingredient, and gyro close-ups. Green-check overlays claim 29g protein and 11g fiber for the base bowl; the double-chicken customization lacks revised numbers. | 114 likes; creator profile showed 5,601 followers. | February 6 was visible without a year; views, comment total, saves, shares, duration, audible voice, and customized macros unknown. Mission Valley visit is outside LA; restaurant co-post terms unknown. |
+| [The Hive Fresh Catch Bowl](https://www.instagram.com/hivehealthyeats/reel/DbtWB8KxfJS/) | A black-outlined uppercase "vision for this bowl" question opens on an empty plate; moving food footage builds to salmon, rice, avocado, and greens. The restaurant caption claims 38g protein. | 1,085 views on the exact Reel grid tile; profile about 25.2K followers. | August 6 was visible without a year; likes, comments, saves, shares, duration, audio content, and protein verification unknown. |
+| [The Hive Protein Power Bowl](https://www.instagram.com/hivehealthyeats/reel/DbBjwiWMb_U/) | A close egg, avocado, edamame, and chicken bowl starts with "protein goals" copy; a later bold caption reads "one bowl, 70g of protein, done." The figure is the restaurant's claim. | 2,323 views on the exact Reel grid tile; profile about 25.2K followers. | July 20 was visible without a year; likes, comments, saves, shares, duration, audio content, and protein verification unknown. |
 
-All eight Reels were sampled across their food sequences in the signed-in Instagram view; no presenter face appeared in inspected frames, although the Talo opening shows incidental patrons.
+All ten Reels were sampled across their food sequences in the signed-in Instagram view; no presenter face appeared in inspected frames, although the Talo opening shows incidental patrons.
 
 ## Footage-inspected examples
 
@@ -293,10 +309,10 @@ All eight Reels were sampled across their food sequences in the signed-in Instag
 - **Public engagement snapshot:** The public YouTube page displayed about 2.5K views, 40 likes, and 0 comments on 2026-11-04.
 - **Unknowns:** Serving components, nutrition data, unseen frames, and shares are unknown.
 
-### 9. Chipotle protein order by thejacked.gentleman
+### 9. Supplemental Chipotle protein order by thejacked.gentleman
 
 - **Link and source:** [Public YouTube mirror uploaded by Timothy Mount](https://www.youtube.com/watch?v=OsI8j_1bNaY) with a visible TikTok watermark crediting @thejacked.gentleman; mirror ownership is unconfirmed, inspected on 2026-11-04.
-- **Qualification and direct footage:** Sampled frames at 0, 15, 25, and 30 seconds showed a bowl close-up, counter ordering, a fountain drink, and a nutrition-calculator screenshot, without a presenter.
+- **Direct footage and count decision:** Sampled frames at 0, 15, 25, and 30 seconds showed a bowl close-up, counter ordering, a fountain drink, and a nutrition-calculator screenshot, without a presenter. The original TikTok post URL was not verified, so this mirror does not count toward the 150-video target.
 - **First two seconds:** A bowl fills the frame behind large stacked white and red text reading "Bodybuilder orders HEALTHY CHIPOTLE" and an image claiming 985 calories, 41g fat, 86g protein, and 79g carbs.
 - **On-screen design:** Burned-in dialogue captions continue over order footage, followed by a nutrition-calculator screenshot and a closing line praising Chipotle's calculator.
 - **Calories/macros:** The opening image presents those numbers as the original creator's claim; its serving and calculation were not independently verified.
