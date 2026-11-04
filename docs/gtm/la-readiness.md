@@ -21,6 +21,9 @@ The existing authenticated Vercel CLI supplied the `fitsy-api` Preview configura
 The database and Supabase origins matched the repository's DEV project identity before either query ran.
 Both bounded aggregate queries ran in transactions confirmed `transaction_read_only = on`, with a ten-second statement timeout, and returned no venue names or user records.
 The historic catalog and synthetic seed were not used as current counts.
+For a later audit, use the installed `vercel link --cwd <private-task-scratch> --yes --project fitsy-api --non-interactive` and `vercel env pull <private-task-scratch>/preview.env --environment=preview --cwd <private-task-scratch> --yes --non-interactive` against the existing project.
+Keep that scratch untracked under the task worktree, check the linked project identity, and validate both database and Supabase targets against the repository DEV identity with [the database guard](../../scripts/lib/db-target-guard.ts) before opening a connection.
+Never print the pulled values or connection URL; remove the private scratch after the aggregate and do not run the environment-writing setup script.
 The centroids below come from the app's [location presets](../../apps/mobile/lib/locations.ts); they approximate neighborhoods and are not administrative boundaries.
 The [schema](../../prisma/schema.prisma) stores venue coordinates and active `MenuItem` macro snapshots.
 An active item with non-null calories, protein, carbs, and fat is counted as having a macro estimate; this does not prove serving accuracy, appealing dish quality, or successful in-app access.
@@ -70,7 +73,7 @@ ROLLBACK;
 ```
 
 **Gaps still unknown:** independent status quality, main-dish suitability, cuisine diversity, freshness, and whether the intended build serves those records.
-Overlapping three-mile circles may count the same venue in both areas.
+`count(DISTINCT id)` counts each restaurant once within each area, while overlapping three-mile circles may count the same restaurant in both area rows.
 The smallest follow-up is a manual in-app sample by the existing catalog owner, followed by filling any confirmed venue, menu, or macro gap.
 
 ## Install and price evidence limits
