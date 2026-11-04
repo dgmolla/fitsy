@@ -100,9 +100,19 @@ env:
 - tapOn:
     id: signup-apple
 - extendedWaitUntil:
-    visible: "^(Sign In Failed|Cancel)$"
+    visible: "^(Sign In Failed|Cancel|Close)$"
     timeout: 15000
 - takeScreenshot: no-trial-native-apple-result
+# An iOS Simulator without an Apple ID offers Close before the app error.
+- runFlow:
+    when:
+      visible: "^Close$"
+    commands:
+      - assertVisible: "^Sign in with your Apple.*ID$"
+      - tapOn: "^Close$"
+      - extendedWaitUntil:
+          visible: "^Sign In Failed$"
+          timeout: 15000
 - runFlow:
     when:
       visible: "^Cancel$"
@@ -113,8 +123,16 @@ env:
       visible: "Sign In Failed"
     commands:
       - tapOn: "OK"
+# The cold launch can restore the Debug banner over later footer actions.
+- runFlow:
+    when:
+      visible: ".*Open debugger to view warnings.*"
+    commands:
+      - tapOn:
+          point: "93%,93%"
 - assertVisible:
     id: signup-apple
+    enabled: true
 - assertNotVisible:
     id: paywall-logo
 # The protected data destination survives interruption at sign-in without a paywall flash.
