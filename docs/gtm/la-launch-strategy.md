@@ -21,6 +21,10 @@ Demonstrate local usefulness; superior breadth or accuracy remains unproven.
 **Organic content, on Instagram Reels first.**
 My judgment: control over local examples and feedback makes this the best first experiment.
 No existing founder audience is assumed.
+Start faceless with owned food footage, on-screen menu and app captures, and text or voiceover.
+Use "surprisingly healthy slept-on LA spots/dishes" as an internal content angle about specific dishes, not a claim about any venue.
+The [LA dish shortlist](la-dish-shortlist.md) is a research queue; publish nutrition-led copy only after checking the exact current menu dish and Fitsy estimate and confidence.
+Phrase every number as an estimate, for example "fitsy estimates ~45g protein," only when that value is verified in Fitsy.
 [Instagram supports testing Reels with non-followers](https://about.fb.com/news/2025/06/inspiring-creativity-that-brings-people-together/), without guaranteeing LA reach.
 Try Trial Reels if available; otherwise use ordinary Reels.
 
