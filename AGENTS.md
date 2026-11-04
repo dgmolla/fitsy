@@ -71,10 +71,15 @@ Use `gh` directly, with no daemon, helper script, new tooling, or skills.
 - Read the issue's Goal / Done when / Proof / Constraints.
   If Done when is missing, comment asking for it, mark the issue blocked, and exit.
 - Read before writing; make the smallest change meeting Done when, add one test only where real risk exists, and list what was skipped.
+- Before every push, select tests for the changed files with `node scripts/verify/focused-tests.mjs --set <test paths>` and run `node scripts/verify/run.mjs --layer=0-1 --stage=cheap --scope=changed` for type-check, lint, and those tests.
+  Do not push until these gates pass; local gate failures do not count as repair attempts.
+  Apply this accounting prospectively; preserve previously recorded attempts.
 - Run applicable repository checks locally, commit, push normally with hooks enabled, and open a PR with `Closes #N`, Done-when, command/output proof, and skipped work.
   Reuse an existing PR when present and enable `gh pr merge --repo dgmolla/fitsy <PR_NUMBER> --auto --squash`.
+- When a native/Maestro run fails, reproduce and rerun only the failing journey locally until it passes, then complete one passing full native run before marking the PR ready, within the existing retry limits.
 - Iterate until merged, polling the PR about every five minutes.
   If BEHIND, run `gh pr update-branch --repo dgmolla/fitsy <PR_NUMBER>`; if a required check (Verify, AI review) fails, read the logs/review, fix, and push.
+  Batch all known failures into a single repair attempt where possible.
   If conflicts occur, rebase on current main and resolve them; use `--force-with-lease` if the rebase requires a rewritten push.
 - Infrastructure failures (runner, simulator, network, GitHub outage) get one retry, then mark the issue blocked with the reason.
   Code/review failures get up to three fix attempts, then mark the issue blocked with a summary of what was tried.
