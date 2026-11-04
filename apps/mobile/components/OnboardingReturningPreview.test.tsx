@@ -77,7 +77,11 @@ test.each([
   global.fetch = jest.fn(withAccountProfile(async url => {
     if (url.endsWith('/api/auth/login')) return response({ token: 'test-token', refreshToken: 'refresh', user: { id: accountId }, isNewUser: false });
     if (new URL(url).pathname.startsWith('/api/restaurants'))
-      return response({ data: [], meta: { nearbyDishCount: 10, radiusMiles: 3, goalMatch: null } });
+      return response({ data: [{ id: `restaurant-${accountId}`, name: 'Fixture kitchen', address: 'Test',
+        lat: 34.05, lng: -118.25, distanceMiles: 1, cuisineTags: [], chainFlag: false,
+        bestMatch: { menuItemId: `meal-${accountId}`, name: 'Fixture meal', calories: 600,
+          proteinG: 40, carbsG: 60, fatG: 20, confidence: 'HIGH', matchScore: 0 } }],
+      meta: { nearbyDishCount: 10, radiusMiles: 3, goalMatch: null } });
     return response({ active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false });
   }));
   const resumedRoutes = { ...routeMap, 'welcome/problem': () => <Problem />,
@@ -151,6 +155,24 @@ test.each([
   expect((await getOnboardingData()).goal).toBe('lose_fat');
   expect(screen.queryByTestId('signup-apple')).toBeNull();
   expect(screen.queryByTestId('paywall-logo')).toBeNull();
+  if (scenario === 'first tap') {
+    const purchase = jest.spyOn(Purchases, 'purchasePackage');
+    if (screen.queryByTestId('coachmark-skip'))
+      await act(async () => { fireEvent.press(screen.getByTestId('coachmark-skip')); });
+    await screen.findByTestId('discovery-hero');
+    await act(async () => { fireEvent.press(screen.getByTestId('discovery-hero')); });
+    await screen.findByTestId('paywall-offer-paid');
+    // The saved native journey exercises the edge swipe here; UIKit is not
+    // simulated by this rendered regression. Preserve the real history for Back.
+    await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+    await screen.findByTestId('paywall-back-to-plans');
+    expect(screen.queryByTestId('preview-back')).toBeNull();
+    expect(screen.queryByTestId('signup-apple')).toBeNull();
+    await act(async () => { fireEvent.press(screen.getByTestId('paywall-back-to-plans')); });
+    await screen.findByTestId('paywall-offer-paid');
+    expect(mockState.session).toMatchObject({ user: { id: accountId } });
+    expect(purchase).not.toHaveBeenCalled();
+  }
 });
 
 test('a corrected fixture login reaches the real paywall, records decline and gates anonymous return without purchasing', async () => {
