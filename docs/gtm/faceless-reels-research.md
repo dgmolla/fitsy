@@ -96,13 +96,16 @@ Challenges, captchas, try-again-later notices, action blocks, private APIs, and 
 | B1, 2026-11-04 signed-in Chrome | Instagram loaded as @fitsy.lyfe, but the first inspected Sweetgreen Reel showed a presenter and was excluded. CAVA's Instagram profile displayed about 334K followers. Original CAVA TikTok playback loaded; its profile displayed about 183.3K followers, and the original post displayed a dated caption plus like, comment, favorite, and share counters. The directly inspected MenuFit account URL returned "Couldn't find this account." | 0 new | 143 |
 | B2, 2026-11-04 signed-in Chrome | Five LA TikTok originals passed sampled footage inspection: Pacific Catch Santa Monica, two The Hive Santa Monica creatives, The Window grain bowl, and Summit protein plate. Presenter-led candidates were excluded. | 5 new | 138 |
 | B3, 2026-11-04 signed-in Chrome | Two LA Instagram Reels passed sampled footage inspection: Faregrounds Beverly Hills breakfast burrito and Sweetfin Innovation Kitchen bowls. A general list of healthy LA restaurants was screened but excluded from the count because it did not analyze a specific dish or swap. | 2 new | 136 |
+| B4, 2026-11-04 same-profile view check | The original TikTok profile grids linked the exact Naomi, Kathy, and Summit post URLs to visible view counts. The original direct-post pages alone had not exposed those counts. | 0 new; 3 rows enriched | 136 |
 
 The CSV holds the fourteen counted video identities, original links where known, source links, observation batches, visible metrics, unknown fields, and source limitations.
 The B1 CAVA post showed 2025-12-15, 17.7K likes, 175 comments, 4,617 favorites, and 2,001 shares on its original TikTok page; its approximate 3.3M view value remains a public-mirror snapshot.
 The original TikTok profile displayed 183.3K followers on 2026-11-04, so its follower snapshot is current rather than a historical follower denominator for the post.
-No view-to-follower ratio is interpreted from these mixed-source, mixed-time observations.
-The other thirteen CSV records still have unknown or mismatched follower denominators or lack original post views, and all fourteen lack a source-comparable views and follower pair.
-Accordingly, normalized comparison has **n = 0** in this partial batch; top-performer, underperformance, and cadence findings remain unassessed.
+No view-to-follower ratio is interpreted from the older mixed-source, mixed-time mirror observations.
+Three LA TikTok rows now have original-profile view counts and current follower counts observed on the same day, each tied to the exact post tile; the other eleven rows lack this matched pair.
+Accordingly, the normalized comparison has **n = 3**, with no comparable Instagram ratio and no paid-ad ratio.
+The ratios use current follower snapshots against cumulative views on posts of different ages, so they cannot be read as reach at posting or a controlled comparison.
+Posting cadence remains unassessed because no complete dated account window was collected.
 The original historical access results below do not establish current platform access limits after the signed-in authorization.
 TikTok Creative Center's public US Top Ads view showed a login-limited advertiser subset; a visible search for "protein" returned two non-restaurant ads, so zero were counted.
 Meta Ad Library loaded MenuFit's advertiser page with about 500 active ads on this visit; two additional food-order previews showed presenters, so zero were counted from that screened subset.
@@ -110,7 +113,7 @@ Paid-ad previews are kept separate from organic reach analysis because those lib
 
 | Field in the fourteen-row CSV | Observed | Unknown or source-limited | Interpretation now |
 | --- | ---: | ---: | --- |
-| Views | 7 | 7 | One YouTube mirror and six Urlebird mirror snapshots; none of the seven LA originals exposed post views in the inspected page. |
+| Views | 10 | 4 | One YouTube mirror, six Urlebird mirror snapshots, and three original TikTok profile tiles bound to exact post URLs. |
 | Follower count | 10 | 4 | Current Instagram or TikTok profile snapshots, not post-date denominators. |
 | Likes and comments | 13 and 13 | 1 and 1 | Seven new rows use original platform counts where visible; older rows include mirror observations. |
 | Saves or favorites | 6 | 8 | Five new TikToks exposed favorites; the Instagram saves remain unknown. |
@@ -118,21 +121,31 @@ Paid-ad previews are kept separate from organic reach analysis because those lib
 | Length | 8 | 6 | The Pacific Catch original displayed 22 seconds; the two Instagram originals did not expose reliable duration in this view. |
 | Verified audible voice or music | 0 | 14 | Track labels are recorded, but the listening evidence is insufficient. |
 
-The seven lengths range from 10.65 to 31 seconds with a median of 19.16 seconds.
-Two hooks are coded as how-to orders; the other five each use a different observed opening type.
-Four rows show a creator-stated numeric nutrition claim, while three do not show a numeric macro in the inspected footage.
+The seven prior-batch lengths range from 10.65 to 31 seconds with a median of 19.16 seconds; the Pacific Catch original adds a 22-second observation.
+Two prior-batch hooks are coded as how-to orders; the other five each use a different observed opening type.
+Four prior-batch rows show a creator-stated numeric nutrition claim, while three do not show a numeric macro in the inspected footage.
 Seven of fourteen counted videos are LA-focused, and none is a paid ad.
 These descriptive counts identify what this selected batch contains, not which creative choice caused more reach.
+
+| LA TikTok with original post tile and current profile count | Views | Current followers | Views / current follower | Observed angle |
+| --- | ---: | ---: | ---: | --- |
+| [The Hive by Naomi](https://www.tiktok.com/@naomisnoshes/video/7688912545826000158) | 438 | 1,167 | 0.38 | Surprise 65g protein bowl claim. |
+| [The Hive by Kathy](https://www.tiktok.com/@lawithkathy/video/7675130994252352782) | 7,281 | 3,750 | 1.94 | Broad healthy-lunch discovery. |
+| [Summit protein plate](https://www.tiktok.com/@summits.life/video/7619757946339183886) | 965 | 129 | 7.48 | Customizable protein plate. |
+
+In this selected three-post comparison, Naomi's numeric protein hook has the lowest observed views per current follower and Summit's plate has the highest, helped by a very small 129-follower denominator.
+The sample is too small and uneven in account, post age, distribution, and format to call the Naomi angle a general flop or the Summit angle a repeatable winner.
+No causal claim follows from these ratios.
 
 ### New LA examples in the current batch
 
 | Original video | Opening, footage, and nutrition treatment | Public engagement snapshot on 2026-11-04 | Evidence limits |
 | --- | --- | --- | --- |
 | [Pacific Catch Santa Monica](https://www.tiktok.com/@losangelesgoodeats/video/7619405004020927774) | Venue-first sign and white location label lead to bowls, sushi, and dining-room cuts; caption frames the Feel Good 5 menu as health-conscious and names chicken and shrimp, without a gram claim. | 1,668 likes, 15 comments, 1,150 favorites, 697 shares; creator profile 18.7K followers. | 22 seconds; post views, exact year of displayed 3-20, audio content, and nutrition verification unknown. |
-| [The Hive Chicken Athena bowl](https://www.tiktok.com/@naomisnoshes/video/7688912545826000158) | A bowl opens under "65 grams of protein?" white outlined text; food, burrito, açaí, and latte cuts follow. The 65g bowl and 62g burrito figures are creator claims. | 23 likes, 0 comments, 8 favorites, 1 share; creator profile 1,167 followers. | Post views, duration, exact year of displayed 9-23, audio content, and nutrition verification unknown. |
-| [The Hive healthy lunch](https://www.tiktok.com/@lawithkathy/video/7675130994252352782) | Food platter and "HEALTH" opening, then burrito sauce and latte in small white captions; the caption names high-protein açaí without a verified gram total. | 217 likes, 19 comments, 97 favorites, 42 shares; creator profile 3,750 followers. | Post views, duration, exact year of displayed 8-21, audio content, and nutrition verification unknown. |
+| [The Hive Chicken Athena bowl](https://www.tiktok.com/@naomisnoshes/video/7688912545826000158) | A bowl opens under "65 grams of protein?" white outlined text; food, burrito, açaí, and latte cuts follow. The 65g bowl and 62g burrito figures are creator claims. | 438 views, 23 likes, 0 comments, 8 favorites, 1 share; creator profile 1,167 followers. | Views came from the exact original profile tile; duration, exact year of displayed 9-23, audio content, and nutrition verification unknown. |
+| [The Hive healthy lunch](https://www.tiktok.com/@lawithkathy/video/7675130994252352782) | Food platter and "HEALTH" opening, then burrito sauce and latte in small white captions; the caption names high-protein açaí without a verified gram total. | 7,281 views, 217 likes, 19 comments, 97 favorites, 42 shares; creator profile 3,750 followers. | Views came from the exact original profile tile; duration, exact year of displayed 8-21, audio content, and nutrition verification unknown. |
 | [The Window grain bowl](https://www.tiktok.com/@moodfashionfood/video/7475123059637095710) | Bowl close-up and venue sign carry an affordable healthy-lunch claim; overlay lists five LA-area locations. Caption describes an $8 grain bowl with a $2.75 protein add-on. | 863 likes, 8 comments, 820 favorites, 329 shares; creator profile 10.4K followers. | Posted 2025-02-24; post views, duration, audio content, and nutrition verification unknown. |
-| [Summit protein plate](https://www.tiktok.com/@summits.life/video/7619757946339183886) | Receipt, chicken bowl, then empty dish under a short white "unlimited protein" caption; a fleeting 180g/40g text lacks clear referents. | 20 likes, 2 comments, 7 favorites, 5 shares; restaurant profile 129 followers. | Post views, duration, exact year of displayed 3-21, audio content, and gram meaning unknown; "big back" wording is a copy pitfall. |
+| [Summit protein plate](https://www.tiktok.com/@summits.life/video/7619757946339183886) | Receipt, chicken bowl, then empty dish under a short white "unlimited protein" caption; a fleeting 180g/40g text lacks clear referents. | 965 views, 20 likes, 2 comments, 7 favorites, 5 shares; restaurant profile 129 followers. | Views came from the exact original profile tile; duration, exact year of displayed 3-21, audio content, and gram meaning unknown; "big back" wording is a copy pitfall. |
 
 The five LA originals were sampled at opening, middle, and end; no presenter face appeared in inspected frames, but unsampled frames are not asserted as face-free.
 These are selected examples with different account sizes and ages, so their raw engagement does not rank creative effectiveness.
