@@ -1,6 +1,6 @@
 # Faceless restaurant Reels research and Fitsy templates
 
-**TL;DR:** Thirty-two qualifying Instagram and TikTok videos are documented; the expanded 150-300-example target remains open.
+**TL;DR:** Forty-two qualifying Instagram and TikTok videos are documented; the expanded 150-300-example target remains open.
 
 > **Status:** partial research, target unmet · **Last verified:** 2026-11-04 · **Owner:** Fitsy Marketing
 > This is creative research and proposed copy, not permission to publish, contact creators, or spend.
@@ -94,14 +94,29 @@ The [Socialpruf Sweetgreen gallery](https://socialpruf.com/tiktok/sweetgreen) wa
 | [Soul Delicious Tron Bowl](https://www.tiktok.com/@souldeliciousla/video/7681344544499191053) | The original TikTok opens on a restaurant presenter holding the bowl. |
 | [Organico LA organic bowls](https://www.instagram.com/organico_la/reel/De7TU8WhpF9/) | Food-only footage claims fully organic ingredients, but the post has no specific macro, protein, or swap angle. |
 | [Locale meal jars](https://www.instagram.com/create.with.michael/reel/DWW6aalAekH/) | The creator frames delivered meal prep, without a particular restaurant dish or order. |
+| [Shaw Choice protein bowls](https://www.instagram.com/latinafoodiela/reel/DYTwHL8Ncti/) | The Reel shows moving restaurant bowl assembly, but the creator's face appears holding trays in the original playback. A food-only thumbnail and later close-ups would have missed that presenter. |
+| [Pura Vida West Hollywood opening](https://www.instagram.com/sklifevox/reel/DZAvrzZhFoa/) | The inspected Reel promotes a broad clean-food venue opening without a specific dish, swap, or macro comparison. |
+| [Fountain East Hollywood bowl](https://www.instagram.com/romsinsta/reel/DH7bo-jRtHu/) | The post calls the venue the healthiest in LA and mentions ingredient sourcing, but the inspected page does not tie its health claim to a specific order or nutrition comparison. |
+| [CynCity Eats Burbank protein lunch](https://www.tiktok.com/@cyncityeats/video/7602127946836380942) | The original TikTok shows the creator eating to camera, despite a restaurant-specific high-protein caption. |
+| [Sweetgreen Chicken Jalapeño Ranch wrap hack](https://www.tiktok.com/@sweetgreen/video/7686922325714898190) | The original TikTok shows food-only assembly, but the modification adds crunch and sauce without an observed nutrition swap or macro angle. |
+| [Sweetgreen vegan Cali Chicken Club remix](https://www.tiktok.com/@sweetgreen/video/7698807701807189262) | The original TikTok describes a tofu-for-chicken vegan swap, but opens on two people presenting the wrap. |
+| [Better Bowls 29g seasonal smoothie](https://www.tiktok.com/@betterbowls/video/7701090687277747486) | Hands-only footage and a caption state 29g protein and 290 calories for a smoothie, but the creative centers a drink rather than a restaurant dish or food order. |
+| [Better Bowls Cinnamon Crunch Bowl](https://www.tiktok.com/@betterbowls/video/7698275583586798862) | The original TikTok shows a staff presenter holding and describing the high-protein bowl. |
+| [Angie's 96g chicken bowl](https://www.tiktok.com/@eatangies/video/7592311517714992398) | The original video opens on a presenter holding the bowl in her car. |
+| [Hummus Republic by Jean](https://www.tiktok.com/@jeanyu_/video/7699854146337262862) | A food-line opening looked faceless, but replay showed the creator eating on camera midway through its 13 seconds. |
+| [Planta Protein Flex dishes](https://www.tiktok.com/@itsromab/video/7616414020710452494) | The original food-only opening cuts to a visible diner presenting a bowl. |
+| [Protein Shop 100g combinations](https://www.tiktok.com/@theproteinshop/video/7704035638244314381) | The video starts with hands-only food preparation but later shows a presenter's face handing over the food. |
+| [Summit 80g LA protein order](https://www.tiktok.com/@summits.life/video/7603909510033362190) | The original opens on a talking presenter; TikTok also labels it Promotional content. |
+| [Boudin Bakery protein bowls](https://www.tiktok.com/@heatherr.eats/video/7657435294765010190) | A presenter appears beneath the restaurant sign in the opening frame. |
+| [Flameo bowl launch](https://www.tiktok.com/@itsflameo/video/7704300358805228808) | The original opens on a restaurant employee speaking to camera. |
 
 ### Coverage achieved and remaining gap
 
-Forty distinct video pages have footage-backed entries below or in the current-batch tables, but only thirty-two qualify toward the expanded target: fifteen TikToks and seventeen Instagram Reels.
-The other eight are seven creator-owned YouTube Shorts and one watermarked YouTube mirror without a verified original TikTok URL; they remain supplemental and do not fill the Reel/TikTok target.
-At least 118 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
+Forty-two distinct video pages qualify toward the expanded target: twenty-five TikToks and seventeen Instagram Reels.
+Seven creator-owned YouTube Shorts and one watermarked YouTube mirror without a verified original TikTok URL remain supplemental and do not fill the Reel/TikTok target.
+At least 108 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
 All six official TikTok mirrors were watched through their public players; the watermarked mirror and the YouTube Shorts were checked at sampled timestamps, with unseen frames explicitly left unknown.
-Nine LA-focused TikTok originals and fifteen LA Instagram Reels met the criteria in the signed-in batches; a non-LA Luna Grill Reel and a non-LA CAVA Reel also met them; no inspected MenuFit creative, LeanBites creative, or Meta ad has yet met them.
+Eleven LA-focused TikTok originals and fifteen LA Instagram Reels met the criteria in the signed-in batches; other examples broaden restaurant and geographic coverage, but no inspected MenuFit creative, LeanBites creative, or Meta ad has yet met them.
 Directly inspected MenuFit and LeanBites partner TikToks opened on faces, while screened MenuFit ads and several other creator clips also showed faces.
 Public searches also checked individual posts and indexes for Just Salad, Mendocino Farms, Tender Greens, Flower Child, Chopt, Chopped Leaf, LA food accounts, and the seven YouTube creators; no additional qualifying individual Reel or TikTok was verified from those routes.
 The current route is slow-paced, signed-in, view-only inspection of Instagram and TikTok public creatives in Dawit's existing Chrome session, plus public TikTok Creative Center and Meta Ad Library assessment.
@@ -122,15 +137,17 @@ Challenges, captchas, try-again-later notices, action blocks, private APIs, and 
 | B8, 2026-11-04 signed-in Chrome | A Luna Grill Medi Macro Bowl co-post showed food-only preparation and a 29g protein claim for the base bowl. The caption's double-chicken customization has no revised nutrition total. Presenter-led macro-order results were excluded. | 1 new | 130 |
 | B9, 2026-11-04 signed-in Chrome | Two food-only The Hive bowl Reels showed restaurant-stated 38g and 70g protein claims. The original Hive grid also exposed exact post view counts for these and the earlier Chicken Athena Reel. Naomi's TikTok creative was found as an Instagram co-post and kept as one identity. | 2 new; 1 row enriched | 128 |
 | B10, 2026-11-04 signed-in Chrome | Homegirl Cafe, six distinct Better Bowls Instagram Reels, a separate Better Bowls TikTok, Legacy Burgers, and Dialog Cafe passed sampled food-only footage review. Better Bowls' TikTok profile also showed captions matching several of its Instagram Reels, so those other uploads were not counted as new identities. Presenter-led Jawny's and Soul Delicious protein bowls were excluded. | 10 new | 118 |
+| B11, 2026-11-04 signed-in Chrome | Ten distinct TikToks passed original-page footage inspection: two LA or LA-area creator bowls, a Michigan Sahara bowl, two Ohio Hummus Republic edits, a disclosed NYC paid partnership, an Atlanta Sweetgreen bowl, LOOK Cinemas bowls, and two Boston Happy Rice creatives. Later replay revealed faces in several food-first leads, which were excluded. | 10 new | 108 |
 
-The CSV holds the thirty-two counted video identities, original links where known, source links, observation batches, visible metrics, unknown fields, and source limitations.
-Its commercial-context field distinguishes twenty brand-owned posts with unknown paid amplification, nine posts without a disclosure observed, two restaurant co-posts with unknown terms, and one creator Reel explicitly marked "hosted" in its caption.
-The hosted Reel is retained as creative evidence but excluded from non-ad post performance comparisons; absence of a disclosure in other posts is not proof of purely organic distribution.
+The CSV holds the forty-two counted video identities, original links, source links, observation batches, visible metrics, unknown fields, and source limitations.
+Its commercial-context field identifies twenty-five brand-owned posts with unknown paid amplification, thirteen creator posts without a disclosure observed, two restaurant co-posts with unknown terms, one hosted Reel, and one TikTok post labeled Paid partnership.
+The hosted Reel and paid partnership are retained as creative evidence but excluded from non-ad post performance comparisons; absence of a disclosure in other posts is not proof of purely organic distribution.
 The B1 CAVA post showed 2025-12-15, 17.7K likes, 175 comments, 4,617 favorites, and 2,001 shares on its original TikTok page; its approximate 3.3M view value remains a public-mirror snapshot.
 The original TikTok profile displayed 183.3K followers on 2026-11-04, so its follower snapshot is current rather than a historical follower denominator for the post.
 No view-to-follower ratio is interpreted from the older mixed-source, mixed-time mirror observations.
-Six LA TikTok rows and nine LA Instagram Reels now have original-profile view counts and current follower counts observed on the same day, each tied to the exact post tile; the other seventeen rows lack this matched pair.
-Accordingly, the normalized comparison has **n = 15**, split by platform and account, with no paid-ad ratio.
+Fourteen TikTok rows and nine Instagram Reels now have original-profile view counts and current follower counts observed on the same day, each tied to the exact post tile.
+One of those TikToks carries a Paid partnership label, leaving **n = 22** original-post pairs in the non-ad normalized comparison: thirteen TikToks and nine Instagram Reels.
+Three older CAVA TikToks have mirror view snapshots and current follower snapshots from a different source and time, so they remain outside this comparison.
 The ratios use current follower snapshots against cumulative views on posts of different ages, so they cannot be read as reach at posting or a controlled comparison.
 One account-level Reel window now supplies a bounded cadence observation, separate from the selected qualifying-video sample.
 The latest-first [Luna Grill Reels grid](https://www.instagram.com/lunagrill/reels/) showed twelve consecutive tiles without a pinned marker, from the [November 3 offer Reel](https://www.instagram.com/lunagrill/reel/DfSdhcnxXSd/) through the [September 30 Forney opening Reel](https://www.instagram.com/lunagrill/reel/Dd7vmHWxs1u/) when inspected on 2026-11-04.
@@ -142,21 +159,22 @@ TikTok Creative Center's public US Top Ads view showed a login-limited advertise
 Meta Ad Library loaded MenuFit's advertiser page with about 500 active ads on this visit; two additional food-order previews showed presenters, so zero were counted from that screened subset.
 Paid-ad previews are kept separate from organic reach analysis because those libraries do not expose comparable organic performance data.
 
-| Field in the thirty-two-row CSV | Observed | Unknown or source-limited | Interpretation now |
+| Field in the forty-two-row CSV | Observed | Unknown or source-limited | Interpretation now |
 | --- | ---: | ---: | --- |
-| Views | 21 | 11 | Six Urlebird mirror snapshots, six original TikTok profile tiles, and nine original Instagram Reel tiles bound to exact post URLs. |
-| Follower count | 29 | 3 | Current Instagram or TikTok profile snapshots, not post-date denominators. |
-| Likes and comments | 29 and 17 | 3 and 15 | New rows use original platform counts where visible; older rows include mirror observations. |
-| Saves or favorites | 10 | 22 | Ten original TikToks exposed favorites; the Instagram saves remain unknown. |
-| Exact posted date | 7 | 25 | Seven originals displayed full dates; many others displayed month and day without year. |
-| Length | 9 | 23 | The new Dialog Cafe and Legacy Burgers TikToks exposed player durations; Instagram durations remain unknown. |
-| Verified audible voice or music | 0 | 32 | Track labels are recorded, but the listening evidence is insufficient. |
+| Views | 29 | 13 | Six older Urlebird mirror snapshots, fourteen original TikTok profile tiles, and nine original Instagram Reel tiles bound to exact post URLs. |
+| Follower count | 39 | 3 | Current Instagram or TikTok profile snapshots, not post-date denominators. |
+| Likes and comments | 39 and 27 | 3 and 15 | New rows use original platform counts where visible; older rows include mirror observations. |
+| Saves or favorites | 20 | 22 | Twenty original TikToks exposed favorites; Instagram saves remain unknown. |
+| Exact posted date | 8 | 34 | Eight originals displayed full dates; many others displayed month and day without year. |
+| Length | 11 | 31 | The new Better Bowls and Sahara TikToks exposed player durations; most durations remain unknown. |
+| Verified audible voice or music | 0 | 42 | Track labels are recorded, but the listening evidence is insufficient. |
 
-The nine observed lengths range from 10 to 27.05 seconds with a median of 19.16 seconds; twenty-three lengths are unknown.
-Across all thirty-two rows, two hooks are coded as how-to orders, while the new Better Bowls examples add protein-goal, assembly, alternative, and snack-swap openings; no single hook dominates this selected sample.
-Eleven rows show a clear creator-stated numeric calorie or protein claim, two show numeric labels whose units or referents are unclear, and nineteen have no numeric calorie or protein figure verified in inspected frames or captions.
+The eleven observed lengths range from 10 to 29 seconds with a median of 19.16 seconds; thirty-one lengths are unknown.
+Across all forty-two rows, hooks include order instruction, protein surprise, food assembly, social proof, menu launch, and venue reveal; no single hook dominates this selected sample.
+Sixteen rows show a clear creator-stated numeric calorie or protein claim, two show numeric labels whose units or referents are unclear, and twenty-four have no numeric calorie or protein figure verified in inspected frames or captions.
 These categories describe what appears in the video or caption, not whether the nutrition estimate is accurate.
-Twenty-four of thirty-two counted videos are LA-focused; no Ad Library paid ad is included, while one Instagram Reel discloses a hosted restaurant visit.
+Twenty-six of forty-two counted videos are LA-focused; fifteen are elsewhere and the LOOK Cinemas video's location is unknown.
+No Ad Library paid ad is included; one Instagram Reel discloses a hosted restaurant visit and one NYC TikTok displays a Paid partnership label.
 These descriptive counts identify what this selected batch contains, not which creative choice caused more reach.
 
 | LA original post tile and current profile count | Views | Current followers | Views / current follower | Observed angle |
@@ -176,13 +194,29 @@ These descriptive counts identify what this selected batch contains, not which c
 | [Better Bowls Niagen Bowl](https://www.instagram.com/betterbowls.la/reel/DdunlGJlHzB/) | 392 | 776 | 0.51 | Brand claim of 45g protein with an unverified energy claim. |
 | [Better Bowls protein-goal TikTok](https://www.tiktok.com/@betterbowls/video/7626915747305901343) | about 12,900 | 132 | about 97.7 | Empty-to-filled yogurt bowl reveal. |
 | [Legacy Burgers teriyaki bowl](https://www.tiktok.com/@legacyburgersolym/video/7701127114052898062) | 1,067 | 489 | 2.18 | Grill-to-bowl restaurant protein option. |
+| [Better Bowls by The Bougie Foodie](https://www.tiktok.com/@the_bougie_foodie/video/7634359903447993613) | 776 | 719 | 1.08 | West Hollywood protein-yogurt cafe recommendation. |
 
-Six rows are TikTok originals and nine are Instagram Reels; repeated Better Bowls Reels share one 776-follower snapshot, while its TikTok account showed only 132 followers.
+Seven LA rows are TikTok originals and nine are Instagram Reels; repeated Better Bowls Reels share one 776-follower snapshot, while its TikTok account showed only 132 followers.
+Six other non-ad TikToks with exact-post views and current follower counts provide a wider but still selected context.
+
+| Other original TikTok post | Views | Current followers | Views / current follower | Context and interpretation limit |
+| --- | ---: | ---: | ---: | --- |
+| [Sahara Mediterranean protein bowl](https://www.tiktok.com/@saharahallroad/video/7600944752682470687) | about 302,000 | 346 | about 872.8 | Michigan brand post; the rounded view count and tiny current denominator create an extreme outlier, with paid amplification unknown. |
+| [Hummus Republic summer bowls](https://www.tiktok.com/@hummusrepublicdelaware/video/7676929540400221453) | 151 | 62 | 2.44 | Ohio brand macro lineup; current account has only 62 followers. |
+| [Hummus Republic 70% bowl](https://www.tiktok.com/@hummusrepublicdelaware/video/7676930080114838797) | 73 | 62 | 1.18 | Same brand and follower snapshot; its 70% customer claim is unverified. |
+| [Sweetgreen Hot Honey Chicken by KP](https://www.tiktok.com/@theekalebp/video/7647596793546411277) | about 11,200 | about 13,900 | about 0.81 | Atlanta creator post with rounded numerator and denominator. |
+| [Happy Rice bowls by Jas](https://www.tiktok.com/@jasfoodgram/video/7703593051096157454) | 918 | 2,477 | 0.37 | Boston creator's food-only launch video. |
+| [Happy Rice brand warm bowls](https://www.tiktok.com/@happyricesushi/video/7703583251662703886) | 830 | 1,005 | 0.83 | Separate preparation creative from the same Boston restaurant. |
+
+The [VIVIBOWL creator partnership](https://www.tiktok.com/@2chenz/video/7703692919986736414) had 322 views and 1,838 current followers, or about 0.18 views per current follower, but its explicit Paid partnership label keeps it outside the non-ad comparison.
+Jenz's LA Kebab Shop video and LOOK Cinemas' bowl launch lack exact-post view observations, so neither has a ratio.
 Platform ratios, account sizes, and post ages should not be pooled into a single ranking.
 Within the three Hive Reels, the 70g Protein Power Bowl has more views per current follower than the 65g Chicken Athena bowl, but post ages and presentation differ.
 Within six Better Bowls Instagram Reels from the same current account, the yogurt-build clip has about 7.6 times the views of the Niagen Bowl clip, and the protein-goal bagel has about 14% of the build clip's views.
 Their publish dates and topics differ, so this is relative underperformance within selected posts, not proof that Niagen or a bagel angle generally flops.
-Within the selected TikToks, the Better Bowls protein-goal reveal has the highest current-follower ratio, driven by its small 132-follower denominator; the Oishi ratio also depends on just 50 current followers.
+Within the selected TikToks, Sahara's rounded view count against only 346 current followers produces the highest ratio, followed by the Better Bowls protein-goal reveal against 132 followers and Oishi against 50 followers.
+None of those ratios establishes the distribution mechanism or predicts performance on a larger account.
+The two Ohio Hummus Republic edits differ by roughly twofold in views from the same current 62-follower account, but their publication timing, subject, and possible distribution are not controlled.
 The sample remains uneven in account, post age, distribution, and format and cannot establish a repeatable winner.
 No causal claim follows from these ratios.
 The [Naomi TikTok](https://www.tiktok.com/@naomisnoshes/video/7688912545826000158) also appears as an [Instagram co-post](https://www.instagram.com/naomisnoshes/reel/DdoyFWotDIz/) with the same opening bowl and 65g claim.
@@ -237,6 +271,25 @@ All ten Reels were sampled across their food sequences in the signed-in Instagra
 These ten originals were inspected at their individual pages in signed-in Chrome; no presenter face appeared in sampled footage, and unsampled frames remain unverified.
 The Better Bowls TikTok profile also showed captions corresponding to several Instagram entries, but a matching caption alone is insufficient to add another creative identity or assert identical footage.
 The six Better Bowls Instagram rows use one current profile count and are an account cluster, not six independent accounts.
+
+### B11 original TikTok examples
+
+| Original video | Inspected food footage, hook, and nutrition treatment | Public snapshot on 2026-11-04 | Evidence limits and commercial context |
+| --- | --- | --- | --- |
+| [Better Bowls by The Bougie Foodie](https://www.tiktok.com/@the_bougie_foodie/video/7634359903447993613) | West Hollywood venue and yogurt bowl cuts carry a large white endorsement; the caption calls the cafe protein-focused without a gram total. | 776 views, 6 likes, 2 comments, 2 favorites, 1 share; creator profile 719 followers. | 29 seconds; April 29 lacked year; staff member briefly incidental in background; sponsorship not disclosed. |
+| [Sahara Mediterranean protein bowl](https://www.tiktok.com/@saharahallroad/video/7600944752682470687) | Food-only bowl montage starts under the brand wordmark; caption calls it protein-packed without numeric macros. | Rounded 302K views, 1,024 likes, 9 comments, 149 favorites, 97 shares; profile 346 followers. | 18 seconds; January 29 lacked year; paid distribution and nutrition verification unknown; tiny follower denominator. |
+| [Hummus Republic summer bowls](https://www.tiktok.com/@hummusrepublicdelaware/video/7676929540400221453) | Moving poolside lineup labels four bowls with restaurant-stated 33-46g protein in white text. | 151 views, 1 like, 0 comments, 0 favorites; profile 62 followers. | August 28 lacked year; duration and shares unknown; brand-owned Ohio post. |
+| [Hummus Republic 70% bowl](https://www.tiktok.com/@hummusrepublicdelaware/video/7676930080114838797) | Large white "70% of our customers order this" claim opens on chicken, then hands assemble a bowl under "FRESH." | 73 views, 2 likes, 0 comments, 0 favorites; profile 62 followers. | August 30 lacked year; the 70% claim, duration, and shares are unverified; brand-owned Ohio post. |
+| [The Kebab Shop by Jen Z](https://www.tiktok.com/@jenz_losangeles/video/7351839397290986798) | El Segundo food line, kebab tray, and steak bowl appear under small white myth-busting subtitles; caption claims 42g protein and under 500 calories. | 1,631 likes, 9 comments, 557 favorites, 225 shares; creator profile rounded 177.8K followers. | Posted 2024-03-29; exact views and duration unknown; no presenter face in sampled replay; sponsorship not disclosed. |
+| [VIVIBOWL by Henry](https://www.tiktok.com/@2chenz/video/7703692919986736414) | Restaurant sign and hands-only bowl assembly lead to three 35-43g protein claims in caption and closing food close-ups. | 322 views, 13 likes, 1 comment, 6 favorites, 2 shares; creator profile 1,838 followers. | TikTok labels this Paid partnership; 2d ago lacked an absolute timestamp; excluded from non-ad performance comparisons. |
+| [Sweetgreen Hot Honey Chicken by KP](https://www.tiktok.com/@theekalebp/video/7647596793546411277) | Hand places sauce beside a close-up Atlanta bowl; caption calls it high-protein without grams. | Rounded 11.2K views, 222 likes, 11 comments, 53 favorites, 67 shares; profile rounded 13.9K followers. | June 4 lacked year; precise duration and nutrition unknown; sponsorship not disclosed. |
+| [LOOK Cinemas Power Protein Bowls](https://www.tiktok.com/@look_cinemas/video/7642033713525706015) | Overhead five-bowl reveal and food-only table cuts announce a new menu; caption claims up to 41g protein without naming an individual bowl's total. | 9 likes, 1 comment, 2 favorites, 0 shares; profile 1,475 followers. | May 20 lacked year; views, duration, exact location, and paid distribution unknown. |
+| [Happy Rice bowls by Jas](https://www.tiktok.com/@jasfoodgram/video/7703593051096157454) | Three Boston sushi bowls open under a white high-protein line, followed by fish close-ups; caption says menu nutrition facts exist, but shows no exact grams. | 918 views, 39 likes, 2 comments, 2 favorites; creator profile 2,477 followers. | 2d ago lacked an absolute timestamp; duration, shares, menu nutrition, and sponsorship unknown. |
+| [Happy Rice brand warm bowls](https://www.tiktok.com/@happyricesushi/video/7703583251662703886) | Cod preparation opens under "BOSTON SEAPORT warm bowls are here" and cuts to food; caption claims 53g protein for cod and 50g for salmon. | 830 views, 26 likes, 1 comment, 2 favorites; brand profile 1,005 followers. | 2d ago lacked an absolute timestamp; duration, shares, verified macros, and paid distribution unknown; distinct filming from Jas's post. |
+
+These ten originals were inspected in signed-in Chrome, with later replay for short-list candidates that initially appeared food-only.
+Presenter-led LA, Boudin, Planta, Protein Shop, and MenuFit or LeanBites-tagged candidates were excluded rather than counted from food thumbnails or macro captions.
+The new batch broadens platform and restaurant coverage but does not establish a reliable winner, a universal "flop" threshold, or a cadence pattern.
 
 ## Footage-inspected examples
 
