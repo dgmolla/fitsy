@@ -175,11 +175,13 @@ it('resets a spent preview sample and tour when a new onboarding pass starts', a
 });
 
 it.each([
-  ['opens the chooser on the first tap', 0],
-  ['recovers a cancelled chooser touch', 1],
-  ['fails when the chooser never opens', Infinity],
-] as const)('replays saved out-of-area recovery after a cold launch: %s', async (_, cancelledTouches) => {
-  mockSession = { access_token: 'test-token', user: { id: `area-recovery-${cancelledTouches}` } };
+  ['opens the chooser on the first tap', 0, false],
+  ['recovers a cancelled chooser touch', 1, false],
+  ['dismisses a blocking Debug warning', 0, true],
+  ['fails when the chooser never opens', Infinity, false],
+] as const)('replays saved out-of-area recovery after a cold launch: %s', async (scenario, cancelledTouches, debugWarning) => {
+  // Preview responses are cached by account; each native scenario owns its fixture.
+  mockSession = { access_token: 'test-token', user: { id: `area-recovery-${scenario}` } };
   await AsyncStorage.setItem('@fitsy/onboardingAccount', mockSession.user.id);
   jest.spyOn(ExpoLocation, 'requestForegroundPermissionsAsync')
     .mockResolvedValue({ status: ExpoLocation.PermissionStatus.GRANTED } as never);
@@ -205,15 +207,21 @@ it.each([
 
   const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
   type Selector = string | { id: string; enabled?: boolean };
-  type Step = { tapOn?: Selector; assertVisible?: Selector; waitForAnimationToEnd?: unknown;
+  type Step = { tapOn?: Selector | { point: string }; assertVisible?: Selector; waitForAnimationToEnd?: unknown;
     extendedWaitUntil?: { visible: Selector }; scrollUntilVisible?: { element: { text: string }; direction: string };
-    runFlow?: string; retry?: { maxRetries: number; commands: Step[] } };
+    runFlow?: string | { when: { visible: Selector }; commands: Step[] }; retry?: { maxRetries: number; commands: Step[] } };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/onboarding-out-of-area.yaml'), 'utf8')) as [unknown, Step[]];
-  const start = commands.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === 'waitlist-change-area');
+  const start = commands.findIndex(step => typeof step.tapOn === 'object' && 'id' in step.tapOn && step.tapOn.id === 'waitlist-change-area');
   const end = commands.findIndex((step, index) => index > start && typeof step.extendedWaitUntil?.visible === 'object' && step.extendedWaitUntil.visible.id === 'goal-performance');
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   let chooserTouches = 0;
+  let warningVisible: boolean = debugWarning;
+  let warningDismissals = 0;
+  function visible(selector: Selector) {
+    if (typeof selector === 'string' && new RegExp(selector).test('!, Open debugger to view warnings.')) return warningVisible;
+    return (typeof selector === 'string' ? screen.queryByText(selector) : screen.queryByTestId(selector.id)) !== null;
+  }
   function assertVisible(selector: Selector) {
     const element = typeof selector === 'string' ? screen.queryByText(selector) : screen.queryByTestId(selector.id);
     if (!element) throw new Error(`Missing visible outcome: ${JSON.stringify(selector)}`);
@@ -227,15 +235,25 @@ it.each([
           catch (error) { if (attempt >= step.retry.maxRetries) throw error; }
         }
       } else if (step.runFlow) {
-        const file = resolve(directory, step.runFlow);
-        const [, nested] = loadAll(readFileSync(file, 'utf8')) as [unknown, Step[]];
-        await replay(nested, resolve(file, '..'));
+        if (typeof step.runFlow === 'string') {
+          const file = resolve(directory, step.runFlow);
+          const [, nested] = loadAll(readFileSync(file, 'utf8')) as [unknown, Step[]];
+          await replay(nested, resolve(file, '..'));
+        } else if (visible(step.runFlow.when.visible)) await replay(step.runFlow.commands, directory);
       } else if (step.tapOn) {
         const selector = step.tapOn;
+        if (typeof selector === 'object' && 'point' in selector) {
+          expect(warningVisible).toBe(true);
+          expect(selector.point).toBe('93%,93%');
+          warningVisible = false;
+          warningDismissals++;
+          continue;
+        }
         const element = typeof selector === 'string' ? screen.getByLabelText(selector) : screen.getByTestId(selector.id);
-        if (typeof selector === 'object' && selector.id === 'location-choose-area' && ++chooserTouches <= cancelledTouches) {
+        if (typeof selector === 'object' && selector.id === 'location-choose-area' && (++chooserTouches <= cancelledTouches || warningVisible)) {
           // UIKit can cancel a touch during route replacement. Press feedback
           // changes the screen, so Maestro's generic change detector is insufficient.
+          // The captured native Debug warning also covers this footer's tap point.
           await act(async () => { fireEvent(element, 'pressIn'); fireEvent(element, 'pressOut'); });
         } else await act(async () => { fireEvent.press(element); });
       }
@@ -255,6 +273,7 @@ it.each([
     return;
   }
   await recovery;
+  expect(warningDismissals).toBe(Number(debugWarning));
   expect(chooserTouches).toBe(cancelledTouches + 1);
   expect(screen.getPathname()).toBe('/welcome/goal');
   expect((await getOnboardingData()).area).toEqual({ lat: 34.0407, lng: -118.2468, name: 'DTLA', source: 'manual' });
