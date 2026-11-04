@@ -5,6 +5,8 @@ import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-nati
 import Payment from '../app/welcome/payment';
 import { supabase } from '../lib/supabase';
 import { fetchSubscriptionStatus } from '../lib/apiClient';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Only native providers, transport and store inputs are synthetic.
 // The sign-in screen, session adoption, navigation and purchase guards are real.
@@ -20,8 +22,9 @@ beforeEach(() => {
   jest.spyOn(Purchases, 'getAppUserID').mockImplementation(async () => mockState.session?.user.id ?? '$RCAnonymousID:fixture');
 });
 
-it.each(['Apple failure', 'Apple cancellation', 'Google exchange failure', 'Google cancellation', 'Google missing token', 'Apple session rejection', 'Google session rejection'] as const)(
+it.each(['Apple failure', 'Apple cancellation', 'Apple missing account', 'Google exchange failure', 'Google cancellation', 'Google missing token', 'Apple session rejection', 'Google session rejection'] as const)(
   '%s cannot expose plans or invoke purchase; only a valid-session retry continues', async kind => {
+    const accountId = kind === 'Apple missing account' ? 'apple-missing-account-buyer' : 'buyer';
     const alert = jest.spyOn(Alert, 'alert');
     const purchase = jest.spyOn(Purchases, 'purchasePackage');
     const nativeApple = jest.mocked(AppleAuthentication.signInAsync);
@@ -29,6 +32,20 @@ it.each(['Apple failure', 'Apple cancellation', 'Google exchange failure', 'Goog
     nativeApple.mockReset().mockResolvedValue(credential);
     if (kind === 'Apple failure' || kind === 'Apple cancellation') nativeApple.mockRejectedValueOnce(new Error(
       kind === 'Apple cancellation' ? 'The user canceled the authorization attempt' : 'The authorization attempt failed for an unknown reason'));
+    const nativeDialog = new Set<string>();
+    let closeAppleDialog = () => { throw new Error('Apple dialog is not open'); };
+    if (kind === 'Apple missing account') {
+      jest.spyOn(supabase.auth, 'setSession').mockImplementation(async () => {
+        mockState.session = { access_token: 'test-token', user: { id: accountId } };
+        return { data: { session: mockState.session }, error: null } as never;
+      });
+      // Observed iOS 17.5 response without an Apple ID: Close, then app error.
+      alert.mockImplementation(title => { nativeDialog.clear(); nativeDialog.add(title); nativeDialog.add('OK'); });
+      nativeApple.mockImplementationOnce(() => new Promise((_, reject) => {
+        ['Sign in with your Apple\u00a0ID', 'Close', 'Settings'].forEach(text => nativeDialog.add(text));
+        closeAppleDialog = () => reject(new Error('The authorization attempt failed for an unknown reason'));
+      }));
+    }
     if (kind.endsWith('session rejection')) jest.spyOn(supabase.auth, 'setSession').mockImplementationOnce(async () => {
       // A rejected refresh during adoption can emit SIGNED_OUT before returning.
       for (const listener of mockState.authListeners) listener('SIGNED_OUT', null);
@@ -43,7 +60,7 @@ it.each(['Apple failure', 'Apple cancellation', 'Google exchange failure', 'Goog
         return Promise.resolve({ ...response({ error: 'Provider token rejected' }), ok: false, status: 401 });
       }
       return Promise.resolve(response(/\/api\/auth\/(apple|google)$/.test(String(url))
-        ? { token: 'test-token', refreshToken: 'refresh', user: { id: 'buyer' }, isNewUser: false }
+        ? { token: 'test-token', refreshToken: 'refresh', user: { id: accountId }, isNewUser: false }
         : { active: false, synced: true, verdict: 'never_subscribed', lastRcVerifiedAt: new Date().toISOString(), stale: false }));
     }));
     await rememberPaywallIntent(selected);
@@ -54,6 +71,35 @@ it.each(['Apple failure', 'Apple cancellation', 'Google exchange failure', 'Goog
     await waitFor(() => expect(screen.getByTestId('signup-selected-restaurant')).toBeTruthy());
     const providerControl = kind.startsWith('Google') ? 'signup-google' : 'signup-apple';
     await act(async () => { fireEvent.press(screen.getByTestId(providerControl)); });
+    if (kind === 'Apple missing account') {
+      type NativeStep = { tapOn?: string | { id: string }; takeScreenshot?: string;
+        extendedWaitUntil?: { visible: string }; assertVisible?: string | { id: string };
+        runFlow?: { when: { visible: string }; commands: NativeStep[] } };
+      const [, flow] = require('js-yaml').loadAll(readFileSync(resolve(__dirname,
+        '../e2e/flows/onboarding-returning-preview.yaml'), 'utf8')) as [unknown, NativeStep[]];
+      const start = flow.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === 'signup-apple');
+      const end = flow.findIndex((step, index) => index > start &&
+        typeof step.assertVisible === 'object' && step.assertVisible.id === 'signup-apple');
+      expect(start).toBeGreaterThan(-1);
+      expect(end).toBeGreaterThan(start);
+      const visible = (selector: string) => [...nativeDialog].some(text => new RegExp(selector).test(text));
+      const replay = async (steps: NativeStep[]) => {
+        for (const step of steps) {
+          const required = step.extendedWaitUntil?.visible ?? step.assertVisible;
+          if (typeof required === 'string' && !visible(required)) throw new Error(`Missing native outcome: ${required}`);
+          if (step.runFlow && visible(step.runFlow.when.visible)) await replay(step.runFlow.commands);
+          if (typeof step.tapOn === 'string') {
+            expect(visible(step.tapOn)).toBe(true);
+            if (new RegExp(step.tapOn).test('Close')) await act(async () => { closeAppleDialog(); });
+            else if (new RegExp(step.tapOn).test('OK')) nativeDialog.clear();
+            else throw new Error(`Unexpected native action: ${step.tapOn}`);
+          }
+        }
+      };
+      // Execute the saved flow's real dialog branch before the existing auth guards.
+      await replay(flow.slice(start + 1, end));
+      expect(nativeDialog.size).toBe(0);
+    }
     if (!kind.endsWith('cancellation')) await waitFor(() => expect(alert).toHaveBeenCalled());
     else expect(alert).not.toHaveBeenCalled();
     expect(mockState.session).toBeNull();
@@ -76,11 +122,11 @@ it.each(['Apple failure', 'Apple cancellation', 'Google exchange failure', 'Goog
     mockState.googleResponse = undefined;
     await act(async () => { fireEvent.press(resumed.getByTestId(providerControl)); });
     await waitFor(() => expect(resumed.getByTestId('paywall-offer-paid')).toBeTruthy());
-    expect(mockState.session?.user.id).toBe('buyer');
+    expect(mockState.session?.user.id).toBe(accountId);
     expect(resumed.getAllByTestId('paywall-logo')).toHaveLength(1);
     expect(resumed.queryByTestId('signup-apple')).toBeNull();
-    expect(await getPaywallIntent('buyer')).toEqual(selected);
-    expect(JSON.parse((await AsyncStorage.getItem('@fitsy/paywallIntent'))!).userId).toBe('buyer');
+    expect(await getPaywallIntent(accountId)).toEqual(selected);
+    expect(JSON.parse((await AsyncStorage.getItem('@fitsy/paywallIntent'))!).userId).toBe(accountId);
     expect(purchase).not.toHaveBeenCalled();
     // Synthetic native purchase boundary: only the later valid session unlocks it.
     await act(async () => { fireEvent.press(resumed.getByTestId('welcome-continue')); });
