@@ -1,6 +1,6 @@
 # Faceless restaurant Reels research and Fitsy templates
 
-**TL;DR:** Seven qualifying TikTok-origin videos are documented; the expanded 150-300-example target remains open.
+**TL;DR:** Fourteen qualifying Instagram and TikTok videos are documented; the expanded 150-300-example target remains open.
 
 > **Status:** partial research, target unmet · **Last verified:** 2026-11-04 · **Owner:** Fitsy Marketing
 > This is creative research and proposed copy, not permission to publish, contact creators, or spend.
@@ -73,15 +73,17 @@ The [Socialpruf Sweetgreen gallery](https://socialpruf.com/tiktok/sweetgreen) wa
 | [MenuFit Panda Express Meta ad](https://www.facebook.com/ads/library/?id=1183997977522853) | The ad presents a calorie and protein overlay, but a person's face and hair appear beside the tray in the opening frame. |
 | [MenuFit Chick-fil-A Meta ad](https://www.facebook.com/ads/library/?id=1170741792303768) | A woman's eyes and face are visible behind the food container in the opening frame. |
 | [MenuFit food-preparation Meta ad](https://www.facebook.com/ads/library/?id=2864133903960270) | Public playback showed a home food-preparation sequence and an app screen, without a specific restaurant dish or order. |
+| [MenuFit partner Chipotle order](https://www.tiktok.com/@macroswithem/video/7702235650879212813) | The signed-in original TikTok opened on the creator's face, despite its restaurant macro caption. |
+| [LeanBites partner Taco Bell swap](https://www.tiktok.com/@evanfoodhacks/video/7685452987036142879) | The signed-in original TikTok opened on the creator's face; earlier indexed text alone could not show this. |
 
 ### Coverage achieved and remaining gap
 
-Fourteen distinct video pages have footage-backed entries below, but only seven are clearly attributable to TikTok originals: six official brand mirrors and one watermarked creator mirror.
-The other seven are creator-owned YouTube Shorts that provide short-form restaurant inspiration but have no verified Reel or TikTok cross-post, so they do not fill the strict 15-25 Reel/TikTok target.
-At least 143 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
+Twenty-one distinct video pages have footage-backed entries below, but only fourteen are attributable to Instagram or TikTok originals: six official TikTok brand mirrors, one watermarked TikTok creator mirror, five newly inspected LA TikToks, and two LA Instagram Reels.
+The other seven are creator-owned YouTube Shorts that provide short-form restaurant inspiration but have no verified Reel or TikTok cross-post, so they do not fill the expanded Reel/TikTok target.
+At least 136 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
 All six official TikTok mirrors were watched through their public players; the watermarked mirror and the YouTube Shorts were checked at sampled timestamps, with unseen frames explicitly left unknown.
-No LA-focused account, MenuFit creative, LeanBites creative, or Meta ad met the combined public-footage and faceless criteria in this pass.
-The closest LA and LeanBites leads had captions or thumbnails only, while screened MenuFit ads and several creator clips showed faces.
+Five LA-focused TikTok originals and two LA Instagram Reels met the criteria in the new batches; no inspected MenuFit creative, LeanBites creative, or Meta ad has yet met them.
+Directly inspected MenuFit and LeanBites partner TikToks opened on faces, while screened MenuFit ads and several other creator clips also showed faces.
 Public searches also checked individual posts and indexes for Just Salad, Mendocino Farms, Tender Greens, Flower Child, Chopt, Chopped Leaf, LA food accounts, and the seven YouTube creators; no additional qualifying individual Reel or TikTok was verified from those routes.
 The current route is slow-paced, signed-in, view-only inspection of Instagram and TikTok public creatives in Dawit's existing Chrome session, plus public TikTok Creative Center and Meta Ad Library assessment.
 Challenges, captchas, try-again-later notices, action blocks, private APIs, and unverified captions cannot close the evidence gap.
@@ -92,31 +94,57 @@ Challenges, captchas, try-again-later notices, action blocks, private APIs, and 
 | --- | --- | ---: | ---: |
 | B0, prior public pass | Seven attributable TikTok-origin videos with inspected footage; seven YouTube-only Shorts retained as supplemental analogues. | 7 | 143 |
 | B1, 2026-11-04 signed-in Chrome | Instagram loaded as @fitsy.lyfe, but the first inspected Sweetgreen Reel showed a presenter and was excluded. CAVA's Instagram profile displayed about 334K followers. Original CAVA TikTok playback loaded; its profile displayed about 183.3K followers, and the original post displayed a dated caption plus like, comment, favorite, and share counters. The directly inspected MenuFit account URL returned "Couldn't find this account." | 0 new | 143 |
+| B2, 2026-11-04 signed-in Chrome | Five LA TikTok originals passed sampled footage inspection: Pacific Catch Santa Monica, two The Hive Santa Monica creatives, The Window grain bowl, and Summit protein plate. Presenter-led candidates were excluded. | 5 new | 138 |
+| B3, 2026-11-04 signed-in Chrome | Two LA Instagram Reels passed sampled footage inspection: Faregrounds Beverly Hills breakfast burrito and Sweetfin Innovation Kitchen bowls. A general list of healthy LA restaurants was screened but excluded from the count because it did not analyze a specific dish or swap. | 2 new | 136 |
 
-The CSV holds the seven counted video identities, original links where known, source links, observation batches, visible metrics, unknown fields, and source limitations.
+The CSV holds the fourteen counted video identities, original links where known, source links, observation batches, visible metrics, unknown fields, and source limitations.
 The B1 CAVA post showed 2025-12-15, 17.7K likes, 175 comments, 4,617 favorites, and 2,001 shares on its original TikTok page; its approximate 3.3M view value remains a public-mirror snapshot.
 The original TikTok profile displayed 183.3K followers on 2026-11-04, so its follower snapshot is current rather than a historical follower denominator for the post.
 No view-to-follower ratio is interpreted from these mixed-source, mixed-time observations.
-The other six CSV records still have unknown or mismatched follower denominators, and all seven lack a source-comparable views and follower pair.
+The other thirteen CSV records still have unknown or mismatched follower denominators or lack original post views, and all fourteen lack a source-comparable views and follower pair.
 Accordingly, normalized comparison has **n = 0** in this partial batch; top-performer, underperformance, and cadence findings remain unassessed.
 The original historical access results below do not establish current platform access limits after the signed-in authorization.
-The current batch has not yet assessed TikTok Creative Center or revisited Meta Ad Library.
+TikTok Creative Center's public US Top Ads view showed a login-limited advertiser subset; a visible search for "protein" returned two non-restaurant ads, so zero were counted.
+Meta Ad Library loaded MenuFit's advertiser page with about 500 active ads on this visit; two additional food-order previews showed presenters, so zero were counted from that screened subset.
+Paid-ad previews are kept separate from organic reach analysis because those libraries do not expose comparable organic performance data.
 
-| Field in the seven-row CSV | Observed | Unknown or source-limited | Interpretation now |
+| Field in the fourteen-row CSV | Observed | Unknown or source-limited | Interpretation now |
 | --- | ---: | ---: | --- |
-| Views | 7 | 0 | One YouTube mirror and six Urlebird mirror snapshots; original-platform comparability is unverified. |
-| Follower count | 3 | 4 | All three are CAVA's 2026-11-04 TikTok profile snapshot, not a post-date denominator. |
-| Likes and comments | 6 and 7 | 1 and 0 | Original CAVA counts exist for one row; the rest are public mirror observations. |
-| Saves or favorites | 1 | 6 | One original TikTok favorite count; no zero is inferred from missing saves. |
-| Exact posted date | 1 | 6 | The one original TikTok date cannot establish an account cadence window. |
-| Length | 7 | 0 | Six mirror-player lengths and one original TikTok playback length. |
-| Verified audible voice or music | 0 | 7 | Track labels are recorded, but the listening evidence is insufficient. |
+| Views | 7 | 7 | One YouTube mirror and six Urlebird mirror snapshots; none of the seven LA originals exposed post views in the inspected page. |
+| Follower count | 10 | 4 | Current Instagram or TikTok profile snapshots, not post-date denominators. |
+| Likes and comments | 13 and 13 | 1 and 1 | Seven new rows use original platform counts where visible; older rows include mirror observations. |
+| Saves or favorites | 6 | 8 | Five new TikToks exposed favorites; the Instagram saves remain unknown. |
+| Exact posted date | 3 | 11 | The Window and Faregrounds originals displayed full dates; most other new originals displayed month and day without year. |
+| Length | 8 | 6 | The Pacific Catch original displayed 22 seconds; the two Instagram originals did not expose reliable duration in this view. |
+| Verified audible voice or music | 0 | 14 | Track labels are recorded, but the listening evidence is insufficient. |
 
 The seven lengths range from 10.65 to 31 seconds with a median of 19.16 seconds.
 Two hooks are coded as how-to orders; the other five each use a different observed opening type.
 Four rows show a creator-stated numeric nutrition claim, while three do not show a numeric macro in the inspected footage.
-All seven are non-LA, organic or brand posts; no paid ad is included in these comparisons.
+Seven of fourteen counted videos are LA-focused, and none is a paid ad.
 These descriptive counts identify what this selected batch contains, not which creative choice caused more reach.
+
+### New LA examples in the current batch
+
+| Original video | Opening, footage, and nutrition treatment | Public engagement snapshot on 2026-11-04 | Evidence limits |
+| --- | --- | --- | --- |
+| [Pacific Catch Santa Monica](https://www.tiktok.com/@losangelesgoodeats/video/7619405004020927774) | Venue-first sign and white location label lead to bowls, sushi, and dining-room cuts; caption frames the Feel Good 5 menu as health-conscious and names chicken and shrimp, without a gram claim. | 1,668 likes, 15 comments, 1,150 favorites, 697 shares; creator profile 18.7K followers. | 22 seconds; post views, exact year of displayed 3-20, audio content, and nutrition verification unknown. |
+| [The Hive Chicken Athena bowl](https://www.tiktok.com/@naomisnoshes/video/7688912545826000158) | A bowl opens under "65 grams of protein?" white outlined text; food, burrito, açaí, and latte cuts follow. The 65g bowl and 62g burrito figures are creator claims. | 23 likes, 0 comments, 8 favorites, 1 share; creator profile 1,167 followers. | Post views, duration, exact year of displayed 9-23, audio content, and nutrition verification unknown. |
+| [The Hive healthy lunch](https://www.tiktok.com/@lawithkathy/video/7675130994252352782) | Food platter and "HEALTH" opening, then burrito sauce and latte in small white captions; the caption names high-protein açaí without a verified gram total. | 217 likes, 19 comments, 97 favorites, 42 shares; creator profile 3,750 followers. | Post views, duration, exact year of displayed 8-21, audio content, and nutrition verification unknown. |
+| [The Window grain bowl](https://www.tiktok.com/@moodfashionfood/video/7475123059637095710) | Bowl close-up and venue sign carry an affordable healthy-lunch claim; overlay lists five LA-area locations. Caption describes an $8 grain bowl with a $2.75 protein add-on. | 863 likes, 8 comments, 820 favorites, 329 shares; creator profile 10.4K followers. | Posted 2025-02-24; post views, duration, audio content, and nutrition verification unknown. |
+| [Summit protein plate](https://www.tiktok.com/@summits.life/video/7619757946339183886) | Receipt, chicken bowl, then empty dish under a short white "unlimited protein" caption; a fleeting 180g/40g text lacks clear referents. | 20 likes, 2 comments, 7 favorites, 5 shares; restaurant profile 129 followers. | Post views, duration, exact year of displayed 3-21, audio content, and gram meaning unknown; "big back" wording is a copy pitfall. |
+
+The five LA originals were sampled at opening, middle, and end; no presenter face appeared in inspected frames, but unsampled frames are not asserted as face-free.
+These are selected examples with different account sizes and ages, so their raw engagement does not rank creative effectiveness.
+
+### New Instagram examples in the current batch
+
+| Original Reel | Opening, footage, and nutrition treatment | Public engagement snapshot on 2026-11-04 | Evidence limits |
+| --- | --- | --- | --- |
+| [Faregrounds Beverly Hills breakfast burrito](https://www.instagram.com/nate.eatz/reel/DKAHBRpJIVe/) | Storefront opens under a large black-on-white "LA's healthiest breakfast burrito" card; yellow outlined subtitles follow burrito close-ups and serving hands. The caption cites ingredient sourcing and no seed oils, which do not verify a nutrition outcome. | 5,430 likes; creator profile 373K followers. | Posted 2025-05-23; views, total comments, saves, shares, duration, audio content, and nutrition verification unknown. |
+| [Sweetfin Innovation Kitchen bowls](https://www.instagram.com/theogglutenfree/reel/DVPcEzAAXPF/) | Menu board and bowl close-ups show the restaurant offering; caption calls the LA bowls high-protein and gluten-free friendly, without a gram figure in inspected frames. | 57 likes, 22 comments, 1 repost; creator profile 8,018 followers. | Exact year of displayed February 26, views, saves, shares, duration, audio content, and nutrition verification unknown. Repost count is not treated as share count. |
+
+Both Reels were sampled across their food sequences in the signed-in Instagram view; no presenter face appeared in inspected frames.
 
 ## Footage-inspected examples
 
