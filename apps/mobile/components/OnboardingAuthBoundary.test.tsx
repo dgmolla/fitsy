@@ -33,7 +33,7 @@ it.each(['Apple failure', 'Apple cancellation', 'Apple missing account', 'Google
     if (kind === 'Apple failure' || kind === 'Apple cancellation') nativeApple.mockRejectedValueOnce(new Error(
       kind === 'Apple cancellation' ? 'The user canceled the authorization attempt' : 'The authorization attempt failed for an unknown reason'));
     const nativeDialog = new Set<string>();
-    let closeAppleDialog = () => { throw new Error('Apple dialog is not open'); };
+    let closeAppleDialog: () => void = () => { throw new Error('Apple dialog is not open'); };
     if (kind === 'Apple missing account') {
       jest.spyOn(supabase.auth, 'setSession').mockImplementation(async () => {
         mockState.session = { access_token: 'test-token', user: { id: accountId } };
