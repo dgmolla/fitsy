@@ -191,12 +191,28 @@ env:
     timeout: 15000
 - tapOn:
     id: goal-lose_fat
-- tapOn:
-    id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: tried-meal_prep
-    timeout: 15000
+# Press feedback can finish without navigation after the resumed deep link.
+# Retry only on the goal screen so a late transition cannot advance Tried too.
+- retry:
+    maxRetries: 1
+    commands:
+      - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              id: goal-lose_fat
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  id: welcome-continue
+                  enabled: true
+                timeout: 15000
+            - tapOn:
+                id: welcome-continue
+      - extendedWaitUntil:
+          visible:
+            id: tried-meal_prep
+          timeout: 15000
 - openLink: com.fitsy.mobile://welcome/how-it-works
 - tapOn:
     text: "^Open$"
