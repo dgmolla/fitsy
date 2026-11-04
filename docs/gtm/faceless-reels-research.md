@@ -1,20 +1,22 @@
 # Faceless restaurant Reels research and Fitsy templates
 
-**TL;DR:** Fourteen video references are documented, but only seven verify Reel or TikTok origin and the target remains open.
+**TL;DR:** Seven qualifying TikTok-origin videos are documented; the expanded 150-300-example target remains open.
 
 > **Status:** partial research, target unmet · **Last verified:** 2026-11-04 · **Owner:** Fitsy Marketing
 > This is creative research and proposed copy, not permission to publish, contact creators, or spend.
 
 ## Scope and evidence method
 
-The target is 15-25 distinct public short videos showing restaurant dishes or orders through a healthy swap, macro, protein, or surprising nutrition angle, with no presenter visible in the footage.
-An example counts only after its individual video page and footage can be inspected through ordinary public access.
+The current target is 150-300 distinct Instagram Reels or TikTok videos showing restaurant dishes or orders through a healthy swap, macro, protein, or surprising nutrition angle, with no presenter visible in the footage.
+The 15-25 target and anonymous-only rule below are historical and were superseded by Dawit's 2026-11-04 issue comments.
+Signed-in viewing through Dawit's existing Chrome session is authorized for public creative research only, at a normal person's pace and strictly view-only.
+An example counts only after its individual video page and footage have been inspected, including a source and an explicit observation date in the [CSV dataset](faceless-reels-dataset.csv).
 Each entry separates footage observed directly from page or caption metadata and marks details that cannot be verified as unknown.
 An image thumbnail, search snippet, caption, or creator profile alone cannot establish the first two seconds, pacing, audio, or whether the whole video is faceless.
 Engagement is a public page snapshot on the access date, not evidence that a creative choice caused results.
 Nutrition numbers stated by other creators are reported as their claims, not verified Fitsy estimates or venue-wide health claims.
 
-### Public access log
+### Historical anonymous public access log
 
 | Date | Source and ordinary access attempted | Observed result | Treatment |
 | --- | --- | --- | --- |
@@ -35,8 +37,9 @@ Nutrition numbers stated by other creators are reported as their claims, not ver
 
 The public mirror is unaffiliated with TikTok, and its displayed counters can change.
 Mirror captions and playback can disagree, so a mirrored example counts only after its visible footage matches the named restaurant and creative claim.
-No authenticated content, private API, proxy rotation, or bot-check bypass was used as research evidence.
-An existing signed-in TikTok browser session was noticed during a media-type check and immediately abandoned without relying on its content.
+The prior batch used no authenticated content, private API, proxy rotation, or bot-check bypass as research evidence.
+The prior worker noticed an existing signed-in TikTok session during a media-type check and abandoned it under the then-current anonymous-only rule.
+The current signed-in viewing authorization supersedes that restriction without changing the historical access record.
 When a public source supplies only a caption or thumbnail, its discovery lead is excluded from the counted examples.
 Several [official MenuFit public mirrors](https://urlebird.com/user/menufit.app/) played a single static graphic throughout and may represent TikTok photo posts rendered as video by the mirror; their original media type could not be confirmed through anonymous access, so none counts here.
 The [Socialpruf Sweetgreen gallery](https://socialpruf.com/tiktok/sweetgreen) was also screened as a public fallback, but one salad-labeled card played an unrelated word quiz, so its gallery footage was excluded where caption and player could not be reconciled.
@@ -75,12 +78,45 @@ The [Socialpruf Sweetgreen gallery](https://socialpruf.com/tiktok/sweetgreen) wa
 
 Fourteen distinct video pages have footage-backed entries below, but only seven are clearly attributable to TikTok originals: six official brand mirrors and one watermarked creator mirror.
 The other seven are creator-owned YouTube Shorts that provide short-form restaurant inspiration but have no verified Reel or TikTok cross-post, so they do not fill the strict 15-25 Reel/TikTok target.
-At least eight more qualifying Reel or TikTok videos are needed to meet the lower bound.
+At least 143 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
 All six official TikTok mirrors were watched through their public players; the watermarked mirror and the YouTube Shorts were checked at sampled timestamps, with unseen frames explicitly left unknown.
 No LA-focused account, MenuFit creative, LeanBites creative, or Meta ad met the combined public-footage and faceless criteria in this pass.
 The closest LA and LeanBites leads had captions or thumbnails only, while screened MenuFit ads and several creator clips showed faces.
 Public searches also checked individual posts and indexes for Just Salad, Mendocino Farms, Tender Greens, Flower Child, Chopt, Chopped Leaf, LA food accounts, and the seven YouTube creators; no additional qualifying individual Reel or TikTok was verified from those routes.
-The remaining recovery is ordinary public inspection of at least eight additional individual restaurant videos or verified creator-owned cross-posts when accessible; a login, bot-check solution, private API, or unverified caption cannot close the evidence gap.
+The current route is slow-paced, signed-in, view-only inspection of Instagram and TikTok public creatives in Dawit's existing Chrome session, plus public TikTok Creative Center and Meta Ad Library assessment.
+Challenges, captchas, try-again-later notices, action blocks, private APIs, and unverified captions cannot close the evidence gap.
+
+### Expanded research batches and data coverage
+
+| Batch | Source and observed result | Counted qualifying examples | Remaining to 150 |
+| --- | --- | ---: | ---: |
+| B0, prior public pass | Seven attributable TikTok-origin videos with inspected footage; seven YouTube-only Shorts retained as supplemental analogues. | 7 | 143 |
+| B1, 2026-11-04 signed-in Chrome | Instagram loaded as @fitsy.lyfe, but the first inspected Sweetgreen Reel showed a presenter and was excluded. CAVA's Instagram profile displayed about 334K followers. Original CAVA TikTok playback loaded; its profile displayed about 183.3K followers, and the original post displayed a dated caption plus like, comment, favorite, and share counters. The directly inspected MenuFit account URL returned "Couldn't find this account." | 0 new | 143 |
+
+The CSV holds the seven counted video identities, original links where known, source links, observation batches, visible metrics, unknown fields, and source limitations.
+The B1 CAVA post showed 2025-12-15, 17.7K likes, 175 comments, 4,617 favorites, and 2,001 shares on its original TikTok page; its approximate 3.3M view value remains a public-mirror snapshot.
+The original TikTok profile displayed 183.3K followers on 2026-11-04, so its follower snapshot is current rather than a historical follower denominator for the post.
+No view-to-follower ratio is interpreted from these mixed-source, mixed-time observations.
+The other six CSV records still have unknown or mismatched follower denominators, and all seven lack a source-comparable views and follower pair.
+Accordingly, normalized comparison has **n = 0** in this partial batch; top-performer, underperformance, and cadence findings remain unassessed.
+The original historical access results below do not establish current platform access limits after the signed-in authorization.
+The current batch has not yet assessed TikTok Creative Center or revisited Meta Ad Library.
+
+| Field in the seven-row CSV | Observed | Unknown or source-limited | Interpretation now |
+| --- | ---: | ---: | --- |
+| Views | 7 | 0 | One YouTube mirror and six Urlebird mirror snapshots; original-platform comparability is unverified. |
+| Follower count | 3 | 4 | All three are CAVA's 2026-11-04 TikTok profile snapshot, not a post-date denominator. |
+| Likes and comments | 6 and 7 | 1 and 0 | Original CAVA counts exist for one row; the rest are public mirror observations. |
+| Saves or favorites | 1 | 6 | One original TikTok favorite count; no zero is inferred from missing saves. |
+| Exact posted date | 1 | 6 | The one original TikTok date cannot establish an account cadence window. |
+| Length | 7 | 0 | Six mirror-player lengths and one original TikTok playback length. |
+| Verified audible voice or music | 0 | 7 | Track labels are recorded, but the listening evidence is insufficient. |
+
+The seven lengths range from 10.65 to 31 seconds with a median of 19.16 seconds.
+Two hooks are coded as how-to orders; the other five each use a different observed opening type.
+Four rows show a creator-stated numeric nutrition claim, while three do not show a numeric macro in the inspected footage.
+All seven are non-LA, organic or brand posts; no paid ad is included in these comparisons.
+These descriptive counts identify what this selected batch contains, not which creative choice caused more reach.
 
 ## Footage-inspected examples
 
