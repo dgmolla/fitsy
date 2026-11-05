@@ -174,6 +174,10 @@ export async function workflowMetrics(file, name, context) {
   if (runs.some(item => item.status !== 'completed')) return null;
   if (!run) throw new Error('Verified workflow identity unavailable');
   const previous = context.state?.incidents[scope];
+  // Legacy v1 incidents have no workflow watermark. Require a success after
+  // their observed start rather than assuming an older result is recovery.
+  if (previous?.active && !previous.workflowUpdatedAt
+      && (!Number.isFinite(previous.since) || Date.parse(run.updated_at) <= previous.since)) return null;
   if (previous?.active && previous.workflowUpdatedAt
       && (Date.parse(run.updated_at) < Date.parse(previous.workflowUpdatedAt)
         || (run.updated_at === previous.workflowUpdatedAt && run.id < previous.workflowRunId))) return null;

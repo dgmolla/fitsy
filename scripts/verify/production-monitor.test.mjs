@@ -401,8 +401,29 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
   workflowRuns['deploy.yml'] = [completedRun('Deploy', 'failure', { run_attempt: 2 })];
   const retried = await runMonitor({ env, fetchImpl, now: now + 183_000 });
   assert.ok(retried.some(item => item.key === 'workflow:Deploy' && item.summary.includes('attempt 2')));
+
+  // Existing v1 state predates failure watermarks. A skipped retry must not
+  // turn a success from before that incident into a recovery during adoption.
+  const legacy = await loadAlertState(external.context);
+  delete legacy.state.incidents['workflow:Deploy'].workflowUpdatedAt;
+  delete legacy.state.incidents['workflow:Deploy'].workflowRunId;
+  await saveAlertState(legacy.number, legacy.state, external.context);
+  const recoveriesBefore = external.messages.filter(message => message.text.includes('RESOLVED production alert: workflow:Deploy.')).length;
+  workflowRuns['deploy.yml'] = [completedRun('Deploy', 'skipped', { run_attempt: 3,
+    updated_at: new Date(now + 184_000).toISOString() }),
+  completedRun('Deploy', 'success', { id: 122, updated_at: new Date(now + 180_000).toISOString() })];
+  const pendingLegacy = await runMonitor({ env, fetchImpl, now: now + 184_500 });
+  assert.ok(pendingLegacy.some(item => item.key === 'workflow:Deploy'));
+  assert.equal(external.messages.filter(message => message.text.includes('RESOLVED production alert: workflow:Deploy.')).length, recoveriesBefore);
+  workflowRuns['deploy.yml'] = [completedRun('Deploy', 'success', { run_attempt: 4,
+    updated_at: new Date(now + 185_000).toISOString() })];
+  await runMonitor({ env, fetchImpl, now: now + 186_000 });
+  assert.equal((await loadAlertState(external.context)).state.incidents['workflow:Deploy'].active, false);
+  assert.equal(external.messages.filter(message => message.text.includes('RESOLVED production alert: workflow:Deploy.')).length, recoveriesBefore + 2);
+
+  workflowRuns['deploy.yml'] = [completedRun('Deploy', 'failure', { run_attempt: 5 })];
   workflowRuns['eas-build.yml'] = undefined;
-  const partial = await runMonitor({ env, fetchImpl, now: now + 184_000 });
+  const partial = await runMonitor({ env, fetchImpl, now: now + 187_000 });
   assert.ok(partial.some(item => item.key === 'workflow:Deploy'));
   assert.ok(partial.some(item => item.key === 'observer:workflow:EAS Build + TestFlight'));
 });

@@ -119,6 +119,7 @@ The file-scoped GitHub endpoint and returned workflow path establish identity; a
 A replaced pending wakeup therefore cannot lose a retained failed outcome, including a rerun of the same run ID.
 An active attempt defers recovery without generating an observer-error warning, and the monitor still reports any persisted active incidents.
 Failure receipts retain their workflow update time and run ID so a skipped retry cannot expose an older success as recovery.
+Legacy incidents without that watermark require a successful outcome newer than their persisted incident start; missing timing evidence defers recovery.
 The bounded history is not a complete historical incident audit; unavailable meaningful history remains an observer failure.
 Unavailable or malformed history preserves incidents for that workflow while other sources still report their outcomes.
 Issue state records each channel/direct delivery separately so a failed DM retries without repeating the successful channel message.
