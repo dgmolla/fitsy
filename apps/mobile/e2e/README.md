@@ -368,3 +368,10 @@ Expired acceptance requires `synced: true`, `verdict: expired`, `active: false`,
 Also retain an active Restore or rebuy returning to its selected destination, foreground expiry, delayed synchronization and retry, and account-switch controls in the walkthrough.
 RevenueCat Test Store cannot transfer history between app user IDs, so an empty Test Store Restore after recreation does not prove Apple receipt acceptance.
 Use the compatible Apple TestFlight build and candidate OTA for that remaining store journey, and preserve its observed evidence separately from synthetic component tests.
+
+For issue #718, [Dawit deferred local native acceptance](https://github.com/dgmolla/fitsy/issues/718#issuecomment-6650371147) because of host memory pressure.
+The unused [local StoreKit configuration](storekit/FitsyIssue718.storekit) preserves the existing product IDs, prices, trial terms and US storefront for a later authorized device/native follow-up.
+It uses Xcode's monthly-renewal-every-five-minutes test setting; it is not live App Store sandbox history or proof that Restore passed.
+The prepared Xcode scheme selected this file with a Release executable, while the app retained DEV API/Supabase configuration.
+No StoreKit purchase or 27-journey aggregate completed before the explicit deferral.
+Keep its generated scheme snapshot, sealed artifact and private fixture bindings in the issue's external recovery handoff; never commit credentials or fabricate billing history.
