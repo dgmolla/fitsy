@@ -15,7 +15,9 @@ export async function runMonitor({ env = process.env, fetchImpl = fetch, now = D
     save: state => saveAlertState(store.number, state, { env, fetchImpl, policy }),
     send: (message, urgent, destination) => sendSlack(message, urgent, { env, fetchImpl, policy }, destination),
   });
-  return observations.flatMap(item => item.alerts);
+  // An active retry can defer observation while its earlier incident remains
+  // open. Report persisted active incidents, never a false healthy result.
+  return Object.values(store.state.incidents).filter(item => item.active);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

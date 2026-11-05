@@ -12,6 +12,7 @@ Read the applicable [API](apps/api/AGENTS.md), [mobile](apps/mobile/AGENTS.md), 
 - Reproduce bugs through the real user journey before fixing them.
 - Add one small test where the risk is: branching logic, parsing, money, auth, or security; trivial changes stay trivial.
 - Never skip, weaken, or bypass checks; no `--no-verify`, no admin merge, and never touch required-check configuration.
+- A new fail-closed dependency needs a bounded health check and a failure test proving its rejected request emits an alert signal.
 - Never print or commit secrets; use dev data only, with no production database writes or deletes.
 - Use RevenueCat Test Store or sandbox only; the rate limiter must never fail open.
 - TestFlight only, no App Store submission; any new native build or fingerprint change needs Dawit's OK: stop and say so in the PR.
