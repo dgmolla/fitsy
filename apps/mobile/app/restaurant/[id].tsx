@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Redirect, Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { MenuItemResult, MenuResponse } from '@fitsy/shared';
 import { BookmarkButton, FitsyLoader, LockedUnlockCard, MenuItemCard } from '@/components';
 import { fetchMenuOutcome, getSavedItems, saveItem, unsaveItem } from '@/lib/apiClient';
@@ -80,6 +81,7 @@ export default function RestaurantDetailScreen() {
   const previewAccess = usePreviewAccess();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const params = useLocalSearchParams<{ id: string; distance?: string; selectedItemId?: string; saveSelected?: string }>();
   const id = params.id;
 
@@ -130,9 +132,6 @@ export default function RestaurantDetailScreen() {
         setError('Could not load menu.');
         trackRestaurantDetailFailed({ restaurant_id: id });
       }
-      else {
-        trackRestaurantDetailViewed({ restaurant_id: id, item_count: result.menuItems.length });
-      }
       setTargets(macroTargets);
       const fetchedBookmarks = savedResult ? new Map<string, string>() : null;
       for (const saved of savedResult?.data ?? []) { if (saved.menuItemId) fetchedBookmarks?.set(saved.menuItemId, saved.id); }
@@ -142,7 +141,11 @@ export default function RestaurantDetailScreen() {
       if (session && params.saveSelected === '1' && params.selectedItemId && result && !result.locked && result.menuItems.some(item => item.id === params.selectedItemId) && !fetchedBookmarks?.has(params.selectedItemId)) {
         const saved = await saveItem(params.selectedItemId);
         if (cancelled) return;
-        if (saved) confirmedSave = { menuItemId: params.selectedItemId, id: saved.id };
+        if (saved) {
+          confirmedSave = { menuItemId: params.selectedItemId, id: saved.id };
+          trackItemSaved({ menu_item_id: params.selectedItemId, restaurant_id: id,
+            action: 'save', entry_point: 'purchase_continuation' });
+        }
         else Alert.alert('Could not save this meal', 'The selected meal is shown first. Tap its bookmark to try again.');
       }
       // A failed read is not an empty saved list. Preserve known bookmarks
@@ -155,6 +158,17 @@ export default function RestaurantDetailScreen() {
   }, [id, params.selectedItemId, params.saveSelected, reload]);
 
   const isLocked = menu?.locked === true;
+  const viewedMenu = useRef<MenuResponse | null>(null);
+  useEffect(() => {
+    // Count a rendered menu, not a response hidden by loading or an access redirect.
+    if (!isFocused || loading || !purchases.ready || !reviewer.ready || !previewAccess.ready ||
+        (!purchases.entitled && !reviewer.isReviewer && !previewAccess.canPreview) ||
+        !menu || menu.restaurantId !== id || viewedMenu.current === menu) return;
+    viewedMenu.current = menu;
+    trackRestaurantDetailViewed({ restaurant_id: id, item_count: menu.menuItems.length,
+      unlocked: !isLocked, has_macros: menu.menuItems.some(item => item.macros != null) });
+  }, [id, isFocused, isLocked, loading, menu, purchases.ready, purchases.entitled,
+    reviewer.ready, reviewer.isReviewer, previewAccess.ready, previewAccess.canPreview]);
   // `beforeRemove` closures capture whatever `isLocked` was when the
   // listener was registered - mirrored into a ref, read fresh inside the
   // handler, so the listener can be registered once on mount (covering a
@@ -233,7 +247,7 @@ export default function RestaurantDetailScreen() {
   // actually loaded. `fullMenuCount` is the true menu size, shown in the header
   // so a locked restaurant with 50 dishes doesn't read as having only 3.
   const totalCount = menu?.menuItems.length ?? 0;
-  const fullMenuCount = menu?.totalItemCount ?? totalCount;
+  const fullMenuCount = Math.max(menu?.totalItemCount ?? totalCount, totalCount);
   const hiddenItemCount = Math.max(fullMenuCount - totalCount, 0);
   const matchCount = filtered.length;
   const restaurantName = menu?.restaurantName ?? 'Restaurant';
@@ -338,6 +352,7 @@ export default function RestaurantDetailScreen() {
                   menu_item_id: scoredItem.item.id,
                   restaurant_id: id ?? '',
                   position: index,
+                  unlocked: !isLocked,
                 });
                 if (isLocked) void routeToPaywall({ intent: {
                   action: 'menu', restaurantId: id, menuItemId: scoredItem.item.id,

@@ -126,3 +126,4 @@ Record the next eligible small PR's hosted L2 duration on issue #712 after this 
 - 2026-11-05: A created ASC sandbox tester still failed StoreKit authentication twice on #718; verify private field input and the actual store response, bound the retry, and require genuine purchase history before admitting the Apple-history journey.
 
 - 2026-11-05: Repeated Production Monitor failures rejected Deploy's dynamic run-name; bind observation to the workflow file, include release tags and active retries, and test persisted alert/recovery behavior through the actual monitor caller before activation (#605).
+- 2026-11-05: #735 repeated a completed native tap with no resulting action because the Profile card was visible but its control was behind the tab bar; scroll to the existing bottom anchor, require the action enabled, and assert its confirmation before continuing.

@@ -38,6 +38,7 @@ import {
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
+import { LaunchAnalyticsPreferences } from '@/components/LaunchAnalyticsPreferences';
 
 const GOAL_OPTIONS = [
   { id: 'lose_fat', label: 'Lose Weight', icon: 'flame-outline', description: 'Calorie deficit for fat loss' },
@@ -359,6 +360,8 @@ export default function ProfileScreen() {
           </View>
           <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
         </Pressable>
+
+        <LaunchAnalyticsPreferences />
 
         {/* Logout */}
         <Pressable testID="profile-logout" style={s.logoutBtn} onPress={handleLogout}>

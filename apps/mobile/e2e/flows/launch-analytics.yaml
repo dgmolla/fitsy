@@ -1,0 +1,96 @@
+appId: com.fitsy.mobile
+tags:
+  - 'fixture:entitled-dev'
+  - 'store:test-store'
+  - auth
+  - billing
+  - discovery
+  - changed-journey
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
+---
+- evalScript: ${output.apiPaths = ['/api/restaurants?lat=34.0522&lng=-118.2437&radius=5']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue: ${output.dataApiLoginStatus === 200}
+- assertTrue: ${output.dataApiResponses[0].status === 200}
+- evalScript: ${output.seed = json(output.dataApiResponses[0].body).data[0]}
+- assertTrue: ${!!output.seed}
+- evalScript: ${output.apiPaths = ['/api/restaurants/' + output.seed.id + '/menu', '/api/saved-items']}
+- runScript: ../helpers/data-api.mjs
+- assertTrue: ${output.dataApiResponses[0].status === 200 && output.dataApiResponses[1].status === 200}
+- evalScript: ${output.menu = json(output.dataApiResponses[0].body).data}
+- assertTrue: ${!output.menu.locked}
+- evalScript: ${output.savedIds = json(output.dataApiResponses[1].body).data.map(function (s) { return s.menuItemId; })}
+- evalScript: ${output.meal = output.menu.menuItems.filter(function (m) { return !!m.macros && output.savedIds.indexOf(m.id) < 0; })[0]}
+- assertTrue: ${!!output.meal}
+- launchApp
+- openLink: com.fitsy.mobile://profile
+- tapOn:
+    text: '^Open$'
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: profile-logout
+    direction: DOWN
+- runFlow:
+    when:
+      visible: 'Using a staff or test account.*'
+    commands:
+      - tapOn:
+          id: analytics-exclude-account
+          enabled: true
+      - tapOn: Exclude account
+- assertVisible: Test account excluded from launch counts
+- runFlow:
+    when:
+      visible:
+        id: la-analytics-consent
+        checked: true
+    commands:
+      - tapOn:
+          id: la-analytics-consent
+- assertVisible:
+    id: la-analytics-consent
+    checked: false
+- tapOn:
+    id: la-analytics-consent
+- extendedWaitUntil:
+    visible:
+      id: la-analytics-consent
+      checked: true
+    timeout: 15000
+- takeScreenshot: la-consent-on
+- openLink: ${'com.fitsy.mobile://restaurant/' + output.seed.id + '?selectedItemId=' + output.meal.id + '&saveSelected=1'}
+- tapOn:
+    text: '^Open$'
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: menu-search
+    timeout: 30000
+- assertVisible:
+    id: ${'menu-item-' + output.meal.id}
+- assertNotVisible: '.*dish name hidden, view plans to find this meal.*'
+- takeScreenshot: unlocked-macro-menu
+- stopApp
+- launchApp
+- openLink: com.fitsy.mobile://profile
+- tapOn:
+    text: '^Open$'
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: profile-logout
+    direction: DOWN
+- assertVisible:
+    id: la-analytics-consent
+    checked: true
+- tapOn:
+    id: la-analytics-consent
+- extendedWaitUntil:
+    visible:
+      id: la-analytics-consent
+      checked: false
+    timeout: 15000
+- takeScreenshot: la-consent-off

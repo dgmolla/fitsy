@@ -7,7 +7,71 @@
 This is the audit-only scope [approved for #731](https://github.com/dgmolla/fitsy/issues/731#issuecomment-6638818432), following the [LA readiness assessment](../../gtm/la-readiness.md#analytics-query-and-interpretation).
 Source inspection and existing-data queries are separate evidence below; neither establishes that every installed bundle matches this commit.
 No events, person properties, flags, configuration, saved insights, production records, or follow-up issues were created or changed.
-Gap implementation waits for Dawit's review.
+Gap implementation awaited Dawit's review at the time of this audit.
+The subsequent [#735 implementation](https://github.com/dgmolla/fitsy/issues/735) is separately authorized; its [launch contracts and SQL defaults](analytics-events.md#launch-measurement-contract) do not relabel these historical observations.
+
+## November 5 implementation baseline
+
+Before changing source, the #735 worker repeated aggregate reads in the signed-in PostHog SQL editor for `[2026-10-05 00:00:00 UTC, 2026-11-05 08:10:00 UTC)`.
+Query `37aa17a0-4e89-4e73-8fb7-e9de098159a8` completed in 0.52 seconds: 632 events, 11 people, 32 detail views, one menu tap, one save, 24 `kind=development` events, zero internal-marked events and zero distribution-marked events.
+Query `5228c424-f5c1-4089-a173-5e14c1e44b4e` completed in 0.45 seconds: zero LA markers, zero access markers and zero events excluded by cohort `233968`.
+These are a later window than the original audit, not corrected totals for W.
+
+The unchanged app's controlled DEV `chain-menu-serving` journey passed on a separate iPhone 15 simulator, with the real API and Debug Test Store binary.
+It reached the locked menu and then subscription plans; the ending screenshot was inspected.
+The real-router regression separately reproduced identical access-free event payloads for locked/unlocked menus and a missing successful post-purchase save event: three failures, one pass before the correction.
+That HTTP/native-boundary fixture establishes caller behavior, not production usage.
+Current implementation, controlled ingestion, protected checks and rollout receipts must remain distinct in #735's PR.
+
+## November 5 controlled implementation receipts
+
+Issue #735 prepares the six contracts below; the mobile candidate is not merged or deployed.
+The saved [LA activity insight](https://us.posthog.com/project/361712/insights/q9FuSWZ4) exists with the exact qualified SQL in [analytics-events](analytics-events.md#default-launch-sql-filters).
+Its description explicitly says that zero is not evidence of LA retention before deployment and two completed eligible weeks.
+No existing insight, cohort definition, project setting, feature flag or paid feature was changed.
+
+| Gap | Implemented and observed | Remaining boundary, owner and resume event |
+| --- | --- | --- |
+| Staff/test exclusion | Runtime, reviewer and explicit account metadata populate the person marker; all 40 initial contract events were excluded by their event marker and 38 had identified internal person profiles. | Cohort 233968 still showed its seven-hour-old empty calculation; #735's direct person/event filters exclude immediately, while the launch owner checks the next automatic daily cohort refresh and enrolls existing staff explicitly. |
+| Distribution | All 40 initial contract events carried `development`; branch tests distinguish configured TestFlight and production channels without changing #605's `kind`. | The #735 release owner must verify the deployed channel after native acceptance and rollout; a simulator and configured channel do not attest a physical install source. |
+| Meaningful use | A saved native journey emitted an unlocked macro view and one successful purchase-continuation save with LA consent; the final manual app observation emitted another view and save. | The usage proxy is implemented; genuine user reading, eating and retention remain unobserved and belong to the launch owner after adoption. |
+| LA consent | Native Profile opt-in, persistence after restart, revocation and permanent test-account exclusion passed before the final IP masking change. | The same #735 worker must finish the current saved journey and full native acceptance before rollout; consenting real LA enrollment then belongs to the launch owner. |
+| Identity | Separate owned simulator installations signed into the same DEV account; seven identify events across both windows resolve to one PostHog person. | This proves controlled simulator continuity, not physical-device/provider-account merging; the launch owner resumes real-device observation after deployment with an authorized staff account. |
+| Insight | The saved dynamic query returns `meaningful_people=0`, `active_two_days_each_week=0` with staff, contract, distribution and consent filters. | The launch owner interprets it only after deployment, consenting eligible activity and two completed LA calendar weeks; no production uptake is fabricated. |
+
+All reads used the existing authenticated PostHog SQL UI and returned aggregates, never addresses, credentials or exported account identities.
+The initial controlled window C is `[2026-11-05 08:10:00, 2026-11-05 09:11:00)` UTC.
+The final manual observation window F is `[2026-11-05 09:31:00, 2026-11-05 09:34:00)` UTC.
+
+| Query | Window and actual output | Duration |
+| --- | --- | ---: |
+| `039919e3-16c2-4b43-8fd5-79e45a1a152f` | C: one `restaurant_detail_viewed` with `la_cohort=true`, `unlocked=true`, `has_macros=true`; one `item_saved` with consent and `entry_point=purchase_continuation`. | 0.59s |
+| `a1a246b7-caec-4cc1-a083-c85fb4954273` | C: 40 contract events; 40 event-excluded, 38 person-excluded, 0 in the stale cohort, 40 development. | 2.6s |
+| `caaa239e-2256-4169-82a5-3989236af937` | C: 40 IP-present events; 0 checked GeoIP, nutrition or neighborhood fields. | 0.75s |
+| `dac6a1df-3b40-4afc-906e-134c0a92b494` | C: 40 unmasked IP fields, 0 placeholder fields; values were not returned. | 0.50s |
+| `78a0e5f4-443c-45cf-b1b0-103654db6e7e` | F after the client fix: 9 events, 9 `$ip=0.0.0.0`, 0 unmasked IPs, 0 checked GeoIP or private fields. | 0.89s |
+| `91fe8721-0b59-4ac5-aa55-106423a74ce4` | Before 09:15: five identifies/five sessions; 09:15-09:30: one identify/one session on the second simulator; each window has one person/account ID. | 0.37s |
+| `8129ed9c-8aff-4439-8828-4f0e11a5dc51` | 08:10-09:34: seven identifies, three sets, two views and two saves, each resolving to one person; F includes one identify/view/save, all event-excluded. | 1.3s |
+| `57ec848a-5c16-49c4-a528-1c551850de54` | Qualified two-completed-week SQL: 0 meaningful people, 0 people active at least two days in each week. | 0.58s |
+
+The IP finding is an ingestion behavior, not a removed privacy check.
+PostHog populates an omitted IP property from the transport connection even with GeoIP disabled.
+The final sanitizer forces the inert placeholder and disables GeoIP after filtering every caller-supplied property, including identify/set events.
+The nine-event F receipt verifies that correction in the real app; it does not erase earlier retained data or authorize project-wide changes.
+
+The earlier saved `launch-analytics` journey passed on the first simulator.
+After three recorded repairs, its latest rerun failed before UI actions because the added repeatable-bookmark setup passed `/api/saved-items` to the restaurant-only `data-api.mjs` helper.
+That guard remains intact; the malformed Graal command report and raw failure are preserved, and the current saved flow is not passing.
+The manual final observation used authenticated DEV reads and the actual app deep link under the existing exclusive native controls, followed the visible Open prompt, and inspected the unlocked bookmarked meal.
+It is independent ingestion evidence, not a substitute for the saved journey or final aggregate.
+The observed header count was also corrected to never undercount the loaded menu, with a real-screen regression and matching 276/276 native display.
+
+The current full selector requires 28 flows, including genuine Apple purchase-history restoration.
+Retained DEV empty-store and expired fixtures were re-read successfully through supported auth/status calls; missing optional fixture configuration is recoverable.
+The real Apple identity/history prerequisite remains with root and #736, and no unchanged full preflight is retried against it.
+The separate hosted workflow still has zero registered runners and is unverified, but is not an added protected merge context.
+The sole #735 worker owns the next saved-flow correction after a renewed product repair allocation, then full native acceptance, protected review/Verify, squash auto-merge and applicable rollout.
+Until those resume events occur, the PR stays draft with auto-merge off and no release claim.
 
 ## Findings
 
