@@ -1,14 +1,20 @@
 # Faceless restaurant Reels research and Fitsy templates
 
-**TL;DR:** 115 distinct Instagram and TikTok restaurant videos are documented; 35 more are needed.
+**TL;DR:** 115 inspected restaurant video identities form the owner-accepted final partial dataset.
 
-> **Status:** partial research, target unmet · **Last verified:** 2026-11-05 · **Owner:** Fitsy Marketing
+> **Status:** final partial research, owner-accepted · **Last verified:** 2026-11-05 · **Owner:** Fitsy Marketing
 > This is creative research and proposed copy, not permission to publish, contact creators, or spend.
 
 ## Scope and evidence method
 
-The current target is 150-300 distinct Instagram Reels or TikTok videos showing restaurant dishes or orders through a healthy swap, macro, protein, or surprising nutrition angle, with no presenter visible in the footage.
-Signed-in viewing through Dawit's existing Chrome session is authorized for public creative research only, at a normal person's pace and strictly view-only.
+The [November 5 owner decision](https://github.com/dgmolla/fitsy/issues/732#issuecomment-6669232657) accepts the existing 115 retained identities as the final partial dataset and closes collection for this deliverable.
+The earlier [expanded research scope](https://github.com/dgmolla/fitsy/issues/732#issuecomment-6638873621) sought 150-300 distinct Instagram Reels or TikTok videos showing restaurant dishes or orders through a healthy swap, macro, protein, or surprising nutrition angle, with no presenter visible in the footage.
+The dataset remains 35 examples below the original 150-example minimum.
+That original-target shortfall is a sampling limitation, not an ongoing collection requirement or acceptance blocker under the later owner decision.
+No further Instagram or TikTok collection is authorized or required for this deliverable.
+The retained analysis and four Fitsy templates are finalized against this explicitly partial sample.
+The earlier signed-in authorization allowed public creative research through Dawit's existing Chrome session at a normal person's pace and strictly view-only.
+The viewing phase ended at the recorded platform notices below; the later owner decision requires no further collection, discovery helpers, or alternative access routes.
 An example counts only after its individual video page and footage have been inspected, including a source and an explicit observation date in the [CSV dataset](faceless-reels-dataset.csv).
 Each entry separates footage observed directly from page or caption metadata and marks details that cannot be verified as unknown.
 An image thumbnail, search snippet, caption, or creator profile alone cannot establish the first two seconds, pacing, audio, or whether the whole video is faceless.
@@ -39,9 +45,9 @@ The owned stopped TikTok tab 2090362390 was closed after the notice.
 During B17, an older worker-created TikTok tab 2090362381 was detached after a supported close attempt returned "Debugger unattached"; it was never used to resume TikTok viewing.
 A later full browser inventory omitted that tab and older Instagram tab 2090362393, without evidence of who closed them; no stale-ID cleanup was retried.
 Instagram remained independently accessible and supplied the later B17 Reels.
-The current capture entrypoint first checks normalized platform source IDs against counted and excluded links before opening a known candidate.
-Before counting, the researcher checks account and brand aliases, restaurant and dish, hook, visual sequence, overlay, and caption against the creative ledger across both platforms.
-Likely matches are compared with retained source-bound frames; after TikTok stopped, no new TikTok request is made.
+The completed collection entrypoint first checked normalized platform source IDs against counted and excluded links before opening a known candidate.
+Before counting, the researcher checked account and brand aliases, restaurant and dish, hook, visual sequence, overlay, and caption against the creative ledger across both platforms.
+Likely matches were compared with retained source-bound frames; no new TikTok request was made after its stop notice.
 A different URL, date, or counter is insufficient to prove a different creative.
 A candidate with unresolved creative identity remains excluded, and the outcome is recorded in its evidence.
 The owner-authorized Better Bowls correction retained one TikTok creative and moved the Instagram cross-post URL, counters, and frame comparison into that row notes without mixing platform metrics.
@@ -128,7 +134,7 @@ The [Socialpruf Sweetgreen gallery](https://socialpruf.com/tiktok/sweetgreen) wa
 | [Low-calorie Mexican order Reel](https://www.instagram.com/kraftyoufitness/reel/DcJJJ0VxAI8/) | The original Instagram Reel opens on the presenter eating at a restaurant, despite a food-only search thumbnail. |
 | [Hive seed-oil-free spot Reel](https://www.instagram.com/hivehealthyeats/reel/DbL2nRGhsXC/) | Food-only montage frames seed-oil avoidance as "cleanest" without a specific nutrition comparison; excluded as a broad health claim. |
 | [Palms n' Patties smashburger Reel](https://www.instagram.com/laslaywithtracy/reel/De-D4gZyXhQ/) | Food-only burger and griddle shots call no seed oils "healthy" without a specific nutrition comparison; excluded as an unsupported health shortcut. |
-| [Chipotle bodybuilder order mirror](https://www.youtube.com/watch?v=OsI8j_1bNaY) | The footage has a TikTok watermark, but no original TikTok post URL or creator-owned cross-post was verified. It remains supplemental creative evidence and is excluded from the 150-video count. |
+| [Chipotle bodybuilder order mirror](https://www.youtube.com/watch?v=OsI8j_1bNaY) | The footage has a TikTok watermark, but no original TikTok post URL or creator-owned cross-post was verified. It remains supplemental creative evidence and is excluded from the counted CSV. |
 | [The Hive Buddha Bowl](https://www.instagram.com/hivehealthyeats/reel/De94IaehBix/) | Food footage promotes a vegan restaurant bowl under a general wellness frame, without a specific swap, macro, or surprising nutrition comparison. |
 | [California Fish Grill protein hack](https://www.tiktok.com/@derekeatsla/video/7641014055804685599) | The original TikTok opens on the presenter's face. |
 | [Protein Shop 77g wrap](https://www.tiktok.com/@theproteinshop/video/7657914600058326285) | The original TikTok shows the restaurant presenter holding the wrap. |
@@ -172,11 +178,12 @@ The [Socialpruf Sweetgreen gallery](https://socialpruf.com/tiktok/sweetgreen) wa
 | [Texas Trending Packin Bowls](https://www.instagram.com/texastrending_/reel/DfLa6vOtVe8/) | Original food-first frames are followed by a presenter speaking to camera outside the restaurant, so the distinct footage does not qualify. |
 | [Tracy California Chicken Cafe](https://www.instagram.com/laslaywithtracy/reel/DWcDLEVj-IE/) | The original shows the creator presenting to camera in a car under the healthy-spot overlay. |
 
-### Coverage achieved and remaining gap
+### Coverage achieved and original-target shortfall
 
-115 distinct video identities qualify toward the expanded target: 69 TikToks and 46 Instagram Reels.
-Seven creator-owned YouTube Shorts and one watermarked YouTube mirror without a verified original TikTok URL remain supplemental and do not fill the Reel/TikTok target.
-At least 35 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
+115 distinct video identities form the accepted final partial dataset: 69 TikToks and 46 Instagram Reels.
+Seven creator-owned YouTube Shorts and one watermarked YouTube mirror without a verified original TikTok URL remain supplemental and are not included in the counted CSV.
+The dataset remains 35 examples below the original 150-example minimum.
+The owner accepted this shortfall on November 5 and directed a final partial deliverable without further collection.
 All six official TikTok mirrors were watched through their public players; the watermarked mirror and the YouTube Shorts were checked at sampled timestamps, with unseen frames explicitly left unknown.
 63 of 115 counted videos are LA-focused; 28 are elsewhere and 24 have an unknown location.
 No inspected MenuFit creative, LeanBites creative, or Meta ad has yet met the criteria.
@@ -184,13 +191,14 @@ Directly inspected MenuFit and LeanBites partner TikToks opened on faces, while 
 The earlier anonymous public pass checked individual posts and indexes for Just Salad, Mendocino Farms, Tender Greens, Flower Child, Chopt, Chopped Leaf, LA food accounts, and seven YouTube creators without verifying another qualifying Reel or TikTok through those routes.
 The later signed-in Just Salad Hero Wrap is separately counted in B14 after original-page footage inspection.
 After TikTok's B17 server notice, Instagram supplied the subsequent inspected batches until its B22 page-load error with a reload prompt.
-Both viewing platforms are now stopped under the instructed retry-notice rule; offline analysis of retained observations remains available.
+Both viewing platforms were stopped under the instructed retry-notice rule; the final report uses only retained observations and offline analysis.
+The later owner decision closes research at this partial sample rather than requiring access recovery.
 This does not establish a captcha, rate limit, lost account access, or failure of every page on either platform.
 Challenges, captchas, try-again-later notices, action blocks, private APIs, and unverified captions cannot close the evidence gap.
 
 ### Expanded research batches and data coverage
 
-| Batch | Source and observed result | Counted qualifying examples | Remaining to 150 |
+| Batch | Source and observed result | Counted qualifying examples | Historical shortfall to 150 |
 | --- | --- | ---: | ---: |
 | B0, prior public pass, audited now | The prior pass called seven videos TikTok-origin. This audit retains six with original post URLs and inspected mirror footage; seven YouTube-only Shorts and one watermarked mirror without a verified original URL remain supplemental. | 6 | 144 |
 | B1, 2026-11-04 signed-in Chrome | Instagram loaded as @fitsy.lyfe, but the first inspected Sweetgreen Reel showed a presenter and was excluded. CAVA's Instagram profile displayed about 334K followers. Original CAVA TikTok playback loaded; its profile displayed about 183.3K followers, and the original post displayed a dated caption plus like, comment, favorite, and share counters. The directly inspected MenuFit account URL returned "Couldn't find this account." | 0 new | 144 |
@@ -234,7 +242,8 @@ This was a page-load failure with a reload prompt, not a proven captcha, rate li
 Owned stopped tab 2090363072 was closed without reloading.
 The older owned tab 2090363069 was subsequently closed through the documented browser management tab-close control, without claiming or loading its page, and inventory verified both owned tabs absent.
 The new Cafe Gratitude watermelon-poke footage was observed, but its qualifying angle and venue check remained unfinished and it does not count.
-Resume requires an explicit owner disposition permitting Instagram viewing after this actual notice, with safe existing signed-in access verified; the 35-example gap remains unfinished.
+The [November 5 owner decision](https://github.com/dgmolla/fitsy/issues/732#issuecomment-6669232657) supersedes the prior collection-blocked handoff by accepting the 115-example partial dataset and directing no further Instagram or TikTok collection.
+The actual stop reasons and their raw evidence remain historical access limitations; no platform recovery or further discovery is part of this finalized deliverable.
 
 The CSV holds the 115 counted video identities, original links, source links, observation batches, visible metrics, unknown fields, and source limitations.
 Its commercial-context field records two TikToks labeled Paid partnership, two hosted Reels, one invitation-tagged Reel, brand-owned promotions, and creator posts with unknown paid amplification.
@@ -371,7 +380,7 @@ Its original Hive Instagram grid showed 840 views and its Reel showed 149 likes 
 The six LA TikTok originals were sampled at opening, middle, and end; no presenter face appeared in inspected frames, but unsampled frames are not asserted as face-free.
 These are selected examples with different account sizes and ages, so their raw engagement does not rank creative effectiveness.
 
-### New Instagram examples in the current batch
+### Earlier inspected Instagram examples
 
 | Original Reel | Opening, footage, and nutrition treatment | Public engagement snapshot on 2026-11-04 | Evidence limits |
 | --- | --- | --- | --- |
@@ -753,7 +762,7 @@ The existing temporary audit rejects their old unsupported geography flags and r
 ### 9. Supplemental Chipotle protein order by thejacked.gentleman
 
 - **Link and source:** [Public YouTube mirror uploaded by Timothy Mount](https://www.youtube.com/watch?v=OsI8j_1bNaY) with a visible TikTok watermark crediting @thejacked.gentleman; mirror ownership is unconfirmed, inspected on 2026-11-04.
-- **Direct footage and count decision:** Sampled frames at 0, 15, 25, and 30 seconds showed a bowl close-up, counter ordering, a fountain drink, and a nutrition-calculator screenshot, without a presenter. The original TikTok post URL was not verified, so this mirror does not count toward the 150-video target.
+- **Direct footage and count decision:** Sampled frames at 0, 15, 25, and 30 seconds showed a bowl close-up, counter ordering, a fountain drink, and a nutrition-calculator screenshot, without a presenter. The original TikTok post URL was not verified, so this mirror is excluded from the final partial dataset.
 - **First two seconds:** A bowl fills the frame behind large stacked white and red text reading "Bodybuilder orders HEALTHY CHIPOTLE" and an image claiming 985 calories, 41g fat, 86g protein, and 79g carbs.
 - **On-screen design:** Burned-in dialogue captions continue over order footage, followed by a nutrition-calculator screenshot and a closing line praising Chipotle's calculator.
 - **Calories/macros:** The opening image presents those numbers as the original creator's claim; its serving and calculation were not independently verified.
