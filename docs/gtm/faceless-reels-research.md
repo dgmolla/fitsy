@@ -52,6 +52,9 @@ The verified LeanBites account was located as `@leanbitesapp` with about 68K fol
 The visible `#urbanepartner` disclosure on the Goleta Urbane Cafe co-post is recorded without assuming payment details, and the co-post is excluded from the ratio pool without explicit commercial markers.
 
 It then audits the same staged CSV and report for raw LF bytes, exclusion-ledger conflicts, repost/share semantics, total, gap, platform and LA counts, missingness, original-source ratio denominator, and the newest batch entry before publication.
+The current coverage narrative and numeric-claim narrative are checked against the same CSV-derived summary as the tables.
+Numeric-claim categories use the recorded macro-display evidence: unclear units or referents are grouped first, explicit gram or calorie claims are grouped next, and rows without those numeric claims remain separate.
+This classification describes the recorded creator claim, without validating its nutrition accuracy.
 
 ### Historical anonymous public access log
 
@@ -164,7 +167,8 @@ The [Socialpruf Sweetgreen gallery](https://socialpruf.com/tiktok/sweetgreen) wa
 Seven creator-owned YouTube Shorts and one watermarked YouTube mirror without a verified original TikTok URL remain supplemental and do not fill the Reel/TikTok target.
 At least 40 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
 All six official TikTok mirrors were watched through their public players; the watermarked mirror and the YouTube Shorts were checked at sampled timestamps, with unseen frames explicitly left unknown.
-Sixty-four counted videos are LA-focused; other examples broaden restaurant and geographic coverage, but no inspected MenuFit creative, LeanBites creative, or Meta ad has yet met the criteria.
+63 of 110 counted videos are LA-focused; 36 are elsewhere and 11 have an unknown location.
+No inspected MenuFit creative, LeanBites creative, or Meta ad has yet met the criteria.
 Directly inspected MenuFit and LeanBites partner TikToks opened on faces, while screened MenuFit ads and several other creator clips also showed faces.
 The earlier anonymous public pass checked individual posts and indexes for Just Salad, Mendocino Farms, Tender Greens, Flower Child, Chopt, Chopped Leaf, LA food accounts, and seven YouTube creators without verifying another qualifying Reel or TikTok through those routes.
 The later signed-in Just Salad Hero Wrap is separately counted in B14 after original-page footage inspection.
@@ -238,7 +242,7 @@ Paid-ad previews are kept separate from organic reach analysis because those lib
 The forty-six observed lengths range from 5 to 80 seconds with a median of 14 seconds; sixty-four lengths are unknown.
 The 80-second California Fish Grill review is a long food-only outlier; no measured Instagram duration supports a platform length comparison.
 Across all 110 rows, hooks include order instruction, protein surprise, food assembly, social proof, menu launch, venue reveal, and offer framing; no single hook dominates this selected sample.
-Thirty-seven rows show a clear creator-stated numeric calorie or protein claim, two show numeric labels whose units or referents are unclear, and seventy-one have no numeric calorie or protein figure verified in inspected frames or captions.
+36 rows show a clear creator-stated numeric calorie or protein claim, 2 show numeric labels whose units or referents are unclear, and 72 have no numeric calorie or protein figure verified in inspected frames or captions.
 These categories describe what appears in the video or caption, not whether the nutrition estimate is accurate.
 63 of 110 counted videos are LA-focused; 36 are elsewhere and 11 have an unknown location.
 No Ad Library paid ad is included; the CSV separately marks two TikTok Paid partnership labels, two hosted Reels, and one invitation-tagged Reel.
