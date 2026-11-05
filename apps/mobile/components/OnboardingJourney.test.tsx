@@ -12,6 +12,7 @@ import GoalPayoff from '../app/welcome/goal-payoff';
 import Targets from '../app/welcome/target-setup';
 import Tuning from '../app/welcome/tuning';
 import Trust from '../app/welcome/how-it-works';
+import WidgetCard from '../app/welcome/widget';
 import Goal from '../app/welcome/goal';
 import Height from '../app/welcome/height';
 import Weight from '../app/welcome/weight';
@@ -44,7 +45,7 @@ const routes = {
   'welcome/goal': Goal, 'welcome/height': Height, 'welcome/goal-payoff': GoalPayoff,
   'welcome/weight': Weight, 'welcome/age': Age, 'welcome/sex': Sex,
   'welcome/activity': Activity, 'welcome/macros-intro': MacrosIntro,
-  'welcome/preview': () => <Text>Discovery preview</Text>,
+  'welcome/preview': () => <Text>Discovery preview</Text>, 'welcome/widget': WidgetCard,
   'welcome/location-permission': () => <Text>Choose your area</Text>,
   'macro-setup': MacroSetup,
   '(tabs)/search': () => <Text>Search for meals</Text>,
@@ -132,6 +133,8 @@ it('keeps own meal targets through trust, Back, and the saved-target shortcut wi
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await screen.findByTestId('onboarding-widget-card');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-skip')); });
   expect(await screen.findByText('Discovery preview')).toBeTruthy();
 });
 
@@ -297,4 +300,25 @@ it('requires a fresh goal choice before showing macros for a legacy maintenance 
   expect((await getOnboardingData()).goal).toBe('performance');
   await act(async () => { fireEvent.press(screen.getByTestId('macro-setup-save')); });
   expect(await getMacroTargets()).toEqual({ protein: '20', carbs: '99', fat: '18', calories: '638' });
+});
+
+
+it.each(['welcome-continue', 'welcome-skip'])('keeps the optional widget card and %s out of Preview Back history', async action => {
+  await saveOnboardingField('goal', 'lose_fat');
+  const targets = { calories: '600', protein: '40', carbs: '65', fat: '20' };
+  await saveMacroTargets(targets);
+  const screen = renderRouter(routes, { initialUrl: '/welcome/how-it-works' });
+  await screen.findByTestId('nutrition-source-published');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await screen.findByTestId('onboarding-widget-example');
+  for (const step of [1, 2, 3]) expect(screen.getByTestId(`onboarding-widget-step-${step}`)).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
+  await screen.findByTestId('nutrition-source-published');
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await screen.findByTestId('onboarding-widget-card');
+  await act(async () => { fireEvent.press(screen.getByTestId(action)); });
+  await screen.findByText('Discovery preview');
+  await act(async () => { router.back(); });
+  await screen.findByTestId('nutrition-source-published');
+  expect(await getMacroTargets()).toEqual(targets);
 });

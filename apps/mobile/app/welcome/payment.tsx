@@ -124,7 +124,8 @@ export default function PaymentScreen() {
   const discountTerms = purchaseTerms(discountedAnnual?.product, discountedAnnual ? introEligibility[discountedAnnual.product.identifier] : false);
   const discountPercent = savingPercent(offering?.annual?.product, discountedAnnual?.product);
   const onBack = useOwnedHardwareBack(() => {
-    void navigateBackFromPayment(previewReturn === '1' || navigation.canGoBack(), userId ?? undefined,
+    // History may still contain a preview whose one-time onboarding access was spent.
+    void navigateBackFromPayment(variants.canPreview && (previewReturn === '1' || navigation.canGoBack()), userId ?? undefined,
       () => { if (previewReturn === '1') router.dismissTo('/welcome/preview'); else router.back(); },
       () => setModal(discountTerms && discountPercent ? 'discount' : 'goodbye'));
   });

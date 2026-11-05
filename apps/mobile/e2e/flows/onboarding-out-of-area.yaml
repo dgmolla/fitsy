@@ -76,6 +76,13 @@ env:
       enabled: true
     timeout: 15000
 - assertVisible: "Continue with Your location"
+# A Debug warning can return after the cold launch and cover the footer action.
+- runFlow:
+    when:
+      visible: ".*Open debugger to view warnings.*"
+    commands:
+      - tapOn:
+          point: "93%,93%"
 # A cancelled touch can still animate the button. Require the actual sheet,
 # with one bounded retry of this idempotent action before selecting an area.
 - waitForAnimationToEnd
