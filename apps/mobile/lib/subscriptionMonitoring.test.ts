@@ -31,5 +31,6 @@ test('network failures remain distinct and privacy filtering retains only operat
     source: 'status', outcome: 'server_error', status_code: 503, duration_ms: 21, kind: 'production',
     email: 'person@example.test', token: 'private-token', message: 'private-provider-body',
   } });
-  expect(event?.properties).toEqual({ source: 'status', outcome: 'server_error', status_code: 503, duration_ms: 21, kind: 'production' });
+  expect(event?.properties).toEqual({ source: 'status', outcome: 'server_error', status_code: 503, duration_ms: 21, kind: 'production',
+    $ip: '0.0.0.0', $geoip_disable: true });
 });

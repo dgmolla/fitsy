@@ -110,7 +110,7 @@ test('every helper caller fails with deployment diagnostics before using a faile
       }
     });
   }
-  expect(callers).toBe(14);
+  expect(callers).toBe(16);
 });
 
 test('every maintained flow uses the authenticated helper for direct restaurant API requests', () => {

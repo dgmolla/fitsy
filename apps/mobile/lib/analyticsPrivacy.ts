@@ -1,7 +1,7 @@
 import type { CaptureEvent, JsonType } from '@posthog/core';
 
 // Operational events deny unknown fields, nested objects, error strings,
-// location and nutrition values. Account identification permits only email.
+// location and nutrition values. Account properties are explicitly typed below.
 const allowed = new Set([
   'screen_name', 'screen', 'cuisine_filter', 'location_source', 'restaurant_id', 'menu_item_id', 'feedback_id',
   'action', 'entry_point', 'provider', 'tab', 'field', 'link', 'source', 'outcome', 'reason', 'kind', 'status_code', 'duration_ms',
@@ -13,6 +13,8 @@ const allowed = new Set([
   'has_calories_target', 'has_protein', 'has_carbs', 'has_fat', 'has_calories', 'has_weight', 'has_height',
   '$lib', '$lib_version', '$os', '$os_version', '$app_version', '$app_build', '$session_id',
   '$feature_flag', '$feature_flag_response', '$geoip_disable', '$process_person_profile',
+  'analytics_contract', 'distribution_channel', '$internal_or_test_user', 'la_cohort',
+  'unlocked', 'has_macros', 'item_count',
 ]);
 
 export function sanitizeAnalyticsEvent(event: CaptureEvent | null): CaptureEvent | null {
@@ -22,16 +24,26 @@ export function sanitizeAnalyticsEvent(event: CaptureEvent | null): CaptureEvent
   const properties: Record<string, JsonType> = {};
   for (const [key, value] of Object.entries(event.properties ?? {})) {
     if (!allowed.has(key) && !(identityEvent && key === '$anon_distinct_id')) continue;
+    if (['$internal_or_test_user', 'la_cohort', 'unlocked', 'has_macros'].includes(key) && typeof value !== 'boolean') continue;
+    if (key === 'analytics_contract' && value !== 1) continue;
+    if (key === 'distribution_channel' && !['development', 'testflight', 'production', 'unknown'].includes(String(value))) continue;
     if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) ||
         (typeof value === 'string' && value.length <= 128 && !/[@\s]|Bearer|eyJ/i.test(value))) {
       properties[key] = value;
     }
   }
+  // Omitting $ip lets ingestion populate it from the transport connection.
+  // Never forward a caller's address, even on identity events.
+  properties.$ip = '0.0.0.0';
+  properties.$geoip_disable = true;
   // The SDK exposes person properties at the top level of before_send events.
   const email = identityEvent ? event.$set?.['email'] : undefined;
+  const person: Record<string, JsonType> = {};
+  if (typeof email === 'string' && email.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(email)) person.email = email;
+  if (identityEvent && typeof event.$set?.la_cohort === 'boolean') person.la_cohort = event.$set.la_cohort;
+  if (identityEvent && event.$set?.$internal_or_test_user === true) person.$internal_or_test_user = true;
   return {
     event: event.event, uuid: event.uuid, timestamp: event.timestamp, properties,
-    ...(typeof email === 'string' && email.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(email)
-      ? { $set: { email } } : {}),
+    ...(Object.keys(person).length ? { $set: person } : {}),
   };
 }
