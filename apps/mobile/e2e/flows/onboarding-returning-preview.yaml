@@ -100,9 +100,19 @@ env:
 - tapOn:
     id: signup-apple
 - extendedWaitUntil:
-    visible: "^(Sign In Failed|Cancel)$"
+    visible: "^(Sign In Failed|Cancel|Close)$"
     timeout: 15000
 - takeScreenshot: no-trial-native-apple-result
+# An iOS Simulator without an Apple ID offers Close before the app error.
+- runFlow:
+    when:
+      visible: "^Close$"
+    commands:
+      - assertVisible: "^Sign in with your Apple.*ID$"
+      - tapOn: "^Close$"
+      - extendedWaitUntil:
+          visible: "^Sign In Failed$"
+          timeout: 15000
 - runFlow:
     when:
       visible: "^Cancel$"
@@ -113,8 +123,16 @@ env:
       visible: "Sign In Failed"
     commands:
       - tapOn: "OK"
+# The cold launch can restore the Debug banner over later footer actions.
+- runFlow:
+    when:
+      visible: ".*Open debugger to view warnings.*"
+    commands:
+      - tapOn:
+          point: "93%,93%"
 - assertVisible:
     id: signup-apple
+    enabled: true
 - assertNotVisible:
     id: paywall-logo
 # The protected data destination survives interruption at sign-in without a paywall flash.
@@ -173,12 +191,28 @@ env:
     timeout: 15000
 - tapOn:
     id: goal-lose_fat
-- tapOn:
-    id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: tried-meal_prep
-    timeout: 15000
+# Press feedback can finish without navigation after the resumed deep link.
+# Retry only on the goal screen so a late transition cannot advance Tried too.
+- retry:
+    maxRetries: 1
+    commands:
+      - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              id: goal-lose_fat
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  id: welcome-continue
+                  enabled: true
+                timeout: 15000
+            - tapOn:
+                id: welcome-continue
+      - extendedWaitUntil:
+          visible:
+            id: tried-meal_prep
+          timeout: 15000
 - openLink: com.fitsy.mobile://welcome/how-it-works
 - tapOn:
     text: "^Open$"
@@ -189,6 +223,20 @@ env:
     timeout: 15000
 - tapOn:
     id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: onboarding-widget-card
+    timeout: 15000
+- assertVisible:
+    id: onboarding-widget-example
+- assertVisible: "1. Long-press your Home Screen."
+- assertVisible: "2. Tap \\+ \\(or Edit → Add Widget\\)."
+- assertVisible: "3. Search fitsy and add the widget."
+- assertVisible:
+    id: welcome-skip
+- takeScreenshot: onboarding-widget-card
+- tapOn:
+    id: welcome-skip
 - extendedWaitUntil:
     visible:
       id: preview-guide
