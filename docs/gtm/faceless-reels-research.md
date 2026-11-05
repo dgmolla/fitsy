@@ -13,6 +13,10 @@ An example counts only after its individual video page and footage have been ins
 Each entry separates footage observed directly from page or caption metadata and marks details that cannot be verified as unknown.
 An image thumbnail, search snippet, caption, or creator profile alone cannot establish the first two seconds, pacing, audio, or whether the whole video is faceless.
 The B14 duplicate audit established a URL and creative-ledger check against the CSV and prior exclusions before new viewing; cross-platform footage still needs direct visual comparison because URL matching alone cannot find reposts.
+The prepublication audit now rejects any counted original URL or platform source ID found in the excluded-lead table, including links presented through public mirrors.
+The 2026-11-05 owner-authorized source correction removed the Sweetgreen wrap video from the count because its original opens on visible presenters; the exclusion and observation remain in the historical ledger.
+Instagram repost counts are retained in evidence notes, while the `shares` field is blank when an independently visible share count is unavailable; reposts are not interchangeable with shares.
+The full CSV was checked for this metric mix-up, including older TikTok mirror shares and original TikTok share counters.
 The CSV is written as UTF-8 with LF line endings through the existing Python standard-library `csv.DictWriter(..., lineterminator="\n")` workflow, preserving quoted fields and allowing the normal whitespace check to run without a cleanup rewrite.
 Engagement is a public page snapshot on the access date, not evidence that a creative choice caused results.
 Nutrition numbers stated by other creators are reported as their claims, not verified Fitsy estimates or venue-wide health claims.
@@ -25,7 +29,7 @@ This was a visible server notice, not an identified captcha or rate limit.
 The owned stopped TikTok tab 2090362390 was closed after the notice.
 The older worker-created TikTok tab 2090362381 remains detached because a supported close attempt returned "Debugger unattached"; it was not used to resume TikTok viewing.
 Instagram remained independently accessible and supplied the later B17 Reels.
-The current capture workflow checks existing URLs and cross-post evidence before counting, then audits the staged CSV and report together for total, gap, platform and LA counts, missingness, original-source ratio denominator, and the newest batch entry before publication.
+The current capture workflow checks existing URLs and cross-post evidence before counting, then audits the same staged CSV and report for exclusion-ledger conflicts, repost/share semantics, total, gap, platform and LA counts, missingness, original-source ratio denominator, and the newest batch entry before publication.
 
 ### Historical anonymous public access log
 
@@ -128,10 +132,11 @@ The [Socialpruf Sweetgreen gallery](https://socialpruf.com/tiktok/sweetgreen) wa
 | [California Fish Grill 56g creator review](https://www.tiktok.com/@awtran/video/7696537228759108895) | The food-only opening gives way to the creator's face later in the original playback. |
 | [Sweetgreen Power Max official video](https://www.tiktok.com/@sweetgreen/video/7574067725023202573) | The official video opens on a person eating at a desk. |
 | [MenuFit Blaze Pizza partner](https://www.tiktok.com/@tastyshreds/video/7695868396780522766) | The original opens on the creator's face; a food-first public mirror lead would have been insufficient. |
+| [Protein Shop 100g meal combinations Reel](https://www.instagram.com/theproteinshopnyc/reel/DfSsFhONvtN/) | A B18 provisional row was removed before publication: sampled food shots did not establish whole-video facelessness or a distinct creative identity from the earlier excluded Protein Shop 100g combinations TikTok. |
 
 ### Coverage achieved and remaining gap
 
-Ninety-six distinct video identities qualify toward the expanded target: seventy-one TikToks and twenty-five Instagram Reels.
+96 distinct video identities qualify toward the expanded target: 70 TikToks and 26 Instagram Reels.
 Seven creator-owned YouTube Shorts and one watermarked YouTube mirror without a verified original TikTok URL remain supplemental and do not fill the Reel/TikTok target.
 At least 54 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
 All six official TikTok mirrors were watched through their public players; the watermarked mirror and the YouTube Shorts were checked at sampled timestamps, with unseen frames explicitly left unknown.
@@ -163,7 +168,8 @@ Challenges, captchas, try-again-later notices, action blocks, private APIs, and 
 | B14, 2026-11-04 signed-in Chrome | Eight additional TikToks passed individual-page footage inspection: two Urbane Cafe dishes, a Better Bowls workout edit, two Hummus Republic dishes, a Pacific Catch salmon menu edit, a Just Salad wrap, and an Eagle Rock steak bowl. Three apparent cross-platform duplicates and one weak venue-only angle were rejected; a Better Bowls yogurt build matching an already counted Instagram Reel was also removed. | 8 new | 84 |
 | B15, 2026-11-04 signed-in Chrome | Ten additional TikToks passed individual-page footage inspection: four Hummus Republic franchise edits, two distinct Burbank Girl and The Chicken dishes, and one each from Carnivorous LA, Just Salad, Benny's Tacos, and Hummus Republic Delaware. A Delaware repost with the same lunch montage, two presenter-led search results, and a generic wellness montage were excluded. | 10 new | 74 |
 | B16, 2026-11-04 signed-in Chrome | Nine TikToks and one Instagram Reel passed individual-page footage inspection: two distinct Girl and The Chicken falafel edits, two Merka Saltao bowl edits, two Sweetfin menu edits, three Smokin' Stove food edits, and one separate Merka Instagram order. A Merka cross-post, presenter-led reviews, photo posts, and broad wellness claims were excluded. | 10 new | 64 |
-| B17, 2026-11-04 signed-in Chrome | Three TikToks and seven Instagram Reels passed individual-page footage inspection: California Fish Grill, Sweetgreen, Luna Grill, Fountain, Protein Shop, a Belfast vegan bowl, a Wisconsin hosted Hummus Republic lunch, a separate Hummus Republic Honey Harissa bowl, a West LA Moonbowls salad, and a West Covina protein bowl. TikTok viewing stopped after the 2026-11-05 03:36 UTC server notice; a Hive vegan-bowl lead, Kathy Hive cross-post, presenter-led clips, venue-only claims, and meal-prep services were excluded. | 10 new | 54 |
+| B17, 2026-11-04 signed-in Chrome, later audited | Two TikToks and seven Instagram Reels remain after the owner-directed removal of a Sweetgreen wrap video that opens on presenters. California Fish Grill, Luna Grill, Fountain, Protein Shop, a Belfast vegan bowl, a Wisconsin hosted Hummus Republic lunch, a separate Hummus Republic Honey Harissa bowl, a West LA Moonbowls salad, and a West Covina protein bowl remain. TikTok viewing stopped after the 2026-11-05 03:36 UTC server notice; a Hive vegan-bowl lead, Kathy Hive cross-post, presenter-led clips, venue-only claims, and meal-prep services were excluded. | 9 retained | 55 |
+| B18, 2026-11-04 signed-in Instagram, in progress | A distinct food-only Hummus Republic Honey Harissa bowl assembly Reel passed source and footage comparison. A provisional Protein Shop 100g combo row was removed before publication because whole-video facelessness and distinctness from an excluded TikTok were unresolved. | 1 new | 54 |
 
 The CSV holds the ninety-six counted video identities, original links, source links, observation batches, visible metrics, unknown fields, and source limitations.
 Its commercial-context field records two TikToks labeled Paid partnership, two hosted Reels, one invitation-tagged Reel, brand-owned promotions, and creator posts with unknown paid amplification.
@@ -171,8 +177,8 @@ The hosted Reels, invitation, and two paid partnerships are retained as creative
 The B1 CAVA post showed 2025-12-15, 17.7K likes, 175 comments, 4,617 favorites, and 2,001 shares on its original TikTok page; its approximate 3.3M view value remains a public-mirror snapshot.
 The original TikTok profile displayed 183.3K followers on 2026-11-04, so its follower snapshot is current rather than a historical follower denominator for the post.
 No view-to-follower ratio is interpreted from the older mixed-source, mixed-time mirror observations.
-Forty-seven TikTok rows and fifteen Instagram Reels now have original-profile view counts and current follower counts observed on the same day, each tied to the exact post tile.
-Two of those TikToks carry a Paid partnership label, and one Instagram Reel marks a hosted meal, leaving **n = 59** original-post pairs in the non-ad normalized comparison: forty-five TikToks and fourteen Instagram Reels.
+46 TikTok rows and 16 Instagram Reels now have original-profile view counts and current follower counts observed on the same day, each tied to the exact post tile.
+Two of those TikToks carry a Paid partnership label, and one Instagram Reel marks a hosted meal, leaving **n = 59** original-post pairs in the non-ad normalized comparison: 44 TikToks and 15 Instagram Reels.
 Three older CAVA TikToks have mirror view snapshots and current follower snapshots from a different source and time, so they remain outside this comparison.
 The ratios use current follower snapshots against cumulative views on posts of different ages, so they cannot be read as reach at posting or a controlled comparison.
 One account-level Reel window now supplies a bounded cadence observation, separate from the selected qualifying-video sample.
@@ -185,26 +191,26 @@ TikTok Creative Center's public US Top Ads view showed a login-limited advertise
 Meta Ad Library loaded MenuFit's advertiser page with about 500 active ads on this visit; two additional food-order previews showed presenters, so zero were counted from that screened subset.
 Paid-ad previews are kept separate from organic reach analysis because those libraries do not expose comparable organic performance data.
 
-| Field in the ninety-six-row CSV | Observed | Unknown or source-limited | Interpretation now |
+| Field in the 96-row CSV | Observed | Unknown or source-limited | Interpretation now |
 | --- | ---: | ---: | --- |
-| Views | 68 | 28 | Six older public-mirror snapshots, forty-seven original TikTok profile tiles, and fifteen original Instagram Reel tiles bound to exact post URLs. |
+| Views | 68 | 28 | Six older public-mirror snapshots, forty-six original TikTok profile tiles, and sixteen original Instagram Reel tiles bound to exact post URLs. |
 | Follower count | 93 | 3 | Current Instagram or TikTok profile snapshots, not post-date denominators; some are rounded. |
-| Likes and comments | 92 and 81 | 4 and 15 | New rows use original platform counts where visible; older rows include mirror observations. |
-| Saves or favorites | 66 | 30 | Original TikToks exposed favorites; Instagram saves remain unknown. |
-| Shares | 41 | 55 | TikTok shares and some Instagram reposts are visible; they are labeled by source in each row. |
+| Likes and comments | 92 and 80 | 4 and 16 | New rows use original platform counts where visible; older rows include mirror observations. |
+| Saves or favorites | 65 | 31 | Original TikToks exposed favorites; Instagram saves remain unknown. |
+| Shares | 35 | 61 | Visible TikTok share counts are separate from Instagram repost observations; unavailable Instagram shares are blank or explicitly unknown. |
 | Exact posted date | 15 | 81 | Fifteen originals displayed full dates; many others displayed month and day without year. |
-| Length | 48 | 48 | All measured durations are TikTok player readings; Instagram durations remain unknown. |
+| Length | 47 | 49 | All measured durations are TikTok player readings; Instagram durations remain unknown. |
 | Verified audible voice or music | 0 | 96 | Track labels are recorded, but the listening evidence is insufficient. |
 
-The forty-eight observed lengths range from 5 to 80 seconds with a median of 14 seconds; forty-eight lengths are unknown.
+The forty-seven observed lengths range from 5 to 80 seconds with a median of 14 seconds; forty-nine lengths are unknown.
 The 80-second California Fish Grill review is a long food-only outlier; no measured Instagram duration supports a platform length comparison.
 Across all ninety-six rows, hooks include order instruction, protein surprise, food assembly, social proof, menu launch, venue reveal, and offer framing; no single hook dominates this selected sample.
-Thirty-one rows show a clear creator-stated numeric calorie or protein claim, two show numeric labels whose units or referents are unclear, and sixty-three have no numeric calorie or protein figure verified in inspected frames or captions.
+Thirty-two rows show a clear creator-stated numeric calorie or protein claim, two show numeric labels whose units or referents are unclear, and sixty-two have no numeric calorie or protein figure verified in inspected frames or captions.
 These categories describe what appears in the video or caption, not whether the nutrition estimate is accurate.
-Fifty-three of ninety-six counted videos are LA-focused; thirty-four are elsewhere and nine have an unknown location.
+53 of 96 counted videos are LA-focused; 33 are elsewhere and 10 have an unknown location.
 No Ad Library paid ad is included; the CSV separately marks two TikTok Paid partnership labels, two hosted Reels, and one invitation-tagged Reel.
 These descriptive counts identify what this selected batch contains, not which creative choice caused more reach.
-Sixty-two rows now have both current followers and views from the original post and account surfaces, but two disclosed Paid partnerships and one hosted Reel are excluded from the fifty-nine-row non-ad ratio pool.
+62 rows now have both current followers and views from the original post and account surfaces, but two disclosed Paid partnerships and one hosted Reel are excluded from the 59-row non-ad ratio pool.
 Three older CAVA rows combine mirror views with current original-profile followers and remain outside that pool.
 
 | LA original post tile and current profile count | Views | Current followers | Views / current follower | Observed angle |
@@ -449,7 +455,6 @@ The [CAVA stop-motion partnership](https://www.tiktok.com/@hypnomotion/video/742
 | Original video | Inspected food hook and nutrition treatment | Views / current followers | Response and evidence limit |
 | --- | --- | ---: | --- |
 | [California Fish Grill bowls by Cassie](https://www.tiktok.com/@shake_datcass/video/7579899971411971359) | A food-only lineup names five protein bowls; the caption claims a 31-56g protein range and 56g for one bowl. | Unknown / 5,920 | 438 likes, 5 comments, 169 favorites, 237 shares; posted 2025-12-03; grams unverified. |
-| [Sweetgreen vegan wrap customization](https://www.tiktok.com/@sweetgreen/video/7698807701807189262) | A wrap split opens a 42-second tofu-for-chicken customization with ingredient labels; vegan-friendly is the brand's description. | 1,076 / about 249,100 = about 0.004 | 21 likes, 8 comments, 4 favorites, 1 share; year and verified vegan status unknown. |
 | [Luna Grill garlic lemon chicken](https://www.tiktok.com/@lunagrillofficial/video/7669932095266966797) | A 38-second food montage names the Santorini Bowl and calls the chicken choice protein-packed without a gram figure. | 680 / 1,117 = 0.61 | 15 likes, 0 comments, 0 favorites, 4 shares; filmed location and nutrition unknown. |
 | [Fountain East Hollywood bowls](https://www.instagram.com/fountain.gg/reel/DK-TlRxTtmX/) | Hand-held salad and kimchi-bowl cuts use large white dish labels; the caption discusses local grains and proteins without macros. | 2,137 / 2,642 = 0.81 | 7 comments; posted 2025-06-16; total likes, saves and nutrition unknown. |
 | [Protein Shop Caesar wrap](https://www.instagram.com/theproteinshopnyc/reel/DfIZF-hglyO/) | A torso-cropped wrap reveal gives way to a cut-wrap shot; the brand caption claims 77g protein. | 1,731 / about 25,000 = about 0.07 | 32 likes, 3 comments, 1 repost; NYC, duration and protein calculation unknown. |
@@ -459,12 +464,20 @@ The [CAVA stop-motion partnership](https://www.tiktok.com/@hypnomotion/video/742
 | [Moonbowls BBQ chicken salad](https://www.instagram.com/eatwamburger/reel/DIJ-Xh5SUlM/) | West LA bowl close-ups and a venue cut frame a gluten-free menu with meatless protein options. | Unknown / 1,612 | 74 likes, 18 comments; posted 2025-04-07; creator marks #invite, and no numeric macro is verified. |
 | [Xoxo Biscoff protein bowl](https://www.instagram.com/xoxoprotein/reel/Dd4Fiqypl2B/) | A moving hand-held cafe bowl reveal supports brand claims of 29g protein and 300-400 calories. | Unknown / 7,435 | 22 likes, 0 comments, 2 reposts; West Covina cafe, year and numbers unverified. |
 
-The B17 entries are distinct videos after URL and cross-platform creative checks; the [Kathy Hive Instagram co-post](https://www.instagram.com/lawithkathy/reel/DcUylyahWY2/) repeats an earlier counted TikTok and remains one identity.
+The nine retained B17 entries are distinct videos after URL and cross-platform creative checks; the [Kathy Hive Instagram co-post](https://www.instagram.com/lawithkathy/reel/DcUylyahWY2/) repeats an earlier counted TikTok and remains one identity.
 The [Hive Buddha Bowl](https://www.instagram.com/hivehealthyeats/reel/De94IaehBix/) remained excluded because its broad vegan-wellness framing lacks a dish-specific swap or macro comparison.
 The [Urbane Cafe Harissa Sandwich Reel](https://www.instagram.com/urbanecafe/reel/DfDIi1SgFbH/) repeats a counted TikTok creative, while a separate Glendale paid partner review showed the creator's face later in playback.
 An LA protein-bowl keyword search also surfaced meal-prep deliveries, presenter-led restaurant reviews, and broad venue lists that were not counted from snippets or thumbnails.
 The B17 TikTok server notice stopped that platform at 03:36 UTC on 2026-11-05; later B17 additions came from Instagram only.
-The Sweetgreen original's about 0.004 view-to-current-follower ratio is low relative to the Luna and Fountain entries shown here, but account size, post age, distribution, and paid reach are uncontrolled, so it is relative underperformance within this selected sample only.
+The excluded Sweetgreen original no longer contributes to any performance denominator or B17 comparison.
+
+### B18 Instagram food assembly, in progress
+
+| Original video | Inspected food hook and nutrition treatment | Views / current followers | Response and evidence limit |
+| --- | --- | ---: | --- |
+| [Hummus Republic Honey Harissa bowl launch](https://www.instagram.com/hummusrepublic/reel/DdUY-ySB63w/) | A large white and yellow dish-name headline overlays counter-side greens, chicken, toppings, and sauce assembly; the brand caption claims 46g protein. | 3,355 / about 25,800 = about 0.13 | 39 likes; September 15 without year, comments total and shares unknown. This is a separate counter-side build from the later hand-held Honey Harissa Reel. |
+
+The B18 Protein Shop 100g combination Reel remains excluded because the sampled food-only shots did not establish a distinct whole-video faceless creative from an already excluded TikTok with a presenter.
 
 ## Footage-inspected examples
 
