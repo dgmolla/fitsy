@@ -22,7 +22,7 @@ flowchart LR
     External --> State[One GitHub monitoring state issue]
     State --> Warning[Warning channel]
     State --> Urgent[P1 channel and Dawit direct Slack]
-    Workflows[Completed main release outcomes] --> External
+    Workflows[Main and tagged EAS release outcomes] --> External
 ```
 
 The app lane owns route/client instrumentation, health checks, policy, and probe implementation.
@@ -72,7 +72,7 @@ Existing Maestro journeys remain applicable because user interactions are unchan
 | API crons | No successful execution within two schedule intervals plus one hour | P2 |
 | TLS/domain expiration | Within 14 days; within three days | P2 then P1 |
 | Observer failure | Missing configuration, denied query access, malformed/partial provider results, or unavailable provider API | P2; affected prior incidents remain open |
-| Deploy/EAS workflow failure | Failed, timed out, cancelled, or action-required production release | P1 |
+| Deploy/EAS workflow failure | Failed, timed out, cancelled, action-required, stale, or startup-failed production release | P1 |
 | Dev maintenance failure | Failed maintenance workflow | P2 |
 
 Current and baseline API windows are disjoint.
@@ -112,8 +112,14 @@ The workflow receives only the GitHub permissions needed to read source/workflow
 It checks out the protected workflow revision, never failed-release artifacts or candidate PR code.
 Every trigger requires `refs/heads/main` before checkout or credential-bearing steps.
 The `fitsy-production-monitor` concurrency group serializes monitoring state updates.
-Every wakeup polls the latest 100 completed main runs for each monitored workflow and uses the most recently updated meaningful outcome.
-A replaced pending wakeup therefore cannot lose the current failed outcome, including a rerun of the same run ID.
+Every wakeup polls up to 100 recent runs, including active attempts, for each monitored workflow and uses the most recently updated meaningful completed outcome.
+Deploy and Dev maintenance are scoped to main; EAS also admits push-triggered release tags matching its configured `v*.*.*` pattern.
+Candidate-branch dispatches cannot resolve a production incident.
+The file-scoped GitHub endpoint and returned workflow path establish identity; a custom `run-name` is a display value.
+A replaced pending wakeup therefore cannot lose a retained failed outcome, including a rerun of the same run ID.
+An active attempt defers recovery without generating an observer-error warning, and the monitor still reports any persisted active incidents.
+Failure receipts retain their workflow update time and run ID so a skipped retry cannot expose an older success as recovery.
+The bounded history is not a complete historical incident audit; unavailable meaningful history remains an observer failure.
 Unavailable or malformed history preserves incidents for that workflow while other sources still report their outcomes.
 Issue state records each channel/direct delivery separately so a failed DM retries without repeating the successful channel message.
 Failures receive reminders at most every 30 minutes; observed recovery sends one resolved transition.
@@ -131,8 +137,10 @@ Separate production storage remains a cost decision for Dawit.
 No paid vendor subscription or new Vercel integration is required by this implementation.
 Existing [Axiom Personal](https://axiom.co/pricing) and [PostHog](https://posthog.com/pricing) allowances can cover early traffic, subject to account usage.
 A five-minute GitHub schedule runs 288 jobs/day, or 8,640 jobs per 30 days.
-For private repositories, [each job's billable time rounds up to a minute](https://docs.github.com/en/actions/how-tos/monitor-workflows/view-job-execution-time), so this can exceed included Actions minutes even with short jobs.
-The schedule is therefore opt-in, and enabling paid capacity still requires Dawit's decision.
+The November 5 inventory verified that this repository is public and this workflow uses standard `ubuntu-latest` runners without artifact/cache uploads.
+[GitHub makes standard runners in public repositories free](https://docs.github.com/en/billing/concepts/product-billing/github-actions), so these runner jobs do not consume a private-repository minute allowance.
+Recheck that budget assumption if repository visibility or runner type changes, and verify actual Axiom/PostHog account allowances before activation.
+The schedule remains opt-in until credentials, routing and the live alert drill pass; enabling paid capacity still requires Dawit's decision.
 Manual and release-completion runs remain available for verification.
 GitHub also [delays or drops scheduled jobs under load](https://docs.github.com/en/actions/how-tos/troubleshoot-workflows); the schedule is not a guaranteed five-minute detection SLA.
 A separately approved external watchdog is the next step if that guarantee is required.

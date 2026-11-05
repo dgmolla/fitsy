@@ -141,21 +141,43 @@ export async function expiryMetrics({ fetchImpl, now, state }, readCertificate =
 }
 
 export async function workflowMetrics(file, name, context) {
-  // Every wakeup reads durable outcomes. Replacing a pending wakeup cannot
-  // discard its failure, and a rerun of the same run ID is observed afresh.
-  const result = await github(`actions/workflows/${file}/runs?branch=main&status=completed&per_page=100`, context);
+  // Include active attempts: a retry hides its previous failure from a
+  // completed-only query. EAS also runs on release tags, not just main.
+  const eas = file === 'eas-build.yml';
+  const result = await github(`actions/workflows/${file}/runs?${eas ? '' : 'branch=main&'}per_page=100`, context);
   if (!Array.isArray(result.workflow_runs)) throw new Error('Invalid workflow history');
-  const runs = result.workflow_runs.filter(run => !['skipped', 'neutral', null, undefined].includes(run.conclusion));
-  if (!runs.length || runs.some(run => run.name !== name || run.head_branch !== 'main' || run.status !== 'completed'
+  const runs = eas ? result.workflow_runs.filter(run => run.head_branch === 'main'
+    || (run.event === 'push' && /^v[^/]*\.[^/]*\.[^/]*$/.test(run.head_branch ?? ''))) : result.workflow_runs;
+  const activeStatuses = ['queued', 'in_progress', 'requested', 'waiting', 'pending'];
+  const conclusions = ['success', 'failure', 'timed_out', 'action_required', 'cancelled', 'stale', 'startup_failure', 'skipped', 'neutral'];
+  // GitHub's name can be the dynamic run-name. The file-scoped endpoint and
+  // returned workflow path identify the observer's trusted release stream.
+  if (!runs.length || runs.some(run => run.path !== `.github/workflows/${file}`
+      || (!eas && run.head_branch !== 'main')
+      || !(eas ? ['push', 'workflow_dispatch'] : file === 'deploy.yml'
+        ? ['workflow_run', 'workflow_dispatch'] : ['schedule', 'workflow_dispatch']).includes(run.event)
       || !Number.isSafeInteger(run.id) || run.id <= 0 || !Number.isSafeInteger(run.run_attempt) || run.run_attempt <= 0
       || !Number.isFinite(Date.parse(run.updated_at))
-      || !['success', 'failure', 'timed_out', 'action_required', 'cancelled'].includes(run.conclusion))) {
-    throw new Error('Completed workflow identity unavailable');
+      || (run.status === 'completed' ? !conclusions.includes(run.conclusion)
+        : !activeStatuses.includes(run.status) || run.conclusion !== null))) {
+    throw new Error('Verified workflow identity unavailable');
   }
-  const run = runs.sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0];
+  const run = runs.filter(item => item.status === 'completed' && !['skipped', 'neutral'].includes(item.conclusion))
+    .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at) || b.id - a.id)[0];
   const scope = `workflow:${name}`;
-  return run.conclusion === 'success' ? []
-    : [alert(scope, scope, name === 'Dev maintenance' ? 'P2' : 'P1', `${name} failed; inspect Actions run ${run.id}, attempt ${run.run_attempt}.`)];
+  if (run && run.conclusion !== 'success') {
+    return [{ ...alert(scope, scope, name === 'Dev maintenance' ? 'P2' : 'P1', `${name} failed; inspect Actions run ${run.id}, attempt ${run.run_attempt}.`),
+      workflowUpdatedAt: run.updated_at, workflowRunId: run.id }];
+  }
+  // Pending work is neither a recovery nor a broken observer. Omit its scope
+  // so shared incidents and reminder delivery survive until an outcome exists.
+  if (runs.some(item => item.status !== 'completed')) return null;
+  if (!run) throw new Error('Verified workflow identity unavailable');
+  const previous = context.state?.incidents[scope];
+  if (previous?.active && previous.workflowUpdatedAt
+      && (Date.parse(run.updated_at) < Date.parse(previous.workflowUpdatedAt)
+        || (run.updated_at === previous.workflowUpdatedAt && run.id < previous.workflowRunId))) return null;
+  return [];
 }
 
 export async function collectObservations({ env, fetchImpl, now, state }) {
@@ -173,7 +195,9 @@ export async function collectObservations({ env, fetchImpl, now, state }) {
   const observerAlerts = [];
   results.forEach((result, index) => {
     const scope = sources[index][0];
-    if (result.status === 'fulfilled') observations.push({ scope, alerts: result.value });
+    if (result.status === 'fulfilled') {
+      if (result.value !== null) observations.push({ scope, alerts: result.value });
+    }
     else observerAlerts.push(alert(`observer:${scope}`, 'observer', 'P2', `${scope} monitoring failed or is unconfigured; inspect the monitoring setup contract.`));
   });
   observations.push({ scope: 'observer', alerts: observerAlerts });

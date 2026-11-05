@@ -17,6 +17,8 @@ ADDITION to correctness. Read `REVIEW.md` first.
   decisions on this data).
 - External clients: missing rate limiting, retries without idempotency,
   resume-safety of pipeline writes.
+- Fail-closed dependencies: a new store/configuration failure that rejects requests needs a bounded health check and a test proving the rejected request emits an alert signal.
+  Flag missing health or alert-test coverage even when the rejection is intentional; returning a handled 503 must not bypass monitoring (#605).
 - Migrations: locks on large tables, backfill strategies, old-code-on-new-schema
   windows (deploys are not atomic with migrations).
 - Workflows/deploy config: widened permissions, new secret exposure to steps

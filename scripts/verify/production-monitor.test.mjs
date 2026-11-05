@@ -260,23 +260,45 @@ test('every required environment fails on a missing/blank binding, with names on
 });
 
 test('workflow polling catches reruns and retained failures without relying on trigger payloads', async () => {
-  const run = overrides => ({ id: 123, run_attempt: 1, name: 'Deploy', head_branch: 'main', status: 'completed',
+  const run = overrides => ({ id: 123, run_attempt: 1, name: 'Release workflow_run 456',
+    path: '.github/workflows/deploy.yml', event: 'workflow_run', head_branch: 'main', status: 'completed',
     conclusion: 'failure', updated_at: new Date(now).toISOString(), ...overrides });
   let runs = [run({ id: 200, conclusion: 'success' }), run({ run_attempt: 2, updated_at: new Date(now + 1_000).toISOString() })];
   const context = { env: { GITHUB_TOKEN: 'fixture' }, policy, fetchImpl: async url => {
-    assert.equal(url, 'https://api.github.com/repos/dgmolla/fitsy/actions/workflows/deploy.yml/runs?branch=main&status=completed&per_page=100');
+    assert.equal(url, 'https://api.github.com/repos/dgmolla/fitsy/actions/workflows/deploy.yml/runs?branch=main&per_page=100');
     return Response.json({ workflow_runs: runs });
   } };
   assert.match((await workflowMetrics('deploy.yml', 'Deploy', context))[0].summary, /run 123, attempt 2/);
   runs = [run({ conclusion: 'skipped', updated_at: new Date(now + 2_000).toISOString() }), run({})];
   assert.equal((await workflowMetrics('deploy.yml', 'Deploy', context))[0].key, 'workflow:Deploy');
+  for (const conclusion of ['stale', 'startup_failure']) {
+    runs = [run({ conclusion })];
+    assert.equal((await workflowMetrics('deploy.yml', 'Deploy', context))[0].severity, 'P1');
+  }
   runs = [run({ conclusion: 'success' })];
   assert.deepEqual(await workflowMetrics('deploy.yml', 'Deploy', context), []);
-  for (const overrides of [{ head_branch: 'candidate' }, { status: 'in_progress' }, { id: null },
-    { run_attempt: undefined }, { updated_at: 'invalid' }, { name: 'Untrusted workflow' }, { conclusion: 'unknown' }]) {
+  for (const overrides of [{ head_branch: 'candidate' }, { status: 'unknown' }, { id: null },
+    { run_attempt: undefined }, { updated_at: 'invalid' }, { path: '.github/workflows/other.yml' }, { conclusion: 'unknown' }]) {
     runs = [run(overrides)];
     await assert.rejects(workflowMetrics('deploy.yml', 'Deploy', context), /workflow identity/);
   }
+});
+
+test('EAS release tags are observed while candidate dispatches cannot resolve a release failure', async () => {
+  const run = overrides => ({ id: 34102447143, path: '.github/workflows/eas-build.yml', event: 'push',
+    name: 'EAS Build + TestFlight', head_branch: 'v1.0.0', run_attempt: 1, status: 'completed',
+    conclusion: 'failure', updated_at: new Date(now).toISOString(), ...overrides });
+  let runs = [run({ id: 124, head_branch: 'candidate', event: 'workflow_dispatch', conclusion: 'success',
+    updated_at: new Date(now + 1_000).toISOString() }), run({})];
+  const context = { env: { GITHUB_TOKEN: 'fixture' }, policy, fetchImpl: async url => {
+    const parsed = new URL(url);
+    assert.equal(parsed.searchParams.get('branch'), null);
+    assert.equal(parsed.searchParams.get('status'), null);
+    return Response.json({ workflow_runs: runs });
+  } };
+  assert.match((await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context))[0].summary, /run 34102447143/);
+  runs = [run({ event: 'workflow_dispatch', head_branch: 'v1.0.0', conclusion: 'success' })];
+  await assert.rejects(workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context), /workflow identity/);
 });
 
 test('the scheduled entrypoint preserves incidents until provider or workflow recovery is observed', async () => {
@@ -287,6 +309,7 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
   let apiBroken = true, queryDenied = false;
   const workflowFiles = { Deploy: 'deploy.yml', 'EAS Build + TestFlight': 'eas-build.yml', 'Dev maintenance': 'dev-maintenance.yml' };
   const completedRun = (name, conclusion, overrides = {}) => ({ id: 123, name, conclusion, run_attempt: 1,
+    path: `.github/workflows/${workflowFiles[name]}`, event: name === 'Deploy' ? 'workflow_run' : 'workflow_dispatch',
     status: 'completed', head_branch: 'main', updated_at: new Date(now).toISOString(), ...overrides });
   const workflowRuns = Object.fromEntries(Object.entries(workflowFiles).map(([name, file]) => [file, [completedRun(name, 'success')]]));
   const store = await loadAlertState(external.context);
@@ -312,10 +335,11 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
     if (url.includes('/actions/workflows/')) {
       assert.equal(init.method ?? 'GET', 'GET');
       const path = new URL(url);
-      assert.equal(path.searchParams.get('branch'), 'main');
-      assert.equal(path.searchParams.get('status'), 'completed');
       const file = path.pathname.split('/workflows/')[1].split('/')[0];
-      return Response.json({ workflow_runs: workflowRuns[file] });
+      // Model GitHub's filtering so narrowing the real query changes behavior.
+      return Response.json({ workflow_runs: workflowRuns[file]?.filter(run =>
+        (!path.searchParams.has('branch') || run.head_branch === path.searchParams.get('branch'))
+        && (!path.searchParams.has('status') || run.status === path.searchParams.get('status'))) });
     }
     if (url.includes('api.upstash.com')) return Response.json({ daily_net_commands: 10 });
     if (url.endsWith('/commits/main')) return Response.json({ sha: 'a'.repeat(40) });
@@ -333,8 +357,11 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
 
   for (const name of ['Deploy', 'EAS Build + TestFlight', 'Dev maintenance']) {
     const key = `workflow:${name}`;
-    workflowRuns[workflowFiles[name]] = [completedRun(name, 'failure')];
+    workflowRuns[workflowFiles[name]] = [completedRun(name, 'failure', name === 'EAS Build + TestFlight'
+      ? { head_branch: 'v1.2.3', event: 'push' } : { name: `Release workflow_run ${now}` })];
     await runMonitor({ env, fetchImpl, now: now + 180_000 });
+    assert.deepEqual(external.messages.filter(message => message.text.includes(`Incident: ${key};`))
+      .map(message => message.channel), name === 'Dev maintenance' ? [policy.channel] : [policy.channel, 'UFIXTURE']);
     const recoveries = () => external.messages.filter(message => message.text.includes(`RESOLVED production alert: ${key}.`));
     for (const conclusion of ['skipped', 'neutral', undefined, null, 'unknown']) {
       workflowRuns[workflowFiles[name]] = [completedRun(name, conclusion)];
@@ -342,6 +369,28 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
       assert.equal((await loadAlertState(external.context)).state.incidents[key].active, true, `${name}: ${conclusion}`);
       assert.equal(recoveries().length, 0, `${name}: ${conclusion} is not recovery`);
     }
+    for (const conclusion of ['stale', 'startup_failure']) {
+      workflowRuns[workflowFiles[name]] = [completedRun(name, conclusion)];
+      const signals = await runMonitor({ env, fetchImpl, now: now + 181_500 });
+      assert.ok(signals.some(item => item.key === key && item.severity === (name === 'Dev maintenance' ? 'P2' : 'P1')));
+      assert.equal(signals.some(item => item.key === `observer:${key}`), false, 'known failures are not observer errors');
+      assert.equal(recoveries().length, 0);
+    }
+    for (const status of ['queued', 'in_progress', 'requested', 'waiting', 'pending']) {
+      workflowRuns[workflowFiles[name]] = [completedRun(name, null, { status, run_attempt: 2,
+        updated_at: new Date(now + 1_000).toISOString() }),
+      completedRun(name, 'success', { id: 124, updated_at: new Date(now + 500).toISOString() })];
+      const signals = await runMonitor({ env, fetchImpl, now: now + 181_900 });
+      assert.ok(signals.some(item => item.key === key), 'pending attempts must not report a healthy monitor');
+      assert.equal(signals.some(item => item.key === `observer:${key}`), false, 'valid pending work is not an observer failure');
+      assert.equal((await loadAlertState(external.context)).state.incidents[key].active, true, `${name}: ${status}`);
+      assert.equal(recoveries().length, 0, 'a success cannot resolve a failure while its retry remains active');
+    }
+    workflowRuns[workflowFiles[name]] = [completedRun(name, 'skipped', { run_attempt: 2,
+      updated_at: new Date(now + 1_000).toISOString() }),
+    completedRun(name, 'success', { id: 122, updated_at: new Date(now - 1_000).toISOString() })];
+    await runMonitor({ env, fetchImpl, now: now + 181_950 });
+    assert.equal(recoveries().length, 0, 'a skipped retry cannot expose an old success as recovery');
     workflowRuns[workflowFiles[name]] = [completedRun(name, 'success')];
     await runMonitor({ env, fetchImpl, now: now + 182_000 });
     assert.equal((await loadAlertState(external.context)).state.incidents[key].active, false);
