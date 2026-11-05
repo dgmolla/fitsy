@@ -13,6 +13,7 @@ it.each(['@fitsy/onboarding', '@fitsy/onboarding_unowned'])(
     await AsyncStorage.setItem(legacyKey, legacyFacts);
     const screen = renderJourney('/profile', profileRoutes);
     await screen.findByTestId('profile-edit-goal');
+    await waitFor(() => expect(screen.getByTestId('la-analytics-consent').props.disabled).toBe(false));
 
     for (const label of ['Restore older profile facts', 'Notifications', 'Home Screen widget']) {
       expect(Boolean(screen.queryByText(label))).toBe(false);
@@ -34,6 +35,7 @@ it('still edits the current profile without replacing manual meal targets or old
   await AsyncStorage.setItem('@fitsy/onboarding_unowned', legacyFacts);
   const screen = renderJourney('/profile', profileRoutes);
   await screen.findByTestId('profile-edit-meal-targets');
+  await waitFor(() => expect(screen.getByTestId('la-analytics-consent').props.disabled).toBe(false));
   await act(async () => { fireEvent.press(screen.getByTestId('profile-edit-goal')); });
   await act(async () => { fireEvent.press(screen.getByTestId('profile-choice-performance')); });
   await act(async () => { fireEvent.press(screen.getByTestId('profile-edit-apply')); });

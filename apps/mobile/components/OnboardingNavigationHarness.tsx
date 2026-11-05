@@ -30,7 +30,7 @@ import { hasPaymentSignInContinuation, rememberPaymentSignInContinuation } from 
 import { hasPendingMealClaim, rememberPendingMealClaim } from '../lib/pendingMealClaim';
 import type { ProfileResponse, UserGoalV2 } from '@fitsy/shared';
 
-type Session = { access_token: string; user: { id: string } } | null;
+type Session = { access_token: string; user: { id: string; user_metadata?: Record<string, unknown> } } | null;
 type AuthListener = (event: string, session: Session) => void;
 export const mockState: { session: Session; sessionRead?: () => Promise<{ data: { session: Session } }>; googleResponse?: 'cancel' | 'missing-token'; authListeners: Set<AuthListener> } = { session: null, authListeners: new Set() };
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
@@ -44,6 +44,11 @@ jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: {
     getSession: async () => mockState.sessionRead ? mockState.sessionRead() : ({ data: { session: mockState.session } }),
+    getUser: async () => ({ data: { user: mockState.session?.user ?? null }, error: null }),
+    refreshSession: async () => {
+      for (const listener of mockState.authListeners) listener('TOKEN_REFRESHED', mockState.session);
+      return { data: { session: mockState.session }, error: null };
+    },
     signOut: async () => { mockState.session = null; return { error: null }; },
     setSession: async () => { mockState.session = { access_token: 'test-token', user: { id: 'buyer' } }; return { data: { session: mockState.session } }; },
     onAuthStateChange: (listener: AuthListener) => {

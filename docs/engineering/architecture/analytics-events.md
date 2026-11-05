@@ -1,12 +1,90 @@
 # Analytics event taxonomy
 
-Last updated: 2026-05-09 (Sprint 12, S-222 + post-S-225 priming reorder).
+Launch contract updated: 2026-11-05 (#735).
 
-This is the canonical list of every PostHog event the Fitsy mobile client
-fires. The runtime contract lives in
-`apps/mobile/lib/analytics.ts` — every event has a typed `track*` helper
-and is pinned by tests in `apps/mobile/lib/analytics.test.ts`. The naming
-convention is `snake_case` for both event names and property names.
+The runtime contract lives in `apps/mobile/lib/analytics.ts` and `analyticsPrivacy.ts`.
+The [dated audit](launch-analytics-audit.md) inventories the current callers and which legacy taxonomy fields are filtered out.
+The launch contract below supersedes older table entries where they differ.
+Names use `snake_case`; unknown properties, precise location, IP, nutrition, free text and nested objects remain denied.
+The final sanitizer always supplies the non-identifying `$ip=0.0.0.0` placeholder and `$geoip_disable=true`, including identity events.
+Omitting `$ip` alone lets PostHog [populate it from the capture connection](https://posthog.com/tutorials/web-redact-properties#hiding-customer-ip-address); GeoIP disabling alone does not prevent that IP enrichment.
+Caller-supplied IP addresses never pass through, and no project-wide privacy setting is changed.
+
+## Launch measurement contract
+
+No new custom event name is needed for #735.
+Every accepted capture, including SDK identity updates, carries `analytics_contract=1`, `distribution_channel`, `$internal_or_test_user` and `la_cohort` through the final privacy filter.
+The boolean fields accept only actual booleans; the channel accepts only `development`, `testflight`, `production` or `unknown`.
+
+| Gap | Contract | Limitation |
+| --- | --- | --- |
+| Staff/test exclusion | DEV/preview API origins, Debug/Metro/development distributions, the existing review account, `app_metadata.fitsy_internal_or_test=true`, or the Profile test-account choice mark the person `$internal_or_test_user=true`. | TestFlight by itself is not an internal account; existing staff must choose exclusion or receive the explicit administrator metadata through an authorized account-management process. |
+| Distribution | Debug/Metro is `development`; otherwise the configured Expo Update channel supplies `testflight` or `production`; preview/e2e/development channels are `development`; unrecognized channels are `unknown`. | This records deployment configuration, not an independently attested installation source; historical builds cannot be relabeled from their `kind` value. |
+| Meaningful use | `restaurant_detail_viewed` includes boolean `unlocked` and `has_macros` after the focused, loaded menu passes its access guards; `menu_item_tapped` includes `unlocked`. | An unlocked menu containing macros is an activity proxy, not proof of reading every item or eating a meal. |
+| Save continuation | `item_saved`, `action=save`, `entry_point=purchase_continuation` fires after the existing post-purchase save succeeds. | An already-known bookmark, failed save or unsave is not a newly completed save. |
+| LA cohort | Profile's optional LA consent stores `user_metadata.fitsy_la_cohort_consent_v1` in the signed-in account; only strict `true` produces `la_cohort=true` on subsequent events and the identified person. | A neighborhood choice or GeoIP never grants consent; controlled DEV consent is not evidence of real LA uptake. |
+| Identity | The Supabase account UUID is the distinct ID on initial sign-in, token refresh and user updates; direct account switches and sign-out clear the previous SDK identity. | Two different provider accounts are not automatically merged; genuine physical-device continuity and adopted customer behavior need separate observation. |
+
+Profile exclusion is intentionally one-way for an account.
+The app never sends `$internal_or_test_user=false` as a person update, so another device cannot silently remove a known test classification.
+An excluded account can still exercise consent and menu journeys for controlled evidence.
+No production account metadata is backfilled by this change, and previously retained private properties are not erased.
+Any historical data cleanup remains separately owned and authorized.
+
+Consent changes use the authenticated Supabase user endpoint with the initiating account's captured token, then refresh the persisted session and analytics identity.
+A concurrent account switch cannot retarget the write to the new account.
+The control stays off until confirmed opt-in and supports revocation.
+Cold start and sign-in identify the account with LA attribution off until a fresh Auth read confirms consent; a late response after sign-out or account change cannot restore it.
+An already-running second device receives account metadata on its next auth refresh.
+Neither LA nor internal/test metadata grants application access or entitlement.
+
+The existing `kind` on `subscription_check` and `client_error` retains #605's monitoring meaning.
+Launch SQL must use `distribution_channel` instead of excluding `kind=development`, which also labels TestFlight monitoring traffic.
+The existing weekly scoreboard remains an all-event operational measure and is not the qualified LA launch metric.
+
+### Default launch SQL filters
+
+PostHog [internal-user filtering](https://posthog.com/tutorials/filter-internal-users) requires explicit SQL exclusion.
+Do not rely on a project toggle or infer staff eligibility from email or subscription status.
+Use both the cohort and direct person/event booleans so a cohort refresh delay cannot admit a known test event.
+PostHog documents [daily dynamic-cohort recalculation](https://posthog.com/docs/data/cohorts#how-often-are-dynamic-cohorts-updated); direct booleans take effect without waiting for that refresh.
+Require consent at capture time and the current person consent so later enrollment does not retroactively qualify earlier activity.
+Missing contract, channel, consent or access fields are ineligible.
+
+```sql
+-- Two completed Monday-Sunday weeks in Los Angeles; named timezone handles DST.
+-- Counts distinct LA calendar days, never sessions or raw event totals.
+WITH toStartOfWeek(toDate(toTimeZone(now(), 'America/Los_Angeles')), 1) AS week_end
+SELECT count() AS meaningful_people,
+       countIf(qualifying_weeks = 2) AS active_two_days_each_week
+FROM (
+  SELECT person_id, countIf(active_days >= 2) AS qualifying_weeks
+  FROM (
+    SELECT person_id,
+           toStartOfWeek(toDate(toTimeZone(timestamp, 'America/Los_Angeles')), 1) AS la_week,
+           uniqExact(toDate(toTimeZone(timestamp, 'America/Los_Angeles'))) AS active_days
+    FROM events
+    WHERE timestamp >= now() - INTERVAL 22 DAY
+      AND toDate(toTimeZone(timestamp, 'America/Los_Angeles')) >= week_end - INTERVAL 14 DAY
+      AND toDate(toTimeZone(timestamp, 'America/Los_Angeles')) < week_end
+      AND properties.analytics_contract = 1
+      AND properties.distribution_channel IN ('testflight', 'production')
+      AND properties.$internal_or_test_user = false
+      AND coalesce(person.properties.$internal_or_test_user, false) = false
+      AND person_id NOT IN COHORT 233968
+      AND properties.la_cohort = true AND person.properties.la_cohort = true
+      AND ((event = 'restaurant_detail_viewed' AND properties.unlocked = true AND properties.has_macros = true)
+           OR (event = 'item_saved' AND properties.action = 'save'))
+    GROUP BY person_id, la_week
+  )
+  GROUP BY person_id
+)
+```
+
+The query cannot demonstrate two completed eligible weeks until the contract is adopted and those weeks have elapsed.
+The #735 worker owns controlled emission and insight setup; the launch owner owns real consenting participant enrollment and the first completed-week interpretation after deployment.
+Saved insight and measured execution receipts belong in the audit follow-up and issue/PR proof.
+Project-wide defaults, existing insight rewrites, feature flags, paid add-ons and retained-data deletion are outside this change.
 
 If you add an event, update three places in lockstep:
 1. add a `track*` helper in `apps/mobile/lib/analytics.ts`,
@@ -51,8 +129,8 @@ between any two edges is measurable as a PostHog funnel step.
 
 | Event | When | Properties | Question it answers |
 |-------|------|------------|---------------------|
-| `$identify` (via `identifyUser`) | After successful auth (Apple, Google, dev) | `email?`, `goal?`, `activity_level?`, `macro_protein?`, `macro_carbs?`, `macro_fat?`, `macro_calories?` | Stitch anonymous → identified events; segment by goal/activity |
-| `$reset` (via `resetAnalyticsSession`) | On explicit logout | none | Drop attributed user from subsequent anonymous events |
+| `$identify` / `$set` (via `identifyAnalyticsUser`) | Account sign-in, refresh or metadata update | `email?`, `la_cohort`, `$internal_or_test_user=true?` | Stitch the same account and apply consent/test classification; nutrition and other person fields remain denied |
+| SDK reset (via `resetAnalyticsSession`) | Sign-out or account switch | no captured `$reset` event | Drop the previous identity from subsequent activity |
 
 ## Onboarding
 
@@ -128,18 +206,18 @@ between any two edges is measurable as a PostHog funnel step.
 | Event | When | Properties | Question it answers |
 |-------|------|------------|---------------------|
 | `restaurant_tapped` | User taps a restaurant card | `restaurant_id`, `restaurant_name`, `position`, `entry_point: 'hero' \| 'dish_card' \| 'section' \| 'saved_screen'`, `best_match_calories?` | Click-through rate by entry surface / list position |
-| `restaurant_detail_viewed` | `/api/menu/[id]` resolves successfully | `restaurant_id`, `item_count` | Detail-screen views; baseline for save / tap funnels |
+| `restaurant_detail_viewed` | Focused menu finishes loading and passes UI access guards | `restaurant_id`, `item_count`, `unlocked`, `has_macros` | Separate unlocked menu exploration from locked samples and empty/macro-less menus |
 | `restaurant_detail_failed` | `fetchMenu` returns null (network or non-2xx) | `restaurant_id`, `error_message?` | Detail-API reliability |
 | `menu_search_typed` | User types in the menu search input (throttled: emit on first/clear/every 5 chars) | `query_length: number` | Whether menu search is discoverable & used |
 | `menu_filter_chip_toggled` | User taps a filter chip on the detail screen | `chip: string`, `on: boolean` | Which dietary / macro chips drive filtering |
 | `menu_sort_changed` | User picks a sort option | `sort: string` | Match vs Protein vs Calories vs Price preference |
-| `menu_item_tapped` | User taps a menu item card | `menu_item_id`, `restaurant_id`, `position` | Per-item engagement / position bias |
+| `menu_item_tapped` | User taps a menu item card | `menu_item_id`, `restaurant_id`, `position`, `unlocked` | Separate locked teaser taps from unlocked item engagement |
 
 ## Saving items
 
 | Event | When | Properties | Question it answers |
 |-------|------|------------|---------------------|
-| `item_saved` | `/api/saved-items` create or delete succeeds | `menu_item_id`, `restaurant_id`, `action: 'save' \| 'unsave'`, `entry_point: 'restaurant_detail' \| 'saved_screen'` | Save volume / unsave rate per surface |
+| `item_saved` | `/api/saved-items` create or delete succeeds, including a purchase continuation | `menu_item_id`, `restaurant_id`, `action: 'save' \| 'unsave'`, `entry_point: 'restaurant_detail' \| 'saved_screen' \| 'purchase_continuation'` | Completed saves by initiating surface |
 | `save_failed` | `/api/saved-items` create or delete fails | `menu_item_id`, `restaurant_id`, `action`, `entry_point`, `error_message?` | Save-API reliability |
 
 ## Profile (S-222)

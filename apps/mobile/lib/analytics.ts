@@ -11,6 +11,7 @@ import PostHog from 'posthog-react-native';
 import type { JsonType } from '@posthog/core';
 import { sanitizeAnalyticsEvent } from './analyticsPrivacy';
 import { monitoringEnvironment } from './monitoringEnvironment';
+import { analyticsAccount, analyticsDistribution, isAnalyticsTestRuntime, type AnalyticsUser } from './analyticsContext';
 
 const API_KEY =
   process.env.EXPO_PUBLIC_POSTHOG_API_KEY ?? 'phc_placeholder_replace_via_vercel_cli';
@@ -26,12 +27,19 @@ if (API_KEY.startsWith('phc_placeholder')) {
 }
 
 let _client: PostHog | null = null;
+let _account: { id: string; la_cohort: boolean; $internal_or_test_user: boolean } | null = null;
 
 export function getPostHogClient(): PostHog {
   if (!_client) {
     _client = new PostHog(API_KEY, {
       host: HOST,
-      before_send: sanitizeAnalyticsEvent,
+      before_send: event => event ? sanitizeAnalyticsEvent({
+        ...event,
+        properties: { ...event.properties, analytics_contract: 1,
+          distribution_channel: analyticsDistribution(),
+          la_cohort: _account?.la_cohort ?? false,
+          $internal_or_test_user: isAnalyticsTestRuntime() || (_account?.$internal_or_test_user ?? false) },
+      }) : null,
       disableGeoip: true,
       personProfiles: 'identified_only',
       persistence: 'memory',
@@ -56,6 +64,7 @@ function logCaptureError(eventName: string, _err: unknown): void {
 }
 
 export function resetAnalyticsSession(): void {
+  _account = null;
   try {
     getPostHogClient().reset();
   } catch (err) {
@@ -75,10 +84,17 @@ export function trackSubscriptionCheck(props: {
   } catch (err) { logCaptureError('subscription_check', err); }
 }
 
-export function identifyAnalyticsUser(user: { id: string; email?: string }): void {
+export function identifyAnalyticsUser(user: AnalyticsUser): void {
   try {
     const client = getPostHogClient();
-    client.identify(user.id, user.email ? { email: user.email } : {});
+    // A direct account switch must not merge two signed-in people.
+    if (_account && _account.id !== user.id) client.reset();
+    _account = { id: user.id, ...analyticsAccount(user) };
+    client.identify(user.id, {
+      ...(user.email ? { email: user.email } : {}), la_cohort: _account.la_cohort,
+      // Never clear a prior internal classification from another device.
+      ...(_account.$internal_or_test_user ? { $internal_or_test_user: true } : {}),
+    });
     client.reloadFeatureFlags();
   } catch (err) {
     logCaptureError('identify', err);
@@ -345,7 +361,7 @@ export interface ItemSavedProps {
   menu_item_id: string;
   restaurant_id: string;
   action: 'save' | 'unsave';
-  entry_point: 'restaurant_detail' | 'saved_screen';
+  entry_point: 'restaurant_detail' | 'saved_screen' | 'purchase_continuation';
 }
 
 export function trackItemSaved(props: ItemSavedProps): void {
@@ -398,6 +414,8 @@ export function trackAuthSuccess(props: AuthSuccessProps): void {
 export function trackRestaurantDetailViewed(props: {
   restaurant_id: string;
   item_count: number;
+  unlocked: boolean;
+  has_macros: boolean;
 }): void {
   try {
     getPostHogClient().capture(
@@ -446,6 +464,7 @@ export function trackMenuItemTapped(props: {
   menu_item_id: string;
   restaurant_id: string;
   position: number;
+  unlocked: boolean;
 }): void {
   try {
     getPostHogClient().capture(
@@ -876,6 +895,7 @@ export function trackEntitlementSyncFailed(props: { reason: string }): void {
 
 export function __resetForTesting(): void {
   _client = null;
+  _account = null;
 }
 
 /** Offering assignment is supplied by RevenueCat; this records the shown UI. */
