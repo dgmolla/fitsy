@@ -375,3 +375,52 @@ It uses Xcode's monthly-renewal-every-five-minutes test setting; it is not live 
 The prepared Xcode scheme selected this file with a Release executable, while the app retained DEV API/Supabase configuration.
 No StoreKit purchase or 27-journey aggregate completed before the explicit deferral.
 Keep its generated scheme snapshot, sealed artifact and private fixture bindings in the issue's external recovery handoff; never commit credentials or fabricate billing history.
+
+### Headless StoreKit activation
+
+[FitsyStoreKit](storekit/FitsyStoreKit.xcodeproj) hosts a small XCTest in an existing Release app using Apple's public `SKTestSession` API.
+It uses the installed Xcode CLI and does not require Xcode.app or SourceKit.
+The scheme builds only the test bundle; its Fitsy application target references the already-built host.
+The test requires `com.fitsy.mobile`, all three configured products and a verified `AppTransaction` whose environment is `Xcode`.
+It creates no purchase and never clears or edits transaction history.
+See [Apple's StoreKitTest documentation](https://developer.apple.com/documentation/storekittest) for the supported API.
+
+First verify the candidate Release app through the normal native-artifact checks and retain its original sealed receipt.
+Stage an independent copy at `.evidence/storekit/host/Fitsy.app` in the owned checkout.
+Never point the test build at a sealed original or shared cache: Xcode embeds the test bundle and testing frameworks into its host copy.
+The original app executable and embedded JavaScript must remain byte-identical, and the instrumented copy must not replace the canonical app hash or receipt.
+The host and test bundle share the same build-products directory because Xcode requires the hosted `PlugIns` directory to be inside that directory.
+
+Hold the shared simulator and native-build locks, the canonical claim and the legacy command lock before these commands.
+Use one explicit owned iOS Simulator destination, a healthy memory-pressure reading and one compiler job.
+Set `FITSY_STOREKIT_DESTINATION` to `platform=iOS Simulator,id=<owned-UDID>,arch=arm64`.
+
+```sh
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock xcodebuild \
+  -project apps/mobile/e2e/storekit/FitsyStoreKit.xcodeproj \
+  -scheme FitsyStoreKit -configuration Release -sdk iphonesimulator \
+  -destination "$FITSY_STOREKIT_DESTINATION" \
+  -derivedDataPath .evidence/storekit/build -jobs 1 \
+  -parallel-testing-enabled NO COMPILER_INDEX_STORE_ENABLE=NO build-for-testing
+rg --files .evidence/storekit/build/Build/Products -g '*.xctestrun'
+```
+
+Set `FITSY_STOREKIT_RUN` to the emitted `.xctestrun` path, then execute the generated test configuration.
+Use a fresh result-bundle path for every execution and retain failed results unchanged.
+
+```sh
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock xcodebuild test-without-building \
+  -xctestrun "$FITSY_STOREKIT_RUN" -destination "$FITSY_STOREKIT_DESTINATION" \
+  -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
+  -test-timeouts-enabled YES -default-test-execution-time-allowance 60 \
+  -maximum-test-execution-time-allowance 90 \
+  -resultBundlePath .evidence/storekit/activation.xcresult
+```
+
+A passing activation test establishes the local StoreKit environment in the Release host.
+It does not establish a purchase, RevenueCat entitlement, transferred receipt, cold-launch persistence or a passing Maestro aggregate.
+Before acceptance, return to the canonical verified Release artifact and verify the local store still applies to the actual purchase and Restore journey.
+Retain genuine UI purchase, expiry, deletion/recreation, backend verdict and cold-launch evidence under the existing fixture procedure.
+StoreKit Testing does not provide a Sign in with Apple identity.
+Verify the real Apple provider prerequisite before preparing history: an email-only Dev Login fixture cannot establish the same-Apple-identity recreation requirement above.
+An Apple ID sign-in prompt in Settings requires the owned provider identity; the retained ASC sandbox tester and a browser login do not supply that prerequisite.
