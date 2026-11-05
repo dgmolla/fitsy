@@ -127,3 +127,4 @@ Record the next eligible small PR's hosted L2 duration on issue #712 after this 
 
 - 2026-11-05: Repeated Production Monitor failures rejected Deploy's dynamic run-name; bind observation to the workflow file, include release tags and active retries, and test persisted alert/recovery behavior through the actual monitor caller before activation (#605).
 - 2026-11-05: #735 repeated a completed native tap with no resulting action because the Profile card was visible but its control was behind the tab bar; scroll to the existing bottom anchor, require the action enabled, and assert its confirmation before continuing.
+- 2026-11-05: #735 omitted dataApiFlow.test.ts from focused selection after adding helper callers; include that caller-contract test explicitly, preserve the maintained 401/401/login200 diagnostics, and update the caller inventory before every push.
