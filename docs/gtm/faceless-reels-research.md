@@ -124,11 +124,11 @@ The [Socialpruf Sweetgreen gallery](https://socialpruf.com/tiktok/sweetgreen) wa
 
 ### Coverage achieved and remaining gap
 
-Seventy-six distinct video identities qualify toward the expanded target: fifty-nine TikToks and seventeen Instagram Reels.
+Eighty-six distinct video identities qualify toward the expanded target: sixty-eight TikToks and eighteen Instagram Reels.
 Seven creator-owned YouTube Shorts and one watermarked YouTube mirror without a verified original TikTok URL remain supplemental and do not fill the Reel/TikTok target.
-At least 74 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
+At least 64 more qualifying Reel or TikTok videos are needed to meet the current lower bound.
 All six official TikTok mirrors were watched through their public players; the watermarked mirror and the YouTube Shorts were checked at sampled timestamps, with unseen frames explicitly left unknown.
-Twenty-five LA-focused TikTok originals and fifteen LA Instagram Reels met the criteria in the signed-in batches; other examples broaden restaurant and geographic coverage, but no inspected MenuFit creative, LeanBites creative, or Meta ad has yet met them.
+Fifty counted videos are LA-focused; other examples broaden restaurant and geographic coverage, but no inspected MenuFit creative, LeanBites creative, or Meta ad has yet met the criteria.
 Directly inspected MenuFit and LeanBites partner TikToks opened on faces, while screened MenuFit ads and several other creator clips also showed faces.
 The earlier anonymous public pass checked individual posts and indexes for Just Salad, Mendocino Farms, Tender Greens, Flower Child, Chopt, Chopped Leaf, LA food accounts, and seven YouTube creators without verifying another qualifying Reel or TikTok through those routes.
 The later signed-in Just Salad Hero Wrap is separately counted in B14 after original-page footage inspection.
@@ -155,15 +155,16 @@ Challenges, captchas, try-again-later notices, action blocks, private APIs, and 
 | B13, 2026-11-04 signed-in Chrome, later audited | Ten TikToks were originally published in this batch. A later source audit found the creator's face in the Sweetfin West Third video, and independent review identified a smoothie-base preparation inconsistent with the food-only rule. Both rows were removed. The other eight cover LA protein bowls, a Sweetgreen order, and a non-LA Urbane Cafe add-on. | 8 retained | 92 |
 | B14, 2026-11-04 signed-in Chrome | Eight additional TikToks passed individual-page footage inspection: two Urbane Cafe dishes, a Better Bowls workout edit, two Hummus Republic dishes, a Pacific Catch salmon menu edit, a Just Salad wrap, and an Eagle Rock steak bowl. Three apparent cross-platform duplicates and one weak venue-only angle were rejected; a Better Bowls yogurt build matching an already counted Instagram Reel was also removed. | 8 new | 84 |
 | B15, 2026-11-04 signed-in Chrome | Ten additional TikToks passed individual-page footage inspection: four Hummus Republic franchise edits, two distinct Burbank Girl and The Chicken dishes, and one each from Carnivorous LA, Just Salad, Benny's Tacos, and Hummus Republic Delaware. A Delaware repost with the same lunch montage, two presenter-led search results, and a generic wellness montage were excluded. | 10 new | 74 |
+| B16, 2026-11-04 signed-in Chrome | Nine TikToks and one Instagram Reel passed individual-page footage inspection: two distinct Girl and The Chicken falafel edits, two Merka Saltao bowl edits, two Sweetfin menu edits, three Smokin' Stove food edits, and one separate Merka Instagram order. A Merka cross-post, presenter-led reviews, photo posts, and broad wellness claims were excluded. | 10 new | 64 |
 
-The CSV holds the seventy-six counted video identities, original links, source links, observation batches, visible metrics, unknown fields, and source limitations.
+The CSV holds the eighty-six counted video identities, original links, source links, observation batches, visible metrics, unknown fields, and source limitations.
 Its commercial-context field records two TikToks labeled Paid partnership, one hosted Reel, brand-owned promotions, and creator posts with unknown paid amplification.
 The hosted Reel and two paid partnerships are retained as creative evidence but excluded from non-ad post performance comparisons when a ratio is available; absence of a disclosure in other posts is not proof of purely organic distribution.
 The B1 CAVA post showed 2025-12-15, 17.7K likes, 175 comments, 4,617 favorites, and 2,001 shares on its original TikTok page; its approximate 3.3M view value remains a public-mirror snapshot.
 The original TikTok profile displayed 183.3K followers on 2026-11-04, so its follower snapshot is current rather than a historical follower denominator for the post.
 No view-to-follower ratio is interpreted from the older mixed-source, mixed-time mirror observations.
-Thirty-nine TikTok rows and nine Instagram Reels now have original-profile view counts and current follower counts observed on the same day, each tied to the exact post tile.
-Two of those TikToks carry a Paid partnership label, leaving **n = 46** original-post pairs in the non-ad normalized comparison: thirty-seven TikToks and nine Instagram Reels.
+Forty-five TikTok rows and ten Instagram Reels now have original-profile view counts and current follower counts observed on the same day, each tied to the exact post tile.
+Two of those TikToks carry a Paid partnership label, leaving **n = 53** original-post pairs in the non-ad normalized comparison: forty-three TikToks and ten Instagram Reels.
 Three older CAVA TikToks have mirror view snapshots and current follower snapshots from a different source and time, so they remain outside this comparison.
 The ratios use current follower snapshots against cumulative views on posts of different ages, so they cannot be read as reach at posting or a controlled comparison.
 One account-level Reel window now supplies a bounded cadence observation, separate from the selected qualifying-video sample.
