@@ -5,7 +5,7 @@ const marker = '<!-- fitsy-production-monitor-state:v1 -->';
 /** Only external HTTP is injected. All evaluation, transitions and delivery are real. */
 export async function requestJson(url, init = {}, fetchImpl = fetch) {
   const response = await fetchImpl(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(10_000) });
-  if (!response.ok) throw new Error('Monitoring provider request failed');
+  if (!response.ok) throw Object.assign(new Error('Monitoring provider request failed'), { httpStatus: response.status });
   return response.json();
 }
 
@@ -98,7 +98,7 @@ export async function dispatchAlerts({ observations, state, now, policy, save, s
     const pending = incident.pending;
     const text = pending.kind === 'alert'
       ? `*TL;DR:* ${incident.severity} production alert: ${incident.summary}\nIncident: ${incident.key}; since ${new Date(incident.since).toISOString()}. Observed ${new Date(pending.at).toISOString()}.`
-      : `*TL;DR:* RESOLVED production alert: ${incident.key}.\nThe affected check passed at ${new Date(incident.resolvedAt).toISOString()}.`;
+      : `*TL;DR:* RESOLVED production alert: ${incident.key}.\nThe monitor no longer reports this incident at ${new Date(incident.resolvedAt).toISOString()}.`;
     const urgent = incident.severity === 'P1';
     for (const destination of urgent ? ['channel', 'direct'] : ['channel']) {
       if (pending.delivered.includes(destination)) continue;
