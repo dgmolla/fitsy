@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { policy, alert, evaluateApi, evaluateDeployment, evaluateMobile, evaluateQuota, evaluateExpiry, evaluateCrons } from './production-policy.mjs';
-import { axiomRows, probeApi, queryAxiom, apiMetrics, workflowMetrics, quotaMetrics } from './production-providers.mjs';
+import { axiomRows, probeApi, queryAxiom, apiMetrics, cronMetrics, workflowMetrics, quotaMetrics } from './production-providers.mjs';
 import { dispatchAlerts, loadAlertState, saveAlertState, sendSlack } from './production-alerts.mjs';
 import { assertRequiredEnvironment, checkEnvironmentSources, readManifest } from '../deploy/env-manifest.mjs';
 import { runMonitor } from './production-monitor.mjs';
@@ -98,7 +98,7 @@ test('a 503 burst through the real Axiom decoder/evaluator pages Slack', async (
     assert.equal(url, 'https://api.axiom.co/v1/datasets/_apl?format=tabular');
     const query = JSON.parse(init.body);
     assert.match(query.apl, /type == 'api_request' and environment == 'production'/);
-    return Response.json(table([row({ requests: 10, errors: 10 })]));
+    return Response.json(table([row({ requests: 10, errors: 10, lastSeen: (Date.parse(query.endTime) - 1000) * 1e6 })]));
   } };
   const signals = await apiMetrics(context);
   const external = transport();
@@ -131,6 +131,42 @@ test('partial Axiom data, denied query credentials and malformed tables cannot p
   await assert.rejects(queryAxiom('query', now - 300_000, now,
     { env: { AXIOM_TOKEN: 'private' }, fetchImpl: async () => new Response(null, { status: 403 }) }),
   error => error.httpStatus === 403 && !error.message.includes('private'));
+});
+
+test('real tabular nanosecond aggregates retain API and cron freshness, schema and outage checks', async () => {
+  const cutoff = now - policy.windowMinutes * 60_000;
+  let current = [row({ lastSeen: (now - 1000) * 1e6 })];
+  let baseline = [row({ lastSeen: (now - 20 * 60_000) * 1e6 })];
+  let cronTime = (now - 60_000) * 1e6;
+  const route = '/api/internal/watch-review';
+  const context = { now, state: { cronMonitoringStartedAt: 0 }, env: { AXIOM_TOKEN: 'private' }, fetchImpl: async (_url, init) => {
+    const query = JSON.parse(init.body);
+    return Response.json(table(query.apl.includes('lastSuccess') ? [{ route, lastSuccess: cronTime }]
+      : Date.parse(query.startTime) === cutoff ? current : baseline));
+  } };
+  assert.deepEqual(await apiMetrics(context), []);
+  assert.deepEqual((await cronMetrics(context)).map(item => item.key),
+    Object.keys(policy.cronMaxAgeHours).filter(key => key !== route).map(key => `cron:${key}`));
+  current = [row({ errors: 10, lastSeen: (now - 1000) * 1e6 })];
+  assert.equal((await apiMetrics(context))[0].key, 'api:5xx');
+  current = [];
+  assert.equal((await apiMetrics(context))[0].key, 'api:telemetry-missing');
+  cronTime = (now - 10 * 3_600_000) * 1e6;
+  assert.ok((await cronMetrics(context)).some(item => item.key === `cron:${route}`));
+  for (const invalid of [null, undefined, NaN, Infinity, 'invalid', now / 1000, now, now * 1000,
+    (cutoff - 1) * 1e6, now * 1e6, new Date(now).toISOString()]) {
+    current = [row({ lastSeen: invalid })];
+    await assert.rejects(apiMetrics(context), /Invalid Axiom timestamp/);
+  }
+  current = [row({ lastSeen: new Date(now - 1000).toISOString() })];
+  baseline = [row({ lastSeen: now * 1e6 })];
+  await assert.rejects(apiMetrics(context), /Invalid Axiom timestamp/);
+  baseline = [];
+  assert.deepEqual(await apiMetrics(context), []);
+  current = [row({ errors: '10', lastSeen: (now - 1000) * 1e6 })];
+  await assert.rejects(apiMetrics(context), /Invalid API metric schema/);
+  cronTime = now;
+  await assert.rejects(cronMetrics(context), /Invalid Axiom timestamp/);
 });
 
 test('shared issue state deduplicates fresh instances, sends one recovery, and preserves unobserved failures', async () => {
@@ -402,7 +438,9 @@ test('the actual monitor CLI succeeds with product incidents and normal stale/op
         }
         if (url.includes('api.axiom.co')) {
           if (scenario === 'observer') return new Response(null, { status: 403 });
-          return Response.json(table(JSON.parse(init.body).apl.includes('lastSuccess') ? [] : [row({ errors: 10 })]));
+          const query = JSON.parse(init.body);
+          return Response.json(table(query.apl.includes('lastSuccess') ? []
+            : [row({ errors: 10, lastSeen: (Date.parse(query.endTime) - 1000) * 1e6 })]));
         }
         if (url.includes('posthog.com')) return Response.json({ results: [[10, 0, 100, 0, 0]] });
         if (url.includes('api.vercel.com')) return Response.json({ deployments: [{ readyState: 'READY' }] });
@@ -470,8 +508,9 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
     if (url.includes('api.axiom.co')) {
       if (queryDenied) return new Response(null, { status: 403 });
       const query = JSON.parse(init.body);
-      if (query.apl.includes('lastSuccess')) return Response.json(table(Object.keys(policy.cronMaxAgeHours).map(route => ({ route, lastSuccess: new Date(now).toISOString() }))));
-      return Response.json(table([row({ errors: apiBroken ? 10 : 0 })]));
+      const timestamp = (Date.parse(query.endTime) - 1000) * 1e6;
+      if (query.apl.includes('lastSuccess')) return Response.json(table(Object.keys(policy.cronMaxAgeHours).map(route => ({ route, lastSuccess: timestamp }))));
+      return Response.json(table([row({ errors: apiBroken ? 10 : 0, lastSeen: timestamp })]));
     }
     if (url.includes('posthog.com')) return Response.json({ results: [[10, 0, 100, 0, 0]] });
     if (url.includes('api.vercel.com')) {

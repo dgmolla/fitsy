@@ -131,3 +131,4 @@ Record the next eligible small PR's hosted L2 duration on issue #712 after this 
 - 2026-11-05: #745 review and caller replay exposed false recovery from a successfully superseded health step; require a distinct release-ready marker and preserve a retained incident in the actual monitor CLI regression.
 
 - 2026-11-05: CI and local release-helper tests silently skipped the survivor after a new workflow readiness guard; bind every workflow input, reject unevaluated `needs` expressions, preserve no-publication assertions for superseded output, and include `scripts/deploy/native-compatibility.test.ts` in focused release-workflow validation (#745).
+- 2026-11-05: Both automatic and manual #745 monitor runs rejected Axiom's numeric nanosecond aggregates; normalize timestamps within their real query windows and replay that wire representation through the API, cron and monitor CLI callers before shipping.
