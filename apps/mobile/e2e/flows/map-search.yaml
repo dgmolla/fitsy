@@ -48,7 +48,10 @@ env:
     id: map-pin-0
 - assertVisible:
     id: map-preview-open
+- assertVisible:
+    id: map-carousel
 - takeScreenshot: map-search-preview
+- takeScreenshot: map-poc-c
 - tapOn:
     id: map-preview-open
 - extendedWaitUntil:
@@ -168,3 +171,37 @@ env:
     text: "Edit protein grams, 40"
 - assertVisible: "Location: DTLA"
 - takeScreenshot: map-search-shuffle
+
+# Compare the dev-only layouts with the same bounded results and search state.
+- tapOn:
+    id: map-variant-A
+- assertVisible:
+    id: map-list-A
+- assertVisible:
+    id: discovery-hero
+- takeScreenshot: map-poc-a
+- tapOn:
+    id: map-variant-B
+- assertVisible:
+    id: map-list-B
+- assertVisible:
+    id: map-sheet-half
+- takeScreenshot: map-poc-b-half
+- tapOn:
+    id: map-sheet-height
+- assertVisible:
+    id: map-sheet-full
+- takeScreenshot: map-poc-b-full
+- tapOn:
+    id: map-sheet-height
+- assertVisible:
+    id: map-sheet-peek
+- takeScreenshot: map-poc-b-peek
+- tapOn:
+    id: map-variant-C
+- assertVisible:
+    id: map-carousel
+- assertVisible: "Location: DTLA"
+- assertVisible:
+    id: map-filter-protein
+    text: "Edit protein grams, 40"
