@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { trackClientError } from '@/lib/errorReporting';
+import { captureException } from '@/lib/sentry';
 
 interface Props {
   children: React.ReactNode;
@@ -25,6 +26,7 @@ export class AppErrorBoundary extends React.Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    captureException(error);
     trackClientError({
       message: error.message,
       stack: `${error.stack ?? ''}\ncomponent stack:${info.componentStack ?? ''}`,
