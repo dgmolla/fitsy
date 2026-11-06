@@ -17,6 +17,10 @@ env:
 - takeScreenshot: map-search-location-denied
 - tapOn:
     id: discovery-location
+- extendedWaitUntil:
+    visible: "Choose a neighborhood"
+    timeout: 5000
+- waitForAnimationToEnd
 - tapOn: "Search near Hollywood"
 - assertVisible: "Location: Hollywood"
 - assertNotVisible:
