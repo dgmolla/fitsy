@@ -132,6 +132,19 @@ sys.exit(int(os.environ.get('EAS_EXIT', '0')))
                 self.assertNotIn("syntheticCredential", result.stdout + result.stderr)
                 self.assertEqual(self.records(), [])
 
+    def test_public_sentry_dsn_syncs_without_exposing_value_or_accepting_upload_tokens(self):
+        values = config()
+        values['EXPO_PUBLIC_SENTRY_DSN'] = 'https://' + 'a' * 32 + '@o1.ingest.us.sentry.io/1'
+        self.write(values)
+        code, output = self.run_main()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.records()[0]['values']['EXPO_PUBLIC_SENTRY_DSN'], values['EXPO_PUBLIC_SENTRY_DSN'])
+        self.assertNotIn(values['EXPO_PUBLIC_SENTRY_DSN'], output)
+        for value in ['sntrys_fixture', 'sntryu_fixture', 'https://private@example.test/1']:
+            with self.subTest(value=value):
+                with self.assertRaises(sync.Refused):
+                    sync.validate_public_config({**values, 'EXPO_PUBLIC_SENTRY_DSN': value}, 'development')
+
     def test_dev_and_prod_files_cannot_cross_targets(self):
         for source, target in [("development", "production"), ("preview", "production"),
                                ("production", "development"), ("production", "preview")]:

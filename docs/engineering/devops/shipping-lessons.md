@@ -1,5 +1,7 @@
 # Shipping lessons
 
+- 2026-11-05: #747 exceeded the iOS bundle budget twice after adding Sentry; compose its Metro resolver with existing native pins, exclude web Replay through the supported option, and measure the remaining SDK footprint before release without silently raising budgets.
+
 - 2026-11-04: A declined account's renewed onboarding preview left stale history behind its paid offer; gate payment Back on current preview access and replay the restored-account checkout through cancellation, then run the saved native swipe and Back assertions (#718).
 
 - After `npm ci`, require `npm ls --depth=0 --workspaces` and the actual renderer caller: a stale nested renderer can violate the manifest and React peer versions even while installation and focused tests pass; repair the generated lockfile with npm and recheck the native fingerprint before reusing a release binary (#711).

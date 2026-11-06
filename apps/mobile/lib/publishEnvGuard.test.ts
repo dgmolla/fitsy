@@ -26,6 +26,9 @@ describe('missingPublicEnv', () => {
 });
 
 test.each([
+  { EXPO_PUBLIC_SENTRY_AUTH_TOKEN: 'fixture' },
+  { EXPO_PUBLIC_SENTRY_DSN: 'sntrys_fixture' },
+  { EXPO_PUBLIC_SENTRY_DSN: 'sntryu_fixture' },
   { EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: 'fixture' },
   { EXPO_PUBLIC_SUPABASE_ANON_KEY: 'sb_secret_fixture' },
   { EXPO_PUBLIC_REVENUECAT_IOS_KEY: ['sk', 'live', 'fixture'].join('_') },

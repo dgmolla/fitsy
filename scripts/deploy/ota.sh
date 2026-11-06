@@ -107,6 +107,54 @@ env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update --platform ios --branch "$
 GROUP="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));d=d[0] if isinstance(d,list) else d;print(d.get("group") or d.get("id",""))' "$RESULT")"
 [ -n "$GROUP" ] || { echo "eas update returned no group id" >&2; exit 1; }
 echo "update group: $GROUP"
+# Sentry source-map upload runs with EAS's non-public build environment.
+# Keep provider output private; a failed upload leaves the existing release lease
+# held because the group is already published and needs reconciliation.
+SENTRY_LOG="$(mktemp "$REPO_ROOT/.evidence/ota/sentry.XXXXXX")"
+SENTRY_UPLOAD_COMMAND="$(cat <<'SENTRY_UPLOAD'
+set -euo pipefail
+if [ -z "${EXPO_PUBLIC_SENTRY_DSN:-}" ]; then
+  echo 'Sentry inactive: no mobile DSN configured'
+  exit 0
+fi
+: "${SENTRY_ORG:?Sentry organization missing}"
+: "${SENTRY_PROJECT:?Sentry project missing}"
+: "${SENTRY_AUTH_TOKEN:?Sentry build upload token missing}"
+# The vendor uploader warns but exits successfully when no maps are found.
+# Require the exact exported iOS bundle/map and its injected debug ID first.
+python3 - <<'MAP_CHECK'
+import json, pathlib, uuid
+root = pathlib.Path('dist').resolve()
+metadata = json.loads((root / 'metadata.json').read_text())
+bundle = (root / metadata['fileMetadata']['ios']['bundle']).resolve()
+assert bundle.is_relative_to(root) and bundle.is_file(), 'missing exported iOS bundle'
+source_map = json.loads(pathlib.Path(str(bundle) + '.map').read_text())
+uuid.UUID(source_map.get('debugId') or source_map['debug_id'])
+assert source_map.get('sources'), 'empty iOS source map'
+MAP_CHECK
+npx --no-install sentry-expo-upload-sourcemaps dist
+SENTRY_UPLOAD
+)"
+if ! env -u GH_TOKEN -u GITHUB_TOKEN python3 - "$SENTRY_LOG" "$SENTRY_UPLOAD_COMMAND" <<'SENTRY_EXEC'
+import os, signal, subprocess, sys
+with open(sys.argv[1], 'wb') as output:
+    child = subprocess.Popen(['npx', 'eas-cli@18', 'env:exec', 'production', sys.argv[2], '--non-interactive'],
+                             stdout=output, stderr=output, start_new_session=True)
+    try:
+        sys.exit(child.wait(timeout=120))
+    except subprocess.TimeoutExpired:
+        os.killpg(child.pid, signal.SIGTERM)
+        try:
+            child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            os.killpg(child.pid, signal.SIGKILL)
+            child.wait()
+        sys.exit(1)
+SENTRY_EXEC
+then
+  echo "Sentry source-map upload failed for published group $GROUP; reconcile the retained release lease. Private log: $SENTRY_LOG" >&2
+  exit 1
+fi
 # Verify: the newest update on the selected branch must be OUR group.
 sleep 5
 LATEST="$(env -u GH_TOKEN -u GITHUB_TOKEN npx eas-cli@18 update:list --branch "$CHANNEL" --limit 1 --json --non-interactive | python3 -c 'import json,sys;d=json.load(sys.stdin);u=(d.get("currentPage") or d.get("updates") or d or [{}])[0];print(u.get("group") or u.get("id",""))')"

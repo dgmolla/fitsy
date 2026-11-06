@@ -14,11 +14,13 @@ import { WidgetSync } from '@/components/WidgetSync';
 import { recordSession } from '@/lib/ratingPrompt';
 import { supabase } from '@/lib/supabase';
 import { useAuthAnalytics } from '@/lib/useAuthAnalytics';
+import { initializeSentry, wrap } from '@/lib/sentry';
 
 // Module scope so uncaught errors during the very first render are captured.
+initializeSentry();
 installGlobalErrorReporting();
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded] = useFonts({
     // Display / headline serif — matches the webapp's Fraunces 700.
     'Fraunces-Bold': require('@expo-google-fonts/fraunces/700Bold/Fraunces_700Bold.ttf'),
@@ -95,3 +97,5 @@ export default function RootLayout() {
     </PostHogProvider>
   );
 }
+
+export default wrap(RootLayout);

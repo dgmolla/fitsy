@@ -9,10 +9,21 @@
  */
 import type { Instrumentation } from "next";
 
+export async function register(): Promise<void> {
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    await import('./sentry.server.config');
+  }
+}
+
 export const onRequestError: Instrumentation.onRequestError = async (
   err,
   request,
+  context,
 ) => {
   const { reportServerError } = await import("@/lib/errorAlert");
   reportServerError(`${request.method} ${request.path}`, err);
+  if (process.env.NEXT_RUNTIME === 'nodejs' && process.env.SENTRY_DSN) {
+    const Sentry = await import('@sentry/nextjs');
+    Sentry.captureRequestError(err, request, context);
+  }
 };
