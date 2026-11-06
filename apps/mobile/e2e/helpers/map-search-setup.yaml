@@ -68,3 +68,10 @@ appId: com.fitsy.mobile
     visible:
       id: discovery-map
     timeout: 15000
+# Keep the Debug warning banner from covering the tab bar or POC layout controls.
+- runFlow:
+    when:
+      visible: ".*Open debugger to view warnings.*"
+    commands:
+      - tapOn:
+          point: "93%,93%"
