@@ -39,7 +39,8 @@ const table = rows => ({ status: { isPartial: false }, tables: [{
 }] });
 const releaseJobs = (id = 123, attempt = 1, conclusion = 'success') => ({ total_count: 1,
   jobs: [{ run_id: id, run_attempt: attempt, name: 'smoke', conclusion: 'success',
-    steps: [{ name: 'Verify serving identity after smoke', conclusion }] }],
+    steps: [{ name: 'Verify serving identity after smoke', conclusion: 'success' },
+      { name: 'Confirm verified release', conclusion }] }],
 });
 
 /** In-memory external GitHub/Slack HTTP servers, with serialized persistence. */
@@ -368,7 +369,7 @@ test('a superseded Deploy success neither hides retained failure nor manufacture
 });
 
 test('the actual monitor CLI succeeds with product incidents and normal stale/optional recovery, but fails broken observers', () => {
-  for (const scenario of ['product', 'observer', 'configuration', 'delivery', 'crash']) {
+  for (const scenario of ['product', 'superseded-health', 'observer', 'configuration', 'delivery', 'crash']) {
     const script = `
       import { policy } from ${JSON.stringify(new URL('./production-policy.mjs', import.meta.url).href)};
       const now = Date.now(), scenario = ${JSON.stringify(scenario)};
@@ -383,6 +384,9 @@ test('the actual monitor CLI succeeds with product incidents and normal stale/op
           severity: 'P1', active: true, since: old, deliveredAt: old, workflowUpdatedAt: '2026-09-07T08:48:30Z', workflowRunId: 34102447143 },
         'observer:quota': { key: 'observer:quota', scope: 'observer', severity: 'P2', active: true, since: old, deliveredAt: old },
       }, expiry: { checkedAt: now, certificate: new Date(now + 90 * 86400000).toISOString(), domain: new Date(now + 365 * 86400000).toISOString() } };
+      if (scenario === 'superseded-health') state.incidents['workflow:Deploy'] = {
+        key: 'workflow:Deploy', scope: 'workflow:Deploy', severity: 'P1', active: true,
+        since: now - 60000, deliveredAt: now - 30000, workflowUpdatedAt: new Date(now - 60000).toISOString(), workflowRunId: 122 };
       const messages = [];
       globalThis.fetch = async (url, init = {}) => {
         if (url.includes('/issues?')) {
@@ -403,7 +407,7 @@ test('the actual monitor CLI succeeds with product incidents and normal stale/op
         if (url.includes('posthog.com')) return Response.json({ results: [[10, 0, 100, 0, 0]] });
         if (url.includes('api.vercel.com')) return Response.json({ deployments: [{ readyState: 'READY' }] });
         if (url.endsWith('/commits/main')) return Response.json({ sha: 'a'.repeat(40) });
-        if (url.includes('/jobs?')) return Response.json(releaseJobs());
+        if (url.includes('/jobs?')) return Response.json(releaseJobs(123, 1, scenario === 'superseded-health' ? 'skipped' : 'success'));
         if (url.includes('/actions/workflows/')) {
           const file = new URL(url).pathname.split('/workflows/')[1].split('/')[0], eas = file === 'eas-build.yml';
           return Response.json({ workflow_runs: [{ id: eas ? 34102447143 : 123, run_attempt: 1,
@@ -419,8 +423,14 @@ test('the actual monitor CLI succeeds with product incidents and normal stale/op
       console.log(JSON.stringify({ fixture: true, incidents: state.incidents, messages }));
     `;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 10_000, env: {} });
-    assert.equal(result.status, scenario === 'product' ? 0 : 1, `${scenario}: ${result.stderr}\n${result.stdout}`);
+    assert.equal(result.status, ['product', 'superseded-health'].includes(scenario) ? 0 : 1, `${scenario}: ${result.stderr}\n${result.stdout}`);
     assert.doesNotMatch(result.stderr, /private fixture exception/);
+    if (scenario === 'superseded-health') {
+      const [summary, proof] = result.stdout.trim().split('\n').map(line => JSON.parse(line));
+      assert.ok(summary.alerts.includes('workflow:Deploy'), 'a superseded health command is not release recovery');
+      assert.equal(proof.incidents['workflow:Deploy'].active, true);
+      assert.equal(proof.messages.some(text => text.includes('RESOLVED production alert: workflow:Deploy')), false);
+    }
     if (scenario === 'product') {
       const lines = result.stdout.trim().split('\n').map(line => JSON.parse(line));
       assert.equal(lines[0].status, 'alerting');

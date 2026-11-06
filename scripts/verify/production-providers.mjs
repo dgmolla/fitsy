@@ -190,10 +190,12 @@ export async function workflowMetrics(file, name, context) {
           || result.jobs.some(job => job.run_id !== candidate.id || job.run_attempt !== candidate.run_attempt || !Array.isArray(job.steps))) {
         throw new Error('Complete release attempt jobs required');
       }
-      // A benign superseded release is not evidence of recovery. The actual
-      // post-smoke step must succeed before its run can resolve an incident.
+      // The health command also exits zero on supersession. Only its gated
+      // release_ready marker proves automatic recovery; manual releases still
+      // fail closed on supersession and use the original health step.
       if (!result.jobs.some(job => ['smoke', 'production-ota'].includes(job.name) && job.conclusion === 'success'
-          && job.steps.some(step => step.name === 'Verify serving identity after smoke' && step.conclusion === 'success'))) continue;
+          && job.steps.some(step => step.name === (job.name === 'smoke' ? 'Confirm verified release'
+            : 'Verify serving identity after smoke') && step.conclusion === 'success'))) continue;
     }
     run = candidate;
     break;

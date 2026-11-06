@@ -131,7 +131,9 @@ Failures receive reminders at most every 30 minutes; observed recovery sends one
 An unavailable metric source cannot resolve an incident from that source.
 Skipped, neutral, missing, or unknown workflow conclusions likewise preserve open incidents and reminders until a completed success is observed.
 An automatic Deploy superseded by newer protected main finishes successfully without admitting the old source or continuing its release steps.
-The workflow observer checks that attempt's actual post-smoke serving-identity step before accepting a successful Deploy as recovery, so a superseded no-op cannot hide a retained failure.
+The workflow observer requires the automatic attempt's `Confirm verified release` marker, gated on successful post-smoke `release_ready` output, before accepting a successful Deploy as recovery.
+A successful health step alone can mean supersession, so it cannot hide a retained failure.
+Manual production releases still reject supersession and retain their post-smoke serving-identity check.
 Slack errors remain pending and fail execution; a failed state/query/transport cannot be reported healthy.
 A crash between Slack acceptance and persistence can still repeat a delivery; deterministic message IDs reduce this unavoidable transport ambiguity.
 Production Monitor succeeds in Actions when evaluation and required Slack delivery succeed, even while product incidents remain active and continue their normal alert/reminder lifecycle.

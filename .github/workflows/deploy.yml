@@ -85,6 +85,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
         run: python3 scripts/deploy/routine-release.py health "$RELEASE_SHA" "$RUNNER_TEMP/vercel-deployment.json"
+      - name: Confirm verified release
+        if: steps.serving.outputs.release_ready == 'true'
+        run: echo 'Release source verified after smoke.'
       - name: File incident on failure
         if: failure()
         env:

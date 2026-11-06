@@ -303,11 +303,12 @@ class GitDeploymentTests(unittest.TestCase):
         smoke = self.jobs['smoke']
         probe = next(step for step in smoke['steps'] if step.get('name') == 'Prod-safe API smoke')
         serving = next(step for step in smoke['steps'] if step.get('name') == 'Verify serving identity after smoke')
+        confirmed = next(step for step in smoke['steps'] if step.get('name') == 'Confirm verified release')
         self.assertEqual(smoke['outputs']['release_ready'], '${{ steps.serving.outputs.release_ready }}')
         self.assertEqual(serving['id'], 'serving')
         observer = next(step for step in smoke['steps'] if step.get('name', '').startswith('Observe the exact'))
         self.assertEqual(observer['id'], 'deployment')
-        expressions = [smoke['if'], probe['if'], serving['if'], self.jobs['ota']['if']]
+        expressions = [smoke['if'], probe['if'], serving['if'], confirmed['if'], self.jobs['ota']['if']]
         script = """
           const vm = require('vm'), expressions = JSON.parse(process.argv[1]);
           const results = [];
@@ -315,16 +316,18 @@ class GitDeploymentTests(unittest.TestCase):
             const context = { always: () => true,
               needs: { changes: { result: 'success', outputs: { release_sha: supersededAt === 'admission' ? '' : 'a'.repeat(40) } },
                 smoke: { result: 'success', outputs: { release_ready: supersededAt === 'none' ? 'true' : '' } } },
-              steps: { deployment: { outputs: { superseded: supersededAt === 'observation' ? 'true' : '' } } } };
+              steps: { deployment: { outputs: { superseded: supersededAt === 'observation' ? 'true' : '' } },
+                serving: { outputs: { release_ready: supersededAt === 'none' ? 'true' : '' } } } };
             results.push(expressions.map(expression => vm.runInNewContext(expression, context)));
           }
           process.stdout.write(JSON.stringify(results));
         """
         results = json.loads(subprocess.check_output(['node', '-e', script, json.dumps(expressions)], text=True))
         self.assertFalse(results[0][0], 'no release source means no smoke job')
-        self.assertEqual(results[1], [True, False, False, False])
-        self.assertFalse(results[2][3], 'superseded after smoke must not reach OTA')
-        self.assertEqual(results[3], [True, True, True, True])
+        self.assertEqual(results[1], [True, False, False, False, False])
+        self.assertEqual(results[2], [True, True, True, False, False],
+                         'superseded health must not confirm recovery or reach OTA')
+        self.assertEqual(results[3], [True, True, True, True, True])
 
     def result(self):
         with patch.object(gate, 'github', side_effect=[[self.row], [self.status]]):
