@@ -19,7 +19,7 @@ const fs=require('fs'),cp=require('child_process'),args=process.argv.slice(2);
 if(args[0]==='eas-cli@18'){
   if(args[1]!=='env:exec'||args[2]!=='production'||args[4]!=='--non-interactive')process.exit(91);
   if(process.env.GH_TOKEN||process.env.GITHUB_TOKEN)process.exit(92);
-  const result=cp.spawnSync('bash',['-c',args[3]],{stdio:'inherit',env:process.env});process.exit(result.status??1);
+  const result=cp.spawnSync(args[3],{shell:process.env.SENTRY_FIXTURE_SHELL||true,stdio:'inherit',env:process.env});process.exit(result.status??1);
 }
 if(args.join(' ')!=='--no-install sentry-expo-upload-sourcemaps dist')process.exit(93);
 fs.writeFileSync('uploaded','yes');
@@ -30,26 +30,29 @@ process.exit(process.env.UPLOAD_FAIL==='1'?1:0);
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-function run(extra: Record<string, string> = {}) {
+function run(extra: Record<string, string> = {}, shell = '') {
   return spawnSync('bash', ['-c', stage], { cwd: root, encoding: 'utf8', env: {
     ...process.env, PATH: `${join(root, 'bin')}:${process.env.PATH}`, REPO_ROOT: root, GROUP: 'synthetic-group',
     SENTRY_ORG: 'fixture-org', SENTRY_PROJECT: 'fixture-mobile', SENTRY_AUTH_TOKEN: 'fixture-upload-private',
-    EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.test/1', GH_TOKEN: 'fixture-github', ...extra,
+    EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.test/1', GH_TOKEN: 'fixture-github',
+    SENTRY_FIXTURE_SHELL: shell, ...extra,
   } });
 }
 
-test('ordinary publication invokes the bounded upload before final bundle verification', () => {
+const shells = [{ name: 'system shell', executable: '' }, { name: 'Dash', executable: '/bin/dash' }];
+
+test.each(shells)('ordinary publication invokes the bounded upload before final verification ($name)', ({ executable }) => {
   expect(stage).toContain('timeout=120');
   expect(source.indexOf('# Sentry source-map upload')).toBeGreaterThan(source.indexOf('npx eas-cli@18 update --platform ios'));
   expect(source.indexOf('# Verify: the newest update')).toBeLessThan(source.indexOf('OTA_MUTATION_IN_PROGRESS=0'));
-  const result = run();
+  const result = run({}, executable);
   expect(result.status).toBe(0);
   expect(existsSync(join(root, 'uploaded'))).toBe(true);
   expect(result.stdout + result.stderr).not.toContain('fixture-upload-private');
 });
 
-test('an unconfigured DSN leaves ordinary publication independent of Sentry', () => {
-  expect(run({ EXPO_PUBLIC_SENTRY_DSN: '' }).status).toBe(0);
+test.each(shells)('an unconfigured DSN leaves ordinary publication independent of Sentry ($name)', ({ executable }) => {
+  expect(run({ EXPO_PUBLIC_SENTRY_DSN: '' }, executable).status).toBe(0);
   expect(existsSync(join(root, 'uploaded'))).toBe(false);
 });
 

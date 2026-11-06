@@ -112,7 +112,8 @@ echo "update group: $GROUP"
 # held because the group is already published and needs reconciliation.
 SENTRY_LOG="$(mktemp "$REPO_ROOT/.evidence/ota/sentry.XXXXXX")"
 SENTRY_UPLOAD_COMMAND="$(cat <<'SENTRY_UPLOAD'
-set -euo pipefail
+# EAS env:exec uses the system /bin/sh, including Dash on Ubuntu.
+set -eu
 if [ -z "${EXPO_PUBLIC_SENTRY_DSN:-}" ]; then
   echo 'Sentry inactive: no mobile DSN configured'
   exit 0

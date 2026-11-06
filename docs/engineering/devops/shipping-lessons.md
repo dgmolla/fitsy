@@ -1,5 +1,7 @@
 # Shipping lessons
 
+- 2026-11-05: #747's EAS upload payload failed with configured and absent DSNs under Linux Dash; use POSIX shell options and exercise EAS's actual shell:true caller plus Dash instead of substituting Bash in regression tests.
+
 - 2026-11-05: #747 exceeded the iOS bundle budget twice after adding Sentry; compose its Metro resolver with existing native pins, exclude web Replay through the supported option, and measure the remaining SDK footprint before release without silently raising budgets.
 
 - 2026-11-04: A declined account's renewed onboarding preview left stale history behind its paid offer; gate payment Back on current preview access and replay the restored-account checkout through cancellation, then run the saved native swipe and Back assertions (#718).
