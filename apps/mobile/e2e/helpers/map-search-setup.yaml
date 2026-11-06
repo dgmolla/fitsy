@@ -64,6 +64,10 @@ appId: com.fitsy.mobile
 - tapOn:
     text: "^Open$"
     optional: true
+# A retained DEV session can meet the native rating-prompt threshold.
+- tapOn:
+    text: "^Not Now$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: discovery-map

@@ -436,3 +436,27 @@ it('synchronizes carousel cards and settled pins, switches layouts without fetch
   expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
   expect(searchRequests()).toHaveLength(before);
 });
+
+it.each(['A', 'B'])('preserves an explicit final pin when layout %s clamps scrolling, but follows a user drag', async variant => {
+  const screen = open(`/search?query=meal&mapDebug=1&mapTray=${variant}`);
+  await screen.findByTestId('map-pin-3');
+  for (let position = 0; position < restaurants.length; position++) {
+    act(() => fireEvent(screen.getByTestId(`preview-pick-${position + 1}`), 'layout', {
+      nativeEvent: { layout: { x: 0, y: position * 300, width: 340, height: 300 } },
+    }));
+  }
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-3')));
+  // The native viewport cannot put the final row at its top; animated scrollTo
+  // finishes at the content limit, which still exposes part of the previous row.
+  act(() => fireEvent(screen.getByTestId(`map-list-${variant}`), 'momentumScrollEnd', {
+    nativeEvent: { contentOffset: { x: 0, y: 600 } },
+  }));
+  expect(screen.getByTestId('map-pin-3').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('4 / 4')).toBeTruthy();
+  act(() => fireEvent(screen.getByTestId(`map-list-${variant}`), 'scrollBeginDrag'));
+  act(() => fireEvent(screen.getByTestId(`map-list-${variant}`), 'momentumScrollEnd', {
+    nativeEvent: { contentOffset: { x: 0, y: 300 } },
+  }));
+  expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('2 / 4')).toBeTruthy();
+});

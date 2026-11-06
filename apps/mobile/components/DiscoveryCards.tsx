@@ -90,13 +90,13 @@ export async function openRestaurantOrPaywall(
 
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
-export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false, hideDistance = false, imageSource }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: (result: RestaurantResult) => void; paywallPreview?: boolean; hideDistance?: boolean; imageSource?: ImageRequireSource }) {
+export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false, hideDistance = false, imageSource, compact = false }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: (result: RestaurantResult) => void; paywallPreview?: boolean; hideDistance?: boolean; imageSource?: ImageRequireSource; compact?: boolean }) {
   const bm = result.bestMatch;
   return (
     <View ref={containerRef} collapsable={false} testID={paywallPreview ? 'paywall-restaurant-card' : 'preview-pick-1'}>
     <TouchableOpacity
       activeOpacity={paywallPreview ? 1 : 0.92}
-      style={[hero.container, paywallPreview && paywallCard.container]}
+      style={[hero.container, compact && compactHero.container, paywallPreview && paywallCard.container]}
       testID={paywallPreview ? 'paywall-search-item-card' : 'discovery-hero'}
       disabled={paywallPreview}
       onPress={() => {
@@ -120,9 +120,9 @@ export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking
       <RestaurantPhoto uri={result.photoUrl} source={imageSource} name={result.name} style={hero.image} />
       <LinearGradient
         colors={['transparent', EDITORIAL.heroGrad]}
-        style={[hero.gradient, paywallPreview && paywallCard.gradient]}
+        style={[hero.gradient, compact && compactHero.gradient, paywallPreview && paywallCard.gradient]}
       />
-      <View style={[hero.overlay, paywallPreview && paywallCard.overlay]}>
+      <View style={[hero.overlay, compact && compactHero.overlay, paywallPreview && paywallCard.overlay]}>
         <View style={hero.topRow}>
           {!paywallPreview && <View style={hero.indexBadge}>
             <Text style={hero.indexText}>01</Text>
@@ -130,7 +130,7 @@ export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking
           <DietaryBadges options={result.dietaryOptions} />
           {!hideDistance && Number.isFinite(result.distanceMiles) && <Text style={hero.distText}>{result.distanceMiles.toFixed(1)} mi</Text>}
         </View>
-        <Text style={[hero.restName, paywallPreview && paywallCard.name]} numberOfLines={1} testID={paywallPreview ? 'paywall-restaurant-name' : undefined}>{result.name}</Text>
+        <Text style={[hero.restName, compact && compactHero.name, paywallPreview && paywallCard.name]} numberOfLines={1} testID={paywallPreview ? 'paywall-restaurant-name' : undefined}>{result.name}</Text>
         {locked && <LockedDishTeaser variant="hero" />}
         {!locked && bm && <Text style={[hero.dishName, paywallPreview && paywallCard.dish]} numberOfLines={1}>{bm.name}</Text>}
         {!locked && bm && (!paywallPreview || bm.nutritionBasis === 'published') && (
@@ -150,6 +150,14 @@ export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking
     </TouchableOpacity>
     </View>
   );
+});
+
+// Used only by the dev map tray; ordinary Discovery retains its full hero.
+const compactHero = StyleSheet.create({
+  container: { height: 180 },
+  gradient: { height: 180 },
+  overlay: { padding: 14, gap: 3 },
+  name: { fontSize: 22, lineHeight: 26 },
 });
 
 const paywallCard = StyleSheet.create({

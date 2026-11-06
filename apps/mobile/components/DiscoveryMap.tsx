@@ -57,6 +57,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const carousel = useRef<ScrollView>(null);
   const list = useRef<ScrollView>(null);
   const rowOffsets = useRef<Record<string, number>>({});
+  const userListScroll = useRef(false);
   const [mapReady, setMapReady] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const [trayHeight, setTrayHeight] = useState(220);
@@ -89,6 +90,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const firstId = cards[0]?.id;
   useEffect(() => {
     setSelectedId(undefined);
+    userListScroll.current = false;
     carousel.current?.scrollTo({ x: 0, animated: false });
     list.current?.scrollTo({ y: 0, animated: false });
   }, [firstId]);
@@ -104,9 +106,17 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     setSelectedId(result.id);
     if (hasMapCoordinate(result)) map.current?.animateCamera({ center: { latitude: result.lat, longitude: result.lng } }, { duration: 300 });
     if (scroll) {
+      userListScroll.current = false;
       carousel.current?.scrollTo({ x: cards.findIndex(card => card.id === result.id) * stride, animated: true });
       list.current?.scrollTo({ y: rowOffsets.current[result.id] ?? 0, animated: true });
     }
+  }
+  function selectVisibleCard(y: number) {
+    // Native scrollTo can clamp at the final row. Only a real drag may replace
+    // an explicit pin/arrow target with the row at the viewport's leading edge.
+    if (!userListScroll.current) return;
+    const result = [...cards].reverse().find(card => (rowOffsets.current[card.id] ?? Infinity) <= y + 40);
+    if (result) select(result, false);
   }
   function open(result: RestaurantResult) {
     trackRestaurantTapped({ restaurant_id: result.id, restaurant_name: result.name,
@@ -116,6 +126,8 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
       params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
     }), d.onLockedTap);
   }
+  const peek = variant === 'B' && detent === 0;
+  const preview = cards[Math.max(0, index)];
   const emptyTitle = !d.canSearch ? 'Find your next meal' : d.hasQuery ? 'No matches for this search' : 'No meals with nutrition nearby';
   const more = d.nextCursor && !d.locked && !d.loading && <Pressable style={s.more} disabled={d.loadingMore || d.refreshing}
     onPress={() => { void d.handleEndReached(); }} testID="map-load-more" accessibilityRole="button"
@@ -167,7 +179,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
             <View style={s.grabber} /><Text style={s.heightLabel}>{HEIGHTS[detent]} · tap or drag</Text>
           </Pressable>
         </View>}
-        <View style={s.caption}>
+        {!peek && <View style={s.caption}>
           <Text style={s.heading}>Nearby</Text>
           <Text style={s.count} testID="map-page">{index < 0 ? `${cards.length} spots` : `${index + 1} / ${cards.length}`}</Text>
           {index >= 0 && <Pressable onPress={() => setSelectedId(undefined)} style={s.arrow} testID="map-preview-close"
@@ -181,7 +193,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
             accessibilityState={{ disabled: !cards.length || index === cards.length - 1 }}>
             <Ionicons name="chevron-forward" size={19} color={!cards.length || index === cards.length - 1 ? EDITORIAL.textSoft : EDITORIAL.green} />
           </Pressable>
-        </View>
+        </View>}
         {fallback && <Text style={s.fallback} testID="map-location-fallback">
           {d.location.source === 'fallback-denied' ? 'Location off' : 'Location unavailable'} · Showing {d.locationLabel}. Change area above.
         </Text>}
@@ -220,16 +232,21 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
           </View>)}
           {more && <View style={s.moreCard}>{more}</View>}
         </ScrollView>}
-        {cards.length > 0 && variant !== 'C' && <ScrollView ref={list} style={s.list} testID={`map-list-${variant}`}
+        {peek && preview && <Pressable testID="map-sheet-peek-card" style={s.peekCard} onPress={() => open(preview)}
+          accessibilityRole="button" accessibilityLabel={`Open ${mapRestaurantLabel(preview)}`}>
+          <RestaurantPhoto uri={preview.photoUrl} name={preview.name} style={s.peekPhoto} thumbnail />
+          <View style={s.peekCopy}><Text style={s.heading} numberOfLines={1}>{preview.name}</Text>
+            <Text style={s.body}>{cards.length} nearby spots · View menu →</Text></View>
+          <Ionicons name="chevron-forward" size={18} color={EDITORIAL.green} />
+        </Pressable>}
+        {cards.length > 0 && variant !== 'C' && !peek && <ScrollView ref={list} style={s.list} testID={`map-list-${variant}`}
           contentContainerStyle={s.listContent} keyboardShouldPersistTaps="handled"
-          onMomentumScrollEnd={event => {
-            const y = event.nativeEvent.contentOffset.y;
-            const result = [...cards].reverse().find(card => (rowOffsets.current[card.id] ?? Infinity) <= y + 40);
-            if (result) select(result, false);
-          }}>
+          onScrollBeginDrag={() => { userListScroll.current = true; }}
+          onScrollEndDrag={event => selectVisibleCard(event.nativeEvent.contentOffset.y)}
+          onMomentumScrollEnd={event => selectVisibleCard(event.nativeEvent.contentOffset.y)}>
           {cards.map((result, position) => <View key={result.id} style={result.id === selectedId && s.selectedRow}
             onLayout={event => { rowOffsets.current[result.id] = event.nativeEvent.layout.y; }}>
-            {position === 0 ? <HeroCard result={result} locked={d.locked === true} unlocking={d.onLockedTap} />
+            {position === 0 && variant === 'A' ? <HeroCard result={result} locked={d.locked === true} unlocking={d.onLockedTap} compact />
               : <RestaurantSection result={result} index={position - 1} locked={d.locked === true} unlocking={d.onLockedTap} />}
           </View>)}
           {more}
@@ -237,7 +254,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
         <View style={s.variants} accessibilityLabel="Map layout prototypes">
           {VARIANTS.map(([key, label]) => <Pressable key={key} style={[s.variant, key === variant && s.activeVariant]}
             testID={`map-variant-${key}`} accessibilityRole="button" accessibilityLabel={`Prototype ${key}: ${label}`}
-            accessibilityState={{ selected: key === variant }} onPress={() => { setSelectedId(undefined); router.setParams({ mapTray: key }); }}>
+            accessibilityState={{ selected: key === variant }} onPress={() => { userListScroll.current = false; setSelectedId(undefined); router.setParams({ mapTray: key }); }}>
             <Text style={[s.variantText, key === variant && s.activeVariantText]}>{key} · {label}</Text>
           </Pressable>)}
         </View>
