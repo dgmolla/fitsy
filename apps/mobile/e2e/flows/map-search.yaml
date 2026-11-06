@@ -11,10 +11,18 @@ env:
       LOCATION_PERMISSION: inuse
 - tapOn:
     id: discovery-location
+- extendedWaitUntil:
+    visible: "Choose a neighborhood"
+    timeout: 5000
+- waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Search near DTLA"
     direction: DOWN
+    centerElement: true
 - tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible: "Location: DTLA"
+    timeout: 15000
 - tapOn:
     id: preview-edit-targets
 - runFlow:
@@ -48,7 +56,10 @@ env:
     id: map-pin-0
 - assertVisible:
     id: map-preview-open
+- assertVisible:
+    id: map-carousel
 - takeScreenshot: map-search-preview
+- takeScreenshot: map-poc-c
 - tapOn:
     id: map-preview-open
 - extendedWaitUntil:
@@ -168,3 +179,75 @@ env:
     text: "Edit protein grams, 40"
 - assertVisible: "Location: DTLA"
 - takeScreenshot: map-search-shuffle
+
+# Swipe the real carousel from the deterministic first card before comparing layouts.
+- runFlow: ../helpers/map-first-spot.yaml
+- swipe:
+    start: "83%,70%"
+    end: "10%,70%"
+    duration: 450
+- waitForAnimationToEnd
+- assertVisible:
+    id: map-page
+    text: "^2 / [1-9][0-9]*$"
+- assertVisible:
+    id: map-preview-open
+- takeScreenshot: map-poc-c-swiped
+# Compare the dev-only layouts with the same bounded results and search state.
+- tapOn:
+    id: map-variant-A
+- assertVisible:
+    id: map-list-A
+- assertVisible:
+    id: discovery-hero
+- takeScreenshot: map-poc-a
+- tapOn:
+    id: map-variant-B
+- assertVisible:
+    id: map-list-B
+- assertVisible:
+    id: map-sheet-half
+- takeScreenshot: map-poc-b-half
+- tapOn:
+    id: map-sheet-height
+- assertVisible:
+    id: map-sheet-full
+- takeScreenshot: map-poc-b-full
+# A clamped programmatic scroll must retain the final explicit restaurant target.
+- copyTextFrom:
+    id: map-page
+- evalScript: ${output.mapCount = Number(maestro.copiedText.match(/[0-9]+/)[0])}
+- repeat:
+    times: ${output.mapCount}
+    commands:
+      - tapOn:
+          id: map-next-spot
+      - waitForAnimationToEnd
+- copyTextFrom:
+    id: map-page
+- assertTrue: ${Number(maestro.copiedText.split(' / ')[0]) === output.mapCount && Number(maestro.copiedText.split(' / ')[1]) === output.mapCount}
+- takeScreenshot: map-poc-b-last
+# Real list drags still synchronize the selected restaurant with the map.
+- swipe:
+    start: "50%,65%"
+    end: "50%,78%"
+    duration: 450
+- waitForAnimationToEnd
+- copyTextFrom:
+    id: map-page
+- assertTrue: ${Number(maestro.copiedText.split(' / ')[0]) > 0 && Number(maestro.copiedText.split(' / ')[0]) < output.mapCount && Number(maestro.copiedText.split(' / ')[1]) === output.mapCount}
+- tapOn:
+    id: map-sheet-height
+- assertVisible:
+    id: map-sheet-peek
+- assertVisible:
+    id: map-sheet-peek-card
+- takeScreenshot: map-poc-b-peek
+- tapOn:
+    id: map-variant-C
+- assertVisible:
+    id: map-carousel
+- assertVisible: "Location: DTLA"
+- assertVisible:
+    id: map-filter-protein
+    text: "Edit protein grams, 40"

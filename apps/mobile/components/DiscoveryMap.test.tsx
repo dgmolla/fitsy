@@ -21,7 +21,7 @@ jest.mock('react-native-maps', () => {
   const { View, Pressable } = require('react-native');
   return { __esModule: true,
     default: React.forwardRef((props: object, ref: React.Ref<unknown>) => {
-      React.useImperativeHandle(ref, () => ({ animateToRegion: mockAnimate }));
+      React.useImperativeHandle(ref, () => ({ animateToRegion: mockAnimate, animateCamera: jest.fn(), fitToCoordinates: jest.fn() }));
       return <View {...props} />;
     }),
     Marker: ({ onPress, ...props }: { onPress: (event: unknown) => void }) =>
@@ -101,7 +101,7 @@ it.each([0, 106])('keeps the map tray and camera clear of a %spt floating overla
   expect(screen.getByTestId('map-filter-protein')).toBeTruthy();
 });
 
-it('opens a photo pin preview, then returns from the real detail using the saved iOS flow control', async () => {
+it("opens a compact pin's card, then returns from the real detail using the saved iOS flow control", async () => {
   const screen = renderJourney('/search?query=meal', {
     ...routes, '(tabs)/search': () => <Search />, 'restaurant/[id]': () => <Restaurant />,
   });
@@ -153,7 +153,7 @@ it('keeps query, targets and results when switching and applies the same filter 
   expect(selections).toHaveLength(4);
   const proteinAssertions = commands.map(step => step.assertVisible).filter((selector): selector is Selector =>
     typeof selector === 'string' ? selector.endsWith('g protein') : selector?.id === 'map-filter-protein');
-  expect(proteinAssertions).toHaveLength(4);
+  expect(proteinAssertions).toHaveLength(5);
   const screen = open();
   const selectSavedSpot = async (checkpoint: number, nativeHit: number) => {
     async function replay(steps: Step[]) {
@@ -399,4 +399,64 @@ it('allows explicit local opt-in and removes the map on a remote flag update wit
   expect(listeners.size).toBe(0);
   const debugScreen = open('/search?query=meal&mapDebug=1');
   await debugScreen.findByTestId('map-pin-0');
+});
+
+it('synchronizes carousel cards and settled pins, switches layouts without fetching, and exposes three sheet heights', async () => {
+  const screen = open('/search?query=meal&mapDebug=1&mapTray=C');
+  await screen.findByTestId('map-pin-0');
+  await waitFor(() => expect(screen.getByTestId('map-pin-0').props.tracksViewChanges).toBe(false));
+  const before = searchRequests().length;
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
+  expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Green Kitchen');
+  const width = StyleSheet.flatten(screen.getByTestId('map-card-0').props.style).width as number;
+  act(() => fireEvent(screen.getByTestId('map-carousel'), 'momentumScrollEnd', {
+    nativeEvent: { contentOffset: { x: 2 * (width + 12), y: 0 } },
+  }));
+  expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Pizza House');
+  await waitFor(() => expect(screen.getByTestId('map-pin-2').props.tracksViewChanges).toBe(false));
+  await act(async () => fireEvent.press(screen.getByTestId('map-variant-A')));
+  await screen.findByTestId('map-list-A');
+  expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toContain('Flor do Ave');
+  expect(screen.getByTestId('preview-pick-2')).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
+  expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
+  await act(async () => fireEvent.press(screen.getByTestId('map-variant-B')));
+  await screen.findByTestId('map-list-B');
+  const half = StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height;
+  expect(screen.getByTestId('map-sheet-height').props.accessibilityValue.text).toBe('Half');
+  await act(async () => fireEvent.press(screen.getByTestId('map-sheet-height')));
+  expect(screen.getByTestId('map-sheet-height').props.accessibilityValue.text).toBe('Full');
+  expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height).toBeGreaterThan(half);
+  await act(async () => fireEvent.press(screen.getByTestId('map-sheet-height')));
+  expect(screen.getByTestId('map-sheet-height').props.accessibilityValue.text).toBe('Peek');
+  expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height).toBeLessThan(half);
+  act(() => fireEvent(screen.getByTestId('map-sheet-height'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } }));
+  expect(screen.getByTestId('map-sheet-height').props.accessibilityValue.text).toBe('Half');
+  expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
+  expect(searchRequests()).toHaveLength(before);
+});
+
+it.each(['A', 'B'])('preserves an explicit final pin when layout %s clamps scrolling, but follows a user drag', async variant => {
+  const screen = open(`/search?query=meal&mapDebug=1&mapTray=${variant}`);
+  await screen.findByTestId('map-pin-3');
+  for (let position = 0; position < restaurants.length; position++) {
+    act(() => fireEvent(screen.getByTestId(`preview-pick-${position + 1}`), 'layout', {
+      nativeEvent: { layout: { x: 0, y: position * 300, width: 340, height: 300 } },
+    }));
+  }
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-3')));
+  // The native viewport cannot put the final row at its top; animated scrollTo
+  // finishes at the content limit, which still exposes part of the previous row.
+  act(() => fireEvent(screen.getByTestId(`map-list-${variant}`), 'momentumScrollEnd', {
+    nativeEvent: { contentOffset: { x: 0, y: 600 } },
+  }));
+  expect(screen.getByTestId('map-pin-3').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('4 / 4')).toBeTruthy();
+  act(() => fireEvent(screen.getByTestId(`map-list-${variant}`), 'scrollBeginDrag'));
+  act(() => fireEvent(screen.getByTestId(`map-list-${variant}`), 'momentumScrollEnd', {
+    nativeEvent: { contentOffset: { x: 0, y: 300 } },
+  }));
+  expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('2 / 4')).toBeTruthy();
 });

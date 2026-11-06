@@ -375,3 +375,11 @@ It uses Xcode's monthly-renewal-every-five-minutes test setting; it is not live 
 The prepared Xcode scheme selected this file with a Release executable, while the app retained DEV API/Supabase configuration.
 No StoreKit purchase or 27-journey aggregate completed before the explicit deferral.
 Keep its generated scheme snapshot, sealed artifact and private fixture bindings in the issue's external recovery handoff; never commit credentials or fabricate billing history.
+
+The dev-only map POCs default to C (floating search and restaurant carousel).
+Use `com.fitsy.mobile://search?mapDebug=1&mapTray=C`, or select A (Discovery card list) and B (grabber sheet) from the in-map layout controls.
+B cycles Peek, Half and Full by tapping the grabber, supports upward/downward dragging, and exposes adjustable accessibility actions.
+All layouts share the current results, search, targets, area, pagination and access rules; camera moves never start a search.
+The saved `map-search` journey swipes C, then captures C, A and all three B heights after checking the existing menu/search/filter/List/shuffle journey.
+Run it on normal and small Simulator layouts and inspect search safe areas, selected pin labels, carousel clipping, sheet controls and tab clearance.
+These are Debug iOS POCs; the production gate and Dawit's eventual design choice remain separate.
