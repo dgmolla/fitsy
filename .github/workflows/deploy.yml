@@ -50,8 +50,10 @@ jobs:
 
   smoke:
     needs: changes
-    if: needs.changes.result == 'success'
+    if: needs.changes.result == 'success' && needs.changes.outputs.release_sha != ''
     runs-on: ubuntu-latest
+    outputs:
+      release_ready: ${{ steps.serving.outputs.release_ready }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,6 +65,7 @@ jobs:
       # Vercel's existing Git integration builds, migrates and assigns domains.
       # Verify is required for release completion, not for provider build timing.
       - name: Observe the exact successful Vercel Git deployment and serving source
+        id: deployment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
@@ -70,11 +73,14 @@ jobs:
           python3 scripts/deploy/routine-release.py observe "$RELEASE_SHA" > "$RUNNER_TEMP/vercel-deployment.json"
           cat "$RUNNER_TEMP/vercel-deployment.json"
       - name: Prod-safe API smoke
+        if: steps.deployment.outputs.superseded != 'true'
         env:
           PROD_SMOKE_EMAIL: ${{ secrets.PROD_SMOKE_EMAIL }}
           PROD_SMOKE_PASSWORD: ${{ secrets.PROD_SMOKE_PASSWORD }}
         run: bash scripts/verify/api-e2e.sh --base=https://fitsy.org --prod-safe
       - name: Verify serving identity after smoke
+        id: serving
+        if: steps.deployment.outputs.superseded != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ needs.changes.outputs.release_sha }}
@@ -94,7 +100,7 @@ jobs:
       statuses: read
     needs: [changes, smoke]
     # Exact Git production build (including migration) and API smoke must pass.
-    if: always() && needs.smoke.result == 'success'
+    if: always() && needs.smoke.result == 'success' && needs.smoke.outputs.release_ready == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

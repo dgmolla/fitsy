@@ -71,7 +71,7 @@ Existing Maestro journeys remain applicable because user interactions are unchan
 | Upstash daily commands | At least 80% of the explicitly configured daily allowance; at least 95% | P2 then P1 |
 | API crons | No successful execution within two schedule intervals plus one hour | P2 |
 | TLS/domain expiration | Within 14 days; within three days | P2 then P1 |
-| Observer failure | Missing configuration, denied query access, malformed/partial provider results, or unavailable provider API | P2; affected prior incidents remain open |
+| Observer failure | Missing required or partially configured optional bindings, denied query access, malformed/partial provider results, or unavailable provider API | P2; affected prior incidents remain open |
 | Deploy/EAS workflow failure | Failed, timed out, cancelled, action-required, stale, or startup-failed production release | P1 |
 | Dev maintenance failure | Failed maintenance workflow | P2 |
 
@@ -114,6 +114,10 @@ Every trigger requires `refs/heads/main` before checkout or credential-bearing s
 The `fitsy-production-monitor` concurrency group serializes monitoring state updates.
 Every wakeup polls up to 100 recent runs, including active attempts, for each monitored workflow and uses the most recently updated meaningful completed outcome.
 Deploy and Dev maintenance are scoped to main; EAS also admits push-triggered release tags matching its configured `v*.*.*` pattern.
+EAS Actions is an intermittent release path: `easWorkflowMaxAgeDays` limits inactive completed history to seven days because current TestFlight OTAs ship through Deploy instead.
+When no qualifying EAS run or persisted failure receipt is recent and no attempt is active, the next monitor run resolves the old EAS incident through ordinary shared-state delivery.
+This expiry does not prove that an old build succeeded.
+Active retries, recent receipts, malformed history, and unavailable provider queries retain the existing incident protections.
 Candidate-branch dispatches cannot resolve a production incident.
 The file-scoped GitHub endpoint and returned workflow path establish identity; a custom `run-name` is a display value.
 A replaced pending wakeup therefore cannot lose a retained failed outcome, including a rerun of the same run ID.
@@ -126,12 +130,21 @@ Issue state records each channel/direct delivery separately so a failed DM retri
 Failures receive reminders at most every 30 minutes; observed recovery sends one resolved transition.
 An unavailable metric source cannot resolve an incident from that source.
 Skipped, neutral, missing, or unknown workflow conclusions likewise preserve open incidents and reminders until a completed success is observed.
+An automatic Deploy superseded by newer protected main finishes successfully without admitting the old source or continuing its release steps.
+The workflow observer checks that attempt's actual post-smoke serving-identity step before accepting a successful Deploy as recovery, so a superseded no-op cannot hide a retained failure.
 Slack errors remain pending and fail execution; a failed state/query/transport cannot be reported healthy.
 A crash between Slack acceptance and persistence can still repeat a delivery; deterministic message IDs reduce this unavoidable transport ambiguity.
+Production Monitor succeeds in Actions when evaluation and required Slack delivery succeed, even while product incidents remain active and continue their normal alert/reminder lifecycle.
+Observer errors, missing required configuration, crashes, state failures, and delivery failures still fail the job.
+The JSON summary continues to distinguish `alerting` from `healthy`; a green Actions conclusion does not claim production is incident-free.
 
 [Upstash's Developer API](https://upstash.com/docs/devops/developer-api/introduction) requires a native Upstash account.
 Do not manufacture quota counts from successful requests, create a paid store, accept new terms, or widen integration access to bypass that boundary.
-An unavailable quota source remains an explicit observer warning for the cloud owner.
+When all four quota bindings are absent, quota observation is intentionally skipped and creates no `observer:quota` page.
+The next normal run resolves a prior missing-configuration observer page without a manual state edit.
+An existing measured quota incident remains unobserved until configured measurements resume; absence cannot prove its recovery.
+Partially configured bindings, invalid allowances, denied access, and unavailable configured quota sources remain explicit observer failures for the cloud owner.
+With all bindings configured, the existing 80% warning and 95% critical thresholds remain active.
 The daily allowance is operator-supplied because provider plans can change and a shared store includes nonproduction traffic.
 Separate production storage remains a cost decision for Dawit.
 

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { policy, alert, evaluateApi, evaluateDeployment, evaluateMobile, evaluateQuota, evaluateExpiry, evaluateCrons } from './production-policy.mjs';
-import { axiomRows, probeApi, queryAxiom, apiMetrics, workflowMetrics } from './production-providers.mjs';
+import { axiomRows, probeApi, queryAxiom, apiMetrics, workflowMetrics, quotaMetrics } from './production-providers.mjs';
 import { dispatchAlerts, loadAlertState, saveAlertState, sendSlack } from './production-alerts.mjs';
 import { assertRequiredEnvironment, checkEnvironmentSources, readManifest } from '../deploy/env-manifest.mjs';
 import { runMonitor } from './production-monitor.mjs';
@@ -37,6 +37,10 @@ const table = rows => ({ status: { isPartial: false }, tables: [{
   fields: Object.keys(rows[0] ?? {}).map(name => ({ name })),
   columns: Object.keys(rows[0] ?? {}).map(key => rows.map(item => item[key])),
 }] });
+const releaseJobs = (id = 123, attempt = 1, conclusion = 'success') => ({ total_count: 1,
+  jobs: [{ run_id: id, run_attempt: attempt, name: 'smoke', conclusion: 'success',
+    steps: [{ name: 'Verify serving identity after smoke', conclusion }] }],
+});
 
 /** In-memory external GitHub/Slack HTTP servers, with serialized persistence. */
 function transport() {
@@ -124,7 +128,8 @@ test('partial Axiom data, denied query credentials and malformed tables cannot p
   assert.throws(() => axiomRows({ status: { isPartial: false }, tables: [{ fields: [{ name: 'x' }], columns: [] }] }));
   await assert.rejects(queryAxiom('query', now - 300_000, now, { env: {}, fetchImpl: fetch }));
   await assert.rejects(queryAxiom('query', now - 300_000, now,
-    { env: { AXIOM_TOKEN: 'private' }, fetchImpl: async () => new Response(null, { status: 403 }) }));
+    { env: { AXIOM_TOKEN: 'private' }, fetchImpl: async () => new Response(null, { status: 403 }) }),
+  error => error.httpStatus === 403 && !error.message.includes('private'));
 });
 
 test('shared issue state deduplicates fresh instances, sends one recovery, and preserves unobserved failures', async () => {
@@ -209,6 +214,26 @@ test('quota, TLS/domain expiry and missed cron thresholds remain checked in', ()
   assert.deepEqual(Object.keys(policy.cronMaxAgeHours).sort(), vercel.crons.map(item => item.path).filter(path => path !== '/api/health').sort());
 });
 
+test('quota is optional only when entirely absent; configured limits and errors remain observable', async () => {
+  let calls = 0, used = 80;
+  const fetchImpl = async () => { calls++; return Response.json({ daily_net_commands: used }); };
+  assert.equal(await quotaMetrics({ env: {}, fetchImpl }), null);
+  assert.equal(calls, 0);
+  const env = { UPSTASH_EMAIL: 'fixture@example.test', UPSTASH_API_KEY: 'private',
+    UPSTASH_DATABASE_ID: 'fixture', UPSTASH_DAILY_COMMAND_LIMIT: '100' };
+  for (const key of Object.keys(env)) {
+    await assert.rejects(quotaMetrics({ env: { ...env, [key]: '' }, fetchImpl }));
+  }
+  for (const value of ['bad', '0', '-1', 'Infinity']) {
+    await assert.rejects(quotaMetrics({ env: { ...env, UPSTASH_DAILY_COMMAND_LIMIT: value }, fetchImpl }));
+  }
+  assert.equal(calls, 0, 'invalid configuration must fail before querying a provider');
+  assert.equal((await quotaMetrics({ env, fetchImpl }))[0].severity, 'P2');
+  used = 95;
+  assert.equal((await quotaMetrics({ env, fetchImpl }))[0].severity, 'P1');
+  await assert.rejects(quotaMetrics({ env, fetchImpl: async () => new Response(null, { status: 403 }) }));
+});
+
 test('an unlisted variable in a fixture PR fails the actual source manifest check', async () => {
   const manifest = readManifest();
   const fixture = source => [{ file: 'apps/api/lib/new-feature.ts', source }];
@@ -265,6 +290,7 @@ test('workflow polling catches reruns and retained failures without relying on t
     conclusion: 'failure', updated_at: new Date(now).toISOString(), ...overrides });
   let runs = [run({ id: 200, conclusion: 'success' }), run({ run_attempt: 2, updated_at: new Date(now + 1_000).toISOString() })];
   const context = { env: { GITHUB_TOKEN: 'fixture' }, policy, fetchImpl: async url => {
+    if (url.includes('/jobs?')) return Response.json(releaseJobs(runs[0].id, runs[0].run_attempt));
     assert.equal(url, 'https://api.github.com/repos/dgmolla/fitsy/actions/workflows/deploy.yml/runs?branch=main&per_page=100');
     return Response.json({ workflow_runs: runs });
   } };
@@ -290,7 +316,7 @@ test('EAS release tags are observed while candidate dispatches cannot resolve a 
     conclusion: 'failure', updated_at: new Date(now).toISOString(), ...overrides });
   let runs = [run({ id: 124, head_branch: 'candidate', event: 'workflow_dispatch', conclusion: 'success',
     updated_at: new Date(now + 1_000).toISOString() }), run({})];
-  const context = { env: { GITHUB_TOKEN: 'fixture' }, policy, fetchImpl: async url => {
+  const context = { env: { GITHUB_TOKEN: 'fixture' }, policy, now, fetchImpl: async url => {
     const parsed = new URL(url);
     assert.equal(parsed.searchParams.get('branch'), null);
     assert.equal(parsed.searchParams.get('status'), null);
@@ -298,7 +324,117 @@ test('EAS release tags are observed while candidate dispatches cannot resolve a 
   } };
   assert.match((await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context))[0].summary, /run 34102447143/);
   runs = [run({ event: 'workflow_dispatch', head_branch: 'v1.0.0', conclusion: 'success' })];
-  await assert.rejects(workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context), /workflow identity/);
+  assert.deepEqual(await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context), [], 'tag dispatch is not a release');
+});
+
+test('EAS inactivity expires old receipts but cannot erase a recent receipt or active retry', async () => {
+  const key = 'workflow:EAS Build + TestFlight';
+  const cutoff = now - policy.easWorkflowMaxAgeDays * 86_400_000;
+  const old = { id: 34102447143, run_attempt: 1, path: '.github/workflows/eas-build.yml',
+    event: 'push', head_branch: 'v1.0.0', status: 'completed', conclusion: 'failure',
+    updated_at: '2026-09-07T08:48:30Z' };
+  let runs = [old];
+  const context = { now, policy, env: { GITHUB_TOKEN: 'fixture' }, state: { incidents: {
+    [key]: { active: true, since: now, workflowUpdatedAt: old.updated_at, workflowRunId: old.id },
+  } }, fetchImpl: async () => Response.json({ workflow_runs: runs }) };
+  assert.deepEqual(await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context), []);
+  runs = [];
+  assert.deepEqual(await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context), []);
+  context.state.incidents[key].workflowUpdatedAt = new Date(cutoff).toISOString();
+  assert.equal(await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context), null);
+  runs = [{ ...old, updated_at: new Date(cutoff).toISOString() }];
+  assert.equal((await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context))[0].severity, 'P1');
+  delete context.state.incidents[key].workflowUpdatedAt;
+  runs = [{ ...old, status: 'in_progress', conclusion: null, run_attempt: 2 }];
+  assert.equal(await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context), null);
+  runs = [{ ...old, updated_at: 'invalid' }];
+  await assert.rejects(workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context));
+});
+
+test('a superseded Deploy success neither hides retained failure nor manufactures recovery', async () => {
+  const old = { id: 1, run_attempt: 1, path: '.github/workflows/deploy.yml', event: 'workflow_run',
+    head_branch: 'main', status: 'completed', conclusion: 'failure', updated_at: new Date(now).toISOString() };
+  let runs = [{ ...old, id: 2, conclusion: 'success', updated_at: new Date(now + 1000).toISOString() }, old];
+  let jobs = releaseJobs(2, 1, 'skipped');
+  const context = { now, policy, env: { GITHUB_TOKEN: 'fixture' },
+    fetchImpl: async url => Response.json(url.includes('/jobs?') ? jobs : { workflow_runs: runs }) };
+  assert.match((await workflowMetrics('deploy.yml', 'Deploy', context))[0].summary, /run 1,/);
+  runs = [runs[0]];
+  assert.equal(await workflowMetrics('deploy.yml', 'Deploy', context), null);
+  jobs = releaseJobs(2);
+  assert.deepEqual(await workflowMetrics('deploy.yml', 'Deploy', context), []);
+  jobs.jobs[0].run_attempt = 2;
+  await assert.rejects(workflowMetrics('deploy.yml', 'Deploy', context), /attempt jobs/);
+});
+
+test('the actual monitor CLI succeeds with product incidents and normal stale/optional recovery, but fails broken observers', () => {
+  for (const scenario of ['product', 'observer', 'configuration', 'delivery', 'crash']) {
+    const script = `
+      import { policy } from ${JSON.stringify(new URL('./production-policy.mjs', import.meta.url).href)};
+      const now = Date.now(), scenario = ${JSON.stringify(scenario)};
+      const table = ${table.toString()}, row = ${row.toString()}, releaseJobs = ${releaseJobs.toString()};
+      const env = ${JSON.stringify(Object.fromEntries(readManifest().required.monitor.map(key => [key, 'fixture'])))};
+      Object.assign(env, { SLACK_ALERT_USER_ID: 'UFIXTURE', POSTHOG_PROJECT_ID: '1' });
+      if (scenario === 'configuration') delete env.AXIOM_TOKEN;
+      process.env = env;
+      const old = now - 60 * 86400000;
+      let state = { version: 1, cronMonitoringStartedAt: old, incidents: {
+        'workflow:EAS Build + TestFlight': { key: 'workflow:EAS Build + TestFlight', scope: 'workflow:EAS Build + TestFlight',
+          severity: 'P1', active: true, since: old, deliveredAt: old, workflowUpdatedAt: '2026-09-07T08:48:30Z', workflowRunId: 34102447143 },
+        'observer:quota': { key: 'observer:quota', scope: 'observer', severity: 'P2', active: true, since: old, deliveredAt: old },
+      }, expiry: { checkedAt: now, certificate: new Date(now + 90 * 86400000).toISOString(), domain: new Date(now + 365 * 86400000).toISOString() } };
+      const messages = [];
+      globalThis.fetch = async (url, init = {}) => {
+        if (url.includes('/issues?')) {
+          if (scenario === 'crash') throw new Error('private fixture exception');
+          return Response.json([{ number: 716, body: '<!-- fitsy-production-monitor-state:v1 -->\\n' + '\`\`\`json\\n' + JSON.stringify(state) + '\\n\`\`\`' }]);
+        }
+        if (url.endsWith('/issues/716')) { state = JSON.parse(JSON.parse(init.body).body.match(/\`\`\`json\\n([^]*?)\\n\`\`\`/)[1]); return Response.json({ number: 716 }); }
+        if (url.includes('slack.com')) { messages.push(JSON.parse(init.body).text); return Response.json({ ok: scenario !== 'delivery' }); }
+        if (url.startsWith('https://fitsy.org/')) {
+          if (url.endsWith('?deep=1')) return Response.json({ status: 'ok', dependencies: { supabase: 'ok', upstash: 'ok', revenuecat: 'ok' } });
+          if (url.endsWith('/api/health')) return Response.json({ status: 'ok', db: 'connected', deploymentSha: 'a'.repeat(40) });
+          return new Response(null, { status: 401 });
+        }
+        if (url.includes('api.axiom.co')) {
+          if (scenario === 'observer') return new Response(null, { status: 403 });
+          return Response.json(table(JSON.parse(init.body).apl.includes('lastSuccess') ? [] : [row({ errors: 10 })]));
+        }
+        if (url.includes('posthog.com')) return Response.json({ results: [[10, 0, 100, 0, 0]] });
+        if (url.includes('api.vercel.com')) return Response.json({ deployments: [{ readyState: 'READY' }] });
+        if (url.endsWith('/commits/main')) return Response.json({ sha: 'a'.repeat(40) });
+        if (url.includes('/jobs?')) return Response.json(releaseJobs());
+        if (url.includes('/actions/workflows/')) {
+          const file = new URL(url).pathname.split('/workflows/')[1].split('/')[0], eas = file === 'eas-build.yml';
+          return Response.json({ workflow_runs: [{ id: eas ? 34102447143 : 123, run_attempt: 1,
+            path: '.github/workflows/' + file, event: file === 'deploy.yml' ? 'workflow_run' : 'push',
+            head_branch: eas ? 'v1.0.0' : 'main', status: 'completed', conclusion: eas ? 'failure' : 'success',
+            updated_at: eas ? '2026-09-07T08:48:30Z' : new Date(now).toISOString(),
+            ...(file === 'dev-maintenance.yml' ? { event: 'schedule' } : {}) }] });
+        }
+        throw new Error('Unexpected fixture HTTP request');
+      };
+      process.argv[1] = ${JSON.stringify(fileURLToPath(new URL('./production-monitor.mjs', import.meta.url)))};
+      await import(${JSON.stringify(new URL('./production-monitor.mjs', import.meta.url).href)});
+      console.log(JSON.stringify({ fixture: true, incidents: state.incidents, messages }));
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 10_000, env: {} });
+    assert.equal(result.status, scenario === 'product' ? 0 : 1, `${scenario}: ${result.stderr}\n${result.stdout}`);
+    assert.doesNotMatch(result.stderr, /private fixture exception/);
+    if (scenario === 'product') {
+      const lines = result.stdout.trim().split('\n').map(line => JSON.parse(line));
+      assert.equal(lines[0].status, 'alerting');
+      assert.ok(lines[0].alerts.includes('api:5xx'));
+      assert.ok(lines[0].alerts.includes('cron:/api/internal/watch-review'));
+      assert.equal(lines[0].alerts.some(key => key.startsWith('observer:')), false);
+      const proof = lines[1];
+      for (const key of ['workflow:EAS Build + TestFlight', 'observer:quota']) {
+        assert.equal(proof.incidents[key].active, false);
+        assert.equal(proof.incidents[key].recoveryDelivered, true);
+        assert.ok(proof.messages.some(text => text.includes('RESOLVED production alert: ' + key)));
+      }
+    }
+  }
 });
 
 test('the scheduled entrypoint preserves incidents until provider or workflow recovery is observed', async () => {
@@ -306,7 +442,7 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
   const env = { ...external.context.env, AXIOM_TOKEN: 'private', CRON_SECRET: 'private', VERCEL_TOKEN: 'private',
     POSTHOG_PERSONAL_API_KEY: 'private', POSTHOG_PROJECT_ID: '1', UPSTASH_EMAIL: 'private@example.test',
     UPSTASH_API_KEY: 'private', UPSTASH_DATABASE_ID: 'fixture', UPSTASH_DAILY_COMMAND_LIMIT: '10000' };
-  let apiBroken = true, queryDenied = false;
+  let apiBroken = true, queryDenied = false, jobsDenied = false;
   const workflowFiles = { Deploy: 'deploy.yml', 'EAS Build + TestFlight': 'eas-build.yml', 'Dev maintenance': 'dev-maintenance.yml' };
   const completedRun = (name, conclusion, overrides = {}) => ({ id: 123, name, conclusion, run_attempt: 1,
     path: `.github/workflows/${workflowFiles[name]}`, event: name === 'Deploy' ? 'workflow_run' : 'workflow_dispatch',
@@ -340,6 +476,11 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
       return Response.json({ workflow_runs: workflowRuns[file]?.filter(run =>
         (!path.searchParams.has('branch') || run.head_branch === path.searchParams.get('branch'))
         && (!path.searchParams.has('status') || run.status === path.searchParams.get('status'))) });
+    }
+    if (url.includes('/jobs?')) {
+      if (jobsDenied) return new Response(null, { status: 403 });
+      const [, id, attempt] = url.match(/runs\/(\d+)\/attempts\/(\d+)/);
+      return Response.json(releaseJobs(Number(id), Number(attempt)));
     }
     if (url.includes('api.upstash.com')) return Response.json({ daily_net_commands: 10 });
     if (url.endsWith('/commits/main')) return Response.json({ sha: 'a'.repeat(40) });
@@ -426,4 +567,9 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
   const partial = await runMonitor({ env, fetchImpl, now: now + 187_000 });
   assert.ok(partial.some(item => item.key === 'workflow:Deploy'));
   assert.ok(partial.some(item => item.key === 'observer:workflow:EAS Build + TestFlight'));
+  workflowRuns['deploy.yml'] = [completedRun('Deploy', 'success')];
+  jobsDenied = true;
+  const denied = await runMonitor({ env, fetchImpl, now: now + 188_000 });
+  assert.ok(denied.some(item => item.key === 'workflow:Deploy'), 'denied job evidence must preserve the prior release incident');
+  assert.match(denied.find(item => item.key === 'observer:workflow:Deploy').summary, /HTTP 403/);
 });

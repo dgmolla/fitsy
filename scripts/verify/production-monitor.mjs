@@ -24,7 +24,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     const alerts = await runMonitor();
     console.log(JSON.stringify({ status: alerts.length ? 'alerting' : 'healthy', alerts: alerts.map(item => item.key) }));
-    if (alerts.length) process.exitCode = 1;
+    // Product incidents are successfully reported outcomes. A broken observer
+    // or required configuration is still a failed monitoring execution.
+    if (alerts.some(item => item.scope === 'observer')) process.exitCode = 1;
   } catch {
     // Never log provider exception text: it can contain credentials or bodies.
     console.error('Production monitoring stopped: configuration, state, provider query or alert delivery failed.');

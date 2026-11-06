@@ -106,12 +106,20 @@ class AdmissionTests(unittest.TestCase):
                 self.assertIn('unauthorized release event/repository/ref', result.stderr)
                 self.assertEqual((self.root / 'output').read_text(), '')
 
-    def test_superseded_main_sha_is_refused(self):
+    def test_superseded_main_sha_stops_without_admitting_a_release(self):
         self.get('git/ref/heads/main')['object']['sha'] = 'b' * 40
         result = self.drive()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('superseded protected main source', result.stderr)
-        self.assertEqual((self.root / 'output').read_text(), '')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {'release_status': 'superseded'})
+        self.assertEqual((self.root / 'output').read_text(), 'superseded=true\n')
+
+    def test_invalid_main_identity_remains_a_failure_not_supersession(self):
+        for source in ('', 'unavailable', None):
+            self.get('git/ref/heads/main')['object']['sha'] = source
+            result = self.drive()
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('invalid protected main source', result.stderr)
+            self.assertEqual((self.root / 'output').read_text(), '')
 
     def test_latest_push_verify_run_for_source_is_required(self):
         latest = self.get(f'actions/workflows/verify.yml/runs?head_sha={self.source}&event=push&per_page=1')
@@ -131,6 +139,7 @@ class GitDeploymentTests(unittest.TestCase):
         workflow = json.loads(subprocess.check_output(['node', '-e', command, str(ROOT / '.github/workflows/deploy.yml')],
                                                       cwd=ROOT, text=True))
         cls.steps = workflow['jobs']['smoke']['steps']
+        cls.jobs = workflow['jobs']
 
     def setUp(self):
         self.source = 'a' * 40
@@ -179,8 +188,11 @@ class GitDeploymentTests(unittest.TestCase):
                     for arg in shlex.split(command)]
             self.assertEqual(args[:2], ['python3', 'scripts/deploy/routine-release.py'])
             final = io.StringIO()
-            with patch.object(sys, 'argv', args[1:]), patch('sys.stdout', final):
+            workflow_output = Path(directory) / 'output'
+            with patch.object(sys, 'argv', args[1:]), patch('sys.stdout', final), \
+                    patch.dict(os.environ, {'GITHUB_OUTPUT': str(workflow_output)}):
                 gate.main()
+            self.assertEqual(workflow_output.read_text(), 'release_ready=true\n')
             return json.loads(final.getvalue())
 
     def test_actual_post_smoke_cli_refuses_new_pending_attempt_despite_healthy_old_source(self):
@@ -258,6 +270,61 @@ class GitDeploymentTests(unittest.TestCase):
                                          'PATH': directory + ':' + os.environ['PATH']})
             self.assertEqual(result.returncode, 7, result.stderr)
             self.assertFalse((root / 'display-ran').exists())
+
+    def test_superseded_observation_and_post_smoke_stop_benignly_without_release_ready(self):
+        for phase in ('observe', 'health'):
+            for at in (1, 2, 3):
+                with self.subTest(phase=phase, at=at), tempfile.TemporaryDirectory(prefix='fitsy-superseded-') as directory:
+                    snapshot = Path(directory) / 'deployment.json'
+                    snapshot.write_text(json.dumps({'deployment': self.row, 'status': self.status}))
+                    output = Path(directory) / 'output'
+                    args = ['routine-release.py', phase, self.source] + ([str(snapshot)] if phase == 'health' else [])
+                    # current() runs at entry, during observation and after health.
+                    checks = 2 if phase == 'health' else 3
+                    failure_at = min(at, checks)
+                    outcomes = [None] * (failure_at - 1) + [gate.SupersededSource('superseded protected main source')]
+                    with patch.object(sys, 'argv', args), patch.object(gate, 'current', side_effect=outcomes), \
+                            patch.object(gate, 'deployment', return_value={'deployment': self.row, 'status': self.status}), \
+                            patch.object(gate, 'health'), patch('sys.stdout', io.StringIO()) as stdout, \
+                            patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'workflow_run', 'GITHUB_REPOSITORY': gate.REPO,
+                                                   'GITHUB_REF': 'refs/heads/main', 'GITHUB_OUTPUT': str(output)}):
+                        self.assertEqual(gate.cli(), 0)
+                    self.assertEqual(json.loads(stdout.getvalue()), {'release_status': 'superseded'})
+                    self.assertEqual(output.read_text(), 'superseded=true\n')
+
+    def test_local_and_manual_current_checks_still_refuse_superseded_sources(self):
+        for event in ('', 'workflow_dispatch'):
+            with patch.object(sys, 'argv', ['routine-release.py', 'current', self.source]), \
+                    patch.object(gate, 'current', side_effect=gate.SupersededSource('superseded protected main source')), \
+                    patch.dict(os.environ, {'GITHUB_EVENT_NAME': event}), patch('sys.stderr', io.StringIO()):
+                self.assertEqual(gate.cli(), 1)
+
+    def test_actual_workflow_conditions_skip_all_release_consumers_after_supersession(self):
+        smoke = self.jobs['smoke']
+        probe = next(step for step in smoke['steps'] if step.get('name') == 'Prod-safe API smoke')
+        serving = next(step for step in smoke['steps'] if step.get('name') == 'Verify serving identity after smoke')
+        self.assertEqual(smoke['outputs']['release_ready'], '${{ steps.serving.outputs.release_ready }}')
+        self.assertEqual(serving['id'], 'serving')
+        observer = next(step for step in smoke['steps'] if step.get('name', '').startswith('Observe the exact'))
+        self.assertEqual(observer['id'], 'deployment')
+        expressions = [smoke['if'], probe['if'], serving['if'], self.jobs['ota']['if']]
+        script = """
+          const vm = require('vm'), expressions = JSON.parse(process.argv[1]);
+          const results = [];
+          for (const supersededAt of ['admission', 'observation', 'health', 'none']) {
+            const context = { always: () => true,
+              needs: { changes: { result: 'success', outputs: { release_sha: supersededAt === 'admission' ? '' : 'a'.repeat(40) } },
+                smoke: { result: 'success', outputs: { release_ready: supersededAt === 'none' ? 'true' : '' } } },
+              steps: { deployment: { outputs: { superseded: supersededAt === 'observation' ? 'true' : '' } } } };
+            results.push(expressions.map(expression => vm.runInNewContext(expression, context)));
+          }
+          process.stdout.write(JSON.stringify(results));
+        """
+        results = json.loads(subprocess.check_output(['node', '-e', script, json.dumps(expressions)], text=True))
+        self.assertFalse(results[0][0], 'no release source means no smoke job')
+        self.assertEqual(results[1], [True, False, False, False])
+        self.assertFalse(results[2][3], 'superseded after smoke must not reach OTA')
+        self.assertEqual(results[3], [True, True, True, True])
 
     def result(self):
         with patch.object(gate, 'github', side_effect=[[self.row], [self.status]]):

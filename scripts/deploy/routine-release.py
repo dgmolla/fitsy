@@ -13,6 +13,10 @@ from pathlib import Path
 REPO = 'dgmolla/fitsy'
 
 
+class SupersededSource(ValueError):
+    """A valid protected main revision advanced before this release completed."""
+
+
 def require(value, message):
     if not value:
         raise ValueError(message)
@@ -24,8 +28,10 @@ def github(config, endpoint):
 
 
 def current(source):
-    require(github({}, f'repos/{REPO}/git/ref/heads/main')['object']['sha'] == source,
-            'superseded protected main source')
+    latest = github({}, f'repos/{REPO}/git/ref/heads/main')['object']['sha']
+    require(isinstance(latest, str) and re.fullmatch('[0-9a-f]{40}', latest), 'invalid protected main source')
+    if latest != source:
+        raise SupersededSource('superseded protected main source')
 
 
 def vercel_bot(value):
@@ -182,6 +188,9 @@ def main():
             observe(sys.argv[2])
         elif sys.argv[1] == 'health':
             verify_after_smoke(sys.argv[2], json.loads(Path(sys.argv[3]).read_text()))
+            if os.environ.get('GITHUB_OUTPUT'):
+                with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                    output.write('release_ready=true\n')
         return
     result = admit(json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text()), int(os.environ['GITHUB_RUN_ID']))
     with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
@@ -189,10 +198,28 @@ def main():
     print(json.dumps(result))
 
 
-if __name__ == '__main__':
+def cli():
     try:
         main()
+    except SupersededSource as error:
+        # Only the automatic workflow consumes this explicit no-release result.
+        # Manual/local callers retain refusal; no stale source is admitted.
+        if (os.environ.get('GITHUB_EVENT_NAME') == 'workflow_run'
+                and os.environ.get('GITHUB_REPOSITORY') == REPO
+                and os.environ.get('GITHUB_REF') == 'refs/heads/main'
+                and os.environ.get('GITHUB_OUTPUT')):
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                output.write('superseded=true\n')
+            print(json.dumps({'release_status': 'superseded'}))
+            return 0
+        print(f'Routine release refused: {error}', file=sys.stderr)
+        return 1
     except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired,
             urllib.error.URLError) as error:
         print(f'Routine release refused: {error}', file=sys.stderr)
-        sys.exit(1)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(cli())
