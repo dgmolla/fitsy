@@ -129,3 +129,5 @@ Record the next eligible small PR's hosted L2 duration on issue #712 after this 
 - 2026-11-05: #735 repeated a completed native tap with no resulting action because the Profile card was visible but its control was behind the tab bar; scroll to the existing bottom anchor, require the action enabled, and assert its confirmation before continuing.
 - 2026-11-05: #735 omitted dataApiFlow.test.ts from focused selection after adding helper callers; include that caller-contract test explicitly, preserve the maintained 401/401/login200 diagnostics, and update the caller inventory before every push.
 - 2026-11-05: #745 review and caller replay exposed false recovery from a successfully superseded health step; require a distinct release-ready marker and preserve a retained incident in the actual monitor CLI regression.
+
+- 2026-11-05: CI and local release-helper tests silently skipped the survivor after a new workflow readiness guard; bind every workflow input, reject unevaluated `needs` expressions, preserve no-publication assertions for superseded output, and include `scripts/deploy/native-compatibility.test.ts` in focused release-workflow validation (#745).
