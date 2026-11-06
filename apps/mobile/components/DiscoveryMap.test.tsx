@@ -2,6 +2,7 @@ import { act, deferred, ExpoLocation, fireEvent, installPurchasedAccount, render
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { Platform, StyleSheet } from 'react-native';
 import PostHog from 'posthog-react-native';
 import type { RestaurantResult } from '@fitsy/shared';
@@ -16,12 +17,13 @@ import { FloatingNavClearanceContext } from '../lib/floatingNav';
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
 const mockAnimate = jest.fn();
+const mockFit = jest.fn();
 jest.mock('react-native-maps', () => {
   const React = require('react');
   const { View, Pressable } = require('react-native');
   return { __esModule: true,
     default: React.forwardRef((props: object, ref: React.Ref<unknown>) => {
-      React.useImperativeHandle(ref, () => ({ animateToRegion: mockAnimate, animateCamera: jest.fn(), fitToCoordinates: jest.fn() }));
+      React.useImperativeHandle(ref, () => ({ animateToRegion: mockAnimate, animateCamera: jest.fn(), fitToCoordinates: mockFit }));
       return <View {...props} />;
     }),
     Marker: ({ onPress, ...props }: { onPress: (event: unknown) => void }) =>
@@ -56,6 +58,7 @@ beforeEach(async () => {
   await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify({ name: 'DTLA', lat: 34.04, lng: -118.24 }));
   __resetForTesting();
   mockAnimate.mockClear();
+  mockFit.mockClear();
   jest.mocked(ExpoLocation.requestForegroundPermissionsAsync).mockResolvedValue({ status: 'granted' } as never);
   jest.mocked(ExpoLocation.getLastKnownPositionAsync).mockResolvedValue(null);
   rows = restaurants;
@@ -97,8 +100,10 @@ it.each([0, 106])('keeps the map tray and camera clear of a %spt floating overla
   });
   await screen.findByTestId('map-pin-0');
   expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).marginBottom).toBe(clearance);
-  expect(screen.getByTestId('discovery-map-surface').props.mapPadding.bottom).toBe(220 + clearance + 12);
-  expect(screen.getByTestId('map-filter-protein')).toBeTruthy();
+  expect(screen.getByTestId('discovery-map-surface').props.mapPadding).toBeUndefined();
+  expect(screen.getByTestId('discovery-map-surface').props.legalLabelInsets.bottom).toBe(220 + clearance + 8);
+  expect(screen.queryByTestId('discovery-macro-strip')).toBeNull();
+  expect(screen.queryByTestId('preview-edit-targets')).toBeNull();
 });
 
 it("opens a compact pin's card, then returns from the real detail using the saved iOS flow control", async () => {
@@ -129,131 +134,68 @@ it("opens a compact pin's card, then returns from the real detail using the save
   await screen.findByTestId('discovery-map');
   await screen.findByTestId('map-pin-0');
   expect(screen.getPathname()).toBe('/search');
-  expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
-  expect(screen.getByText('40g protein')).toBeTruthy();
+  expect(screen.getByLabelText('Search: meal')).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  expect(screen.getByText('40g')).toBeTruthy();
   expect(screen.getByLabelText('Location: DTLA')).toBeTruthy();
 });
 
-it('keeps query, targets and results when switching and applies the same filter editor and shuffle', async () => {
-  type Selector = string | { id: string; text: string };
-  type Step = {
-    tapOn?: string | { id: string };
-    eraseText?: number;
-    inputText?: string;
-    copyTextFrom?: { id: string };
-    assertVisible?: Selector;
-    assertTrue?: string;
-    extendedWaitUntil?: { visible: { id: string; enabled?: boolean } };
-    runFlow?: string | { when: { visible: { id: string } }; commands: Step[] };
-  };
-  const readCommands = (path: string) => (loadAll(readFileSync(path, 'utf8')) as [unknown, Step[]])[1];
-  const flowDirectory = resolve(__dirname, '../e2e/flows');
-  const commands = readCommands(resolve(flowDirectory, 'map-search.yaml'));
-  const selections = commands.flatMap((step, index) => step.copyTextFrom?.id === 'map-preview-open' ? [commands[index - 1]] : []);
-  expect(selections).toHaveLength(4);
-  const proteinAssertions = commands.map(step => step.assertVisible).filter((selector): selector is Selector =>
-    typeof selector === 'string' ? selector.endsWith('g protein') : selector?.id === 'map-filter-protein');
-  expect(proteinAssertions).toHaveLength(5);
+it('opens the real search list and Goals editor while preserving bounded results, targets and shuffle', async () => {
   const screen = open();
-  const selectSavedSpot = async (checkpoint: number, nativeHit: number) => {
-    async function replay(steps: Step[]) {
-      for (const step of steps) {
-        if (typeof step.runFlow === 'string') await replay(readCommands(resolve(flowDirectory, step.runFlow)));
-        else if (step.runFlow) {
-          if (screen.queryByTestId(step.runFlow.when.visible.id)) await replay(step.runFlow.commands);
-        } else if (step.tapOn) {
-          // MapKit dispatches a coordinate tap to the frontmost overlapping pin,
-          // even when Maestro located a different annotation's accessibility ID.
-          if (typeof step.tapOn === 'string') throw new Error('Map selection requires a named control');
-          const id = step.tapOn.id.startsWith('map-pin-') ? `map-pin-${nativeHit}` : step.tapOn.id;
-          await act(async () => fireEvent.press(screen.getByTestId(id)));
-        } else if (step.assertVisible && typeof step.assertVisible !== 'string') {
-          expect(screen.getByTestId(step.assertVisible.id)).toBeTruthy();
-          if (step.assertVisible.text) expect(screen.getByText(new RegExp(step.assertVisible.text))).toBeTruthy();
-        } else throw new Error('Unexpected saved map selection command');
-      }
-    }
-    await replay([selections[checkpoint]]);
-    return screen.getByTestId('map-preview-open').props.accessibilityLabel;
-  };
-  const assertSavedProtein = (checkpoint: number) => {
-    const selector = proteinAssertions[checkpoint];
-    // iOS exposes the Pressable's explicit label, not the nested visual Text.
-    const chip = screen.getByLabelText(typeof selector === 'string' ? selector : selector.text);
-    expect(chip.props.accessibilityRole).toBe('button');
-    if (typeof selector !== 'string') expect(chip).toBe(screen.getByTestId(selector.id));
-  };
   await screen.findByTestId('map-pin-0');
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  expect(screen.queryByTestId('discovery-map')).toBeNull();
+  expect(screen.getByTestId('discovery-macro-strip')).toBeTruthy();
   await act(async () => fireEvent.changeText(screen.getByTestId('discovery-search'), 'pizza'));
-  await waitFor(() => expect(searchParams()).toMatchObject({ q: 'pizza' }));
-  // The real failure selected result 17 after tapping map-pin-0.
-  // Exercise different native hit targets while keeping the actual results fixed.
-  await act(async () => fireEvent.press(screen.getByTestId('map-pin-3')));
-  const beforeToggle = await selectSavedSpot(0, 2);
-  expect(beforeToggle).toBe('Open Flor do Ave · Portuguese');
+  await waitFor(() => expect(searchParams().q).toBe('pizza'));
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  await screen.findByTestId('map-card-0');
+  const originalCard = screen.getByTestId('map-card-0').props.accessibilityLabel;
   const before = searchRequests().length;
-  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
-  await screen.findByTestId('discovery-hero');
-  expect(screen.getByTestId('discovery-search').props.value).toBe('pizza');
-  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
-  await screen.findByTestId('map-pin-0');
+  // Replay the maintained first-result helper through the actual caller.
+  type Step = { tapOn?: { id: string }; assertVisible?: { id: string }; assertNotVisible?: { id: string };
+    extendedWaitUntil?: { visible: { id: string } } };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/helpers/map-first-spot.yaml'), 'utf8')) as [unknown, Step[]];
+  for (const step of commands) {
+    if (step.tapOn) await act(async () => fireEvent.press(screen.getByTestId(step.tapOn!.id)));
+    else if (step.assertNotVisible) expect(screen.queryByTestId(step.assertNotVisible.id)).toBeNull();
+    else if (step.assertVisible) expect(screen.getByTestId(step.assertVisible.id)).toBeTruthy();
+    else if (step.extendedWaitUntil) await screen.findByTestId(step.extendedWaitUntil.visible.id);
+    else throw new Error('Unexpected saved first-result command');
+  }
+  expect(screen.getByTestId('map-card-0').props.accessibilityLabel).toBe(originalCard);
+  expect(screen.getByLabelText('Search: pizza')).toBeTruthy();
   expect(searchRequests()).toHaveLength(before);
-  expect(await selectSavedSpot(1, 1)).toBe(beforeToggle);
-  assertSavedProtein(0);
-  // Ranked pizza rows need not qualify for a close-fit shuffle. Reproduce the
-  // live API boundary instead of giving every search the same nonempty rows.
+  await act(async () => fireEvent.press(screen.getByTestId('map-options-open')));
+  await act(async () => fireEvent.press(screen.getByTestId('map-variant-G')));
+  await act(async () => fireEvent.press(screen.getByTestId('map-goals')));
+  expect(screen.getByTestId('discovery-map')).toBeTruthy();
+  await act(async () => fireEvent.changeText(screen.getByLabelText('Protein grams'), '45'));
+  await act(async () => fireEvent.press(screen.getByTestId('meal-filter-apply')));
+  await waitFor(() => expect(searchParams()).toMatchObject({ q: 'pizza', protein: '45', lat: '34.04', lng: '-118.24' }));
   searchResponse = async url => {
     const params = Object.fromEntries(url.searchParams);
     return response({ data: params.shuffle && (params.q || params.protein !== '40') ? [] : rows,
       meta: { locked: false, nextCursor: null } });
   };
-  const toggleCheck = commands.findIndex(step => step.assertTrue === '${maestro.copiedText === output.mapBeforeToggle}');
-  expect(toggleCheck).toBeGreaterThan(-1);
-  const copies = commands.flatMap((step, index) => step.copyTextFrom?.id === 'map-preview-open' ? [index] : []);
-  let input: ReturnType<typeof screen.getByLabelText> | undefined;
-  // Drive the saved filter/search actions, including the transition back to the
-  // context whose subscriber preflight establishes positive shuffle results.
-  for (const step of commands.slice(toggleCheck + 1, copies[2] - 1)) {
-    if (typeof step.tapOn === 'string') input = screen.getByLabelText(step.tapOn);
-    else if (step.tapOn) {
-      const control = screen.getByTestId(step.tapOn.id);
-      await act(async () => fireEvent.press(control));
-    } else if (step.eraseText !== undefined || step.inputText !== undefined) {
-      if (!input) throw new Error('Saved target edit must select its input');
-      const selectedInput = input;
-      await act(async () => fireEvent.changeText(selectedInput, step.inputText ?? ''));
-    } else if (typeof step.assertVisible === 'object' && step.assertVisible.id === 'map-filter-protein') {
-      assertSavedProtein(proteinAssertions.indexOf(step.assertVisible));
-    } else if (step.extendedWaitUntil) {
-      const { id, enabled } = step.extendedWaitUntil.visible;
-      await screen.findByTestId(id);
-      if (enabled) await waitFor(() => expect(screen.getByTestId(id).props.accessibilityState.disabled).toBe(false));
-    }
-  }
-  await screen.findByTestId('map-pin-0');
-  assertSavedProtein(2);
-  const filtered = Object.fromEntries(searchRequests().at(-1)!.searchParams);
-  expect(searchRequests().map(url => Object.fromEntries(url.searchParams))).toContainEqual(expect.objectContaining({
-    q: 'pizza', ...values, protein: '45', lat: '34.04', lng: '-118.24',
-  }));
-  await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
-  const beforeShuffle = await selectSavedSpot(2, 3);
-  expect(beforeShuffle).toBe('Open Flor do Ave · Portuguese');
+  await act(async () => fireEvent.press(screen.getByTestId('map-goals')));
+  await act(async () => fireEvent.changeText(screen.getByLabelText('Protein grams'), '40'));
+  await act(async () => fireEvent.press(screen.getByTestId('meal-filter-apply')));
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-clear-search')));
+  await waitFor(() => expect(searchParams().q).toBeUndefined());
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  await screen.findByTestId('map-card-0');
   rows = restaurants.map(row => ({ ...row, id: `${row.id}-new`, name: `${row.name} new` }));
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
-  await waitFor(() => expect(screen.getByTestId('map-pin-0').props.accessibilityLabel).toBe('Flor do Ave new · Portuguese'));
-  expect(Object.fromEntries(searchRequests().at(-1)!.searchParams)).toMatchObject({
-    ...filtered, shuffle: '1', excludeRestaurantIds: restaurants.map(row => row.id).join(','),
-  });
-  expect(searchParams()).toMatchObject({ ...values, lat: '34.04', lng: '-118.24' });
+  await waitFor(() => expect(screen.getByTestId('map-card-0').props.accessibilityLabel).toContain('Flor do Ave new'));
+  expect(searchParams()).toMatchObject({ ...values, lat: '34.04', lng: '-118.24', shuffle: '1',
+    excludeRestaurantIds: restaurants.map(row => row.id).join(',') });
   expect(searchParams().q).toBeUndefined();
   expect(searchParams().seed).toBeTruthy();
-  expect(await selectSavedSpot(3, 2)).toBe('Open Flor do Ave new · Portuguese');
-  expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).not.toBe(beforeShuffle);
-  assertSavedProtein(3);
-  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
-  await screen.findByTestId('discovery-hero');
-  expect(screen.getByTestId('discovery-search').props.value).toBe('');
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  expect(screen.getByLabelText('Search restaurants or dishes')).toBeTruthy();
+  expect(screen.getByText('40g')).toBeTruthy();
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toBe('Flor do Ave new');
 });
 
@@ -266,8 +208,7 @@ it('keeps a craving and its targets when Shuffle finds no close-fit meals, then 
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
   await screen.findByText('No matches for this search');
   expect(searchParams()).toMatchObject({ q: 'pizza', ...values, protein: '45', shuffle: '1' });
-  expect(screen.getByTestId('discovery-search').props.value).toBe('pizza');
-  expect(screen.getByLabelText('Edit protein grams, 45')).toBeTruthy();
+  expect(screen.getByLabelText('Search: pizza')).toBeTruthy();
   expect(screen.queryByTestId('map-pin-0')).toBeNull();
   expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
   await act(async () => fireEvent.press(screen.getByTestId('discovery-empty-clear')));
@@ -275,19 +216,19 @@ it('keeps a craving and its targets when Shuffle finds no close-fit meals, then 
   expect(searchParams()).toMatchObject({ ...values, protein: '45' });
   expect(searchParams().q).toBeUndefined();
   expect(searchParams().shuffle).toBeUndefined();
-  expect(screen.getByTestId('discovery-search').props.value).toBe('');
+  expect(screen.getByLabelText('Search restaurants or dishes')).toBeTruthy();
   expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
 });
 
 it('uses the existing cursor to load more pins and browse previews', async () => {
   rows = restaurants.slice(0, 2);
   nextCursor = 'next-page';
-  const screen = open();
+  const screen = open('/search?query=meal&mapTray=A');
   await screen.findByTestId('map-pin-0');
   await act(async () => fireEvent.press(screen.getByLabelText('Next spot')));
   expect(screen.getByText('1 / 2')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByLabelText('Next spot')));
-  expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Green Kitchen');
+  expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
   rows = restaurants.slice(2);
   nextCursor = null;
   await act(async () => fireEvent.press(screen.getByTestId('map-load-more')));
@@ -321,9 +262,10 @@ it('opens around the actual GPS fix when permission is granted', async () => {
   const screen = open();
   await screen.findByTestId('map-pin-0');
   expect(screen.getByTestId('discovery-map-surface').props.showsUserLocation).toBe(true);
-  expect(mockAnimate).toHaveBeenCalledWith(expect.objectContaining({ latitude: 34.08, longitude: -118.27 }), 350);
+  expect(screen.getByTestId('discovery-map-surface').props.initialRegion).toMatchObject({ latitude: 34.08, longitude: -118.27 });
   act(() => fireEvent(screen.getByTestId('discovery-map-surface'), 'mapReady'));
-  expect(mockAnimate).toHaveBeenCalledWith(expect.objectContaining({ latitude: 34.08, longitude: -118.27 }), 0);
+  await waitFor(() => expect(mockFit).toHaveBeenCalled());
+  expect(mockAnimate).not.toHaveBeenCalled();
   expect(Object.fromEntries(searchRequests().at(-1)!.searchParams)).toMatchObject({ lat: '34.08', lng: '-118.27' });
 });
 
@@ -342,7 +284,7 @@ it('keeps pending, failed, empty and cleared searches recoverable and never shuf
   await screen.findByText('No matches for this search');
   expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
   await act(async () => fireEvent.press(screen.getByTestId('discovery-empty-clear')));
-  expect(screen.getByTestId('discovery-search').props.value).toBe('');
+  expect(screen.getByLabelText('Search restaurants or dishes')).toBeTruthy();
   await screen.findByText('No meals with nutrition nearby');
 });
 
@@ -362,7 +304,7 @@ it('offers the list and a real photo placeholder when provider map data is incom
   await screen.findByTestId('map-pin-0');
   expect(screen.queryByTestId('map-pin-1')).toBeNull();
   expect(screen.getByLabelText('Photo unavailable for Flor do Ave')).toBeTruthy();
-  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   await screen.findByText('Green Kitchen');
 });
 
@@ -415,13 +357,17 @@ it('synchronizes carousel cards and settled pins, switches layouts without fetch
   expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
   expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Pizza House');
   await waitFor(() => expect(screen.getByTestId('map-pin-2').props.tracksViewChanges).toBe(false));
+  await act(async () => fireEvent.press(screen.getByTestId('map-options-open')));
   await act(async () => fireEvent.press(screen.getByTestId('map-variant-A')));
   await screen.findByTestId('map-list-A');
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toContain('Flor do Ave');
   expect(screen.getByTestId('preview-pick-2')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
   expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
+  await act(async () => fireEvent.press(screen.getByTestId('map-options-open')));
   await act(async () => fireEvent.press(screen.getByTestId('map-variant-B')));
+  expect(screen.getByTestId('map-sheet-height').props.accessibilityValue.text).toBe('Peek');
+  await act(async () => fireEvent.press(screen.getByTestId('map-sheet-height')));
   await screen.findByTestId('map-list-B');
   const half = StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height;
   expect(screen.getByTestId('map-sheet-height').props.accessibilityValue.text).toBe('Half');
@@ -433,13 +379,14 @@ it('synchronizes carousel cards and settled pins, switches layouts without fetch
   expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height).toBeLessThan(half);
   act(() => fireEvent(screen.getByTestId('map-sheet-height'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } }));
   expect(screen.getByTestId('map-sheet-height').props.accessibilityValue.text).toBe('Half');
-  expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
+  expect(screen.getByLabelText('Search: meal')).toBeTruthy();
   expect(searchRequests()).toHaveLength(before);
 });
 
 it.each(['A', 'B'])('preserves an explicit final pin when layout %s clamps scrolling, but follows a user drag', async variant => {
   const screen = open(`/search?query=meal&mapDebug=1&mapTray=${variant}`);
   await screen.findByTestId('map-pin-3');
+  if (variant === 'B') await act(async () => fireEvent.press(screen.getByTestId('map-sheet-height')));
   for (let position = 0; position < restaurants.length; position++) {
     act(() => fireEvent(screen.getByTestId(`preview-pick-${position + 1}`), 'layout', {
       nativeEvent: { layout: { x: 0, y: position * 300, width: 340, height: 300 } },
@@ -459,4 +406,63 @@ it.each(['A', 'B'])('preserves an explicit final pin when layout %s clamps scrol
   }));
   expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
   expect(screen.getByText('2 / 4')).toBeTruthy();
+});
+
+it('keeps B mounted with its selected final restaurant through Full, Peek and Half', async () => {
+  const screen = open('/search?query=meal&mapTray=B');
+  await screen.findByTestId('map-pin-3');
+  await act(async () => fireEvent.press(screen.getByTestId('map-sheet-height')));
+  await act(async () => fireEvent.press(screen.getByTestId('map-sheet-height')));
+  const list = screen.getByTestId('map-list-B');
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-3')));
+  expect(screen.getByText('4 / 4')).toBeTruthy();
+  const [, steps] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/map-search.yaml'), 'utf8')) as [unknown, { evalScript?: string; assertTrue?: string }[]];
+  const context = { maestro: { copiedText: screen.getByTestId('preview-pick-4').props.accessibilityLabel }, output: {} as Record<string, string> };
+  const nameScript = steps.find(step => step.evalScript?.includes('output.mapLastName ='))!.evalScript!;
+  runInNewContext(nameScript.slice(2, -1), context);
+  expect(context.output.mapLastName).toBe(restaurants[3].name);
+  await act(async () => fireEvent.press(screen.getByTestId('map-sheet-height')));
+  context.maestro.copiedText = screen.getByTestId('map-sheet-peek-card').props.accessibilityLabel;
+  const peekAssertion = steps.find(step => step.assertTrue?.includes('output.mapLastName'))!.assertTrue!;
+  expect(runInNewContext(peekAssertion.slice(2, -1), context)).toBe(true);
+  expect(screen.getByTestId('map-list-B', { includeHiddenElements: true })).toBe(list);
+  await act(async () => fireEvent.press(screen.getByTestId('map-sheet-height')));
+  expect(screen.getByTestId('map-list-B')).toBe(list);
+  expect(screen.getByText('4 / 4')).toBeTruthy();
+  expect(screen.getByTestId('map-pin-3').props.accessibilityState.selected).toBe(true);
+});
+
+it('fits after measured overlays settle without a competing selection camera or a pan fetch', async () => {
+  const screen = open();
+  await screen.findByTestId('map-pin-0');
+  act(() => {
+    fireEvent(screen.getByTestId('map-controls'), 'layout', { nativeEvent: { layout: { height: 100 } } });
+    fireEvent(screen.getByTestId('map-tray'), 'layout', { nativeEvent: { layout: { height: 226 } } });
+    fireEvent(screen.getByTestId('discovery-map-surface'), 'layout', { nativeEvent: { layout: { width: 393, height: 852 } } });
+  });
+  await waitFor(() => expect(mockFit).toHaveBeenLastCalledWith(
+    restaurants.map(result => ({ latitude: result.lat, longitude: result.lng })),
+    { edgePadding: { top: 136, bottom: 254, left: 32, right: 32 }, animated: false },
+  ));
+  const before = searchRequests().length;
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-2')));
+  act(() => fireEvent(screen.getByTestId('discovery-map-surface'), 'regionChangeComplete', { latitude: 40, longitude: -74 }));
+  expect(mockAnimate).not.toHaveBeenCalled();
+  expect(searchRequests()).toHaveLength(before);
+});
+
+it('changes existing emoji pin styles without changing results and stops marker tracking after paint', async () => {
+  const screen = open('/search?query=meal&mapPin=numbered');
+  await screen.findByTestId('map-pin-0');
+  const before = searchRequests().length;
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
+  for (const style of ['utensils', 'cuisine']) {
+    await act(async () => fireEvent.press(screen.getByTestId('map-options-open')));
+    await act(async () => fireEvent.press(screen.getByTestId(`map-pin-style-${style}`)));
+    expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
+    await waitFor(() => expect(screen.getByTestId('map-pin-1').props.tracksViewChanges).toBe(false));
+  }
+  expect(screen.getAllByText('🍕')).toHaveLength(3);
+  expect(screen.getByText('🍴')).toBeTruthy();
+  expect(searchRequests()).toHaveLength(before);
 });

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Modal, PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,41 +7,41 @@ import { router, useLocalSearchParams } from 'expo-router';
 import type { RestaurantResult } from '@fitsy/shared';
 import type { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { EDITORIAL } from '@/lib/brand';
-import { hasMapCoordinate, mapRestaurantLabel } from '@/lib/discoveryMap';
+import { hasMapCoordinate, mapCuisineEmoji, mapRestaurantLabel } from '@/lib/discoveryMap';
 import { trackRestaurantTapped } from '@/lib/analytics';
-import { SearchBar } from './DiscoveryChrome';
+import { MacroStrip } from './DiscoveryChrome';
 import { HeroCard, RestaurantSection, openRestaurantOrPaywall } from './DiscoveryCards';
 import { RestaurantPhoto } from './RestaurantPhoto';
-import { DiscoveryViewToggle } from './DiscoveryViewToggle';
 import { ShuffleButton } from './ShuffleButton';
 import { s } from './DiscoveryMap.styles';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
 
 type Discovery = ReturnType<typeof useDiscoveryState>;
+type PinStyle = 'numbered' | 'utensils' | 'cuisine' | 'icon';
 const DELTA = { latitudeDelta: 0.09, longitudeDelta: 0.09 };
-const VARIANTS = [['C', 'Carousel'], ['A', 'List'], ['B', 'Sheet']] as const;
+const VARIANTS = [['C', 'Search to list'], ['G', 'Quick goals'], ['A', 'Map + list'], ['B', 'Slim sheet']] as const;
+const PIN_STYLES = [['numbered', '01', 'Numbers'], ['utensils', '🍴', 'Utensils'], ['cuisine', '🌮', 'Cuisine'], ['icon', '', 'Icon']] as const;
 const HEIGHTS = ['Peek', 'Half', 'Full'] as const;
 
-// Snapshot only the short paint/selection transition, with no asynchronous photo in a pin.
-const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, onSelect }: {
-  result: RestaurantResult; position: number; selected: boolean; onSelect: (result: RestaurantResult) => void;
+// Snapshot only paint/selection changes, with no asynchronous image in a marker.
+const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, pinStyle, onSelect }: {
+  result: RestaurantResult; position: number; selected: boolean; pinStyle: PinStyle; onSelect: (result: RestaurantResult) => void;
 }) {
+  const symbol = pinStyle === 'cuisine' ? mapCuisineEmoji(result) : pinStyle === 'utensils' ? '🍴' : String(position + 1).padStart(2, '0');
   const [tracking, setTracking] = useState(true);
   useEffect(() => {
     setTracking(true);
     const timer = setTimeout(() => setTracking(false), 250);
     return () => clearTimeout(timer);
-  }, [selected, position, result.name]);
+  }, [selected, symbol, pinStyle, result.name]);
   return <Marker identifier={result.id} coordinate={{ latitude: result.lat, longitude: result.lng }}
-    anchor={{ x: 0.5, y: 0.28 }} stopPropagation tracksViewChanges={tracking}
+    anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={tracking}
     zIndex={selected ? 1000 : 100 - position} testID={`map-pin-${position}`}
     accessibilityRole="button" accessibilityLabel={mapRestaurantLabel(result)}
     accessibilityHint="Select restaurant card" accessibilityState={{ selected }} onPress={() => onSelect(result)}>
-    <View style={s.pin} collapsable={false}>
-      <View style={[s.pinBadge, selected && s.selectedPin]}>
-        <Text style={[s.pinNumber, selected && s.selectedPinNumber]}>{String(position + 1).padStart(2, '0')}</Text>
-      </View>
-      {selected && <Text style={s.pinLabel} numberOfLines={1}>{result.name}</Text>}
+    <View style={[s.pin, pinStyle !== 'numbered' && s.emojiPin, selected && s.selectedPin]} collapsable={false}>
+      {pinStyle === 'icon' ? <Ionicons name="restaurant-outline" size={24} color={EDITORIAL.green} />
+        : <Text style={[pinStyle === 'numbered' ? s.pinNumber : s.pinEmoji, selected && pinStyle === 'numbered' && s.selectedPinNumber]}>{symbol}</Text>}
     </View>
   </Marker>;
 });
@@ -51,24 +51,31 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const insets = useSafeAreaInsets();
   const tabBarClearance = useFloatingNavClearance();
   const { width, height } = useWindowDimensions();
-  const { mapTray } = useLocalSearchParams<{ mapTray?: string }>();
-  const variant = mapTray === 'A' || mapTray === 'B' ? mapTray : 'C';
+  const { mapTray, mapPin } = useLocalSearchParams<{ mapTray?: string; mapPin?: string }>();
+  const variant = mapTray === 'A' || mapTray === 'B' || mapTray === 'G' ? mapTray : 'C';
+  const pinStyle: PinStyle = mapPin === 'numbered' || mapPin === 'cuisine' || mapPin === 'icon' ? mapPin : 'utensils';
+  const carouselLayout = variant === 'C' || variant === 'G';
   const map = useRef<MapView>(null);
   const carousel = useRef<ScrollView>(null);
   const list = useRef<ScrollView>(null);
   const rowOffsets = useRef<Record<string, number>>({});
+  const listOffset = useRef(0);
   const userListScroll = useRef(false);
-  const [mapReady, setMapReady] = useState(false);
+  const restoredLayout = useRef('');
+  const [mapRevision, setMapRevision] = useState(0);
   const [selectedId, setSelectedId] = useState<string>();
   const [trayHeight, setTrayHeight] = useState(220);
-  const [topHeight, setTopHeight] = useState(156);
+  const [topHeight, setTopHeight] = useState(104);
   const [layoutHeight, setLayoutHeight] = useState(height);
-  const [detent, setDetent] = useState(1);
+  const [detent, setDetent] = useState(0);
+  const [optionsVisible, setOptionsVisible] = useState(false);
   const cardWidth = width - 56;
   const stride = cardWidth + 12;
   const compact = height < 740;
-  const maxTrayHeight = Math.max(160, layoutHeight - insets.top - topHeight - tabBarClearance - 20);
-  const sheetHeights = [Math.min(196, maxTrayHeight), Math.min(layoutHeight * 0.53, maxTrayHeight), maxTrayHeight];
+  const controlsBottom = insets.top + 8 + topHeight;
+  const maxTrayHeight = Math.max(160, layoutHeight - controlsBottom - tabBarClearance - 96);
+  const sheetHeights = [Math.min(124, maxTrayHeight), Math.min(layoutHeight * 0.40, maxTrayHeight), maxTrayHeight];
+  const peek = variant === 'B' && detent === 0;
   const pan = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 8,
     onPanResponderRelease: (_event, gesture) => {
@@ -82,29 +89,48 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const index = cards.findIndex(result => result.id === selectedId);
   const fallback = !d.location.loading && d.location.source.startsWith('fallback-');
   const { lat, lng } = d.location;
-  useEffect(() => {
-    setSelectedId(undefined);
-    if (!d.location.loading) map.current?.animateToRegion({ latitude: lat, longitude: lng, ...DELTA }, 350);
-  }, [lat, lng, d.location.loading]);
-  // A replacement search starts at its first card; pagination preserves selection.
   const firstId = cards[0]?.id;
   useEffect(() => {
     setSelectedId(undefined);
     userListScroll.current = false;
+    listOffset.current = 0;
     carousel.current?.scrollTo({ x: 0, animated: false });
     list.current?.scrollTo({ y: 0, animated: false });
-  }, [firstId]);
+  }, [firstId, lat, lng]);
   useEffect(() => {
-    const top = insets.top + topHeight + 24, bottom = trayHeight + tabBarClearance + 24;
-    // Frame only the loaded results, and never fetch when the camera moves.
-    if (mapReady && pins.length > 1 && layoutHeight - top - bottom > 100) {
-      map.current?.fitToCoordinates(pins.map(result => ({ latitude: result.lat, longitude: result.lng })),
-        { edgePadding: { top, bottom, left: 40, right: 40 }, animated: true });
-    }
-  }, [mapReady, pins, insets.top, topHeight, trayHeight, tabBarClearance, layoutHeight]);
+    if (!mapRevision || d.location.loading) return;
+    // One camera writer, after measured layout. Do not also set mapPadding:
+    // Apple Maps applies those layout margins in addition to this fitted inset.
+    const frame = requestAnimationFrame(() => {
+      if (!pins.length) {
+        map.current?.animateToRegion({ latitude: lat, longitude: lng, ...DELTA }, 0);
+        return;
+      }
+      const coordinates = pins.length === 1
+        ? [{ latitude: pins[0].lat - 0.004, longitude: pins[0].lng - 0.004 },
+          { latitude: pins[0].lat + 0.004, longitude: pins[0].lng + 0.004 }]
+        : pins.map(result => ({ latitude: result.lat, longitude: result.lng }));
+      map.current?.fitToCoordinates(coordinates, { edgePadding: {
+        top: controlsBottom + 28, bottom: trayHeight + tabBarClearance + 28, left: 32, right: 32,
+      }, animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [mapRevision, pins, controlsBottom, trayHeight, tabBarClearance, layoutHeight, lat, lng, d.location.loading]);
+  const restoreList = useCallback(() => {
+    if (peek || userListScroll.current) return;
+    list.current?.scrollTo({ y: selectedId ? rowOffsets.current[selectedId] ?? listOffset.current : listOffset.current, animated: false });
+  }, [peek, selectedId]);
+  useEffect(() => {
+    const layout = `${variant}:${detent}`;
+    if (restoredLayout.current === layout) return;
+    restoredLayout.current = layout;
+    userListScroll.current = false;
+    if (peek || carouselLayout) return;
+    const frame = requestAnimationFrame(restoreList);
+    return () => cancelAnimationFrame(frame);
+  }, [detent, variant, peek, carouselLayout, restoreList]);
   function select(result: RestaurantResult, scroll = true) {
     setSelectedId(result.id);
-    if (hasMapCoordinate(result)) map.current?.animateCamera({ center: { latitude: result.lat, longitude: result.lng } }, { duration: 300 });
     if (scroll) {
       userListScroll.current = false;
       carousel.current?.scrollTo({ x: cards.findIndex(card => card.id === result.id) * stride, animated: true });
@@ -112,8 +138,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     }
   }
   function selectVisibleCard(y: number) {
-    // Native scrollTo can clamp at the final row. Only a real drag may replace
-    // an explicit pin/arrow target with the row at the viewport's leading edge.
+    // A clamped programmatic scroll must retain its explicit final-row target.
     if (!userListScroll.current) return;
     const result = [...cards].reverse().find(card => (rowOffsets.current[card.id] ?? Infinity) <= y + 40);
     if (result) select(result, false);
@@ -126,7 +151,6 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
       params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
     }), d.onLockedTap);
   }
-  const peek = variant === 'B' && detent === 0;
   const preview = cards[Math.max(0, index)];
   const emptyTitle = !d.canSearch ? 'Find your next meal' : d.hasQuery ? 'No matches for this search' : 'No meals with nutrition nearby';
   const more = d.nextCursor && !d.locked && !d.loading && <Pressable style={s.more} disabled={d.loadingMore || d.refreshing}
@@ -136,51 +160,57 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   </Pressable>;
   return <View style={s.root} testID="discovery-map" onLayout={event => setLayoutHeight(event.nativeEvent.layout.height)}>
     {!d.location.loading && <MapView ref={map} style={s.map} testID="discovery-map-surface"
-      initialRegion={{ latitude: lat, longitude: lng, ...DELTA }}
-      onMapReady={() => { map.current?.animateToRegion({ latitude: lat, longitude: lng, ...DELTA }, 0); setMapReady(true); }}
-      mapPadding={{ top: insets.top + topHeight + 12, right: 24, bottom: trayHeight + tabBarClearance + 12, left: 24 }}
+      initialRegion={{ latitude: lat, longitude: lng, ...DELTA }} onMapReady={() => setMapRevision(value => value + 1)}
+      onLayout={() => setMapRevision(value => value + 1)}
+      legalLabelInsets={{ top: 0, right: 0, bottom: trayHeight + tabBarClearance + 8, left: 12 }}
       showsUserLocation={d.location.source === 'gps'} showsMyLocationButton={false}
-      showsCompass={false} showsPointsOfInterest={false} rotateEnabled={false}
-      onPress={() => setSelectedId(undefined)}>
+      showsCompass={false} showsPointsOfInterest={false} rotateEnabled={false}>
       {pins.map(result => <RestaurantMarker key={result.id} result={result} position={cards.indexOf(result)}
-        selected={result.id === selectedId} onSelect={select} />)}
+        pinStyle={pinStyle} selected={result.id === selectedId} onSelect={select} />)}
     </MapView>}
-    <View pointerEvents="box-none" style={[s.top, { top: insets.top + 8 }]}
+    <View testID="map-controls" pointerEvents="box-none" style={[s.top, { top: insets.top + 8 }]}
       onLayout={event => setTopHeight(event.nativeEvent.layout.height)}>
-      <SearchBar value={d.query} onChangeText={d.setQuery} onClear={d.handleClearQuery}
-        action={<ShuffleButton disabled={!d.canShuffle} onPress={d.handleShuffle} />} />
+      <View style={s.searchRow}>
+        <Pressable style={s.searchEntry} testID="map-search-entry" onPress={onShowList}
+          accessibilityRole="button" accessibilityLabel={d.query ? `Search: ${d.query}` : 'Search restaurants or dishes'}
+          accessibilityHint="Open the list with search and meal goals">
+          <Ionicons name="search" size={19} color={EDITORIAL.green} />
+          <Text style={s.searchText} numberOfLines={1}>{d.query || 'Search restaurants or dishes'}</Text>
+        </Pressable>
+        <View style={s.shuffle}><ShuffleButton disabled={!d.canShuffle} onPress={d.handleShuffle} /></View>
+      </View>
       <View style={s.topRow} pointerEvents="box-none">
         <Pressable style={s.location} testID="discovery-location" onPress={d.handleOpenLocationPicker}
           accessibilityRole="button" accessibilityLabel={`Location: ${d.locationLabel}`} accessibilityHint="Change search area">
-          <Ionicons name="location" size={16} color={EDITORIAL.green} />
+          <Ionicons name="location" size={15} color={EDITORIAL.green} />
           <Text style={s.locationText} numberOfLines={1}>{d.locationLabel}</Text>
           <Ionicons name="chevron-down" size={12} color={EDITORIAL.green} />
         </Pressable>
-        <DiscoveryViewToggle map onPress={onShowList} />
+        {variant === 'G' && <Pressable style={s.goals} testID="map-goals" onPress={() => d.setFilterVisible(true)}
+          accessibilityRole="button" accessibilityLabel="Edit meal goals">
+          <Ionicons name="options-outline" size={16} color={EDITORIAL.green} /><Text style={s.locationText}>Goals</Text>
+        </Pressable>}
+        <Pressable style={s.optionsButton} testID="map-options-open" onPress={() => setOptionsVisible(true)}
+          accessibilityRole="button" accessibilityLabel="Map prototype options">
+          <Ionicons name="layers-outline" size={19} color={EDITORIAL.green} />
+        </Pressable>
       </View>
-      <ScrollView horizontal style={s.chipsViewport} showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips} keyboardShouldPersistTaps="handled">
-        {(['calories', 'protein', 'carbs', 'fat'] as const).map((key, position) => <Pressable key={key}
-          style={s.chip} onPress={() => d.setFilterVisible(true)} testID={position === 0 ? 'preview-edit-targets' : `map-filter-${key}`}
-          accessibilityRole="button" accessibilityLabel={`Edit ${key === 'calories' ? 'calories per meal' : `${key} grams`}, ${d.inputs[key] || 'not set'}`}>
-          <Text style={s.chipText}>{d.inputs[key] || 'Any'}{d.inputs[key] && key !== 'calories' ? 'g' : ''} {key === 'calories' ? 'kcal' : key}</Text>
-        </Pressable>)}
-      </ScrollView>
     </View>
-    <KeyboardAvoidingView style={s.foreground} behavior="padding" pointerEvents="box-none">
+    <View style={s.foreground} pointerEvents="box-none">
       <View style={s.spacer} pointerEvents="none" />
-      <View testID="map-tray" style={[s.tray, variant !== 'C' && s.solidTray, { marginBottom: tabBarClearance },
-        variant === 'A' && { height: Math.min(layoutHeight * 0.56, maxTrayHeight) }, variant === 'B' && { height: sheetHeights[detent] }]}
+      <View testID="map-tray" style={[s.tray, !carouselLayout && s.solidTray, { marginBottom: tabBarClearance },
+        variant === 'A' && { height: Math.min(layoutHeight * 0.42, maxTrayHeight) }, variant === 'B' && { height: sheetHeights[detent] }]}
         onLayout={event => setTrayHeight(event.nativeEvent.layout.height)}>
         {variant === 'B' && <View testID={`map-sheet-${HEIGHTS[detent].toLowerCase()}`} {...pan.panHandlers}>
           <Pressable testID="map-sheet-height" style={s.grabberButton} onPress={() => setDetent(current => (current + 1) % 3)}
             accessibilityRole="adjustable" accessibilityLabel="Restaurant sheet height" accessibilityValue={{ text: HEIGHTS[detent] }}
             accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
             onAccessibilityAction={event => setDetent(current => Math.max(0, Math.min(2, current + (event.nativeEvent.actionName === 'increment' ? 1 : -1))))}>
-            <View style={s.grabber} /><Text style={s.heightLabel}>{HEIGHTS[detent]} · tap or drag</Text>
+            <View style={s.grabber} /><Text style={s.heightLabel}>{peek ? `${cards.length} places · pull up to explore` : `${HEIGHTS[detent]} · tap or drag`}</Text>
           </Pressable>
         </View>}
-        {!peek && <View style={s.caption}>
-          <Text style={s.heading}>Nearby</Text>
+        {!carouselLayout && !peek && <View style={s.caption}>
+          <Text style={s.heading}>Your picks</Text>
           <Text style={s.count} testID="map-page">{index < 0 ? `${cards.length} spots` : `${index + 1} / ${cards.length}`}</Text>
           {index >= 0 && <Pressable onPress={() => setSelectedId(undefined)} style={s.arrow} testID="map-preview-close"
             accessibilityRole="button" accessibilityLabel="Clear restaurant selection"><Ionicons name="close" size={16} color={EDITORIAL.green} /></Pressable>}
@@ -194,6 +224,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
             <Ionicons name="chevron-forward" size={19} color={!cards.length || index === cards.length - 1 ? EDITORIAL.textSoft : EDITORIAL.green} />
           </Pressable>
         </View>}
+        {variant === 'B' && detent === 2 && <MacroStrip macros={d.inputs} onEdit={() => d.setFilterVisible(true)} />}
         {fallback && <Text style={s.fallback} testID="map-location-fallback">
           {d.location.source === 'fallback-denied' ? 'Location off' : 'Location unavailable'} · Showing {d.locationLabel}. Change area above.
         </Text>}
@@ -210,7 +241,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
           <Pressable style={s.action} onPress={() => d.setFilterVisible(true)} testID="discovery-empty-edit" accessibilityRole="button"><Text style={s.link}>Adjust meal targets</Text></Pressable>
           {d.hasQuery && <Pressable style={s.action} onPress={d.handleClearQuery} testID="discovery-empty-clear" accessibilityRole="button"><Text style={s.link}>Clear search</Text></Pressable>}
         </View>}
-        {cards.length > 0 && variant === 'C' && <ScrollView ref={carousel} horizontal testID="map-carousel" style={{ height: compact ? 166 : 206, flexGrow: 0 }}
+        {cards.length > 0 && carouselLayout && <ScrollView ref={carousel} horizontal testID="map-carousel" style={{ height: compact ? 174 : 210, flexGrow: 0 }}
           showsHorizontalScrollIndicator={false} snapToInterval={stride} decelerationRate="fast" disableIntervalMomentum
           contentContainerStyle={s.carousel} keyboardShouldPersistTaps="handled"
           onMomentumScrollEnd={event => {
@@ -218,15 +249,15 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
             if (result) select(result, false);
           }}>
           {cards.map((result, position) => <View key={result.id} testID={result.id === selectedId ? 'map-preview' : undefined}>
-            <Pressable style={[s.card, { width: cardWidth }, result.id === selectedId && s.selectedCard]}
+            <Pressable style={[s.card, { width: cardWidth }]}
               testID={result.id === selectedId ? 'map-preview-open' : `map-card-${position}`} onPress={() => open(result)}
               accessibilityRole="button" accessibilityLabel={`Open ${mapRestaurantLabel(result)}`}>
               <RestaurantPhoto uri={result.photoUrl} name={result.name} style={[s.cardPhoto, compact && s.compactPhoto]} thumbnail />
               <View style={s.cardCopy}>
-                <View style={s.cardTitleRow}><Text style={s.cardNumber}>{String(position + 1).padStart(2, '0')}</Text>
-                  <Text style={s.cardTitle} numberOfLines={1}>{result.name}</Text></View>
+                <Text style={s.cardTitle} numberOfLines={1}>{result.name}</Text>
                 <Text style={s.body} numberOfLines={1}>{result.cuisineTags.join(', ') || 'Restaurant'}{Number.isFinite(result.distanceMiles) ? ` · ${result.distanceMiles.toFixed(1)} mi` : ''}</Text>
-                <Text style={s.previewLink}>View menu →</Text>
+                <View style={s.cardFooter}><Text style={s.previewLink}>View menu →</Text>
+                  <Text style={s.cardCount} testID={position === Math.max(0, index) ? 'map-page' : undefined}>{position + 1} / {cards.length}</Text></View>
               </View>
             </Pressable>
           </View>)}
@@ -235,12 +266,15 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
         {peek && preview && <Pressable testID="map-sheet-peek-card" style={s.peekCard} onPress={() => open(preview)}
           accessibilityRole="button" accessibilityLabel={`Open ${mapRestaurantLabel(preview)}`}>
           <RestaurantPhoto uri={preview.photoUrl} name={preview.name} style={s.peekPhoto} thumbnail />
-          <View style={s.peekCopy}><Text style={s.heading} numberOfLines={1}>{preview.name}</Text>
-            <Text style={s.body}>{cards.length} nearby spots · View menu →</Text></View>
+          <View style={s.peekCopy}><Text style={s.peekTitle} numberOfLines={1}>{preview.name}</Text>
+            <Text style={s.body}>{Number.isFinite(preview.distanceMiles) ? `${preview.distanceMiles.toFixed(1)} mi · ` : ''}View menu →</Text></View>
           <Ionicons name="chevron-forward" size={18} color={EDITORIAL.green} />
         </Pressable>}
-        {cards.length > 0 && variant !== 'C' && !peek && <ScrollView ref={list} style={s.list} testID={`map-list-${variant}`}
+        {cards.length > 0 && !carouselLayout && <ScrollView ref={list} style={[s.list, peek && s.hiddenList]} testID={`map-list-${variant}`}
+          accessibilityElementsHidden={peek} importantForAccessibility={peek ? 'no-hide-descendants' : 'auto'} pointerEvents={peek ? 'none' : 'auto'}
           contentContainerStyle={s.listContent} keyboardShouldPersistTaps="handled"
+          onLayout={restoreList} onContentSizeChange={restoreList}
+          onScroll={event => { if (!peek) listOffset.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16}
           onScrollBeginDrag={() => { userListScroll.current = true; }}
           onScrollEndDrag={event => selectVisibleCard(event.nativeEvent.contentOffset.y)}
           onMomentumScrollEnd={event => selectVisibleCard(event.nativeEvent.contentOffset.y)}>
@@ -251,14 +285,31 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
           </View>)}
           {more}
         </ScrollView>}
-        <View style={s.variants} accessibilityLabel="Map layout prototypes">
-          {VARIANTS.map(([key, label]) => <Pressable key={key} style={[s.variant, key === variant && s.activeVariant]}
+      </View>
+    </View>
+    <Modal visible={optionsVisible} transparent animationType="fade" onRequestClose={() => setOptionsVisible(false)}>
+      <View style={s.optionsBackdrop}>
+        <Pressable style={s.optionsDismiss} onPress={() => setOptionsVisible(false)} accessibilityRole="button" accessibilityLabel="Close map options" />
+        <View style={s.optionsPanel} testID="map-options">
+          <View style={s.optionsHeading}><Text style={s.heading}>Map studies</Text>
+            <Pressable style={s.arrow} testID="map-options-close" onPress={() => setOptionsVisible(false)} accessibilityRole="button" accessibilityLabel="Done with map options">
+              <Ionicons name="close" size={21} color={EDITORIAL.green} />
+            </Pressable></View>
+          <Text style={s.optionLabel}>LAYOUT</Text>
+          {VARIANTS.map(([key, label]) => <Pressable key={key} style={[s.option, key === variant && s.activeOption]}
             testID={`map-variant-${key}`} accessibilityRole="button" accessibilityLabel={`Prototype ${key}: ${label}`}
-            accessibilityState={{ selected: key === variant }} onPress={() => { userListScroll.current = false; setSelectedId(undefined); router.setParams({ mapTray: key }); }}>
-            <Text style={[s.variantText, key === variant && s.activeVariantText]}>{key} · {label}</Text>
+            accessibilityState={{ selected: key === variant }} onPress={() => { userListScroll.current = false; setSelectedId(undefined); listOffset.current = 0; router.setParams({ mapTray: key }); setOptionsVisible(false); }}>
+            <Text style={s.optionText}>{label}</Text>{key === variant && <Ionicons name="checkmark" size={20} color={EDITORIAL.green} />}
           </Pressable>)}
+          <Text style={s.optionLabel}>PINS</Text>
+          <View style={s.pinOptions}>{PIN_STYLES.map(([key, symbol, label]) => <Pressable key={key}
+            style={[s.pinOption, key === pinStyle && s.activeOption]} testID={`map-pin-style-${key}`}
+            accessibilityRole="button" accessibilityLabel={`${label} pins`} accessibilityState={{ selected: key === pinStyle }}
+            onPress={() => { router.setParams({ mapPin: key }); setOptionsVisible(false); }}>
+            {key === 'icon' ? <Ionicons name="restaurant-outline" size={27} color={EDITORIAL.green} /> : <Text style={s.pinOptionSymbol}>{symbol}</Text>}<Text style={s.body}>{label}</Text>
+          </Pressable>)}</View>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </Modal>
   </View>;
 }

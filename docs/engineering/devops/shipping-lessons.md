@@ -134,3 +134,5 @@ Record the next eligible small PR's hosted L2 duration on issue #712 after this 
 - 2026-11-05: Both automatic and manual #745 monitor runs rejected Axiom's numeric nanosecond aggregates; normalize timestamps within their real query windows and replay that wire representation through the API, cron and monitor CLI callers before shipping.
 
 - 2026-11-05: #748's native before/after selectors treated an inline constructed regex as literal text; read the control with copyTextFrom and compare its parsed values in assertTrue, preserving the failed native traces and proving the maintained caller passes.
+
+- 2026-11-06: #753 twice passed first-pin assertions while other pins remained beneath controls; apply overlay insets once through fitToCoordinates, use legalLabelInsets for attribution only, and inspect source-bound native pin bounds against measured controls and trays before accepting the saved journey.

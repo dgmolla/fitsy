@@ -60,7 +60,7 @@ appId: com.fitsy.mobile
       id: discovery-search
     timeout: 30000
 - assertNotVisible: "Dev Login Failed"
-- openLink: com.fitsy.mobile://search?mapDebug=1&shuffleDebug=1
+- openLink: com.fitsy.mobile://search?mapDebug=1&shuffleDebug=1&floatingNavDebug=1
 - tapOn:
     text: "^Open$"
     optional: true

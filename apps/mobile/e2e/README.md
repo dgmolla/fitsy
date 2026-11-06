@@ -160,11 +160,17 @@ The first flow opens a pin, enters the restaurant menu, searches pizza, edits me
 The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
 Both map journeys submit the single-line search field with `pressKey: Enter`, which uses its native Search return key to dismiss the keyboard.
 The detail round trip taps `restaurant-back`; generic Maestro `back` does not activate the iOS screen's custom Back control.
-Map filter assertions require the chip ID and its exact accessibility label, such as `map-filter-protein` with `Edit protein grams, 40`.
-An explicit label hides the nested `40g protein` text from iOS accessibility; `DiscoveryMap.test.tsx` exercises the saved selectors against the rendered controls after switching views, editing targets and shuffling.
-Dense photo pins overlap, and MapKit can dispatch Maestro's coordinate tap to a neighboring pin despite the requested accessibility ID.
-Both journeys retain pin-to-preview coverage; `map-search` compares toggle and shuffle results through `helpers/map-first-spot.yaml`, which closes any preview and uses the existing carousel to require the first result.
+The v2 map has no macro pills: Search opens the ordinary list and macro strip, while G's compact Goals control opens the existing editor on the map.
+`DiscoveryMap.test.tsx` exercises both paths against the real Discovery state, including targets after view switching and shuffling.
+Dense pins can overlap, and MapKit can dispatch a coordinate tap to a neighboring pin despite the requested accessibility ID.
+Both journeys retain pin-to-preview coverage; `map-search` compares toggle and shuffle results through `helpers/map-first-spot.yaml`, which opens the list and returns to the first current carousel result.
 The real-screen regression replays that helper with different native pin hit targets and a previously selected restaurant, requiring the same first result after toggling and a new one after shuffling.
+The denied-location journey settles the centered Hollywood picker, requires the unchanged area immediately, and taps a pin after fallback dismissal.
+Inspect native pin bounds against the controls and tray as well as the required preview assertion; one accessible pin does not prove all markers are unobscured.
+The primary flow captures C, G, A and B plus numbered, utensil, cuisine and installed Ionicons pin styles.
+B's final-row proof requires the actual last row, the same restaurant in Peek, the last row again in Half, and a matching counter after real user scrolling.
+Its copied restaurant name uses literal suffix indexing; an inline end-anchor regex inside Maestro interpolation can remain unevaluated while reporting the command complete.
+The explicit suffix assertion and final-row visibility checks remain mandatory.
 Ranked search can return pizza restaurants whose meals do not satisfy Shuffle's close-fit nutrition filter.
 After checking pizza and the 45g protein edit, the positive Shuffle phase clears the craving and restores the exact 600 kcal, 40g protein, 60g carbs and 20g fat context verified by `shuffle-subscriber.mjs`.
 It still requires a changed first result and preserved area and targets; a disabled Shuffle button after a successful empty response is expected behavior.
