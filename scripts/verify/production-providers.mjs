@@ -46,13 +46,23 @@ export function axiomRows(body) {
     Object.fromEntries(table.fields.map((field, column) => [field.name, table.columns[column][index]])));
 }
 
-export async function queryAxiom(apl, startTime, endTime, { env, fetchImpl }) {
+export async function queryAxiom(apl, startTime, endTime, { env, fetchImpl }, timestampField) {
   if (!env.AXIOM_TOKEN) throw new Error('Axiom query token missing');
   const body = await requestJson('https://api.axiom.co/v1/datasets/_apl?format=tabular', {
     method: 'POST', headers: { authorization: `Bearer ${env.AXIOM_TOKEN}`, 'content-type': 'application/json' },
     body: JSON.stringify({ apl, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString() }),
   }, fetchImpl);
-  return axiomRows(body);
+  const rows = axiomRows(body);
+  if (!timestampField) return rows;
+  return rows.map(row => {
+    const value = row[timestampField];
+    // Axiom's tabular max(_time) returns numeric nanoseconds, not Date.parse input.
+    // Bound conversion to the query window so wrong units cannot look healthy.
+    const millis = typeof value === 'number' && Number.isInteger(value) ? value / 1e6
+      : typeof value === 'string' ? Date.parse(value) : NaN;
+    if (!Number.isFinite(millis) || millis < startTime || millis >= endTime) throw new Error('Invalid Axiom timestamp');
+    return { ...row, [timestampField]: new Date(millis).toISOString() };
+  });
 }
 
 const apiQuery = `['${policy.dataset}'] | where type == 'api_request' and environment == 'production'`;
@@ -61,8 +71,8 @@ const aggregate = " | summarize requests=count(), errors=countif(status >= 500),
 export async function apiMetrics(context) {
   const cutoff = context.now - policy.windowMinutes * 60_000;
   const [current, baseline] = await Promise.all([
-    queryAxiom(apiQuery + aggregate, cutoff, context.now, context),
-    queryAxiom(apiQuery + aggregate, context.now - policy.baselineMinutes * 60_000, cutoff, context),
+    queryAxiom(apiQuery + aggregate, cutoff, context.now, context, 'lastSeen'),
+    queryAxiom(apiQuery + aggregate, context.now - policy.baselineMinutes * 60_000, cutoff, context, 'lastSeen'),
   ]);
   return evaluateApi(current, baseline, context.now);
 }
@@ -70,7 +80,7 @@ export async function apiMetrics(context) {
 export async function cronMetrics(context) {
   context.state.cronMonitoringStartedAt ??= context.now;
   const rows = await queryAxiom(apiQuery + " | where route startswith '/api/internal/' and status >= 200 and status < 300 | summarize lastSuccess=max(_time) by route",
-    context.now - 15 * 86_400_000, context.now, context);
+    context.now - 15 * 86_400_000, context.now, context, 'lastSuccess');
   return evaluateCrons(rows, context.now, context.state.cronMonitoringStartedAt);
 }
 
@@ -244,7 +254,7 @@ export async function collectObservations({ env, fetchImpl, now, state }) {
       // boundary. Never copy arbitrary exception text, response bodies or URLs.
       const status = result.reason?.httpStatus;
       const detail = Number.isInteger(status) && status >= 100 && status <= 599 ? `HTTP ${status}`
-        : ['Incomplete Axiom query', 'Malformed Axiom table', 'Invalid API metric schema'].includes(result.reason?.message)
+        : ['Incomplete Axiom query', 'Malformed Axiom table', 'Invalid Axiom timestamp', 'Invalid API metric schema'].includes(result.reason?.message)
           ? result.reason.message : 'request or configuration error';
       observerAlerts.push(alert(`observer:${scope}`, 'observer', 'P2', `${scope} monitoring failed (${detail}); inspect the monitoring setup contract.`));
     }
