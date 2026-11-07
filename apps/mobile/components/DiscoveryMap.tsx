@@ -70,6 +70,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const [detent, setDetent] = useState(0);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const panning = useRef(false);
+  const touchStart = useRef<{ x: number; y: number }>();
   const [pendingArea, setPendingArea] = useState<{ lat: number; lng: number } | null>(null);
   const cardWidth = width - 56;
   const stride = cardWidth + 12;
@@ -170,9 +171,9 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     {!d.location.loading && <MapView ref={map} style={s.map} testID="discovery-map-surface"
       initialRegion={{ latitude: lat, longitude: lng, ...DELTA }} onMapReady={() => setMapRevision(value => value + 1)}
       onLayout={() => setMapRevision(value => value + 1)}
-      onTouchStart={() => { if (__DEV__) console.info('issue755-map-gesture', 'touchStart'); }}
+      onTouchStart={event => { touchStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }; if (__DEV__) console.info('issue755-map-gesture', 'touchStart'); }}
       onTouchMove={() => { if (__DEV__) console.info('issue755-map-gesture', 'touchMove'); }}
-      onTouchEnd={() => { if (__DEV__) console.info('issue755-map-gesture', 'touchEnd'); }}
+      onTouchEnd={event => { if (__DEV__) console.info('issue755-map-gesture', 'touchEndMoved', Boolean(touchStart.current && Math.hypot(event.nativeEvent.pageX - touchStart.current.x, event.nativeEvent.pageY - touchStart.current.y) > 8)); }}
       onTouchCancel={() => { if (__DEV__) console.info('issue755-map-gesture', 'touchCancel'); }}
       onPanDrag={() => { if (__DEV__) console.info('issue755-map-gesture', 'pan'); panning.current = true; setPendingArea(null); }}
       onRegionChangeComplete={region => {
