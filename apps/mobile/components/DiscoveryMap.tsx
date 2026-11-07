@@ -51,7 +51,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const insets = useSafeAreaInsets();
   const tabBarClearance = useFloatingNavClearance();
   const { width, height } = useWindowDimensions();
-  const { mapTray, mapPin, mapList } = useLocalSearchParams<{ mapTray?: string; mapPin?: string; mapList?: string }>();
+  const { mapTray, mapPin } = useLocalSearchParams<{ mapTray?: string; mapPin?: string }>();
   const variant = mapTray === 'A' || mapTray === 'B' || mapTray === 'C' ? mapTray : 'G';
   const pinStyle: PinStyle = mapPin === 'numbered' || mapPin === 'cuisine' || mapPin === 'icon' ? mapPin : 'utensils';
   const carouselLayout = variant === 'C' || variant === 'G';
@@ -69,6 +69,8 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const [layoutHeight, setLayoutHeight] = useState(height);
   const [detent, setDetent] = useState(0);
   const [optionsVisible, setOptionsVisible] = useState(false);
+  const panning = useRef(false);
+  const [pendingArea, setPendingArea] = useState<{ lat: number; lng: number } | null>(null);
   const cardWidth = width - 56;
   const stride = cardWidth + 12;
   const compact = height < 740;
@@ -89,6 +91,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const index = cards.findIndex(result => result.id === selectedId);
   const fallback = !d.location.loading && d.location.source.startsWith('fallback-');
   const { lat, lng } = d.location;
+  useEffect(() => { setPendingArea(null); panning.current = false; }, [lat, lng]);
   const firstId = cards[0]?.id;
   useEffect(() => {
     setSelectedId(undefined);
@@ -98,7 +101,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     list.current?.scrollTo({ y: 0, animated: false });
   }, [firstId, lat, lng]);
   useEffect(() => {
-    if (!mapRevision || d.location.loading) return;
+    if (!mapRevision || d.location.loading || panning.current || pendingArea) return;
     // One camera writer, after measured layout. Do not also set mapPadding:
     // Apple Maps applies those layout margins in addition to this fitted inset.
     const frame = requestAnimationFrame(() => {
@@ -115,7 +118,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
       }, animated: false });
     });
     return () => cancelAnimationFrame(frame);
-  }, [mapRevision, pins, controlsBottom, trayHeight, tabBarClearance, layoutHeight, lat, lng, d.location.loading]);
+  }, [mapRevision, pins, controlsBottom, trayHeight, tabBarClearance, layoutHeight, lat, lng, d.location.loading, pendingArea]);
   const restoreList = useCallback(() => {
     if (peek || userListScroll.current) return;
     list.current?.scrollTo({ y: selectedId ? rowOffsets.current[selectedId] ?? listOffset.current : listOffset.current, animated: false });
@@ -167,12 +170,24 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     {!d.location.loading && <MapView ref={map} style={s.map} testID="discovery-map-surface"
       initialRegion={{ latitude: lat, longitude: lng, ...DELTA }} onMapReady={() => setMapRevision(value => value + 1)}
       onLayout={() => setMapRevision(value => value + 1)}
+      onPanDrag={() => { panning.current = true; setPendingArea(null); }}
+      onRegionChangeComplete={region => {
+        // MapKit also reports programmatic fits; only a real pan offers a search.
+        if (!panning.current) return;
+        panning.current = false;
+        const { latitude, longitude } = region;
+        if (Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180)
+          setPendingArea({ lat: latitude, lng: longitude });
+      }}
       legalLabelInsets={{ top: 0, right: 0, bottom: trayHeight + tabBarClearance + 8, left: 12 }}
       showsUserLocation={d.location.source === 'gps'} showsMyLocationButton={false}
       showsCompass={false} showsPointsOfInterest={false} rotateEnabled={false}>
       {pins.map(result => <RestaurantMarker key={result.id} result={result} position={cards.indexOf(result)}
         pinStyle={pinStyle} selected={result.id === selectedId} onSelect={select} />)}
     </MapView>}
+    {pendingArea && <View pointerEvents="none" style={s.areaCenter} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Ionicons name="add" size={28} color={EDITORIAL.green} />
+    </View>}
     <View testID="map-controls" pointerEvents="box-none" style={[s.top, { top: insets.top + 8 }]}
       onLayout={event => setTopHeight(event.nativeEvent.layout.height)}>
       <View style={s.searchRow}>
@@ -201,6 +216,11 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
           <Ionicons name="layers-outline" size={19} color={EDITORIAL.green} />
         </Pressable>
       </View>
+      {pendingArea && <Pressable style={s.areaSearch} testID="map-search-area" accessibilityRole="button"
+        accessibilityLabel="Search this area" accessibilityHint="Search near the center of the map with your current meal targets"
+        onPress={() => d.handlePickLocation({ ...pendingArea, name: 'Map area' })}>
+        <Ionicons name="search" size={17} color={EDITORIAL.green} /><Text style={s.locationText}>Search this area</Text>
+      </Pressable>}
     </View>
     <View style={s.foreground} pointerEvents="box-none">
       <View style={s.spacer} pointerEvents="none" />
@@ -300,13 +320,6 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
             testID={`map-variant-${key}`} accessibilityRole="button" accessibilityLabel={`Prototype ${key}: ${label}`}
             accessibilityState={{ selected: key === variant }} onPress={() => { userListScroll.current = false; setSelectedId(undefined); listOffset.current = 0; router.setParams({ mapTray: key }); setOptionsVisible(false); }}>
             <Text style={s.optionText}>{label}</Text>{key === variant && <Ionicons name="checkmark" size={20} color={EDITORIAL.green} />}
-          </Pressable>)}</View>
-          <Text style={s.optionLabel}>LIST ACCESS</Text>
-          <View style={s.optionGrid}>{(['split', 'compact'] as const).map(key => <Pressable key={key} style={[s.option, s.gridOption, (mapList === 'compact' ? 'compact' : 'split') === key && s.activeOption]}
-            testID={`map-list-style-${key}`} accessibilityRole="button" accessibilityLabel={key === 'split' ? 'List: Map and area' : 'List: compact Map and location icon'}
-            accessibilityState={{ selected: (mapList === 'compact' ? 'compact' : 'split') === key }}
-            onPress={() => { router.setParams({ mapList: key }); setOptionsVisible(false); onShowList(); }}>
-            <Text style={s.optionText}>{key === 'split' ? 'Map + area' : 'Compact Map'}</Text>
           </Pressable>)}</View>
           <Text style={s.optionLabel}>PINS</Text>
           <View style={s.pinOptions}>{PIN_STYLES.map(([key, symbol, label]) => <Pressable key={key}

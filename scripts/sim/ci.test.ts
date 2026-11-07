@@ -87,13 +87,28 @@ test.each([
   ]);
 });
 
-test.each(['split', 'compact'])('%s list location journey centers the offscreen picker row and confirms the chosen area', variant => {
-  type Step = { tapOn?: string | { id: string }; assertVisible?: string; scrollUntilVisible?: object };
+test('single Map control retains city selection, explicit pan confirmation and the centered picker restore', () => {
+  type Step = { tapOn?: string | { id: string }; assertVisible?: string; scrollUntilVisible?: object; takeScreenshot?: string };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/map-search.yaml'), 'utf8')) as [unknown, Step[]];
-  const start = commands.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === `map-list-style-${variant}`);
+  const start = commands.findIndex(step => step.takeScreenshot === 'map-list-single');
   expect(start).toBeGreaterThan(-1);
+  expect(commands.slice(start - 2, start + 3)).toEqual([
+    { assertNotVisible: { id: 'discovery-location' } }, { assertVisible: { id: 'discovery-macro-strip' } },
+    { takeScreenshot: 'map-list-single' }, { tapOn: { id: 'discovery-view-toggle' } },
+    { assertVisible: { id: 'discovery-location' } },
+  ]);
+  const confirm = commands.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === 'map-search-area');
+  expect(confirm).toBeGreaterThan(start);
+  expect(commands.slice(confirm - 5, confirm + 4)).toEqual([
+    { swipe: { start: '60%,44%', end: '35%,44%', duration: 500 } }, 'waitForAnimationToEnd',
+    { assertVisible: { id: 'map-search-area' } }, { assertVisible: 'Location: Hollywood' }, { takeScreenshot: 'map-area-pending' },
+    { tapOn: { id: 'map-search-area' } },
+    { extendedWaitUntil: { visible: 'Location: Map area', timeout: 10000 } },
+    { assertNotVisible: { id: 'map-search-area' } },
+    { extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 } },
+  ]);
   const restore = commands.findIndex((step, index) => index > start && step.tapOn === 'Search near DTLA');
-  expect(restore).toBeGreaterThan(start);
+  expect(restore).toBeGreaterThan(confirm);
   // DTLA is below the visible picker rows on SE. A selector alone can tap
   // during scrolling or fail offscreen; center it and verify the actual area.
   expect(commands.slice(restore - 3, restore + 2)).toEqual([

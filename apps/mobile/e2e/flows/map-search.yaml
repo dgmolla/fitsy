@@ -208,20 +208,56 @@ env:
     text: "40"
 - runFlow: ../helpers/dismiss-meal-targets.yaml
 - takeScreenshot: map-v2-g-goals
-# Both list studies integrate Map into the location control and keep the real picker.
+# The owner-selected list has one Map control; area editing stays on the map.
 - tapOn:
-    id: map-options-open
-- tapOn:
-    id: map-list-style-split
+    id: map-search-entry
 - assertVisible:
-    id: list-location-split
+    id: discovery-list
+- assertNotVisible:
+    id: discovery-location
 - assertVisible:
     id: discovery-macro-strip
+- takeScreenshot: map-list-single
+- tapOn:
+    id: discovery-view-toggle
+- assertVisible:
+    id: discovery-location
 - tapOn:
     id: discovery-location
 - waitForAnimationToEnd
 - tapOn: "Search near Hollywood"
 - assertVisible: "Location: Hollywood"
+- extendedWaitUntil:
+    visible:
+      id: map-pin-0
+    timeout: 30000
+# Dragging only offers an action; the existing bounded search runs on confirmation.
+- swipe:
+    start: "60%,44%"
+    end: "35%,44%"
+    duration: 500
+- waitForAnimationToEnd
+- assertVisible:
+    id: map-search-area
+- assertVisible: "Location: Hollywood"
+- takeScreenshot: map-area-pending
+- tapOn:
+    id: map-search-area
+- extendedWaitUntil:
+    visible: "Location: Map area"
+    timeout: 10000
+- assertNotVisible:
+    id: map-search-area
+- extendedWaitUntil:
+    visible:
+      id: map-pin-0
+    timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    id: map-pin-0
+- assertVisible:
+    id: map-preview-open
+- takeScreenshot: map-area-results
 - tapOn:
     id: discovery-location
 - waitForAnimationToEnd
@@ -231,34 +267,6 @@ env:
     centerElement: true
 - tapOn: "Search near DTLA"
 - assertVisible: "Location: DTLA"
-- takeScreenshot: map-list-split
-- tapOn:
-    id: discovery-view-toggle
-- tapOn:
-    id: map-options-open
-- tapOn:
-    id: map-list-style-compact
-- assertVisible:
-    id: list-location-compact
-- assertVisible:
-    id: discovery-macro-strip
-- tapOn:
-    id: discovery-location
-- waitForAnimationToEnd
-- tapOn: "Search near Hollywood"
-- assertVisible: "Location: Hollywood"
-- tapOn:
-    id: discovery-location
-- waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "Search near DTLA"
-    direction: DOWN
-    centerElement: true
-- tapOn: "Search near DTLA"
-- assertVisible: "Location: DTLA"
-- takeScreenshot: map-list-compact
-- tapOn:
-    id: discovery-view-toggle
 - tapOn:
     id: map-options-open
 - tapOn:

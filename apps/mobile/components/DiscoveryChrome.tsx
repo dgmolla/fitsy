@@ -25,7 +25,7 @@ export function Masthead({
   locationLabel: string;
   onLocationPress: () => void;
   locationRef?: React.RefObject<View | null>;
-  mapControl?: { onPress: () => void; variant: 'split' | 'compact' };
+  mapControl?: { onPress: () => void };
 }) {
   return (
     <View style={[s.masthead, !preview && s.mainMasthead]}>
@@ -34,10 +34,9 @@ export function Masthead({
           <View style={s.logoDot} />
           <Text style={s.logo}>fitsy</Text>
         </View>}
-        <View ref={locationRef} collapsable={false} style={[s.locationAnchor, mapControl && chrome.mapLocation]} testID={mapControl ? `list-location-${mapControl.variant}` : undefined}>
-          {mapControl && <DiscoveryViewToggle map={false} onPress={mapControl.onPress} style={chrome.mapButton} />}
-          <TouchableOpacity
-          style={[s.locationButton, mapControl && chrome.areaButton]}
+        <View ref={locationRef} collapsable={false} style={s.locationAnchor}>
+          {mapControl ? <DiscoveryViewToggle map={false} onPress={mapControl.onPress} style={chrome.mapButton} /> : <TouchableOpacity
+          style={s.locationButton}
           onPress={onLocationPress}
           activeOpacity={0.7}
           accessibilityRole="button"
@@ -45,16 +44,14 @@ export function Masthead({
           accessibilityHint="Double-tap to change location"
           testID="discovery-location"
         >
-          <View style={[s.locationChip, mapControl && chrome.areaChip]} testID="discovery-location-pill">
-            <Ionicons name="location" size={mapControl ? 16 : 11} color={EDITORIAL.greenAccent} />
-            {mapControl?.variant !== 'compact' && <>
-              <Text style={s.locationText} numberOfLines={1}>{locationLabel}</Text>
-              <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
-            </>}
+          <View style={s.locationChip} testID="discovery-location-pill">
+            <Ionicons name="location" size={11} color={EDITORIAL.greenAccent} />
+            <Text style={s.locationText} numberOfLines={1}>{locationLabel}</Text>
+            <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
           </View>
-        </TouchableOpacity></View>
+        </TouchableOpacity>}</View>
       </View>
-      {!preview && <Text style={s.issueLabel} numberOfLines={1}>{mapControl?.variant === 'compact' ? `YOUR PICKS NEAR ${locationLabel}` : getSelectionLabel()}</Text>}
+      {!preview && <Text style={s.issueLabel} numberOfLines={1}>{mapControl ? `YOUR PICKS NEAR ${locationLabel}` : getSelectionLabel()}</Text>}
     </View>
   );
 }
@@ -167,11 +164,7 @@ export function FrostedSearchSurface() {
 }
 
 const chrome = StyleSheet.create({
-  mapLocation: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, borderWidth: 1,
-    borderColor: EDITORIAL.border, backgroundColor: 'rgba(255,255,255,0.8)', overflow: 'hidden' },
-  mapButton: { borderWidth: 0, borderRadius: 0, backgroundColor: 'transparent', paddingHorizontal: 12 },
-  areaButton: { flexShrink: 1, minWidth: 44, borderLeftWidth: 1, borderLeftColor: EDITORIAL.border },
-  areaChip: { backgroundColor: 'transparent', borderWidth: 0, paddingHorizontal: 10 },
+  mapButton: { backgroundColor: 'rgba(255,255,255,0.8)' },
   search: { backgroundColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(58,112,80,0.2)', borderRadius: 24, overflow: 'hidden', minHeight: 48 },
   searchFocused: { borderColor: EDITORIAL.greenAccent },
   frostTint: { backgroundColor: 'rgba(255,255,255,0.68)' },

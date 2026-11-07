@@ -3,7 +3,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { Platform, ScrollView, StyleSheet } from 'react-native';
+import { Platform, ScrollView, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { within } from '@testing-library/react-native';
 import PostHog from 'posthog-react-native';
 import type { RestaurantResult } from '@fitsy/shared';
@@ -15,7 +15,6 @@ import { FALLBACK_LAT, FALLBACK_LNG, MANUAL_LOCATION_KEY } from '../lib/useLocat
 import { __resetForTesting } from '../lib/analytics';
 import { FloatingNavClearanceContext } from '../lib/floatingNav';
 import { EDITORIAL } from '../lib/brand';
-import type { ReactTestRendererJSON } from 'react-test-renderer';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
@@ -102,7 +101,8 @@ it('removes the map action surface with Shuffle disabled and keeps the enabled a
   const screen = open('/search?mapDebug=1');
   await screen.findByTestId('map-pin-0');
   expect(screen.queryByTestId('shuffle-button')).toBeNull();
-  const emptyActionSurfaces = (node: ReactTestRendererJSON | string): number => {
+  type NativeNode = { props: { style?: StyleProp<ViewStyle> }; children?: (NativeNode | string)[] | null };
+  const emptyActionSurfaces = (node: NativeNode | string): number => {
     if (typeof node === 'string') return 0;
     const style = StyleSheet.flatten(node.props.style);
     const emptyAction = !node.children?.length && style?.width === 48 && style?.height === 48;
@@ -202,10 +202,11 @@ it.each(['A', 'B', 'C', 'G'])("opens layout %s's full-photo card, then returns u
   expect(screen.getByLabelText('Search: meal')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   expect(screen.getByText('40g')).toBeTruthy();
-  expect(screen.getByLabelText('Location: DTLA')).toBeTruthy();
+  expect(screen.getByText('YOUR PICKS NEAR DTLA')).toBeTruthy();
+  expect(screen.queryByTestId('discovery-location')).toBeNull();
 });
 
-it.each([{ variant: 'split', confidence: 'LOW' as const }, { variant: 'compact', confidence: 'MEDIUM' as const }])('keeps actual meal content and $confidence confidence through the $variant list control', async ({ variant, confidence }) => {
+it.each(['LOW', 'MEDIUM'] as const)('keeps actual meal content and %s confidence through the single Map control', async confidence => {
   rows = [{ ...restaurants[0], bestMatch: { menuItemId: 'meal-1', name: 'Grilled salmon plate',
     proteinG: 37, carbsG: 53, fatG: 19, calories: 531, confidence, nutritionBasis: 'estimated', matchScore: 0.2 } }];
   const screen = open();
@@ -215,25 +216,25 @@ it.each([{ variant: 'split', confidence: 'LOW' as const }, { variant: 'compact',
   for (const text of meal) expect(within(screen.getByTestId('map-card-0')).getByText(text)).toBeTruthy();
   const qualified = `Estimated nutrition, ${confidence.toLowerCase()} confidence, approximately 531 kcal`;
   expect(screen.getByTestId('map-card-0').props.accessibilityLabel).toContain(qualified);
-  await act(async () => fireEvent.press(screen.getByTestId('map-options-open')));
-  type Step = { tapOn?: string | { id: string }; assertVisible?: string | { id: string } };
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  type Step = { tapOn?: string | { id: string }; takeScreenshot?: string };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/map-search.yaml'), 'utf8')) as [unknown, Step[]];
-  const start = commands.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === `map-list-style-${variant}`);
+  const start = commands.findIndex(step => step.takeScreenshot === 'map-list-single');
   expect(start).toBeGreaterThan(-1);
-  const selection = commands[start].tapOn;
-  if (typeof selection !== 'object') throw new Error('The native list study must use its rendered option');
-  await act(async () => fireEvent.press(screen.getByTestId(selection.id)));
   await screen.findByTestId('discovery-list');
   for (const text of meal) expect(within(screen.getByTestId('discovery-hero')).getByText(text)).toBeTruthy();
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toContain(qualified);
-  const controls = within(screen.getByTestId(`list-location-${variant}`));
-  expect(controls.getByTestId('discovery-view-toggle')).toBeTruthy();
-  await act(async () => fireEvent.press(controls.getByLabelText('Location: DTLA')));
-  const area = commands[start + 5]?.tapOn;
-  if (typeof area !== 'string') throw new Error('The native list study must select a real neighborhood');
+  expect(screen.queryByTestId('discovery-location')).toBeNull();
+  const mapControl = commands[start + 1].tapOn;
+  if (typeof mapControl !== 'object') throw new Error('The native list journey must use its rendered Map control');
+  await act(async () => fireEvent.press(screen.getByTestId(mapControl.id)));
+  await act(async () => fireEvent.press(await screen.findByLabelText('Location: DTLA')));
+  const area = commands.slice(start).find(step => step.tapOn === 'Search near Hollywood')?.tapOn;
+  if (typeof area !== 'string') throw new Error('The native map journey must select a real neighborhood');
   await act(async () => fireEvent.press(await screen.findByLabelText(area)));
   await screen.findByLabelText('Location: Hollywood');
   await waitFor(() => expect(searchParams().lat).not.toBe('34.04'));
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   const input = screen.getByTestId('discovery-search');
   const background = () => StyleSheet.flatten(screen.getByTestId('discovery-search-bar').props.style).backgroundColor;
   const idle = background();
@@ -251,6 +252,47 @@ it.each([{ variant: 'split', confidence: 'LOW' as const }, { variant: 'compact',
   for (const text of meal) expect(within(screen.getByTestId('map-preview-open')).getByText(text)).toBeTruthy();
   expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain(qualified);
   expect(screen.getByLabelText('Search: salmon')).toBeTruthy();
+});
+
+it('searches a settled dragged area only after confirmation and ignores stale area responses', async () => {
+  const screen = open('/search?query=salmon');
+  const map = await screen.findByTestId('discovery-map-surface');
+  await screen.findByTestId('map-pin-0');
+  const initialRequests = searchRequests().length;
+  const firstArea = { latitude: 34.08, longitude: -118.28, latitudeDelta: 0.06, longitudeDelta: 0.06 };
+  await act(async () => fireEvent(map, 'regionChangeComplete', firstArea));
+  expect(screen.queryByTestId('map-search-area')).toBeNull();
+  await act(async () => {
+    fireEvent(map, 'panDrag', {});
+    fireEvent(map, 'panDrag', {});
+    fireEvent(map, 'regionChangeComplete', firstArea);
+  });
+  expect(searchRequests()).toHaveLength(initialRequests);
+  expect(screen.getByLabelText('Location: DTLA')).toBeTruthy();
+  const oldArea = deferred<Response>();
+  searchResponse = url => Object.fromEntries(url.searchParams).lat === '34.08' ? oldArea.promise : Promise.resolve(response({ data: [restaurants[2]], meta: { locked: false, nextCursor: null } }));
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-area')));
+  await waitFor(() => expect(searchRequests()).toHaveLength(initialRequests + 1));
+  expect(searchParams()).toEqual({ lat: '34.08', lng: '-118.28', q: 'salmon', ...values });
+  expect(screen.queryByTestId('map-search-area')).toBeNull();
+  await act(async () => {
+    fireEvent(map, 'panDrag', {});
+    fireEvent(map, 'regionChangeComplete', { ...firstArea, latitude: 34.1, longitude: -118.3 });
+  });
+  expect(searchRequests()).toHaveLength(initialRequests + 1);
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-area')));
+  await waitFor(() => expect(searchRequests()).toHaveLength(initialRequests + 2));
+  expect(searchParams()).toEqual({ lat: '34.1', lng: '-118.3', q: 'salmon', ...values });
+  await screen.findByTestId('map-card-0');
+  await act(async () => oldArea.resolve(response({ data: [restaurants[0]], meta: { locked: false, nextCursor: null } })));
+  expect(within(screen.getByTestId('map-card-0')).getByText('Pizza House')).toBeTruthy();
+  expect(screen.queryByText('Flor do Ave')).toBeNull();
+  expect(screen.getByLabelText('Location: Map area')).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  expect(screen.getByTestId('discovery-search').props.value).toBe('salmon');
+  expect(within(screen.getByTestId('discovery-hero')).getByText('Pizza House')).toBeTruthy();
+  expect(screen.getByText('40g')).toBeTruthy();
+  expect(screen.queryByTestId('discovery-location')).toBeNull();
 });
 
 it.each(['published', 'locked', 'missing'])('preserves %s meal disclosure through map and list', async state => {

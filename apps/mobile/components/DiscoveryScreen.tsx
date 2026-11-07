@@ -25,7 +25,7 @@ const DiscoveryMap = React.lazy(async () => require('./DiscoveryMap') as typeof 
 const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { onboardingPreview?: boolean; onPreviewBack?: () => void }) {
   const tabBarClearance = useFloatingNavClearance();
-  const { mapDebug, mapList } = useLocalSearchParams<{ mapDebug?: string; mapList?: string }>();
+  const { mapDebug } = useLocalSearchParams<{ mapDebug?: string }>();
   const mapEnabled = useMapSearchFlag(mapDebug === '1') && !onboardingPreview;
   const [view, setView] = useState<'map' | 'list'>('map');
   const showMap = mapEnabled && view === 'map';
@@ -179,7 +179,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       </Suspense> : <>
       {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined)} />}
       <Masthead preview={isOnboardingPreview} locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker}
-        mapControl={mapEnabled ? { onPress: () => setView('map'), variant: mapList === 'compact' ? 'compact' : 'split' } : undefined} />
+        mapControl={mapEnabled ? { onPress: () => setView('map') } : undefined} />
       {!loading && error !== null && (
         <View style={s.errorBanner}>
           <Text style={s.errorText}>{error}</Text>
