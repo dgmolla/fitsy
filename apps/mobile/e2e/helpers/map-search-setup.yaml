@@ -57,7 +57,7 @@ appId: com.fitsy.mobile
 - tapOn: ".*Dev Login.*"
 - extendedWaitUntil:
     visible:
-      id: discovery-search
+      id: discovery-location
     timeout: 30000
 - assertNotVisible: "Dev Login Failed"
 - openLink: com.fitsy.mobile://search?mapDebug=1&shuffleDebug=1&floatingNavDebug=1

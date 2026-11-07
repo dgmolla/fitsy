@@ -52,7 +52,7 @@ env:
         id: discovery-map
     commands:
       - tapOn:
-          id: discovery-view-toggle
+          id: map-search-entry
 - openLink: com.fitsy.mobile://search?floatingNavDebug=0
 - tapOn:
     text: "^Open$"

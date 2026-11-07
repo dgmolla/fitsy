@@ -92,6 +92,39 @@ afterEach(() => {
 });
 const open = (url = '/search?query=meal') => renderJourney(url, { ...routes, '(tabs)/search': () => <Search /> });
 
+it.each(['flows/floating-nav', 'helpers/map-search-setup'].flatMap(caller =>
+  [false, true].map(enabled => ({ caller, enabled }))))(
+  'replays $caller startup with the remote map flag $enabled', async ({ caller, enabled }) => {
+    flag = enabled;
+    const screen = open();
+    await screen.findByTestId(enabled ? 'map-pin-0' : 'discovery-hero');
+    type Step = {
+      tapOn?: string | { id: string };
+      extendedWaitUntil?: { visible: { id: string } };
+      runFlow?: { when: { visible: { id: string } }; commands: Step[] };
+    };
+    const [, commands] = loadAll(readFileSync(resolve(__dirname, `../e2e/${caller}.yaml`), 'utf8')) as [unknown, Step[]];
+    const login = commands.findIndex(step => typeof step.tapOn === 'string' && step.tapOn.includes('Dev Login'));
+    expect(login).toBeGreaterThan(-1);
+    const ready = commands[login + 1]?.extendedWaitUntil;
+    if (!ready) throw new Error('The saved startup caller must require discovery readiness after login');
+    await screen.findByTestId(ready.visible.id);
+    if (caller === 'flows/floating-nav') {
+      const branch = commands.slice(login + 2).find(step => step.runFlow?.when.visible.id === 'discovery-map')?.runFlow;
+      if (!branch) throw new Error('Floating navigation must handle map-mode startup');
+      if (screen.queryByTestId(branch.when.visible.id)) {
+        for (const step of branch.commands) {
+          if (typeof step.tapOn !== 'object') throw new Error('Map startup must use a rendered named control');
+          const target = step.tapOn.id;
+          await act(async () => fireEvent.press(screen.getByTestId(target)));
+        }
+      }
+      await screen.findByTestId('discovery-list');
+      expect(screen.queryByTestId('discovery-map')).toBeNull();
+    }
+  },
+);
+
 it.each([0, 106])('keeps the map tray and camera clear of a %spt floating overlay', async clearance => {
   const Root = routes._layout;
   const screen = renderJourney('/search?query=meal', { ...routes,
