@@ -74,7 +74,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const compact = height < 740;
   const controlsBottom = insets.top + 8 + topHeight;
   const maxTrayHeight = Math.max(160, layoutHeight - controlsBottom - tabBarClearance - 96);
-  const sheetHeights = [Math.min(152, maxTrayHeight), Math.min(layoutHeight * 0.40, maxTrayHeight), maxTrayHeight];
+  const sheetHeights = [Math.min(180, maxTrayHeight), Math.min(layoutHeight * 0.40, maxTrayHeight), maxTrayHeight];
   const peek = variant === 'B' && detent === 0;
   const pan = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 8,

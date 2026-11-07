@@ -153,8 +153,11 @@ test('variant A omits exact estimated macros while retaining supported restauran
   expect(screen.getByText('Estimated nutrition · low confidence')).toBeTruthy();
   expect(screen.queryByText('P 40g')).toBeNull();
   expect(screen.queryByText('500 kcal')).toBeNull();
+  expect(screen.getByTestId('paywall-search-item-card').props.accessibilityLabel).toContain('Estimated nutrition, low confidence');
+  expect(screen.getByTestId('paywall-search-item-card').props.accessibilityLabel).not.toContain('500 kcal');
   screen.rerender(<PaywallView {...p} discovery={{ selected: { ...low, bestMatch: { ...low.bestMatch, nutritionBasis: 'published' as const } } }} variant="A" />);
   expect(screen.getByText('P 40g')).toBeTruthy();
+  expect(screen.getByTestId('paywall-search-item-card').props.accessibilityLabel).toContain('Published nutrition, low confidence, 500 kcal');
 });
 
 test('unavailable pricing disables purchases and provides retry without inventing terms', () => {

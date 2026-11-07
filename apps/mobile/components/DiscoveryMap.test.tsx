@@ -177,14 +177,16 @@ it.each(['A', 'B', 'C', 'G'])("opens layout %s's full-photo card, then returns u
   expect(screen.getByLabelText('Location: DTLA')).toBeTruthy();
 });
 
-it.each(['split', 'compact'])('keeps actual meal content and location access through the %s list control', async variant => {
+it.each([{ variant: 'split', confidence: 'LOW' as const }, { variant: 'compact', confidence: 'MEDIUM' as const }])('keeps actual meal content and $confidence confidence through the $variant list control', async ({ variant, confidence }) => {
   rows = [{ ...restaurants[0], bestMatch: { menuItemId: 'meal-1', name: 'Grilled salmon plate',
-    proteinG: 37, carbsG: 53, fatG: 19, calories: 531, confidence: 'HIGH', matchScore: 0.2 } }];
+    proteinG: 37, carbsG: 53, fatG: 19, calories: 531, confidence, nutritionBasis: 'estimated', matchScore: 0.2 } }];
   const screen = open();
   await screen.findByTestId('map-card-0');
   expect(screen.getByText('Macros')).toBeTruthy();
-  const meal = ['Flor do Ave', 'Grilled salmon plate', 'P 37g', 'C 53g', 'F 19g', '531 kcal'];
+  const meal = ['Flor do Ave', 'Grilled salmon plate', 'P 37g', 'C 53g', 'F 19g', '531 kcal', 'Estimated nutrition', `${confidence === 'LOW' ? 'Low' : 'Medium'} confidence`];
   for (const text of meal) expect(within(screen.getByTestId('map-card-0')).getByText(text)).toBeTruthy();
+  const qualified = `Estimated nutrition, ${confidence.toLowerCase()} confidence, approximately 531 kcal`;
+  expect(screen.getByTestId('map-card-0').props.accessibilityLabel).toContain(qualified);
   await act(async () => fireEvent.press(screen.getByTestId('map-options-open')));
   type Step = { tapOn?: string | { id: string }; assertVisible?: string | { id: string } };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/map-search.yaml'), 'utf8')) as [unknown, Step[]];
@@ -195,6 +197,7 @@ it.each(['split', 'compact'])('keeps actual meal content and location access thr
   await act(async () => fireEvent.press(screen.getByTestId(selection.id)));
   await screen.findByTestId('discovery-list');
   for (const text of meal) expect(within(screen.getByTestId('discovery-hero')).getByText(text)).toBeTruthy();
+  expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toContain(qualified);
   const controls = within(screen.getByTestId(`list-location-${variant}`));
   expect(controls.getByTestId('discovery-view-toggle')).toBeTruthy();
   await act(async () => fireEvent.press(controls.getByLabelText('Location: DTLA')));
@@ -218,7 +221,34 @@ it.each(['split', 'compact'])('keeps actual meal content and location access thr
   expect(screen.getByLabelText('Location: Hollywood')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-pin-0')));
   for (const text of meal) expect(within(screen.getByTestId('map-preview-open')).getByText(text)).toBeTruthy();
+  expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain(qualified);
   expect(screen.getByLabelText('Search: salmon')).toBeTruthy();
+});
+
+it.each(['published', 'locked', 'missing'])('preserves %s meal disclosure through map and list', async state => {
+  locked = state === 'locked';
+  rows = [{ ...restaurants[0], bestMatch: state === 'missing' ? null : { menuItemId: 'meal-1', name: 'Published bowl',
+    proteinG: 31, carbsG: 47, fatG: 13, calories: 429, confidence: 'HIGH', nutritionBasis: 'published', matchScore: 0.1 } }];
+  const screen = open();
+  const assertCard = (id: string) => {
+    const card = screen.getByTestId(id), content = within(card);
+    if (state === 'published') {
+      expect(content.getByText('Published nutrition')).toBeTruthy();
+      expect(content.getByText('High confidence')).toBeTruthy();
+      expect(content.getByText('429 kcal')).toBeTruthy();
+      expect(card.props.accessibilityLabel).toContain('Published nutrition, high confidence, 429 kcal');
+      expect(card.props.accessibilityLabel).not.toContain('approximately');
+    } else {
+      expect(content.queryByText('Published bowl')).toBeNull();
+      expect(content.queryByText('429 kcal')).toBeNull();
+      expect(content.queryByText('Published nutrition')).toBeNull();
+      expect(card.props.accessibilityLabel).not.toContain('429');
+      expect(card.props.accessibilityLabel).not.toContain('Published bowl');
+    }
+  };
+  await screen.findByTestId('map-card-0'); assertCard('map-card-0');
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  await screen.findByTestId('discovery-hero'); assertCard('discovery-hero');
 });
 
 it('opens the real search list and Macros editor while preserving bounded results, targets and shuffle', async () => {
@@ -373,7 +403,7 @@ it.each(['A', 'B', 'C', 'G'])('keeps layout %s status actions content-sized and 
   await act(async () => fireEvent.press(screen.getByTestId('discovery-empty-clear')));
   expect(screen.getByLabelText('Search restaurants or dishes')).toBeTruthy();
   await screen.findByTestId('map-pin-0');
-  if (variant === 'B') expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height).toBe(152);
+  if (variant === 'B') expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height).toBe(180);
 });
 
 it('keeps the same free preview boundary as the list', async () => {

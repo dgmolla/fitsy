@@ -9,6 +9,7 @@ import { hasUsedPreviewSample, routeToPaywall } from '@/lib/teaserGate';
 import { trackRestaurantTapped } from '@/lib/analytics';
 import { RestaurantPhoto } from './RestaurantPhoto';
 import { PreviewDishName } from './PreviewDishName';
+import { ConfidenceBadge } from './ConfidenceBadge';
 import { s, hero, dc } from './DiscoveryScreen.styles';
 
 const DIETARY_BADGE_LABELS: Record<string, string> = {
@@ -92,6 +93,14 @@ export async function openRestaurantOrPaywall(
 
 // Search and map previews share the API's actual meal, including its locked
 // and missing-match states. Layout changes must not invent nutrition content.
+export function mealAccessibilitySummary(result: RestaurantResult, locked: boolean, paywallPreview = false): string {
+  const bm = result.bestMatch;
+  if (locked || !bm) return '';
+  const published = bm.nutritionBasis === 'published';
+  const values = !paywallPreview || published ? `, ${published ? '' : 'approximately '}${bm.calories} kcal` : '';
+  return `, best match: ${bm.name}, ${published ? 'Published' : 'Estimated'} nutrition, ${bm.confidence.toLowerCase()} confidence${values}`;
+}
+
 export function HeroMealContent({ result, locked, paywallPreview = false, nameStyle, dishStyle }: {
   result: RestaurantResult; locked: boolean; paywallPreview?: boolean;
   nameStyle?: StyleProp<TextStyle>; dishStyle?: StyleProp<TextStyle>;
@@ -112,7 +121,12 @@ export function HeroMealContent({ result, locked, paywallPreview = false, nameSt
         <Text style={hero.calText}>{bm.calories} kcal</Text>
       </View>
     )}
-    {paywallPreview && bm && <Text style={hero.macroText}>{bm.nutritionBasis === 'published' ? 'Published nutrition' : 'Estimated nutrition'} · {bm.confidence.toLowerCase()} confidence</Text>}
+    {!locked && bm && (paywallPreview
+      ? <Text style={hero.macroText}>{bm.nutritionBasis === 'published' ? 'Published nutrition' : 'Estimated nutrition'} · {bm.confidence.toLowerCase()} confidence</Text>
+      : <View style={meal.provenance}>
+          <Text style={hero.macroText}>{bm.nutritionBasis === 'published' ? 'Published nutrition' : 'Estimated nutrition'}</Text>
+          <ConfidenceBadge confidence={bm.confidence} photo />
+        </View>)}
   </>;
 }
 
@@ -139,7 +153,7 @@ export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking
           params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
         }), unlocking);
       }}
-      accessibilityLabel={`${result.name}${result.bestMatch ? `, best match: ${result.bestMatch.name}` : ''}`}
+      accessibilityLabel={`${result.name}${mealAccessibilitySummary(result, locked, paywallPreview)}`}
       accessibilityRole={paywallPreview ? 'text' : 'button'}
     >
       <RestaurantPhoto uri={result.photoUrl} source={imageSource} name={result.name} style={hero.image} />
@@ -169,6 +183,10 @@ const paywallCard = StyleSheet.create({
   overlay: { padding: 11, gap: 1 },
   name: { fontSize: 20, lineHeight: 23 },
   dish: { fontSize: 14, lineHeight: 17 },
+});
+
+const meal = StyleSheet.create({
+  provenance: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
 });
 
 // ─── Dish carousel card ───────────────────────────────────────────────────────
