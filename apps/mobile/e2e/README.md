@@ -388,10 +388,13 @@ The prepared Xcode scheme selected this file with a Release executable, while th
 No StoreKit purchase or 27-journey aggregate completed before the explicit deferral.
 Keep its generated scheme snapshot, sealed artifact and private fixture bindings in the issue's external recovery handoff; never commit credentials or fabricate billing history.
 
-The dev-only map POCs default to C (floating search and restaurant carousel).
-Use `com.fitsy.mobile://search?mapDebug=1&mapTray=C`, or select A (Discovery card list) and B (grabber sheet) from the in-map layout controls.
-B cycles Peek, Half and Full by tapping the grabber, supports upward/downward dragging, and exposes adjustable accessibility actions.
-All layouts share the current results, search, targets, area, pagination and access rules; camera moves never start a search.
-The saved `map-search` journey swipes C, then captures C, A and all three B heights after checking the existing menu/search/filter/List/shuffle journey.
-Run it on normal and small Simulator layouts and inspect search safe areas, selected pin labels, carousel clipping, sheet controls and tab clearance.
-These are Debug iOS POCs; the production gate and Dawit's eventual design choice remain separate.
+The dev-only map now exposes only the owner-selected C alternate, with Macros, Shuffle and a horizontal restaurant carousel.
+Use `com.fitsy.mobile://search?mapDebug=1`; retired `mapTray` and `mapVariant` parameters are ignored.
+The options panel changes pin style only.
+Owner [6713988813](https://github.com/dgmolla/fitsy/issues/755#issuecomment-6713988813) retired A, B and baseline C from active source, capture and acceptance matrices on November7.
+Their galleries and raw results remain historical; removed subjourneys are not new passes or native waivers.
+The maintained `map-search` journey checks C menu/search/list/macros/Shuffle, city selection, explicit bounded pan confirmation, pin styles, visible final-card/name/counter synchronization and empty recovery.
+Rendered real-caller tests also cover failed Shuffle and retry restoration from pin and drag selection.
+Run on normal and small Simulator layouts and inspect control bounds, readable meal/confidence overlays, selected pins, carousel clipping and tab clearance.
+The impact-selected full scope, auth/subscription journeys and genuine Apple-history prerequisite remain unchanged by layout retirement.
+These are Debug iOS POCs; the chosen prototype does not authorize production availability or rollout.

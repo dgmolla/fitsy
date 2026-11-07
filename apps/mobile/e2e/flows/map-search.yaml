@@ -1,4 +1,5 @@
-# Dev-only map studies use real subscriber search, current navigation and Test Store.
+# Owner6713988813 retired A/B and baseline C; only chosen C alternate remains active.
+# Keep real subscriber search, current navigation and Test Store acceptance.
 appId: com.fitsy.mobile
 tags: [billing, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
 env:
@@ -21,6 +22,14 @@ env:
     centerElement: true
 - tapOn: "Search near DTLA"
 - assertVisible: "Location: DTLA"
+- assertVisible:
+    id: map-carousel
+- assertVisible:
+    id: map-goals
+- assertNotVisible:
+    id: map-sheet-height
+- assertNotVisible:
+    id: map-list-A
 - assertNotVisible:
     id: discovery-macro-strip
 - assertNotVisible:
@@ -143,10 +152,6 @@ env:
     id: map-card-0
 - assertTrue: ${maestro.copiedText === output.mapBeforeToggle}
 # The chosen C alternate edits the same macros while staying on the map.
-- tapOn:
-    id: map-options-open
-- tapOn:
-    id: map-variant-G
 - assertVisible:
     id: map-goals
 - assertVisible:
@@ -213,7 +218,7 @@ env:
 - assertVisible:
     text: "40"
 - runFlow: ../helpers/dismiss-meal-targets.yaml
-- takeScreenshot: map-v2-g-goals
+- takeScreenshot: map-chosen-c-macros-shuffle
 # The owner-selected list has one Map control; area editing stays on the map.
 - tapOn:
     id: map-search-entry
@@ -299,95 +304,44 @@ env:
 - assertVisible:
     id: map-preview-open
 - takeScreenshot: map-v2-carousel-swiped
-- tapOn:
-    id: map-options-open
-- tapOn:
-    id: map-variant-A
-- assertVisible:
-    id: map-list-A
-- assertVisible:
-    id: discovery-hero
-- takeScreenshot: map-v2-a-map-list
-- tapOn:
-    id: map-options-open
-- tapOn:
-    id: map-variant-B
-- assertVisible:
-    id: map-sheet-peek
-- assertVisible:
-    id: map-sheet-peek-card
-- takeScreenshot: map-v2-b-peek
-- tapOn:
-    id: map-sheet-height
-- assertVisible:
-    id: map-sheet-half
-- assertVisible:
-    id: map-list-B
-- takeScreenshot: map-v2-b-half
-- tapOn:
-    id: map-sheet-height
-- assertVisible:
-    id: map-sheet-full
-- assertVisible:
-    id: discovery-macro-strip
-- takeScreenshot: map-v2-b-full-macros
-# Final-row selection must agree with the actual row, including across detents.
+# Keep the final visible C restaurant, matching pin name and counter synchronized.
 - copyTextFrom:
     id: map-page
 - evalScript: ${output.mapCount = Number(maestro.copiedText.split(' / ').pop().split(' ')[0])}
 - repeat:
-    times: ${output.mapCount}
+    times: ${Math.max(0, output.mapCount - 2)}
     commands:
-      - tapOn:
-          id: map-next-spot
+      - swipe:
+          start: "83%,70%"
+          end: "10%,70%"
+          duration: 450
       - waitForAnimationToEnd
 - copyTextFrom:
     id: map-page
 - assertTrue: ${Number(maestro.copiedText.split(' / ')[0]) === output.mapCount && Number(maestro.copiedText.split(' / ')[1]) === output.mapCount}
-- assertVisible:
-    id: ${'preview-pick-' + output.mapCount}
 - copyTextFrom:
-    id: ${'preview-pick-' + output.mapCount}
-- assertTrue: ${maestro.copiedText.lastIndexOf(', view full menu') > 0}
-- evalScript: ${output.mapLastName = maestro.copiedText.substring(0, maestro.copiedText.lastIndexOf(', view full menu'))}
-- takeScreenshot: map-v2-b-full-last
-- tapOn:
-    id: map-sheet-height
-- assertVisible:
-    id: map-sheet-peek
+    id: map-preview-open
+- assertTrue: ${maestro.copiedText.indexOf('Open ') === 0 && maestro.copiedText.indexOf(' · ') > 5}
+- evalScript: ${output.mapLastName = maestro.copiedText.substring(5, maestro.copiedText.indexOf(' · '))}
 - copyTextFrom:
-    id: map-sheet-peek-card
-- assertTrue: ${maestro.copiedText.indexOf(output.mapLastName) >= 0}
-- takeScreenshot: map-v2-b-peek-last
-- tapOn:
-    id: map-sheet-height
-- assertVisible:
-    id: map-sheet-half
-- copyTextFrom:
-    id: map-page
-- assertTrue: ${Number(maestro.copiedText.split(' / ')[0]) === output.mapCount}
-- assertVisible:
-    id: ${'preview-pick-' + output.mapCount}
-- assertNotVisible:
-    id: preview-pick-1
-- takeScreenshot: map-v2-b-half-last
-# Real user scrolling still owns selection after a programmatic final-row jump.
+    id: ${'map-pin-' + (output.mapCount - 1)}
+- assertTrue: ${maestro.copiedText.indexOf(output.mapLastName) === 0}
+- takeScreenshot: map-chosen-c-final-card
 - swipe:
-    start: "50%,65%"
-    end: "50%,78%"
+    start: "10%,70%"
+    end: "83%,70%"
     duration: 450
 - waitForAnimationToEnd
 - copyTextFrom:
     id: map-page
-- evalScript: ${output.mapVisibleIndex = Number(maestro.copiedText.split(' / ')[0])}
-- assertTrue: ${output.mapVisibleIndex > 0 && output.mapVisibleIndex < output.mapCount}
+- assertTrue: ${Number(maestro.copiedText.split(' / ')[0]) === output.mapCount - 1}
 - assertVisible:
-    id: ${'preview-pick-' + output.mapVisibleIndex}
-- takeScreenshot: map-v2-b-user-scroll
+    id: map-preview-open
+- takeScreenshot: map-chosen-c-user-scroll
 - assertVisible: "Location: DTLA"
 - assertVisible:
     id: floating-tab-bar
-# B's empty response must fit real recovery actions above the navigation.
+# Chosen C's empty response must fit real recovery actions above navigation.
 - tapOn:
     id: map-search-entry
 - tapOn:
@@ -400,9 +354,9 @@ env:
     timeout: 30000
 - tapOn:
     id: discovery-view-toggle
-- assertVisible:
-    id: map-sheet-peek
-- takeScreenshot: map-v2-b-empty
+- assertNotVisible:
+    id: map-sheet-height
+- takeScreenshot: map-chosen-c-empty
 - tapOn:
     id: discovery-empty-edit
 - extendedWaitUntil:
@@ -419,8 +373,8 @@ env:
     id: discovery-empty-clear
 - extendedWaitUntil:
     visible:
-      id: map-sheet-peek-card
+      id: map-carousel
     timeout: 30000
 - assertVisible:
     id: map-pin-0
-- takeScreenshot: map-v2-b-empty-recovered
+- takeScreenshot: map-chosen-c-empty-recovered

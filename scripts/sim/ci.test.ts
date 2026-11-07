@@ -124,6 +124,27 @@ test('single Map control retains city selection, explicit pan confirmation and t
   ]);
 });
 
+test('the maintained map capture journey stays on chosen C and retains visible card, pin and recovery proof', () => {
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/map-search.yaml'), 'utf8')) as [unknown, Record<string, unknown>[]];
+  const actions = commands.filter(step => step.tapOn || step.takeScreenshot);
+  expect(JSON.stringify(actions)).not.toMatch(/map-variant-|map-sheet-|map-v2-[ab]-/);
+  expect(commands).toEqual(expect.arrayContaining([
+    { assertVisible: { id: 'map-carousel' } },
+    { assertNotVisible: { id: 'map-sheet-height' } },
+    { assertNotVisible: { id: 'map-list-A' } },
+    { assertVisible: { id: 'map-goals', text: 'Edit macros' } },
+    { tapOn: { id: 'shuffle-button' } },
+    { tapOn: { id: 'map-search-area' } },
+    { tapOn: { id: 'discovery-empty-edit' } },
+    { tapOn: { id: 'discovery-empty-clear' } },
+    { copyTextFrom: { id: 'map-preview-open' } },
+    { copyTextFrom: { id: "${'map-pin-' + (output.mapCount - 1)}" } },
+  ]));
+  // The real rendered screen test executes these literal parsers against card
+  // and pin labels, retaining name proof alongside the native page counter.
+  expect(commands).toContainEqual({ assertTrue: '${maestro.copiedText.indexOf(output.mapLastName) === 0}' });
+});
+
 test('floating navigation clears only the observed Debug toast before proving Saved content and selection', () => {
   type Step = { runFlow?: { when: { visible: string }; commands: unknown[] }; tapOn?: { id: string } };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/floating-nav.yaml'), 'utf8')) as [unknown, Step[]];

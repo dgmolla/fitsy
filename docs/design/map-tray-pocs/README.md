@@ -1,3 +1,15 @@
+**TL;DR:** Only chosen C alternate remains active; earlier galleries below preserve retired comparisons.
+
+Owner [6713988813](https://github.com/dgmolla/fitsy/issues/755#issuecomment-6713988813) retired A, B and baseline C on November7, superseding their active comparison and acceptance matrix.
+The current Debug entrypoint `com.fitsy.mobile://search?mapDebug=1` always opens chosen C alternate with Macros, Shuffle, real meal/confidence overlays and pin-style options only.
+Retired layout parameters cannot restore rejected variants.
+The prior native comparison explicitly selected B and ended on B Peek, explaining the observed vertical screen rather than proving a stale default or stall.
+Current acceptance retains C pan/area, Shuffle, Macros, retry, bounds/filter consistency, auth/subscriptions and the actual impact-selected native scope, including its genuine Apple-history prerequisite.
+Removed retired subjourneys are not counted as passed.
+Production availability and rollout remain unauthorized.
+
+## Historical comparison and evidence
+
 **TL;DR:** Three dev-only map layouts are captured for comparison; pin visibility still needs work.
 
 > **Status:** proposed · **Last verified:** 2026-11-06
