@@ -70,7 +70,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const [detent, setDetent] = useState(0);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const panning = useRef(false);
-  const touchStart = useRef<{ x: number; y: number }>();
+  const touchStart = useRef<{ x: number; y: number } | undefined>(undefined);
   const [pendingArea, setPendingArea] = useState<{ lat: number; lng: number } | null>(null);
   const cardWidth = width - 56;
   const stride = cardWidth + 12;
