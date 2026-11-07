@@ -690,6 +690,21 @@ it('fits after measured overlays settle without a competing selection camera or 
   act(() => fireEvent(screen.getByTestId('discovery-map-surface'), 'regionChangeComplete', { latitude: 40, longitude: -74 }));
   expect(mockAnimate).not.toHaveBeenCalled();
   expect(searchRequests()).toHaveLength(before);
+  // A native touch can end without MapKit moving or completing a region.
+  // That incomplete gesture must not suppress a later measured camera fit.
+  const map = screen.getByTestId('discovery-map-surface');
+  act(() => {
+    fireEvent(map, 'touchStart', { nativeEvent: { pageX: 200, pageY: 300 } });
+    fireEvent(map, 'touchEnd', { nativeEvent: { pageX: 100, pageY: 300 } });
+    fireEvent(screen.getByTestId('map-controls'), 'layout', { nativeEvent: { layout: { height: 120 } } });
+  });
+  await waitFor(() => expect(mockFit).toHaveBeenLastCalledWith(
+    restaurants.map(result => ({ latitude: result.lat, longitude: result.lng })),
+    { edgePadding: { top: 156, bottom: 254, left: 32, right: 32 }, animated: false },
+  ));
+  act(() => fireEvent(map, 'regionChangeComplete', { latitude: 34.04, longitude: -118.24 }));
+  expect(screen.queryByTestId('map-search-area')).toBeNull();
+  expect(searchRequests()).toHaveLength(before);
 });
 
 it('changes existing emoji pin styles without changing results and stops marker tracking after paint', async () => {

@@ -102,10 +102,13 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     list.current?.scrollTo({ y: 0, animated: false });
   }, [firstId, lat, lng]);
   useEffect(() => {
-    if (!mapRevision || d.location.loading || panning.current || pendingArea) return;
+    if (!mapRevision || d.location.loading || pendingArea) return;
     // One camera writer, after measured layout. Do not also set mapPadding:
     // Apple Maps applies those layout margins in addition to this fitted inset.
     const frame = requestAnimationFrame(() => {
+      // A touch may finish without a native region event. A later intentional
+      // fit supersedes that gesture and must not be mistaken for an area pick.
+      panning.current = false;
       if (!pins.length) {
         map.current?.animateToRegion({ latitude: lat, longitude: lng, ...DELTA }, 0);
         return;
@@ -171,9 +174,9 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     {!d.location.loading && <MapView ref={map} style={s.map} testID="discovery-map-surface"
       initialRegion={{ latitude: lat, longitude: lng, ...DELTA }} onMapReady={() => setMapRevision(value => value + 1)}
       onLayout={() => setMapRevision(value => value + 1)}
-      onTouchStart={event => { touchStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }; }}
+      onTouchStart={event => { panning.current = false; touchStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }; }}
       onTouchCancel={() => { touchStart.current = undefined; }}
-      onPanDrag={() => { panning.current = true; setPendingArea(null); }}
+      onPanDrag={() => { panning.current = true; }}
       onTouchEnd={event => {
         // MapKit scrolling can omit onPanDrag/onTouchMove while still delivering
         // touch endpoints before region completion. A tap must not arm a search.
@@ -181,7 +184,6 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
         touchStart.current = undefined;
         if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) {
           panning.current = true;
-          setPendingArea(null);
         }
       }}
       onRegionChangeComplete={region => {
