@@ -161,7 +161,8 @@ The first flow opens a pin, enters the restaurant menu, searches pizza, edits me
 The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
 Both map journeys submit the single-line search field with `pressKey: Enter`, which uses its native Search return key to dismiss the keyboard.
 The detail round trip taps `restaurant-back`; generic Maestro `back` does not activate the iOS screen's custom Back control.
-The v2 map has no macro pills: Search opens the ordinary list and macro strip, while G's compact Goals control opens the existing editor on the map.
+The v2 map has no macro pills: Search opens the ordinary list and macro strip, while G's compact Macros control opens the existing editor on the map.
+The list's single Map control occupies the former location-control position; city selection remains on the map, and a settled pan offers an explicit Search this area action before requesting bounded results.
 `DiscoveryMap.test.tsx` exercises both paths against the real Discovery state, including targets after view switching and shuffling.
 Dense pins can overlap, and MapKit can dispatch a coordinate tap to a neighboring pin despite the requested accessibility ID.
 Both journeys retain pin-to-preview coverage; `map-search` compares toggle and shuffle results through `helpers/map-first-spot.yaml`, which opens the list and returns to the first current carousel result.
