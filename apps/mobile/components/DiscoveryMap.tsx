@@ -170,8 +170,13 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     {!d.location.loading && <MapView ref={map} style={s.map} testID="discovery-map-surface"
       initialRegion={{ latitude: lat, longitude: lng, ...DELTA }} onMapReady={() => setMapRevision(value => value + 1)}
       onLayout={() => setMapRevision(value => value + 1)}
-      onPanDrag={() => { panning.current = true; setPendingArea(null); }}
+      onTouchStart={() => { if (__DEV__) console.info('issue755-map-gesture', 'touchStart'); }}
+      onTouchMove={() => { if (__DEV__) console.info('issue755-map-gesture', 'touchMove'); }}
+      onTouchEnd={() => { if (__DEV__) console.info('issue755-map-gesture', 'touchEnd'); }}
+      onTouchCancel={() => { if (__DEV__) console.info('issue755-map-gesture', 'touchCancel'); }}
+      onPanDrag={() => { if (__DEV__) console.info('issue755-map-gesture', 'pan'); panning.current = true; setPendingArea(null); }}
       onRegionChangeComplete={region => {
+        if (__DEV__) console.info('issue755-map-gesture', 'regionComplete', panning.current);
         // MapKit also reports programmatic fits; only a real pan offers a search.
         if (!panning.current) return;
         panning.current = false;
