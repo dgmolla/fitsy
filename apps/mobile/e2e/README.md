@@ -48,6 +48,7 @@ A `Dev Login Failed` alert requires correcting the fixture credentials bundled b
 Prepare an active disposable account through the local fixture adapter before rerunning; retain the Search assertion and paid-access routing.
 If XCTest reports `kAXErrorInvalidUIElement` while waiting for `welcome-login`, hierarchy inspection failed before Dev Login ran.
 Preserve the command trace and startup screenshot, then recover through the existing simulator owner before rerunning the unchanged journey.
+On #753, the actual Welcome page was usable while XCTest hierarchy inspection stalled until the owned runner stopped it; independent Simulator UI screenshots can continue, but they do not pass the stopped Maestro journey or reset its infrastructure history.
 Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
 For a subscription transport-failure diagnostic, start on the recovery screen with the same failure on status and sync, then run `helpers/subscription-check-retry.yaml` with `SUBSCRIPTION_ERROR_COPY` set to the expected copy.
 `SubscriptionCheckNavigation.test.tsx` replays its saved assertions through the real router, provider and API client for 503, network failure and 429, including a failed retry followed by successful recovery.

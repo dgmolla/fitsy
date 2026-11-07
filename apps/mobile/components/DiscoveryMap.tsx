@@ -208,7 +208,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
             accessibilityRole="adjustable" accessibilityLabel="Restaurant sheet height" accessibilityValue={{ text: HEIGHTS[detent] }}
             accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
             onAccessibilityAction={event => setDetent(current => Math.max(0, Math.min(2, current + (event.nativeEvent.actionName === 'increment' ? 1 : -1))))}>
-            <View style={s.grabber} /><Text style={s.heightLabel}>{peek ? `${cards.length} places · pull up to explore` : `${HEIGHTS[detent]} · tap or drag`}</Text>
+            <View style={s.grabber} /><Text style={s.heightLabel}>{!showRestaurants ? 'Search results' : peek ? `${cards.length} places · pull up to explore` : `${HEIGHTS[detent]} · tap or drag`}</Text>
           </Pressable>
         </View>}
         {showRestaurants && !carouselLayout && !peek && <View style={s.caption}>
