@@ -173,6 +173,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
       onLayout={() => setMapRevision(value => value + 1)}
       onTouchStart={event => { touchStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }; }}
       onTouchCancel={() => { touchStart.current = undefined; }}
+      onPanDrag={() => { panning.current = true; setPendingArea(null); }}
       onTouchEnd={event => {
         // MapKit scrolling can omit onPanDrag/onTouchMove while still delivering
         // touch endpoints before region completion. A tap must not arm a search.
