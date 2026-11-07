@@ -38,7 +38,12 @@ The [manifest](capture-manifest.json) records capture time, device, dimensions, 
 Both devices served `0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934` from JavaScript input `455101b0e14fecfaf4d89be1586f7392e8da7ad7f99eff95b386dc1bd8a0bdbb`.
 Originals and the identical manifest remain at `/Users/dawitmolla/fitsy-wt/issue-755-evidence/single-map-6539edab/` for direct chat attachment outside the checkout.
 
-Local cheap checks passed 209 focused tests and 10 checks, with only non-applicable migrations skipped.
+The gallery source's local cheap checks passed 209 focused tests and 10 checks, with only non-applicable migrations skipped.
+The later complete review found that A/B retained a previous drag's ownership after a failed request remounted the list, preventing restoration of the selected row.
+Batch 11 resets that ownership only when a new native list mounts and covers both pin and drag selection across A/B/C/G in the real rendered retry caller.
+Both A/B regressions failed before the correction; afterward 51 map tests and 215 focused tests passed.
+At successor app source `1492762996a08d2ab1df430f3d9d62aaf999b162`, normal-device button selection showed the third card and counter together, and B retained that visible card through Full, Peek and Half.
+Those separate diagnostics do not relabel this gallery, prove native failed-request retry, or establish user-drag restoration: desktop drag opened a menu and desktop scroll left the list unchanged.
 The actual native plan still selects 28 flows, including the unavailable real Apple-history prerequisite; the retained XCTest setup boundary also remains unresolved.
 No unchanged setup retry, native waiver, transferred exception or production rollout is claimed.
 Final Verify and the complete trusted review belong to the exact PR head and remain tracked on #755/#753 and draft PR754.
