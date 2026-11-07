@@ -120,6 +120,10 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     if (peek || userListScroll.current) return;
     list.current?.scrollTo({ y: selectedId ? rowOffsets.current[selectedId] ?? listOffset.current : listOffset.current, animated: false });
   }, [peek, selectedId]);
+  const restoreCarousel = useCallback(() => {
+    // Refresh/error states unmount this view while retaining the selected row.
+    carousel.current?.scrollTo({ x: Math.max(0, index) * stride, animated: false });
+  }, [index, stride]);
   useEffect(() => {
     const layout = `${variant}:${detent}`;
     if (restoredLayout.current === layout) return;
@@ -248,6 +252,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
         {showRestaurants && carouselLayout && <ScrollView ref={carousel} horizontal testID="map-carousel" style={{ height: compact ? 174 : 210, flexGrow: 0 }}
           showsHorizontalScrollIndicator={false} snapToInterval={stride} decelerationRate="fast" disableIntervalMomentum
           contentContainerStyle={s.carousel} keyboardShouldPersistTaps="handled"
+          onLayout={restoreCarousel} onContentSizeChange={restoreCarousel}
           onMomentumScrollEnd={event => {
             const result = cards[Math.min(cards.length - 1, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / stride)))];
             if (result) select(result, false);

@@ -3,7 +3,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, ScrollView, StyleSheet } from 'react-native';
 import { within } from '@testing-library/react-native';
 import PostHog from 'posthog-react-native';
 import type { RestaurantResult } from '@fitsy/shared';
@@ -499,6 +499,44 @@ it('synchronizes carousel cards and settled pins, switches layouts without fetch
   expect(screen.getByTestId('map-sheet-height').props.accessibilityValue.text).toBe('Half');
   expect(screen.getByLabelText('Search: meal')).toBeTruthy();
   expect(searchRequests()).toHaveLength(before);
+});
+
+it.each(['C', 'G'])('restores layout %s to the retained restaurant after failed Shuffle and unchanged retry rows', async variant => {
+  const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
+  const screen = open(`/search?query=meal&mapTray=${variant}`);
+  await screen.findByTestId('map-pin-2');
+  const previousCarousel = screen.getByTestId('map-carousel');
+  const stride = (StyleSheet.flatten(screen.getByTestId('map-card-0').props.style).width as number) + 12;
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-2')));
+  expect(scrollTo).toHaveBeenLastCalledWith({ x: 2 * stride, animated: true });
+  const failedShuffle = deferred<Response>();
+  searchResponse = () => failedShuffle.promise;
+  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  expect(screen.queryByTestId('map-carousel')).toBeNull();
+  await act(async () => failedShuffle.resolve({ ok: false, status: 503, json: async () => ({ error: 'offline' }) } as Response));
+  await screen.findByTestId('preview-retry');
+  expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
+  searchResponse = async () => response({ data: rows, meta: { locked: false, nextCursor: null } });
+  scrollTo.mockClear();
+  await act(async () => fireEvent.press(screen.getByTestId('preview-retry')));
+  const restoredCarousel = await screen.findByTestId('map-carousel');
+  expect(restoredCarousel).not.toBe(previousCarousel);
+  act(() => fireEvent(restoredCarousel, 'layout', { nativeEvent: { layout: { width: stride, height: 210 } } }));
+  expect(scrollTo).toHaveBeenLastCalledWith({ x: 2 * stride, animated: false });
+  scrollTo.mockClear();
+  act(() => fireEvent(restoredCarousel, 'contentSizeChange', rows.length * stride, 210));
+  expect(scrollTo).toHaveBeenLastCalledWith({ x: 2 * stride, animated: false });
+  expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Pizza House');
+  expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
+  expect(within(screen.getByTestId('map-preview')).getByText('3 / 4')).toBeTruthy();
+  act(() => fireEvent(restoredCarousel, 'momentumScrollEnd', {
+    nativeEvent: { contentOffset: { x: stride, y: 0 } },
+  }));
+  expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Green Kitchen');
+  expect(within(screen.getByTestId('map-preview')).getByText('2 / 4')).toBeTruthy();
+  act(() => fireEvent(restoredCarousel, 'contentSizeChange', rows.length * stride, 210));
+  expect(scrollTo).toHaveBeenLastCalledWith({ x: stride, animated: false });
 });
 
 it.each(['A', 'B'])('preserves an explicit final pin when layout %s clamps scrolling, but follows a user drag', async variant => {
