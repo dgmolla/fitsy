@@ -6,8 +6,8 @@ import { EDITORIAL } from '@/lib/brand';
 import { useShuffleFlag } from '@/lib/useShuffleFlag';
 
 export function ShuffleButton({ disabled, onPress, style }: { disabled: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
-  const { shuffleDebug } = useLocalSearchParams<{ shuffleDebug?: string }>();
-  const enabled = useShuffleFlag(shuffleDebug === '1');
+  const { shuffleDebug, mapDebug } = useLocalSearchParams<{ shuffleDebug?: string; mapDebug?: string }>();
+  const enabled = useShuffleFlag(shuffleDebug === '1' || mapDebug === '1');
   if (!enabled) return null;
   return <Pressable onPress={onPress} disabled={disabled} hitSlop={10}
     accessibilityRole="button" accessibilityLabel="Shuffle results"

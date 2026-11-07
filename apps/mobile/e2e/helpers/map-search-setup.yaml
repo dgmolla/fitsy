@@ -60,7 +60,7 @@ appId: com.fitsy.mobile
       id: discovery-location
     timeout: 30000
 - assertNotVisible: "Dev Login Failed"
-- openLink: com.fitsy.mobile://search?mapDebug=1&shuffleDebug=1&floatingNavDebug=1
+- openLink: com.fitsy.mobile://search?mapDebug=1&floatingNavDebug=1
 - tapOn:
     text: "^Open$"
     optional: true
@@ -72,6 +72,8 @@ appId: com.fitsy.mobile
     visible:
       id: discovery-map
     timeout: 15000
+- assertVisible:
+    id: shuffle-button
 # Keep the Debug warning banner from covering the tab bar or POC layout controls.
 - runFlow:
     when:

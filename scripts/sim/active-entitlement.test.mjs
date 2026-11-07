@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { evidenceStore, prepareActiveEntitlement, sandboxState } from './active-entitlement.mjs';
+import { prepareEntitledEvidence } from './product-flow.mjs';
 
 const now = () => Date.parse('2026-10-31T12:00:00Z');
 const expiresAt = '2026-10-31T13:00:00.000Z';
@@ -51,6 +55,33 @@ test('a failed renewal stops before server sync and is never converted into a pa
   await assert.rejects(prepareActiveEntitlement({ built, env, now, fetchImpl: b.fetchImpl,
     renew: async () => { throw new Error('purchase failed'); } }), /purchase failed/);
   assert.equal(b.calls.length, 2);
+});
+
+test('walkthrough setup signs in once, retaining a verified renewal instead of resetting it again', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-entitlement-caller-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const executable = join(dir, 'maestro'), calls = join(dir, 'calls');
+  writeFileSync(executable, `#!${process.execPath}\nconst fs=require('node:fs');\nconst purchase=process.argv.find(arg=>arg.startsWith('ALLOW_TEST_PURCHASE='));\nfs.appendFileSync(${JSON.stringify(calls)},purchase+'\\n');\n`, { mode: 0o755 });
+  const config = { ...env, MAESTRO_BIN: executable };
+  const previous = Object.fromEntries(Object.keys(config).map(key => [key, process.env[key]]));
+  Object.assign(process.env, config);
+  t.after(() => { for (const [key, value] of Object.entries(previous)) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  } });
+  for (const renew of [false, true]) {
+    writeFileSync(calls, '');
+    const expiry = new Date(Date.now() + 3600000).toISOString();
+    const freshStatus = { ...status, expiresAt: expiry, lastRcVerifiedAt: new Date().toISOString() };
+    const b = boundary([login, ...(renew ? [subscriber('2020-01-01T00:00:00Z')] : []),
+      subscriber(expiry), { synced: true }, freshStatus]);
+    const fetchMock = t.mock.method(globalThis, 'fetch', b.fetchImpl);
+    try {
+      const proof = await prepareEntitledEvidence(built, '11111111-1111-1111-1111-111111111111',
+        join(dir, renew ? 'renewed' : 'active'), { signIn: true });
+      assert.equal(proof.renewed, renew);
+      assert.equal(readFileSync(calls, 'utf8'), `ALLOW_TEST_PURCHASE=${renew ? '1' : '0'}\n`);
+    } finally { fetchMock.mock.restore(); }
+  }
 });
 
 test('a completed purchase dialog without active RevenueCat proof cannot synchronize or pass', async () => {

@@ -65,7 +65,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
         </Pressable>}
       </View>}
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
-      {renderSearchBar(!isOnboardingPreview && <ShuffleButton disabled={!canShuffle} onPress={handleShuffle} />)}
+      {renderSearchBar(!isOnboardingPreview && <ShuffleButton style={mapEnabled && s.mapShuffle} disabled={!canShuffle} onPress={handleShuffle} />)}
       {!canSearch && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.greenAccent} />

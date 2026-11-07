@@ -98,7 +98,7 @@ const open = (url = '/search?query=meal') => renderJourney(url, { ...routes, '(t
 
 it('removes the map action surface with Shuffle disabled and keeps the enabled action usable', async () => {
   shuffleFlag = false;
-  const screen = open('/search?mapDebug=1');
+  const screen = open();
   await screen.findByTestId('map-pin-0');
   expect(screen.queryByTestId('shuffle-button')).toBeNull();
   type NativeNode = { props: { style?: StyleProp<ViewStyle> }; children?: (NativeNode | string)[] | null };
@@ -113,13 +113,40 @@ it('removes the map action surface with Shuffle disabled and keeps the enabled a
   shuffleFlag = true;
   await act(async () => listeners.forEach(listener => listener()));
   const shuffle = await screen.findByTestId('shuffle-button');
-  expect(StyleSheet.flatten(shuffle.props.style)).toMatchObject({ width: 48, height: 48 });
+  expect(StyleSheet.flatten(shuffle.props.style)).toMatchObject({ width: 44, height: 44 });
   await act(async () => fireEvent.press(shuffle));
   expect(searchParams().shuffle).toBe('1');
   shuffleFlag = false;
   await act(async () => listeners.forEach(listener => listener()));
   expect(screen.queryByTestId('shuffle-button')).toBeNull();
   expect(screen.getByTestId('map-search-entry')).toBeTruthy();
+});
+
+it.each(['map', 'list'])('mapDebug keeps visible Shuffle in the %s controls with the remote flag off', async view => {
+  flag = false;
+  shuffleFlag = false;
+  const screen = open('/search?mapDebug=1&query=meal');
+  await screen.findByTestId('map-pin-0');
+  if (view === 'list') await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  const shuffle = screen.getByRole('button', { name: 'Shuffle results' });
+  const controls = screen.getByTestId(view === 'map' ? 'map-toolbar' : 'discovery-search-bar');
+  expect(within(controls).getByTestId('shuffle-button')).toBe(shuffle);
+  expect(StyleSheet.flatten(shuffle.props.style)).toMatchObject({ width: 44, height: 44 });
+  expect(screen.getAllByTestId('shuffle-button')).toHaveLength(1);
+  if (view === 'map') expect(within(controls).getByRole('button', { name: 'Edit macros' })).toBeTruthy();
+
+  const pending = deferred<Response>();
+  searchResponse = () => pending.promise;
+  await act(async () => fireEvent.press(shuffle));
+  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
+  expect(searchParams()).toMatchObject({ q: 'meal', shuffle: '1', ...values });
+  await act(async () => pending.resolve({ ok: false, status: 503, json: async () => ({ error: 'offline' }) } as Response));
+  expect(screen.getByTestId('shuffle-button')).toBeTruthy();
+  searchResponse = async () => response({ data: rows, meta: { locked: false } });
+  await act(async () => fireEvent.press(screen.getByTestId('preview-retry')));
+  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
+  expect(searchParams().q).toBe('meal');
+  expect(screen.getByTestId(view === 'map' ? 'map-pin-0' : 'discovery-hero')).toBeTruthy();
 });
 
 it.each(['flows/floating-nav', 'helpers/map-search-setup'].flatMap(caller =>
@@ -521,11 +548,13 @@ it.each([undefined, false, 'true', 'control'])('fails closed for a non-boolean m
 });
 
 it.each([[false, 'ios'], [true, 'android']])('keeps production and Android on the list, including debug links (dev=%s, os=%s)', async (dev, os) => {
+  shuffleFlag = false;
   Object.defineProperty(globalThis, '__DEV__', { value: dev, configurable: true });
   Object.defineProperty(Platform, 'OS', { value: os, configurable: true });
   const screen = open('/search?query=meal&mapDebug=1');
   await screen.findByTestId('discovery-hero');
   expect(screen.queryByTestId('discovery-map')).toBeNull();
+  expect(Boolean(screen.queryByTestId('shuffle-button'))).toBe(dev);
 });
 
 it('allows explicit local opt-in and removes the map on a remote flag update without losing search', async () => {

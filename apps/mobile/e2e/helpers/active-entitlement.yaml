@@ -5,6 +5,9 @@ appId: com.fitsy.mobile
 - launchApp:
     clearState: true
     clearKeychain: true
+# Observe the launch transition before XCTest reads the first Welcome element.
+- waitForAnimationToEnd:
+    timeout: 10000
 - extendedWaitUntil:
     visible:
       id: welcome-login

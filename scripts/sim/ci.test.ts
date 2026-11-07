@@ -80,11 +80,17 @@ test.each([
     { assertNotVisible: { id: 'discovery-map' } },
     { assertVisible: { id: 'discovery-macro-strip' } },
     { assertVisible: { id: 'discovery-search', text: 'pizza' } },
+    { assertVisible: { id: 'shuffle-button' } },
   ]));
   expect(commands.slice(backToMap + 1, backToMap + 5)).toEqual([
     { extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 } },
     'waitForAnimationToEnd', { tapOn: { id: 'map-pin-0' } }, { assertVisible: { id: 'map-preview-open' } },
   ]);
+  expect(commands[backToMap + 5]).toEqual({ assertVisible: { id: 'shuffle-button' } });
+  const [, setup] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/helpers/map-search-setup.yaml'), 'utf8')) as [unknown, Record<string, unknown>[]];
+  // The prototype itself must expose Shuffle, without a second hidden opt-in.
+  expect(setup).toContainEqual({ openLink: 'com.fitsy.mobile://search?mapDebug=1&floatingNavDebug=1' });
+  expect(setup).toContainEqual({ assertVisible: { id: 'shuffle-button' } });
 });
 
 test('single Map control retains city selection, explicit pan confirmation and the centered picker restore', () => {

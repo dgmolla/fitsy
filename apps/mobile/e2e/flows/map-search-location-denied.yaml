@@ -62,6 +62,8 @@ env:
 - assertVisible:
     id: discovery-search
     text: pizza
+- assertVisible:
+    id: shuffle-button
 - tapOn:
     id: discovery-view-toggle
 - extendedWaitUntil:
@@ -73,6 +75,8 @@ env:
     id: map-pin-0
 - assertVisible:
     id: map-preview-open
+- assertVisible:
+    id: shuffle-button
 - assertVisible: "Location: Hollywood"
 - assertVisible:
     id: map-search-entry

@@ -63,6 +63,7 @@ Use `gh` directly, with no daemon, helper script, new tooling, or skills.
    Run in the background, log to `~/fitsy-wt/logs/issue-N.log`, and record the PID and ownership on the issue.
 5. Watch workers about every five minutes, not more frequently.
    At each checkpoint, freshly read the issue and PR comments, including edits, and pass material owner directions to the existing worker before waiting again.
+   At the first pending hosted Mac job, run `node scripts/verify/simulator-actions.mjs --preflight` with the existing authorized local `gh` identity and record missing capacity or unavailable inventory with its owner action; do not silently poll, change settings or block independent work.
    When a worker exits, verify its PR: if merged, close out (the issue auto-closes), remove its worktree and local branch; if blocked, remove its worktree after preserving unfinished work on its branch.
    If it crashed without either outcome, diagnose and restart it once with the same ownership and log history; a second crash marks the issue blocked with a sanitized log tail.
 6. When no eligible issues and no workers remain, sleep ten minutes and rescan; do not exit on an empty queue.

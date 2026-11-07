@@ -1,6 +1,7 @@
 # Simulator CI
 
-The required `Simulator` check comes from `.github/workflows/simulator.yml` on every PR and main push.
+The `Simulator` workflow result comes from `.github/workflows/simulator.yml` on every PR and main push.
+It does not define or change protected branch requirements.
 An Ubuntu selector uses the complete Git comparison, including deletions and renames.
 Only `apps/mobile/**`, `scripts/sim/**`, `scripts/verify/**`, the native fingerprint helper or this workflow starts the Mac.
 Other changes pass on Ubuntu; failed classification, missing fixtures, failed flows, cancellation and an unexpectedly skipped Mac job never pass.
@@ -19,6 +20,7 @@ flowchart LR
 PR pushes cancel superseded work on the same PR.
 The repository-wide `fitsy-simulator` concurrency group queues different PRs with `queue: max`, allowing one Mac job at a time.
 The Mac job has a 30-minute deadline, one Xcode build worker, one Metro worker, a 2 GB Node heap and a 768 MB Java heap.
+That deadline starts after assignment and does not bound a queue with no registered runner.
 Keep only one runner registered with `fitsy-sim` and leave the old local publisher paused.
 Manual native work must respect the existing `scripts/sim/sim` claim; CI refuses to boot alongside another booted simulator.
 
@@ -27,6 +29,19 @@ Main and PRs labeled `full-sim` run every maintained flow compatible with Test S
 The `subscription-restore-expired` Apple receipt-history journey retains its separate manual acceptance in [the E2E guide](../apps/mobile/e2e/README.md#subscription-restore-acceptance); Test Store cannot prove Apple history transfer.
 The label expands a relevant change's suite; it does not start a simulator for an unrelated change.
 Full runs still fail if the deadline or any fixture/flow assertion fails.
+
+## Pending Mac capacity preflight
+
+At setup and the first pending Mac checkpoint, run `node scripts/verify/simulator-actions.mjs --preflight` locally with the existing authorized `gh` identity.
+It reads the actual workflow labels and all runner inventory pages, exits nonzero for absent/offline matching capacity, and distinguishes unavailable inventory from an empty list.
+Busy online matching runners remain valid serialized capacity; inspect the actual job owner before any cancellation or native work.
+A passing capacity check is not a native execution result.
+Record a failed preflight and its concrete owner action instead of silently waiting, while continuing independent authorized work.
+
+The [runner inventory API](https://docs.github.com/en/rest/actions/self-hosted-runners#list-self-hosted-runners-for-a-repository) requires repository Administration read permission.
+The workflow's ordinary `GITHUB_TOKEN` cannot request that permission, so this local diagnostic is not added to the Ubuntu selector or hooks as a broken credential-dependent gate.
+Do not add a token, register a runner or change settings without the separate owner's authorization.
+The original migration in #704 already recorded zero registered runners and an unverified Mac run; a later empty inventory alone does not prove removal or identify a removal actor.
 
 ## One-time Mac setup
 
@@ -48,7 +63,7 @@ Full runs still fail if the deadline or any fixture/flow assertion fails.
    Do not select a personal simulator: CI erases this device's data after every job and reuses the same device next time.
 5. Set the secrets below under **Settings > Secrets and variables > Actions**.
    Run a mobile PR once, then rerun unchanged native inputs to confirm a cache hit and current-source Maestro execution.
-   Keep branch protection's required check named `Simulator`, with GitHub Actions as its source if the rule pins an app.
+   Preserve the repository's existing protected contexts; runner setup does not authorize changing required checks.
    Do not resume the old poller or manually post a success status.
 
 GitHub documents [runner service installation](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/configure-the-application?platform=mac) and [concurrency queues](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).

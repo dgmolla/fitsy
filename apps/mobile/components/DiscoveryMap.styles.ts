@@ -14,7 +14,7 @@ export const s = StyleSheet.create({
   areaSearch: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8,
     minHeight: 44, paddingHorizontal: 18, marginTop: 8, borderRadius: 24, backgroundColor: EDITORIAL.cream,
     borderWidth: 1, borderColor: EDITORIAL.border },
-  shuffle: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: EDITORIAL.cream },
+  shuffle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: EDITORIAL.cream },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16 },
   location: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44,
     paddingHorizontal: 14, borderRadius: 24, backgroundColor: EDITORIAL.cream, marginRight: 'auto' },

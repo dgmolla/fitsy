@@ -165,7 +165,7 @@ export function FrostedSearchSurface() {
 
 const chrome = StyleSheet.create({
   mapButton: { backgroundColor: 'rgba(255,255,255,0.8)' },
-  search: { backgroundColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(58,112,80,0.2)', borderRadius: 24, overflow: 'hidden', minHeight: 48 },
+  search: { backgroundColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(58,112,80,0.2)', borderRadius: 24, overflow: 'hidden', minHeight: 48, paddingVertical: 2 },
   searchFocused: { borderColor: EDITORIAL.greenAccent },
   frostTint: { backgroundColor: 'rgba(255,255,255,0.68)' },
 });

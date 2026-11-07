@@ -97,7 +97,9 @@ export async function prepareEntitledEvidence(built, udid, directory, { signIn =
   const proof = await prepareActiveEntitlement({ built, renew: () => setup(true) });
   // A preceding expired/history journey can leave another account in keychain.
   // The walkthrough must enter the active account even when no renewal is due.
-  if (signIn && built.storeMode === 'test-store') await setup(false);
+  // Renewal already signs in and asserts Search with these exact credentials.
+  // Do not immediately clear and relaunch that verified session a second time.
+  if (signIn && !proof.renewed && built.storeMode === 'test-store') await setup(false);
   save(join(directory, 'entitlement.json'), proof);
   return proof;
 }

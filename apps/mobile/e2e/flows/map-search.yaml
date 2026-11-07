@@ -108,6 +108,8 @@ env:
 - assertVisible:
     id: discovery-search
     text: pizza
+- assertVisible:
+    id: shuffle-button
 - tapOn:
     id: discovery-view-toggle
 - extendedWaitUntil:
@@ -119,6 +121,8 @@ env:
     id: map-pin-0
 - assertVisible:
     id: map-preview-open
+- assertVisible:
+    id: shuffle-button
 - runFlow: ../helpers/map-first-spot.yaml
 - copyTextFrom:
     id: map-card-0

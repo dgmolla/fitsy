@@ -218,9 +218,8 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
           <Ionicons name="search" size={19} color={EDITORIAL.green} />
           <Text style={s.searchText} numberOfLines={1}>{d.query || 'Search restaurants or dishes'}</Text>
         </Pressable>
-        <ShuffleButton style={s.shuffle} disabled={!d.canShuffle} onPress={d.handleShuffle} />
       </View>
-      <View style={s.topRow} pointerEvents="box-none">
+      <View style={s.topRow} pointerEvents="box-none" testID="map-toolbar">
         <Pressable style={s.location} testID="discovery-location" onPress={d.handleOpenLocationPicker}
           accessibilityRole="button" accessibilityLabel={`Location: ${d.locationLabel}`} accessibilityHint="Change search area">
           <Ionicons name="location" size={15} color={EDITORIAL.green} />
@@ -231,6 +230,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
           accessibilityRole="button" accessibilityLabel="Edit macros">
           <Ionicons name="options-outline" size={16} color={EDITORIAL.green} /><Text style={s.locationText}>Macros</Text>
         </Pressable>}
+        <ShuffleButton style={s.shuffle} disabled={!d.canShuffle} onPress={d.handleShuffle} />
         <Pressable style={s.optionsButton} testID="map-options-open" onPress={() => setOptionsVisible(true)}
           accessibilityRole="button" accessibilityLabel="Map prototype options">
           <Ionicons name="layers-outline" size={19} color={EDITORIAL.green} />
