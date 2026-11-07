@@ -225,6 +225,10 @@ env:
 - tapOn:
     id: discovery-location
 - waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Search near DTLA"
+    direction: DOWN
+    centerElement: true
 - tapOn: "Search near DTLA"
 - assertVisible: "Location: DTLA"
 - takeScreenshot: map-list-split
@@ -246,6 +250,10 @@ env:
 - tapOn:
     id: discovery-location
 - waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Search near DTLA"
+    direction: DOWN
+    centerElement: true
 - tapOn: "Search near DTLA"
 - assertVisible: "Location: DTLA"
 - takeScreenshot: map-list-compact

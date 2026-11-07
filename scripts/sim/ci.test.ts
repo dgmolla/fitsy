@@ -87,6 +87,22 @@ test.each([
   ]);
 });
 
+test.each(['split', 'compact'])('%s list location journey centers the offscreen picker row and confirms the chosen area', variant => {
+  type Step = { tapOn?: string | { id: string }; assertVisible?: string; scrollUntilVisible?: object };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/map-search.yaml'), 'utf8')) as [unknown, Step[]];
+  const start = commands.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === `map-list-style-${variant}`);
+  expect(start).toBeGreaterThan(-1);
+  const restore = commands.findIndex((step, index) => index > start && step.tapOn === 'Search near DTLA');
+  expect(restore).toBeGreaterThan(start);
+  // DTLA is below the visible picker rows on SE. A selector alone can tap
+  // during scrolling or fail offscreen; center it and verify the actual area.
+  expect(commands.slice(restore - 3, restore + 2)).toEqual([
+    { tapOn: { id: 'discovery-location' } }, 'waitForAnimationToEnd',
+    { scrollUntilVisible: { element: 'Search near DTLA', direction: 'DOWN', centerElement: true } },
+    { tapOn: 'Search near DTLA' }, { assertVisible: 'Location: DTLA' },
+  ]);
+});
+
 test('floating navigation clears only the observed Debug toast before proving Saved content and selection', () => {
   type Step = { runFlow?: { when: { visible: string }; commands: unknown[] }; tapOn?: { id: string } };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/floating-nav.yaml'), 'utf8')) as [unknown, Step[]];
