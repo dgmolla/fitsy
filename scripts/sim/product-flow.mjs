@@ -13,7 +13,7 @@ import { backendOrigin, backendRevision, maestroApiArgs } from './backend-identi
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
 import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
-import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
+import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, clock, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
 import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 import { prepareActiveEntitlement } from './active-entitlement.mjs';
 import { inspectScreenshot, inspectScreenshotDirectory, requireScreenRecognition } from './screen-guard.mjs';
@@ -156,13 +156,51 @@ export async function stopMetro() {
   rmSync(metroFile);
 }
 async function metroBundle(m) {
-  assert(processIdentity(m.pid) === m.processIdentity, 'The identified Metro process is no longer running');
-  assert(m.jsHash === inputHash(root, 'js') && m.configHash === environment().configHash, 'Metro JavaScript/configuration changed; start a fresh owned server');
+  const verify = () => {
+    assert(processIdentity(m.pid) === m.processIdentity, 'The identified Metro process is no longer running');
+    assert(m.jsHash === inputHash(root, 'js') && m.configHash === environment().configHash, 'Metro JavaScript/configuration changed; start a fresh owned server');
+  };
+  verify();
   const response = await fetch(`http://localhost:${m.port}${metroRoute}`, { signal: AbortSignal.timeout(120_000) });
   assert(response.ok, `Metro bundle failed: HTTP ${response.status}`);
-  return digest(Buffer.from(await response.arrayBuffer()));
+  const hash = digest(Buffer.from(await response.arrayBuffer()));
+  verify();
+  return hash;
 }
 export async function startMetro(r, { maxWorkers } = {}) {
+  const dispatched = clock(), timeline = join(buildDir, 'metro-timeline.jsonl');
+  event(timeline, { type: 'metro-prepare-start', port: r.metroPort });
+  const complete = (m, action) => {
+    const returnPrepared = clock();
+    const startup = { action, dispatched, returnPrepared,
+      elapsedMs: Number(BigInt(returnPrepared.monotonicNs) - BigInt(dispatched.monotonicNs)) / 1e6,
+      observation: 'owned Metro readiness and bundle response before receipt write; app UI readiness and outer tool return are unobserved' };
+    event(timeline, { type: 'metro-prepare-end', pid: m.pid, jsHash: m.jsHash, configHash: m.configHash, bundleHash: m.bundleHash, ...startup });
+    return { ...m, startup };
+  };
+  try {
+    if (existsSync(metroFile)) {
+      const m = read(metroFile);
+      assert(!m.root || m.root === root, 'Metro receipt belongs to another checkout; refusing to reuse or stop it');
+      let alive = true;
+      try { process.kill(m.pid, 0); }
+      catch (error) { if (error.code !== 'ESRCH') throw error; alive = false; }
+      // A local receipt is ownership, not proof of compatible or healthy serving.
+      // Never attach to a foreign port or relabel a server after source changes.
+      if (alive && m.root === root && m.port === r.metroPort && m.route === metroRoute &&
+          m.maxWorkers === (maxWorkers ?? null) && m.jsHash === inputHash(root, 'js') && m.configHash === environment().configHash) {
+        await requireMetro(m, { processIdentity, sourceHash: m.jsHash, configHash: m.configHash });
+        return complete({ ...m, bundleHash: await metroBundle(m) }, 'reuse');
+      }
+    }
+    return complete(await startMetroProcess(r, maxWorkers), 'start');
+  } catch (error) {
+    event(timeline, { type: 'metro-prepare-failed', code: error.code || null,
+      elapsedMs: Number(process.hrtime.bigint() - BigInt(dispatched.monotonicNs)) / 1e6 });
+    throw error;
+  }
+}
+async function startMetroProcess(r, maxWorkers) {
   await stopMetro();
   // Refuse a busy port; never attach to or terminate another task's server.
   await new Promise((resolvePort, reject) => {
@@ -178,7 +216,7 @@ export async function startMetro(r, { maxWorkers } = {}) {
   closeSync(fd);
   await new Promise((ready, reject) => { child.once('spawn', ready); child.once('error', reject); });
   child.unref();
-  const m = { pid: child.pid, port: r.metroPort, route: metroRoute, processIdentity: processIdentity(child.pid),
+  const m = { pid: child.pid, root, maxWorkers: maxWorkers ?? null, port: r.metroPort, route: metroRoute, processIdentity: processIdentity(child.pid),
     jsHash: inputHash(root, 'js'), configHash: environment().configHash };
   save(metroFile, m);
   try {
