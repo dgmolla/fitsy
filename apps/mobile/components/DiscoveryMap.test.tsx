@@ -106,8 +106,8 @@ it.each([0, 106])('keeps the map tray and camera clear of a %spt floating overla
   expect(screen.queryByTestId('preview-edit-targets')).toBeNull();
 });
 
-it("opens a compact pin's card, then returns from the real detail using the saved iOS flow control", async () => {
-  const screen = renderJourney('/search?query=meal', {
+it.each(['A', 'B', 'C', 'G'])("opens layout %s's full-photo card, then returns using the saved iOS flow control", async variant => {
+  const screen = renderJourney(`/search?query=meal&mapTray=${variant}`, {
     ...routes, '(tabs)/search': () => <Search />, 'restaurant/[id]': () => <Restaurant />,
   });
   const pin = await screen.findByTestId('map-pin-0');
@@ -117,9 +117,11 @@ it("opens a compact pin's card, then returns from the real detail using the save
   expect(screen.getByLabelText('Photo of Flor do Ave')).toBeTruthy();
   expect(screen.queryByTestId('map-preview')).toBeNull();
   await act(async () => fireEvent.press(pin));
-  expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toBe('Open Flor do Ave · Portuguese');
+  const card = screen.getByTestId(variant === 'A' ? 'discovery-hero' : variant === 'B' ? 'map-sheet-peek-card' : 'map-preview-open');
+  expect(card.props.accessibilityLabel).toContain('Flor do Ave');
+  expect(StyleSheet.flatten(screen.getByLabelText('Photo of Flor do Ave').props.style)).toMatchObject({ width: '100%', height: '100%' });
   expect(screen.getPathname()).toBe('/search');
-  await act(async () => fireEvent.press(screen.getByTestId('map-preview-open')));
+  await act(async () => fireEvent.press(card));
   expect(screen.getPathname()).toBe('/restaurant/spot-0');
   await screen.findByTestId('menu-search');
   type Step = string | { tapOn?: { id: string }; extendedWaitUntil?: { visible: { id: string } } };
@@ -269,23 +271,30 @@ it('opens around the actual GPS fix when permission is granted', async () => {
   expect(Object.fromEntries(searchRequests().at(-1)!.searchParams)).toMatchObject({ lat: '34.08', lng: '-118.27' });
 });
 
-it('keeps pending, failed, empty and cleared searches recoverable and never shuffles an empty map', async () => {
+it.each(['A', 'B', 'C', 'G'])('keeps layout %s status actions content-sized and recovers through retry, targets and Clear search', async variant => {
   const pending = deferred<Response>();
   searchResponse = () => pending.promise;
-  const screen = open();
+  const screen = open(`/search?query=meal&mapTray=${variant}`);
   await screen.findByTestId('discovery-map');
   expect(screen.queryByTestId('map-pin-0')).toBeNull();
   expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
   await act(async () => pending.resolve({ ok: false, status: 503, json: async () => ({ error: 'offline' }) } as Response));
   await screen.findByTestId('preview-retry');
+  expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height).toBeUndefined();
   rows = [];
   searchResponse = async () => response({ data: rows, meta: { locked: false, nextCursor: null } });
   await act(async () => fireEvent.press(screen.getByTestId('preview-retry')));
   await screen.findByText('No matches for this search');
+  expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height).toBeUndefined();
   expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-empty-edit')));
+  await screen.findByTestId('meal-filter-apply');
+  await act(async () => fireEvent.press(screen.getByTestId('meal-filter-apply')));
+  rows = restaurants;
   await act(async () => fireEvent.press(screen.getByTestId('discovery-empty-clear')));
   expect(screen.getByLabelText('Search restaurants or dishes')).toBeTruthy();
-  await screen.findByText('No meals with nutrition nearby');
+  await screen.findByTestId('map-pin-0');
+  if (variant === 'B') expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height).toBe(124);
 });
 
 it('keeps the same free preview boundary as the list', async () => {
@@ -418,6 +427,12 @@ it('keeps B mounted with its selected final restaurant through Full, Peek and Ha
   expect(screen.getByText('4 / 4')).toBeTruthy();
   const [, steps] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/map-search.yaml'), 'utf8')) as [unknown, { evalScript?: string; assertTrue?: string }[]];
   const context = { maestro: { copiedText: screen.getByTestId('preview-pick-4').props.accessibilityLabel }, output: {} as Record<string, string> };
+  const countScript = steps.find(step => step.evalScript?.includes('output.mapCount ='))!.evalScript!;
+  for (const text of ['4 spots', '2 / 4', '4 / 4']) {
+    const countContext = { maestro: { copiedText: text }, output: {} as Record<string, number> };
+    runInNewContext(countScript.slice(2, -1), countContext);
+    expect(countContext.output.mapCount).toBe(restaurants.length);
+  }
   const nameScript = steps.find(step => step.evalScript?.includes('output.mapLastName ='))!.evalScript!;
   runInNewContext(nameScript.slice(2, -1), context);
   expect(context.output.mapLastName).toBe(restaurants[3].name);

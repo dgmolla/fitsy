@@ -101,8 +101,24 @@ env:
     visible:
       id: discovery-hero
     timeout: 30000
+- assertNotVisible:
+    id: discovery-map
+- assertVisible:
+    id: discovery-macro-strip
+- assertVisible:
+    id: discovery-search
+    text: pizza
 - tapOn:
     id: discovery-view-toggle
+- extendedWaitUntil:
+    visible:
+      id: map-pin-0
+    timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    id: map-pin-0
+- assertVisible:
+    id: map-preview-open
 - runFlow: ../helpers/map-first-spot.yaml
 - copyTextFrom:
     id: map-card-0
@@ -252,7 +268,7 @@ env:
 # Final-row selection must agree with the actual row, including across detents.
 - copyTextFrom:
     id: map-page
-- evalScript: ${output.mapCount = Number(maestro.copiedText.match(/[0-9]+/)[0])}
+- evalScript: ${output.mapCount = Number(maestro.copiedText.split(' / ').pop().split(' ')[0])}
 - repeat:
     times: ${output.mapCount}
     commands:
@@ -305,3 +321,40 @@ env:
 - assertVisible: "Location: DTLA"
 - assertVisible:
     id: floating-tab-bar
+# B's empty response must fit real recovery actions above the navigation.
+- tapOn:
+    id: map-search-entry
+- tapOn:
+    id: discovery-search
+- inputText: zzznomatch753zzz
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: discovery-empty-clear
+    timeout: 30000
+- tapOn:
+    id: discovery-view-toggle
+- assertVisible:
+    id: map-sheet-peek
+- takeScreenshot: map-v2-b-empty
+- tapOn:
+    id: discovery-empty-edit
+- extendedWaitUntil:
+    visible:
+      id: meal-filter-apply
+    timeout: 15000
+- tapOn:
+    id: meal-filter-apply
+- extendedWaitUntil:
+    visible:
+      id: discovery-empty-clear
+    timeout: 15000
+- tapOn:
+    id: discovery-empty-clear
+- extendedWaitUntil:
+    visible:
+      id: map-sheet-peek-card
+    timeout: 30000
+- assertVisible:
+    id: map-pin-0
+- takeScreenshot: map-v2-b-empty-recovered

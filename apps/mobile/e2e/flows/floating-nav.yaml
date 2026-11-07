@@ -76,6 +76,16 @@ env:
     timeout: 15000
 - assertVisible:
     id: discovery-list
+# The Debug warning toast occupies Saved's center and consumes its first tap.
+# Use the same conditional close as map-search-setup, retaining the warning logs.
+- runFlow:
+    when:
+      visible: ".*Open debugger to view warnings.*"
+    commands:
+      - tapOn:
+          point: "93%,93%"
+- assertNotVisible: ".*Open debugger to view warnings.*"
+- waitForAnimationToEnd
 # Maestro matches VoiceOver labels as text, ignoring case by default.
 # Keep those labels accessible while rejecting the uppercase visual labels.
 - assertVisible: '(?-i)^Saved$'
@@ -90,6 +100,9 @@ env:
     visible:
       id: saved-content
     timeout: 15000
+- assertVisible:
+    id: tab-saved
+    selected: true
 - assertVisible:
     id: floating-tab-bar
 - takeScreenshot: floating-nav-on-saved

@@ -176,6 +176,10 @@ After checking pizza and the 45g protein edit, the positive Shuffle phase clears
 It still requires a changed first result and preserved area and targets; a disabled Shuffle button after a successful empty response is expected behavior.
 `DiscoveryMap.test.tsx` replays those saved edits against a boundary with no qualified pizza results and separately verifies empty-shuffle state and Clear search recovery.
 `helpers/map-search-setup.yaml` shares the authenticated API preflight and bounded startup reconnection.
+`floating-nav` uses the same conditional Debug warning-banner close before tapping Saved, then requires both Saved content and selected-tab state.
+Its original pre-tap capture showed the warning covering Saved even though the later failure capture no longer did.
+The full-photo map pass keeps A/B/C/G card interactions, and the B empty-response tail opens meal targets and clears search through the actual recovery buttons above navigation.
+Changed native YAML requires the existing `scripts/sim/ci.test.ts` consumer in unfiltered focused selection, since dynamic file reads are outside Jest's import graph.
 Maestro passes `launchApp.permissions` values to iOS without expanding variables, so this helper selects literal `inuse` or `never` launches through `runFlow.when.true`.
 The installed iOS location driver rejects generic `allow`/`deny`; `inuse` grants foreground location and `never` exercises denial.
 Keep both permission scenarios covered by `scripts/sim/ci.test.ts` before host replay.
