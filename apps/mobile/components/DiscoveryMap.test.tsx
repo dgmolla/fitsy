@@ -618,6 +618,59 @@ it.each(['C', 'G'])('restores layout %s to the retained restaurant after failed 
   expect(scrollTo).toHaveBeenLastCalledWith({ x: stride, animated: false });
 });
 
+it.each(['A', 'B'])('restores user-dragged layout %s after failed Shuffle and unchanged retry rows', async variant => {
+  const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
+  const screen = open(`/search?query=meal&mapTray=${variant}`);
+  await screen.findByTestId('map-pin-2');
+  if (variant === 'B') await act(async () => fireEvent.press(screen.getByTestId('map-sheet-height')));
+  for (let position = 0; position < rows.length; position++) {
+    act(() => fireEvent(screen.getByTestId(`preview-pick-${position + 1}`), 'layout', {
+      nativeEvent: { layout: { x: 0, y: position * 300, width: 340, height: 300 } },
+    }));
+  }
+  const previousList = screen.getByTestId(`map-list-${variant}`);
+  act(() => {
+    fireEvent(previousList, 'scrollBeginDrag');
+    fireEvent.scroll(previousList, { nativeEvent: { contentOffset: { x: 0, y: 600 } } });
+    fireEvent(previousList, 'scrollEndDrag', { nativeEvent: { contentOffset: { x: 0, y: 600 } } });
+    fireEvent(previousList, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: 0, y: 600 } } });
+  });
+  expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('3 / 4')).toBeTruthy();
+  scrollTo.mockClear();
+  act(() => fireEvent(previousList, 'contentSizeChange', 340, rows.length * 300));
+  expect(scrollTo).not.toHaveBeenCalled();
+  const failedShuffle = deferred<Response>();
+  searchResponse = () => failedShuffle.promise;
+  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  expect(screen.queryByTestId(`map-list-${variant}`)).toBeNull();
+  await act(async () => failedShuffle.resolve({ ok: false, status: 503, json: async () => ({ error: 'offline' }) } as Response));
+  await screen.findByTestId('preview-retry');
+  searchResponse = async () => response({ data: rows, meta: { locked: false, nextCursor: null } });
+  await act(async () => fireEvent.press(screen.getByTestId('preview-retry')));
+  const restoredList = await screen.findByTestId(`map-list-${variant}`);
+  expect(restoredList).not.toBe(previousList);
+  scrollTo.mockClear();
+  act(() => fireEvent(restoredList, 'layout', { nativeEvent: { layout: { width: 340, height: 220 } } }));
+  expect(scrollTo).toHaveBeenLastCalledWith({ y: 600, animated: false });
+  scrollTo.mockClear();
+  act(() => fireEvent(restoredList, 'contentSizeChange', 340, rows.length * 300));
+  expect(scrollTo).toHaveBeenLastCalledWith({ y: 600, animated: false });
+  expect(screen.getByTestId('preview-pick-3').props.accessibilityLabel).toContain('Pizza House');
+  expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('3 / 4')).toBeTruthy();
+  // Restoration owns its clamped scroll; only a new user drag changes selection.
+  act(() => fireEvent(restoredList, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: 0, y: 300 } } }));
+  expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
+  act(() => {
+    fireEvent(restoredList, 'scrollBeginDrag');
+    fireEvent(restoredList, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: 0, y: 300 } } });
+  });
+  expect(screen.getByTestId('preview-pick-2').props.accessibilityLabel).toContain('Green Kitchen');
+  expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('2 / 4')).toBeTruthy();
+});
+
 it.each(['A', 'B'])('preserves an explicit final pin when layout %s clamps scrolling, but follows a user drag', async variant => {
   const screen = open(`/search?query=meal&mapDebug=1&mapTray=${variant}`);
   await screen.findByTestId('map-pin-3');

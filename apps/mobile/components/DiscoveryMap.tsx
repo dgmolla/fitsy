@@ -61,6 +61,11 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const rowOffsets = useRef<Record<string, number>>({});
   const listOffset = useRef(0);
   const userListScroll = useRef(false);
+  const attachList = useCallback((view: ScrollView | null) => {
+    list.current = view;
+    // A remounted native view has no user-owned drag to preserve.
+    if (view) userListScroll.current = false;
+  }, []);
   const restoredLayout = useRef('');
   const [mapRevision, setMapRevision] = useState(0);
   const [selectedId, setSelectedId] = useState<string>();
@@ -302,7 +307,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
         </ScrollView>}
         {showRestaurants && peek && preview && <DiscoveryMapCard result={preview} locked={d.locked === true} peek style={s.peekCard}
           testID="map-sheet-peek-card" onPress={() => open(preview)} label={`Open ${mapRestaurantLabel(preview)}`} />}
-        {showRestaurants && !carouselLayout && <ScrollView ref={list} style={[s.list, peek && s.hiddenList]} testID={`map-list-${variant}`}
+        {showRestaurants && !carouselLayout && <ScrollView ref={attachList} style={[s.list, peek && s.hiddenList]} testID={`map-list-${variant}`}
           accessibilityElementsHidden={peek} importantForAccessibility={peek ? 'no-hide-descendants' : 'auto'} pointerEvents={peek ? 'none' : 'auto'}
           contentContainerStyle={s.listContent} keyboardShouldPersistTaps="handled"
           onLayout={restoreList} onContentSizeChange={restoreList}
