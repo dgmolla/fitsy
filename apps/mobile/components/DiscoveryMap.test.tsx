@@ -580,14 +580,21 @@ it('synchronizes carousel cards and settled pins, switches layouts without fetch
   expect(searchRequests()).toHaveLength(before);
 });
 
-it.each(['C', 'G'])('restores layout %s to the retained restaurant after failed Shuffle and unchanged retry rows', async variant => {
+it.each(['C', 'G'].flatMap(variant => ['pin', 'drag'].map(selection => ({ variant, selection }))))(
+  'restores layout $variant after $selection selection, failed Shuffle and unchanged retry rows', async ({ variant, selection }) => {
   const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
   const screen = open(`/search?query=meal&mapTray=${variant}`);
   await screen.findByTestId('map-pin-2');
   const previousCarousel = screen.getByTestId('map-carousel');
   const stride = (StyleSheet.flatten(screen.getByTestId('map-card-0').props.style).width as number) + 12;
-  await act(async () => fireEvent.press(screen.getByTestId('map-pin-2')));
-  expect(scrollTo).toHaveBeenLastCalledWith({ x: 2 * stride, animated: true });
+  if (selection === 'pin') {
+    await act(async () => fireEvent.press(screen.getByTestId('map-pin-2')));
+    expect(scrollTo).toHaveBeenLastCalledWith({ x: 2 * stride, animated: true });
+  } else {
+    act(() => fireEvent(previousCarousel, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: 2 * stride, y: 0 } } }));
+    expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Pizza House');
+  }
   const failedShuffle = deferred<Response>();
   searchResponse = () => failedShuffle.promise;
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
@@ -618,7 +625,8 @@ it.each(['C', 'G'])('restores layout %s to the retained restaurant after failed 
   expect(scrollTo).toHaveBeenLastCalledWith({ x: stride, animated: false });
 });
 
-it.each(['A', 'B'])('restores user-dragged layout %s after failed Shuffle and unchanged retry rows', async variant => {
+it.each(['A', 'B'].flatMap(variant => ['pin', 'drag'].map(selection => ({ variant, selection }))))(
+  'restores layout $variant after $selection selection, failed Shuffle and unchanged retry rows', async ({ variant, selection }) => {
   const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
   const screen = open(`/search?query=meal&mapTray=${variant}`);
   await screen.findByTestId('map-pin-2');
@@ -629,17 +637,23 @@ it.each(['A', 'B'])('restores user-dragged layout %s after failed Shuffle and un
     }));
   }
   const previousList = screen.getByTestId(`map-list-${variant}`);
-  act(() => {
-    fireEvent(previousList, 'scrollBeginDrag');
-    fireEvent.scroll(previousList, { nativeEvent: { contentOffset: { x: 0, y: 600 } } });
-    fireEvent(previousList, 'scrollEndDrag', { nativeEvent: { contentOffset: { x: 0, y: 600 } } });
-    fireEvent(previousList, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: 0, y: 600 } } });
-  });
+  if (selection === 'pin') {
+    await act(async () => fireEvent.press(screen.getByTestId('map-pin-2')));
+    expect(scrollTo).toHaveBeenLastCalledWith({ y: 600, animated: true });
+  } else {
+    act(() => {
+      fireEvent(previousList, 'scrollBeginDrag');
+      fireEvent.scroll(previousList, { nativeEvent: { contentOffset: { x: 0, y: 600 } } });
+      fireEvent(previousList, 'scrollEndDrag', { nativeEvent: { contentOffset: { x: 0, y: 600 } } });
+      fireEvent(previousList, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: 0, y: 600 } } });
+    });
+  }
   expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
   expect(screen.getByText('3 / 4')).toBeTruthy();
   scrollTo.mockClear();
   act(() => fireEvent(previousList, 'contentSizeChange', 340, rows.length * 300));
-  expect(scrollTo).not.toHaveBeenCalled();
+  if (selection === 'drag') expect(scrollTo).not.toHaveBeenCalled();
+  else expect(scrollTo).toHaveBeenLastCalledWith({ y: 600, animated: false });
   const failedShuffle = deferred<Response>();
   searchResponse = () => failedShuffle.promise;
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
