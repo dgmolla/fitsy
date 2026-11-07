@@ -171,14 +171,13 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     {!d.location.loading && <MapView ref={map} style={s.map} testID="discovery-map-surface"
       initialRegion={{ latitude: lat, longitude: lng, ...DELTA }} onMapReady={() => setMapRevision(value => value + 1)}
       onLayout={() => setMapRevision(value => value + 1)}
-      onTouchStart={event => { touchStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }; if (__DEV__) console.info('issue755-normal-gesture', 'start'); }}
+      onTouchStart={event => { touchStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }; }}
       onTouchCancel={() => { touchStart.current = undefined; }}
-      onPanDrag={() => { if (__DEV__) console.info('issue755-normal-gesture', 'pan'); panning.current = true; setPendingArea(null); }}
+      onPanDrag={() => { panning.current = true; setPendingArea(null); }}
       onTouchEnd={event => {
         // MapKit scrolling can omit onPanDrag/onTouchMove while still delivering
         // touch endpoints before region completion. A tap must not arm a search.
         const start = touchStart.current;
-        if (__DEV__) console.info('issue755-normal-gesture', 'endMoved', Boolean(start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8));
         touchStart.current = undefined;
         if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) {
           panning.current = true;
@@ -186,7 +185,6 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
         }
       }}
       onRegionChangeComplete={region => {
-        if (__DEV__) console.info('issue755-normal-gesture', 'regionComplete', panning.current);
         // MapKit also reports programmatic fits; only a real pan offers a search.
         if (!panning.current) return;
         panning.current = false;
@@ -196,7 +194,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
       }}
       legalLabelInsets={{ top: 0, right: 0, bottom: trayHeight + tabBarClearance + 8, left: 12 }}
       showsUserLocation={d.location.source === 'gps'} showsMyLocationButton={false}
-      showsCompass={false} showsPointsOfInterest={false} rotateEnabled={false}>
+      showsCompass={false} showsPointsOfInterest={false} scrollEnabled rotateEnabled={false}>
       {pins.map(result => <RestaurantMarker key={result.id} result={result} position={cards.indexOf(result)}
         pinStyle={pinStyle} selected={result.id === selectedId} onSelect={select} />)}
     </MapView>}
