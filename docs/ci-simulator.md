@@ -23,6 +23,7 @@ The Mac job has a 30-minute deadline, one Xcode build worker, one Metro worker, 
 That deadline starts after assignment and does not bound a queue with no registered runner.
 Keep only one runner registered with `fitsy-sim` and leave the old local publisher paused.
 Manual native work must respect the existing `scripts/sim/sim` claim; CI refuses to boot alongside another booted simulator.
+Run the media integration gate after releasing the native lane: its host-isolation test also acquires the canonical OS lock, so running it concurrently with an owned Maestro session causes a real lock timeout.
 
 Normal PRs run `cold-start-welcome`, `signin-options` and `paywall-access`, including real DEV sign-in and paid-access assertions.
 Main and PRs labeled `full-sim` run every maintained flow compatible with Test Store, with no known-failure exclusions.

@@ -149,7 +149,9 @@ env:
     id: map-variant-G
 - assertVisible:
     id: map-goals
-- assertVisible: Macros
+- assertVisible:
+    id: map-goals
+    text: Edit macros
 - tapOn:
     id: map-goals
 - tapOn: "Protein grams"

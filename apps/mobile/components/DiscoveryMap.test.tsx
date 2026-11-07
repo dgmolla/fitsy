@@ -385,6 +385,14 @@ it('opens the real search list and Macros editor while preserving bounded result
   expect(searchRequests()).toHaveLength(before);
   await act(async () => fireEvent.press(screen.getByTestId('map-options-open')));
   await act(async () => fireEvent.press(screen.getByTestId('map-variant-G')));
+  const [, mapFlow] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/map-search.yaml'), 'utf8')) as [unknown, {
+    tapOn?: { id: string }; assertVisible?: string | { id: string; text?: string };
+  }[]];
+  const selectedG = mapFlow.findIndex(step => step.tapOn?.id === 'map-variant-G');
+  const macroName = mapFlow[selectedG + 2]?.assertVisible;
+  const macroButton = screen.getByTestId('map-goals');
+  expect(macroButton.props.accessibilityLabel).toBe(typeof macroName === 'string' ? macroName : macroName?.text);
+  expect(within(macroButton).getByText('Macros')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-goals')));
   expect(screen.getByTestId('discovery-map')).toBeTruthy();
   await act(async () => fireEvent.changeText(screen.getByLabelText('Protein grams'), '45'));
