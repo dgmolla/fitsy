@@ -15,6 +15,7 @@ import { FALLBACK_LAT, FALLBACK_LNG, MANUAL_LOCATION_KEY } from '../lib/useLocat
 import { __resetForTesting } from '../lib/analytics';
 import { FloatingNavClearanceContext } from '../lib/floatingNav';
 import { EDITORIAL } from '../lib/brand';
+import type { ReactTestRendererJSON } from 'react-test-renderer';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
@@ -43,6 +44,7 @@ const restaurants: RestaurantResult[] = ['Flor do Ave', 'Green Kitchen', 'Pizza 
 let requests: URL[];
 let rows: RestaurantResult[];
 let flag: boolean | string | undefined;
+let shuffleFlag: boolean;
 let locked: boolean;
 let nextCursor: string | null;
 let listeners: Set<() => void>;
@@ -65,11 +67,12 @@ beforeEach(async () => {
   jest.mocked(ExpoLocation.getLastKnownPositionAsync).mockResolvedValue(null);
   rows = restaurants;
   flag = true;
+  shuffleFlag = true;
   locked = false;
   nextCursor = null;
   listeners = new Set();
   jest.mocked(PostHog).mockImplementation(() => ({ capture() {}, identify() {},
-    getFeatureFlag: (name: string) => name === 'map-search' ? flag : name === 'shuffle',
+    getFeatureFlag: (name: string) => name === 'map-search' ? flag : name === 'shuffle' && shuffleFlag,
     onFeatureFlags: (callback: () => void) => { listeners.add(callback); return () => listeners.delete(callback); },
   }) as unknown as PostHog);
   searchResponse = async () => response({ data: rows, meta: { locked, nextCursor } });
@@ -93,6 +96,31 @@ afterEach(() => {
   Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
 });
 const open = (url = '/search?query=meal') => renderJourney(url, { ...routes, '(tabs)/search': () => <Search /> });
+
+it('removes the map action surface with Shuffle disabled and keeps the enabled action usable', async () => {
+  shuffleFlag = false;
+  const screen = open('/search?mapDebug=1');
+  await screen.findByTestId('map-pin-0');
+  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  const emptyActionSurfaces = (node: ReactTestRendererJSON | string): number => {
+    if (typeof node === 'string') return 0;
+    const style = StyleSheet.flatten(node.props.style);
+    const emptyAction = !node.children?.length && style?.width === 48 && style?.height === 48;
+    return Number(emptyAction) + (node.children ?? []).reduce((count, child) => count + emptyActionSurfaces(child), 0);
+  };
+  const tree = screen.toJSON();
+  expect((Array.isArray(tree) ? tree : tree ? [tree] : []).reduce((count, node) => count + emptyActionSurfaces(node), 0)).toBe(0);
+  shuffleFlag = true;
+  await act(async () => listeners.forEach(listener => listener()));
+  const shuffle = await screen.findByTestId('shuffle-button');
+  expect(StyleSheet.flatten(shuffle.props.style)).toMatchObject({ width: 48, height: 48 });
+  await act(async () => fireEvent.press(shuffle));
+  expect(searchParams().shuffle).toBe('1');
+  shuffleFlag = false;
+  await act(async () => listeners.forEach(listener => listener()));
+  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  expect(screen.getByTestId('map-search-entry')).toBeTruthy();
+});
 
 it.each(['flows/floating-nav', 'helpers/map-search-setup'].flatMap(caller =>
   [false, true].map(enabled => ({ caller, enabled }))))(

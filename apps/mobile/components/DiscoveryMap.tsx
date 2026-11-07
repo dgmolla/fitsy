@@ -183,7 +183,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
           <Ionicons name="search" size={19} color={EDITORIAL.green} />
           <Text style={s.searchText} numberOfLines={1}>{d.query || 'Search restaurants or dishes'}</Text>
         </Pressable>
-        <View style={s.shuffle}><ShuffleButton disabled={!d.canShuffle} onPress={d.handleShuffle} /></View>
+        <ShuffleButton style={s.shuffle} disabled={!d.canShuffle} onPress={d.handleShuffle} />
       </View>
       <View style={s.topRow} pointerEvents="box-none">
         <Pressable style={s.location} testID="discovery-location" onPress={d.handleOpenLocationPicker}

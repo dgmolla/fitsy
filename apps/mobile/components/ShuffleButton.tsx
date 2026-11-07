@@ -1,11 +1,11 @@
 import React from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { EDITORIAL } from '@/lib/brand';
 import { useShuffleFlag } from '@/lib/useShuffleFlag';
 
-export function ShuffleButton({ disabled, onPress }: { disabled: boolean; onPress: () => void }) {
+export function ShuffleButton({ disabled, onPress, style }: { disabled: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
   const { shuffleDebug } = useLocalSearchParams<{ shuffleDebug?: string }>();
   const enabled = useShuffleFlag(shuffleDebug === '1');
   if (!enabled) return null;
@@ -13,7 +13,7 @@ export function ShuffleButton({ disabled, onPress }: { disabled: boolean; onPres
     accessibilityRole="button" accessibilityLabel="Shuffle results"
     accessibilityHint="Find a fresh set of restaurants for this search"
     accessibilityState={{ disabled }} testID="shuffle-button"
-    style={({ pressed }) => [s.button, (disabled || pressed) && s.dimmed]}>
+    style={({ pressed }) => [s.button, style, (disabled || pressed) && s.dimmed]}>
     <Ionicons name="shuffle" size={16} color={EDITORIAL.greenAccent} />
   </Pressable>;
 }
