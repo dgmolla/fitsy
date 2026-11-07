@@ -262,9 +262,17 @@ it('searches a settled dragged area only after confirmation and ignores stale ar
   const firstArea = { latitude: 34.08, longitude: -118.28, latitudeDelta: 0.06, longitudeDelta: 0.06 };
   await act(async () => fireEvent(map, 'regionChangeComplete', firstArea));
   expect(screen.queryByTestId('map-search-area')).toBeNull();
+  // MapKit delivers start/end but no onPanDrag/onTouchMove while scrolling.
+  // A tap followed by a programmatic fit must not offer a new area.
   await act(async () => {
-    fireEvent(map, 'panDrag', {});
-    fireEvent(map, 'panDrag', {});
+    fireEvent(map, 'touchStart', { nativeEvent: { pageX: 200, pageY: 300 } });
+    fireEvent(map, 'touchEnd', { nativeEvent: { pageX: 201, pageY: 300 } });
+    fireEvent(map, 'regionChangeComplete', firstArea);
+  });
+  expect(screen.queryByTestId('map-search-area')).toBeNull();
+  await act(async () => {
+    fireEvent(map, 'touchStart', { nativeEvent: { pageX: 200, pageY: 300 } });
+    fireEvent(map, 'touchEnd', { nativeEvent: { pageX: 100, pageY: 300 } });
     fireEvent(map, 'regionChangeComplete', firstArea);
   });
   expect(searchRequests()).toHaveLength(initialRequests);
@@ -276,7 +284,8 @@ it('searches a settled dragged area only after confirmation and ignores stale ar
   expect(searchParams()).toEqual({ lat: '34.08', lng: '-118.28', q: 'salmon', ...values });
   expect(screen.queryByTestId('map-search-area')).toBeNull();
   await act(async () => {
-    fireEvent(map, 'panDrag', {});
+    fireEvent(map, 'touchStart', { nativeEvent: { pageX: 200, pageY: 300 } });
+    fireEvent(map, 'touchEnd', { nativeEvent: { pageX: 100, pageY: 300 } });
     fireEvent(map, 'regionChangeComplete', { ...firstArea, latitude: 34.1, longitude: -118.3 });
   });
   expect(searchRequests()).toHaveLength(initialRequests + 1);
