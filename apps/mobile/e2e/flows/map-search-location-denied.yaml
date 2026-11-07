@@ -1,4 +1,4 @@
-# Permission denial must retain a usable city picker, search, and view toggle.
+# Permission denial must retain a usable city picker, tappable pins and search.
 appId: com.fitsy.mobile
 tags: [billing, discovery, changed-journey, 'fixture:entitled-dev', 'store:test-store']
 env:
@@ -17,32 +17,66 @@ env:
 - takeScreenshot: map-search-location-denied
 - tapOn:
     id: discovery-location
+- extendedWaitUntil:
+    visible: "Choose a neighborhood"
+    timeout: 5000
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Search near Hollywood"
+    direction: DOWN
+    centerElement: true
 - tapOn: "Search near Hollywood"
 - assertVisible: "Location: Hollywood"
 - assertNotVisible:
     id: map-location-fallback
+- extendedWaitUntil:
+    visible:
+      id: map-pin-0
+    timeout: 30000
+- waitForAnimationToEnd
+- assertNotVisible:
+    id: map-preview-open
+- tapOn:
+    id: map-pin-0
+- assertVisible:
+    id: map-preview-open
+- takeScreenshot: map-area-pin-recovered
+- tapOn:
+    id: map-search-entry
+- assertNotVisible:
+    id: discovery-map
+- assertVisible:
+    id: discovery-macro-strip
 - tapOn:
     id: discovery-search
 - inputText: pizza
 - pressKey: Enter
 - extendedWaitUntil:
     visible:
-      id: map-pin-0
+      id: discovery-hero
     timeout: 30000
-- tapOn:
-    id: map-pin-0
+- assertNotVisible:
+    id: discovery-map
 - assertVisible:
-    id: map-preview-open
-- tapOn:
-    id: discovery-view-toggle
-- assertVisible:
-    id: discovery-hero
+    id: discovery-macro-strip
 - assertVisible:
     id: discovery-search
     text: pizza
 - tapOn:
     id: discovery-view-toggle
+- extendedWaitUntil:
+    visible:
+      id: map-pin-0
+    timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    id: map-pin-0
 - assertVisible:
-    id: discovery-map
+    id: map-preview-open
 - assertVisible: "Location: Hollywood"
+- assertVisible:
+    id: map-search-entry
+    text: "Search: pizza"
+- assertVisible:
+    id: floating-tab-bar
 - takeScreenshot: map-search-manual-area

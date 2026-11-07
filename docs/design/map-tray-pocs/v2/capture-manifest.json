@@ -1,0 +1,198 @@
+{
+  "captured": "2026-11-06",
+  "nativeAppSha256": "124fc5780bbf86fb1f8881c6721f2f09b2b27a2727703a426610db9f247b90ef",
+  "sourceJsSha256": "eb4382772d52e82fb6a62339ae907b0a75bb0221de1b287accbf4a9778d9458c",
+  "servedBundleSha256": "d5f020c9dc2fa8c8fa85e687fceee691e82e8008faa21256f23f270752920879",
+  "runtimeSource": {
+    "apps/mobile/components/DiscoveryMap.tsx": "37d3c448bbd5abe606cb2bd3b08a973ddcd2679812472bcf0a800dfab0b18880",
+    "apps/mobile/components/DiscoveryMap.styles.ts": "a02fe6a2f37d60ada1147c228e157f5a817d20faa0a7da6f2ed22563a96a02df",
+    "apps/mobile/components/DiscoveryCards.tsx": "68058cfb7453714ccc0de9d19cb9168c28e156c6952dcde3fafb10f0e9a59e32",
+    "apps/mobile/lib/discoveryMap.ts": "b507cd7db85cdc6eb6588a827a12da798619e0d98fac55edd35299a9c0ee56a3",
+    "apps/mobile/e2e/flows/map-search.yaml": "a935e6e4318e02c351a516babe2621490e7f4b9f99f85bbbffa5dd495cb08fa1",
+    "apps/mobile/e2e/flows/map-search-location-denied.yaml": "9cc20d140ee2a99719a3783a0b8ed7427c1071a219465bae882701d8b5b62a37",
+    "apps/mobile/e2e/helpers/map-search-setup.yaml": "a9935038ec05d290ad2f9256c0094e477cd93ddb5952c2c5874a17eb730e293a",
+    "apps/mobile/e2e/helpers/map-first-spot.yaml": "31e18ce3ba7587c1e62f0a685d7f9ae92122ac705721e02d9dd9313c803e7f7a"
+  },
+  "screenshots": [
+    {
+      "file": "normal-c.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "f67828d4be3669885b55aaa8952409824d693d65208b0cbc3afae8f768d8f765",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "normal-g.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "65a02df5b385fb1ac18239be82ff62318a88253d9c65f4da613d746f359441fd",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "normal-a.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "61b4d74068827ab0e6a054d2149cd239b2bf25bb9f582ddb55fe160f94f84c80",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "normal-b-peek.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "370b28d60f0e27e36ef9ea579dc9a4473111607883c1c2be692fd11706c1af95",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "search-list-macros.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "4888b892f90adf940b63a6d85235402dcbe13e3925869c66f99fcca2954a2e1c",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "pins-cuisine.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "65a02df5b385fb1ac18239be82ff62318a88253d9c65f4da613d746f359441fd",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "pins-icon.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "39b4008e22b08043ced720fb16525b3c507b0c4553b5842b96c8f28dd0d73feb",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "pins-numbered.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "1ec80e8e66fc2e3ccd3cca768ea7fe032e09c54a6d3f3a69660e1871f4e89dc4",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "b-full-macros.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "ab636897cd704a8c2710df950d3c4fcef48915baea10ff442597d46f76e8cbde",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "b-full-last.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "33448df01d14e078b7fa44e7c25aaf9baed8a0cdf2be8eb6fbc5221c633e0339",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "b-peek-last.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "ba8d93c83a3fe8695801b502f6b71bb47630c74cba38785f1c528f96f732e599",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "b-half-last.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "e2355b35be83d44b842f97c1398e96e97a65318e44f4342a4c64e19fc4985d74",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "b-user-scroll.png",
+      "sourceRun": "v2-repair3-map",
+      "sha256": "3b3c8d5c88debe7f68dfa6a7ed82d145887585ac6924a9539eec00b916e382cf",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "small-c.png",
+      "sourceRun": "v2-small-map",
+      "sha256": "3cea28805280e75aad08108a3c71186e5c64432ff137973f5febff18b6e35cf5",
+      "pixels": [
+        750,
+        1334
+      ]
+    },
+    {
+      "file": "small-g.png",
+      "sourceRun": "v2-small-map",
+      "sha256": "e5778d416e6708939a0799a62cb9e2097e1c217c587995562a55925c9870b689",
+      "pixels": [
+        750,
+        1334
+      ]
+    },
+    {
+      "file": "small-a.png",
+      "sourceRun": "v2-small-map",
+      "sha256": "139881800eb6e9d908a0544605cff3941386b5ecaf0e6f2ade01f93d04d5bd47",
+      "pixels": [
+        750,
+        1334
+      ]
+    },
+    {
+      "file": "small-b-peek.png",
+      "sourceRun": "v2-small-map",
+      "sha256": "a21ee2ea162271410c1f4465ddb79380390c58fe70f079a3306fb6df2e2d8c04",
+      "pixels": [
+        750,
+        1334
+      ]
+    },
+    {
+      "file": "small-b-half-last.png",
+      "sourceRun": "v2-small-map",
+      "sha256": "6f067a5b8fc7eb7f052cecaf95e787ddca2bf20ef79fe32fa6f389de9a6f8220",
+      "pixels": [
+        750,
+        1334
+      ]
+    },
+    {
+      "file": "denied-area-pin.png",
+      "sourceRun": "v2-repair2-denied",
+      "sha256": "24c1731450a609d36dff330fae8bbf27e01513bbdda2f23a015191296c46ed9a",
+      "pixels": [
+        1178,
+        2556
+      ]
+    },
+    {
+      "file": "denied-search.png",
+      "sourceRun": "v2-repair2-denied",
+      "sha256": "69adcc6cd9d6838205dcbf6b20cdf91d91a77d8381e47e5a47e084bb7b8c40da",
+      "pixels": [
+        1178,
+        2556
+      ]
+    }
+  ]
+}

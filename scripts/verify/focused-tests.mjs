@@ -11,9 +11,9 @@ import { passingTests } from './test-results.mjs';
 const file = join(repository, '.evidence/verify/focused-tests.json');
 const selectionHelp = 'select meaningful focused reproduction/regression tests with focused-tests.mjs --set <test paths>';
 const jestWorkspaces = ['apps/api', 'apps/mobile', 'packages/shared', 'scripts'];
-function selection(paths) {
+function selection(paths, pattern) {
   if (!Array.isArray(paths) || !paths.length) throw new Error(selectionHelp);
-  return [...new Set(paths)].map(path => {
+  const tests = [...new Set(paths)].map(path => {
     if (typeof path !== 'string' || path.startsWith('-') || relative(repository, resolve(repository, path)) !== path ||
         !/\.(?:test\.(?:ts|tsx|mjs|py)|spec\.(?:ts|tsx))$/.test(path) || !existsSync(resolve(repository, path))) {
       throw new Error(`invalid focused test path: ${path}`);
@@ -23,6 +23,15 @@ function selection(paths) {
     }
     return path;
   });
+  // Saved native YAML is read dynamically, outside Jest's import graph.
+  // Its existing caller contracts must run even when local tests are explicit.
+  if (impactPlan().files?.some(path => /^apps\/mobile\/e2e\/(?:flows|helpers)\/.*\.ya?ml$/.test(path))) {
+    if (!tests.includes('scripts/sim/ci.test.ts'))
+      throw new Error('Changed native YAML requires scripts/sim/ci.test.ts in focused selection');
+    if (pattern !== undefined)
+      throw new Error('Changed native YAML requires unfiltered caller tests; omit --jest-pattern');
+  }
+  return tests;
 }
 async function run(paths, pattern) {
   if (pattern !== undefined) {
@@ -72,7 +81,7 @@ if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[
       const pattern = flags[0]?.slice('--jest-pattern='.length);
       if (pattern !== undefined && (!pattern.trim() || pattern.length > 500)) throw new Error('invalid Jest test-name pattern');
       if (pattern !== undefined) new RegExp(pattern);
-      const tests = selection(process.argv.slice(3).filter(arg => !arg.startsWith('--jest-pattern=')));
+      const tests = selection(process.argv.slice(3).filter(arg => !arg.startsWith('--jest-pattern=')), pattern);
       mkdirSync(join(repository, '.evidence/verify'), { recursive: true });
       writeFileSync(file, JSON.stringify({ version: 1, tests, ...(pattern === undefined ? {} : { pattern }) }) + '\n');
       console.log(JSON.stringify({ name: 'focused-tests', status: 'pass', summary: 'focused test selection saved' }));
@@ -86,7 +95,7 @@ if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[
       try { config = JSON.parse(recipe); }
       catch { throw new Error('invalid focused test selection JSON; ' + selectionHelp); }
       if (config?.version !== 1) throw new Error('unsupported focused selection version');
-      const executed = await run(selection(config.tests), config.pattern);
+      const executed = await run(selection(config.tests, config.pattern), config.pattern);
       console.log(JSON.stringify({ name: 'focused-tests', status: 'pass', summary: 'selected reproduction/regression tests pass', executed_tests: executed }));
     }
   } catch (error) {

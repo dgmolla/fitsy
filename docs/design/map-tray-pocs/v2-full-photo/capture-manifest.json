@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "issue": 753,
+  "pr": 754,
+  "phase": "repair batch 4 full-photo gallery",
+  "sourceSha": "bbeae80f7eb42d3e9c30808df4c939a46c76ef38",
+  "baseSha": "195d5a603be56a581bbd40b2fd144df8a5fdc608",
+  "jsInputHash": "f943e7de02f37654d0e4583b3aa5117896a158054d5d071888669fae51e90979",
+  "servedBundleSha256": "946f808d614acce8bb7d22a3c20ab541fc3b80692f52c6e2c766ef5e77a7da39",
+  "nativeIdentity": "9b5e96655cdadf7f544593b602abe6c10bddeab66eb20f79c583e4695d9772d7",
+  "appHash": "9b81bf391d6e26e13b273e30b375726929b563eea0dbaca4da1b55e29d4a6c07",
+  "bundleReadbackAt": "2026-11-07T02:59:35.061Z",
+  "captureMethod": "Actual Debug Simulator UI, preserved outside checkout; no image edits",
+  "automatedNativeScopePassed": false,
+  "nativeLimit": "Saved affected journey passed before card implementation; final-source XCTest setup stopped before login. Independent UI captures do not pass the selected 28-flow scope. Apple-history prerequisite remains unavailable and unwaived.",
+  "priorGallerySource": "f0300765f965755f0851dbc33c8593eb9d8224df",
+  "files": [
+    {
+      "file": "normal-a-icon.png",
+      "sha256": "47a4aa360cb8677241a8ac5be1f929830ea480a5c95da9754c48d5a9df89a3c0",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 2659889,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-b-empty-recovered.png",
+      "sha256": "ef0d18b10a1488b8e8bef148a02693915242be4885f32cd88b48bf8bda1a9444",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 2122847,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-b-empty.png",
+      "sha256": "483aa766730cb88882e42f4d9bae037eb9ed3fe5ab4ccf52a5649941704f7251",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 1455249,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-b-full-final-row.png",
+      "sha256": "f90da2a10ff0f55e5f3f76f4e25b9a6dad1d9160afd6b3676db6315a024d7f5e",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 2288887,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-b-half-final-row.png",
+      "sha256": "90570c2fc1dfce78804e54b44678a6307e7c2385e3f4bb1ec9c6efc700f3d64e",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 2092493,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-b-half-utensils.png",
+      "sha256": "352ec308b310bf826c5f2984b463c31d855479a9a77715391284901963beb8ee",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 2377038,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-b-peek-final-row.png",
+      "sha256": "0c7e57bcaa07bc7212c1bfefbc24372aa77f2d39bd28477935a779de99f8260f",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 2102227,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-b-peek-utensils.png",
+      "sha256": "b74afcddef0c994c83a036116ef95c9a9233b18f4f2d1c916f7461881a882e84",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 2113439,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-c-icon.png",
+      "sha256": "3fa8795f2983ef0a6f8ebcd9e5ba8d8ed29138f064892d6ac29b023d48c03a63",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 3068077,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-c-search-list-macros.png",
+      "sha256": "f4849ba5c8ccf5b4dc8ee0891de1b7f0d69d6993f83f9e4556492f8535b546d0",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 2534453,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-c-search-pin-selection.png",
+      "sha256": "8eb50a07f6a38a5e1af8f621aceb8ed06c9d1d13cb964fb55358aa6587486005",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 2609488,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-g-cuisine-fallback.png",
+      "sha256": "0251cb3fa38179ce6159f794437240aa60712bdacc1528202a418958138bf570",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 3002538,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "normal-g-goals-editor.png",
+      "sha256": "9bee912280100d54b41e3511819742c94125dfbc11623d1908f044f63b8d210f",
+      "width": 1179,
+      "height": 2556,
+      "bytes": 598224,
+      "device": "iPhone 15 / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-a-icon.png",
+      "sha256": "1a8b9b388221153eb3bd50e65d2f1909493087f5afbd3281003992df5d697266",
+      "width": 750,
+      "height": 1334,
+      "bytes": 1050032,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-b-empty-recovered.png",
+      "sha256": "be530950a10a63f63e12f4b409fecc0ca267da7f5171cbe47cb342b2f92ca03e",
+      "width": 750,
+      "height": 1334,
+      "bytes": 950796,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-b-empty.png",
+      "sha256": "3f4e1313eab3a597d0e1529079ac836477445094892e83db7875d087cfd6dde4",
+      "width": 750,
+      "height": 1334,
+      "bytes": 595922,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-b-full-final-row.png",
+      "sha256": "ccff68a6b7b6694efe1b8b43fb799c891ed4e1d4ac453314c8d9e1f463cd87a3",
+      "width": 750,
+      "height": 1334,
+      "bytes": 958824,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-b-half-final-row.png",
+      "sha256": "b0b1eedea6d28350b73b125489e9714e5fd75134dac8d5668d4edac3e8af4dd9",
+      "width": 750,
+      "height": 1334,
+      "bytes": 1058691,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-b-peek-final-row.png",
+      "sha256": "cf484d9a4a44954c4cdc31f95b5454d702749d7f4a182fc5663bd1d26aec47b5",
+      "width": 750,
+      "height": 1334,
+      "bytes": 482368,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-b-peek-utensils.png",
+      "sha256": "cd739c9f201e807a130486bbf34512c56c7af7f88ad06bf1ca3671db0cf813ea",
+      "width": 750,
+      "height": 1334,
+      "bytes": 1003366,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-c-denied-numbered.png",
+      "sha256": "08f8aeefcf24309249b01428d55fbb71737b0239911e13308c3a96c2782c112f",
+      "width": 750,
+      "height": 1334,
+      "bytes": 1060634,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-c-hollywood-pin-selected.png",
+      "sha256": "743313eb31fb77a72c12ca6687f04c15eeadd9421089eb65e7e04dbd2bcfbf7a",
+      "width": 750,
+      "height": 1334,
+      "bytes": 1106961,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-g-cuisine-fallback.png",
+      "sha256": "857d2e1fc95eba7c57cd93f95106f89d4b11007931c5442082608d66bac7fd34",
+      "width": 750,
+      "height": 1334,
+      "bytes": 1107075,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    },
+    {
+      "file": "small-g-goals-editor.png",
+      "sha256": "d8d43d8e1a832a9a79a6e711a80fab9982ab0580bed0d74d3b8470afdd46c84f",
+      "width": 750,
+      "height": 1334,
+      "bytes": 246566,
+      "device": "iPhone SE / iOS 17.5",
+      "capture": "unedited simctl PNG"
+    }
+  ]
+}

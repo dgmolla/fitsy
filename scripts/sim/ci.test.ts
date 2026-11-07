@@ -58,21 +58,48 @@ test('menu startup retries only observations and authenticates once before readi
 
 test.each([
   'map-search', 'map-search-location-denied',
-])('%s submits search through the iOS return key before requiring a result pin', flow => {
+])('%s submits with Enter, shows list results/macros, then returns to a selectable map pin', flow => {
   type Step = string | {
     inputText?: string;
     pressKey?: string;
+    tapOn?: { id: string };
     extendedWaitUntil?: { visible: { id: string }; timeout: number };
   };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, Step[]];
   const search = commands.findIndex(step => typeof step === 'object' && step.inputText === 'pizza');
   expect(search).toBeGreaterThan(-1);
-  // Use the input's native Search action instead of heuristic iOS keyboard
-  // dismissal, and keep the result gate after submission.
+  // Search intentionally hides the map. Preserve its native submission and
+  // result gate, then require actual pin selection after the explicit return.
   expect(commands[search + 1]).toEqual({ pressKey: 'Enter' });
   expect(commands[search + 2]).toEqual({
-    extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 },
+    extendedWaitUntil: { visible: { id: 'discovery-hero' }, timeout: 30000 },
   });
+  const backToMap = commands.findIndex((step, index) => index > search && typeof step === 'object' && step.tapOn?.id === 'discovery-view-toggle');
+  expect(backToMap).toBeGreaterThan(search + 2);
+  expect(commands.slice(search + 3, backToMap)).toEqual(expect.arrayContaining([
+    { assertNotVisible: { id: 'discovery-map' } },
+    { assertVisible: { id: 'discovery-macro-strip' } },
+    { assertVisible: { id: 'discovery-search', text: 'pizza' } },
+  ]));
+  expect(commands.slice(backToMap + 1, backToMap + 5)).toEqual([
+    { extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 } },
+    'waitForAnimationToEnd', { tapOn: { id: 'map-pin-0' } }, { assertVisible: { id: 'map-preview-open' } },
+  ]);
+});
+
+test('floating navigation clears only the observed Debug toast before proving Saved content and selection', () => {
+  type Step = { runFlow?: { when: { visible: string }; commands: unknown[] }; tapOn?: { id: string } };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/floating-nav.yaml'), 'utf8')) as [unknown, Step[]];
+  const banner = commands.findIndex(step => step.runFlow?.when?.visible === '.*Open debugger to view warnings.*');
+  const saved = commands.findIndex(step => step.tapOn?.id === 'tab-saved');
+  expect(banner).toBeGreaterThan(-1);
+  expect(saved).toBeGreaterThan(banner);
+  expect(commands[banner]?.runFlow?.commands).toEqual([{ tapOn: { point: '93%,93%' } }]);
+  expect(commands[banner + 1]).toEqual({ assertNotVisible: '.*Open debugger to view warnings.*' });
+  expect(commands.slice(saved + 1, saved + 3)).toEqual([
+    { extendedWaitUntil: { visible: { id: 'saved-content' }, timeout: 15000 } },
+    { assertVisible: { id: 'tab-saved', selected: true } },
+  ]);
 });
 
 test('widget return dismisses the non-accessible Debug overlay and retains the named action and Search assertion', () => {
