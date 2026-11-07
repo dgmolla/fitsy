@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle, type ImageRequireSource } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle, type ImageRequireSource, type StyleProp, type TextStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import type { RestaurantResult } from '@fitsy/shared';
@@ -90,8 +90,33 @@ export async function openRestaurantOrPaywall(
 
 // ─── Hero card (#01) ──────────────────────────────────────────────────────────
 
-export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false, hideDistance = false, imageSource }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: (result: RestaurantResult) => void; paywallPreview?: boolean; hideDistance?: boolean; imageSource?: ImageRequireSource }) {
+// Search and map previews share the API's actual meal, including its locked
+// and missing-match states. Layout changes must not invent nutrition content.
+export function HeroMealContent({ result, locked, paywallPreview = false, nameStyle, dishStyle }: {
+  result: RestaurantResult; locked: boolean; paywallPreview?: boolean;
+  nameStyle?: StyleProp<TextStyle>; dishStyle?: StyleProp<TextStyle>;
+}) {
   const bm = result.bestMatch;
+  return <>
+    <Text style={[hero.restName, paywallPreview && paywallCard.name, nameStyle]} numberOfLines={1} testID={paywallPreview ? 'paywall-restaurant-name' : undefined}>{result.name}</Text>
+    {locked && <LockedDishTeaser variant="hero" />}
+    {!locked && bm && <Text style={[hero.dishName, paywallPreview && paywallCard.dish, dishStyle]} numberOfLines={1}>{bm.name}</Text>}
+    {!locked && bm && (!paywallPreview || bm.nutritionBasis === 'published') && (
+      <View style={hero.macroRow}>
+        <Text style={hero.macroText}>P {bm.proteinG}g</Text>
+        <Text style={hero.dot}>·</Text>
+        <Text style={hero.macroText}>C {bm.carbsG}g</Text>
+        <Text style={hero.dot}>·</Text>
+        <Text style={hero.macroText}>F {bm.fatG}g</Text>
+        <Text style={hero.dot}>·</Text>
+        <Text style={hero.calText}>{bm.calories} kcal</Text>
+      </View>
+    )}
+    {paywallPreview && bm && <Text style={hero.macroText}>{bm.nutritionBasis === 'published' ? 'Published nutrition' : 'Estimated nutrition'} · {bm.confidence.toLowerCase()} confidence</Text>}
+  </>;
+}
+
+export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking, containerRef, onOpen, paywallPreview = false, hideDistance = false, imageSource }: { result: RestaurantResult; locked: boolean; unlocking?: () => void; containerRef?: React.RefObject<View | null>; onOpen?: (result: RestaurantResult) => void; paywallPreview?: boolean; hideDistance?: boolean; imageSource?: ImageRequireSource }) {
   return (
     <View ref={containerRef} collapsable={false} testID={paywallPreview ? 'paywall-restaurant-card' : 'preview-pick-1'}>
     <TouchableOpacity
@@ -130,21 +155,7 @@ export const HeroCard = React.memo(function HeroCard({ result, locked, unlocking
           <DietaryBadges options={result.dietaryOptions} />
           {!hideDistance && Number.isFinite(result.distanceMiles) && <Text style={hero.distText}>{result.distanceMiles.toFixed(1)} mi</Text>}
         </View>
-        <Text style={[hero.restName, paywallPreview && paywallCard.name]} numberOfLines={1} testID={paywallPreview ? 'paywall-restaurant-name' : undefined}>{result.name}</Text>
-        {locked && <LockedDishTeaser variant="hero" />}
-        {!locked && bm && <Text style={[hero.dishName, paywallPreview && paywallCard.dish]} numberOfLines={1}>{bm.name}</Text>}
-        {!locked && bm && (!paywallPreview || bm.nutritionBasis === 'published') && (
-          <View style={hero.macroRow}>
-            <Text style={hero.macroText}>P {bm.proteinG}g</Text>
-            <Text style={hero.dot}>·</Text>
-            <Text style={hero.macroText}>C {bm.carbsG}g</Text>
-            <Text style={hero.dot}>·</Text>
-            <Text style={hero.macroText}>F {bm.fatG}g</Text>
-            <Text style={hero.dot}>·</Text>
-            <Text style={hero.calText}>{bm.calories} kcal</Text>
-          </View>
-        )}
-        {paywallPreview && bm && <Text style={hero.macroText}>{bm.nutritionBasis === 'published' ? 'Published nutrition' : 'Estimated nutrition'} · {bm.confidence.toLowerCase()} confidence</Text>}
+        <HeroMealContent result={result} locked={locked} paywallPreview={paywallPreview} />
         {onOpen && <Text style={hero.macroText}>See full menu with Pro →</Text>}
       </View>
     </TouchableOpacity>

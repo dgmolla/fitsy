@@ -138,13 +138,14 @@ env:
 - copyTextFrom:
     id: map-card-0
 - assertTrue: ${maestro.copiedText === output.mapBeforeToggle}
-# A single Goals affordance edits the same macros while staying on the map.
+# The chosen C alternate edits the same macros while staying on the map.
 - tapOn:
     id: map-options-open
 - tapOn:
     id: map-variant-G
 - assertVisible:
     id: map-goals
+- assertVisible: Macros
 - tapOn:
     id: map-goals
 - tapOn: "Protein grams"
@@ -207,6 +208,49 @@ env:
     text: "40"
 - runFlow: ../helpers/dismiss-meal-targets.yaml
 - takeScreenshot: map-v2-g-goals
+# Both list studies integrate Map into the location control and keep the real picker.
+- tapOn:
+    id: map-options-open
+- tapOn:
+    id: map-list-style-split
+- assertVisible:
+    id: list-location-split
+- assertVisible:
+    id: discovery-macro-strip
+- tapOn:
+    id: discovery-location
+- waitForAnimationToEnd
+- tapOn: "Search near Hollywood"
+- assertVisible: "Location: Hollywood"
+- tapOn:
+    id: discovery-location
+- waitForAnimationToEnd
+- tapOn: "Search near DTLA"
+- assertVisible: "Location: DTLA"
+- takeScreenshot: map-list-split
+- tapOn:
+    id: discovery-view-toggle
+- tapOn:
+    id: map-options-open
+- tapOn:
+    id: map-list-style-compact
+- assertVisible:
+    id: list-location-compact
+- assertVisible:
+    id: discovery-macro-strip
+- tapOn:
+    id: discovery-location
+- waitForAnimationToEnd
+- tapOn: "Search near Hollywood"
+- assertVisible: "Location: Hollywood"
+- tapOn:
+    id: discovery-location
+- waitForAnimationToEnd
+- tapOn: "Search near DTLA"
+- assertVisible: "Location: DTLA"
+- takeScreenshot: map-list-compact
+- tapOn:
+    id: discovery-view-toggle
 - tapOn:
     id: map-options-open
 - tapOn:

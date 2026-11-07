@@ -1,10 +1,10 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 
-export function DiscoveryViewToggle({ map, onPress }: { map: boolean; onPress: () => void }) {
-  return <Pressable testID="discovery-view-toggle" onPress={onPress} style={s.button}
+export function DiscoveryViewToggle({ map, onPress, style }: { map: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
+  return <Pressable testID="discovery-view-toggle" onPress={onPress} style={[s.button, style]}
     accessibilityRole="button" accessibilityLabel={map ? 'Show restaurant list' : 'Show restaurant map'}>
     <Ionicons name={map ? 'list' : 'map-outline'} size={18} color={EDITORIAL.green} />
     <Text style={s.label}>{map ? 'List' : 'Map'}</Text>

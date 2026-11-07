@@ -1,8 +1,10 @@
-import React from 'react';
-import { Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { MacroValues } from '@/lib/macroPresets';
 import { EDITORIAL } from '@/lib/brand';
+import { BlurFallback } from '@/lib/BlurFallback';
+import { DiscoveryViewToggle } from './DiscoveryViewToggle';
 import { s } from './DiscoveryScreen.styles';
 
 function getSelectionLabel(): string {
@@ -17,11 +19,13 @@ export function Masthead({
   onLocationPress,
   locationRef,
   preview = false,
+  mapControl,
 }: {
   preview?: boolean;
   locationLabel: string;
   onLocationPress: () => void;
   locationRef?: React.RefObject<View | null>;
+  mapControl?: { onPress: () => void; variant: 'split' | 'compact' };
 }) {
   return (
     <View style={[s.masthead, !preview && s.mainMasthead]}>
@@ -30,8 +34,10 @@ export function Masthead({
           <View style={s.logoDot} />
           <Text style={s.logo}>fitsy</Text>
         </View>}
-        <View ref={locationRef} collapsable={false} style={s.locationAnchor}><TouchableOpacity
-          style={s.locationButton}
+        <View ref={locationRef} collapsable={false} style={[s.locationAnchor, mapControl && chrome.mapLocation]} testID={mapControl ? `list-location-${mapControl.variant}` : undefined}>
+          {mapControl && <DiscoveryViewToggle map={false} onPress={mapControl.onPress} style={chrome.mapButton} />}
+          <TouchableOpacity
+          style={[s.locationButton, mapControl && chrome.areaButton]}
           onPress={onLocationPress}
           activeOpacity={0.7}
           accessibilityRole="button"
@@ -39,14 +45,16 @@ export function Masthead({
           accessibilityHint="Double-tap to change location"
           testID="discovery-location"
         >
-          <View style={s.locationChip} testID="discovery-location-pill">
-            <Ionicons name="location" size={11} color={EDITORIAL.greenAccent} />
-            <Text style={s.locationText} numberOfLines={1}>{locationLabel}</Text>
-            <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
+          <View style={[s.locationChip, mapControl && chrome.areaChip]} testID="discovery-location-pill">
+            <Ionicons name="location" size={mapControl ? 16 : 11} color={EDITORIAL.greenAccent} />
+            {mapControl?.variant !== 'compact' && <>
+              <Text style={s.locationText} numberOfLines={1}>{locationLabel}</Text>
+              <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
+            </>}
           </View>
         </TouchableOpacity></View>
       </View>
-      {!preview && <Text style={s.issueLabel}>{getSelectionLabel()}</Text>}
+      {!preview && <Text style={s.issueLabel} numberOfLines={1}>{mapControl?.variant === 'compact' ? `YOUR PICKS NEAR ${locationLabel}` : getSelectionLabel()}</Text>}
     </View>
   );
 }
@@ -108,6 +116,7 @@ export function SearchBar({
   containerRef,
   action,
   placeholder = 'Search restaurants or dishes',
+  frosted = false,
 }: {
   value: string;
   onChangeText: (text: string) => void;
@@ -115,14 +124,19 @@ export function SearchBar({
   containerRef?: React.RefObject<View | null>;
   action?: React.ReactNode;
   placeholder?: string;
+  frosted?: boolean;
 }) {
+  const [focused, setFocused] = useState(false);
   return (
-    <View ref={containerRef} collapsable={false} style={s.search} testID="discovery-search-bar">
+    <View ref={containerRef} collapsable={false} style={[s.search, frosted && chrome.search, frosted && focused && chrome.searchFocused]} testID="discovery-search-bar">
+      {frosted && <FrostedSearchSurface />}
       <Text style={s.searchIco}>⌕</Text>
       <TextInput
         style={s.searchInput}
         value={value}
         onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         placeholder={placeholder}
         placeholderTextColor={EDITORIAL.textSoft}
         returnKeyType="search"
@@ -142,3 +156,23 @@ export function SearchBar({
     </View>
   );
 }
+
+// The same installed blur treatment stays cool white at rest, while typing,
+// and after submission. Its decorative layers never intercept input.
+export function FrostedSearchSurface() {
+  return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <BlurFallback tint="light" intensity={60} fallbackColor="rgba(255,255,255,0.9)" />
+    <View style={[StyleSheet.absoluteFill, chrome.frostTint]} />
+  </View>;
+}
+
+const chrome = StyleSheet.create({
+  mapLocation: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, borderWidth: 1,
+    borderColor: EDITORIAL.border, backgroundColor: 'rgba(255,255,255,0.8)', overflow: 'hidden' },
+  mapButton: { borderWidth: 0, borderRadius: 0, backgroundColor: 'transparent', paddingHorizontal: 12 },
+  areaButton: { flexShrink: 1, minWidth: 44, borderLeftWidth: 1, borderLeftColor: EDITORIAL.border },
+  areaChip: { backgroundColor: 'transparent', borderWidth: 0, paddingHorizontal: 10 },
+  search: { backgroundColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(58,112,80,0.2)', borderRadius: 24, overflow: 'hidden', minHeight: 48 },
+  searchFocused: { borderColor: EDITORIAL.greenAccent },
+  frostTint: { backgroundColor: 'rgba(255,255,255,0.68)' },
+});

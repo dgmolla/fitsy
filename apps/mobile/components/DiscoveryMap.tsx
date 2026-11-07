@@ -9,7 +9,7 @@ import type { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { EDITORIAL } from '@/lib/brand';
 import { hasMapCoordinate, mapCuisineEmoji, mapRestaurantLabel } from '@/lib/discoveryMap';
 import { trackRestaurantTapped } from '@/lib/analytics';
-import { MacroStrip } from './DiscoveryChrome';
+import { FrostedSearchSurface, MacroStrip } from './DiscoveryChrome';
 import { openRestaurantOrPaywall } from './DiscoveryCards';
 import { DiscoveryMapCard } from './DiscoveryMapCard';
 import { ShuffleButton } from './ShuffleButton';
@@ -19,7 +19,7 @@ import { useFloatingNavClearance } from '@/lib/floatingNav';
 type Discovery = ReturnType<typeof useDiscoveryState>;
 type PinStyle = 'numbered' | 'utensils' | 'cuisine' | 'icon';
 const DELTA = { latitudeDelta: 0.09, longitudeDelta: 0.09 };
-const VARIANTS = [['C', 'Search to list'], ['G', 'Quick goals'], ['A', 'Map + list'], ['B', 'Slim sheet']] as const;
+const VARIANTS = [['G', 'C alternate · Macros'], ['C', 'Search to list'], ['A', 'Map + list'], ['B', 'Slim sheet']] as const;
 const PIN_STYLES = [['numbered', '01', 'Numbers'], ['utensils', '🍴', 'Utensils'], ['cuisine', '🌮', 'Cuisine'], ['icon', '', 'Icon']] as const;
 const HEIGHTS = ['Peek', 'Half', 'Full'] as const;
 
@@ -51,8 +51,8 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const insets = useSafeAreaInsets();
   const tabBarClearance = useFloatingNavClearance();
   const { width, height } = useWindowDimensions();
-  const { mapTray, mapPin } = useLocalSearchParams<{ mapTray?: string; mapPin?: string }>();
-  const variant = mapTray === 'A' || mapTray === 'B' || mapTray === 'G' ? mapTray : 'C';
+  const { mapTray, mapPin, mapList } = useLocalSearchParams<{ mapTray?: string; mapPin?: string; mapList?: string }>();
+  const variant = mapTray === 'A' || mapTray === 'B' || mapTray === 'C' ? mapTray : 'G';
   const pinStyle: PinStyle = mapPin === 'numbered' || mapPin === 'cuisine' || mapPin === 'icon' ? mapPin : 'utensils';
   const carouselLayout = variant === 'C' || variant === 'G';
   const map = useRef<MapView>(null);
@@ -74,7 +74,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
   const compact = height < 740;
   const controlsBottom = insets.top + 8 + topHeight;
   const maxTrayHeight = Math.max(160, layoutHeight - controlsBottom - tabBarClearance - 96);
-  const sheetHeights = [Math.min(124, maxTrayHeight), Math.min(layoutHeight * 0.40, maxTrayHeight), maxTrayHeight];
+  const sheetHeights = [Math.min(152, maxTrayHeight), Math.min(layoutHeight * 0.40, maxTrayHeight), maxTrayHeight];
   const peek = variant === 'B' && detent === 0;
   const pan = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 8,
@@ -174,7 +174,8 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
       <View style={s.searchRow}>
         <Pressable style={s.searchEntry} testID="map-search-entry" onPress={onShowList}
           accessibilityRole="button" accessibilityLabel={d.query ? `Search: ${d.query}` : 'Search restaurants or dishes'}
-          accessibilityHint="Open the list with search and meal goals">
+          accessibilityHint="Open the list with search and macro editing">
+          <FrostedSearchSurface />
           <Ionicons name="search" size={19} color={EDITORIAL.green} />
           <Text style={s.searchText} numberOfLines={1}>{d.query || 'Search restaurants or dishes'}</Text>
         </Pressable>
@@ -188,8 +189,8 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
           <Ionicons name="chevron-down" size={12} color={EDITORIAL.green} />
         </Pressable>
         {variant === 'G' && <Pressable style={s.goals} testID="map-goals" onPress={() => d.setFilterVisible(true)}
-          accessibilityRole="button" accessibilityLabel="Edit meal goals">
-          <Ionicons name="options-outline" size={16} color={EDITORIAL.green} /><Text style={s.locationText}>Goals</Text>
+          accessibilityRole="button" accessibilityLabel="Edit macros">
+          <Ionicons name="options-outline" size={16} color={EDITORIAL.green} /><Text style={s.locationText}>Macros</Text>
         </Pressable>}
         <Pressable style={s.optionsButton} testID="map-options-open" onPress={() => setOptionsVisible(true)}
           accessibilityRole="button" accessibilityLabel="Map prototype options">
@@ -252,14 +253,14 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
             if (result) select(result, false);
           }}>
           {cards.map((result, position) => <View key={result.id} testID={result.id === selectedId ? 'map-preview' : undefined}>
-            <DiscoveryMapCard result={result} style={{ width: cardWidth, height: compact ? 174 : 210 }}
+            <DiscoveryMapCard result={result} locked={d.locked === true} style={{ width: cardWidth, height: compact ? 174 : 210 }}
               testID={result.id === selectedId ? 'map-preview-open' : `map-card-${position}`} onPress={() => open(result)}
               label={`Open ${mapRestaurantLabel(result)}`} page={`${position + 1} / ${cards.length}`}
               pageTestID={position === Math.max(0, index) ? 'map-page' : undefined} />
           </View>)}
           {more && <View style={s.moreCard}>{more}</View>}
         </ScrollView>}
-        {showRestaurants && peek && preview && <DiscoveryMapCard result={preview} peek style={s.peekCard}
+        {showRestaurants && peek && preview && <DiscoveryMapCard result={preview} locked={d.locked === true} peek style={s.peekCard}
           testID="map-sheet-peek-card" onPress={() => open(preview)} label={`Open ${mapRestaurantLabel(preview)}`} />}
         {showRestaurants && !carouselLayout && <ScrollView ref={list} style={[s.list, peek && s.hiddenList]} testID={`map-list-${variant}`}
           accessibilityElementsHidden={peek} importantForAccessibility={peek ? 'no-hide-descendants' : 'auto'} pointerEvents={peek ? 'none' : 'auto'}
@@ -272,7 +273,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
           {cards.map((result, position) => <View key={result.id} style={result.id === selectedId && s.selectedRow}
             onLayout={event => { rowOffsets.current[result.id] = event.nativeEvent.layout.y; }}>
             <View testID={position === 0 && variant === 'A' ? 'preview-pick-1' : undefined}>
-              <DiscoveryMapCard result={result} style={s.listCard} onPress={() => open(result)}
+              <DiscoveryMapCard result={result} locked={d.locked === true} style={s.listCard} onPress={() => open(result)}
                 testID={position === 0 && variant === 'A' ? 'discovery-hero' : `preview-pick-${position + 1}`}
                 label={`${result.name}, view full menu`} />
             </View>
@@ -284,17 +285,24 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
     <Modal visible={optionsVisible} transparent animationType="fade" onRequestClose={() => setOptionsVisible(false)}>
       <View style={s.optionsBackdrop}>
         <Pressable style={s.optionsDismiss} onPress={() => setOptionsVisible(false)} accessibilityRole="button" accessibilityLabel="Close map options" />
-        <View style={s.optionsPanel} testID="map-options">
+        <ScrollView style={s.optionsPanel} contentContainerStyle={s.optionsContent} testID="map-options">
           <View style={s.optionsHeading}><Text style={s.heading}>Map studies</Text>
             <Pressable style={s.arrow} testID="map-options-close" onPress={() => setOptionsVisible(false)} accessibilityRole="button" accessibilityLabel="Done with map options">
               <Ionicons name="close" size={21} color={EDITORIAL.green} />
             </Pressable></View>
           <Text style={s.optionLabel}>LAYOUT</Text>
-          {VARIANTS.map(([key, label]) => <Pressable key={key} style={[s.option, key === variant && s.activeOption]}
+          <View style={s.optionGrid}>{VARIANTS.map(([key, label]) => <Pressable key={key} style={[s.option, s.gridOption, key === variant && s.activeOption]}
             testID={`map-variant-${key}`} accessibilityRole="button" accessibilityLabel={`Prototype ${key}: ${label}`}
             accessibilityState={{ selected: key === variant }} onPress={() => { userListScroll.current = false; setSelectedId(undefined); listOffset.current = 0; router.setParams({ mapTray: key }); setOptionsVisible(false); }}>
             <Text style={s.optionText}>{label}</Text>{key === variant && <Ionicons name="checkmark" size={20} color={EDITORIAL.green} />}
-          </Pressable>)}
+          </Pressable>)}</View>
+          <Text style={s.optionLabel}>LIST ACCESS</Text>
+          <View style={s.optionGrid}>{(['split', 'compact'] as const).map(key => <Pressable key={key} style={[s.option, s.gridOption, (mapList === 'compact' ? 'compact' : 'split') === key && s.activeOption]}
+            testID={`map-list-style-${key}`} accessibilityRole="button" accessibilityLabel={key === 'split' ? 'List: Map and area' : 'List: compact Map and location icon'}
+            accessibilityState={{ selected: (mapList === 'compact' ? 'compact' : 'split') === key }}
+            onPress={() => { router.setParams({ mapList: key }); setOptionsVisible(false); onShowList(); }}>
+            <Text style={s.optionText}>{key === 'split' ? 'Map + area' : 'Compact Map'}</Text>
+          </Pressable>)}</View>
           <Text style={s.optionLabel}>PINS</Text>
           <View style={s.pinOptions}>{PIN_STYLES.map(([key, symbol, label]) => <Pressable key={key}
             style={[s.pinOption, key === pinStyle && s.activeOption]} testID={`map-pin-style-${key}`}
@@ -302,7 +310,7 @@ export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: 
             onPress={() => { router.setParams({ mapPin: key }); setOptionsVisible(false); }}>
             {key === 'icon' ? <Ionicons name="restaurant-outline" size={27} color={EDITORIAL.green} /> : <Text style={s.pinOptionSymbol}>{symbol}</Text>}<Text style={s.body}>{label}</Text>
           </Pressable>)}</View>
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   </View>;

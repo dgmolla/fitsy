@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { Platform, StyleSheet } from 'react-native';
+import { within } from '@testing-library/react-native';
 import PostHog from 'posthog-react-native';
 import type { RestaurantResult } from '@fitsy/shared';
 import Search from '../app/(tabs)/search';
@@ -13,6 +14,7 @@ import { saveDiscoveryMacroTargets } from '../lib/macroStorage';
 import { FALLBACK_LAT, FALLBACK_LNG, MANUAL_LOCATION_KEY } from '../lib/useLocation';
 import { __resetForTesting } from '../lib/analytics';
 import { FloatingNavClearanceContext } from '../lib/floatingNav';
+import { EDITORIAL } from '../lib/brand';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
@@ -175,7 +177,51 @@ it.each(['A', 'B', 'C', 'G'])("opens layout %s's full-photo card, then returns u
   expect(screen.getByLabelText('Location: DTLA')).toBeTruthy();
 });
 
-it('opens the real search list and Goals editor while preserving bounded results, targets and shuffle', async () => {
+it.each(['split', 'compact'])('keeps actual meal content and location access through the %s list control', async variant => {
+  rows = [{ ...restaurants[0], bestMatch: { menuItemId: 'meal-1', name: 'Grilled salmon plate',
+    proteinG: 37, carbsG: 53, fatG: 19, calories: 531, confidence: 'HIGH', matchScore: 0.2 } }];
+  const screen = open();
+  await screen.findByTestId('map-card-0');
+  expect(screen.getByText('Macros')).toBeTruthy();
+  const meal = ['Flor do Ave', 'Grilled salmon plate', 'P 37g', 'C 53g', 'F 19g', '531 kcal'];
+  for (const text of meal) expect(within(screen.getByTestId('map-card-0')).getByText(text)).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByTestId('map-options-open')));
+  type Step = { tapOn?: string | { id: string }; assertVisible?: string | { id: string } };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/map-search.yaml'), 'utf8')) as [unknown, Step[]];
+  const start = commands.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === `map-list-style-${variant}`);
+  expect(start).toBeGreaterThan(-1);
+  const selection = commands[start].tapOn;
+  if (typeof selection !== 'object') throw new Error('The native list study must use its rendered option');
+  await act(async () => fireEvent.press(screen.getByTestId(selection.id)));
+  await screen.findByTestId('discovery-list');
+  for (const text of meal) expect(within(screen.getByTestId('discovery-hero')).getByText(text)).toBeTruthy();
+  const controls = within(screen.getByTestId(`list-location-${variant}`));
+  expect(controls.getByTestId('discovery-view-toggle')).toBeTruthy();
+  await act(async () => fireEvent.press(controls.getByLabelText('Location: DTLA')));
+  const area = commands[start + 5]?.tapOn;
+  if (typeof area !== 'string') throw new Error('The native list study must select a real neighborhood');
+  await act(async () => fireEvent.press(await screen.findByLabelText(area)));
+  await screen.findByLabelText('Location: Hollywood');
+  await waitFor(() => expect(searchParams().lat).not.toBe('34.04'));
+  const input = screen.getByTestId('discovery-search');
+  const background = () => StyleSheet.flatten(screen.getByTestId('discovery-search-bar').props.style).backgroundColor;
+  const idle = background();
+  expect([EDITORIAL.cream, EDITORIAL.creamCard, EDITORIAL.creamDeep]).not.toContain(idle);
+  await act(async () => fireEvent(input, 'focus'));
+  await act(async () => fireEvent.changeText(input, 'salmon'));
+  await waitFor(() => expect(searchParams().q).toBe('salmon'));
+  expect(background()).toBe(idle);
+  await act(async () => fireEvent(input, 'blur'));
+  expect(background()).toBe(idle);
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  await screen.findByTestId('map-pin-0');
+  expect(screen.getByLabelText('Location: Hollywood')).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-0')));
+  for (const text of meal) expect(within(screen.getByTestId('map-preview-open')).getByText(text)).toBeTruthy();
+  expect(screen.getByLabelText('Search: salmon')).toBeTruthy();
+});
+
+it('opens the real search list and Macros editor while preserving bounded results, targets and shuffle', async () => {
   const screen = open();
   await screen.findByTestId('map-pin-0');
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
@@ -327,7 +373,7 @@ it.each(['A', 'B', 'C', 'G'])('keeps layout %s status actions content-sized and 
   await act(async () => fireEvent.press(screen.getByTestId('discovery-empty-clear')));
   expect(screen.getByLabelText('Search restaurants or dishes')).toBeTruthy();
   await screen.findByTestId('map-pin-0');
-  if (variant === 'B') expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height).toBe(124);
+  if (variant === 'B') expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).height).toBe(152);
 });
 
 it('keeps the same free preview boundary as the list', async () => {
