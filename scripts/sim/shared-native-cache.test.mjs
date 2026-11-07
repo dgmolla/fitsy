@@ -35,7 +35,7 @@ function fixture(t) {
   const temp = mkdtempSync(join(tmpdir(), 'fitsy-shared-native-'));
   t.after(() => { writable(temp); rmSync(temp, { recursive: true, force: true }); });
   const root = join(temp, 'first'), other = join(temp, 'second'), bin = join(temp, 'bin');
-  const git = (...args) => execFileSync('git', args, { cwd: root, env: cleanEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  const git = (...args) => execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args], { cwd: root, env: cleanEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   write(join(root, '.gitignore'), 'node_modules/\n.evidence/\napps/mobile/ios/\n');
   write(join(root, 'apps/mobile/app/screen.js'), 'source-one');
   write(join(root, 'apps/mobile/native-config.json'), JSON.stringify({ name: 'Fitsy', slug: 'fitsy', ios: { bundleIdentifier: 'com.fitsy.mobile' } }));
@@ -247,19 +247,25 @@ test('simultaneous publishers install one complete artifact without changing ori
   assert.ok(importNativeArtifact(f.cache, f.localBuild, f.currentNative(), f.profile, f.recipe));
 });
 
-test('each Metro startup owns a new process and serves current source without relabeling the binary', t => {
+test('Metro reuses only healthy owned matching inputs and restarts for changed source without relabeling the binary', t => {
   const f = fixture(t), adapter = join(f.temp, 'network-boundary.mjs'), loaded = join(f.temp, 'loaded.json');
   const originalReceipt = readFileSync(f.receiptFile);
   // The sandbox denies sockets and ps. Substitute only those OS/HTTP boundaries;
-  // exercise the real Metro spawn, source hashes, stop and restart lifecycle.
+  // exercise the real Metro spawn, source hashes, reuse and restart lifecycle.
   write(adapter, `import net from 'node:net'; import {EventEmitter} from 'node:events';
-    import {syncBuiltinESMExports} from 'node:module'; import {readFileSync} from 'node:fs';
+    import {syncBuiltinESMExports} from 'node:module'; import {readFileSync,writeFileSync} from 'node:fs';
     net.createServer=()=>{const server=new EventEmitter(); server.close=done=>done();
       server.listen=(port,host,done)=>{if(process.env.FITSY_METRO_FIXTURE_BUSY) {
         const error=new Error('busy port'); error.code='EADDRINUSE'; server.emit('error',error);
       } else done();}; return server;}; syncBuiltinESMExports();
     globalThis.fetch=async url=>{const loaded=JSON.parse(readFileSync(process.env.FITSY_METRO_FIXTURE_LOADED));
-      process.kill(loaded.pid,0); return new Response(url.endsWith('/status')?'packager-status:running':loaded.source);};`);
+      process.kill(loaded.pid,0);
+      if(process.env.FITSY_METRO_FIXTURE_UNHEALTHY) return new Response('not ready',{status:503});
+      if(!url.endsWith('/status') && process.env.FITSY_METRO_FIXTURE_DRIFT) {
+        writeFileSync(process.env.FITSY_METRO_FIXTURE_DRIFT,'changed during bundle response');
+        delete process.env.FITSY_METRO_FIXTURE_DRIFT;
+      }
+      return new Response(url.endsWith('/status')?'packager-status:running':loaded.source);};`);
   write(join(f.bin, 'ps'), `#!${process.execPath}\ntry {const pid=Number(process.argv[process.argv.indexOf('-p')+1]);
     process.kill(pid,0); console.log('fixture-process-'+pid);}catch{process.exit(1);}\n`, 0o700);
   mkdirSync(f.localBuild, { recursive: true });
@@ -269,15 +275,52 @@ test('each Metro startup owns a new process and serves current source without re
     import {digest} from ${JSON.stringify(new URL('../verify/product-flow.mjs', import.meta.url).href)};
     try {
       const first=await startMetro({metroPort:8099});
+      const warm=await startMetro({metroPort:8099});
+      assert.equal(warm.pid,first.pid,'unchanged setup must keep its healthy owned Metro');
+      assert.equal(warm.bundleHash,first.bundleHash);
+      assert.equal(warm.startup.action,'reuse');
+      assert.ok(BigInt(warm.startup.returnPrepared.monotonicNs)>=BigInt(warm.startup.dispatched.monotonicNs));
+      process.env.FITSY_METRO_FIXTURE_UNHEALTHY='1';
+      await assert.rejects(startMetro({metroPort:8099}),/not ready/);
+      delete process.env.FITSY_METRO_FIXTURE_UNHEALTHY;
+      process.kill(first.pid,0);
+      const receiptPath=${JSON.stringify(join(f.localBuild, 'metro.json'))};
+      const receipt=readFileSync(receiptPath,'utf8');
+      writeFileSync(receiptPath,JSON.stringify({...JSON.parse(receipt),processIdentity:'unrelated-process'}));
+      await assert.rejects(startMetro({metroPort:8099}),/PID changed/);
+      process.kill(first.pid,0);
+      writeFileSync(receiptPath,JSON.stringify({...JSON.parse(receipt),root:'another-checkout'}));
+      await assert.rejects(startMetro({metroPort:8099}),/another checkout/);
+      process.kill(first.pid,0);
+      writeFileSync(receiptPath,receipt);
+      process.env.FITSY_METRO_FIXTURE_DRIFT=${JSON.stringify(join(f.other, 'apps/mobile/app/screen.js'))};
+      await assert.rejects(startMetro({metroPort:8099}),/configuration changed/);
       writeFileSync(${JSON.stringify(join(f.other, 'apps/mobile/app/screen.js'))},'new source served by second process');
       const second=await startMetro({metroPort:8099});
       assert.notEqual(first.pid,second.pid); assert.notEqual(first.jsHash,second.jsHash);
       assert.notEqual(first.bundleHash,second.bundleHash);
+      assert.equal(second.startup.action,'start');
       assert.equal(second.bundleHash,digest('new source served by second process'));
       assert.throws(()=>process.kill(first.pid,0));
-      await stopMetro(); assert.throws(()=>process.kill(second.pid,0));
+      process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL='another-fixture@example.test';
+      const changedConfig=await startMetro({metroPort:8099});
+      assert.notEqual(changedConfig.pid,second.pid); assert.notEqual(changedConfig.configHash,second.configHash);
+      assert.throws(()=>process.kill(second.pid,0));
+      const changedWorkers=await startMetro({metroPort:8099},{maxWorkers:1});
+      assert.notEqual(changedWorkers.pid,changedConfig.pid);
+      assert.throws(()=>process.kill(changedConfig.pid,0));
+      writeFileSync(receiptPath,JSON.stringify({...JSON.parse(readFileSync(receiptPath,'utf8')),route:'/wrong.bundle'}));
+      const changedRoute=await startMetro({metroPort:8099},{maxWorkers:1});
+      assert.notEqual(changedRoute.pid,changedWorkers.pid);
+      assert.throws(()=>process.kill(changedWorkers.pid,0));
+      const changedPort=await startMetro({metroPort:8100},{maxWorkers:1});
+      assert.notEqual(changedPort.pid,changedRoute.pid); assert.equal(changedPort.port,8100);
+      await stopMetro(); assert.throws(()=>process.kill(changedPort.pid,0));
       process.env.FITSY_METRO_FIXTURE_BUSY='1';
       await assert.rejects(startMetro({metroPort:8099}),{code:'EADDRINUSE'});
+      const events=readFileSync(${JSON.stringify(join(f.localBuild, 'metro-timeline.jsonl'))},'utf8').trim().split('\\n').map(JSON.parse);
+      assert.equal(events.filter(row=>row.type==='metro-prepare-failed').length,5);
+      assert.equal(events.at(-1).code,'EADDRINUSE');
     } finally { await stopMetro(); }
   `], { cwd: f.other, encoding: 'utf8', timeout: 15_000,
     env: { ...f.env, FITSY_PRODUCT_ROOT: f.other, FITSY_METRO_FIXTURE_LOADED: loaded } });
