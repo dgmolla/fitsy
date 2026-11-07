@@ -182,9 +182,12 @@ export async function startMetro(r, { maxWorkers } = {}) {
     if (existsSync(metroFile)) {
       const m = read(metroFile);
       assert(!m.root || m.root === root, 'Metro receipt belongs to another checkout; refusing to reuse or stop it');
+      let alive = true;
+      try { process.kill(m.pid, 0); }
+      catch (error) { if (error.code !== 'ESRCH') throw error; alive = false; }
       // A local receipt is ownership, not proof of compatible or healthy serving.
       // Never attach to a foreign port or relabel a server after source changes.
-      if (m.root === root && m.port === r.metroPort && m.route === metroRoute &&
+      if (alive && m.root === root && m.port === r.metroPort && m.route === metroRoute &&
           m.maxWorkers === (maxWorkers ?? null) && m.jsHash === inputHash(root, 'js') && m.configHash === environment().configHash) {
         await requireMetro(m, { processIdentity, sourceHash: m.jsHash, configHash: m.configHash });
         return complete({ ...m, bundleHash: await metroBundle(m) }, 'reuse');

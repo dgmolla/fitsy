@@ -315,7 +315,12 @@ test('Metro reuses only healthy owned matching inputs and restarts for changed s
       assert.throws(()=>process.kill(changedWorkers.pid,0));
       const changedPort=await startMetro({metroPort:8100},{maxWorkers:1});
       assert.notEqual(changedPort.pid,changedRoute.pid); assert.equal(changedPort.port,8100);
+      const staleReceipt=readFileSync(receiptPath,'utf8');
       await stopMetro(); assert.throws(()=>process.kill(changedPort.pid,0));
+      writeFileSync(receiptPath,staleReceipt);
+      const restarted=await startMetro({metroPort:8100},{maxWorkers:1});
+      assert.notEqual(restarted.pid,changedPort.pid); assert.equal(restarted.startup.action,'start');
+      await stopMetro(); assert.throws(()=>process.kill(restarted.pid,0));
       process.env.FITSY_METRO_FIXTURE_BUSY='1';
       await assert.rejects(startMetro({metroPort:8099}),{code:'EADDRINUSE'});
       const events=readFileSync(${JSON.stringify(join(f.localBuild, 'metro-timeline.jsonl'))},'utf8').trim().split('\\n').map(JSON.parse);
