@@ -53,6 +53,12 @@ Billing journeys retain the starting states below, and Apple history transfer st
 For a subscription transport-failure diagnostic, start on the recovery screen with the same failure on status and sync, then run `helpers/subscription-check-retry.yaml` with `SUBSCRIPTION_ERROR_COPY` set to the expected copy.
 `SubscriptionCheckNavigation.test.tsx` replays its saved assertions through the real router, provider and API client for 503, network failure and 429, including a failed retry followed by successful recovery.
 A local scope pass does not replace the source-bound final-candidate product-flow gate.
+Before an expensive full run, confirm the required final consumer and its approved exception admission.
+`ci.mjs` writes mobile-e2e coverage receipts; the final publisher requires `product-flow.mjs run <UDID> --mode=final-candidate`, which also collects per-flow attachment closeouts and later accepts genuine primary/recovery MCP traces through `finish`.
+For the approved map/#746 release only, preflight with `node scripts/verify/product-flow.mjs --plan --release-exception=6716597294` and pass the same exception option to the final runner.
+The shared live owner/source verifier keeps all 28 selected, records only the approved Apple-history journey as EXCEPTED, and requires the other 27 journeys with their own real fixtures.
+Use `--no-environment-retry` when that retry is already consumed; preserve prior CI/Release results separately and never convert them into final-candidate receipts.
+Keep the same fixture manifest and caller environment loaded for `finish`, `check` and publication; each rechecks the recorded fixture configurations and current source-bound exception.
 Inspect `npm run verify:product-plan` for the same affected journeys and their required MCP categories.
 The final runner includes every selected journey automatically, adds explicitly requested diagnostic flows, and does not append unrelated cold-start or sign-in baselines.
 Required YAML assertions remain mandatory; only explicit optional commands and conditional branches may be optional.

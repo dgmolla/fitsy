@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore, releaseExceptions } from './journey-fixtures.mjs';
 import { simulatorFlows, repository } from '../verify/impact-plan.mjs';
 import { main as hostedMain } from './actions.mjs';
+import { acceptanceExceptions, validateAcceptance } from '../verify/product-flow.mjs';
 
 const yaml = createRequire(import.meta.url)('js-yaml');
 const header = flow => yaml.loadAll(readFileSync(join(repository, `apps/mobile/e2e/flows/${flow}.yaml`), 'utf8'))[0];
@@ -150,6 +151,7 @@ test('release admission retains the full catalog and excepts only genuine Apple-
   assert.deepEqual(await releaseExceptions(names, catalog), []);
   await assert.rejects(releaseExceptions(names, catalog, '745', execute), /Unknown/);
   const result = await releaseExceptions(names, catalog, '6716597294', execute);
+  assert.deepEqual(await acceptanceExceptions({ flows: names }, '6716597294', repository, execute), result);
   assert.equal(names.length, 28);
   assert.equal(names.filter(name => !result.some(item => item.flow === name)).length, 27);
   assert.deepEqual(result, [{ flow: 'subscription-restore-expired', status: 'EXCEPTED',
@@ -169,6 +171,13 @@ test('release admission retains the full catalog and excepts only genuine Apple-
     if (problem === 'tag') catalog['subscription-restore-expired'].tags = ['fixture:empty-store', 'store:test-store'];
     await assert.rejects(releaseExceptions(names, catalog, '6716597294', problem === 'inventory'
       ? () => { throw new Error('private API failure'); } : execute), /exception|contract/);
+    if (problem !== 'tag') {
+      // The final validator re-reads the same live grant/source boundary, even
+      // when a report retained a previously admitted exception.
+      await assert.rejects(validateAcceptance({ releaseExceptionId: '6716597294', exceptions: result },
+        { flows: names }, 'inputs', repository, Date.now(), repository, null, 'final-candidate',
+        problem === 'inventory' ? () => { throw new Error('private API failure'); } : execute), /exception|contract/);
+    }
     const saved = JSON.parse(original); Object.assign(pr, saved.pr); Object.assign(approval, saved.approval); Object.assign(catalog, saved.catalog);
   }
   assert.deepEqual(await releaseExceptions(['cold-start-welcome'], catalog, '6716597294', execute), []);

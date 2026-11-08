@@ -130,6 +130,31 @@ export function selectedFlows(plan, additional = []) {
   return [...new Set([...(plan.flows || []), ...additional])].sort();
 }
 
+// The same live owner/source admission serves execution and final publication.
+// Report metadata is never authority to omit a selected journey.
+export async function acceptanceExceptions(plan, approvalId, cwd = root, execute) {
+  if (!approvalId) return [];
+  const { releaseExceptions } = await import('../sim/journey-fixtures.mjs');
+  const names = selectedFlows(plan);
+  const catalog = Object.fromEntries(names.map(name => [name,
+    yaml.loadAll(readFileSync(resolve(cwd, `apps/mobile/e2e/flows/${name}.yaml`), 'utf8'))[0]]));
+  return releaseExceptions(names, catalog, approvalId, execute);
+}
+
+export async function validateAcceptance(report, plan, hash, directory, now = Date.now(), cwd = root,
+  nativeHash = null, mode = 'final-candidate', executeAuthority) {
+  const exceptions = await acceptanceExceptions(plan, report.releaseExceptionId, cwd, executeAuthority);
+  const fixtureConfigurations = {};
+  for (const flow of report.flows || []) {
+    if (!flow.identity) continue;
+    insist(/^[a-z0-9-]+$/.test(flow.name) && flow.source === `apps/mobile/e2e/flows/${flow.name}.yaml`, 'invalid flow source');
+    const { journeyFixture, withFixtureEnvironment } = await import('../sim/journey-fixtures.mjs');
+    const header = yaml.loadAll(readFileSync(resolve(cwd, flow.source), 'utf8'))[0];
+    fixtureConfigurations[flow.name] = await withFixtureEnvironment(journeyFixture(header), () => publicConfigIdentity(cwd).configHash);
+  }
+  return validate(report, plan, hash, directory, now, cwd, nativeHash, mode, exceptions, fixtureConfigurations);
+}
+
 export function isSuccessfulCommand(entry) {
   if (entry.metadata?.status === 'COMPLETED') return true;
   const status = entry.metadata?.status;
@@ -231,13 +256,17 @@ export function isPlayableVideo(file) {
   }
 }
 
-export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = null, mode = 'final-candidate') {
+export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = null,
+  mode = 'final-candidate', verifiedExceptions = [], fixtureConfigurations = {}) {
   insist(report.version === 1 && report.inputHash === hash, 'missing or stale source/test identity');
   insist(['development', 'final-candidate', 'requested-video'].includes(mode) && report.evidenceMode === mode,
     `Expected ${mode} evidence; development or requested-video proof cannot satisfy final publication`);
   const time = Date.parse(report.finishedAt);
   insist(Number.isFinite(time) && time <= now && now - time <= 24 * 3600_000, 'evidence expired or invalid timestamp');
   insist(report.result === 'pass', 'product flow did not pass');
+  insist(JSON.stringify(report.exceptions || []) === JSON.stringify(verifiedExceptions),
+    'release exceptions do not match current owner/source admission');
+  const excepted = new Set(verifiedExceptions.map(item => item.flow));
   for (const field of ['appHash', 'bundleHash', 'backendRevision', 'simulator', 'os', 'storeMode', 'fixture', 'maestroVersion']) {
     insist(typeof report[field] === 'string' && report[field].trim() && !/^(unknown|none|n\/a)$/i.test(report[field]), `missing ${field}`);
   }
@@ -254,12 +283,31 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
   const covered = new Set();
   const names = new Set();
   for (const flow of report.flows) {
+    insist(!excepted.has(flow.name), 'an excepted journey cannot also be reported passed');
     insist(!names.has(flow.name), 'duplicate flow result'); names.add(flow.name);
     insist(/^apps\/mobile\/e2e\/flows\/[a-z0-9-]+\.yaml$/.test(flow.source), 'invalid flow source');
     const source = readFileSync(resolve(cwd, flow.source));
     insist(digest(source) === flow.sourceHash, `changed flow source: ${flow.name}`);
     const config = yaml.load(source.toString().split(/^---\s*$/m)[0]);
     insist((config.name || flow.source.split('/').at(-1).replace('.yaml', '')) === flow.name, 'flow identity mismatch');
+    const fixtures = (config.tags || []).filter(tag => tag.startsWith('fixture:'));
+    const stores = (config.tags || []).filter(tag => tag.startsWith('store:')).map(tag => tag.slice(6));
+    if (fixtures.length || flow.identity || flow.identityHash) {
+      insist(flow.identity && flow.identityHash, `missing journey fixture identity: ${flow.name}`);
+      const identityBytes = artifact(flow.identity, directory);
+      insist(digest(identityBytes) === flow.identityHash, `changed journey fixture identity: ${flow.name}`);
+      const identity = JSON.parse(identityBytes.toString());
+      insist(identity.version === 1 && fixtures.length <= 1 &&
+        identity.fixture === (fixtures[0]?.slice(8) || 'default') && identity.storeMode === report.storeMode &&
+        (!stores.length || stores.includes(identity.storeMode)), `wrong fixture or store: ${flow.name}`);
+      for (const field of ['inputHash', 'jsHash', 'appHash', 'simulator', 'os', 'backendRevision', 'backendDeployment'])
+        insist(identity[field] === report[field], `journey ${field} differs from the accepted run: ${flow.name}`);
+      insist(identity.configHash === fixtureConfigurations[flow.name], `wrong fixture configuration: ${flow.name}`);
+      insist(identity.nativeHash === (report.nativeIdentity?.hash || report.nativeSourceHash) &&
+        /^[a-f0-9]{64}$/.test(identity.configHash) && /^[a-f0-9]{64}$/.test(identity.bundleHash) &&
+        identity.initialBundleHash === identity.bundleHash,
+      `missing native/configuration/bundle fixture proof: ${flow.name}`);
+    }
     const data = artifact(flow.commands, directory);
     insist(digest(data) === flow.sha256, `changed command artifact: ${flow.name}`);
     const commands = JSON.parse(data.toString());
@@ -299,7 +347,8 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
       for (const tag of config.tags || []) if (!baselineTags || baselineTags.includes(tag)) covered.add(tag);
     }
   }
-  for (const name of selectedFlows(plan)) insist(names.has(name), `missing affected flow: ${name}`);
+  for (const name of selectedFlows(plan))
+    insist(excepted.has(name) || names.has(name), `missing affected flow: ${name}`);
   // A completed configuration acceptance remains part of the retained proof
   // even when that configuration no longer requires a new run.
   const acceptedCategories = typeof report.publicConfigAcceptance?.verifiedConfigHash === 'string' &&
@@ -330,12 +379,16 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
       events.some(e => e.command?.name === 'mobile_list_elements_on_screen');
     insist(maestro || legacy, `walkthrough needs actual interactions and screen observations: ${category}`);
   }
-  return { status: 'pass', summary: `${report.flows.length} flows and ${plan.categories.length} changed-journey walkthroughs verified` };
+  return { status: 'pass', summary: `${report.flows.length} flows and ${plan.categories.length} changed-journey walkthroughs verified` +
+    (excepted.size ? `; ${excepted.size} explicitly excepted, not passed` : '') };
 }
 
 if (isMain(import.meta.url)) {
   try {
     insist(!process.env.CI || process.env.FITSY_DIFF_BASE, 'CI must supply the candidate diff base');
+    const args = process.argv.slice(2), approvals = args.filter(arg => arg.startsWith('--release-exception='));
+    insist(approvals.length <= 1 && args.every(arg => arg === '--plan' || arg.startsWith('--release-exception=')) &&
+      (!approvals.length || args.includes('--plan')), 'Usage: product-flow.mjs [--plan [--release-exception=6716597294]]');
     const reportFile = resolve(root, '.evidence/product-flow/report.json');
     const buildFile = resolve(root, '.evidence/product-build/receipt.json');
     const previous = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null;
@@ -343,12 +396,13 @@ if (isMain(import.meta.url)) {
     const configKeys = requiredPublicConfigKeys(previous, build, publicConfigIdentity());
     const plan = candidatePlan(configKeys, process.env.CI ? process.env.FITSY_DIFF_BASE : undefined);
     if (process.argv.includes('--plan')) {
-      console.log(JSON.stringify({ ...plan, inputHash: inputHash() }));
+      const exceptions = await acceptanceExceptions(plan, approvals[0]?.slice('--release-exception='.length));
+      console.log(JSON.stringify({ ...plan, inputHash: inputHash(), exceptions }));
     } else if (!plan.required) {
       console.log(JSON.stringify({ name: 'product-flow', status: 'pass', applicability: 'not_applicable', summary: 'no mobile-facing product changes', fix: '' }));
     } else {
       const report = JSON.parse(readFileSync(reportFile, 'utf8'));
-      const result = validate(report, plan, inputHash(), resolve(reportFile, '..'));
+      const result = await validateAcceptance(report, plan, inputHash(), resolve(reportFile, '..'));
       execFileSync(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check'], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'] });
       console.log(JSON.stringify({ name: 'product-flow', ...result, fix: '' }));
     }

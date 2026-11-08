@@ -53,9 +53,9 @@ function fixture() {
     exploration: [{ category: 'billing', result: 'pass', expected: 'cancel returns to paywall', observed: 'paywall remains usable', branches: ['primary', 'recovery'], trace: 'trace.json', sha256: sha(trace) }],
   };
 }
-function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate') {
+function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate', fixtureConfigurations: Record<string, string> = {}) {
   writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
-  return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:['cold-start-welcome','signin-options','billing-cancel']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)})`);
+  return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:['cold-start-welcome','signin-options','billing-cancel']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)}, [], ${JSON.stringify(fixtureConfigurations)})`);
 }
 
 deterministicTest('an affected journey passes without unrelated baselines but cannot substitute another tagged journey', () => {
@@ -69,6 +69,85 @@ deterministicTest('an affected journey passes without unrelated baselines but ca
   const missing = check(['billing-cancel', 'billing-recovery']);
   expect(missing.status).toBe(1);
   expect(missing.stderr).toContain('missing affected flow: billing-recovery');
+});
+
+deterministicTest('retained exception metadata cannot omit a journey without fresh authority', () => {
+  const report = { ...fixture(), releaseExceptionId: '6716597294',
+    exceptions: [{ flow: 'billing-cancel', status: 'EXCEPTED' }] };
+  report.flows = report.flows.filter(flow => flow.name !== 'billing-cancel');
+  const result = validate(report);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('release exceptions do not match current owner/source admission');
+});
+
+deterministicTest('an independently admitted Apple exception cannot pass itself or hide another required flow', () => {
+  const exception = { flow: 'subscription-restore-expired', status: 'EXCEPTED', fixture: 'apple-history', store: 'apple-simulator' };
+  const report = { ...fixture(), exceptions: [exception] };
+  report.videoRequested = false;
+  for (const flow of report.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
+  const check = () => {
+    writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
+    return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')),
+      {required:true,categories:['billing'],flows:['cold-start-welcome','signin-options','billing-cancel','subscription-restore-expired']},
+      'current-inputs',${JSON.stringify(dir)},Date.now(),${JSON.stringify(dir)},'current-inputs','final-candidate',${JSON.stringify([exception])})`);
+  };
+  expect(check().stdout).toContain('1 explicitly excepted, not passed');
+  const removed = report.flows.pop()!;
+  expect(check().stderr).toContain('missing affected flow: billing-cancel');
+  report.flows.push(removed, { ...removed, name: exception.flow });
+  expect(check().stderr).toContain('an excepted journey cannot also be reported passed');
+});
+
+deterministicTest('fixture-tagged journeys require their own unchanged source, store and served-bundle identity', () => {
+  const report = { ...fixture(), jsHash: sha('javascript'), backendDeployment: 'dev-deployment' };
+  report.videoRequested = false;
+  for (const flow of report.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
+  const flow = report.flows[2]!;
+  const source = readFileSync(join(dir, flow.source), 'utf8').replace('tags: [billing]', 'tags: [billing, "fixture:empty-store", "store:test-store"]');
+  writeFileSync(join(dir, flow.source), source); flow.sourceHash = sha(source);
+  expect(validate(report).stderr).toContain('missing journey fixture identity');
+  const identity = { version: 1, inputHash: report.inputHash, jsHash: report.jsHash, appHash: report.appHash,
+    simulator: report.simulator, os: report.os, backendRevision: report.backendRevision, backendDeployment: report.backendDeployment,
+    nativeHash: report.nativeSourceHash, fixture: 'empty-store', storeMode: 'test-store', configHash: sha('fixture'),
+    bundleHash: sha('served-bundle'), initialBundleHash: sha('served-bundle') };
+  const check = () => validate(report, 'final-candidate', { 'billing-cancel': sha('fixture') });
+  const writeIdentity = () => {
+    const text = JSON.stringify(identity); writeFileSync(join(dir, 'identity.json'), text);
+    Object.assign(flow, { identity: 'identity.json', identityHash: sha(text) });
+  };
+  writeIdentity();
+  expect(check().status).toBe(0);
+  identity.fixture = 'expired-subscription'; writeIdentity();
+  expect(check().stderr).toContain('wrong fixture or store');
+  identity.fixture = 'empty-store'; identity.storeMode = 'apple-simulator'; writeIdentity();
+  expect(check().stderr).toContain('wrong fixture or store');
+  identity.storeMode = 'test-store'; identity.jsHash = sha('other-source'); writeIdentity();
+  expect(check().stderr).toContain('journey jsHash differs');
+  identity.jsHash = report.jsHash; identity.configHash = sha('different-fixture'); writeIdentity();
+  expect(check().stderr).toContain('wrong fixture configuration');
+  identity.configHash = sha('fixture'); identity.bundleHash = sha('different-bundle'); writeIdentity();
+  expect(check().stderr).toContain('missing native/configuration/bundle fixture proof');
+
+  const envFile = join(dir, 'empty.env'), manifest = join(dir, 'fixtures.json');
+  writeFileSync(envFile, 'EXPO_PUBLIC_DEV_LOGIN_EMAIL=empty@example.test\nEXPO_PUBLIC_DEV_LOGIN_PASSWORD=fixture-only\n');
+  writeFileSync(manifest, JSON.stringify({ version: 1, fixtures: { 'empty-store': { envFile, prepare: ['/usr/bin/true'] } } }));
+  const env = { ...fixtureEnv(), FITSY_E2E_FIXTURES: manifest };
+  const captured = evaluate(`await (async () => {
+    const fixtures = await import(${JSON.stringify(resolve(__dirname, '../sim/journey-fixtures.mjs'))});
+    return fixtures.withFixtureEnvironment(fixtures.journeyFixture({tags:['fixture:empty-store','store:test-store']}),
+      () => gate.publicConfigIdentity(${JSON.stringify(dir)}).configHash);
+  })()`, env);
+  expect(captured.status).toBe(0);
+  identity.configHash = JSON.parse(captured.stdout); identity.bundleHash = identity.initialBundleHash; writeIdentity();
+  const actualCheck = () => {
+    writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
+    return evaluate(`await gate.validateAcceptance(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')),
+      {required:true,categories:['billing'],flows:['cold-start-welcome','signin-options','billing-cancel']},
+      'current-inputs',${JSON.stringify(dir)},Date.now(),${JSON.stringify(dir)},'current-inputs')`, env);
+  };
+  expect(actualCheck().status).toBe(0);
+  writeFileSync(envFile, 'EXPO_PUBLIC_DEV_LOGIN_EMAIL=empty@example.test\nEXPO_PUBLIC_DEV_LOGIN_PASSWORD=changed-fixture\n');
+  expect(actualCheck().stderr).toContain('wrong fixture configuration');
 });
 
 deterministicTest.each(['truncated', 'skipped', 'optional-required', 'warned', 'warned-optional-required'])('mandatory source assertions reject a %s successful receipt', kind => {

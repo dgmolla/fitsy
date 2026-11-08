@@ -214,7 +214,8 @@ test('the publisher path retains every flow command, screen and complete video w
     const evidenceDirectory = join(dir, 'product-flow');
     const publicationDirectory = join(dir, 'publication');
     const report = { flows: [
-      { commands: 'welcome/commands.json', screenshot: 'welcome/outcome.png', captureReceipt: 'welcome/xctest-capture-policy.jsonl', video: 'welcome/flow-untrimmed.mp4', videoHash: 'hash' },
+      { commands: 'welcome/commands.json', screenshot: 'welcome/outcome.png', captureReceipt: 'welcome/xctest-capture-policy.jsonl',
+        identity: 'welcome/identity.json', attachmentCloseout: 'welcome/closeout.json', video: 'welcome/flow-untrimmed.mp4', videoHash: 'hash' },
       { commands: 'signup/commands.json', screenshot: 'signup/outcome.png', captureReceipt: 'signup/xctest-capture-policy.jsonl', video: 'signup/flow-untrimmed.mp4', videoHash: 'hash' },
     ],
       exploration: [{ category: 'onboarding', trace: 'mcp/onboarding.jsonl' }],
@@ -225,6 +226,8 @@ test('the publisher path retains every flow command, screen and complete video w
       'welcome/commands.json',
       'welcome/outcome.png',
       'welcome/xctest-capture-policy.jsonl',
+      'welcome/identity.json',
+      'welcome/closeout.json',
       'welcome/flow-untrimmed.mp4',
       'signup/commands.json',
       'signup/outcome.png',

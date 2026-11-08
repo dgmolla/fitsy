@@ -181,6 +181,17 @@ test('development and final candidate omit recording unless explicitly requested
   assert.throws(() => runSelection(['device', '--mode=unknown']), /Unknown evidence mode/);
 });
 
+test('the final-candidate CLI admits only the scoped release option and preserves a consumed retry', () => {
+  const selection = runSelection(['owned-device', '--mode=final-candidate', '--release-exception=6716597294', '--no-environment-retry']);
+  assert.equal(selection.approvalId, '6716597294');
+  assert.equal(selection.environmentRetryAllowed, false);
+  assert.deepEqual(selection.names, []);
+  assert.equal(selection.mode.publishable, true);
+  assert.throws(() => runSelection(['owned-device', '--release-exception=735']), /Unknown/);
+  assert.throws(() => runSelection(['owned-device', '--release-exception=6716597294', '--release-exception=6716597294']), /repeated/);
+  assert.throws(() => runSelection(['owned-device', '--no-environment-retry', '--no-environment-retry']), /at most once/);
+});
+
 test('a final candidate reuses complete supersets only with the same passing source-bound inputs', () => {
   const selected = { udid: 'device', appHash: 'app', configHash: 'config', backendDeployment: 'backend', fixture: 'fixture',
     flows: [{ name: 'welcome', sourceHash: 'source' }] };
