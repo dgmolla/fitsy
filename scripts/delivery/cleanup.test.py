@@ -255,6 +255,14 @@ class CleanupTest(unittest.TestCase):
 
 
 class ApprovedAttachmentsTest(unittest.TestCase):
+    def node_ms(self, path):
+        child = subprocess.Popen(['node', '-e',
+            'console.log(JSON.stringify(require("node:fs").statSync(process.argv[1]).mtimeMs))', str(path)],
+            stdout=subprocess.PIPE, text=True)
+        output, _ = child.communicate(timeout=10)
+        self.assertEqual(child.returncode, 0)
+        return json.loads(output)
+
     def setUp(self):
         spec = importlib.util.spec_from_file_location('cleanup', SCRIPT)
         self.cleanup = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.cleanup)
@@ -275,7 +283,7 @@ class ApprovedAttachmentsTest(unittest.TestCase):
             path = self.directory / f'00000000-0000-0000-0000-{index:012d}'; path.write_bytes(data)
             s = path.stat()
             self.selected.append({'path': str(path), 'device': s.st_dev, 'inode': s.st_ino,
-                                  'bytes': len(data), 'modifiedMs': s.st_mtime * 1000, 'video': False,
+                                  'bytes': len(data), 'modifiedMs': self.node_ms(path), 'video': False,
                                   'sha256': digest, 'retained': str(representative)})
         self.unique = self.directory / 'unselected'; self.unique.write_bytes(b'required unique evidence')
         self.args = SimpleNamespace(records=self.evidence / 'attachment-duplicate-proposal.json', repo=self.home,
@@ -340,7 +348,7 @@ class ApprovedAttachmentsTest(unittest.TestCase):
                 if mutation == 'path': self.selected[-1]['path'] = str(path)
                 if path.is_symlink(): path.unlink()
                 path.write_bytes(original); s = path.stat()
-                self.selected[-1].update(device=s.st_dev, inode=s.st_ino, modifiedMs=s.st_mtime * 1000)
+                self.selected[-1].update(device=s.st_dev, inode=s.st_ino, modifiedMs=self.node_ms(path))
                 self.write_proposal()
 
     def test_live_owner_writer_uncertain_inventory_and_changed_approval_are_rejected(self):
@@ -368,6 +376,17 @@ class ApprovedAttachmentsTest(unittest.TestCase):
             self.assertFalse(result['full_run_admitted'])
             self.assertLess(result['projected_remaining_bytes'], result['required_floor_bytes'])
         self.assertTrue(all(Path(row['path']).exists() for row in self.selected))
+
+    def test_node_snapshot_timestamp_survives_python_stat_float_rounding(self):
+        path = Path(self.selected[1]['path'])
+        stamp = 1794099623907534782
+        os.utime(path, ns=(stamp, stamp))
+        node_ms = self.node_ms(path)
+        self.assertNotEqual(path.stat().st_mtime * 1000, node_ms, 'fixture must exercise the actual cross-language boundary')
+        self.selected[1]['modifiedMs'] = node_ms
+        self.write_proposal()
+        self.assertEqual(self.cleanup.approved_attachments(self.args)['status'], 'would-delete')
+        self.assertTrue(path.exists())
 
 
 if __name__ == '__main__':

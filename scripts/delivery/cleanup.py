@@ -54,7 +54,10 @@ def verified_png(path, record, identity=False):
         require(stat.S_ISREG(before.st_mode) and before.st_uid == os.getuid()
                 and before.st_nlink == 1 and before.st_size == record['bytes'], 'file type, owner or size changed')
         if identity:
-            require((before.st_dev, before.st_ino, before.st_mtime * 1000) ==
+            # Node's snapshot converts each timespec part before adding them.
+            # Multiplying Python's already-rounded seconds loses different bits.
+            modified_ms = (before.st_mtime_ns // 1_000_000_000) * 1000 + (before.st_mtime_ns % 1_000_000_000) / 1_000_000
+            require((before.st_dev, before.st_ino, modified_ms) ==
                     (record['device'], record['inode'], record['modifiedMs']), 'attachment identity changed')
         require(stream.read(8) == b'\x89PNG\r\n\x1a\n', 'not a PNG')
         stream.seek(0)
