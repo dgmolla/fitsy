@@ -28,9 +28,9 @@ export function renderSmoke(documents, selector) {
 export function localSelection(args, plan = impactPlan()) {
   const options = {};
   for (const arg of args) {
-    const match = /^--(scope|flows|udid|release-exception)=(.*)$|^--(plan|record-video)$/.exec(arg);
+    const match = /^--(scope|flows|udid|release-exception)=(.*)$|^--(plan|record-video|no-environment-retry)$/.exec(arg);
     if (!match || Object.hasOwn(options, match[1] || match[3]))
-      throw new Error('Usage: ci.mjs [--scope=none|smoke|flow|full|changed|all] [--flows=name,...] [--udid=UDID] [--plan] [--record-video] [--release-exception=6716597294]');
+      throw new Error('Usage: ci.mjs [--scope=none|smoke|flow|full|changed|all] [--flows=name,...] [--udid=UDID] [--plan] [--record-video] [--no-environment-retry] [--release-exception=6716597294]');
     options[match[1] || match[3]] = match[1] ? match[2] : true;
   }
   if (options['release-exception'] && options['release-exception'] !== '6716597294')
@@ -50,6 +50,7 @@ export function localSelection(args, plan = impactPlan()) {
   if (scope === 'smoke' && flows.some(flow => !smoke.some(item => item.flow === flow)))
     throw new Error('Smoke scope requires classified render checkpoints; set the matching comparison range');
   return { ...options, selection: { ...plan.simulator, scope, required: scope !== 'none',
+    environmentRetryAllowed: !options['no-environment-retry'],
     risk: scope === 'full' ? 'high' : scope === 'none' ? 'low' : 'medium',
     mode: scope === 'none' ? 'none' : scope === 'smoke' ? 'render' : 'e2e', flows, smoke,
     omitted: all.filter(flow => !flows.includes(flow)).map(flow => ({ flow, reason: 'Unaffected by the mapped change; no shared or ambiguous impact' })),
@@ -152,7 +153,9 @@ export async function runLocal(args = process.argv.slice(2)) {
           try { if (metroStarted) await stopMetro(); }
           finally { releaseDevice(); }
         }
-      }), { dir: resolve(out, name), signal: controller.signal, canRetry: () => inputHash() === sourceHash });
+      }), { dir: resolve(out, name), signal: controller.signal,
+        // A resumed worker can preserve an already consumed infrastructure retry.
+        canRetry: () => selection.environmentRetryAllowed && inputHash() === sourceHash });
     }
     const result = { name: 'mobile-e2e', status: 'pass', ...selection, exceptions,
       passed: journeys.map(item => item.flow), simulator: udid, evidence: out };

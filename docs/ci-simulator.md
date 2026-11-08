@@ -37,6 +37,7 @@ The label expands a relevant change's suite; it does not start a simulator for a
 Full runs still fail if the deadline or any fixture/flow assertion fails.
 The local full-run caller now checks31GiB free before acquiring the native lane, preserving the8GiB floor after the measured23GiB attachment-growth projection.
 This is capacity admission, not permission to delete files or weaken assertions.
+For a resumed local run whose infrastructure retry is already consumed, pass `--no-environment-retry`; the selection receipt records that replay is disabled while retaining every required journey and the original failure evidence.
 
 The narrowly approved #755 duplicate cleanup uses `scripts/delivery/cleanup.py <sealed-proposal> --approved-attachments --dry-run`, then `--apply --dry-run-receipt <private-json-output>` only after independent review of the frozen cleanup source.
 It accepts only proposalSHA `aabf2e5d48ae01c9124263384a1c93efd345aa156d15736dfcb17385b3c17245` and the unchanged owner6716597294 grant, checking native locks, device ownership, open files, exact identities and retained PNG bytes before removal.

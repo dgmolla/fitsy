@@ -415,6 +415,7 @@ test.each([
   ['--scope=flow', '--flows='], ['--scope=smoke', '--flows=signin-options'],
   ['--scope=flow', '--scope=none'], ['--preflight'], ['--flows=../../private'],
   ['--record-video', '--record-video'], ['--record-video=true'],
+  ['--no-environment-retry', '--no-environment-retry'], ['--no-environment-retry=true'],
   ['--release-exception=735'], ['--release-exception=745'], ['--release-exception=unknown'],
 ].map(args => ({ args })))('invalid local scope cannot launch native resources: $args', ({ args }) => {
   const result = spawnSync(process.execPath, [cliPath, ...args, '--plan'], { env: cleanEnv, encoding: 'utf8' });
@@ -434,6 +435,42 @@ test('none scope completes without native or recording tools or local configurat
   const result = spawnSync(process.execPath, [cliPath, '--scope=none', '--flows=-', '--record-video'], { env: cleanEnv, encoding: 'utf8' });
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ status: 'skipped', required: false, scope: 'none' });
+});
+
+test('a consumed environment retry retains the first failure and all required journeys without replay', () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import assert from 'node:assert/strict';
+    import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+    import { tmpdir } from 'node:os';
+    import { join } from 'node:path';
+    import { localSelection } from ${JSON.stringify(modulePath)};
+    import { withEnvironmentRetry } from ${JSON.stringify(resolve(__dirname, 'failure-policy.mjs'))};
+    const ordinary = localSelection(['--scope=full']).selection;
+    const selection = localSelection(['--scope=full', '--no-environment-retry']).selection;
+    const dir = mkdtempSync(join(tmpdir(), 'fitsy-consumed-retry-'));
+    let calls = 0;
+    try {
+      await assert.rejects(withEnvironmentRetry(async evidence => {
+        calls++;
+        writeFileSync(join(evidence, 'raw.log'), 'kAXErrorInvalidUIElement');
+        throw new Error('kAXErrorInvalidUIElement');
+      }, { dir, canRetry: () => selection.environmentRetryAllowed }), /kAXErrorInvalidUIElement/);
+      const attempts = JSON.parse(readFileSync(join(dir, 'attempts.json'), 'utf8'));
+      assert.deepEqual(selection.flows, ordinary.flows);
+      assert.equal(ordinary.environmentRetryAllowed, true);
+      assert.equal(selection.environmentRetryAllowed, false);
+      assert.equal(calls, 1);
+      assert.equal(attempts.length, 1);
+      assert.equal(attempts[0].classification, 'environment');
+      assert.equal(attempts[0].retry, false);
+      assert.equal(readFileSync(join(dir, 'raw.log'), 'utf8'), 'kAXErrorInvalidUIElement');
+      assert.equal(existsSync(join(dir, 'attempt-2')), false);
+      process.stdout.write(JSON.stringify({ scope: selection.scope, flows: selection.flows, calls }));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  `], { env: cleanEnv, encoding: 'utf8' });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ scope: 'full', calls: 1,
+    flows: expect.arrayContaining(['map-search', 'subscription-expired-routing', 'subscription-restore-empty', 'subscription-restore-expired']) });
 });
 
 test.each([
