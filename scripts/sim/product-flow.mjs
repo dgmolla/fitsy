@@ -92,7 +92,12 @@ export async function prepareEntitledEvidence(built, udid, directory, { signIn =
         FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: join(dir, 'capture.jsonl') },
       diagnostic: () => run('xcrun', ['simctl', 'io', udid, 'screenshot', join(dir, 'failure.png')]),
     });
-    assert(result.code === 0 && !result.reason, 'Active Test Store fixture preparation failed; inspect its raw evidence');
+    if (result.code !== 0 || result.reason) {
+      const reports = files(dir).filter(file => /commands-.*\.json$/.test(file));
+      const parsed = reports.length === 1 ? read(reports[0]) : null;
+      throw maestroFailure('Active Test Store fixture preparation failed; inspect its raw evidence', result,
+        Array.isArray(parsed) ? nearestFailure(parsed) : null);
+    }
   };
   const proof = await prepareActiveEntitlement({ built, renew: () => setup(true) });
   // A preceding expired/history journey can leave another account in keychain.
@@ -118,10 +123,13 @@ export async function prepareBillingEvidence(built, udid, directory, fixture, { 
       FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: join(directory, 'capture.jsonl') },
     diagnostic: () => run('xcrun', ['simctl', 'io', udid, 'screenshot', join(directory, 'failure.png')]),
   });
-  assert(result.code === 0 && !result.reason, 'Billing fixture native sign-in failed; inspect its raw evidence');
   const reports = files(directory).filter(file => /commands-.*\.json$/.test(file));
+  const parsed = reports.length === 1 ? read(reports[0]) : null;
+  if (result.code !== 0 || result.reason)
+    throw maestroFailure('Billing fixture native sign-in failed; inspect its raw evidence', result,
+      Array.isArray(parsed) ? nearestFailure(parsed) : null);
   assert(reports.length === 1, 'Billing fixture requires exactly one native sign-in command receipt');
-  assertFlowCommands(readFileSync(flow), read(reports[0]), `${fixture}-signin`);
+  assertFlowCommands(readFileSync(flow), parsed, `${fixture}-signin`);
   return proof;
 }
 async function prepareWalkthrough(udid) {

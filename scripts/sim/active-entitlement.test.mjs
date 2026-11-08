@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { evidenceStore, prepareActiveEntitlement, sandboxState, verifyInactiveEntitlement } from './active-entitlement.mjs';
 import { prepareEntitledEvidence, prepareBillingEvidence } from './product-flow.mjs';
+import { classifySimulatorFailure, withEnvironmentRetry } from './failure-policy.mjs';
 
 const now = () => Date.parse('2026-10-31T12:00:00Z');
 const expiresAt = '2026-10-31T13:00:00.000Z';
@@ -89,6 +90,57 @@ test('billing setup requires native sign-in after history admission and rejects 
       /genuine expired/);
     assert.equal(readFileSync(calls, 'utf8'), '');
   } finally { fetchMock.mock.restore(); }
+});
+
+test('native fixture failures retain their command diagnosis and respect the remaining retry budget', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-fixture-diagnosis-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const executable = join(dir, 'maestro');
+  const config = { ...env, MAESTRO_BIN: executable };
+  const previous = Object.fromEntries(Object.keys(config).map(key => [key, process.env[key]]));
+  Object.assign(process.env, config);
+  t.after(() => { for (const [key, value] of Object.entries(previous)) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  } });
+  for (const fixture of ['empty-store', 'expired-subscription', 'active-signin', 'active-renew']) {
+    for (const [diagnostic, allowed, classification, attempts] of [
+      ['kAXErrorInvalidUIElement during Welcome hierarchy read', true, 'environment', 2],
+      ['kAXErrorInvalidUIElement during Welcome hierarchy read', false, 'environment', 1],
+      ['Element welcome-login is not visible', true, 'code', 1],
+    ]) {
+      const receipt = [{ command: { assertConditionCommand: { condition: { visible: { idRegex: 'welcome-login' } } } },
+        metadata: { status: 'FAILED', timestamp: 1, error: { message: diagnostic } } }];
+      writeFileSync(executable, `#!${process.execPath}\nconst fs=require('node:fs'),path=require('node:path');\nconst args=process.argv.slice(2),dir=args[args.indexOf('--test-output-dir')+1];\nfs.writeFileSync(path.join(dir,'commands-fixture.json'),${JSON.stringify(JSON.stringify(receipt))});\nprocess.exit(17);\n`, { mode: 0o755 });
+      const expiry = new Date(Date.now() + 3600000).toISOString();
+      const bodies = fixture === 'active-signin' ? [login, subscriber(expiry), { synced: true },
+        { ...status, expiresAt: expiry, lastRcVerifiedAt: new Date().toISOString() }]
+        : [login, fixture === 'empty-store' ? { subscriber: { entitlements: {}, subscriptions: {} } }
+          : subscriber('2020-01-01T00:00:00Z')];
+      const b = boundary(Array.from({ length: attempts }, () => bodies).flat());
+      const fetchMock = t.mock.method(globalThis, 'fetch', b.fetchImpl);
+      const evidence = join(dir, `${fixture}-${classification}-${allowed}`);
+      let calls = 0;
+      try {
+        await assert.rejects(withEnvironmentRetry(async attemptDir => {
+          calls++;
+          if (fixture.startsWith('active-'))
+            return prepareEntitledEvidence(built, '11111111-1111-1111-1111-111111111111', attemptDir, { signIn: true });
+          return prepareBillingEvidence(built, '11111111-1111-1111-1111-111111111111', attemptDir, fixture);
+        }, { dir: evidence, canRetry: () => allowed }), error => {
+          assert.equal(classifySimulatorFailure(error), classification);
+          assert.equal(error.diagnostic, diagnostic);
+          return true;
+        });
+        assert.equal(calls, attempts);
+        const saved = JSON.parse(readFileSync(join(evidence, 'attempts.json'), 'utf8'));
+        assert.deepEqual(saved.map(row => [row.status, row.classification, row.retry]),
+          Array.from({ length: attempts }, (_, index) => ['fail', classification, attempts === 2 && index === 0]));
+        const setup = fixture === 'active-signin' ? 'signin' : fixture === 'active-renew' ? 'renew' : '';
+        for (let index = 0; index < attempts; index++)
+          assert.deepEqual(JSON.parse(readFileSync(join(evidence, index ? 'attempt-2' : '', setup, 'commands-fixture.json'), 'utf8')), receipt);
+      } finally { fetchMock.mock.restore(); }
+    }
+  }
 });
 
 test('real Test Store history plus a fresh successful server sync establishes active evidence', async () => {
