@@ -8,6 +8,7 @@ import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain, repository, simulatorFlows } from '../verify/impact-plan.mjs';
 import { maestroApiArgs } from './backend-identity.mjs';
+import { releaseExceptions } from './journey-fixtures.mjs';
 
 const controlDirectory = fileURLToPath(new URL('.', import.meta.url));
 const buildDirectory = join(repository, '.evidence/product-build');
@@ -19,10 +20,7 @@ const devices = () => Object.values(JSON.parse(command('xcrun', ['simctl', 'list
 
 export function selectFlows(scope, catalog) {
   if (!['smoke', 'full'].includes(scope)) throw new Error('Simulator scope must be smoke or full');
-  const selected = scope === 'smoke' ? smoke : Object.keys(catalog).filter(name => {
-    const stores = (catalog[name].tags || []).filter(tag => tag.startsWith('store:'));
-    return !stores.length || stores.includes('store:test-store');
-  }).sort();
+  const selected = scope === 'smoke' ? smoke : Object.keys(catalog).sort();
   if (!selected.length || selected.some(name => !catalog[name])) throw new Error('Required Maestro flows are missing');
   return selected;
 }
@@ -79,7 +77,11 @@ async function runFlows(udid, work) {
   const catalog = Object.fromEntries(simulatorFlows().map(name => [name,
     yaml.loadAll(readFileSync(join(repository, 'apps/mobile/e2e/flows', `${name}.yaml`), 'utf8'))[0]]));
   const names = selectFlows(process.env.SIM_SCOPE, catalog);
-  const accounts = fixtureAccounts(names, catalog, process.env.SIM_E2E_FIXTURES);
+  const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+  const exceptions = releaseExceptions(names, catalog,
+    event.pull_request?.number === 754 ? '6716597294' : undefined);
+  const executable = names.filter(name => !exceptions.some(item => item.flow === name));
+  const accounts = fixtureAccounts(executable, catalog, process.env.SIM_E2E_FIXTURES);
   for (const account of Object.values(accounts)) { mask(account.email); mask(account.password); }
   delete process.env.SIM_E2E_FIXTURES;
   const { startMetro, stopMetro, prepareEntitledEvidence, prepareBillingEvidence } = await import('./product-flow.mjs');
@@ -110,8 +112,8 @@ async function runFlows(udid, work) {
     if (!name.endsWith('-signin')) inspectScreenshotDirectory(dir, readFileSync(path));
   };
   try {
-    console.log(`Running ${names.length} ${process.env.SIM_SCOPE} flows; Apple receipt-history acceptance remains manual.`);
-    for (const name of names) {
+    console.log(JSON.stringify({ selected: names, exceptions }));
+    for (const name of executable) {
       const fixture = (catalog[name].tags || []).find(tag => tag.startsWith('fixture:'))?.slice(8) || 'unsubscribed-dev';
       process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL = accounts[fixture].email;
       process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD = accounts[fixture].password;
@@ -124,6 +126,7 @@ async function runFlows(udid, work) {
         console.log(`Passed: ${name}`);
       } finally { await stopMetro(); }
     }
+    console.log(JSON.stringify({ selected: names.length, passed: executable.length, excepted: exceptions }));
   } finally {
     process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
   }

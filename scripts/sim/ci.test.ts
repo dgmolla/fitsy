@@ -415,6 +415,7 @@ test.each([
   ['--scope=flow', '--flows='], ['--scope=smoke', '--flows=signin-options'],
   ['--scope=flow', '--scope=none'], ['--preflight'], ['--flows=../../private'],
   ['--record-video', '--record-video'], ['--record-video=true'],
+  ['--release-exception=735'], ['--release-exception=745'], ['--release-exception=unknown'],
 ].map(args => ({ args })))('invalid local scope cannot launch native resources: $args', ({ args }) => {
   const result = spawnSync(process.execPath, [cliPath, ...args, '--plan'], { env: cleanEnv, encoding: 'utf8' });
   expect(result.status).toBe(1);

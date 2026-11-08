@@ -4,13 +4,26 @@ import argparse
 from contextlib import ExitStack
 from datetime import datetime
 import fcntl
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
 import re
+import shutil
+import stat
 import subprocess
 import time
+
+# One independently granted exception, not a general attachment retention policy.
+ATTACHMENT_APPROVAL = '6716597294'
+ATTACHMENT_APPROVAL_SHA = '4a7c397987e38c1e2e30152aab1862661ef4f2f99946fae09c2c2f60509856fb'
+ATTACHMENT_PROPOSAL_SHA = 'aabf2e5d48ae01c9124263384a1c93efd345aa156d15736dfcb17385b3c17245'
+ATTACHMENT_COUNT, ATTACHMENT_BYTES = 16119, 10361606936
+ATTACHMENT_REPRESENTATIVES, ATTACHMENT_RETAINED_BYTES = 851, 657140483
+ATTACHMENT_DEVICE = '98638215-7437-4A09-BF9F-C9E699E303B6'
+ATTACHMENT_DEVICE_NAME = 'Fitsy issue753 PID18174 normal'
+ATTACHMENT_CONTAINER = 'C3858678-AEE6-40F7-B38F-C380441CA3BE'
 
 
 def run(*argv):
@@ -32,6 +45,122 @@ def unopened(path):
     result = subprocess.run(['lsof', '-nP', '+D', str(path)], capture_output=True, text=True, timeout=30)
     require(result.returncode == 1 and not result.stdout and not result.stderr, 'open files or unavailable inventory')
     return (path.stat().st_dev, path.stat().st_ino)
+
+
+def verified_png(path, record, identity=False):
+    require(path.is_absolute() and path == path.resolve(), 'symlinked attachment or representative')
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
+        before = os.fstat(stream.fileno())
+        require(stat.S_ISREG(before.st_mode) and before.st_uid == os.getuid()
+                and before.st_nlink == 1 and before.st_size == record['bytes'], 'file type, owner or size changed')
+        if identity:
+            require((before.st_dev, before.st_ino, before.st_mtime * 1000) ==
+                    (record['device'], record['inode'], record['modifiedMs']), 'attachment identity changed')
+        require(stream.read(8) == b'\x89PNG\r\n\x1a\n', 'not a PNG')
+        stream.seek(0)
+        require(hashlib.file_digest(stream, 'sha256').hexdigest() == record['sha256'], 'PNG hash changed')
+        require(os.fstat(stream.fileno()) == before and path.stat() == before, 'PNG changed while reading')
+        return before
+
+
+def approved_attachments(args):
+    """Retire only the sealed owner-approved duplicates, keeping every unique byte."""
+    home = Path.home()
+    evidence = home / 'fitsy-wt/issue-755-evidence/private/repair15'
+    directory = home / 'Library/Developer/CoreSimulator/Devices' / ATTACHMENT_DEVICE / \
+        'data/Containers/Data/InternalDaemon' / ATTACHMENT_CONTAINER / 'Attachments'
+    require(args.records == evidence / 'attachment-duplicate-proposal.json'
+            and args.records.resolve() == args.records, 'not the approved proposal path')
+    require(args.records.stat().st_uid == os.getuid() and not args.records.stat().st_mode & 0o077,
+            'proposal must be private')
+    original = args.records.read_bytes()
+    require(hashlib.sha256(original).hexdigest() == ATTACHMENT_PROPOSAL_SHA, 'not the sealed approved proposal')
+    approval = json.loads(run('gh', 'api', 'repos/dgmolla/fitsy/issues/comments/' + ATTACHMENT_APPROVAL))
+    require(str(approval['id']) == ATTACHMENT_APPROVAL and approval['user']['login'] == 'dgmolla'
+            and hashlib.sha256(approval['body'].encode()).hexdigest() == ATTACHMENT_APPROVAL_SHA,
+            'owner approval changed or unavailable')
+    source = run('git', '-C', str(args.repo), 'rev-parse', 'HEAD')
+    require(not run('git', '-C', str(args.repo), 'status', '--porcelain'), 'cleanup requires a frozen reviewed checkout')
+    proposal = json.loads(original)
+    selected, representatives = proposal['selected'], proposal['retainedRepresentatives']
+    require(proposal['owner']['issue'] == 755 and proposal['owner']['device'] == ATTACHMENT_DEVICE
+            and len(selected) == proposal['selectedFiles'] == ATTACHMENT_COUNT
+            and sum(row['bytes'] for row in selected) == proposal['selectedBytes'] == ATTACHMENT_BYTES
+            and len(representatives) == ATTACHMENT_REPRESENTATIVES
+            and sum(row['bytes'] for row in representatives) == ATTACHMENT_RETAINED_BYTES,
+            'approved scope/counts changed')
+    retained = {row['path']: row for row in representatives}
+    require(len(retained) == len(representatives) and len({row['path'] for row in selected}) == len(selected),
+            'duplicate manifest entries')
+    for row in representatives:
+        require(Path(row['path']) == evidence / 'attachment-representatives' / (row['sha256'] + '.png'),
+                'representative escaped preservation directory')
+    for row in selected:
+        path = Path(row['path'])
+        require(path.parent == directory and re.fullmatch(r'[A-F0-9-]{36}', path.name) and row['video'] is False,
+                'selection escaped approved attachment directory')
+        require(row['retained'] in retained and
+                (row['sha256'], row['bytes']) == (retained[row['retained']]['sha256'], retained[row['retained']]['bytes']),
+                'missing exact-byte representative')
+    binding = {'proposal': ATTACHMENT_PROPOSAL_SHA, 'approval': ATTACHMENT_APPROVAL,
+               'approval_sha256': ATTACHMENT_APPROVAL_SHA, 'source': source,
+               'files': len(selected), 'bytes': ATTACHMENT_BYTES}
+    if args.apply:
+        require(args.dry_run_receipt is not None, 'apply requires the preceding dry-run receipt')
+        receipt = json.loads(args.dry_run_receipt.read_text())
+        require(receipt.get('status') == 'would-delete' and all(receipt.get(k) == v for k, v in binding.items()),
+                'dry-run receipt does not match this approved source and proposal')
+    with ExitStack() as stack:
+        # Use the current native locks, never initialize the retired dispatcher.
+        lockpath = home / 'fitsy-refactor/loop/sim.lock'
+        require(lockpath.parent.is_dir(), 'canonical native lock directory unavailable')
+        lock = stack.enter_context(lockpath.open('a'))
+        fcntl.lockf(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        claim = stack.enter_context((home / '.fitsy-sim-claim.lock').open('a'))
+        fcntl.flock(claim, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        for path in (home / '.fitsy-sim-claim.json', home / 'fitsy-wt/simulator.lock', home / 'fitsy-wt/native-build.lock'):
+            require(not path.exists(), 'native owner or consumer lease remains')
+        devices = json.loads(run('xcrun', 'simctl', 'list', 'devices', '--json'))['devices']
+        inventory = [device for group in devices.values() for device in group]
+        device = next(device for device in inventory if device['udid'] == ATTACHMENT_DEVICE)
+        require(device['name'] == ATTACHMENT_DEVICE_NAME and device['state'] == 'Shutdown'
+                and not any(device['state'] == 'Booted' for device in inventory), 'device owner/state changed')
+        directory_identity = unopened(directory)
+        unopened(evidence / 'attachment-representatives')
+        for row in representatives:
+            verified_png(Path(row['path']), row)
+        for row in selected:
+            verified_png(Path(row['path']), row, identity=True)
+        free_before = shutil.disk_usage(directory).free
+        projection = proposal['projection']
+        require(projection['conservativeNextFullGiB'] == 23 and projection['requiredFloorGiB'] == 8,
+                'approved run projection changed')
+        require(free_before + ATTACHMENT_BYTES - 23 * 2**30 >= 8 * 2**30, 'cleanup cannot admit the projected full run')
+        require(args.records.read_bytes() == original and unopened(directory) == directory_identity,
+                'proposal or directory changed during validation')
+        removed = 0
+        # Pin the checked directory; no recursive removal or caller-selected path.
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            require((os.fstat(fd).st_dev, os.fstat(fd).st_ino) == directory_identity, 'attachment directory replaced')
+            if args.apply:
+                for row in selected:
+                    verified_png(Path(row['retained']), retained[row['retained']])
+                    before = verified_png(Path(row['path']), row, identity=True)
+                    require(os.stat(Path(row['path']).name, dir_fd=fd, follow_symlinks=False) == before,
+                            'attachment replaced before removal')
+                    os.unlink(Path(row['path']).name, dir_fd=fd)
+                    removed += 1
+        finally:
+            os.close(fd)
+        for row in representatives:
+            verified_png(Path(row['path']), row)
+        missing = sum(not Path(row['path']).exists() for row in selected)
+        require(missing == removed, 'unexpected removed/missing count')
+        return {**binding, 'status': 'deleted' if args.apply else 'would-delete', 'removed': removed,
+                'missing': missing, 'changed': 0, 'representatives': len(representatives),
+                'free_before': free_before, 'free_after': shutil.disk_usage(directory).free,
+                'projected_full_bytes': 23 * 2**30, 'required_floor_bytes': 8 * 2**30}
 
 
 def action(record, repo, state_dir):
@@ -94,10 +223,22 @@ def main():
     parser.add_argument('records', type=Path, help='private JSON list of exact ownership/use records')
     parser.add_argument('--repo', type=Path, default=Path.cwd())
     parser.add_argument('--state-dir', type=Path, default=Path.home() / '.fitsy-dispatcher')
+    parser.add_argument('--approved-attachments', action='store_true', help='only the sealed #755 owner exception')
+    parser.add_argument('--dry-run-receipt', type=Path, help='exact preceding attachment dry-run JSON output')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--dry-run', action='store_true', help='report only (default)')
     mode.add_argument('--apply', action='store_true', help='remove eligible exact resources')
     args = parser.parse_args()
+    if args.approved_attachments:
+        try:
+            print(json.dumps(approved_attachments(args)))
+        except ValueError as error:
+            raise SystemExit('Approved attachment cleanup refused: ' + str(error)) from None
+        except (OSError, KeyError, TypeError, StopIteration, subprocess.SubprocessError):
+            # External command errors may contain private metadata; never echo it.
+            raise SystemExit('Approved attachment cleanup refused; approval, source, identity, preservation, ownership or capacity guard failed')
+        return
+    require(args.dry_run_receipt is None, 'dry-run receipt applies only to approved attachments')
     with ExitStack() as stack:
         for path in (args.state_dir / 'dispatcher.lock', Path.home() / '.fitsy-sim-claim.lock'):
             path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

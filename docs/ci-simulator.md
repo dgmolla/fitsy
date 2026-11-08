@@ -26,10 +26,20 @@ Manual native work must respect the existing `scripts/sim/sim` claim; CI refuses
 Run the media integration gate after releasing the native lane: its host-isolation test also acquires the canonical OS lock, so running it concurrently with an owned Maestro session causes a real lock timeout.
 
 Normal PRs run `cold-start-welcome`, `signin-options` and `paywall-access`, including real DEV sign-in and paid-access assertions.
-Main and PRs labeled `full-sim` run every maintained flow compatible with Test Store, with no known-failure exclusions.
-The `subscription-restore-expired` Apple receipt-history journey retains its separate manual acceptance in [the E2E guide](../apps/mobile/e2e/README.md#subscription-restore-acceptance); Test Store cannot prove Apple history transfer.
+Main and PRs labeled `full-sim` select every maintained flow, including incompatible stores, rather than silently omitting them.
+The `subscription-restore-expired` Apple receipt-history journey requires its genuine fixture or a separately approved release exception; Test Store cannot prove Apple history transfer.
+For the map/#746 release only, owner comment6716597294 explicitly excepts that one flow on the published PR754 head.
+The local caller accepts `--release-exception=6716597294`; the hosted caller checks the same grant for PR754 and records `EXCEPTED`, its reason, owner URL and actual source separately from passed flows.
+Changed approval text, another PR/source or changed fixture/store tags fail admission, and all other flows remain required.
+The selection still contains28 flows for this candidate, with27 required executions and one exception, never28 passes.
 The label expands a relevant change's suite; it does not start a simulator for an unrelated change.
 Full runs still fail if the deadline or any fixture/flow assertion fails.
+The local full-run caller now checks31GiB free before acquiring the native lane, preserving the8GiB floor after the measured23GiB attachment-growth projection.
+This is capacity admission, not permission to delete files or weaken assertions.
+
+The narrowly approved #755 duplicate cleanup uses `scripts/delivery/cleanup.py <sealed-proposal> --approved-attachments --dry-run`, then `--apply --dry-run-receipt <private-json-output>` only after independent review of the frozen cleanup source.
+It accepts only proposalSHA `aabf2e5d48ae01c9124263384a1c93efd345aa156d15736dfcb17385b3c17245` and the unchanged owner6716597294 grant, checking native locks, device ownership, open files, exact identities and retained PNG bytes before removal.
+Historical cleanup retains its existing age/integration rules; this exception grants no future outside-path retention cleanup.
 
 ## Pending Mac capacity preflight
 

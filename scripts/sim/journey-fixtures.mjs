@@ -1,10 +1,45 @@
 // Fixture preparation is local operator configuration, separate from candidate
 // journeys. Real purchase/expiry/history cannot be fabricated by the runner.
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import { parseEnv } from 'node:util';
 import { git, gitEnv, repository } from '../verify/impact-plan.mjs';
+
+// Owner6716597294 grants exactly this release exception, never a passing flow.
+// Check the published PR head and current grant again at admission, not a cached
+// permission or a caller-created fixture receipt.
+export function releaseExceptions(names, catalog, approvalId, execute = (binary, args) =>
+  execFileSync(binary, args, { cwd: repository, env: gitEnv(), encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 }).trim()) {
+  if (!approvalId) return [];
+  if (approvalId !== '6716597294') throw new Error('Unknown native release exception');
+  let approval, pr, head, secondParent;
+  try {
+    approval = JSON.parse(execute('gh', ['api', 'repos/dgmolla/fitsy/issues/comments/6716597294']));
+    pr = JSON.parse(execute('gh', ['api', 'repos/dgmolla/fitsy/pulls/754']));
+    head = execute('git', ['rev-parse', 'HEAD']);
+    if (head !== pr.head.sha) secondParent = execute('git', ['rev-parse', 'HEAD^2']);
+  } catch { throw new Error('Native release exception authority/source lookup unavailable'); }
+  if (approval.id !== 6716597294 || approval.user?.login !== 'dgmolla' ||
+      createHash('sha256').update(approval.body || '').digest('hex') !== '4a7c397987e38c1e2e30152aab1862661ef4f2f99946fae09c2c2f60509856fb' ||
+      pr.state !== 'open' || pr.number !== 754 || pr.head?.ref !== 'codex/issue-753' ||
+      pr.head.repo?.full_name !== 'dgmolla/fitsy' || !/^[a-f0-9]{40}$/.test(head) ||
+      (head !== pr.head.sha && (process.env.GITHUB_ACTIONS !== 'true' || secondParent !== pr.head.sha ||
+        process.env.GITHUB_SHA !== head)))
+    throw new Error('Native release exception does not match the current owner grant and published PR754 source');
+  const flow = 'subscription-restore-expired';
+  if (!names.includes(flow)) return [];
+  const tags = catalog[flow]?.tags || [];
+  if (tags.filter(tag => tag.startsWith('fixture:')).join() !== 'fixture:apple-history' ||
+      tags.filter(tag => tag.startsWith('store:')).join() !== 'store:apple-simulator')
+    throw new Error('Excepted Apple-history journey contract changed');
+  return [{ flow, status: 'EXCEPTED', reason: 'unprovisioned real Apple purchase history',
+    approval: 'https://github.com/dgmolla/fitsy/issues/755#issuecomment-6716597294',
+    release: 'map/#746', source: head, prHead: pr.head.sha,
+    fixture: 'apple-history', store: 'apple-simulator' }];
+}
 
 function localFile(file) {
   if (!isAbsolute(file || '')) throw new Error('Fixture files must use absolute local paths');
