@@ -10,15 +10,25 @@ import { git, gitEnv, repository } from '../verify/impact-plan.mjs';
 // Owner6716597294 grants exactly this release exception, never a passing flow.
 // Check the published PR head and current grant again at admission, not a cached
 // permission or a caller-created fixture receipt.
-export function releaseExceptions(names, catalog, approvalId, execute = (binary, args) =>
+export async function releaseExceptions(names, catalog, approvalId, execute = (binary, args) =>
   execFileSync(binary, args, { cwd: repository, env: gitEnv(), encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 }).trim()) {
   if (!approvalId) return [];
   if (approvalId !== '6716597294') throw new Error('Unknown native release exception');
   let approval, pr, head, secondParent;
   try {
-    approval = JSON.parse(execute('gh', ['api', 'repos/dgmolla/fitsy/issues/comments/6716597294']));
-    pr = JSON.parse(execute('gh', ['api', 'repos/dgmolla/fitsy/pulls/754']));
+    const readAuthority = async path => {
+      if (process.env.GITHUB_ACTIONS !== 'true') return JSON.parse(execute('gh', ['api', path]));
+      // These two resources are public. The hosted native job intentionally has
+      // no GitHub token or ambient CLI login; do not add privileged credentials.
+      const response = await fetch(`https://api.github.com/${path}`, {
+        headers: { Accept: 'application/vnd.github+json' }, redirect: 'error', signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) throw new Error('Public approval lookup failed');
+      return response.json();
+    };
+    approval = await readAuthority('repos/dgmolla/fitsy/issues/comments/6716597294');
+    pr = await readAuthority('repos/dgmolla/fitsy/pulls/754');
     head = execute('git', ['rev-parse', 'HEAD']);
     if (head !== pr.head.sha) secondParent = execute('git', ['rev-parse', 'HEAD^2']);
   } catch { throw new Error('Native release exception authority/source lookup unavailable'); }

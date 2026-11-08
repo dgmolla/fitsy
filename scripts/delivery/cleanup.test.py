@@ -388,6 +388,16 @@ class ApprovedAttachmentsTest(unittest.TestCase):
         self.assertEqual(self.cleanup.approved_attachments(self.args)['status'], 'would-delete')
         self.assertTrue(path.exists())
 
+    def test_hash_read_can_update_access_time_without_changing_the_approved_png(self):
+        path = Path(self.selected[0]['path'])
+        before = path.stat()
+        os.utime(path, ns=(1_000_000_000, before.st_mtime_ns))
+        self.assertEqual(self.cleanup.approved_attachments(self.args)['status'], 'would-delete')
+        after = path.stat()
+        self.assertGreater(after.st_atime_ns, 1_000_000_000)
+        self.assertEqual(after.st_mtime_ns, before.st_mtime_ns)
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), self.selected[0]['sha256'])
+
 
 if __name__ == '__main__':
     unittest.main()

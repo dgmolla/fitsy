@@ -76,7 +76,7 @@ export async function runLocal(args = process.argv.slice(2)) {
   const yaml = createRequire(import.meta.url)('js-yaml');
   const catalog = Object.fromEntries(selection.flows.map(name => [name,
     yaml.loadAll(readFileSync(resolve(repository, `apps/mobile/e2e/flows/${name}.yaml`), 'utf8'))[0]]));
-  const exceptions = releaseExceptions(selection.flows, catalog, options['release-exception']);
+  const exceptions = await releaseExceptions(selection.flows, catalog, options['release-exception']);
   const executableFlows = selection.flows.filter(name => !exceptions.some(item => item.flow === name));
   requireScreenRecognition();
   // Parse checkpoints and check syntax before acquiring the shared native driver.

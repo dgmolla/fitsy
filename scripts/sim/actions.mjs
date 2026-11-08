@@ -81,7 +81,7 @@ async function runFlows(udid, work) {
     yaml.loadAll(readFileSync(join(repository, 'apps/mobile/e2e/flows', `${name}.yaml`), 'utf8'))[0]]));
   const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
   const candidates = process.env.SIM_SCOPE === 'full' ? Object.keys(catalog) : selectFlows(process.env.SIM_SCOPE, catalog);
-  const exceptions = releaseExceptions(candidates, catalog,
+  const exceptions = await releaseExceptions(candidates, catalog,
     event.pull_request?.number === 754 ? '6716597294' : undefined);
   const names = selectFlows(process.env.SIM_SCOPE, catalog, exceptions);
   const manual = candidates.filter(name => !names.includes(name)).map(flow => ({ flow, status: 'UNVERIFIED',

@@ -47,6 +47,12 @@ def unopened(path):
     return (path.stat().st_dev, path.stat().st_ino)
 
 
+def stable_file_attributes(value):
+    # Reading can update access time without changing content or ownership.
+    return (value.st_dev, value.st_ino, value.st_mode, value.st_uid, value.st_gid,
+            value.st_nlink, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+
+
 def verified_png(path, record, identity=False):
     require(path.is_absolute() and path == path.resolve(), 'symlinked attachment or representative')
     with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
@@ -62,7 +68,8 @@ def verified_png(path, record, identity=False):
         require(stream.read(8) == b'\x89PNG\r\n\x1a\n', 'not a PNG')
         stream.seek(0)
         require(hashlib.file_digest(stream, 'sha256').hexdigest() == record['sha256'], 'PNG hash changed')
-        require(os.fstat(stream.fileno()) == before and path.stat() == before, 'PNG changed while reading')
+        require(stable_file_attributes(os.fstat(stream.fileno())) == stable_file_attributes(before)
+                and stable_file_attributes(path.stat()) == stable_file_attributes(before), 'PNG changed while reading')
         return before
 
 
@@ -149,7 +156,8 @@ def approved_attachments(args):
                 for row in selected:
                     verified_png(Path(row['retained']), retained[row['retained']])
                     before = verified_png(Path(row['path']), row, identity=True)
-                    require(os.stat(Path(row['path']).name, dir_fd=fd, follow_symlinks=False) == before,
+                    require(stable_file_attributes(os.stat(Path(row['path']).name, dir_fd=fd, follow_symlinks=False))
+                            == stable_file_attributes(before),
                             'attachment replaced before removal')
                     os.unlink(Path(row['path']).name, dir_fd=fd)
                     removed += 1
