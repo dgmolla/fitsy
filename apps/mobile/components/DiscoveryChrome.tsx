@@ -1,8 +1,10 @@
-import React from 'react';
-import { Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { MacroValues } from '@/lib/macroPresets';
 import { EDITORIAL } from '@/lib/brand';
+import { BlurFallback } from '@/lib/BlurFallback';
+import { DiscoveryViewToggle } from './DiscoveryViewToggle';
 import { s } from './DiscoveryScreen.styles';
 
 function getSelectionLabel(): string {
@@ -17,11 +19,13 @@ export function Masthead({
   onLocationPress,
   locationRef,
   preview = false,
+  mapControl,
 }: {
   preview?: boolean;
   locationLabel: string;
   onLocationPress: () => void;
   locationRef?: React.RefObject<View | null>;
+  mapControl?: { onPress: () => void };
 }) {
   return (
     <View style={[s.masthead, !preview && s.mainMasthead]}>
@@ -30,7 +34,8 @@ export function Masthead({
           <View style={s.logoDot} />
           <Text style={s.logo}>fitsy</Text>
         </View>}
-        <View ref={locationRef} collapsable={false} style={s.locationAnchor}><TouchableOpacity
+        <View ref={locationRef} collapsable={false} style={s.locationAnchor}>
+          {mapControl ? <DiscoveryViewToggle map={false} onPress={mapControl.onPress} style={chrome.mapButton} /> : <TouchableOpacity
           style={s.locationButton}
           onPress={onLocationPress}
           activeOpacity={0.7}
@@ -44,9 +49,9 @@ export function Masthead({
             <Text style={s.locationText} numberOfLines={1}>{locationLabel}</Text>
             <Ionicons name="chevron-down" size={10} color={EDITORIAL.textSoft} />
           </View>
-        </TouchableOpacity></View>
+        </TouchableOpacity>}</View>
       </View>
-      {!preview && <Text style={s.issueLabel}>{getSelectionLabel()}</Text>}
+      {!preview && <Text style={s.issueLabel} numberOfLines={1}>{mapControl ? `YOUR PICKS NEAR ${locationLabel}` : getSelectionLabel()}</Text>}
     </View>
   );
 }
@@ -108,6 +113,7 @@ export function SearchBar({
   containerRef,
   action,
   placeholder = 'Search restaurants or dishes',
+  frosted = false,
 }: {
   value: string;
   onChangeText: (text: string) => void;
@@ -115,14 +121,19 @@ export function SearchBar({
   containerRef?: React.RefObject<View | null>;
   action?: React.ReactNode;
   placeholder?: string;
+  frosted?: boolean;
 }) {
+  const [focused, setFocused] = useState(false);
   return (
-    <View ref={containerRef} collapsable={false} style={s.search} testID="discovery-search-bar">
+    <View ref={containerRef} collapsable={false} style={[s.search, frosted && chrome.search, frosted && focused && chrome.searchFocused]} testID="discovery-search-bar">
+      {frosted && <FrostedSearchSurface />}
       <Text style={s.searchIco}>⌕</Text>
       <TextInput
         style={s.searchInput}
         value={value}
         onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         placeholder={placeholder}
         placeholderTextColor={EDITORIAL.textSoft}
         returnKeyType="search"
@@ -142,3 +153,19 @@ export function SearchBar({
     </View>
   );
 }
+
+// The same installed blur treatment stays cool white at rest, while typing,
+// and after submission. Its decorative layers never intercept input.
+export function FrostedSearchSurface() {
+  return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <BlurFallback tint="light" intensity={60} fallbackColor="rgba(255,255,255,0.9)" />
+    <View style={[StyleSheet.absoluteFill, chrome.frostTint]} />
+  </View>;
+}
+
+const chrome = StyleSheet.create({
+  mapButton: { backgroundColor: 'rgba(255,255,255,0.8)' },
+  search: { backgroundColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(58,112,80,0.2)', borderRadius: 24, overflow: 'hidden', minHeight: 48, paddingVertical: 2 },
+  searchFocused: { borderColor: EDITORIAL.greenAccent },
+  frostTint: { backgroundColor: 'rgba(255,255,255,0.68)' },
+});

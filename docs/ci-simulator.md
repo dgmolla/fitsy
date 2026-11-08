@@ -1,6 +1,7 @@
 # Simulator CI
 
-The required `Simulator` check comes from `.github/workflows/simulator.yml` on every PR and main push.
+The `Simulator` workflow result comes from `.github/workflows/simulator.yml` on every PR and main push.
+It does not define or change protected branch requirements.
 An Ubuntu selector uses the complete Git comparison, including deletions and renames.
 Only `apps/mobile/**`, `scripts/sim/**`, `scripts/verify/**`, the native fingerprint helper or this workflow starts the Mac.
 Other changes pass on Ubuntu; failed classification, missing fixtures, failed flows, cancellation and an unexpectedly skipped Mac job never pass.
@@ -19,14 +20,41 @@ flowchart LR
 PR pushes cancel superseded work on the same PR.
 The repository-wide `fitsy-simulator` concurrency group queues different PRs with `queue: max`, allowing one Mac job at a time.
 The Mac job has a 30-minute deadline, one Xcode build worker, one Metro worker, a 2 GB Node heap and a 768 MB Java heap.
+That deadline starts after assignment and does not bound a queue with no registered runner.
 Keep only one runner registered with `fitsy-sim` and leave the old local publisher paused.
 Manual native work must respect the existing `scripts/sim/sim` claim; CI refuses to boot alongside another booted simulator.
+Run the media integration gate after releasing the native lane: its host-isolation test also acquires the canonical OS lock, so running it concurrently with an owned Maestro session causes a real lock timeout.
 
 Normal PRs run `cold-start-welcome`, `signin-options` and `paywall-access`, including real DEV sign-in and paid-access assertions.
-Main and PRs labeled `full-sim` run every maintained flow compatible with Test Store, with no known-failure exclusions.
-The `subscription-restore-expired` Apple receipt-history journey retains its separate manual acceptance in [the E2E guide](../apps/mobile/e2e/README.md#subscription-restore-acceptance); Test Store cannot prove Apple history transfer.
+Main and PRs labeled `full-sim` retain the existing Test Store-compatible hosted selection, reporting incompatible journeys as separate `UNVERIFIED` manual acceptance rather than passing them.
+The `subscription-restore-expired` Apple receipt-history journey requires its genuine fixture or a separately approved release exception; Test Store cannot prove Apple history transfer.
+For the map/#746 release only, owner comment6716597294 explicitly excepts that one flow on the published PR754 head.
+The local caller accepts `--release-exception=6716597294`; the hosted caller checks the same grant for PR754 and records `EXCEPTED`, its reason, owner URL and actual source separately from passed flows.
+Changed approval text, another PR/source or changed fixture/store tags fail admission, and all other flows remain required.
+The local full selection and the release's hosted full selection contain28 flows, with27 required executions and one exception, never28 passes.
+Ordinary hosted smoke selection and unrelated releases keep their existing scope; the release grant does not create a new Apple-history gate for them.
 The label expands a relevant change's suite; it does not start a simulator for an unrelated change.
 Full runs still fail if the deadline or any fixture/flow assertion fails.
+The local full-run caller now checks31GiB free before acquiring the native lane, preserving the8GiB floor after the measured23GiB attachment-growth projection.
+This is capacity admission, not permission to delete files or weaken assertions.
+For a resumed local run whose infrastructure retry is already consumed, pass `--no-environment-retry`; the selection receipt records that replay is disabled while retaining every required journey and the original failure evidence.
+
+The narrowly approved #755 duplicate cleanup uses `scripts/delivery/cleanup.py <sealed-proposal> --approved-attachments --dry-run`, then `--apply --dry-run-receipt <private-json-output>` only after independent review of the frozen cleanup source.
+It accepts only proposalSHA `aabf2e5d48ae01c9124263384a1c93efd345aa156d15736dfcb17385b3c17245` and the unchanged owner6716597294 grant, checking native locks, device ownership, open files, exact identities and retained PNG bytes before removal.
+Historical cleanup retains its existing age/integration rules; this exception grants no future outside-path retention cleanup.
+
+## Pending Mac capacity preflight
+
+At setup and the first pending Mac checkpoint, run `node scripts/verify/simulator-actions.mjs --preflight` locally with the existing authorized `gh` identity.
+It reads the actual workflow labels and all runner inventory pages, exits nonzero for absent/offline matching capacity, and distinguishes unavailable inventory from an empty list.
+Busy online matching runners remain valid serialized capacity; inspect the actual job owner before any cancellation or native work.
+A passing capacity check is not a native execution result.
+Record a failed preflight and its concrete owner action instead of silently waiting, while continuing independent authorized work.
+
+The [runner inventory API](https://docs.github.com/en/rest/actions/self-hosted-runners#list-self-hosted-runners-for-a-repository) requires repository Administration read permission.
+The workflow's ordinary `GITHUB_TOKEN` cannot request that permission, so this local diagnostic is not added to the Ubuntu selector or hooks as a broken credential-dependent gate.
+Do not add a token, register a runner or change settings without the separate owner's authorization.
+The original migration in #704 already recorded zero registered runners and an unverified Mac run; a later empty inventory alone does not prove removal or identify a removal actor.
 
 ## One-time Mac setup
 
@@ -48,7 +76,7 @@ Full runs still fail if the deadline or any fixture/flow assertion fails.
    Do not select a personal simulator: CI erases this device's data after every job and reuses the same device next time.
 5. Set the secrets below under **Settings > Secrets and variables > Actions**.
    Run a mobile PR once, then rerun unchanged native inputs to confirm a cache hit and current-source Maestro execution.
-   Keep branch protection's required check named `Simulator`, with GitHub Actions as its source if the rule pins an app.
+   Preserve the repository's existing protected contexts; runner setup does not authorize changing required checks.
    Do not resume the old poller or manually post a success status.
 
 GitHub documents [runner service installation](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/configure-the-application?platform=mac) and [concurrency queues](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).

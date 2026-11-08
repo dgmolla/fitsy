@@ -24,6 +24,22 @@ beforeAll(() => {
 });
 afterAll(() => { rmSync(directory, { recursive: true, force: true }); });
 
+test('billing setup settles launch before reading Welcome and its UI-only journeys need no Maestro login variables', () => {
+  const source = readFileSync(resolve(__dirname, '../../apps/mobile/e2e/helpers/ci-signin.yaml'), 'utf8');
+  const [, commands] = loadAll(source) as [unknown, Record<string, unknown>[]];
+  expect(commands.slice(0, 3)).toEqual([
+    { launchApp: { clearState: true, clearKeychain: true } },
+    { waitForAnimationToEnd: { timeout: 10000 } },
+    { extendedWaitUntil: { visible: { id: 'welcome-login' }, timeout: 60000 } },
+  ]);
+  expect(commands.filter(step => step.tapOn === '.*Dev Login.*')).toHaveLength(1);
+  for (const path of ['helpers/ci-signin.yaml', 'helpers/discovery-signin.yaml',
+    'flows/subscription-expired-routing.yaml', 'flows/subscription-restore-empty.yaml']) {
+    const saved = readFileSync(resolve(__dirname, '../../apps/mobile/e2e', path), 'utf8');
+    expect(saved).not.toMatch(/LOGIN_EMAIL|LOGIN_PASSWORD|runScript:/);
+  }
+});
+
 test('menu startup retries only observations and authenticates once before reading data', () => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/menu-macro-serving.yaml'), 'utf8')) as [unknown, {
     launchApp?: object;
@@ -58,21 +74,106 @@ test('menu startup retries only observations and authenticates once before readi
 
 test.each([
   'map-search', 'map-search-location-denied',
-])('%s submits search through the iOS return key before requiring a result pin', flow => {
+])('%s submits with Enter, shows list results/macros, then returns to a selectable map pin', flow => {
   type Step = string | {
     inputText?: string;
     pressKey?: string;
+    tapOn?: { id: string };
     extendedWaitUntil?: { visible: { id: string }; timeout: number };
   };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, Step[]];
   const search = commands.findIndex(step => typeof step === 'object' && step.inputText === 'pizza');
   expect(search).toBeGreaterThan(-1);
-  // Use the input's native Search action instead of heuristic iOS keyboard
-  // dismissal, and keep the result gate after submission.
+  // Search intentionally hides the map. Preserve its native submission and
+  // result gate, then require actual pin selection after the explicit return.
   expect(commands[search + 1]).toEqual({ pressKey: 'Enter' });
   expect(commands[search + 2]).toEqual({
-    extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 },
+    extendedWaitUntil: { visible: { id: 'discovery-hero' }, timeout: 30000 },
   });
+  const backToMap = commands.findIndex((step, index) => index > search && typeof step === 'object' && step.tapOn?.id === 'discovery-view-toggle');
+  expect(backToMap).toBeGreaterThan(search + 2);
+  expect(commands.slice(search + 3, backToMap)).toEqual(expect.arrayContaining([
+    { assertNotVisible: { id: 'discovery-map' } },
+    { assertVisible: { id: 'discovery-macro-strip' } },
+    { assertVisible: { id: 'discovery-search', text: 'pizza' } },
+    { assertVisible: { id: 'shuffle-button' } },
+  ]));
+  expect(commands.slice(backToMap + 1, backToMap + 5)).toEqual([
+    { extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 } },
+    'waitForAnimationToEnd', { tapOn: { id: 'map-pin-0' } }, { assertVisible: { id: 'map-preview-open' } },
+  ]);
+  expect(commands[backToMap + 5]).toEqual({ assertVisible: { id: 'shuffle-button' } });
+  const [, setup] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/helpers/map-search-setup.yaml'), 'utf8')) as [unknown, Record<string, unknown>[]];
+  // The prototype itself must expose Shuffle, without a second hidden opt-in.
+  expect(setup).toContainEqual({ openLink: 'com.fitsy.mobile://search?mapDebug=1&floatingNavDebug=1' });
+  expect(setup).toContainEqual({ assertVisible: { id: 'shuffle-button' } });
+});
+
+test('single Map control retains city selection, explicit pan confirmation and the centered picker restore', () => {
+  type Step = { tapOn?: string | { id: string }; assertVisible?: string; scrollUntilVisible?: object; takeScreenshot?: string };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/map-search.yaml'), 'utf8')) as [unknown, Step[]];
+  const start = commands.findIndex(step => step.takeScreenshot === 'map-list-single');
+  expect(start).toBeGreaterThan(-1);
+  expect(commands.slice(start - 2, start + 3)).toEqual([
+    { assertNotVisible: { id: 'discovery-location' } }, { assertVisible: { id: 'discovery-macro-strip' } },
+    { takeScreenshot: 'map-list-single' }, { tapOn: { id: 'discovery-view-toggle' } },
+    { assertVisible: { id: 'discovery-location' } },
+  ]);
+  const confirm = commands.findIndex(step => typeof step.tapOn === 'object' && step.tapOn.id === 'map-search-area');
+  expect(confirm).toBeGreaterThan(start);
+  expect(commands.slice(confirm - 5, confirm + 4)).toEqual([
+    { swipe: { start: '60%,44%', end: '35%,44%', duration: 500 } }, 'waitForAnimationToEnd',
+    { assertVisible: { id: 'map-search-area' } }, { assertVisible: 'Location: Hollywood' }, { takeScreenshot: 'map-area-pending' },
+    { tapOn: { id: 'map-search-area' } },
+    { extendedWaitUntil: { visible: 'Location: Map area', timeout: 10000 } },
+    { assertNotVisible: { id: 'map-search-area' } },
+    { extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 } },
+  ]);
+  const restore = commands.findIndex((step, index) => index > start && step.tapOn === 'Search near DTLA');
+  expect(restore).toBeGreaterThan(confirm);
+  // DTLA is below the visible picker rows on SE. A selector alone can tap
+  // during scrolling or fail offscreen; center it and verify the actual area.
+  expect(commands.slice(restore - 3, restore + 2)).toEqual([
+    { tapOn: { id: 'discovery-location' } }, 'waitForAnimationToEnd',
+    { scrollUntilVisible: { element: 'Search near DTLA', direction: 'DOWN', centerElement: true } },
+    { tapOn: 'Search near DTLA' }, { assertVisible: 'Location: DTLA' },
+  ]);
+});
+
+test('the maintained map capture journey stays on chosen C and retains visible card, pin and recovery proof', () => {
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/map-search.yaml'), 'utf8')) as [unknown, Record<string, unknown>[]];
+  const actions = commands.filter(step => step.tapOn || step.takeScreenshot);
+  expect(JSON.stringify(actions)).not.toMatch(/map-variant-|map-sheet-|map-v2-[ab]-/);
+  expect(commands).toEqual(expect.arrayContaining([
+    { assertVisible: { id: 'map-carousel' } },
+    { assertNotVisible: { id: 'map-sheet-height' } },
+    { assertNotVisible: { id: 'map-list-A' } },
+    { assertVisible: { id: 'map-goals', text: 'Edit macros' } },
+    { tapOn: { id: 'shuffle-button' } },
+    { tapOn: { id: 'map-search-area' } },
+    { tapOn: { id: 'discovery-empty-edit' } },
+    { tapOn: { id: 'discovery-empty-clear' } },
+    { copyTextFrom: { id: 'map-preview-open' } },
+    { copyTextFrom: { id: "${'map-pin-' + (output.mapCount - 1)}" } },
+  ]));
+  // The real rendered screen test executes these literal parsers against card
+  // and pin labels, retaining name proof alongside the native page counter.
+  expect(commands).toContainEqual({ assertTrue: '${maestro.copiedText.indexOf(output.mapLastName) === 0}' });
+});
+
+test('floating navigation clears only the observed Debug toast before proving Saved content and selection', () => {
+  type Step = { runFlow?: { when: { visible: string }; commands: unknown[] }; tapOn?: { id: string } };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/floating-nav.yaml'), 'utf8')) as [unknown, Step[]];
+  const banner = commands.findIndex(step => step.runFlow?.when?.visible === '.*Open debugger to view warnings.*');
+  const saved = commands.findIndex(step => step.tapOn?.id === 'tab-saved');
+  expect(banner).toBeGreaterThan(-1);
+  expect(saved).toBeGreaterThan(banner);
+  expect(commands[banner]?.runFlow?.commands).toEqual([{ tapOn: { point: '93%,93%' } }]);
+  expect(commands[banner + 1]).toEqual({ assertNotVisible: '.*Open debugger to view warnings.*' });
+  expect(commands.slice(saved + 1, saved + 3)).toEqual([
+    { extendedWaitUntil: { visible: { id: 'saved-content' }, timeout: 15000 } },
+    { assertVisible: { id: 'tab-saved', selected: true } },
+  ]);
 });
 
 test('widget return dismisses the non-accessible Debug overlay and retains the named action and Search assertion', () => {
@@ -314,6 +415,8 @@ test.each([
   ['--scope=flow', '--flows='], ['--scope=smoke', '--flows=signin-options'],
   ['--scope=flow', '--scope=none'], ['--preflight'], ['--flows=../../private'],
   ['--record-video', '--record-video'], ['--record-video=true'],
+  ['--no-environment-retry', '--no-environment-retry'], ['--no-environment-retry=true'],
+  ['--release-exception=735'], ['--release-exception=745'], ['--release-exception=unknown'],
 ].map(args => ({ args })))('invalid local scope cannot launch native resources: $args', ({ args }) => {
   const result = spawnSync(process.execPath, [cliPath, ...args, '--plan'], { env: cleanEnv, encoding: 'utf8' });
   expect(result.status).toBe(1);
@@ -332,6 +435,42 @@ test('none scope completes without native or recording tools or local configurat
   const result = spawnSync(process.execPath, [cliPath, '--scope=none', '--flows=-', '--record-video'], { env: cleanEnv, encoding: 'utf8' });
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ status: 'skipped', required: false, scope: 'none' });
+});
+
+test('a consumed environment retry retains the first failure and all required journeys without replay', () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import assert from 'node:assert/strict';
+    import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+    import { tmpdir } from 'node:os';
+    import { join } from 'node:path';
+    import { localSelection } from ${JSON.stringify(modulePath)};
+    import { withEnvironmentRetry } from ${JSON.stringify(resolve(__dirname, 'failure-policy.mjs'))};
+    const ordinary = localSelection(['--scope=full']).selection;
+    const selection = localSelection(['--scope=full', '--no-environment-retry']).selection;
+    const dir = mkdtempSync(join(tmpdir(), 'fitsy-consumed-retry-'));
+    let calls = 0;
+    try {
+      await assert.rejects(withEnvironmentRetry(async evidence => {
+        calls++;
+        writeFileSync(join(evidence, 'raw.log'), 'kAXErrorInvalidUIElement');
+        throw new Error('kAXErrorInvalidUIElement');
+      }, { dir, canRetry: () => selection.environmentRetryAllowed }), /kAXErrorInvalidUIElement/);
+      const attempts = JSON.parse(readFileSync(join(dir, 'attempts.json'), 'utf8'));
+      assert.deepEqual(selection.flows, ordinary.flows);
+      assert.equal(ordinary.environmentRetryAllowed, true);
+      assert.equal(selection.environmentRetryAllowed, false);
+      assert.equal(calls, 1);
+      assert.equal(attempts.length, 1);
+      assert.equal(attempts[0].classification, 'environment');
+      assert.equal(attempts[0].retry, false);
+      assert.equal(readFileSync(join(dir, 'raw.log'), 'utf8'), 'kAXErrorInvalidUIElement');
+      assert.equal(existsSync(join(dir, 'attempt-2')), false);
+      process.stdout.write(JSON.stringify({ scope: selection.scope, flows: selection.flows, calls }));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  `], { env: cleanEnv, encoding: 'utf8' });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ scope: 'full', calls: 1,
+    flows: expect.arrayContaining(['map-search', 'subscription-expired-routing', 'subscription-restore-empty', 'subscription-restore-expired']) });
 });
 
 test.each([

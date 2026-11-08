@@ -48,6 +48,7 @@ A `Dev Login Failed` alert requires correcting the fixture credentials bundled b
 Prepare an active disposable account through the local fixture adapter before rerunning; retain the Search assertion and paid-access routing.
 If XCTest reports `kAXErrorInvalidUIElement` while waiting for `welcome-login`, hierarchy inspection failed before Dev Login ran.
 Preserve the command trace and startup screenshot, then recover through the existing simulator owner before rerunning the unchanged journey.
+On #753, the actual Welcome page was usable while XCTest hierarchy inspection stalled until the owned runner stopped it; independent Simulator UI screenshots can continue, but they do not pass the stopped Maestro journey or reset its infrastructure history.
 Billing journeys retain the starting states below, and Apple history transfer still requires separate real-store acceptance.
 For a subscription transport-failure diagnostic, start on the recovery screen with the same failure on status and sync, then run `helpers/subscription-check-retry.yaml` with `SUBSCRIPTION_ERROR_COPY` set to the expected copy.
 `SubscriptionCheckNavigation.test.tsx` replays its saved assertions through the real router, provider and API client for 503, network failure and 429, including a failed retry followed by successful recovery.
@@ -98,7 +99,7 @@ The runner validates all required entries before acquiring a device or clearing 
 ```
 
 Environment files may override only `EXPO_PUBLIC_` values and stay on the local machine.
-The two dev-login fixtures require their own `${EXPO_PUBLIC_DEV_LOGIN_EMAIL}` and `${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}` values.
+The dev-login, expired-subscription and empty-store fixtures require their own `${EXPO_PUBLIC_DEV_LOGIN_EMAIL}` and `${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}` values.
 Configured Dev Login accounts must already exist with the documented billing state; failed fixture logins preserve the login error and never attempt registration.
 Set both credentials together in the runner and its owned Metro environment.
 The adapter receives its configured arguments followed by the flow name and owned simulator UDID, with the fixture's environment loaded.
@@ -106,6 +107,9 @@ It selects and installs a compatible candidate artifact through the canonical na
 Pre-provision actual purchases, expiry and account recreation through the product; the bounded selection/sign-in step has 60 seconds and must not fabricate receipts or database entitlement.
 Preparation owns and releases its simulator lease before returning; it must leave no driver or Metro process running.
 The runner then reacquires the device, validates the candidate/native/backend identity and allowed store, and starts owned Metro with that fixture's environment.
+Both local and hosted Debug Test Store runners independently verify real expired or empty RevenueCat history and run the maintained `helpers/ci-signin.yaml` before the corresponding billing journey.
+An adapter's successful API login cannot establish native authentication or expired purchase history, especially after `signin-options` clears the previous session.
+These checks never create or renew billing history; select an already-provisioned persistent fixture and retain the native restore assertions.
 It retains an identity receipt per journey, stops owned Metro and restores the previous environment afterward.
 An optional `default` entry can restore a baseline build/state before journeys without a `fixture:` tag.
 All selected journeys still run; missing preparation or a store mismatch fails the selection.
@@ -160,16 +164,27 @@ The first flow opens a pin, enters the restaurant menu, searches pizza, edits me
 The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
 Both map journeys submit the single-line search field with `pressKey: Enter`, which uses its native Search return key to dismiss the keyboard.
 The detail round trip taps `restaurant-back`; generic Maestro `back` does not activate the iOS screen's custom Back control.
-Map filter assertions require the chip ID and its exact accessibility label, such as `map-filter-protein` with `Edit protein grams, 40`.
-An explicit label hides the nested `40g protein` text from iOS accessibility; `DiscoveryMap.test.tsx` exercises the saved selectors against the rendered controls after switching views, editing targets and shuffling.
-Dense photo pins overlap, and MapKit can dispatch Maestro's coordinate tap to a neighboring pin despite the requested accessibility ID.
-Both journeys retain pin-to-preview coverage; `map-search` compares toggle and shuffle results through `helpers/map-first-spot.yaml`, which closes any preview and uses the existing carousel to require the first result.
+The v2 map has no macro pills: Search opens the ordinary list and macro strip, while G's compact Macros control opens the existing editor on the map.
+The list's single Map control occupies the former location-control position; city selection remains on the map, and a settled pan offers an explicit Search this area action before requesting bounded results.
+`DiscoveryMap.test.tsx` exercises both paths against the real Discovery state, including targets after view switching and shuffling.
+Dense pins can overlap, and MapKit can dispatch a coordinate tap to a neighboring pin despite the requested accessibility ID.
+Both journeys retain pin-to-preview coverage; `map-search` compares toggle and shuffle results through `helpers/map-first-spot.yaml`, which opens the list and returns to the first current carousel result.
 The real-screen regression replays that helper with different native pin hit targets and a previously selected restaurant, requiring the same first result after toggling and a new one after shuffling.
+The denied-location journey settles the centered Hollywood picker, requires the unchanged area immediately, and taps a pin after fallback dismissal.
+Inspect native pin bounds against the controls and tray as well as the required preview assertion; one accessible pin does not prove all markers are unobscured.
+The primary flow captures C, G, A and B plus numbered, utensil, cuisine and installed Ionicons pin styles.
+B's final-row proof requires the actual last row, the same restaurant in Peek, the last row again in Half, and a matching counter after real user scrolling.
+Its copied restaurant name uses literal suffix indexing; an inline end-anchor regex inside Maestro interpolation can remain unevaluated while reporting the command complete.
+The explicit suffix assertion and final-row visibility checks remain mandatory.
 Ranked search can return pizza restaurants whose meals do not satisfy Shuffle's close-fit nutrition filter.
 After checking pizza and the 45g protein edit, the positive Shuffle phase clears the craving and restores the exact 600 kcal, 40g protein, 60g carbs and 20g fat context verified by `shuffle-subscriber.mjs`.
 It still requires a changed first result and preserved area and targets; a disabled Shuffle button after a successful empty response is expected behavior.
 `DiscoveryMap.test.tsx` replays those saved edits against a boundary with no qualified pizza results and separately verifies empty-shuffle state and Clear search recovery.
 `helpers/map-search-setup.yaml` shares the authenticated API preflight and bounded startup reconnection.
+`floating-nav` uses the same conditional Debug warning-banner close before tapping Saved, then requires both Saved content and selected-tab state.
+Its original pre-tap capture showed the warning covering Saved even though the later failure capture no longer did.
+The full-photo map pass keeps A/B/C/G card interactions, and the B empty-response tail opens meal targets and clears search through the actual recovery buttons above navigation.
+Changed native YAML requires the existing `scripts/sim/ci.test.ts` consumer in unfiltered focused selection, since dynamic file reads are outside Jest's import graph.
 Maestro passes `launchApp.permissions` values to iOS without expanding variables, so this helper selects literal `inuse` or `never` launches through `runFlow.when.true`.
 The installed iOS location driver rejects generic `allow`/`deny`; `inuse` grants foreground location and `never` exercises denial.
 Keep both permission scenarios covered by `scripts/sim/ci.test.ts` before host replay.
@@ -375,3 +390,14 @@ It uses Xcode's monthly-renewal-every-five-minutes test setting; it is not live 
 The prepared Xcode scheme selected this file with a Release executable, while the app retained DEV API/Supabase configuration.
 No StoreKit purchase or 27-journey aggregate completed before the explicit deferral.
 Keep its generated scheme snapshot, sealed artifact and private fixture bindings in the issue's external recovery handoff; never commit credentials or fabricate billing history.
+
+The dev-only map now exposes only the owner-selected C alternate, with Macros, Shuffle and a horizontal restaurant carousel.
+Use `com.fitsy.mobile://search?mapDebug=1`; retired `mapTray` and `mapVariant` parameters are ignored.
+The options panel changes pin style only.
+Owner [6713988813](https://github.com/dgmolla/fitsy/issues/755#issuecomment-6713988813) retired A, B and baseline C from active source, capture and acceptance matrices on November7.
+Their galleries and raw results remain historical; removed subjourneys are not new passes or native waivers.
+The maintained `map-search` journey checks C menu/search/list/macros/Shuffle, city selection, explicit bounded pan confirmation, pin styles, visible final-card/name/counter synchronization and empty recovery.
+Rendered real-caller tests also cover failed Shuffle and retry restoration from pin and drag selection.
+Run on normal and small Simulator layouts and inspect control bounds, readable meal/confidence overlays, selected pins, carousel clipping and tab clearance.
+The impact-selected full scope, auth/subscription journeys and genuine Apple-history prerequisite remain unchanged by layout retirement.
+These are Debug iOS POCs; the chosen prototype does not authorize production availability or rollout.

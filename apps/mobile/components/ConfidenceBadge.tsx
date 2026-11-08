@@ -1,10 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { ConfidenceLevel } from '@fitsy/shared';
-import { COLORS, FONTS } from '@/lib/brand';
+import { COLORS, EDITORIAL, FONTS } from '@/lib/brand';
 
 interface Props {
   confidence: ConfidenceLevel;
+  photo?: boolean;
 }
 
 const CONF: Record<ConfidenceLevel, { text: string; dot: string; bg: string; border: string }> = {
@@ -19,17 +20,19 @@ const LABEL: Record<ConfidenceLevel, string> = {
   LOW: 'Low',
 };
 
-export function ConfidenceBadge({ confidence }: Props) {
+export function ConfidenceBadge({ confidence, photo = false }: Props) {
   const c = CONF[confidence];
   return (
-    <View style={[styles.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
+    <View style={[styles.badge, { backgroundColor: c.bg, borderColor: c.border }, photo && styles.photo]}>
       <View style={[styles.dot, { backgroundColor: c.dot }]} />
-      <Text style={[styles.text, { color: c.text }]}>{LABEL[confidence]}</Text>
+      <Text style={[styles.text, { color: c.text }, photo && styles.photoText]}>{photo ? `${confidence[0]}${confidence.slice(1).toLowerCase()} confidence` : LABEL[confidence]}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  photo: { backgroundColor: EDITORIAL.whiteTintLow, borderColor: 'rgba(253,251,247,0.2)' },
+  photoText: { color: EDITORIAL.cream },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',

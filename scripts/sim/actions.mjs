@@ -7,6 +7,8 @@ import { createRequire } from 'node:module';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain, repository, simulatorFlows } from '../verify/impact-plan.mjs';
+import { maestroApiArgs } from './backend-identity.mjs';
+import { releaseExceptions } from './journey-fixtures.mjs';
 
 const controlDirectory = fileURLToPath(new URL('.', import.meta.url));
 const buildDirectory = join(repository, '.evidence/product-build');
@@ -16,11 +18,11 @@ const smoke = ['cold-start-welcome', 'signin-options', 'paywall-access'];
 const command = (binary, args) => execFileSync(binary, args, { cwd: repository, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 }).trim();
 const devices = () => Object.values(JSON.parse(command('xcrun', ['simctl', 'list', 'devices', 'available', '--json'])).devices).flat();
 
-export function selectFlows(scope, catalog) {
+export function selectFlows(scope, catalog, exceptions = []) {
   if (!['smoke', 'full'].includes(scope)) throw new Error('Simulator scope must be smoke or full');
   const selected = scope === 'smoke' ? smoke : Object.keys(catalog).filter(name => {
     const stores = (catalog[name].tags || []).filter(tag => tag.startsWith('store:'));
-    return !stores.length || stores.includes('store:test-store');
+    return !stores.length || stores.includes('store:test-store') || exceptions.some(item => item.flow === name);
   }).sort();
   if (!selected.length || selected.some(name => !catalog[name])) throw new Error('Required Maestro flows are missing');
   return selected;
@@ -77,11 +79,18 @@ async function runFlows(udid, work) {
   const { default: yaml } = await import('js-yaml');
   const catalog = Object.fromEntries(simulatorFlows().map(name => [name,
     yaml.loadAll(readFileSync(join(repository, 'apps/mobile/e2e/flows', `${name}.yaml`), 'utf8'))[0]]));
-  const names = selectFlows(process.env.SIM_SCOPE, catalog);
-  const accounts = fixtureAccounts(names, catalog, process.env.SIM_E2E_FIXTURES);
+  const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+  const candidates = process.env.SIM_SCOPE === 'full' ? Object.keys(catalog) : selectFlows(process.env.SIM_SCOPE, catalog);
+  const exceptions = await releaseExceptions(candidates, catalog,
+    event.pull_request?.number === 754 ? '6716597294' : undefined);
+  const names = selectFlows(process.env.SIM_SCOPE, catalog, exceptions);
+  const manual = candidates.filter(name => !names.includes(name)).map(flow => ({ flow, status: 'UNVERIFIED',
+    reason: 'Requires separate compatible-store native acceptance; no release exception granted' }));
+  const executable = names.filter(name => !exceptions.some(item => item.flow === name));
+  const accounts = fixtureAccounts(executable, catalog, process.env.SIM_E2E_FIXTURES);
   for (const account of Object.values(accounts)) { mask(account.email); mask(account.password); }
   delete process.env.SIM_E2E_FIXTURES;
-  const { startMetro, stopMetro, prepareEntitledEvidence } = await import('./product-flow.mjs');
+  const { startMetro, stopMetro, prepareEntitledEvidence, prepareBillingEvidence } = await import('./product-flow.mjs');
   const { runOwnedMaestro } = await import('./runner-controls.mjs');
   const { assertFlowCommands } = await import('../verify/product-flow.mjs');
   const { requireScreenRecognition, inspectScreenshotDirectory } = await import('./screen-guard.mjs');
@@ -90,12 +99,10 @@ async function runFlows(udid, work) {
   const controller = new AbortController();
   const interrupt = () => controller.abort();
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
-  const runFlow = async (name, path, extra = []) => {
+  const runFlow = async (name, path, includeLogin = true) => {
     if (controller.signal.aborted) throw new Error('Simulator run interrupted');
     const dir = join(work, name); mkdirSync(dir, { recursive: true });
-    const loginArgs = ['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_DEV_LOGIN_EMAIL', 'EXPO_PUBLIC_DEV_LOGIN_PASSWORD']
-      .flatMap(key => ['-e', `${key}=${process.env[key]}`]);
-    const result = await runOwnedMaestro(process.env.MAESTRO_BIN || 'maestro', ['--device', udid, 'test', ...loginArgs, ...extra,
+    const result = await runOwnedMaestro(process.env.MAESTRO_BIN || 'maestro', ['--device', udid, 'test', ...maestroApiArgs(process.env, { includeLogin }),
       '--format', 'junit', '--output', join(dir, 'report.xml'), '--debug-output', dir, '--test-output-dir', dir, path], {
       cwd: repository, dir, timeline: join(work, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'), signal: controller.signal,
       env: { ...process.env, PATH: `${controlDirectory}${delimiter}${process.env.PATH}`,
@@ -111,8 +118,8 @@ async function runFlows(udid, work) {
     if (!name.endsWith('-signin')) inspectScreenshotDirectory(dir, readFileSync(path));
   };
   try {
-    console.log(`Running ${names.length} ${process.env.SIM_SCOPE} flows; Apple receipt-history acceptance remains manual.`);
-    for (const name of names) {
+    console.log(JSON.stringify({ selected: names, exceptions, manual }));
+    for (const name of executable) {
       const fixture = (catalog[name].tags || []).find(tag => tag.startsWith('fixture:'))?.slice(8) || 'unsubscribed-dev';
       process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL = accounts[fixture].email;
       process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD = accounts[fixture].password;
@@ -120,12 +127,12 @@ async function runFlows(udid, work) {
         await startMetro(profile, { maxWorkers: 1 });
         if (fixture === 'entitled-dev') await prepareEntitledEvidence(profile, udid, join(work, `${name}-active-setup`));
         if (['empty-store', 'expired-subscription'].includes(fixture))
-          await runFlow(`${name}-signin`, join(repository, 'apps/mobile/e2e/helpers/ci-signin.yaml'),
-            ['-e', `DESTINATION=${fixture === 'empty-store' ? 'paywall-restore' : 'resubscribe-restore'}`]);
-        await runFlow(name, join(repository, 'apps/mobile/e2e/flows', `${name}.yaml`));
+          await prepareBillingEvidence(profile, udid, join(work, `${name}-signin`), fixture, { signal: controller.signal });
+        await runFlow(name, join(repository, 'apps/mobile/e2e/flows', `${name}.yaml`), !['empty-store', 'expired-subscription'].includes(fixture));
         console.log(`Passed: ${name}`);
       } finally { await stopMetro(); }
     }
+    console.log(JSON.stringify({ selected: names.length, passed: executable.length, excepted: exceptions, manual }));
   } finally {
     process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
   }

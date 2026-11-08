@@ -1,19 +1,16 @@
-# MapKit hit-tests screen coordinates, so overlapping photo pins can select a
-# neighbor despite the requested accessibility ID. Use the existing carousel
-# when comparing result identity; the journeys separately test pin -> preview.
+# Returning from the ordinary list starts the carousel at the first current result.
+# Pin hit testing is covered separately, including after denied-location recovery.
 appId: com.fitsy.mobile
 ---
-- runFlow:
-    when:
-      visible:
-        id: map-preview-close
-    commands:
-      - tapOn:
-          id: map-preview-close
 - tapOn:
-    id: map-next-spot
+    id: map-search-entry
+- assertNotVisible:
+    id: discovery-map
 - assertVisible:
-    id: map-page
-    text: "^1 / [1-9][0-9]*$"
-- assertVisible:
-    id: map-preview-open
+    id: discovery-macro-strip
+- tapOn:
+    id: discovery-view-toggle
+- extendedWaitUntil:
+    visible:
+      id: map-card-0
+    timeout: 15000

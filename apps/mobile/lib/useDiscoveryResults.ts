@@ -282,6 +282,8 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     requestController.current?.abort();
     pageController.current?.abort();
     fetchGeneration.current++;
+    // Replaying a completed query still has a new debounced request pending.
+    setCompletedContext(undefined);
     isLoadingMoreRef.current = false;
     setLoadingMore(false);
     setRefreshing(false);

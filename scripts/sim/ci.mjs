@@ -6,7 +6,7 @@ import { delimiter, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { impactPlan, repository, simulatorFlows, gitEnv, isMain } from '../verify/impact-plan.mjs';
-import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
+import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore, releaseExceptions } from './journey-fixtures.mjs';
 import { withSlackVideo } from './slack-video.mjs';
 import { maestroApiArgs } from './backend-identity.mjs';
 import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
@@ -28,11 +28,13 @@ export function renderSmoke(documents, selector) {
 export function localSelection(args, plan = impactPlan()) {
   const options = {};
   for (const arg of args) {
-    const match = /^--(scope|flows|udid)=(.*)$|^--(plan|record-video)$/.exec(arg);
+    const match = /^--(scope|flows|udid|release-exception)=(.*)$|^--(plan|record-video|no-environment-retry)$/.exec(arg);
     if (!match || Object.hasOwn(options, match[1] || match[3]))
-      throw new Error('Usage: ci.mjs [--scope=none|smoke|flow|full|changed|all] [--flows=name,...] [--udid=UDID] [--plan] [--record-video]');
+      throw new Error('Usage: ci.mjs [--scope=none|smoke|flow|full|changed|all] [--flows=name,...] [--udid=UDID] [--plan] [--record-video] [--no-environment-retry] [--release-exception=6716597294]');
     options[match[1] || match[3]] = match[1] ? match[2] : true;
   }
+  if (options['release-exception'] && options['release-exception'] !== '6716597294')
+    throw new Error('Unknown native release exception');
   const scope = options.scope === 'all' ? 'full' : !options.scope || options.scope === 'changed' ? plan.simulator.scope : options.scope;
   if (!['none', 'smoke', 'flow', 'full'].includes(scope)) throw new Error(`Unknown simulator scope: ${scope}`);
   const all = simulatorFlows();
@@ -48,6 +50,7 @@ export function localSelection(args, plan = impactPlan()) {
   if (scope === 'smoke' && flows.some(flow => !smoke.some(item => item.flow === flow)))
     throw new Error('Smoke scope requires classified render checkpoints; set the matching comparison range');
   return { ...options, selection: { ...plan.simulator, scope, required: scope !== 'none',
+    environmentRetryAllowed: !options['no-environment-retry'],
     risk: scope === 'full' ? 'high' : scope === 'none' ? 'low' : 'medium',
     mode: scope === 'none' ? 'none' : scope === 'smoke' ? 'render' : 'e2e', flows, smoke,
     omitted: all.filter(flow => !flows.includes(flow)).map(flow => ({ flow, reason: 'Unaffected by the mapped change; no shared or ambiguous impact' })),
@@ -65,20 +68,24 @@ export async function runLocal(args = process.argv.slice(2)) {
   if (process.platform !== 'darwin') throw new Error('Simulator execution requires macOS with Xcode');
   const udid = options.udid || process.env.FITSY_XCTEST_SIM_UDID;
   if (!/^[a-f0-9-]{36}$/i.test(udid || '')) throw new Error('Pass --udid=<owned booted simulator UDID> or set FITSY_XCTEST_SIM_UDID');
-  const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro, prepareEntitledEvidence } = await import('./product-flow.mjs');
+  const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro, prepareEntitledEvidence, prepareBillingEvidence } = await import('./product-flow.mjs');
   const { admitDisk, runOwnedMaestro, nearestFailure } = await import('./runner-controls.mjs');
   const { inspectScreenshotDirectory, requireScreenRecognition } = await import('./screen-guard.mjs');
   const { inputHash, assertFlowCommands } = await import('../verify/product-flow.mjs');
   const maestro = process.env.MAESTRO_BIN || 'maestro';
   const command = (binary, argv) => execFileSync(binary, argv, { cwd: repository, env: gitEnv(), stdio: 'inherit', timeout: 30000 });
   const yaml = createRequire(import.meta.url)('js-yaml');
+  const catalog = Object.fromEntries(selection.flows.map(name => [name,
+    yaml.loadAll(readFileSync(resolve(repository, `apps/mobile/e2e/flows/${name}.yaml`), 'utf8'))[0]]));
+  const exceptions = await releaseExceptions(selection.flows, catalog, options['release-exception']);
+  const executableFlows = selection.flows.filter(name => !exceptions.some(item => item.flow === name));
   requireScreenRecognition();
   // Parse checkpoints and check syntax before acquiring the shared native driver.
   const journeys = selection.mode === 'render' ? selection.smoke.map((smoke, index) => ({
     name: `render-${index}-${smoke.flow}`,
     flow: smoke.flow,
     documents: renderSmoke(yaml.loadAll(readFileSync(resolve(repository, `apps/mobile/e2e/flows/${smoke.flow}.yaml`), 'utf8')), smoke.selector),
-  })) : selection.flows.map(name => ({ name, flow: name, path: resolve(repository, `apps/mobile/e2e/flows/${name}.yaml`) }));
+  })) : executableFlows.map(name => ({ name, flow: name, path: resolve(repository, `apps/mobile/e2e/flows/${name}.yaml`) }));
   // Resolve every required fixture before acquiring a device or clearing state.
   // The YAML remains the single catalog of journeys and their starting states.
   for (const journey of journeys) {
@@ -86,7 +93,7 @@ export async function runLocal(args = process.argv.slice(2)) {
   }
   const out = resolve(repository, `.evidence/mobile-e2e/${Date.now()}-${process.pid}`);
   mkdirSync(out, { recursive: true });
-  writeFileSync(resolve(out, 'selection.json'), JSON.stringify({ ...selection, comparison: plan.comparison }, null, 2) + '\n');
+  writeFileSync(resolve(out, 'selection.json'), JSON.stringify({ ...selection, exceptions, comparison: plan.comparison }, null, 2) + '\n');
   for (const journey of journeys) {
     if (journey.documents) {
       journey.path = resolve(out, `${journey.name}.yaml`);
@@ -97,7 +104,9 @@ export async function runLocal(args = process.argv.slice(2)) {
   const controller = new AbortController();
   const interrupt = () => controller.abort();
   const sourceHash = inputHash();
-  admitDisk(repository, 'Local simulator scope');
+  // Measured #755 full runs grew up to 23 GiB in XCTest attachments alone.
+  // Keep the existing 8 GiB safety floor after that full-run projection.
+  admitDisk(repository, 'Local simulator scope', selection.scope === 'full' ? 31 : 8);
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   try {
     for (const { name, flow, path, fixture } of journeys) {
@@ -116,10 +125,13 @@ export async function runLocal(args = process.argv.slice(2)) {
           if (session.built.metroPort) { metroStarted = true; await startMetro(session.built); }
           if (fixture.name === 'entitled-dev')
             await prepareEntitledEvidence(session.built, udid, resolve(dir, 'active-setup'));
+          if (session.built.storeMode === 'test-store' && ['empty-store', 'expired-subscription'].includes(fixture.name))
+            await prepareBillingEvidence(session.built, udid, resolve(dir, 'billing-setup'), fixture.name, { signal: controller.signal });
           if (fixture.name === 'entitled-dev' && (!process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL?.trim() ||
             !process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD?.trim())) throw new Error('Local fixture login credentials are required for log-meal');
           const result = await withSlackVideo({ enabled: options['record-video'] || process.env.FITSY_SIM_RECORD_VIDEO === '1',
-            udid, dir, signal: controller.signal }, () => runOwnedMaestro(maestro, ['--device', udid, 'test', ...maestroApiArgs(), '--format', 'junit',
+            udid, dir, signal: controller.signal }, () => runOwnedMaestro(maestro, ['--device', udid, 'test',
+            ...maestroApiArgs(process.env, { includeLogin: !['empty-store', 'expired-subscription'].includes(fixture.name) }), '--format', 'junit',
             '--output', resolve(dir, 'report.xml'), '--debug-output', dir, '--test-output-dir', dir, path], {
             cwd: repository, dir, timeline: resolve(out, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'),
             signal: controller.signal, env: { ...gitEnv(),
@@ -127,7 +139,8 @@ export async function runLocal(args = process.argv.slice(2)) {
               FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: resolve(dir, 'capture.jsonl') },
             diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', resolve(dir, 'failure.png')]),
           }));
-          const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file) && !file.startsWith('active-setup/'));
+          const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file) &&
+            !file.startsWith('active-setup/') && !file.startsWith('billing-setup/'));
           const parsed = reports.length === 1 ? JSON.parse(readFileSync(resolve(dir, reports[0]), 'utf8')) : null;
           if (result.code !== 0 || result.reason)
             throw maestroFailure(`Maestro flow ${name} failed; inspect ${dir}`, result, Array.isArray(parsed) ? nearestFailure(parsed) : null);
@@ -140,9 +153,14 @@ export async function runLocal(args = process.argv.slice(2)) {
           try { if (metroStarted) await stopMetro(); }
           finally { releaseDevice(); }
         }
-      }), { dir: resolve(out, name), signal: controller.signal, canRetry: () => inputHash() === sourceHash });
+      }), { dir: resolve(out, name), signal: controller.signal,
+        // A resumed worker can preserve an already consumed infrastructure retry.
+        canRetry: () => selection.environmentRetryAllowed && inputHash() === sourceHash });
     }
-    return { name: 'mobile-e2e', status: 'pass', ...selection, simulator: udid, evidence: out };
+    const result = { name: 'mobile-e2e', status: 'pass', ...selection, exceptions,
+      passed: journeys.map(item => item.flow), simulator: udid, evidence: out };
+    writeFileSync(resolve(out, 'result.json'), JSON.stringify(result, null, 2) + '\n');
+    return result;
   } finally {
     process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
   }

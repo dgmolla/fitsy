@@ -57,14 +57,27 @@ appId: com.fitsy.mobile
 - tapOn: ".*Dev Login.*"
 - extendedWaitUntil:
     visible:
-      id: discovery-search
+      id: discovery-location
     timeout: 30000
 - assertNotVisible: "Dev Login Failed"
-- openLink: com.fitsy.mobile://search?mapDebug=1&shuffleDebug=1
+- openLink: com.fitsy.mobile://search?mapDebug=1&floatingNavDebug=1
 - tapOn:
     text: "^Open$"
+    optional: true
+# A retained DEV session can meet the native rating-prompt threshold.
+- tapOn:
+    text: "^Not Now$"
     optional: true
 - extendedWaitUntil:
     visible:
       id: discovery-map
     timeout: 15000
+- assertVisible:
+    id: shuffle-button
+# Keep the Debug warning banner from covering the tab bar or POC layout controls.
+- runFlow:
+    when:
+      visible: ".*Open debugger to view warnings.*"
+    commands:
+      - tapOn:
+          point: "93%,93%"

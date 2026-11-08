@@ -1,0 +1,207 @@
+{
+  "captureSource": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+  "method": "Original simctl PNG capture with unchanged served-bundle readback",
+  "scope": "Chosen C with Macros and two list treatments after confidence repair; actual UI observations, not automated full-scope acceptance",
+  "images": [
+    {
+      "source": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+      "jsHash": "b681179c7ce18d8b077b283f8725a6a4ab5b0ca3d3f451cecd98d907e2d869de",
+      "bundleHash": "53454ac6f5a13129ed6ddad41918517d474c31190b042d7285c679eb19808abd",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T17:50:07.894Z",
+      "file": "normal-list-1-split.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T17:54:59.601047+00:00",
+      "sha256": "59498ed7b5322ccb1df9bbf7ad46f8dee0e8ea006baf42d3446a0d9f55ef41fa",
+      "bytes": 1870245,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "List 1: integrated Map/area, actual Erewhon meal and LOW confidence"
+    },
+    {
+      "source": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+      "jsHash": "b681179c7ce18d8b077b283f8725a6a4ab5b0ca3d3f451cecd98d907e2d869de",
+      "bundleHash": "53454ac6f5a13129ed6ddad41918517d474c31190b042d7285c679eb19808abd",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T17:50:07.894Z",
+      "file": "normal-list-1-split-focused.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T17:55:30.147372+00:00",
+      "sha256": "b2555862069f919c89924ac80c3c5145106b4d12454c10b32d9c669fedb11ba1",
+      "bytes": 1593083,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "List 1 focused search: non-cream surface and software keyboard"
+    },
+    {
+      "source": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+      "jsHash": "b681179c7ce18d8b077b283f8725a6a4ab5b0ca3d3f451cecd98d907e2d869de",
+      "bundleHash": "53454ac6f5a13129ed6ddad41918517d474c31190b042d7285c679eb19808abd",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T17:50:07.894Z",
+      "file": "normal-map-c-macros.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T17:55:53.936170+00:00",
+      "sha256": "a8a628128decb40316ef8fb6c004d7727d4abf3560b3ce488f7cf04df8f4c194",
+      "bytes": 2202244,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "Chosen C alternate: Macros, actual Erewhon meal, LOW confidence and selected pin/card 1 of 1"
+    },
+    {
+      "source": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+      "jsHash": "b681179c7ce18d8b077b283f8725a6a4ab5b0ca3d3f451cecd98d907e2d869de",
+      "bundleHash": "53454ac6f5a13129ed6ddad41918517d474c31190b042d7285c679eb19808abd",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T17:50:07.894Z",
+      "file": "normal-list-2-compact.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T17:57:13.246995+00:00",
+      "sha256": "dba75a7b9fa5719f8e352c7b44ffcf69a7982a6b353e5a43f2d8a34ec32ac1d6",
+      "bytes": 1869439,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "List 2: compact Map/location action, actual Erewhon meal and LOW confidence"
+    },
+    {
+      "source": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+      "jsHash": "b681179c7ce18d8b077b283f8725a6a4ab5b0ca3d3f451cecd98d907e2d869de",
+      "bundleHash": "53454ac6f5a13129ed6ddad41918517d474c31190b042d7285c679eb19808abd",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T17:50:07.894Z",
+      "file": "normal-list-2-compact-focused.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T17:57:36.434201+00:00",
+      "sha256": "a0bd813be7a33c41d5756abd6be1d6efcd404017eaea65d55c1cbb584ec7d105",
+      "bytes": 1592672,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "List 2 focused search: non-cream surface, existing location action and software keyboard"
+    },
+    {
+      "source": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+      "jsHash": "b681179c7ce18d8b077b283f8725a6a4ab5b0ca3d3f451cecd98d907e2d869de",
+      "bundleHash": "53454ac6f5a13129ed6ddad41918517d474c31190b042d7285c679eb19808abd",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:01:56.288Z",
+      "file": "small-list-1-split.png",
+      "device": "iPhone SE / iOS 17.5",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T18:05:21.117356+00:00",
+      "sha256": "0183af6361903f3e5a154978caab7228056f9a87599e6d18797f7eda69477486",
+      "bytes": 917831,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "List 1: integrated Map/area, actual Erewhon meal and LOW confidence on small screen"
+    },
+    {
+      "source": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+      "jsHash": "b681179c7ce18d8b077b283f8725a6a4ab5b0ca3d3f451cecd98d907e2d869de",
+      "bundleHash": "53454ac6f5a13129ed6ddad41918517d474c31190b042d7285c679eb19808abd",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:01:56.288Z",
+      "file": "small-list-1-split-focused.png",
+      "device": "iPhone SE / iOS 17.5",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T18:05:34.301248+00:00",
+      "sha256": "664c4dff38f59af6a7f39aed845a946905b9f2a9feb2ed5bcbe337471f2d2364",
+      "bytes": 613368,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "List 1: focused non-cream search and native keyboard on small screen"
+    },
+    {
+      "source": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+      "jsHash": "b681179c7ce18d8b077b283f8725a6a4ab5b0ca3d3f451cecd98d907e2d869de",
+      "bundleHash": "53454ac6f5a13129ed6ddad41918517d474c31190b042d7285c679eb19808abd",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:01:56.288Z",
+      "file": "small-map-c-macros.png",
+      "device": "iPhone SE / iOS 17.5",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T18:05:54.452864+00:00",
+      "sha256": "eff16febdb56b2a1bb12fb62f5f29e44ca5c31401e4f17567226586c8065abe8",
+      "bytes": 932459,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "Chosen C alternate: Macros, selected Erewhon meal, real macros and LOW confidence on small screen"
+    },
+    {
+      "source": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+      "jsHash": "b681179c7ce18d8b077b283f8725a6a4ab5b0ca3d3f451cecd98d907e2d869de",
+      "bundleHash": "53454ac6f5a13129ed6ddad41918517d474c31190b042d7285c679eb19808abd",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:01:56.288Z",
+      "file": "small-list-2-compact.png",
+      "device": "iPhone SE / iOS 17.5",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T18:06:57.973177+00:00",
+      "sha256": "adb49c45f67af7bc5966ed76c30664c2c3a68972d6f08e6b4ce81fe4211fd005",
+      "bytes": 917046,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "List 2: compact Map/location, actual Erewhon meal and LOW confidence on small screen"
+    },
+    {
+      "source": "c74d407b4f60b89dba615b1fe83d7fe2cfcffe8f",
+      "jsHash": "b681179c7ce18d8b077b283f8725a6a4ab5b0ca3d3f451cecd98d907e2d869de",
+      "bundleHash": "53454ac6f5a13129ed6ddad41918517d474c31190b042d7285c679eb19808abd",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:01:56.288Z",
+      "file": "small-list-2-compact-focused.png",
+      "device": "iPhone SE / iOS 17.5",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T18:07:22.696361+00:00",
+      "sha256": "a835c1de0adf74808d05027befd2c89096915ac9342e6b829b4962d34e26810e",
+      "bytes": 612284,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "List 2: focused non-cream search and native keyboard on small screen"
+    }
+  ]
+}

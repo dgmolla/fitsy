@@ -28,6 +28,33 @@ test('path selection is narrow, fails missing history and expands only relevant 
   assert.throws(() => actionsSelection(null, 'pull_request', {}), /comparison/);
 });
 
+test('local runner preflight checks real CLI inventory without confusing missing capacity with denied access', t => {
+  const dir = temporary(t), bin = join(dir, 'bin'), calls = join(dir, 'calls');
+  mkdirSync(bin);
+  const runner = (status, labels = workflow.jobs.mac['runs-on']) => ({ id: 1, status, busy: true,
+    labels: labels.map(name => ({ name })) });
+  const cases = [
+    { pages: [{ total_count: 0, runners: [] }], success: false, message: /No online runner.*registered=0/ },
+    { pages: [{ total_count: 1, runners: [runner('offline')] }], success: false, message: /No online runner.*matching=1/ },
+    { pages: [{ total_count: 1, runners: [runner('online', ['self-hosted', 'Linux', 'fitsy-sim'])] }], success: false, message: /No online runner.*matching=0/ },
+    { pages: [{ total_count: 2, runners: [runner('offline')] }, { total_count: 2, runners: [{ ...runner('online'), id: 2 }] }], success: true, message: /online=1.*busy=1/ },
+    { pages: { message: 'denied' }, status: 1, success: false, message: /Runner inventory unavailable.*Administration read/ },
+    { pages: [{ total_count: 1, runners: [] }], success: false, message: /Runner inventory is incomplete or invalid/ },
+  ];
+  for (const item of cases) {
+    writeFileSync(join(bin, 'gh'), `#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(calls)},JSON.stringify(process.argv.slice(2))+'\\n');\nconsole.log(${JSON.stringify(JSON.stringify(item.pages))});\nprocess.exit(${item.status || 0});\n`, { mode: 0o755 });
+    const result = spawnSync(process.execPath, [join(root, 'scripts/verify/simulator-actions.mjs'), '--preflight'], {
+      cwd: root, env: { ...env, PATH: `${bin}:${env.PATH}` }, encoding: 'utf8', timeout: 10000,
+    });
+    assert.equal(result.status === 0, item.success, result.stderr);
+    assert.match(result.stdout + result.stderr, item.message);
+    assert.doesNotMatch(result.stdout + result.stderr, /"message":"denied"/);
+  }
+  const commands = readFileSync(calls, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  assert.equal(commands.length, cases.length);
+  for (const args of commands) assert.deepEqual(args, ['api', '--paginate', '--slurp', 'repos/dgmolla/fitsy/actions/runners?per_page=100']);
+});
+
 test('the real selector sees a mobile deletion beyond 300 unrelated changed files', t => {
   const dir = temporary(t);
   const git = args => execFileSync('git', args, { cwd: dir, env, stdio: 'pipe', encoding: 'utf8' }).trim();
@@ -102,6 +129,8 @@ test('full Test Store selection includes maintained failures and rejects incompl
   }]));
   assert.deepEqual(selectFlows('smoke', catalog), ['cold-start-welcome', 'signin-options', 'paywall-access']);
   assert.deepEqual(selectFlows('full', catalog), ['chain-menu-serving', 'cold-start-welcome', 'new-flow', 'paywall-access', 'signin-options']);
+  assert.deepEqual(selectFlows('full', catalog, [{ flow: 'apple', status: 'EXCEPTED' }]),
+    ['apple', 'chain-menu-serving', 'cold-start-welcome', 'new-flow', 'paywall-access', 'signin-options']);
   assert.throws(() => selectFlows('none', catalog));
   const accounts = { 'unsubscribed-dev': { email: 'seed-test@fitsy.dev', password: 'synthetic' } };
   assert.doesNotThrow(() => fixtureAccounts(selectFlows('smoke', catalog), catalog, JSON.stringify(accounts)));

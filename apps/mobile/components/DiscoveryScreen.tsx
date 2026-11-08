@@ -18,7 +18,6 @@ import { s } from './DiscoveryScreen.styles';
 import { Masthead, MacroStrip, SearchBar } from './DiscoveryChrome';
 import { HeroCard, RestaurantSection } from './DiscoveryCards';
 import { ShuffleButton } from './ShuffleButton';
-import { DiscoveryViewToggle } from './DiscoveryViewToggle';
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
 // Keep the native map module out of the disabled experiment's execution path.
@@ -56,7 +55,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
     });
   }), []);
   const closeTour = () => { finishTour(); listRef.current?.scrollToOffset({ offset: 0, animated: false }); };
-  const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} action={action} />;
+  const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} action={action} frosted={mapEnabled} />;
   const header = (
     <>
       {isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
@@ -66,7 +65,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
         </Pressable>}
       </View>}
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
-      {renderSearchBar(!isOnboardingPreview && <ShuffleButton disabled={!canShuffle} onPress={handleShuffle} />)}
+      {renderSearchBar(!isOnboardingPreview && <ShuffleButton style={mapEnabled && s.mapShuffle} disabled={!canShuffle} onPress={handleShuffle} />)}
       {!canSearch && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.greenAccent} />
@@ -179,8 +178,8 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
         <DiscoveryMap discovery={discovery} onShowList={() => setView('list')} />
       </Suspense> : <>
       {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined)} />}
-      <Masthead preview={isOnboardingPreview} locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
-      {mapEnabled && <View style={{ paddingHorizontal: 16 }}><DiscoveryViewToggle map={false} onPress={() => setView('map')} /></View>}
+      <Masthead preview={isOnboardingPreview} locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker}
+        mapControl={mapEnabled ? { onPress: () => setView('map') } : undefined} />
       {!loading && error !== null && (
         <View style={s.errorBanner}>
           <Text style={s.errorText}>{error}</Text>

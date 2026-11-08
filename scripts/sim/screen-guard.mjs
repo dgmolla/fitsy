@@ -23,12 +23,21 @@ export function testsExpiredScreen(source = '') {
 }
 
 export function recognizeScreen(file) {
-  try {
-    const text = execFileSync('tesseract', [file, 'stdout', '-l', 'eng'],
-      { encoding: 'utf8', timeout: 15_000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
-    if (!text.trim()) throw new Error('No recognized screenshot text');
-    return text;
-  } catch { throw new Error('Screenshot OCR failed; install working tesseract with English data and retain the failed capture'); }
+  const deadline = Date.now() + 15_000;
+  // Automatic page segmentation can return no text over a full-photo UI.
+  // Retry only that empty successful result with sparse-text segmentation,
+  // within the same total deadline; command failures and blank images still fail.
+  for (const layout of [[], ['--psm', '11']]) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error(`Screenshot OCR deadline exceeded: ${file}`);
+    let text;
+    try {
+      text = execFileSync('tesseract', [file, 'stdout', '-l', 'eng', ...layout],
+        { encoding: 'utf8', timeout: remaining, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch { throw new Error(`Screenshot OCR command failed; verify tesseract and English data, and retain: ${file}`); }
+    if (text.trim()) return text;
+  }
+  throw new Error(`No screenshot text recognized; retain the unreadable capture: ${file}`);
 }
 
 export function requireScreenRecognition() {
