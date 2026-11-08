@@ -437,6 +437,60 @@ class ApprovedAttachmentsTest(unittest.TestCase):
                 self.cleanup.prepare_attachments(self.args)
             self.assertEqual(len(clones), 1)
 
+    def test_successor_scope_requires_its_exact_external_owner_grant_and_reviewed_source(self):
+        control = self.home / 'scripts/delivery/cleanup.py'
+        control.parent.mkdir(parents=True); control.write_text('reviewed control fixture\n')
+        original_run = self.cleanup.run
+        def source_proof(*args):
+            if args[0] == 'git' and 'show' in args: return 'reviewed control fixture'
+            return original_run(*args)
+        for patch in (mock.patch.object(self.cleanup, '__file__', str(control)),
+                      mock.patch.object(self.cleanup, 'run', side_effect=source_proof)):
+            patch.start(); self.addCleanup(patch.stop)
+        self.evidence.rename(self.evidence.with_name('repair25'))
+        self.evidence = self.evidence.with_name('repair25')
+        self.representative = self.evidence / 'attachment-representatives' / self.representative.name
+        self.args.records = self.evidence / self.args.records.name
+        self.args.approval_comment = 9001
+        for row in self.selected: row['retained'] = str(self.representative)
+        self.proposal['retainedRepresentatives'][0]['path'] = str(self.representative)
+        self.write_proposal()
+        values = {'NEXT_ATTACHMENT_PROPOSAL_SHA': hashlib.sha256(self.args.records.read_bytes()).hexdigest(),
+                  'NEXT_ATTACHMENT_COUNT': 2, 'NEXT_ATTACHMENT_BYTES': self.proposal['selectedBytes'],
+                  'NEXT_ATTACHMENT_REPRESENTATIVES': 1, 'NEXT_ATTACHMENT_RETAINED_BYTES': self.representative.stat().st_size}
+        for name, value in values.items():
+            patch = mock.patch.object(self.cleanup, name, value, create=True); patch.start(); self.addCleanup(patch.stop)
+        self.approval.update(id=9001, issue_url='https://api.github.com/repos/dgmolla/fitsy/issues/755')
+        approved = f'''**TL;DR:** Owner approves the exact #755 duplicate cleanup below.
+
+Control source: `{'a' * 40}`.
+Proposal SHA256: `{values['NEXT_ATTACHMENT_PROPOSAL_SHA']}`.
+Delete only 2 duplicate PNGs totaling {self.proposal['selectedBytes']} bytes from the owned normal986/C385 attachment directory.
+Retain all 1 representatives totaling {self.representative.stat().st_size} bytes, every unselected original and every canonical recovery input.
+The outside-path and younger-than-four-hours exceptions apply only to this sealed list.
+Use reviewed scripts/delivery/cleanup.py dry-run, then --apply, after fresh identity, hash, no-consumer and capacity checks.'''
+        for body in ('pending', approved.replace('Owner approves', 'Owner has not approved'),
+                     approved.replace('a' * 40, 'b' * 40), approved.replace('Retain all 1', 'Retain all 0')):
+            self.approval['body'] = body
+            with self.assertRaises(ValueError): self.cleanup.approved_attachments(self.args)
+            self.assertTrue(all(Path(row['path']).exists() for row in self.selected))
+        self.approval['body'] = approved
+        receipt = self.cleanup.approved_attachments(self.args)
+        self.assertEqual(receipt['status'], 'would-delete')
+        self.args.dry_run_receipt.write_text(json.dumps(receipt)); self.args.apply = True
+        control.write_text('modified control\n')
+        with self.assertRaises(ValueError): self.cleanup.approved_attachments(self.args)
+        control.write_text('reviewed control fixture\n')
+        self.approval['body'] += '\nApproval withdrawn.'
+        with self.assertRaises(ValueError): self.cleanup.approved_attachments(self.args)
+        self.approval['body'] = approved
+        self.approval['issue_url'] = 'https://api.github.com/repos/dgmolla/fitsy/issues/753'
+        with self.assertRaises(ValueError): self.cleanup.approved_attachments(self.args)
+        self.approval['issue_url'] = 'https://api.github.com/repos/dgmolla/fitsy/issues/755'
+        self.assertEqual(self.cleanup.approved_attachments(self.args)['removed'], 2)
+        self.assertTrue(self.representative.exists())
+        self.assertEqual(self.unique.read_bytes(), b'required unique evidence')
+
 
 if __name__ == '__main__':
     unittest.main()

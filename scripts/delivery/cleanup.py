@@ -24,6 +24,10 @@ ATTACHMENT_REPRESENTATIVES, ATTACHMENT_RETAINED_BYTES = 851, 657140483
 ATTACHMENT_DEVICE = '98638215-7437-4A09-BF9F-C9E699E303B6'
 ATTACHMENT_DEVICE_NAME = 'Fitsy issue753 PID18174 normal'
 ATTACHMENT_CONTAINER = 'C3858678-AEE6-40F7-B38F-C380441CA3BE'
+# This successor is only a proposal until a separate exact owner grant exists.
+NEXT_ATTACHMENT_PROPOSAL_SHA = '8d478c4e54a1edf6541a6567cc253be32284ec07bbf170e391e7e8223f0bc237'
+NEXT_ATTACHMENT_COUNT, NEXT_ATTACHMENT_BYTES = 12201, 7920250995
+NEXT_ATTACHMENT_REPRESENTATIVES, NEXT_ATTACHMENT_RETAINED_BYTES = 714, 542655061
 
 
 def run(*argv):
@@ -154,10 +158,31 @@ def prepare_attachments(args):
                 'projection': {'conservativeNextFullGiB': 23, 'requiredFloorGiB': 8}}
 
 
+def successor_approval_body(source):
+    # Root may publish this only after genuine owner approval and independent
+    # review of this exact control source. A proposal or old grant cannot match.
+    return f'''**TL;DR:** Owner approves the exact #755 duplicate cleanup below.
+
+Control source: `{source}`.
+Proposal SHA256: `{NEXT_ATTACHMENT_PROPOSAL_SHA}`.
+Delete only {NEXT_ATTACHMENT_COUNT} duplicate PNGs totaling {NEXT_ATTACHMENT_BYTES} bytes from the owned normal986/C385 attachment directory.
+Retain all {NEXT_ATTACHMENT_REPRESENTATIVES} representatives totaling {NEXT_ATTACHMENT_RETAINED_BYTES} bytes, every unselected original and every canonical recovery input.
+The outside-path and younger-than-four-hours exceptions apply only to this sealed list.
+Use reviewed scripts/delivery/cleanup.py dry-run, then --apply, after fresh identity, hash, no-consumer and capacity checks.'''
+
+
 def approved_attachments(args):
     """Retire only the sealed owner-approved duplicates, keeping every unique byte."""
     home = Path.home()
-    evidence = home / 'fitsy-wt/issue-755-evidence/private/repair15'
+    comment = getattr(args, 'approval_comment', None)
+    successor = comment is not None
+    require(not successor or type(comment) is int and comment > 0, 'invalid owner comment ID')
+    evidence = home / 'fitsy-wt/issue-755-evidence/private' / ('repair25' if successor else 'repair15')
+    proposal_sha = NEXT_ATTACHMENT_PROPOSAL_SHA if successor else ATTACHMENT_PROPOSAL_SHA
+    count, total = (NEXT_ATTACHMENT_COUNT, NEXT_ATTACHMENT_BYTES) if successor else (ATTACHMENT_COUNT, ATTACHMENT_BYTES)
+    representative_count, retained_bytes = (NEXT_ATTACHMENT_REPRESENTATIVES, NEXT_ATTACHMENT_RETAINED_BYTES) \
+        if successor else (ATTACHMENT_REPRESENTATIVES, ATTACHMENT_RETAINED_BYTES)
+    approval_id = str(comment) if successor else ATTACHMENT_APPROVAL
     directory = home / 'Library/Developer/CoreSimulator/Devices' / ATTACHMENT_DEVICE / \
         'data/Containers/Data/InternalDaemon' / ATTACHMENT_CONTAINER / 'Attachments'
     require(args.records == evidence / 'attachment-duplicate-proposal.json'
@@ -165,20 +190,30 @@ def approved_attachments(args):
     require(args.records.stat().st_uid == os.getuid() and not args.records.stat().st_mode & 0o077,
             'proposal must be private')
     original = args.records.read_bytes()
-    require(hashlib.sha256(original).hexdigest() == ATTACHMENT_PROPOSAL_SHA, 'not the sealed approved proposal')
-    approval = json.loads(run('gh', 'api', 'repos/dgmolla/fitsy/issues/comments/' + ATTACHMENT_APPROVAL))
-    require(str(approval['id']) == ATTACHMENT_APPROVAL and approval['user']['login'] == 'dgmolla'
-            and hashlib.sha256(approval['body'].encode()).hexdigest() == ATTACHMENT_APPROVAL_SHA,
-            'owner approval changed or unavailable')
+    require(hashlib.sha256(original).hexdigest() == proposal_sha, 'not the sealed approved proposal')
     source = run('git', '-C', str(args.repo), 'rev-parse', 'HEAD')
     require(not run('git', '-C', str(args.repo), 'status', '--porcelain'), 'cleanup requires a frozen reviewed checkout')
+    if successor:
+        control = Path(__file__).resolve()
+        require(control == args.repo.resolve() / 'scripts/delivery/cleanup.py'
+                and control.read_text().strip() == run('git', '-C', str(args.repo), 'show', 'HEAD:scripts/delivery/cleanup.py'),
+                'executing control does not match the approved source')
+    approval = json.loads(run('gh', 'api', 'repos/dgmolla/fitsy/issues/comments/' + approval_id))
+    require(str(approval['id']) == approval_id and approval['user']['login'] == 'dgmolla', 'owner approval unavailable')
+    approval_sha = hashlib.sha256(approval['body'].encode()).hexdigest()
+    if successor:
+        require(approval.get('issue_url') == 'https://api.github.com/repos/dgmolla/fitsy/issues/755'
+                and approval['body'].rstrip('\n') == successor_approval_body(source),
+                'new proposal needs its exact owner grant for this reviewed control source')
+    else:
+        require(approval_sha == ATTACHMENT_APPROVAL_SHA, 'owner approval changed or unavailable')
     proposal = json.loads(original)
     selected, representatives = proposal['selected'], proposal['retainedRepresentatives']
     require(proposal['owner']['issue'] == 755 and proposal['owner']['device'] == ATTACHMENT_DEVICE
-            and len(selected) == proposal['selectedFiles'] == ATTACHMENT_COUNT
-            and sum(row['bytes'] for row in selected) == proposal['selectedBytes'] == ATTACHMENT_BYTES
-            and len(representatives) == ATTACHMENT_REPRESENTATIVES
-            and sum(row['bytes'] for row in representatives) == ATTACHMENT_RETAINED_BYTES,
+            and len(selected) == proposal['selectedFiles'] == count
+            and sum(row['bytes'] for row in selected) == proposal['selectedBytes'] == total
+            and len(representatives) == representative_count
+            and sum(row['bytes'] for row in representatives) == retained_bytes,
             'approved scope/counts changed')
     retained = {row['path']: row for row in representatives}
     require(len(retained) == len(representatives) and len({row['path'] for row in selected}) == len(selected),
@@ -193,9 +228,9 @@ def approved_attachments(args):
         require(row['retained'] in retained and
                 (row['sha256'], row['bytes']) == (retained[row['retained']]['sha256'], retained[row['retained']]['bytes']),
                 'missing exact-byte representative')
-    binding = {'proposal': ATTACHMENT_PROPOSAL_SHA, 'approval': ATTACHMENT_APPROVAL,
-               'approval_sha256': ATTACHMENT_APPROVAL_SHA, 'source': source,
-               'files': len(selected), 'bytes': ATTACHMENT_BYTES}
+    binding = {'proposal': proposal_sha, 'approval': approval_id,
+               'approval_sha256': approval_sha, 'source': source,
+               'files': len(selected), 'bytes': total}
     if args.apply:
         require(args.dry_run_receipt is not None, 'apply requires the preceding dry-run receipt')
         receipt = json.loads(args.dry_run_receipt.read_text())
@@ -249,7 +284,7 @@ def approved_attachments(args):
         missing = sum(not Path(row['path']).exists() for row in selected)
         require(missing == removed, 'unexpected removed/missing count')
         free_after = shutil.disk_usage(directory).free
-        projected_free = (free_after if args.apply else free_before + ATTACHMENT_BYTES) - 23 * 2**30
+        projected_free = (free_after if args.apply else free_before + total) - 23 * 2**30
         return {**binding, 'status': 'deleted' if args.apply else 'would-delete', 'removed': removed,
                 'missing': missing, 'changed': 0, 'representatives': len(representatives),
                 'free_before': free_before, 'free_after': free_after,
@@ -318,6 +353,7 @@ def main():
     parser.add_argument('--repo', type=Path, default=Path.cwd())
     parser.add_argument('--state-dir', type=Path, default=Path.home() / '.fitsy-dispatcher')
     parser.add_argument('--approved-attachments', action='store_true', help='only the sealed #755 owner exception')
+    parser.add_argument('--approval-comment', type=int, help='new exact #755 owner grant for the sealed successor proposal and this reviewed source')
     parser.add_argument('--prepare-attachments', action='store_true', help='stage duplicate-only proposal; no deletion authority')
     parser.add_argument('--output-dir', type=Path, help='existing private #755 repair evidence directory for preparation')
     parser.add_argument('--dry-run-receipt', type=Path, help='exact preceding attachment dry-run JSON output')
@@ -326,7 +362,8 @@ def main():
     mode.add_argument('--apply', action='store_true', help='remove eligible exact resources')
     args = parser.parse_args()
     if args.prepare_attachments:
-        require(not args.approved_attachments and args.dry_run_receipt is None, 'preparation is separate from approved cleanup')
+        require(not args.approved_attachments and args.dry_run_receipt is None and args.approval_comment is None,
+                'preparation is separate from approved cleanup')
         try:
             print(json.dumps(prepare_attachments(args)))
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
@@ -342,7 +379,8 @@ def main():
             # External command errors may contain private metadata; never echo it.
             raise SystemExit('Approved attachment cleanup refused; approval, source, identity, preservation, ownership or capacity guard failed')
         return
-    require(args.dry_run_receipt is None, 'dry-run receipt applies only to approved attachments')
+    require(args.dry_run_receipt is None and args.approval_comment is None,
+            'dry-run receipt and owner grant apply only to approved attachments')
     with ExitStack() as stack:
         for path in (args.state_dir / 'dispatcher.lock', Path.home() / '.fitsy-sim-claim.lock'):
             path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
