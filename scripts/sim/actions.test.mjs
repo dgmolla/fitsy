@@ -119,7 +119,9 @@ test('workflow isolates PR cancellation from the single Mac queue and always cle
   assert.equal(workflow.concurrency.group, 'simulator-pr-${{ github.event.pull_request.number || github.sha }}');
   assert.deepEqual(workflow.jobs.mac.concurrency, { group: 'fitsy-simulator', 'cancel-in-progress': false, queue: 'max' });
   assert.deepEqual(workflow.jobs.mac['runs-on'], ['self-hosted', 'macOS', 'fitsy-sim']);
-  assert.equal(workflow.jobs.mac['timeout-minutes'], 30);
+  assert.equal(workflow.jobs.mac['timeout-minutes'], "${{ needs.select.outputs.scope == 'full' && 90 || 30 }}");
+  assert.equal(workflow.jobs.mac.env.FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS,
+    "${{ needs.select.outputs.scope == 'full' && '5400' || '1800' }}");
   assert.match(workflow.jobs.mac.steps.at(-1).if, /always\(\)/);
   assert.match(workflow.jobs.simulator.if, /always\(\)/);
   assert.equal(workflow.on.pull_request.paths, undefined);
@@ -194,7 +196,7 @@ test('Expo regenerates runtime RevenueCat config without changing the cached app
   assert.equal(signed, true);
 });
 
-test('CLI cleanup shuts down and erases only its claimed device after a boot failure', t => {
+for (const [workerSeconds, leaseMinutes] of [[1800, 35], [5400, 95]]) test(`CLI boot claims the ${leaseMinutes}-minute worker lease and cleans up only its device on failure`, t => {
   const dir = temporary(t), bin = join(dir, 'bin'), work = join(dir, 'fitsy-simulator-12-1'), log = join(dir, 'calls');
   mkdirSync(bin); mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
   const udid = '11111111-1111-1111-1111-111111111111';
@@ -204,12 +206,14 @@ if(args.includes('boot')) process.exit(1);\n`;
   for (const name of ['bash', 'xcrun']) writeFileSync(join(bin, name), executable, { mode: 0o755 });
   const run = action => spawnSync(process.execPath, [join(root, 'scripts/sim/actions.mjs'), action], { cwd: dir, encoding: 'utf8',
     env: { ...env, PATH: `${bin}:${env.PATH}`, FITSY_PRODUCT_ROOT: dir, GITHUB_WORKSPACE: dir, GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS',
-      RUNNER_TEMP: dir, GITHUB_RUN_ID: '12', GITHUB_RUN_ATTEMPT: '1', FITSY_XCTEST_SIM_UDID: udid } });
+      RUNNER_TEMP: dir, GITHUB_RUN_ID: '12', GITHUB_RUN_ATTEMPT: '1', FITSY_XCTEST_SIM_UDID: udid,
+      FITSY_SIM_OWNER: 'actions-12-1', FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: String(workerSeconds) } });
   assert.equal(run('boot').status, 1);
   assert.equal(existsSync(join(work, 'device.json')), true);
   assert.equal(run('cleanup').status, 0);
   assert.equal(existsSync(work), false);
   const calls = readFileSync(log, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  assert(calls.some(args => args.slice(-3).join(' ') === `claim --minutes ${leaseMinutes}`));
   assert(calls.some(args => args.join(' ') === `simctl erase ${udid}`));
   assert(calls.some(args => args.at(-1) === 'release'));
   assert.equal(calls.some(args => args.includes('all') || args.includes('delete')), false);

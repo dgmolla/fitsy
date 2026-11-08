@@ -223,7 +223,8 @@ export async function main(action) {
     if (device?.deviceTypeIdentifier !== 'com.apple.CoreSimulator.SimDeviceType.iPhone-15') throw new Error('FITSY_SIM_UDID must select an available iPhone 15');
     if (inventory.some(item => item.state === 'Booted')) throw new Error('A simulator is already booted; release its current owner first');
     mkdirSync(work, { recursive: true, mode: 0o700 });
-    command('bash', [join(controlDirectory, 'sim'), 'claim', '--minutes', '35']);
+    const { claimDevice } = await import('./product-flow.mjs');
+    claimDevice();
     writeFileSync(marker, JSON.stringify({ udid }));
     command('xcrun', ['simctl', 'boot', udid]);
     command('xcrun', ['simctl', 'bootstatus', udid, '-b']);

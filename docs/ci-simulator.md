@@ -20,7 +20,9 @@ flowchart LR
 
 PR pushes cancel superseded work on the same PR.
 The repository-wide `fitsy-simulator` concurrency group queues different PRs with `queue: max`, allowing one Mac job at a time.
-The Mac job has a 30-minute deadline, one Xcode build worker, one Metro worker, a 2 GB Node heap and a 768 MB Java heap.
+The Mac job allows 30 minutes for smoke and 90 minutes for full scope, with matching 1800/5400-second worker budgets and 35/95-minute claims through the existing worker-budget calculation.
+The full budget covers the observed 713-second cold build and 3450-second full execution plus bounded setup and teardown margin; main run42507935179 exhausted the former 30-minute limit during flows.
+Both scopes use one Xcode build worker, one Metro worker, a 2 GB Node heap and a 768 MB Java heap.
 That deadline starts after assignment and does not bound a queue with no registered runner.
 Keep only one runner registered with `fitsy-sim` and leave the old local publisher paused.
 Manual native work must respect the existing `scripts/sim/sim` claim; CI refuses to boot alongside another booted simulator.
