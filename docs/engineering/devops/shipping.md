@@ -86,6 +86,7 @@ Allowlist additions, unrelated removals, deletion of the allowlist and unreadabl
 Changes under `scripts/sim/`, the product-flow verification controls or the loop's host recovery controls run the blocking local `media-integration` lane in `npm run verify`.
 Install `ffprobe` and `ffmpeg` locally before that run.
 The media preflight also requires working `ps` process ownership inspection; a sandbox denial fails before native fixture children start.
+Release your own idle native lease before this lane; its nonblocking canonical-lock probe fails early if the host-isolation case cannot acquire that lock itself, without releasing another owner's resources.
 The lane runs real decoder, XCTest attachment and host credential-isolation cases, then records `.evidence/verify/media-integration.json` with the candidate SHA and source/test hash.
 Hosted L2 runs deterministic tests without media tools.
 After committing, rerun `node scripts/verify/run.mjs --only=media-integration --runs=local` so the receipt names the PR head.
