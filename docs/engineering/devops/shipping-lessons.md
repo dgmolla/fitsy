@@ -1,6 +1,7 @@
 # Shipping lessons
 
 - 2026-11-04: A declined account's renewed onboarding preview left stale history behind its paid offer; gate payment Back on current preview access and replay the restored-account checkout through cancellation, then run the saved native swipe and Back assertions (#718).
+- 2026-11-08: #746 native command entry was truncated by the held interactive shell; send bounded short input chunks, verify the explicit owner/device binding, and confirm the caller started before waiting or classifying an invocation as a product failure.
 
 - After `npm ci`, require `npm ls --depth=0 --workspaces` and the actual renderer caller: a stale nested renderer can violate the manifest and React peer versions even while installation and focused tests pass; repair the generated lockfile with npm and recheck the native fingerprint before reusing a release binary (#711).
 

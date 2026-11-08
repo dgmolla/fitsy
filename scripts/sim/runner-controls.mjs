@@ -377,7 +377,7 @@ export async function startOwnedRecorder(udid, file, log, { command = 'xcrun', a
   onStart = null, onComplete = null } = {}) {
   const fd = openSync(log, 'w');
   let owned, startError;
-  try { owned = await startOwnedGroup('recorder', command, args || ['simctl', 'io', udid, 'recordVideo', '--type=mp4', file],
+  try { owned = await startOwnedGroup('recorder', command, args || ['simctl', 'io', udid, 'recordVideo', '--codec=h264', file],
     { stdio: ['ignore', fd, fd], spawnImpl }); }
   catch (error) { startError = error; }
   try { closeSync(fd); }
