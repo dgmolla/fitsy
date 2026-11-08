@@ -34,9 +34,11 @@ Unknown product impact, native/shared inputs and explicit `full-sim` retain the 
 Missing comparison history fails selection; missing routing for product changes conservatively selects full coverage.
 A Discovery availability/default-only change qualifies for the three entry journeys only after the shared planner compares complete source modules; renderer, preview-guard or unknown edits retain conservative coverage.
 The `subscription-restore-expired` Apple receipt-history journey requires its genuine fixture or a separately approved release exception; Test Store cannot prove Apple history transfer.
-For the map/#746 release only, owner comment6716597294 explicitly excepts that one flow on the published PR754 head.
-The local caller accepts `--release-exception=6716597294`; the hosted caller checks the same grant for PR754 and records `EXCEPTED`, its reason, owner URL and actual source separately from passed flows.
-Changed approval text, another PR/source or changed fixture/store tags fail admission, and all other flows remain required.
+For the map/#746 release only, owner comment6716597294 explicitly excepts that one flow, including the serial production promotion after PR754.
+The local caller accepts `--release-exception=6716597294`; the hosted caller checks the unchanged grant for production PR759's published head, its verified PR merge ref or its exact resulting main merge.
+It records `EXCEPTED`, its reason, owner URL and actual source separately from passed flows.
+Changed approval text, another PR/source or changed fixture/store tags fail explicit admission, and all other flows remain required.
+Later main commits receive no release exception and retain the ordinary manual Apple-history disposition.
 The local full selection and the release's hosted full selection contain28 flows, with27 required executions and one exception, never28 passes.
 Ordinary hosted smoke selection and unrelated releases keep their existing scope; the release grant does not create a new Apple-history gate for them.
 An explicit `full-sim` label forces full hosted execution; `needs-sim` retains the shared planner's existing override behavior.

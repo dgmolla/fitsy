@@ -91,7 +91,8 @@ async function runFlows(udid, work) {
   const candidates = selection.scope === 'full' ? Object.keys(catalog) : selection.scope === 'flow'
     ? selection.flows : selectFlows('smoke', catalog);
   const exceptions = await releaseExceptions(candidates, catalog,
-    event.pull_request?.number === 754 ? '6716597294' : undefined);
+    event.pull_request?.number === 759 ||
+    (process.env.GITHUB_EVENT_NAME === 'push' && event.ref === 'refs/heads/main') ? '6716597294' : undefined);
   const names = selectFlows(selection.scope, catalog, exceptions, selection.flows);
   const manual = candidates.filter(name => !names.includes(name)).map(flow => ({ flow, status: 'UNVERIFIED',
     reason: 'Requires separate compatible-store native acceptance; no release exception granted' }));
