@@ -128,7 +128,9 @@ test('full Test Store selection includes maintained failures and rejects incompl
     tags: name === 'apple' ? ['store:apple-simulator'] : name === 'new-flow' ? ['fixture:expired-subscription', 'store:test-store'] : ['fixture:unsubscribed-dev'],
   }]));
   assert.deepEqual(selectFlows('smoke', catalog), ['cold-start-welcome', 'signin-options', 'paywall-access']);
-  assert.deepEqual(selectFlows('full', catalog), ['apple', 'chain-menu-serving', 'cold-start-welcome', 'new-flow', 'paywall-access', 'signin-options']);
+  assert.deepEqual(selectFlows('full', catalog), ['chain-menu-serving', 'cold-start-welcome', 'new-flow', 'paywall-access', 'signin-options']);
+  assert.deepEqual(selectFlows('full', catalog, [{ flow: 'apple', status: 'EXCEPTED' }]),
+    ['apple', 'chain-menu-serving', 'cold-start-welcome', 'new-flow', 'paywall-access', 'signin-options']);
   assert.throws(() => selectFlows('none', catalog));
   const accounts = { 'unsubscribed-dev': { email: 'seed-test@fitsy.dev', password: 'synthetic' } };
   assert.doesNotThrow(() => fixtureAccounts(selectFlows('smoke', catalog), catalog, JSON.stringify(accounts)));

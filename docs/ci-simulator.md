@@ -26,12 +26,13 @@ Manual native work must respect the existing `scripts/sim/sim` claim; CI refuses
 Run the media integration gate after releasing the native lane: its host-isolation test also acquires the canonical OS lock, so running it concurrently with an owned Maestro session causes a real lock timeout.
 
 Normal PRs run `cold-start-welcome`, `signin-options` and `paywall-access`, including real DEV sign-in and paid-access assertions.
-Main and PRs labeled `full-sim` select every maintained flow, including incompatible stores, rather than silently omitting them.
+Main and PRs labeled `full-sim` retain the existing Test Store-compatible hosted selection, reporting incompatible journeys as separate `UNVERIFIED` manual acceptance rather than passing them.
 The `subscription-restore-expired` Apple receipt-history journey requires its genuine fixture or a separately approved release exception; Test Store cannot prove Apple history transfer.
 For the map/#746 release only, owner comment6716597294 explicitly excepts that one flow on the published PR754 head.
 The local caller accepts `--release-exception=6716597294`; the hosted caller checks the same grant for PR754 and records `EXCEPTED`, its reason, owner URL and actual source separately from passed flows.
 Changed approval text, another PR/source or changed fixture/store tags fail admission, and all other flows remain required.
-The selection still contains28 flows for this candidate, with27 required executions and one exception, never28 passes.
+The local full selection and the release's hosted full selection contain28 flows, with27 required executions and one exception, never28 passes.
+Ordinary hosted smoke selection and unrelated releases keep their existing scope; the release grant does not create a new Apple-history gate for them.
 The label expands a relevant change's suite; it does not start a simulator for an unrelated change.
 Full runs still fail if the deadline or any fixture/flow assertion fails.
 The local full-run caller now checks31GiB free before acquiring the native lane, preserving the8GiB floor after the measured23GiB attachment-growth projection.
