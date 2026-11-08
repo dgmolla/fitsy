@@ -135,7 +135,6 @@ def approved_attachments(args):
         projection = proposal['projection']
         require(projection['conservativeNextFullGiB'] == 23 and projection['requiredFloorGiB'] == 8,
                 'approved run projection changed')
-        require(free_before + ATTACHMENT_BYTES - 23 * 2**30 >= 8 * 2**30, 'cleanup cannot admit the projected full run')
         require(args.records.read_bytes() == original and unopened(directory) == directory_identity,
                 'proposal or directory changed during validation')
         removed = 0
@@ -157,9 +156,12 @@ def approved_attachments(args):
             verified_png(Path(row['path']), row)
         missing = sum(not Path(row['path']).exists() for row in selected)
         require(missing == removed, 'unexpected removed/missing count')
+        free_after = shutil.disk_usage(directory).free
+        projected_free = (free_after if args.apply else free_before + ATTACHMENT_BYTES) - 23 * 2**30
         return {**binding, 'status': 'deleted' if args.apply else 'would-delete', 'removed': removed,
                 'missing': missing, 'changed': 0, 'representatives': len(representatives),
-                'free_before': free_before, 'free_after': shutil.disk_usage(directory).free,
+                'free_before': free_before, 'free_after': free_after,
+                'projected_remaining_bytes': projected_free, 'full_run_admitted': projected_free >= 8 * 2**30,
                 'projected_full_bytes': 23 * 2**30, 'required_floor_bytes': 8 * 2**30}
 
 

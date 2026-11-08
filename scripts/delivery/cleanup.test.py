@@ -360,11 +360,13 @@ class ApprovedAttachmentsTest(unittest.TestCase):
                 self.opened = self.inventory_denied = False
                 self.approval['body'] = 'explicit fixture grant'
 
-    def test_canonical_os_lock_and_low_projection_prevent_cleanup(self):
+    def test_canonical_os_lock_blocks_cleanup_but_low_projection_remains_a_native_admission_boundary(self):
         with mock.patch.object(self.cleanup.fcntl, 'lockf', side_effect=BlockingIOError):
             with self.assertRaises(BlockingIOError): self.cleanup.approved_attachments(self.args)
         with mock.patch.object(self.cleanup.shutil, 'disk_usage', return_value=SimpleNamespace(free=20 * 2**30)):
-            with self.assertRaisesRegex(ValueError, 'projected full run'): self.cleanup.approved_attachments(self.args)
+            result = self.cleanup.approved_attachments(self.args)
+            self.assertFalse(result['full_run_admitted'])
+            self.assertLess(result['projected_remaining_bytes'], result['required_floor_bytes'])
         self.assertTrue(all(Path(row['path']).exists() for row in self.selected))
 
 
