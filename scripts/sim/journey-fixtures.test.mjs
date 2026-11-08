@@ -27,7 +27,7 @@ test('all account-dependent saved journeys require local preparation before nati
   assert.equal(journeyFixture(header('signin-options'), '').name, 'default');
 });
 
-test('full selection prepares every required account/store after earlier journeys clear authentication', async () => {
+test('full selection invokes every required account/store adapter without inheriting a previous fixture', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-journey-fixtures-'));
   const config = { version: 1, fixtures: {} }, trace = join(directory, 'trace.jsonl');
   const adapter = join(directory, 'prepare.mjs');
@@ -44,21 +44,18 @@ test('full selection prepares every required account/store after earlier journey
   const file = join(directory, 'fixtures.json'); writeFileSync(file, JSON.stringify(config));
   const previousEmail = process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL;
   try {
-    let authenticated = false;
     const observed = [];
     for (const flow of simulatorFlows()) {
       const fixture = journeyFixture(header(flow), file);
       await withFixtureEnvironment(fixture, async () => {
-        // Models the destructive boundary that originally broke the next flow.
-        // No state is inherited as a substitute for a required setup invocation.
-        authenticated = false;
+        // This is adapter selection proof, not native authentication proof.
+        // The billing caller separately verifies history and runs ci-signin.
         prepareJourney(fixture, flow, '54503F5C-8A3C-4699-8401-2E1D32890A24');
         if (expected[flow]) {
           const last = JSON.parse(readFileSync(trace, 'utf8').trim().split('\n').at(-1));
           assert.equal(last.flow, flow); assert.equal(last.fixture, expected[flow][0]);
           assert.equal(last.account, `${fixture.name}@example.test`);
           assert.equal(last.udid, '54503F5C-8A3C-4699-8401-2E1D32890A24');
-          authenticated = true;
           assert.deepEqual(fixture.stores, expected[flow][1]);
           for (const storeMode of ['test-store', 'apple-simulator', 'unconfigured']) {
             if (fixture.stores.includes(storeMode)) assert.doesNotThrow(() => assertJourneyStore(fixture, { storeMode }));
@@ -66,11 +63,22 @@ test('full selection prepares every required account/store after earlier journey
           }
           observed.push(flow);
         }
-        if (flow.startsWith('subscription-')) assert.equal(authenticated, true);
       });
       assert.equal(process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL, previousEmail);
     }
     assert.deepEqual(observed.sort(), Object.keys(expected).sort());
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('inactive billing fixtures require their own credentials rather than inheriting the preceding account', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'fitsy-inactive-fixture-'));
+  try {
+    const file = join(directory, 'fixtures.json');
+    for (const flow of ['subscription-expired-routing', 'subscription-restore-empty']) {
+      const [name] = expected[flow];
+      writeFileSync(file, JSON.stringify({ version: 1, fixtures: { [name]: { prepare: ['/usr/bin/true'] } } }));
+      assert.throws(() => journeyFixture(header(flow), file), /own local dev login/);
+    }
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

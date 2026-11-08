@@ -31,7 +31,8 @@ export function journeyFixture(header, file = process.env.FITSY_E2E_FIXTURES) {
   const env = entry?.envFile ? parseEnv(readFileSync(localFile(entry.envFile), 'utf8')) : {};
   if (Object.keys(env).some(key => !key.startsWith('EXPO_PUBLIC_')))
     throw new Error('Fixture environment files may only override EXPO_PUBLIC_ configuration');
-  if (fixture?.endsWith('-dev') && (!env.EXPO_PUBLIC_DEV_LOGIN_EMAIL?.trim() || !env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD?.trim()))
+  if ((fixture?.endsWith('-dev') || ['expired-subscription', 'empty-store'].includes(fixture)) &&
+      (!env.EXPO_PUBLIC_DEV_LOGIN_EMAIL?.trim() || !env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD?.trim()))
     throw new Error(`Fixture ${fixture} requires its own local dev login environment`);
   return { name: fixture || 'default', stores, prepare: entry?.prepare, env };
 }
@@ -54,7 +55,8 @@ export function prepareJourney(fixture, flow, udid) {
   const [binary, ...args] = fixture.prepare;
   // The local adapter owns preparation's lease. It must finish/release before
   // the runner reacquires the device and independently validates the artifact.
-  // Pre-provision real billing histories; this bounded step selects/signs in.
+  // Pre-provision real billing histories; adapter success is not native proof.
+  // Debug billing runs independently verify history and sign in after Metro starts.
   execFileSync(binary, [...args, flow, udid], { cwd: repository, env: gitEnv(), stdio: 'inherit', timeout: 60000 });
 }
 

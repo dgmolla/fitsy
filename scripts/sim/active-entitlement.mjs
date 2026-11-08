@@ -48,6 +48,31 @@ export function sandboxState(body, testStore, now = Date.now()) {
   return { active: expiresAt > now, expiresAt: new Date(expiresAt).toISOString() };
 }
 
+export async function verifyInactiveEntitlement({ fixture, built, env = process.env, fetchImpl = fetch, now = Date.now }) {
+  if (!['expired-subscription', 'empty-store'].includes(fixture)) throw new Error('Unknown inactive billing fixture');
+  const store = evidenceStore(built, env), origin = backendOrigin(env.EXPO_PUBLIC_API_URL);
+  const login = await jsonRequest(fetchImpl, `${origin}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: env.EXPO_PUBLIC_DEV_LOGIN_EMAIL, password: env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD }),
+  });
+  if (!uuid.test(login.user?.id || '') || typeof login.token !== 'string' || !login.token)
+    throw new Error('Evidence login returned no account identity');
+  const body = await jsonRequest(fetchImpl, `${rcOrigin}/subscribers/${encodeURIComponent(login.user.id)}`, { headers: {
+    authorization: `Bearer ${store.key}`, 'x-platform': 'ios', ...(store.testStore ? { 'x-is-sandbox': 'true' } : {}),
+  } });
+  const state = sandboxState(body, store.testStore, now());
+  if (fixture === 'expired-subscription' && (state.active || !state.expiresAt))
+    throw new Error('Expired fixture requires genuine expired sandbox subscription history; login or inactivity alone is insufficient');
+  if (fixture === 'empty-store' && (Object.keys(body.subscriber.entitlements).length ||
+      Object.keys(body.subscriber.subscriptions).length || Object.keys(body.subscriber.non_subscriptions || {}).length))
+    throw new Error('Empty-store fixture requires an account with no purchase history');
+  // This read-only check never provisions, renews or syncs a purchase.
+  // Native sign-in and the maintained restore assertions must still succeed.
+  return { version: 1, fixture, storeMode: built.storeMode, sandbox: true,
+    accountHash: createHash('sha256').update(login.user.id).digest('hex'),
+    verifiedAt: new Date(now()).toISOString(), expiresAt: state.expiresAt };
+}
+
 export async function prepareActiveEntitlement({ built, env = process.env, renew, fetchImpl = fetch, now = Date.now }) {
   const store = evidenceStore(built, env), origin = backendOrigin(env.EXPO_PUBLIC_API_URL);
   const login = await jsonRequest(fetchImpl, `${origin}/api/auth/login`, {

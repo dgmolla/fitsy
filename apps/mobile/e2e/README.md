@@ -99,7 +99,7 @@ The runner validates all required entries before acquiring a device or clearing 
 ```
 
 Environment files may override only `EXPO_PUBLIC_` values and stay on the local machine.
-The two dev-login fixtures require their own `${EXPO_PUBLIC_DEV_LOGIN_EMAIL}` and `${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}` values.
+The dev-login, expired-subscription and empty-store fixtures require their own `${EXPO_PUBLIC_DEV_LOGIN_EMAIL}` and `${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}` values.
 Configured Dev Login accounts must already exist with the documented billing state; failed fixture logins preserve the login error and never attempt registration.
 Set both credentials together in the runner and its owned Metro environment.
 The adapter receives its configured arguments followed by the flow name and owned simulator UDID, with the fixture's environment loaded.
@@ -107,6 +107,9 @@ It selects and installs a compatible candidate artifact through the canonical na
 Pre-provision actual purchases, expiry and account recreation through the product; the bounded selection/sign-in step has 60 seconds and must not fabricate receipts or database entitlement.
 Preparation owns and releases its simulator lease before returning; it must leave no driver or Metro process running.
 The runner then reacquires the device, validates the candidate/native/backend identity and allowed store, and starts owned Metro with that fixture's environment.
+Both local and hosted Debug Test Store runners independently verify real expired or empty RevenueCat history and run the maintained `helpers/ci-signin.yaml` before the corresponding billing journey.
+An adapter's successful API login cannot establish native authentication or expired purchase history, especially after `signin-options` clears the previous session.
+These checks never create or renew billing history; select an already-provisioned persistent fixture and retain the native restore assertions.
 It retains an identity receipt per journey, stops owned Metro and restores the previous environment afterward.
 An optional `default` entry can restore a baseline build/state before journeys without a `fixture:` tag.
 All selected journeys still run; missing preparation or a store mismatch fails the selection.

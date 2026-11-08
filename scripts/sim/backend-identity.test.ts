@@ -60,6 +60,16 @@ test('passes the fixture login pair to Maestro API scripts and rejects an incomp
   }
 });
 
+test('UI-only billing keeps the guarded API origin but omits credentials from Maestro arguments', () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {maestroApiArgs} from ${JSON.stringify(modulePath)};
+     process.stdout.write(JSON.stringify(maestroApiArgs({EXPO_PUBLIC_API_URL:'https://dev.fitsy.org',
+       EXPO_PUBLIC_DEV_LOGIN_EMAIL:'synthetic@example.test',EXPO_PUBLIC_DEV_LOGIN_PASSWORD:'synthetic-only'}, {includeLogin:false})));`],
+  { encoding: 'utf8' });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toEqual(['-e', 'EXPO_PUBLIC_API_URL=https://dev.fitsy.org']);
+});
+
 test.each(['', 'https://api.fitsy.org', 'https://fitsy.org', 'http://dev.fitsy.org',
   'https://dev.fitsy.org@evil.test', 'https://dev.fitsy.org.evil.test', 'https://dev.fitsy.org:443',
   'https://unrelated.vercel.app', 'https://fitsy-api-branch-other-team.vercel.app',

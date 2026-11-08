@@ -65,7 +65,7 @@ export async function runLocal(args = process.argv.slice(2)) {
   if (process.platform !== 'darwin') throw new Error('Simulator execution requires macOS with Xcode');
   const udid = options.udid || process.env.FITSY_XCTEST_SIM_UDID;
   if (!/^[a-f0-9-]{36}$/i.test(udid || '')) throw new Error('Pass --udid=<owned booted simulator UDID> or set FITSY_XCTEST_SIM_UDID');
-  const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro, prepareEntitledEvidence } = await import('./product-flow.mjs');
+  const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro, prepareEntitledEvidence, prepareBillingEvidence } = await import('./product-flow.mjs');
   const { admitDisk, runOwnedMaestro, nearestFailure } = await import('./runner-controls.mjs');
   const { inspectScreenshotDirectory, requireScreenRecognition } = await import('./screen-guard.mjs');
   const { inputHash, assertFlowCommands } = await import('../verify/product-flow.mjs');
@@ -116,10 +116,13 @@ export async function runLocal(args = process.argv.slice(2)) {
           if (session.built.metroPort) { metroStarted = true; await startMetro(session.built); }
           if (fixture.name === 'entitled-dev')
             await prepareEntitledEvidence(session.built, udid, resolve(dir, 'active-setup'));
+          if (session.built.storeMode === 'test-store' && ['empty-store', 'expired-subscription'].includes(fixture.name))
+            await prepareBillingEvidence(session.built, udid, resolve(dir, 'billing-setup'), fixture.name, { signal: controller.signal });
           if (fixture.name === 'entitled-dev' && (!process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL?.trim() ||
             !process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD?.trim())) throw new Error('Local fixture login credentials are required for log-meal');
           const result = await withSlackVideo({ enabled: options['record-video'] || process.env.FITSY_SIM_RECORD_VIDEO === '1',
-            udid, dir, signal: controller.signal }, () => runOwnedMaestro(maestro, ['--device', udid, 'test', ...maestroApiArgs(), '--format', 'junit',
+            udid, dir, signal: controller.signal }, () => runOwnedMaestro(maestro, ['--device', udid, 'test',
+            ...maestroApiArgs(process.env, { includeLogin: !['empty-store', 'expired-subscription'].includes(fixture.name) }), '--format', 'junit',
             '--output', resolve(dir, 'report.xml'), '--debug-output', dir, '--test-output-dir', dir, path], {
             cwd: repository, dir, timeline: resolve(out, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'),
             signal: controller.signal, env: { ...gitEnv(),
@@ -127,7 +130,8 @@ export async function runLocal(args = process.argv.slice(2)) {
               FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: resolve(dir, 'capture.jsonl') },
             diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', resolve(dir, 'failure.png')]),
           }));
-          const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file) && !file.startsWith('active-setup/'));
+          const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file) &&
+            !file.startsWith('active-setup/') && !file.startsWith('billing-setup/'));
           const parsed = reports.length === 1 ? JSON.parse(readFileSync(resolve(dir, reports[0]), 'utf8')) : null;
           if (result.code !== 0 || result.reason)
             throw maestroFailure(`Maestro flow ${name} failed; inspect ${dir}`, result, Array.isArray(parsed) ? nearestFailure(parsed) : null);

@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain, repository, simulatorFlows } from '../verify/impact-plan.mjs';
+import { maestroApiArgs } from './backend-identity.mjs';
 
 const controlDirectory = fileURLToPath(new URL('.', import.meta.url));
 const buildDirectory = join(repository, '.evidence/product-build');
@@ -81,7 +82,7 @@ async function runFlows(udid, work) {
   const accounts = fixtureAccounts(names, catalog, process.env.SIM_E2E_FIXTURES);
   for (const account of Object.values(accounts)) { mask(account.email); mask(account.password); }
   delete process.env.SIM_E2E_FIXTURES;
-  const { startMetro, stopMetro, prepareEntitledEvidence } = await import('./product-flow.mjs');
+  const { startMetro, stopMetro, prepareEntitledEvidence, prepareBillingEvidence } = await import('./product-flow.mjs');
   const { runOwnedMaestro } = await import('./runner-controls.mjs');
   const { assertFlowCommands } = await import('../verify/product-flow.mjs');
   const { requireScreenRecognition, inspectScreenshotDirectory } = await import('./screen-guard.mjs');
@@ -90,12 +91,10 @@ async function runFlows(udid, work) {
   const controller = new AbortController();
   const interrupt = () => controller.abort();
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
-  const runFlow = async (name, path, extra = []) => {
+  const runFlow = async (name, path, includeLogin = true) => {
     if (controller.signal.aborted) throw new Error('Simulator run interrupted');
     const dir = join(work, name); mkdirSync(dir, { recursive: true });
-    const loginArgs = ['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_DEV_LOGIN_EMAIL', 'EXPO_PUBLIC_DEV_LOGIN_PASSWORD']
-      .flatMap(key => ['-e', `${key}=${process.env[key]}`]);
-    const result = await runOwnedMaestro(process.env.MAESTRO_BIN || 'maestro', ['--device', udid, 'test', ...loginArgs, ...extra,
+    const result = await runOwnedMaestro(process.env.MAESTRO_BIN || 'maestro', ['--device', udid, 'test', ...maestroApiArgs(process.env, { includeLogin }),
       '--format', 'junit', '--output', join(dir, 'report.xml'), '--debug-output', dir, '--test-output-dir', dir, path], {
       cwd: repository, dir, timeline: join(work, 'timeline.jsonl'), flow: readFileSync(path, 'utf8'), signal: controller.signal,
       env: { ...process.env, PATH: `${controlDirectory}${delimiter}${process.env.PATH}`,
@@ -120,9 +119,8 @@ async function runFlows(udid, work) {
         await startMetro(profile, { maxWorkers: 1 });
         if (fixture === 'entitled-dev') await prepareEntitledEvidence(profile, udid, join(work, `${name}-active-setup`));
         if (['empty-store', 'expired-subscription'].includes(fixture))
-          await runFlow(`${name}-signin`, join(repository, 'apps/mobile/e2e/helpers/ci-signin.yaml'),
-            ['-e', `DESTINATION=${fixture === 'empty-store' ? 'paywall-restore' : 'resubscribe-restore'}`]);
-        await runFlow(name, join(repository, 'apps/mobile/e2e/flows', `${name}.yaml`));
+          await prepareBillingEvidence(profile, udid, join(work, `${name}-signin`), fixture, { signal: controller.signal });
+        await runFlow(name, join(repository, 'apps/mobile/e2e/flows', `${name}.yaml`), !['empty-store', 'expired-subscription'].includes(fixture));
         console.log(`Passed: ${name}`);
       } finally { await stopMetro(); }
     }

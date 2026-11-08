@@ -8,14 +8,14 @@ import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { isMain } from '../verify/impact-plan.mjs';
-import { root, inputHash, candidatePlan, selectedFlows, digest, validate, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance } from '../verify/product-flow.mjs';
+import { root, inputHash, candidatePlan, selectedFlows, digest, validate, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance, assertFlowCommands } from '../verify/product-flow.mjs';
 import { backendOrigin, backendRevision, maestroApiArgs } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
 import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, clock, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
 import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
-import { prepareActiveEntitlement } from './active-entitlement.mjs';
+import { prepareActiveEntitlement, verifyInactiveEntitlement } from './active-entitlement.mjs';
 import { inspectScreenshot, inspectScreenshotDirectory, requireScreenRecognition } from './screen-guard.mjs';
 import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
@@ -101,6 +101,27 @@ export async function prepareEntitledEvidence(built, udid, directory, { signIn =
   // Do not immediately clear and relaunch that verified session a second time.
   if (signIn && !proof.renewed && built.storeMode === 'test-store') await setup(false);
   save(join(directory, 'entitlement.json'), proof);
+  return proof;
+}
+export async function prepareBillingEvidence(built, udid, directory, fixture, { signal } = {}) {
+  assert(built.storeMode === 'test-store', 'Automatic billing sign-in requires the Debug Test Store fixture');
+  const proof = await verifyInactiveEntitlement({ fixture, built });
+  mkdirSync(directory, { recursive: true });
+  save(join(directory, 'entitlement.json'), proof);
+  const flow = join(mobile, 'e2e/helpers/ci-signin.yaml');
+  const result = await runOwnedMaestro(process.env.MAESTRO_BIN || 'maestro', ['--device', udid, 'test',
+    // The app reads credentials from owned Metro; this UI-only helper does not.
+    ...maestroApiArgs(process.env, { includeLogin: false }), '-e', `DESTINATION=${fixture === 'empty-store' ? 'paywall-restore' : 'resubscribe-restore'}`,
+    '--test-output-dir', directory, '--debug-output', directory, flow], {
+    cwd: root, dir: directory, timeline: join(directory, 'timeline.jsonl'), flow: readFileSync(flow, 'utf8'), signal,
+    env: { ...repoEnv(), PATH: `${controlDirectory}${delimiter}${process.env.PATH || ''}`,
+      FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: join(directory, 'capture.jsonl') },
+    diagnostic: () => run('xcrun', ['simctl', 'io', udid, 'screenshot', join(directory, 'failure.png')]),
+  });
+  assert(result.code === 0 && !result.reason, 'Billing fixture native sign-in failed; inspect its raw evidence');
+  const reports = files(directory).filter(file => /commands-.*\.json$/.test(file));
+  assert(reports.length === 1, 'Billing fixture requires exactly one native sign-in command receipt');
+  assertFlowCommands(readFileSync(flow), read(reports[0]), `${fixture}-signin`);
   return proof;
 }
 async function prepareWalkthrough(udid) {

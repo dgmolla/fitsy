@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { evidenceStore, prepareActiveEntitlement, sandboxState } from './active-entitlement.mjs';
-import { prepareEntitledEvidence } from './product-flow.mjs';
+import { evidenceStore, prepareActiveEntitlement, sandboxState, verifyInactiveEntitlement } from './active-entitlement.mjs';
+import { prepareEntitledEvidence, prepareBillingEvidence } from './product-flow.mjs';
 
 const now = () => Date.parse('2026-10-31T12:00:00Z');
 const expiresAt = '2026-10-31T13:00:00.000Z';
@@ -30,6 +30,66 @@ function boundary(bodies) {
   return { calls, fetchImpl };
 }
 const login = { token: 'fixture-token', user: { id: '03975501-8b3d-4044-a636-7d79f7167531' } };
+
+test('inactive billing admission distinguishes expired history from a valid never-subscribed login', async () => {
+  const empty = { subscriber: { entitlements: {}, subscriptions: {}, non_subscriptions: {} } };
+  for (const [fixture, provider, allowed] of [
+    ['expired-subscription', empty, false],
+    ['expired-subscription', subscriber('2026-10-30T00:00:00Z'), true],
+    ['expired-subscription', subscriber(), false],
+    ['expired-subscription', subscriber('2026-10-30T00:00:00Z', 'app_store', false), false],
+    ['empty-store', empty, true],
+    ['empty-store', subscriber('2026-10-30T00:00:00Z'), false],
+    ['empty-store', { subscriber: { ...empty.subscriber, non_subscriptions: { lifetime: [{}] } } }, false],
+    ['empty-store', { subscriber: {} }, false],
+  ]) {
+    const b = boundary([login, provider]);
+    const check = verifyInactiveEntitlement({ fixture, built, env, now, fetchImpl: b.fetchImpl });
+    if (allowed) {
+      const proof = await check;
+      assert.equal(proof.fixture, fixture);
+      assert.equal(proof.expiresAt, fixture === 'expired-subscription' ? '2026-10-30T00:00:00.000Z' : null);
+      assert.doesNotMatch(JSON.stringify(proof), /fixture-token|test-password|test_fixture|seed-sim-active/);
+    } else await assert.rejects(check);
+    assert.equal(b.calls.length, 2);
+    assert.ok(b.calls.every(call => !/sync|purchase|register/.test(call.url)));
+  }
+});
+
+test('billing setup requires native sign-in after history admission and rejects a failed driver', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-billing-caller-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const executable = join(dir, 'maestro'), calls = join(dir, 'calls');
+  writeFileSync(executable, `#!${process.execPath}\nconst fs=require('node:fs');\nconst args=process.argv.slice(2);\nfs.appendFileSync(${JSON.stringify(calls)},JSON.stringify({destination:args.find(x=>x.startsWith('DESTINATION=')),flow:args.at(-1),hasLoginArgument:args.some(x=>/^EXPO_PUBLIC_DEV_LOGIN_(EMAIL|PASSWORD)=/.test(x))})+'\\n');\nprocess.exit(17);\n`, { mode: 0o755 });
+  const config = { ...env, MAESTRO_BIN: executable };
+  const previous = Object.fromEntries(Object.keys(config).map(key => [key, process.env[key]]));
+  Object.assign(process.env, config);
+  t.after(() => { for (const [key, value] of Object.entries(previous)) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  } });
+  for (const fixture of ['empty-store', 'expired-subscription']) {
+    writeFileSync(calls, '');
+    const empty = { subscriber: { entitlements: {}, subscriptions: {} } };
+    const b = boundary([login, fixture === 'empty-store' ? empty : subscriber('2020-01-01T00:00:00Z')]);
+    const fetchMock = t.mock.method(globalThis, 'fetch', b.fetchImpl);
+    try {
+      await assert.rejects(prepareBillingEvidence(built, '11111111-1111-1111-1111-111111111111', join(dir, fixture), fixture),
+        /native sign-in failed/);
+      const call = JSON.parse(readFileSync(calls, 'utf8'));
+      assert.equal(call.hasLoginArgument, false, 'UI-only billing setup must not expose credentials in argv or Maestro variable logs');
+      assert.equal(call.destination, `DESTINATION=${fixture === 'empty-store' ? 'paywall-restore' : 'resubscribe-restore'}`);
+      assert.ok(call.flow.endsWith('/e2e/helpers/ci-signin.yaml'));
+    } finally { fetchMock.mock.restore(); }
+  }
+  writeFileSync(calls, '');
+  const b = boundary([login, { subscriber: { entitlements: {}, subscriptions: {} } }]);
+  const fetchMock = t.mock.method(globalThis, 'fetch', b.fetchImpl);
+  try {
+    await assert.rejects(prepareBillingEvidence(built, '11111111-1111-1111-1111-111111111111', join(dir, 'missing-history'), 'expired-subscription'),
+      /genuine expired/);
+    assert.equal(readFileSync(calls, 'utf8'), '');
+  } finally { fetchMock.mock.restore(); }
+});
 
 test('real Test Store history plus a fresh successful server sync establishes active evidence', async () => {
   const b = boundary([login, subscriber(), { synced: true }, status]);

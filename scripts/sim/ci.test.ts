@@ -24,6 +24,22 @@ beforeAll(() => {
 });
 afterAll(() => { rmSync(directory, { recursive: true, force: true }); });
 
+test('billing setup settles launch before reading Welcome and its UI-only journeys need no Maestro login variables', () => {
+  const source = readFileSync(resolve(__dirname, '../../apps/mobile/e2e/helpers/ci-signin.yaml'), 'utf8');
+  const [, commands] = loadAll(source) as [unknown, Record<string, unknown>[]];
+  expect(commands.slice(0, 3)).toEqual([
+    { launchApp: { clearState: true, clearKeychain: true } },
+    { waitForAnimationToEnd: { timeout: 10000 } },
+    { extendedWaitUntil: { visible: { id: 'welcome-login' }, timeout: 60000 } },
+  ]);
+  expect(commands.filter(step => step.tapOn === '.*Dev Login.*')).toHaveLength(1);
+  for (const path of ['helpers/ci-signin.yaml', 'helpers/discovery-signin.yaml',
+    'flows/subscription-expired-routing.yaml', 'flows/subscription-restore-empty.yaml']) {
+    const saved = readFileSync(resolve(__dirname, '../../apps/mobile/e2e', path), 'utf8');
+    expect(saved).not.toMatch(/LOGIN_EMAIL|LOGIN_PASSWORD|runScript:/);
+  }
+});
+
 test('menu startup retries only observations and authenticates once before reading data', () => {
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/menu-macro-serving.yaml'), 'utf8')) as [unknown, {
     launchApp?: object;
