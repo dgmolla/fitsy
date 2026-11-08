@@ -566,10 +566,32 @@ it.each([undefined, false, 'true', 'control'])('fails closed for a non-boolean m
   expect(screen.queryByTestId('discovery-view-toggle')).toBeNull();
 });
 
-it.each([[false, 'ios'], [true, 'android']])('keeps production and Android on the list, including debug links (dev=%s, os=%s)', async (dev, os) => {
+it.each(['', '&mapDebug=1&shuffleDebug=1'])('offers production iOS map and Shuffle from the list without remote opt-ins (%s)', async link => {
+  flag = false;
+  shuffleFlag = false;
+  Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
+  const screen = open(`/search?query=meal${link}`);
+  await screen.findByTestId('discovery-hero');
+  expect(screen.queryByTestId('discovery-map')).toBeNull();
+  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  await screen.findByTestId('map-pin-0');
+  expect(screen.getByLabelText('Search: meal')).toBeTruthy();
+  expect(within(screen.getByTestId('map-goals')).getByText('Macros')).toBeTruthy();
+  const beforeShuffle = searchRequests().length;
+  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  await waitFor(() => expect(searchRequests().length).toBeGreaterThan(beforeShuffle));
+  expect(searchParams()).toMatchObject({ q: 'meal', shuffle: '1', ...values });
+  await screen.findByTestId('map-pin-0');
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
+  expect(screen.getByTestId('shuffle-button')).toBeTruthy();
+});
+
+it.each([false, true])('keeps Android on the list, including debug links (dev=%s)', async dev => {
   shuffleFlag = false;
   Object.defineProperty(globalThis, '__DEV__', { value: dev, configurable: true });
-  Object.defineProperty(Platform, 'OS', { value: os, configurable: true });
+  Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
   const screen = open('/search?query=meal&mapDebug=1');
   await screen.findByTestId('discovery-hero');
   expect(screen.queryByTestId('discovery-map')).toBeNull();

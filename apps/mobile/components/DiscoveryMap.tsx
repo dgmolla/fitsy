@@ -44,7 +44,7 @@ const RestaurantMarker = React.memo(function RestaurantMarker({ result, position
   </Marker>;
 });
 
-// Loaded only by DiscoveryScreen's existing development-iOS experiment gate.
+// Loaded only when the iOS Discovery map is selected.
 export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: Discovery; onShowList: () => void }) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useFloatingNavClearance();

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { getPostHogClient } from './analytics';
 
-/** Production fails closed; Debug walkthroughs can explicitly opt in locally. */
+/** Shuffle ships with iOS Discovery; other builds retain the rollout controls. */
 export function useShuffleFlag(debugOverride = false): boolean {
+  const productionIOS = !__DEV__ && Platform.OS === 'ios';
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
+    if (productionIOS) return;
     try {
       const client = getPostHogClient();
       const update = () => {
@@ -15,6 +18,6 @@ export function useShuffleFlag(debugOverride = false): boolean {
       update();
       return unsubscribe;
     } catch { setEnabled(false); }
-  }, []);
-  return (__DEV__ && debugOverride) || enabled;
+  }, [productionIOS]);
+  return productionIOS || (__DEV__ && debugOverride) || enabled;
 }
