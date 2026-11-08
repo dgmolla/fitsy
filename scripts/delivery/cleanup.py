@@ -73,6 +73,87 @@ def verified_png(path, record, identity=False):
         return before
 
 
+def prepare_attachments(args):
+    """Stage only duplicate groups for review; this never authorizes or deletes originals."""
+    home = Path.home()
+    root = home / 'fitsy-wt/issue-755-evidence/private'
+    output = args.output_dir
+    require(not args.apply and output is not None and output.parent == root
+            and re.fullmatch(r'repair[1-9][0-9]*', output.name)
+            and output == output.resolve() and output.is_dir(), 'uncertain preparation destination')
+    require(args.records == args.records.resolve() and args.records.stat().st_uid == os.getuid()
+            and not args.records.stat().st_mode & 0o077, 'snapshot must be private and not symlinked')
+    original = args.records.read_bytes()
+    snapshot = json.loads(original)
+    directory = home / 'Library/Developer/CoreSimulator/Devices' / ATTACHMENT_DEVICE / \
+        'data/Containers/Data/InternalDaemon' / ATTACHMENT_CONTAINER / 'Attachments'
+    require(snapshot['udid'] == ATTACHMENT_DEVICE and snapshot['directories'] == [str(directory)],
+            'snapshot is not the owned attachment directory')
+    rows = snapshot['entries']
+    require(rows and len({row['path'] for row in rows}) == len(rows), 'empty or duplicate snapshot entries')
+    with ExitStack() as stack:
+        lock = stack.enter_context((home / 'fitsy-refactor/loop/sim.lock').open('a'))
+        fcntl.lockf(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        claim = stack.enter_context((home / '.fitsy-sim-claim.lock').open('a'))
+        fcntl.flock(claim, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        require(not any((home / path).exists() for path in
+                ('.fitsy-sim-claim.json', 'fitsy-wt/simulator.lock', 'fitsy-wt/native-build.lock')),
+                'native owner or consumer lease remains')
+        devices = json.loads(run('xcrun', 'simctl', 'list', 'devices', '--json'))['devices']
+        inventory = [device for group in devices.values() for device in group]
+        require(any(device['udid'] == ATTACHMENT_DEVICE and device['name'] == ATTACHMENT_DEVICE_NAME
+                    and device['state'] == 'Shutdown' for device in inventory)
+                and not any(device['state'] == 'Booted' for device in inventory), 'device owner/state changed')
+        identity = unopened(directory)
+        require({str(path) for path in directory.iterdir()} == {row['path'] for row in rows},
+                'attachment inventory changed')
+        groups = {}
+        for row in rows:
+            path = Path(row['path'])
+            require(path.parent == directory and row['video'] is False, 'non-PNG or escaped snapshot entry')
+            digest = row.get('sha256')
+            if digest is None:
+                with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
+                    digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+            record = {**row, 'sha256': digest}
+            verified_png(path, record, identity=True)
+            groups.setdefault(digest, []).append(record)
+        duplicates = {digest: group for digest, group in groups.items() if len(group) > 1}
+        representatives = output / 'attachment-representatives'
+        if representatives.exists():
+            unopened(representatives)
+            require({path.name for path in representatives.iterdir()} <= {digest + '.png' for digest in duplicates},
+                    'unselected staging copies must be reconciled first')
+        needed = sum(group[0]['bytes'] for digest, group in duplicates.items()
+                     if not (representatives / (digest + '.png')).exists())
+        before = shutil.disk_usage(output).free
+        require(before - needed >= 8 * 2**30, 'insufficient staging capacity before copying')
+        representatives.mkdir(mode=0o700, exist_ok=True)
+        selected, retained = [], []
+        for digest, group in sorted(duplicates.items()):
+            path = representatives / (digest + '.png')
+            if not path.exists():
+                run('/usr/bin/ditto', '--clone', group[0]['path'], str(path))
+                path.chmod(0o600)
+            record = {'path': str(path), 'bytes': group[0]['bytes'], 'sha256': digest}
+            verified_png(path, record)
+            require(not path.stat().st_mode & 0o077, 'representative must be private')
+            retained.append(record)
+            selected.extend({**row, 'retained': str(path)} for row in group[1:])
+        require(args.records.read_bytes() == original and unopened(directory) == identity,
+                'snapshot or directory changed during preparation')
+        after = shutil.disk_usage(output).free
+        require(after >= 8 * 2**30, 'staging consumed the required disk floor')
+        return {'status': 'proposal-only-not-approved', 'owner': {'issue': 755, 'device': ATTACHMENT_DEVICE},
+                'source': run('git', '-C', str(args.repo), 'rev-parse', 'HEAD'),
+                'snapshotSha256': hashlib.sha256(original).hexdigest(),
+                'selectedFiles': len(selected), 'selectedBytes': sum(row['bytes'] for row in selected),
+                'selected': selected, 'retainedRepresentatives': retained,
+                'staging': {'requiredBytes': needed, 'freeBefore': before, 'freeAfter': after,
+                            'untouchedSingletons': len(groups) - len(duplicates)},
+                'projection': {'conservativeNextFullGiB': 23, 'requiredFloorGiB': 8}}
+
+
 def approved_attachments(args):
     """Retire only the sealed owner-approved duplicates, keeping every unique byte."""
     home = Path.home()
@@ -237,11 +318,21 @@ def main():
     parser.add_argument('--repo', type=Path, default=Path.cwd())
     parser.add_argument('--state-dir', type=Path, default=Path.home() / '.fitsy-dispatcher')
     parser.add_argument('--approved-attachments', action='store_true', help='only the sealed #755 owner exception')
+    parser.add_argument('--prepare-attachments', action='store_true', help='stage duplicate-only proposal; no deletion authority')
+    parser.add_argument('--output-dir', type=Path, help='existing private #755 repair evidence directory for preparation')
     parser.add_argument('--dry-run-receipt', type=Path, help='exact preceding attachment dry-run JSON output')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--dry-run', action='store_true', help='report only (default)')
     mode.add_argument('--apply', action='store_true', help='remove eligible exact resources')
     args = parser.parse_args()
+    if args.prepare_attachments:
+        require(not args.approved_attachments and args.dry_run_receipt is None, 'preparation is separate from approved cleanup')
+        try:
+            print(json.dumps(prepare_attachments(args)))
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            raise SystemExit('Attachment preparation refused; source, ownership, preservation or staging capacity guard failed') from None
+        return
+    require(args.output_dir is None, 'output directory applies only to preparation')
     if args.approved_attachments:
         try:
             print(json.dumps(approved_attachments(args)))

@@ -377,7 +377,7 @@ test.each([
     cwd: directory, env: { ...env, CI: 'true', FITSY_DIFF_BASE: base, FITSY_DIFF_HEAD: head }, encoding: 'utf8',
   });
   expect({ status: execute.status, error: execute.status === 0 ? '' : execute.stderr }).toEqual({ status: 0, error: '' });
-  expect(JSON.parse(execute.stdout)).toEqual(plan.simulator);
+  expect(JSON.parse(execute.stdout)).toEqual({ ...plan.simulator, environmentRetryAllowed: true });
 });
 
 test.each([

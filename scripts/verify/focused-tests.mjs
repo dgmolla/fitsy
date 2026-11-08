@@ -23,13 +23,21 @@ function selection(paths, pattern) {
     }
     return path;
   });
+  const changed = impactPlan().files || [];
   // Saved native YAML is read dynamically, outside Jest's import graph.
   // Its existing caller contracts must run even when local tests are explicit.
-  if (impactPlan().files?.some(path => /^apps\/mobile\/e2e\/(?:flows|helpers)\/.*\.ya?ml$/.test(path))) {
+  if (changed.some(path => /^apps\/mobile\/e2e\/(?:flows|helpers)\/.*\.ya?ml$/.test(path))) {
     if (!tests.includes('scripts/sim/ci.test.ts'))
       throw new Error('Changed native YAML requires scripts/sim/ci.test.ts in focused selection');
     if (pattern !== undefined)
       throw new Error('Changed native YAML requires unfiltered caller tests; omit --jest-pattern');
+  }
+  // The plan contract spawns the CLI, so Jest cannot infer this dependency.
+  if (changed.includes('scripts/sim/ci.mjs')) {
+    if (!tests.includes('scripts/verify/simulator-scope.test.ts'))
+      throw new Error('Changed native CLI requires scripts/verify/simulator-scope.test.ts in focused selection');
+    if (pattern !== undefined)
+      throw new Error('Changed native CLI requires unfiltered caller tests; omit --jest-pattern');
   }
   return tests;
 }

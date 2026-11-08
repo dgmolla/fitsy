@@ -398,6 +398,45 @@ class ApprovedAttachmentsTest(unittest.TestCase):
         self.assertEqual(after.st_mtime_ns, before.st_mtime_ns)
         self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), self.selected[0]['sha256'])
 
+    def test_preparation_stages_only_duplicate_groups_and_checks_peak_space_before_copying(self):
+        self.unique.write_bytes(b'\x89PNG\r\n\x1a\nuntouched singleton pixels')
+        s = self.unique.stat()
+        snapshot = {'udid': self.cleanup.ATTACHMENT_DEVICE, 'directories': [str(self.directory)],
+                    'entries': [*self.selected, {'path': str(self.unique), 'device': s.st_dev,
+                        'inode': s.st_ino, 'bytes': s.st_size, 'modifiedMs': self.node_ms(self.unique), 'video': False}]}
+        self.args.records = self.home / 'snapshot.json'
+        self.args.records.write_text(json.dumps(snapshot)); self.args.records.chmod(0o600)
+        self.args.output_dir = self.home / 'fitsy-wt/issue-755-evidence/private/repair25'
+        self.args.output_dir.mkdir()
+        original = self.cleanup.run
+        clones = []
+        def external(*args):
+            if args[:2] == ('/usr/bin/ditto', '--clone'):
+                clones.append(args)
+                Path(args[3]).write_bytes(Path(args[2]).read_bytes())
+                return ''
+            return original(*args)
+        with mock.patch.object(self.cleanup, 'run', side_effect=external):
+            with mock.patch.object(self.cleanup.shutil, 'disk_usage', return_value=SimpleNamespace(free=8 * 2**30)):
+                with self.assertRaisesRegex(ValueError, 'staging'):
+                    self.cleanup.prepare_attachments(self.args)
+            self.assertEqual(clones, [])
+            self.assertFalse((self.args.output_dir / 'attachment-representatives').exists())
+            proposal = self.cleanup.prepare_attachments(self.args)
+            self.assertEqual(proposal['selectedFiles'], 1)
+            self.assertEqual(len(proposal['retainedRepresentatives']), 1)
+            self.assertEqual(proposal['staging']['requiredBytes'], self.selected[0]['bytes'])
+            self.assertEqual(len(clones), 1)
+            self.assertEqual(len(list(self.directory.iterdir())), 3)
+            self.assertEqual(self.unique.read_bytes(), b'\x89PNG\r\n\x1a\nuntouched singleton pixels')
+            # Reuse the verified staged representative rather than copying again.
+            self.assertEqual(self.cleanup.prepare_attachments(self.args)['staging']['requiredBytes'], 0)
+            self.assertEqual(len(clones), 1)
+            self.unique.write_bytes(b'changed source')
+            with self.assertRaises(ValueError):
+                self.cleanup.prepare_attachments(self.args)
+            self.assertEqual(len(clones), 1)
+
 
 if __name__ == '__main__':
     unittest.main()
