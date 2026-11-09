@@ -141,7 +141,7 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
 });
 
-test('bounded preview adaptation reaches every plan consumer and rejects additional ordinary, preview or caller changes', () => {
+test.each([false, true])('bounded preview adaptation (entitlement startup retry: %s) reaches every consumer and rejects unknown changes', retryStartup => {
   copyProductFlowControls(directory);
   symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
   writeFileSync(join(directory, '.gitignore'), 'node_modules\n.evidence/\n');
@@ -247,13 +247,26 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
     'app/welcome/resubscribe.tsx', 'app/(tabs)/search.tsx']) {
     write('apps/mobile/' + path, readFileSync(resolve(__dirname, '../../apps/mobile', path), 'utf8'));
   }
+  const helper = 'apps/mobile/e2e/helpers/active-entitlement.yaml';
+  const repairedHelper = readFileSync(resolve(__dirname, '../..', helper), 'utf8');
+  const originalHelper = repairedHelper.replace(/# Retry only the first read[^\n]*\n# Authentication[^\n]*\n- retry:[\s\S]*?(?=\n- tapOn:)/,
+    '# Observe the launch transition before XCTest reads the first Welcome element.\n' +
+    '- waitForAnimationToEnd:\n    timeout: 10000\n- extendedWaitUntil:\n    visible:\n      id: welcome-login\n    timeout: 60000');
+  expect(originalHelper).not.toBe(repairedHelper);
+  write(helper, originalHelper);
+  for (const path of ['scripts/sim/actions.mjs', 'scripts/sim/ci.mjs', 'scripts/sim/product-flow.mjs',
+    'scripts/sim/active-entitlement.mjs', 'scripts/sim/journey-fixtures.mjs', 'scripts/sim/runner-controls.mjs'])
+    write(path, readFileSync(resolve(__dirname, '../..', path), 'utf8'));
   const git = (...args: string[]) => execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args],
     { cwd: directory, env: env(), encoding: 'utf8' }).trim();
   git('init', '-q'); git('config', 'user.name', 'Preview impact fixture'); git('config', 'user.email', 'fixture@example.test');
   git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'base');
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   const base = git('rev-parse', 'HEAD');
-  const restore = () => { for (const [name, versions] of Object.entries(modules)) write(prefix + name, versions[1]); };
+  const restore = () => {
+    for (const [name, versions] of Object.entries(modules)) write(prefix + name, versions[1]);
+    write(helper, retryStartup ? repairedHelper : originalHelper);
+  };
   for (const [path, versions] of Object.entries(budgetControls)) write(path, versions[1]);
   restore();
   const cli = (file = 'scripts/verify/product-flow.mjs', args: string[] = ['--plan']) => {
@@ -264,6 +277,8 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
   const expected = ['map-search', 'map-search-location-denied', 'onboarding-assisted-targets', 'onboarding-guided-preview',
     'onboarding-out-of-area', 'onboarding-returning-preview', 'onboarding-search-highlight', 'onboarding-target-ranked-search',
     'paywall-access', 'subscription-expired-routing'];
+  if (retryStartup) expected.push('floating-nav', 'launch-analytics', 'log-meal', 'shuffle', 'widget-setup');
+  expected.sort();
   const plan = cli();
   expect(plan).toMatchObject({ flows: expected,
     categories: ['auth', 'billing', 'changed-journey', 'discovery', 'notifications', 'onboarding'], simulator: { scope: 'flow' } });
@@ -306,6 +321,22 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
     write(path, versions[0]);
     expect(cli().simulator.scope).toBe('full'); write(path, versions[1]);
   }
+  if (retryStartup) {
+    for (const [from, to] of [
+      ['maxRetries: 2', 'maxRetries: 3'],
+      ['timeout: 60000', 'timeout: 60001'],
+      ["ALLOW_TEST_PURCHASE === '1'", 'true'],
+      ['      - waitForAnimationToEnd:', '      - tapOn: Dev Login\n      - waitForAnimationToEnd:'],
+      ['- assertNotVisible:\n    id: resubscribe-restore', ''],
+    ] as const) {
+      expect(repairedHelper).toContain(from);
+      write(helper, repairedHelper.replace(from, to));
+      expect(cli().simulator.scope).toBe('full'); restore();
+    }
+    const flow = 'apps/mobile/e2e/flows/onboarding-guided-preview.yaml', original = readFileSync(join(directory, flow), 'utf8');
+    write(flow, original.replace('fixture:unsubscribed-dev', 'fixture:entitled-dev'));
+    expect(cli().simulator.scope).toBe('full'); write(flow, original);
+  }
   for (const [name, from, to] of [
     ['DiscoveryMap.tsx', 'slice(0, 3)', 'slice(0, 4)'],
     ['DiscoveryMap.tsx', 'd.unlockPreview(result)', 'navigate(result)'],
@@ -322,6 +353,7 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
     expect(cli().simulator.scope).toBe('full'); restore();
   }
   for (const path of ['apps/mobile/lib/useDiscoveryState.ts', 'apps/mobile/lib/newProducer.ts', 'scripts/sim/ci.mjs',
+    'scripts/sim/active-entitlement.mjs', 'scripts/sim/journey-fixtures.mjs', 'scripts/sim/runner-controls.mjs',
     'apps/mobile/components/PaywallHero.tsx', 'apps/mobile/app/_layout.tsx', 'packages/shared/src/contracts/search.ts']) {
     const target = join(directory, path), original = (() => { try { return readFileSync(target, 'utf8'); } catch { return null; } })();
     write(path, (original || '') + '\nexport const changed = true;\n');
@@ -337,7 +369,28 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
      process.stdout.write(JSON.stringify(['<unknown>','EXPO_PUBLIC_REVENUECAT_TEST_KEY'].map(key=>candidatePlan([key]).simulator.scope)));`],
   { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
   expect(JSON.parse(unknownConfig.stdout)).toEqual(['full', 'full']);
+  if (retryStartup) {
+    // A real additional fixture consumer must extend the union, not disappear
+    // behind an issue-specific count. Ambiguous YAML retains FULL instead.
+    for (const [tags, scope] of [["[auth, 'fixture:entitled-dev', 'store:test-store']", 'flow'], ['*unknown', 'full'],
+      ['[auth]\n"tags": ["fixture:entitled-dev"]', 'full']]) {
+      git('reset', '--hard', base);
+      git('checkout', '-q', '--detach', base);
+      write('apps/mobile/e2e/flows/additional-entitled.yaml', `appId: com.fitsy.mobile\ntags: ${tags}\n---\n- assertVisible: Search\n`);
+      git('add', '.'); git('commit', '-qm', 'additional existing fixture consumer'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+      restore();
+      expect(cli().simulator.scope).toBe(scope);
+      if (scope === 'flow') expect(cli().flows).toEqual([...expected, 'additional-entitled'].sort());
+    }
+    git('reset', '--hard', base);
+    git('checkout', '-q', '--detach', base);
+    write('scripts/sim/new-caller.mjs', "export { prepareEntitledEvidence } from './product-flow.mjs';\n");
+    git('add', '.'); git('commit', '-qm', 'additional existing setup caller'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    restore();
+    expect(cli().simulator.scope).toBe('full');
+  }
   // A caller that predates the diff must also prevent the narrow selection.
+  git('reset', '--hard', base);
   git('checkout', '-q', '--detach', base);
   write('apps/mobile/app/new-consumer.tsx', "import { HeroCard } from '@/components/DiscoveryCards';\nexport default HeroCard;\n");
   git('add', '.'); git('commit', '-qm', 'new existing consumer'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');

@@ -291,6 +291,7 @@ test.each([
   ['flows/onboarding-out-of-area', 'waitlist-join', 0],
   ['flows/onboarding-out-of-area', 'goal-performance', 1],
   ['helpers/mixed-trial-visual', 'welcome-start', 0],
+  ['helpers/active-entitlement', 'welcome-login', 0],
 ] as const)('%s observes %s despite a transient XCTest read', (flow, checkpoint, index) => {
   type Step = string | {
     launchApp?: object;
@@ -300,9 +301,10 @@ test.each([
     extendedWaitUntil?: { visible: { id: string; optional?: boolean }; timeout: number };
   };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../../apps/mobile/e2e/${flow}.yaml`), 'utf8')) as [unknown, Step[]];
+  const coldLaunch = checkpoint.startsWith('welcome-');
   const resumes = commands.flatMap((step, position) =>
-    (checkpoint === 'welcome-start' ? typeof step === 'object' && step.launchApp : step === 'launchApp') ? [commands[position + 1]] : []);
-  expect(resumes).toHaveLength(checkpoint === 'welcome-start' ? 1 : 2);
+    (coldLaunch ? typeof step === 'object' && step.launchApp : step === 'launchApp') ? [commands[position + 1]] : []);
+  expect(resumes).toHaveLength(coldLaunch ? 1 : 2);
   const readiness = resumes[index];
   if (!readiness) throw new Error('Missing cold-resume readiness check');
 
@@ -336,7 +338,7 @@ test.each([
           read('hierarchy');
           const { visible: selector, timeout } = step.extendedWaitUntil;
           expect(selector.optional).not.toBe(true);
-          expect(timeout).toBe(30000);
+          expect(timeout).toBe(checkpoint === 'welcome-login' ? 60000 : 30000);
           if (selector.id !== visible) throw new Error('Wrong resumed screen');
           observed.push(selector.id);
         } else throw new Error('Unexpected resume command');

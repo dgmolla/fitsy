@@ -218,6 +218,53 @@ function sourceVersions(path, range, cwd, env) {
       : readFileSync(resolve(cwd, path), 'utf8').trimEnd()];
 }
 
+// This setup serves every entitled fixture, including hosted, local and MCP
+// callers. Recognize only the bounded initial observation retry, and derive its
+// union from unchanged, unambiguous YAML headers instead of a fixed flow count.
+function entitlementObservationImpact(path, range, cwd, env) {
+  const [before, after] = sourceVersions(path, range, cwd, env);
+  const initial = '# Observe the launch transition before XCTest reads the first Welcome element.\n' +
+    '- waitForAnimationToEnd:\n    timeout: 10000\n- extendedWaitUntil:\n    visible:\n      id: welcome-login\n    timeout: 60000';
+  const retry = '# Retry only the first read when XCTest rejects a stale launch-time AX element.\n' +
+    '# Authentication and purchase actions remain outside this read-only retry.\n' +
+    '- retry:\n    maxRetries: 2\n    commands:\n      - waitForAnimationToEnd:\n          timeout: 10000\n' +
+    '      - extendedWaitUntil:\n          visible:\n            id: welcome-login\n          timeout: 60000';
+  if (!before.includes(initial) || before.replace(initial, retry) !== after) return null;
+  const callers = ['scripts/sim/actions.mjs', 'scripts/sim/ci.mjs', 'scripts/sim/product-flow.mjs'];
+  for (const file of [...callers, 'scripts/sim/active-entitlement.mjs', 'scripts/sim/journey-fixtures.mjs',
+    'scripts/sim/runner-controls.mjs', 'scripts/verify/product-flow.mjs']) {
+    const versions = sourceVersions(file, range, cwd, env);
+    if (versions[0] !== versions[1]) return null;
+  }
+  for (const revision of [range.base, env.CI || env.GITHUB_EVENT_NAME || range.head !== git(['rev-parse', 'HEAD'], cwd, env) ? range.head : null]) {
+    const actual = git(['grep', '-l', '-E', 'prepareEntitledEvidence|active-entitlement\\.yaml',
+      ...(revision ? [revision] : []), '--', 'scripts', 'apps/mobile'], cwd, env)
+      .split('\n').map(file => revision ? file.slice(revision.length + 1) : file)
+      .filter(file => simulatorSource(file) && file !== 'scripts/verify/impact-plan.mjs').sort();
+    if (!isDeepStrictEqual(actual, callers)) return null;
+  }
+  const catalog = simulatorFlows(cwd), flows = [];
+  const baseCatalog = git(['ls-tree', '-r', '--name-only', range.base, '--', 'apps/mobile/e2e/flows'], cwd, env)
+    .split('\n').filter(file => /^apps\/mobile\/e2e\/flows\/[a-z0-9-]+\.yaml$/.test(file))
+    .map(file => file.split('/').at(-1).replace(/\.yaml$/, '')).sort();
+  if (!catalog.length || !isDeepStrictEqual(catalog, baseCatalog)) return null;
+  for (const name of catalog) {
+    const headers = sourceVersions(`apps/mobile/e2e/flows/${name}.yaml`, range, cwd, env).map(text => text.split(/^---\s*$/m)[0]);
+    if (headers[0] !== headers[1]) return null;
+    // Only the existing simple inline/block tag lists are understood here.
+    // Aliases, escapes, duplicate keys and other YAML forms retain FULL.
+    const tags = [...headers[0].matchAll(/^tags: *(\[[^\n]*\]|(?:\n +- [^\n]+)+)$/gm)];
+    if (tags.length !== 1 || /^(?:tags\s*:|['"]|<<\s*:)|(?:^|\s)[&*][a-z0-9_-]/im.test(headers[0].replace(tags[0][0], ''))) return null;
+    const values = (tags[0][1].startsWith('[') ? tags[0][1].slice(1, -1).split(',') : tags[0][1].trim().split('\n').map(line => line.trim().slice(2)))
+      .map(value => value.trim());
+    if (values.some(value => !/^(?:[a-z0-9:-]+|'[a-z0-9:-]+'|"[a-z0-9:-]+")$/.test(value))) return null;
+    const parsed = values.map(value => value.replace(/^['"]|['"]$/g, ''));
+    if (parsed.filter(tag => tag.startsWith('fixture:')).length > 1) return null;
+    if (parsed.includes('fixture:entitled-dev')) flows.push(name);
+  }
+  return flows.length ? flows : null;
+}
+
 // Recognize the bounded list-to-map preview adaptation, not arbitrary edits to
 // these shared components. Reconstruct the expected candidate from its actual
 // base: every byte outside the listed adaptations must remain unchanged.
@@ -227,14 +274,21 @@ function discoveryPreviewImpact(source, configKeys, range, cwd, env) {
   const components = ['DiscoveryScreen.tsx', 'DiscoveryMap.tsx', 'DiscoveryMap.styles.ts', 'DiscoveryMapCard.tsx', 'DiscoveryCards.tsx']
     .map(name => `apps/mobile/components/${name}`);
   const budgetControls = ['scripts/verify/simulator-actions.mjs', '.github/workflows/simulator.yml'];
+  const entitlementHelper = 'apps/mobile/e2e/helpers/active-entitlement.yaml';
   if (!components.every(path => source.includes(path)) || source.some(path => !components.includes(path) &&
-      path !== 'scripts/verify/impact-plan.mjs' && !budgetControls.includes(path) &&
+      path !== 'scripts/verify/impact-plan.mjs' && path !== entitlementHelper && !budgetControls.includes(path) &&
       !/^apps\/mobile\/e2e\/flows\/onboarding-(guided|returning)-preview\.yaml$/.test(path))) return null;
   if (budgetControls.some(path => source.includes(path)) && !budgetControls.every(path => source.includes(path))) return null;
   const flows = ['map-search', 'map-search-location-denied', 'onboarding-assisted-targets', 'onboarding-guided-preview',
     'onboarding-out-of-area', 'onboarding-returning-preview', 'onboarding-search-highlight', 'onboarding-target-ranked-search',
     'paywall-access', 'subscription-expired-routing'];
   try {
+    if (source.includes(entitlementHelper)) {
+      const entitled = entitlementObservationImpact(entitlementHelper, range, cwd, env);
+      if (!entitled) return null;
+      flows.push(...entitled.filter(flow => !flows.includes(flow)));
+      flows.sort();
+    }
     for (const path of budgetControls.filter(path => source.includes(path))) {
       const [before, after] = sourceVersions(path, range, cwd, env);
       const expected = path.endsWith('.yml') ? before
@@ -351,7 +405,8 @@ function discoveryPreviewImpact(source, configKeys, range, cwd, env) {
     }
   } catch { return null; }
   return { flows, acceptanceCategories: ['auth', 'billing', 'changed-journey', 'discovery', 'notifications', 'onboarding'],
-    reason: 'Source-mapped bounded Discovery map preview and unchanged ordinary card consumers; all other product behavior preserved' };
+    reason: 'Source-mapped bounded Discovery map preview and unchanged ordinary card consumers' +
+      (source.includes(entitlementHelper) ? '; initial setup observation retry includes every entitled-fixture journey' : '; all other product behavior preserved') };
 }
 
 function discoveryEntryImpact(source, configKeys, range, cwd, env) {

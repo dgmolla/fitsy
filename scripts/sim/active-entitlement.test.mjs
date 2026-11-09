@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import yaml from 'js-yaml';
 import { evidenceStore, prepareActiveEntitlement, sandboxState, verifyInactiveEntitlement } from './active-entitlement.mjs';
 import { prepareEntitledEvidence, prepareBillingEvidence } from './product-flow.mjs';
 import { classifySimulatorFailure, withEnvironmentRetry } from './failure-policy.mjs';
@@ -31,6 +32,33 @@ function boundary(bodies) {
   return { calls, fetchImpl };
 }
 const login = { token: 'fixture-token', user: { id: '03975501-8b3d-4044-a636-7d79f7167531' } };
+
+test('entitlement startup retries observations without replaying login, purchase or final assertions', () => {
+  const [header, commands] = yaml.loadAll(readFileSync(new URL('../../apps/mobile/e2e/helpers/active-entitlement.yaml', import.meta.url), 'utf8'));
+  assert.deepEqual(header, { appId: 'com.fitsy.mobile' });
+  assert.deepEqual(commands[0], { launchApp: { clearState: true, clearKeychain: true } });
+  assert.deepEqual(commands[1], { retry: { maxRetries: 2, commands: [
+    { waitForAnimationToEnd: { timeout: 10000 } },
+    { extendedWaitUntil: { visible: { id: 'welcome-login' }, timeout: 60000 } },
+  ] } });
+  assert.deepEqual(commands.slice(2), [
+    { tapOn: { id: 'welcome-login' } },
+    { extendedWaitUntil: { visible: 'Welcome back', timeout: 15000 } },
+    { tapOn: '.*Dev Login.*' },
+    { extendedWaitUntil: { visible: '.*(Search restaurants or dishes|subscription ended|Continue to purchase).*', timeout: 30000 } },
+    { assertNotVisible: 'Dev Login Failed' },
+    { runFlow: { when: { notVisible: 'Search restaurants or dishes' }, commands: [
+      { assertTrue: "${ALLOW_TEST_PURCHASE === '1'}" },
+      { runFlow: { when: { visible: '.*Open debugger to view warnings.*' }, commands: [{ tapOn: { point: '93%,93%' } }] } },
+      { tapOn: { id: 'welcome-continue' } },
+      { extendedWaitUntil: { visible: 'Test Store Purchase', timeout: 20000 } },
+      { assertNotVisible: 'Sign in with Apple ID' },
+      { tapOn: 'Test valid purchase' },
+    ] } },
+    { extendedWaitUntil: { visible: 'Search restaurants or dishes', timeout: 30000 } },
+    { assertNotVisible: { id: 'resubscribe-restore' } },
+  ]);
+});
 
 test('inactive billing admission distinguishes expired history from a valid never-subscribed login', async () => {
   const empty = { subscriber: { entitlements: {}, subscriptions: {}, non_subscriptions: {} } };
