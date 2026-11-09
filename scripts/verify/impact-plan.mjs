@@ -236,12 +236,18 @@ function discoveryEntryImpact(source, configKeys, range, cwd, env) {
           /const \[view, setView\] = useState<'map' \| 'list'>\((?:'(?:map|list)'|__DEV__ \? '(?:map|list)' : '(?:map|list)')\);/,
           'const [view, setView] = <initial-view>;');
         if (!/\/use(?:MapSearch|Shuffle)Flag\.ts$/.test(path)) return text;
+        if (path.endsWith('/useMapSearchFlag.ts')) return compact(text
+          .replace(/^  const (?:allowed = (?:__DEV__ && )?Platform\.OS === 'ios'|production = !__DEV__);$/gm, '')
+          .replace(/^    if \(!allowed(?: \|\| production)?\) return;$/m, '')
+          .replace(/^  \}, \[allowed(?:, production)?\]\);$/m, '  }, [<availability>]);')
+          .replace(/^  return allowed && \((?:production \|\| )?debugOverride \|\| enabled\);$/m,
+            '  return <availability>;'));
         return compact(text
           .replace(/^import \{ Platform \} from 'react-native';$/m, '')
-          .replace(/^  const (?:allowed = (?:__DEV__ && )?Platform\.OS === 'ios'|production = !__DEV__|productionIOS = !__DEV__ && Platform\.OS === 'ios');$/gm, '')
-          .replace(/^    if \((?:!allowed(?: \|\| production)?|productionIOS)\) return;$/m, '')
-          .replace(/^  \}, \[(?:allowed(?:, production)?|productionIOS)?\]\);$/m, '  }, [<availability>]);')
-          .replace(/^  return (?:allowed && \((?:production \|\| )?debugOverride \|\| enabled\)|(?:productionIOS \|\| )?\(__DEV__ && debugOverride\) \|\| enabled);$/m,
+          .replace(/^  const productionIOS = !__DEV__ && Platform\.OS === 'ios';$/m, '')
+          .replace(/^    if \(productionIOS\) return;$/m, '')
+          .replace(/^  \}, \[(?:productionIOS)?\]\);$/m, '  }, [<availability>]);')
+          .replace(/^  return (?:productionIOS \|\| )?\(__DEV__ && debugOverride\) \|\| enabled;$/m,
             '  return <availability>;'));
       };
       if (normalize(clean[0]) === clean[0] || normalize(clean[0]) !== normalize(clean[1])) return null;

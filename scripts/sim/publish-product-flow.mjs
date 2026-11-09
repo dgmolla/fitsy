@@ -92,7 +92,9 @@ export async function publishProductFlow(prNumber, {
   try {
   assert(/^\d+$/.test(prNumber || '') || (preflight && prNumber === undefined),
     'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER [--preflight]');
-  const pr = JSON.parse(gh(['pr', 'view', ...(prNumber === undefined ? [] : [prNumber]), '--repo', repo, '--json', 'headRefOid,baseRefName,headRepositoryOwner,state,url,labels']));
+  const selector = prNumber ?? execute('git', ['branch', '--show-current']);
+  assert(selector && !selector.startsWith('-'), 'Automatic final preflight requires an owned branch or explicit PR number');
+  const pr = JSON.parse(gh(['pr', 'view', selector, '--repo', repo, '--json', 'headRefOid,baseRefName,headRepositoryOwner,state,url,labels']));
   assert(pr.state === 'OPEN' && pr.baseRefName === 'main' && pr.headRepositoryOwner.login === 'dgmolla', 'Expected an open same-repository PR to main');
   const candidate = execute('git', ['rev-parse', 'HEAD']);
   assert(pr.headRefOid === candidate, 'Local HEAD does not match the remote PR');

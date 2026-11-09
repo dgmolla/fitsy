@@ -38,7 +38,7 @@ test('final collection preflights the actual child environment and publisher inp
       assert.doesNotMatch(result.stdout + result.stderr, /forbidden\.example|not booted|Pass an explicit simulator/);
     }
     const head = 'a'.repeat(40), calls = [];
-    let staleHead = false, dirty = false, movedMain = false, mediaFailure = false, staleConfig = false;
+    let staleHead = false, dirty = false, movedMain = false, mediaFailure = false, staleConfig = false, missingBranch = false;
     const execute = (command, args, options) => {
       calls.push([command, ...args]);
       assert.equal(options.timeout, 30000);
@@ -47,6 +47,10 @@ test('final collection preflights the actual child environment and publisher inp
         return JSON.stringify({ configHash: staleConfig ? 'stale' : publicConfigIdentity().configHash });
       }
       if (command === 'git') {
+        if (args[0] === 'branch') {
+          assert.deepEqual(args, ['branch', '--show-current']);
+          return missingBranch ? '' : 'codex/issue-7';
+        }
         if (args[0] === 'rev-parse') return head;
         if (args[0] === 'status') return dirty ? ' M candidate.js' : '';
         if (args[0] === 'ls-remote') return `${movedMain ? 'b'.repeat(40) : head}\trefs/heads/main`;
@@ -54,7 +58,9 @@ test('final collection preflights the actual child environment and publisher inp
         return '';
       }
       assert.equal(command, 'gh');
-      assert.equal(args[0], 'pr', 'preflight must not write statuses or releases');
+      assert.deepEqual(args, ['pr', 'view', 'codex/issue-7', '--repo', 'dgmolla/fitsy', '--json',
+        'headRefOid,baseRefName,headRepositoryOwner,state,url,labels'],
+      'gh pr view with --repo requires an explicit PR or branch selector; preflight must not write statuses or releases');
       return JSON.stringify({ headRefOid: staleHead ? 'b'.repeat(40) : head, baseRefName: 'main',
         headRepositoryOwner: { login: 'dgmolla' }, state: 'OPEN', url: 'https://github.com/dgmolla/fitsy/pull/7',
         labels: [{ name: 'needs-sim' }] });
@@ -74,6 +80,7 @@ test('final collection preflights the actual child environment and publisher inp
       [value => { movedMain = value; }, /Main advanced/],
       [value => { mediaFailure = value; }, /stale media receipt/],
       [value => { staleConfig = value; }, /configuration differs/],
+      [value => { missingBranch = value; }, /requires an owned branch/],
     ]) {
       set(true);
       await assert.rejects(publishWithMediaEvidence(undefined, options), message);

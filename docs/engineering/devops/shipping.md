@@ -159,10 +159,11 @@ Keep public configuration in the ignored mobile environment file.
 Before allocating native collection, run the final publisher's read-only preflight on the committed, pushed PR head:
 
 ```sh
-node scripts/sim/publish-product-flow.mjs <PR_NUMBER> --preflight
+node --env-file=apps/mobile/.env.development.local scripts/sim/publish-product-flow.mjs <PR_NUMBER> --preflight
 ```
 
 The final-candidate runner calls this same preflight automatically and consumes its label-aware impact plan.
+Automatic collection requires an owned branch and passes it explicitly to `gh pr view --repo`; the standalone preflight accepts an explicit PR number.
 It checks the actual child process loading `apps/mobile/.env.development.local`, matching configuration hashes, clean published source, current main ancestry and the applicable source-bound media receipt before touching a simulator or archiving a previous report.
 Each external preflight command has a 30-second timeout; unavailable or mismatched inputs fail visibly before collection.
 For a missing canonical environment, use `npm run dev:env` against the existing `fitsy-api` project and verify the child load; do not create a cloud project to repair local setup.

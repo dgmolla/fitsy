@@ -32,7 +32,7 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
   writeFileSync(join(directory, '.gitignore'), 'node_modules\n.evidence/\n');
   const paths = ['apps/mobile/components/DiscoveryMap.tsx', 'apps/mobile/components/DiscoveryScreen.tsx',
-    '.github/workflows/simulator.yml'];
+    '.github/workflows/simulator.yml', 'apps/mobile/lib/useMapSearchFlag.ts'];
   for (const path of paths) {
     mkdirSync(dirname(join(directory, path)), { recursive: true });
     copyFileSync(resolve(__dirname, '../..', path), join(directory, path));
@@ -44,6 +44,7 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   const map = join(directory, paths[0]!), screen = join(directory, paths[1]!), workflow = join(directory, paths[2]!);
   const originalMap = readFileSync(map, 'utf8'), originalScreen = readFileSync(screen, 'utf8');
+  const flag = join(directory, paths[3]!), originalFlag = readFileSync(flag, 'utf8');
   const cli = (file: string) => spawnSync(process.execPath, [file, '--plan'], { cwd: directory, env: env(), encoding: 'utf8' });
   writeFileSync(map, originalMap + '\n// Clarify the unchanged renderer.\n');
   expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout)).toMatchObject({ required: false, flows: [] });
@@ -88,10 +89,19 @@ test('real Discovery entry changes select three journeys across CLI and publicat
     () => writeFileSync(map, originalMap + '\nexport const newRendererBehavior = true;\n'),
     () => writeFileSync(screen, changedScreen.replace('!onboardingPreview', 'onboardingPreview')),
     () => writeFileSync(workflow, budget.replace('NODE_ENV: development', 'NODE_ENV: production')),
+    // The Shuffle-style policy would let remote flags enable Android Map.
+    // It is not equivalent to Map's existing iOS-only availability boundary.
+    () => writeFileSync(flag, originalFlag
+      .replace(/const allowed = (?:__DEV__ && )?Platform\.OS === 'ios';/, "const productionIOS = !__DEV__ && Platform.OS === 'ios';")
+      .replace('  const production = !__DEV__;\n', '')
+      .replace(/if \(!allowed(?: \|\| production)?\) return;/, 'if (productionIOS) return;')
+      .replace(/\[allowed(?:, production)?\]/, '[productionIOS]')
+      .replace(/return allowed && \((?:production \|\| )?debugOverride \|\| enabled\);/,
+        'return productionIOS || (__DEV__ && debugOverride) || enabled;')),
   ]) {
     mutate();
     expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
-    writeFileSync(map, originalMap); writeFileSync(screen, changedScreen); writeFileSync(workflow, budget);
+    writeFileSync(map, originalMap); writeFileSync(screen, changedScreen); writeFileSync(workflow, budget); writeFileSync(flag, originalFlag);
   }
   const unknownConfig = spawnSync(process.execPath, ['--input-type=module', '-e',
     `import {candidatePlan} from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(candidatePlan(['<unknown>'])));`],
