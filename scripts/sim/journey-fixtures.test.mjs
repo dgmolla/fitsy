@@ -223,20 +223,31 @@ for (const eventName of ['pull_request', 'push']) test(`the real hosted ${eventN
     Object.assign(process.env, previous);
     rmSync(directory, { recursive: true, force: true });
   });
-  const work = join(directory, 'fitsy-simulator-14-1'), config = join(directory, 'gh');
-  mkdirSync(work); mkdirSync(config);
+  const work = join(directory, 'fitsy-simulator-14-1'), config = join(directory, 'gh'), bin = join(directory, 'bin');
+  mkdirSync(work); mkdirSync(config); mkdirSync(bin);
   writeFileSync(join(work, 'device.json'), JSON.stringify({ udid: '11111111-1111-1111-1111-111111111111' }));
+  const head = 'a'.repeat(40), base = 'b'.repeat(40);
+  // Supply the external Git comparison used by the real hosted selector.
+  // A navigation change requires full coverage regardless of this test's branch.
+  writeFileSync(join(bin, 'git'), `#!${process.execPath}
+const args = process.argv.slice(2);
+if (args[0] === 'rev-parse') console.log(args.at(-1).startsWith('${base}') ? '${base}' : '${head}');
+else if (args[0] === 'merge-base') console.log('${base}');
+else if (args[0] === 'diff' && args.includes('--name-only')) process.stdout.write('apps/mobile/app/index.tsx\\0');
+else process.exit(2);
+`, { mode: 0o755 });
   const event = join(directory, 'event.json');
-  writeFileSync(event, JSON.stringify(eventName === 'push' ? { ref: 'refs/heads/main' } : { pull_request: { number: 759 } }));
-  for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN']) delete process.env[key];
+  writeFileSync(event, JSON.stringify(eventName === 'push' ? { ref: 'refs/heads/main', before: base, after: head }
+    : { pull_request: { number: 759, base: { sha: base }, head: { sha: head } } }));
+  for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'FITSY_DIFF_BASE', 'FITSY_DIFF_HEAD']) delete process.env[key];
   Object.assign(process.env, { GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS', GITHUB_WORKSPACE: repository,
+    PATH: `${bin}:${process.env.PATH}`,
     RUNNER_TEMP: directory, GITHUB_RUN_ID: '14', GITHUB_RUN_ATTEMPT: '1', GH_CONFIG_DIR: config,
     GITHUB_EVENT_PATH: event, GITHUB_EVENT_NAME: eventName, GITHUB_REF: eventName === 'push' ? 'refs/heads/main' : 'refs/pull/759/merge', SIM_SCOPE: 'full', FITSY_XCTEST_SIM_UDID: '11111111-1111-1111-1111-111111111111',
     EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org', EXPO_PUBLIC_SUPABASE_URL: 'https://kegycybiruksmrzvniha.supabase.co',
     EXPO_PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_synthetic', EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_synthetic',
     SIM_E2E_FIXTURES: '{}',
   });
-  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, encoding: 'utf8' }).trim();
   process.env.GITHUB_SHA = head;
   const requests = [];
   t.mock.method(globalThis, 'fetch', async (url, options) => {
