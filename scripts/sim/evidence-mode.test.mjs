@@ -11,6 +11,33 @@ import { runOwnedMaestro } from './runner-controls.mjs';
 
 const moduleDir = fileURLToPath(new URL('.', import.meta.url));
 
+test('the requested-video caller uses supported simctl recording arguments and finalizes its owned recorder', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-recorder-'));
+  const recorder = join(dir, 'xcrun'), video = join(dir, 'capture.mp4');
+  writeFileSync(recorder, `#!${process.execPath}
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (args.length !== 6 || args[0] !== 'simctl' || args[1] !== 'io' || args[2] !== 'owned-device' ||
+    args[3] !== 'recordVideo' || !/^--codec=(h264|hevc)$/.test(args[4])) process.exit(117);
+fs.writeFileSync(args[5], 'recording');
+process.on('SIGINT', () => { fs.appendFileSync(args[5], '-finalized'); process.exit(0); });
+setInterval(() => {}, 1000);
+`);
+  chmodSync(recorder, 0o755);
+  try {
+    const recorded = await runSelectedRecordedFlow({ recordVideo: true }, {
+      recorderCommand: recorder, udid: 'owned-device', video, recorderLog: join(dir, 'recorder.log'),
+      maestroCommand: process.execPath, maestroArgs: ['-e', 'process.exit(0)'],
+      cwd: dir, env: process.env, dir, timeline: join(dir, 'timeline.jsonl'), flow: '', diagnostic: () => {},
+    });
+    assert.equal(recorded.result.code, 0);
+    assert.equal(recorded.result.reason, null);
+    assert.equal(recorded.recorderResult.code, 0);
+    assert.equal(recorded.recorderResult.endedBeforeStop, false);
+    assert.equal(readFileSync(video, 'utf8'), 'recording-finalized');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('the real non-recording caller returns on command exit and retains monotonic failure evidence', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-supervisor-'));
   const timeline = join(dir, 'timeline.jsonl');
@@ -152,6 +179,17 @@ test('development and final candidate omit recording unless explicitly requested
   assert.throws(() => runSelection(['device', '--record-video', '--record-video']), /at most once/);
   assert.throws(() => runSelection(['device', '--record-videos']), /Unknown run option/);
   assert.throws(() => runSelection(['device', '--mode=unknown']), /Unknown evidence mode/);
+});
+
+test('the final-candidate CLI admits only the scoped release option and preserves a consumed retry', () => {
+  const selection = runSelection(['owned-device', '--mode=final-candidate', '--release-exception=6716597294', '--no-environment-retry']);
+  assert.equal(selection.approvalId, '6716597294');
+  assert.equal(selection.environmentRetryAllowed, false);
+  assert.deepEqual(selection.names, []);
+  assert.equal(selection.mode.publishable, true);
+  assert.throws(() => runSelection(['owned-device', '--release-exception=735']), /Unknown/);
+  assert.throws(() => runSelection(['owned-device', '--release-exception=6716597294', '--release-exception=6716597294']), /repeated/);
+  assert.throws(() => runSelection(['owned-device', '--no-environment-retry', '--no-environment-retry']), /at most once/);
 });
 
 test('a final candidate reuses complete supersets only with the same passing source-bound inputs', () => {

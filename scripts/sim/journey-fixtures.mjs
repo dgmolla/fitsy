@@ -8,14 +8,16 @@ import { parseEnv } from 'node:util';
 import { git, gitEnv, repository } from '../verify/impact-plan.mjs';
 
 // Owner6716597294 grants exactly this release exception, never a passing flow.
-// Check the published PR head and current grant again at admission, not a cached
-// permission or a caller-created fixture receipt.
+// PR759 is the serial production successor to merged PR754 for this release.
+// Check its published head or exact main merge and the current grant at admission.
 export async function releaseExceptions(names, catalog, approvalId, execute = (binary, args) =>
   execFileSync(binary, args, { cwd: repository, env: gitEnv(), encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 }).trim()) {
   if (!approvalId) return [];
   if (approvalId !== '6716597294') throw new Error('Unknown native release exception');
   let approval, pr, head, secondParent;
+  const hostedMain = process.env.GITHUB_ACTIONS === 'true' && process.env.GITHUB_EVENT_NAME === 'push' &&
+    process.env.GITHUB_REF === 'refs/heads/main';
   try {
     const readAuthority = async path => {
       if (process.env.GITHUB_ACTIONS !== 'true') return JSON.parse(execute('gh', ['api', path]));
@@ -27,18 +29,27 @@ export async function releaseExceptions(names, catalog, approvalId, execute = (b
       if (!response.ok) throw new Error('Public approval lookup failed');
       return response.json();
     };
-    approval = await readAuthority('repos/dgmolla/fitsy/issues/comments/6716597294');
-    pr = await readAuthority('repos/dgmolla/fitsy/pulls/754');
+    pr = await readAuthority('repos/dgmolla/fitsy/pulls/759');
     head = execute('git', ['rev-parse', 'HEAD']);
-    if (head !== pr.head.sha) secondParent = execute('git', ['rev-parse', 'HEAD^2']);
+    // An ordinary later main run retains its manual Apple-history disposition.
+    // The grant cannot propagate beyond this release's exact merge commit.
+    if (hostedMain && head !== pr.merge_commit_sha) return [];
+    approval = await readAuthority('repos/dgmolla/fitsy/issues/comments/6716597294');
+    if (pr.state === 'open' && head !== pr.head?.sha && process.env.GITHUB_ACTIONS === 'true' &&
+        process.env.GITHUB_EVENT_NAME === 'pull_request') secondParent = execute('git', ['rev-parse', 'HEAD^2']);
   } catch { throw new Error('Native release exception authority/source lookup unavailable'); }
+  const publishedHead = pr.state === 'open' && (head === pr.head?.sha ||
+    (process.env.GITHUB_ACTIONS === 'true' && process.env.GITHUB_EVENT_NAME === 'pull_request' &&
+      secondParent === pr.head?.sha && process.env.GITHUB_SHA === head));
+  const mergedSource = pr.state === 'closed' && pr.merged === true && head === pr.merge_commit_sha &&
+    (process.env.GITHUB_ACTIONS !== 'true' || (hostedMain && process.env.GITHUB_SHA === head));
   if (approval.id !== 6716597294 || approval.user?.login !== 'dgmolla' ||
       createHash('sha256').update(approval.body || '').digest('hex') !== '4a7c397987e38c1e2e30152aab1862661ef4f2f99946fae09c2c2f60509856fb' ||
-      pr.state !== 'open' || pr.number !== 754 || pr.head?.ref !== 'codex/issue-753' ||
+      pr.number !== 759 || pr.head?.ref !== 'codex/issue-746' || pr.base?.ref !== 'main' ||
+      pr.base.repo?.full_name !== 'dgmolla/fitsy' ||
       pr.head.repo?.full_name !== 'dgmolla/fitsy' || !/^[a-f0-9]{40}$/.test(head) ||
-      (head !== pr.head.sha && (process.env.GITHUB_ACTIONS !== 'true' || secondParent !== pr.head.sha ||
-        process.env.GITHUB_SHA !== head)))
-    throw new Error('Native release exception does not match the current owner grant and published PR754 source');
+      (!publishedHead && !mergedSource))
+    throw new Error('Native release exception does not match the current owner grant and published PR759 source');
   const flow = 'subscription-restore-expired';
   if (!names.includes(flow)) return [];
   const tags = catalog[flow]?.tags || [];

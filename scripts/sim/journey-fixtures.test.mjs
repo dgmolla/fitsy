@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore, releaseExceptions } from './journey-fixtures.mjs';
 import { simulatorFlows, repository } from '../verify/impact-plan.mjs';
 import { main as hostedMain } from './actions.mjs';
+import { acceptanceExceptions, validateAcceptance } from '../verify/product-flow.mjs';
 
 const yaml = createRequire(import.meta.url)('js-yaml');
 const header = flow => yaml.loadAll(readFileSync(join(repository, `apps/mobile/e2e/flows/${flow}.yaml`), 'utf8'))[0];
@@ -145,34 +146,76 @@ test('release admission retains the full catalog and excepts only genuine Apple-
   const names = Object.keys(catalog);
   const head = 'a'.repeat(40);
   const approval = { id: 6716597294, user: { login: 'dgmolla' }, body: releaseApprovalBody };
-  const pr = { number: 754, state: 'open', head: { sha: head, ref: 'codex/issue-753', repo: { full_name: 'dgmolla/fitsy' } } };
-  const execute = (binary, args) => binary === 'git' ? head : JSON.stringify(args.at(-1).endsWith('/754') ? pr : approval);
+  const pr = { number: 759, state: 'open', base: { ref: 'main', repo: { full_name: 'dgmolla/fitsy' } }, head: { sha: head, ref: 'codex/issue-746', repo: { full_name: 'dgmolla/fitsy' } } };
+  const execute = (binary, args) => binary === 'git' ? head : JSON.stringify(args.at(-1).endsWith('/759') ? pr : approval);
   assert.deepEqual(await releaseExceptions(names, catalog), []);
   await assert.rejects(releaseExceptions(names, catalog, '745', execute), /Unknown/);
   const result = await releaseExceptions(names, catalog, '6716597294', execute);
+  assert.deepEqual(await acceptanceExceptions({ flows: names }, '6716597294', repository, execute), result);
   assert.equal(names.length, 28);
   assert.equal(names.filter(name => !result.some(item => item.flow === name)).length, 27);
   assert.deepEqual(result, [{ flow: 'subscription-restore-expired', status: 'EXCEPTED',
     reason: 'unprovisioned real Apple purchase history',
     approval: 'https://github.com/dgmolla/fitsy/issues/755#issuecomment-6716597294', release: 'map/#746',
     source: head, prHead: head, fixture: 'apple-history', store: 'apple-simulator' }]);
-  for (const problem of ['source', 'closed', 'branch', 'repo', 'author', 'grant', 'tag', 'inventory']) {
+  for (const problem of ['source', 'closed', 'number', 'branch', 'base', 'repo', 'author', 'grant', 'tag', 'inventory']) {
     const original = JSON.stringify({ pr, approval, catalog });
     if (problem === 'source') pr.head.sha = 'b'.repeat(40);
     if (problem === 'closed') pr.state = 'closed';
-    if (problem === 'branch') pr.head.ref = 'codex/issue-746';
+    if (problem === 'number') pr.number = 754;
+    if (problem === 'branch') pr.head.ref = 'codex/issue-753';
+    if (problem === 'base') pr.base.ref = 'dev';
     if (problem === 'repo') pr.head.repo.full_name = 'foreign/fitsy';
     if (problem === 'author') approval.user.login = 'different-owner';
     if (problem === 'grant') approval.body += ' revoked';
     if (problem === 'tag') catalog['subscription-restore-expired'].tags = ['fixture:empty-store', 'store:test-store'];
     await assert.rejects(releaseExceptions(names, catalog, '6716597294', problem === 'inventory'
       ? () => { throw new Error('private API failure'); } : execute), /exception|contract/);
+    if (problem !== 'tag') {
+      // The final validator re-reads the same live grant/source boundary, even
+      // when a report retained a previously admitted exception.
+      await assert.rejects(validateAcceptance({ releaseExceptionId: '6716597294', exceptions: result },
+        { flows: names }, 'inputs', repository, Date.now(), repository, null, 'final-candidate',
+        problem === 'inventory' ? () => { throw new Error('private API failure'); } : execute), /exception|contract/);
+    }
     const saved = JSON.parse(original); Object.assign(pr, saved.pr); Object.assign(approval, saved.approval); Object.assign(catalog, saved.catalog);
   }
   assert.deepEqual(await releaseExceptions(['cold-start-welcome'], catalog, '6716597294', execute), []);
 });
 
-test('the real hosted run reaches fixture admission without stored CLI authentication or a token', async t => {
+test('the release grant binds PR merge refs and the exact squash merge, never a later main source', async t => {
+  const previous = { ...process.env };
+  t.after(() => {
+    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous);
+  });
+  const name = 'subscription-restore-expired', catalog = { [name]: header(name) };
+  const head = 'a'.repeat(40), merge = 'b'.repeat(40);
+  let source = merge, parent = head;
+  const pr = { number: 759, state: 'open', merged: false, merge_commit_sha: merge,
+    base: { ref: 'main', repo: { full_name: 'dgmolla/fitsy' } },
+    head: { sha: head, ref: 'codex/issue-746', repo: { full_name: 'dgmolla/fitsy' } } };
+  const approval = { id: 6716597294, user: { login: 'dgmolla' }, body: releaseApprovalBody };
+  const execute = (binary, args) => binary === 'git' ? (args.at(-1) === 'HEAD^2' ? parent : source)
+    : JSON.stringify(args.at(-1).endsWith('/759') ? pr : approval);
+  t.mock.method(globalThis, 'fetch', async url => new Response(JSON.stringify(url.endsWith('/759') ? pr : approval)));
+  Object.assign(process.env, { GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'pull_request', GITHUB_SHA: merge });
+  assert.equal((await releaseExceptions([name], catalog, '6716597294', execute))[0].source, merge);
+  parent = 'c'.repeat(40);
+  await assert.rejects(releaseExceptions([name], catalog, '6716597294', execute), /published PR759 source/);
+  pr.state = 'closed'; pr.merged = true;
+  Object.assign(process.env, { GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/heads/main' });
+  assert.equal((await releaseExceptions([name], catalog, '6716597294', execute))[0].prHead, head);
+  approval.body += ' revoked';
+  await assert.rejects(releaseExceptions([name], catalog, '6716597294', execute), /owner grant/);
+  approval.body = releaseApprovalBody;
+  source = 'd'.repeat(40); process.env.GITHUB_SHA = source;
+  assert.deepEqual(await releaseExceptions([name], catalog, '6716597294', execute), []);
+  delete process.env.GITHUB_ACTIONS;
+  await assert.rejects(releaseExceptions([name], catalog, '6716597294', execute), /published PR759 source/);
+});
+
+for (const eventName of ['pull_request', 'push']) test(`the real hosted ${eventName} reaches fixture admission without stored CLI authentication or a token`, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-hosted-approval-'));
   const previous = { ...process.env };
   t.after(() => {
@@ -180,20 +223,32 @@ test('the real hosted run reaches fixture admission without stored CLI authentic
     Object.assign(process.env, previous);
     rmSync(directory, { recursive: true, force: true });
   });
-  const work = join(directory, 'fitsy-simulator-14-1'), config = join(directory, 'gh');
-  mkdirSync(work); mkdirSync(config);
+  const work = join(directory, 'fitsy-simulator-14-1'), config = join(directory, 'gh'), bin = join(directory, 'bin');
+  mkdirSync(work); mkdirSync(config); mkdirSync(bin);
   writeFileSync(join(work, 'device.json'), JSON.stringify({ udid: '11111111-1111-1111-1111-111111111111' }));
+  const head = 'a'.repeat(40), base = 'b'.repeat(40);
+  // Supply the external Git comparison used by the real hosted selector.
+  // A navigation change requires full coverage regardless of this test's branch.
+  writeFileSync(join(bin, 'git'), `#!${process.execPath}
+const args = process.argv.slice(2);
+if (args[0] === 'rev-parse') console.log(args.at(-1).startsWith('${base}') ? '${base}' : '${head}');
+else if (args[0] === 'merge-base') console.log('${base}');
+else if (args[0] === 'diff' && args.includes('--name-only')) process.stdout.write('apps/mobile/app/index.tsx\\0');
+else process.exit(2);
+`, { mode: 0o755 });
   const event = join(directory, 'event.json');
-  writeFileSync(event, JSON.stringify({ pull_request: { number: 754 } }));
-  for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN']) delete process.env[key];
+  writeFileSync(event, JSON.stringify(eventName === 'push' ? { ref: 'refs/heads/main', before: base, after: head }
+    : { pull_request: { number: 759, base: { sha: base }, head: { sha: head } } }));
+  for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'FITSY_DIFF_BASE', 'FITSY_DIFF_HEAD']) delete process.env[key];
   Object.assign(process.env, { GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS', GITHUB_WORKSPACE: repository,
+    PATH: `${bin}:${process.env.PATH}`,
     RUNNER_TEMP: directory, GITHUB_RUN_ID: '14', GITHUB_RUN_ATTEMPT: '1', GH_CONFIG_DIR: config,
-    GITHUB_EVENT_PATH: event, SIM_SCOPE: 'full', FITSY_XCTEST_SIM_UDID: '11111111-1111-1111-1111-111111111111',
+    GITHUB_EVENT_PATH: event, GITHUB_EVENT_NAME: eventName, GITHUB_REF: eventName === 'push' ? 'refs/heads/main' : 'refs/pull/759/merge', SIM_SCOPE: 'full', FITSY_XCTEST_SIM_UDID: '11111111-1111-1111-1111-111111111111',
     EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org', EXPO_PUBLIC_SUPABASE_URL: 'https://kegycybiruksmrzvniha.supabase.co',
     EXPO_PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_synthetic', EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_synthetic',
     SIM_E2E_FIXTURES: '{}',
   });
-  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, encoding: 'utf8' }).trim();
+  process.env.GITHUB_SHA = head;
   const requests = [];
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     requests.push(url);
@@ -201,16 +256,16 @@ test('the real hosted run reaches fixture admission without stored CLI authentic
     assert.equal(options.redirect, 'error');
     assert(options.signal instanceof AbortSignal);
     assert.equal(new Headers(options.headers).has('authorization'), false);
-    const body = url.endsWith('/754')
-      ? { number: 754, state: 'open', head: { sha: head, ref: 'codex/issue-753', repo: { full_name: 'dgmolla/fitsy' } } }
+    const body = url.endsWith('/759')
+      ? { number: 759, state: eventName === 'push' ? 'closed' : 'open', merged: eventName === 'push', merge_commit_sha: head, base: { ref: 'main', repo: { full_name: 'dgmolla/fitsy' } }, head: { sha: head, ref: 'codex/issue-746', repo: { full_name: 'dgmolla/fitsy' } } }
       : { id: 6716597294, user: { login: 'dgmolla' }, body: releaseApprovalBody };
     return new Response(JSON.stringify(body));
   });
   // Empty fixture input stops before installation/native work, after the real
   // hosted caller has independently checked public authority and exact source.
   await assert.rejects(hostedMain('run'), /Missing disposable DEV credentials/);
-  assert.deepEqual(requests, ['https://api.github.com/repos/dgmolla/fitsy/issues/comments/6716597294',
-    'https://api.github.com/repos/dgmolla/fitsy/pulls/754']);
+  assert.deepEqual(requests, ['https://api.github.com/repos/dgmolla/fitsy/pulls/759',
+    'https://api.github.com/repos/dgmolla/fitsy/issues/comments/6716597294']);
   for (const failure of ['denied', 'malformed', 'timeout']) {
     t.mock.method(globalThis, 'fetch', async () => {
       if (failure === 'timeout') throw new DOMException('Timed out', 'TimeoutError');

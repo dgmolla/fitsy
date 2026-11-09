@@ -103,7 +103,7 @@ it.each([0, 21, 34])('keeps every tab reachable and its last content above the c
   // Native hit testing must reach the controls above the screen, while the
   // animated blur stays decorative. Calling onPress directly cannot prove this.
   expect(StyleSheet.flatten(position.props.style).zIndex).toBeGreaterThan(0);
-  const blur = screen.UNSAFE_getByType(BlurView);
+  const blur = position.findByType(BlurView);
   expect(blur.props.pointerEvents).toBe('none');
   expect(blur.findAllByProps({ accessibilityRole: 'tab' })).toHaveLength(0);
   await act(async () => fireEvent.press(screen.getByRole('tab', { name: 'Saved' })));

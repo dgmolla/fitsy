@@ -53,6 +53,12 @@ Billing journeys retain the starting states below, and Apple history transfer st
 For a subscription transport-failure diagnostic, start on the recovery screen with the same failure on status and sync, then run `helpers/subscription-check-retry.yaml` with `SUBSCRIPTION_ERROR_COPY` set to the expected copy.
 `SubscriptionCheckNavigation.test.tsx` replays its saved assertions through the real router, provider and API client for 503, network failure and 429, including a failed retry followed by successful recovery.
 A local scope pass does not replace the source-bound final-candidate product-flow gate.
+Before an expensive full run, confirm the required final consumer and its approved exception admission.
+`ci.mjs` writes mobile-e2e coverage receipts; the final publisher requires `product-flow.mjs run <UDID> --mode=final-candidate`, which also collects per-flow attachment closeouts and later accepts genuine primary/recovery MCP traces through `finish`.
+For the approved map/#746 release only, preflight with `node scripts/verify/product-flow.mjs --plan --release-exception=6716597294` and pass the same exception option to the final runner.
+The shared live owner/source verifier keeps all 28 selected, records only the approved Apple-history journey as EXCEPTED, and requires the other 27 journeys with their own real fixtures.
+Use `--no-environment-retry` when that retry is already consumed; preserve prior CI/Release results separately and never convert them into final-candidate receipts.
+Keep the same fixture manifest and caller environment loaded for `finish`, `check` and publication; each rechecks the recorded fixture configurations and current source-bound exception.
 Inspect `npm run verify:product-plan` for the same affected journeys and their required MCP categories.
 The final runner includes every selected journey automatically, adds explicitly requested diagnostic flows, and does not append unrelated cold-start or sign-in baselines.
 Required YAML assertions remain mandatory; only explicit optional commands and conditional branches may be optional.
@@ -121,12 +127,22 @@ Apple sandbox accounts must already have active real sandbox history; the runner
 Use a persistent `seed-%@fitsy.dev` account to preserve RevenueCat identity across DEV resets.
 Profile setup and a subscription database row alone cannot establish this prerequisite.
 
-Before an ordinary Debug Test Store walkthrough, reload the active account's public environment and reset the session with the following command.
-This restarts owned Metro with those credentials and signs into the active account even when a previous expired journey left another account in keychain.
+Keep the final run's original caller environment loaded through every Debug Test Store walkthrough and publication.
+Begin each required category with `prepare-walkthrough`; an optional executed journey selects its existing fixture, and only `entitled-dev` invokes the active-account preparer.
+Without that argument, the original caller stays active; billing verifies its genuine empty store without purchasing or renewing access.
+Never load an entitled environment over a free caller or invoke the active preparer on the free account.
 
 ```sh
-lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs prepare-walkthrough <UDID>
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs prepare-walkthrough <UDID> changed-journey map-search
+# Run actual Maestro MCP with the returned FITSY_XCTEST_CAPTURE_RECEIPT path.
+# Stop that owned MCP driver before closing its attachment observations.
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish-walkthrough mcp/changed-journey.jsonl
 ```
+
+The existing caller records each real fixture, served bundle and Metro process transition, then restores the original configuration and exact bundle before accepting the category.
+Original observations remain immutable; finish/check/publication validate the transition chain and the actual live restored server.
+An interrupted or failed transition remains pending and blocks publication until diagnosed.
+For every native or MCP invocation, set both `TMPDIR` and `JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=<same-owned-directory>` so Java's XCTest files satisfy the existing capture guard.
 
 Install local `tesseract` with English data for evidence capture and the media integration lane.
 Every successful flow screenshot is inspected from its pixels; unreadable captures and unintended subscription-expired screens fail.
@@ -158,8 +174,13 @@ The capture replay uses responder grant/release events with both empty and popul
 The `map-search` and `map-search-location-denied` journeys require an iOS Debug binary rebuilt with the Expo-compatible `react-native-maps` dependency.
 An OTA cannot add this native module to an older binary.
 Both flows use the existing `entitled-dev` fixture and real search/shuffle API with no purchases or remote flag changes.
-The boolean PostHog `map-search` flag enables the experiment only in development iOS builds; `mapDebug=1` is the local walkthrough opt-in.
-Production builds and Android ignore both opt-ins and keep the list.
+Production iOS offers the approved C map and Shuffle by default, starting on the list with a Map control.
+Availability is source-controlled and can be reverted through the normal protected release/OTA procedure; the old PostHog `map-search` and `shuffle` opt-ins do not gate production iOS.
+Debug keeps its existing boolean PostHog flags and local `mapDebug=1` walkthrough opt-in; production ignores Debug navigation overrides and Android has no map.
+Production activation must also be checked in an embedded Release app or the actual TestFlight consumer, without relying on a Debug query switch.
+`GET /api/restaurants` supplies the single search boundary: three miles and 20 restaurants per page by default; the mobile caller supplies neither a radius nor a limit override.
+Pins come only from the current shared Discovery results with valid coordinates, retaining the list's three-result locked preview boundary.
+Explicit More spots loads the same cursor-based pages as the list; pan/zoom does not fetch, and Search this area starts the same bounded search only after confirmation.
 The first flow opens a pin, enters the restaurant menu, searches pizza, edits meal targets, switches map/list without losing state, shuffles, and clears search.
 The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
 Both map journeys submit the single-line search field with `pressKey: Enter`, which uses its native Search return key to dismiss the keyboard.
@@ -391,8 +412,8 @@ The prepared Xcode scheme selected this file with a Release executable, while th
 No StoreKit purchase or 27-journey aggregate completed before the explicit deferral.
 Keep its generated scheme snapshot, sealed artifact and private fixture bindings in the issue's external recovery handoff; never commit credentials or fabricate billing history.
 
-The dev-only map now exposes only the owner-selected C alternate, with Macros, Shuffle and a horizontal restaurant carousel.
-Use `com.fitsy.mobile://search?mapDebug=1`; retired `mapTray` and `mapVariant` parameters are ignored.
+The map exposes only the owner-selected C alternate, with Macros, Shuffle and a horizontal restaurant carousel.
+Use the Map control in production iOS or `com.fitsy.mobile://search?mapDebug=1` in Debug; retired `mapTray` and `mapVariant` parameters are ignored.
 The options panel changes pin style only.
 Owner [6713988813](https://github.com/dgmolla/fitsy/issues/755#issuecomment-6713988813) retired A, B and baseline C from active source, capture and acceptance matrices on November7.
 Their galleries and raw results remain historical; removed subjourneys are not new passes or native waivers.
@@ -400,4 +421,4 @@ The maintained `map-search` journey checks C menu/search/list/macros/Shuffle, ci
 Rendered real-caller tests also cover failed Shuffle and retry restoration from pin and drag selection.
 Run on normal and small Simulator layouts and inspect control bounds, readable meal/confidence overlays, selected pins, carousel clipping and tab clearance.
 The impact-selected full scope, auth/subscription journeys and genuine Apple-history prerequisite remain unchanged by layout retirement.
-These are Debug iOS POCs; the chosen prototype does not authorize production availability or rollout.
+The historical POC galleries remain Debug evidence; they do not prove the later production activation or rollout.

@@ -20,14 +20,14 @@ import { HeroCard, RestaurantSection } from './DiscoveryCards';
 import { ShuffleButton } from './ShuffleButton';
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
-// Keep the native map module out of the disabled experiment's execution path.
+// Load the native map only after entering it, keeping list startup unchanged.
 const DiscoveryMap = React.lazy(async () => require('./DiscoveryMap') as typeof import('./DiscoveryMap'));
 const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { onboardingPreview?: boolean; onPreviewBack?: () => void }) {
   const tabBarClearance = useFloatingNavClearance();
   const { mapDebug } = useLocalSearchParams<{ mapDebug?: string }>();
   const mapEnabled = useMapSearchFlag(mapDebug === '1') && !onboardingPreview;
-  const [view, setView] = useState<'map' | 'list'>('map');
+  const [view, setView] = useState<'map' | 'list'>(__DEV__ ? 'map' : 'list');
   const showMap = mapEnabled && view === 'map';
   const discovery = useDiscoveryState({ onboardingPreview });
   const { navigation, isOnboardingPreview, tried, inputs, filterMode, query, setQuery, canSearch, hasQuery, location,

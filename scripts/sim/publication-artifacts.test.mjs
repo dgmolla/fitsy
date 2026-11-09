@@ -214,7 +214,8 @@ test('the publisher path retains every flow command, screen and complete video w
     const evidenceDirectory = join(dir, 'product-flow');
     const publicationDirectory = join(dir, 'publication');
     const report = { flows: [
-      { commands: 'welcome/commands.json', screenshot: 'welcome/outcome.png', captureReceipt: 'welcome/xctest-capture-policy.jsonl', video: 'welcome/flow-untrimmed.mp4', videoHash: 'hash' },
+      { commands: 'welcome/commands.json', screenshot: 'welcome/outcome.png', captureReceipt: 'welcome/xctest-capture-policy.jsonl',
+        identity: 'welcome/identity.json', attachmentCloseout: 'welcome/closeout.json', video: 'welcome/flow-untrimmed.mp4', videoHash: 'hash' },
       { commands: 'signup/commands.json', screenshot: 'signup/outcome.png', captureReceipt: 'signup/xctest-capture-policy.jsonl', video: 'signup/flow-untrimmed.mp4', videoHash: 'hash' },
     ],
       exploration: [{ category: 'onboarding', trace: 'mcp/onboarding.jsonl' }],
@@ -225,6 +226,8 @@ test('the publisher path retains every flow command, screen and complete video w
       'welcome/commands.json',
       'welcome/outcome.png',
       'welcome/xctest-capture-policy.jsonl',
+      'welcome/identity.json',
+      'welcome/closeout.json',
       'welcome/flow-untrimmed.mp4',
       'signup/commands.json',
       'signup/outcome.png',
@@ -404,9 +407,13 @@ test('final candidate publishes complete non-video proof when recording was not 
       result: 'pass', finishedAt: '2026-01-01T00:00:00Z', storeMode: 'test-store',
       flows: [{ commands: 'welcome/commands.json', screenshot: 'welcome/outcome.png',
         captureReceipt: 'welcome/xctest-capture-policy.jsonl' }],
-      exploration: [{ category: 'onboarding', trace: 'mcp/onboarding.jsonl' }] };
+      exploration: [{ category: 'onboarding', trace: 'mcp/onboarding.jsonl' }],
+      walkthroughSessions: [{ category: 'onboarding', receipt: 'walkthrough/onboarding/identity.json',
+        artifacts: ['walkthrough/onboarding/before.json', 'walkthrough/onboarding/after.json',
+          'walkthrough/onboarding/capture.jsonl', 'walkthrough/onboarding/closeout.json'] }] };
     const required = ['report.json', 'welcome/commands.json', 'welcome/outcome.png',
-      'welcome/xctest-capture-policy.jsonl', 'mcp/onboarding.jsonl'];
+      'welcome/xctest-capture-policy.jsonl', 'mcp/onboarding.jsonl', 'walkthrough/onboarding/identity.json',
+      ...report.walkthroughSessions[0].artifacts];
     for (const path of required) {
       mkdirSync(join(evidenceDirectory, path, '..'), { recursive: true });
       writeFileSync(join(evidenceDirectory, path), path === 'report.json' ? JSON.stringify(report) : path);

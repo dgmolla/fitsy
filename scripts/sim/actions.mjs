@@ -91,7 +91,8 @@ async function runFlows(udid, work) {
   const candidates = selection.scope === 'full' ? Object.keys(catalog) : selection.scope === 'flow'
     ? selection.flows : selectFlows('smoke', catalog);
   const exceptions = await releaseExceptions(candidates, catalog,
-    event.pull_request?.number === 754 ? '6716597294' : undefined);
+    event.pull_request?.number === 759 ||
+    (process.env.GITHUB_EVENT_NAME === 'push' && event.ref === 'refs/heads/main') ? '6716597294' : undefined);
   const names = selectFlows(selection.scope, catalog, exceptions, selection.flows);
   const manual = candidates.filter(name => !names.includes(name)).map(flow => ({ flow, status: 'UNVERIFIED',
     reason: 'Requires separate compatible-store native acceptance; no release exception granted' }));
@@ -222,7 +223,8 @@ export async function main(action) {
     if (device?.deviceTypeIdentifier !== 'com.apple.CoreSimulator.SimDeviceType.iPhone-15') throw new Error('FITSY_SIM_UDID must select an available iPhone 15');
     if (inventory.some(item => item.state === 'Booted')) throw new Error('A simulator is already booted; release its current owner first');
     mkdirSync(work, { recursive: true, mode: 0o700 });
-    command('bash', [join(controlDirectory, 'sim'), 'claim', '--minutes', '35']);
+    const { claimDevice } = await import('./product-flow.mjs');
+    claimDevice();
     writeFileSync(marker, JSON.stringify({ udid }));
     command('xcrun', ['simctl', 'boot', udid]);
     command('xcrun', ['simctl', 'bootstatus', udid, '-b']);

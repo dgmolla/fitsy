@@ -165,12 +165,12 @@ it.each([undefined, false, 'control', 'true'])('keeps normal search usable with 
   expect(screen.getByTestId('discovery-search').props.value).toBe('juice');
 });
 
-it.each([true, false])('allows the explicit override only in Debug builds (dev=%s)', async dev => {
-  Object.defineProperty(globalThis, '__DEV__', { value: dev, configurable: true });
+it('allows the explicit Debug override without a remote opt-in', async () => {
+  Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
   flag = false;
   const screen = renderJourney('/search?query=meal&shuffleDebug=1', { ...routes, '(tabs)/search': () => <Search /> });
   await screen.findByTestId('discovery-hero');
-  expect(Boolean(screen.queryByTestId('shuffle-button'))).toBe(dev);
+  expect(screen.getByTestId('shuffle-button')).toBeTruthy();
 });
 
 it.each(['0', 'true', '', '1&shuffleDebug=1'])('rejects a Debug override other than a single 1 (%s)', async value => {

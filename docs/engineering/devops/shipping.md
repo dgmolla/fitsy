@@ -213,7 +213,11 @@ export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
 # Run final acceptance against the current candidate:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> --mode=final-candidate
-# Capture affected primary and recovery paths through Maestro MCP, then:
+# Prepare each required category using the original run environment.
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs prepare-walkthrough <UDID> auth
+# Capture actual primary/recovery Maestro MCP observations, stop its driver, then:
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish-walkthrough mcp/auth.jsonl
+# Repeat for the remaining categories, then finish the complete observation set.
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
 ```
 
@@ -231,6 +235,10 @@ Development runs remain separate from final publication even when recorded.
 
 The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`.
 Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Maestro MCP actions and screen observations.
+For Debug Test Store walkthroughs, the optional executed-flow argument to `prepare-walkthrough` selects that journey's existing fixture without replacing the original caller environment.
+Use the returned XCTest capture path for MCP, and complete each category with `finish-walkthrough` before preparing another.
+The caller retains original identities, records actual Metro transitions and verifies restoration of the original configuration and bundle; private publication includes these receipts and their before/after attachment snapshots.
+Keep the verified restored Metro alive through publication and actual protected merge.
 Retain direct `tap_on`, `input_text`, `back` or `launch_app` interactions and `inspect_view_hierarchy` observations; a syntax check or scripted flow invocation alone does not establish an interactive walkthrough.
 Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
 

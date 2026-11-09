@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createRead
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { root, inputHash, impact, changedPaths, validate, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
+import { root, inputHash, impact, changedPaths, validateAcceptance, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts } from './publication-artifacts.mjs';
 import { readPreviousReportForReuse } from './evidence-mode.mjs';
@@ -74,7 +74,7 @@ export async function publishProductFlow(prNumber, {
   publicationDirectory = resolve(root, '.evidence/publication'),
   resolvePlan = options => publicationPlan(evidenceDirectory, buildReceiptFile, undefined, undefined, options),
   sourceHash = inputHash,
-  validateEvidence = validate,
+  validateEvidence = validateAcceptance,
   validateMediaEvidence = candidate => validateMediaReceipt(changedPaths('origin/main'), candidate, sourceHash()),
 } = {}) {
   if (preflight) {
@@ -141,7 +141,7 @@ export async function publishProductFlow(prNumber, {
     const report = JSON.parse(readFileSync(reportFile, 'utf8'));
     assert(report.evidenceMode === 'final-candidate',
       'Final candidate proof is required; rerun with --mode=final-candidate');
-    validateEvidence(report, plan, sourceHash(), dir);
+    await validateEvidence(report, plan, sourceHash(), dir);
     execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check']);
     const tag = `product-flow-${head}`;
     mkdirSync(publicationDirectory, { recursive: true });
@@ -152,7 +152,9 @@ export async function publishProductFlow(prNumber, {
     const archiveDigest = `sha256:${await fileDigest(archive)}`;
     const notes = resolve(publicationDirectory, 'notes.md');
     const recorded = report.videoRequested ?? report.flows.every(flow => Boolean(flow.video && flow.videoHash));
-    writeFileSync(notes, `Local simulator evidence for ${pr.url}\n\nCandidate: ${head}\nSource/test hash: ${report.inputHash}\nFinished: ${report.finishedAt}\nStore: ${report.storeMode}\n\nPrivate draft for repository reviewers; do not publish. Includes Maestro commands, screenshots and changed-journey observations${recorded ? ', plus complete untrimmed flow videos' : ''}.\n`);
+    const exceptions = (report.exceptions || []).map(item =>
+      `${item.flow}: ${item.status}, never passed; ${item.reason}; source ${item.source}; owner ${item.approval}.`).join('\n');
+    writeFileSync(notes, `**TL;DR:** Verified local simulator evidence is preserved for ${pr.url}.\n\nCandidate: ${head}\nSource/test hash: ${report.inputHash}\nFinished: ${report.finishedAt}\nStore: ${report.storeMode}\n${exceptions ? `\n${exceptions}\n` : ''}\nPrivate draft for repository reviewers; do not publish.\nIncludes Maestro commands, screenshots and changed-journey observations${recorded ? ', plus complete untrimmed flow videos' : ''}.\n`);
     let release;
     try { release = JSON.parse(gh(['release', 'view', tag, '--repo', repo, '--json', 'isDraft,url'])); } catch { /* create below */ }
     assert(!release || release.isDraft, 'Evidence release must remain a private draft');
