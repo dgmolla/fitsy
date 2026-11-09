@@ -206,6 +206,120 @@ function sourceVersions(path, range, cwd, env) {
       : readFileSync(resolve(cwd, path), 'utf8').trimEnd()];
 }
 
+// Recognize the bounded list-to-map preview adaptation, not arbitrary edits to
+// these shared components. Reconstruct the expected candidate from its actual
+// base: every byte outside the listed adaptations must remain unchanged.
+// This deliberately falls back to full after either implementation evolves.
+function discoveryPreviewImpact(source, configKeys, range, cwd, env) {
+  if (!range || range.unknown || configKeys.length) return null;
+  const components = ['DiscoveryScreen.tsx', 'DiscoveryMap.tsx', 'DiscoveryMap.styles.ts', 'DiscoveryMapCard.tsx', 'DiscoveryCards.tsx']
+    .map(name => `apps/mobile/components/${name}`);
+  if (!components.every(path => source.includes(path)) || source.some(path => !components.includes(path) &&
+      path !== 'scripts/verify/impact-plan.mjs' && !/^apps\/mobile\/e2e\/flows\/onboarding-(guided|returning)-preview\.yaml$/.test(path))) return null;
+  const flows = ['map-search', 'map-search-location-denied', 'onboarding-assisted-targets', 'onboarding-guided-preview',
+    'onboarding-out-of-area', 'onboarding-returning-preview', 'onboarding-search-highlight', 'onboarding-target-ranked-search',
+    'paywall-access', 'subscription-expired-routing'];
+  try {
+    // These are the actual shared card and screen callers, including ordinary
+    // paywall A and resubscribe. A new caller invalidates this bounded mapping.
+    const callers = [...components.filter(path => !path.endsWith('.styles.ts')), 'apps/mobile/components/DiscoveryChrome.tsx',
+      'apps/mobile/components/PaywallHero.tsx', 'apps/mobile/app/welcome/preview.tsx',
+      'apps/mobile/app/welcome/resubscribe.tsx', 'apps/mobile/app/(tabs)/search.tsx'].sort();
+    for (const revision of [range.base, env.CI || env.GITHUB_EVENT_NAME || range.head !== git(['rev-parse', 'HEAD'], cwd, env) ? range.head : null]) {
+      const actual = git(['grep', '-l', '-E', 'Discovery(Screen|Map|Cards)', ...(revision ? [revision] : []), '--', 'apps/mobile'], cwd, env)
+        .split('\n').map(path => revision ? path.slice(revision.length + 1) : path)
+        .filter(path => simulatorSource(path) && /\.tsx?$/.test(path)).sort();
+      if (!isDeepStrictEqual(actual, callers)) return null;
+    }
+    for (const path of components) {
+      const [before, after] = sourceVersions(path, range, cwd, env);
+      let expected = before;
+      const replace = (from, to) => { expected = expected.replace(from, to); };
+      if (path.endsWith('/DiscoveryCards.tsx')) {
+        replace('paywallPreview = false, nameStyle', 'paywallPreview = false, hideDishName = false, nameStyle');
+        replace('locked: boolean; paywallPreview?: boolean;', 'locked: boolean; paywallPreview?: boolean; hideDishName?: boolean;');
+        replace(/(\{!locked && bm && )(<Text style=\{\[hero\.dishName,[^\n]+<\/Text>)(\})/,
+          '$1(hideDishName ? <PreviewDishName restaurantId={result.id} /> : $2)$3');
+        replace('function previewRowLabel', 'export function previewRowLabel');
+        replace('  const m = result.bestMatch;\n', "  const m = result.bestMatch;\n  const published = m?.nutritionBasis === 'published';\n");
+        replace('`, ${m.calories} kcal', "`, ${published ? 'Published' : 'Estimated'} nutrition, ${m.confidence.toLowerCase()} confidence, ${published ? '' : 'approximately '}${m.calories} kcal");
+      } else if (path.endsWith('/DiscoveryMapCard.tsx')) {
+        replace('HeroMealContent, mealAccessibilitySummary', 'HeroMealContent, mealAccessibilitySummary, previewRowLabel');
+        replace('{ result, locked, onPress', '{ result, locked, hideDishName = false, onboardingPreview = false, onPress');
+        replace('  style?: StyleProp<ViewStyle>;', '  hideDishName?: boolean; onboardingPreview?: boolean;\n  style?: StyleProp<ViewStyle>;');
+        replace('accessibilityLabel={`${label}${mealAccessibilitySummary(result, locked)}`}',
+          'accessibilityLabel={hideDishName ? previewRowLabel(result) : `${label}${mealAccessibilitySummary(result, locked)}`}');
+        replace('locked={locked} nameStyle', 'locked={locked} hideDishName={hideDishName} nameStyle');
+        replace('>View menu →</Text>', ">{onboardingPreview ? 'See full menu with Pro →' : 'View menu →'}</Text>");
+      } else if (path.endsWith('/DiscoveryMap.styles.ts')) {
+        replace('  searchRow:', "  previewHeader: { backgroundColor: EDITORIAL.cream, marginBottom: 8, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },\n" +
+          "  previewUnlock: { marginHorizontal: 16, minHeight: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center',\n" +
+          '    borderRadius: 24, backgroundColor: EDITORIAL.cream },\n  searchRow:');
+      } else if (path.endsWith('/DiscoveryMap.tsx')) {
+        replace('export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: Discovery; onShowList: () => void }) {',
+          'export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, onTourLayoutChange }: {\n' +
+          '  discovery: Discovery; onShowList: () => void; previewHeader?: React.ReactNode; onTourLayoutChange?: () => void;\n}) {');
+        expected = expected.replaceAll('tabBarClearance', 'bottomClearance');
+        replace('  const bottomClearance = useFloatingNavClearance();',
+          '  const tabBarClearance = useFloatingNavClearance();\n  const bottomClearance = d.isOnboardingPreview ? insets.bottom : tabBarClearance;');
+        replace('(d.locked ? d.results.slice(0, 3)', '(d.locked || d.isOnboardingPreview ? d.results.slice(0, 3)');
+        replace('[d.canSearch, d.loading, d.locked, d.results]', '[d.canSearch, d.loading, d.locked, d.isOnboardingPreview, d.results]');
+        replace('[firstId, lat, lng]', '[firstId, lat, lng, d.tourVisible]');
+        replace('    void openRestaurantOrPaywall', '    if (d.isOnboardingPreview) { void d.unlockPreview(result); return; }\n    void openRestaurantOrPaywall');
+        replace('&& !d.location.loading && !d.error;', '&& !d.location.loading && !d.error && !d.outOfArea;');
+        replace('d.nextCursor && !d.locked && !d.loading', 'd.nextCursor && !d.locked && !d.isOnboardingPreview && !d.loading');
+        for (const height of ['Top', 'Tray']) replace(`onLayout={event => set${height}Height(event.nativeEvent.layout.height)}`,
+          `onLayout={event => { set${height}Height(event.nativeEvent.layout.height); onTourLayoutChange?.(); }}`);
+        replace('      <View style={s.searchRow}>', '      {previewHeader && <View style={s.previewHeader}>{previewHeader}</View>}\n      <View style={s.searchRow}>');
+        for (const [style, ref] of [['searchEntry', 'Search'], ['location', 'Location'], ['goals', 'Edit']])
+          replace(`<Pressable style={s.${style}}`, `<Pressable ref={d.tour${ref}Ref} collapsable={false} style={s.${style}}`);
+        replace('<ShuffleButton style={s.shuffle} disabled={!d.canShuffle} onPress={d.handleShuffle} />',
+          '{!d.isOnboardingPreview && <ShuffleButton style={s.shuffle} disabled={!d.canShuffle} onPress={d.handleShuffle} />}');
+        replace('          </> : <>\n            <Text style={s.heading}>{emptyTitle}', "          </> : d.outOfArea ? <>\n" +
+          "            <Text style={s.heading}>We're not in your area yet</Text>\n" +
+          '            <Text style={s.body}>Fitsy is launching in Los Angeles first - your city is next on the list.</Text>\n' +
+          '            <Pressable style={s.action} onPress={d.handleJoinWaitlist} testID="discovery-join-waitlist" accessibilityRole="button">\n' +
+          '              <Text style={s.link}>Keep me posted</Text>\n            </Pressable>\n          </> : <>\n            <Text style={s.heading}>{emptyTitle}');
+        replace('onLayout={restoreCarousel}', 'onLayout={() => { restoreCarousel(); onTourLayoutChange?.(); }}');
+        replace('<View key={result.id} testID=', '<View key={result.id} ref={position === 0 ? d.tourHeroRef : undefined} collapsable={false} testID=');
+        replace('locked={d.locked === true} style=', 'locked={d.locked === true && !d.isOnboardingPreview}\n' +
+          '              onboardingPreview={d.isOnboardingPreview} hideDishName={d.isOnboardingPreview && position > 0}\n              style=');
+        replace('          {more && <View style={s.moreCard}>{more}</View>}\n        </ScrollView>}\n',
+          '          {more && <View style={s.moreCard}>{more}</View>}\n        </ScrollView>}\n' +
+          '        {d.isOnboardingPreview && !d.loading && !d.refreshing && !d.error && !d.outOfArea &&\n' +
+          '          <Pressable ref={d.tourMoreRef} collapsable={false} style={s.previewUnlock} testID="locked-value-cta"\n' +
+          '            onPress={() => { void d.unlockPreview(); }} accessibilityRole="button"\n' +
+          "            accessibilityLabel={cards.length ? 'Explore full menus. Explore full menus with Pro.' : 'Keep exploring. Try another dish or area. Explore Pro plans.'}>\n" +
+          "            <Text style={s.link}>{cards.length ? 'Explore full menus with Pro →' : 'Explore Pro plans →'}</Text>\n          </Pressable>}\n");
+      } else {
+        replace('// Load the native map only after entering it, keeping list startup unchanged.',
+          "import { DiscoveryViewToggle } from './DiscoveryViewToggle';\n// Load the native map only on eligible iOS entries.");
+        replace("useMapSearchFlag(mapDebug === '1') && !onboardingPreview", "useMapSearchFlag(mapDebug === '1')");
+        replace("useState<'map' | 'list'>(__DEV__ ? 'map' : 'list')", "useState<'map' | 'list'>('map')");
+        replace('new Promise<void>(resolve => {\n', 'new Promise<void>(resolve => {\n    if (showMap) { resolve(); return; }\n');
+        replace('  }), []);', '  }), [showMap]);');
+        const nav = before.match(/\{isOnboardingPreview && <WelcomeNav [^\n]+\/>\}/)?.[0];
+        const intro = before.match(/      \{isOnboardingPreview && <View style=\{s.previewIntro\}[\s\S]*?      <\/View>\}/)?.[0];
+        if (!nav || !intro) return null;
+        replace(nav, '{previewNav}');
+        replace(intro, '      {previewIntro}');
+        const movedIntro = intro.slice(7, -1).replace(/^    /gm, '').replace(
+          '    {tourReady &&', "    {mapEnabled && !showMap && <DiscoveryViewToggle map={false} onPress={() => setView('map')} />}\n    {tourReady &&");
+        replace('  const header = (', `  const previewNav = ${nav.slice(1, -1)};\n  const previewIntro = ${movedIntro};\n  const header = (`);
+        replace("<DiscoveryMap discovery={discovery} onShowList={() => setView('list')} />",
+          "<DiscoveryMap discovery={discovery} onShowList={() => setView('list')}\n" +
+          '          previewHeader={isOnboardingPreview ? <>{previewNav}{previewIntro}</> : undefined}\n          onTourLayoutChange={onTourLayoutChange} />');
+        replace('mapControl={mapEnabled ?', 'mapControl={mapEnabled && !isOnboardingPreview ?');
+        replace('      <CoachMarks\n', '      </>}\n      <CoachMarks\n');
+        replace('      </>}\n      <FilterPopup', '      <FilterPopup');
+      }
+      if (before === after || expected !== after) return null;
+    }
+  } catch { return null; }
+  return { flows, acceptanceCategories: ['auth', 'billing', 'changed-journey', 'discovery', 'notifications', 'onboarding'],
+    reason: 'Source-mapped bounded Discovery map preview and unchanged ordinary card consumers; all other product behavior preserved' };
+}
+
 function discoveryEntryImpact(source, configKeys, range, cwd, env) {
   if (!range || range.unknown || !source.length || configKeys.some(key =>
     !/^EXPO_PUBLIC_(?:API_URL|SUPABASE_URL|SUPABASE_ANON_KEY|DEV_LOGIN_EMAIL|DEV_LOGIN_PASSWORD|REVENUECAT_TEST_KEY)$/.test(key))) return null;
@@ -336,14 +450,14 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   const source = files.filter(path => simulatorSource(path) && !verificationScriptsOnly(path, range, cwd, env));
   const highPath = source.find(highSimulatorPath);
   if (highPath) return full(`Navigation, auth, billing, native configuration or release path: ${highPath}`);
-  const entry = discoveryEntryImpact(source, configKeys, range, cwd, env);
+  const entry = discoveryPreviewImpact(source, configKeys, range, cwd, env) || discoveryEntryImpact(source, configKeys, range, cwd, env);
   if (entry && entry.flows.every(flow => all.includes(flow)) && (entry.flows.length || !labels.includes('needs-sim'))) {
     let reviewTier;
     try { reviewTier = simulatorReviewTier(source.filter(path => path !== '.github/workflows/simulator.yml'), cwd, env); }
     catch { return full('Review routing or risk tiers unavailable; cannot establish a narrower simulator scope'); }
     if (reviewTier === 'high') return { ...full('High canonical review tier affects a mobile-facing contract'), reviewTier };
     return { ...result(entry.flows.length ? 'medium' : 'low', entry.flows.length ? 'flow' : 'none', entry.flows,
-      entry.flows.length ? 'Source-mapped Discovery availability/default change; map/list/Shuffle, denied location and onboarding preview cover the affected entry'
+      entry.flows.length ? entry.reason || 'Source-mapped Discovery availability/default change; map/list/Shuffle, denied location and onboarding preview cover the affected entry'
         : 'Only Discovery comments changed; executable product inputs are unchanged', reviewTier), acceptanceCategories: entry.acceptanceCategories };
   }
   if (configKeys.length) return full(`Public native configuration changed: ${configKeys.join(', ')}`);

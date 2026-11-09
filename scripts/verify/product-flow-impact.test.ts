@@ -46,7 +46,7 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   const originalMap = readFileSync(map, 'utf8'), originalScreen = readFileSync(screen, 'utf8');
   const flag = join(directory, paths[3]!), originalFlag = readFileSync(flag, 'utf8');
   const cli = (file: string) => spawnSync(process.execPath, [file, '--plan'], { cwd: directory, env: env(), encoding: 'utf8' });
-  writeFileSync(map, originalMap + '\n// Clarify the unchanged renderer.\n');
+  writeFileSync(map, '// Clarify the unchanged renderer.\n' + originalMap);
   expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout)).toMatchObject({ required: false, flows: [] });
   const changedScreen = originalScreen.replace(/useState<'map' \| 'list'>\([^\n]+\);/,
     originalScreen.includes("useState<'map' | 'list'>('list')") ? "useState<'map' | 'list'>('map');" : "useState<'map' | 'list'>('list');");
@@ -110,7 +110,7 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   git('checkout', '-q', '--detach', head);
   for (const mutate of [
     () => writeFileSync(map, originalMap + '\nexport const newRendererBehavior = true;\n'),
-    () => writeFileSync(screen, changedScreen.replace('!onboardingPreview', 'onboardingPreview')),
+    () => writeFileSync(screen, changedScreen.replace('const showMap = mapEnabled', 'const showMap = !mapEnabled')),
     () => writeFileSync(workflow, budget.replace('NODE_ENV: development', 'NODE_ENV: production')),
     // The Shuffle-style policy would let remote flags enable Android Map.
     // It is not equivalent to Map's existing iOS-only availability boundary.
@@ -139,6 +139,163 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   git('add', '.'); git('commit', '-qm', 'template literal baseline'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   writeFileSync(map, originalMap + '\nexport const literal = `\n// after\n`;\n');
   expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
+});
+
+test('bounded preview adaptation reaches every plan consumer and rejects additional ordinary, preview or caller changes', () => {
+  copyProductFlowControls(directory);
+  symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
+  writeFileSync(join(directory, '.gitignore'), 'node_modules\n.evidence/\n');
+  const write = (path: string, content: string) => {
+    mkdirSync(dirname(join(directory, path)), { recursive: true }); writeFileSync(join(directory, path), content);
+  };
+  // Small source contracts keep this fixture independent of the current app
+  // revision. The real candidate is also checked through the same CLI at push.
+  const modules: Record<string, [string, string]> = {
+    'DiscoveryScreen.tsx': [
+      `import { HeroCard } from './DiscoveryCards';
+const [view, setView] = useState<'map' | 'list'>(__DEV__ ? 'map' : 'list');
+  const header = (
+      {isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
+        <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
+      </View>}
+  );
+      {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack} />}`,
+      `import { HeroCard } from './DiscoveryCards';
+const [view, setView] = useState<'map' | 'list'>('map');
+  const previewNav = isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack} />;
+  const previewIntro = isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
+    <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
+  </View>;
+  const header = (
+      {previewIntro}
+  );
+      {previewNav}`],
+    'DiscoveryMap.tsx': [
+      `import { DiscoveryMapCard } from './DiscoveryMapCard';
+  const cards = d.locked ? d.results.slice(0, 3) : d.results;
+  const more = d.nextCursor && !d.locked && !d.loading;
+  function open(result) {
+    void openRestaurantOrPaywall(d.locked, navigate, d.onLockedTap);
+  }`,
+      `import { DiscoveryMapCard } from './DiscoveryMapCard';
+  const cards = d.locked ? d.results.slice(0, 3) : d.results;
+  const more = d.nextCursor && !d.locked && !d.isOnboardingPreview && !d.loading;
+  function open(result) {
+    if (d.isOnboardingPreview) { void d.unlockPreview(result); return; }
+    void openRestaurantOrPaywall(d.locked, navigate, d.onLockedTap);
+  }`],
+    'DiscoveryMap.styles.ts': [
+      `export const s = StyleSheet.create({
+  searchRow: { gap: 8 },
+});`,
+      `export const s = StyleSheet.create({
+  previewHeader: { backgroundColor: EDITORIAL.cream, marginBottom: 8, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  previewUnlock: { marginHorizontal: 16, minHeight: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 24, backgroundColor: EDITORIAL.cream },
+  searchRow: { gap: 8 },
+});`],
+    'DiscoveryMapCard.tsx': [
+      `import { HeroMealContent, mealAccessibilitySummary } from './DiscoveryCards';
+const card = <HeroMealContent result={result} locked={locked} nameStyle={s.name} />;`,
+      `import { HeroMealContent, mealAccessibilitySummary, previewRowLabel } from './DiscoveryCards';
+const card = <HeroMealContent result={result} locked={locked} hideDishName={hideDishName} nameStyle={s.name} />;`],
+    'DiscoveryCards.tsx': [
+      "import { hero } from './DiscoveryScreen.styles';\n" +
+      'export function HeroMealContent({ result, locked, paywallPreview = false, nameStyle }) { return result; }\n' +
+      'function previewRowLabel(result: RestaurantResult): string {\n' +
+      '  const m = result.bestMatch;\n' +
+      '  return `${result.name}${m ? `, ${m.calories} kcal, protein ${m.proteinG}g` : ""}`;\n}',
+      "import { hero } from './DiscoveryScreen.styles';\n" +
+      'export function HeroMealContent({ result, locked, paywallPreview = false, hideDishName = false, nameStyle }) { return result; }\n' +
+      'export function previewRowLabel(result: RestaurantResult): string {\n' +
+      "  const m = result.bestMatch;\n  const published = m?.nutritionBasis === 'published';\n" +
+      "  return `${result.name}${m ? `, ${published ? 'Published' : 'Estimated'} nutrition, ${m.confidence.toLowerCase()} confidence, ${published ? '' : 'approximately '}${m.calories} kcal, protein ${m.proteinG}g` : \"\"}`;\n}"],
+  };
+  const prefix = 'apps/mobile/components/';
+  for (const [name, versions] of Object.entries(modules)) write(prefix + name, versions[0]);
+  for (const path of ['components/DiscoveryChrome.tsx', 'components/PaywallHero.tsx', 'app/welcome/preview.tsx',
+    'app/welcome/resubscribe.tsx', 'app/(tabs)/search.tsx']) {
+    write('apps/mobile/' + path, readFileSync(resolve(__dirname, '../../apps/mobile', path), 'utf8'));
+  }
+  const git = (...args: string[]) => execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args],
+    { cwd: directory, env: env(), encoding: 'utf8' }).trim();
+  git('init', '-q'); git('config', 'user.name', 'Preview impact fixture'); git('config', 'user.email', 'fixture@example.test');
+  git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'base');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  const base = git('rev-parse', 'HEAD');
+  const restore = () => { for (const [name, versions] of Object.entries(modules)) write(prefix + name, versions[1]); };
+  restore();
+  const cli = (file = 'scripts/verify/product-flow.mjs', args: string[] = ['--plan']) => {
+    const result = spawnSync(process.execPath, [file, ...args], { cwd: directory, env: env(), encoding: 'utf8' });
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+    return JSON.parse(result.stdout);
+  };
+  const expected = ['map-search', 'map-search-location-denied', 'onboarding-assisted-targets', 'onboarding-guided-preview',
+    'onboarding-out-of-area', 'onboarding-returning-preview', 'onboarding-search-highlight', 'onboarding-target-ranked-search',
+    'paywall-access', 'subscription-expired-routing'];
+  const plan = cli();
+  expect(plan).toMatchObject({ flows: expected,
+    categories: ['auth', 'billing', 'changed-journey', 'discovery', 'notifications', 'onboarding'], simulator: { scope: 'flow' } });
+  expect(cli('scripts/verify/impact-plan.mjs').simulator).toEqual(plan.simulator);
+  const consumers = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {candidatePlan,selectedFlows} from ${JSON.stringify(modulePath)};
+     import {publicationPlan} from ${JSON.stringify(resolve(__dirname, '../sim/publish-product-flow.mjs'))};
+     const plan=candidatePlan(); process.stdout.write(JSON.stringify({collection:selectedFlows(plan),finish:plan,
+       publication:publicationPlan(${JSON.stringify(join(directory, '.evidence/product-flow'))},${JSON.stringify(join(directory, 'missing-build.json'))})}));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect({ status: consumers.status, stderr: consumers.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(JSON.parse(consumers.stdout)).toMatchObject({ collection: expected, finish: { flows: expected }, publication: { flows: expected } });
+  git('add', '.'); git('commit', '-qm', 'preview adaptation');
+  const head = git('rev-parse', 'HEAD'), output = join(directory, '.evidence/output'), event = join(directory, '.evidence/event.json');
+  mkdirSync(dirname(output), { recursive: true });
+  for (const [eventName, body] of [['push', { before: base, after: head }],
+    ['pull_request', { pull_request: { base: { sha: base }, head: { sha: head } } }]] as const) {
+    writeFileSync(event, JSON.stringify(body)); writeFileSync(output, '');
+    const hosted = spawnSync(process.execPath, [resolve(__dirname, 'simulator-actions.mjs')], {
+      cwd: directory, env: { ...env(), CI: 'true', FITSY_PRODUCT_ROOT: directory,
+        GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output }, encoding: 'utf8',
+    });
+    expect(hosted.status).toBe(0);
+    expect(JSON.parse(hosted.stdout.replace(/^Simulator: /, '')).flows).toEqual(expected);
+    expect(readFileSync(output, 'utf8')).toBe('required=true\nscope=flow\n');
+  }
+  for (const [name, from, to] of [
+    ['DiscoveryMap.tsx', 'slice(0, 3)', 'slice(0, 4)'],
+    ['DiscoveryMap.tsx', 'd.unlockPreview(result)', 'navigate(result)'],
+    ['DiscoveryMap.tsx', 'openRestaurantOrPaywall(d.locked', 'openRestaurantOrPaywall(false'],
+    ['DiscoveryCards.tsx', 'paywallPreview = false', 'paywallPreview = true'],
+    ['DiscoveryCards.tsx', 'approximately ', ''],
+    ['DiscoveryCards.tsx', '${result.name}', '${m.name}'],
+    ['DiscoveryMapCard.tsx', 'locked={locked}', 'locked={false}'],
+    ['DiscoveryMap.styles.ts', 'searchRow: { gap: 8 }', 'searchRow: { gap: 0 }'],
+    ['DiscoveryScreen.tsx', 'onBack={onPreviewBack}', 'onBack={completeOnboarding}'],
+  ]) {
+    const original = modules[name!]![1]; expect(original).toContain(from);
+    write(prefix + name, original.replace(from!, to!));
+    expect(cli().simulator.scope).toBe('full'); restore();
+  }
+  for (const path of ['apps/mobile/lib/useDiscoveryState.ts', 'apps/mobile/lib/newProducer.ts', 'scripts/sim/ci.mjs',
+    'apps/mobile/components/PaywallHero.tsx', 'apps/mobile/app/_layout.tsx', 'packages/shared/src/contracts/search.ts']) {
+    const target = join(directory, path), original = (() => { try { return readFileSync(target, 'utf8'); } catch { return null; } })();
+    write(path, (original || '') + '\nexport const changed = true;\n');
+    expect(cli().simulator.scope).toBe('full');
+    if (original === null) rmSync(target); else write(path, original);
+  }
+  expect(cli('scripts/verify/impact-plan.mjs', ['--release-candidate']).simulator.scope).toBe('full');
+  expect(cli('scripts/verify/impact-plan.mjs', ['--base=unavailable-history']).simulator.scope).toBe('full');
+  rmSync(join(directory, prefix + 'DiscoveryMapCard.tsx'));
+  expect(cli().simulator.scope).toBe('full'); restore();
+  const unknownConfig = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {candidatePlan} from ${JSON.stringify(modulePath)};
+     process.stdout.write(JSON.stringify(['<unknown>','EXPO_PUBLIC_REVENUECAT_TEST_KEY'].map(key=>candidatePlan([key]).simulator.scope)));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect(JSON.parse(unknownConfig.stdout)).toEqual(['full', 'full']);
+  // A caller that predates the diff must also prevent the narrow selection.
+  git('checkout', '-q', '--detach', base);
+  write('apps/mobile/app/new-consumer.tsx', "import { HeroCard } from '@/components/DiscoveryCards';\nexport default HeroCard;\n");
+  git('add', '.'); git('commit', '-qm', 'new existing consumer'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  restore();
+  expect(cli().simulator.scope).toBe('full');
 });
 
 test.each([

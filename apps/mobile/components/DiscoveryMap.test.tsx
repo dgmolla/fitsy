@@ -563,8 +563,9 @@ it('recovers the production map preview, preserves sample disclosure, and carrie
   await saveOnboardingField('area', { lat: 34.04, lng: -118.24, name: 'DTLA', source: 'manual' });
   markPreviewTourSeen();
   rows = restaurants.slice(0, 3).map((row, index) => ({ ...row, bestMatch: {
-    menuItemId: `sample-${index}`, name: `Meal ${index}`, calories: 600 + index,
-    proteinG: 40, carbsG: 60, fatG: 20, confidence: 'HIGH', matchScore: index,
+    menuItemId: `sample-${index}`, name: `Meal ${index}`, calories: index === 1 ? 531 : 600 + index,
+    proteinG: 40, carbsG: 60, fatG: 20, confidence: index === 1 ? 'LOW' : 'HIGH', matchScore: index,
+    nutritionBasis: index === 1 ? 'estimated' : 'published',
   } }));
   let offline = true;
   global.fetch = jest.fn(withAccountProfile(async input => {
@@ -590,11 +591,17 @@ it('recovers the production map preview, preserves sample disclosure, and carrie
   expect(screen.getByText('Meal 0')).toBeTruthy();
   expect(screen.queryByText('Meal 1')).toBeNull();
   expect(screen.getByTestId('map-card-1').props.accessibilityLabel).not.toContain('Meal 1');
+  expect(screen.getByTestId('map-card-1').props.accessibilityLabel).toContain('Estimated nutrition, low confidence');
+  expect(screen.getByTestId('map-card-1').props.accessibilityLabel).toContain('approximately 531 kcal');
+  expect(screen.getByTestId('map-card-2').props.accessibilityLabel).toContain('Published nutrition, high confidence');
+  expect(screen.getByTestId('map-card-2').props.accessibilityLabel).not.toContain('approximately');
   expect(screen.getByTestId('preview-hidden-dish-spot-1', { includeHiddenElements: true })).toBeTruthy();
   expect(screen.getByTestId('locked-value-cta')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   await screen.findByTestId('discovery-list');
   expect(screen.getByTestId('discovery-location')).toBeTruthy();
+  expect(screen.getByTestId('preview-pick-2').props.accessibilityLabel).toContain('Estimated nutrition, low confidence, approximately 531 kcal');
+  expect(screen.getByTestId('preview-pick-2').props.accessibilityLabel).not.toContain('Meal 1');
   expect(screen.getAllByTestId('discovery-view-toggle')).toHaveLength(1);
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('map-pin-1');

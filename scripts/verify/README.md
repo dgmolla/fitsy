@@ -133,6 +133,11 @@ Every mobile or web UI source change requires simulator/E2E coverage.
 Proven literal copy or StyleSheet value edits on mapped screens select `scope: smoke` and `mode: render`, using the maintained journey's setup through the screen's render assertion and a screenshot.
 Changed navigation, state, forms, new/deleted screens and uncertain syntax retain affected E2E flows.
 Shared components, theme/assets, app shells and unmapped UI require the full suite.
+The bounded Discovery map-preview adaptation has a source comparison exception covering its existing onboarding, ordinary map/list, paywall and resubscribe consumers.
+It reconstructs the candidate from the complete base modules, permits only the listed preview/default adaptations, and checks the existing caller inventory in both revisions.
+Any additional product change, new caller, missing source or public configuration change restores full coverage.
+The same plan reaches local, hosted, final collection and publication callers, retaining all six interactive categories.
+Independent review must approve a changed selector before native admission; a matching plan is not execution evidence.
 Mixed changes keep the broader coverage; render smoke never narrows high risk.
 The exact `needs-sim` PR label forces execution, using the affected selection when available and the full set otherwise.
 Unavailable history or classification expands to full coverage.

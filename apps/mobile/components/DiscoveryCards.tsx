@@ -289,5 +289,6 @@ export const RestaurantSection = React.memo(function RestaurantSection({ result,
 
 export function previewRowLabel(result: RestaurantResult): string {
   const m = result.bestMatch;
-  return `${result.name}${m ? `, ${m.calories} kcal, protein ${m.proteinG}g, carbs ${m.carbsG}g, fat ${m.fatG}g` : ''}. Unlock meal name and full menu with Pro.`;
+  const published = m?.nutritionBasis === 'published';
+  return `${result.name}${m ? `, ${published ? 'Published' : 'Estimated'} nutrition, ${m.confidence.toLowerCase()} confidence, ${published ? '' : 'approximately '}${m.calories} kcal, protein ${m.proteinG}g, carbs ${m.carbsG}g, fat ${m.fatG}g` : ''}. Unlock meal name and full menu with Pro.`;
 }
