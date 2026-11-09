@@ -297,6 +297,34 @@ deterministicTest('optional and conditional omissions agree across runner and fi
 mediaTest('accepts identified baseline and billing outcomes with matching artifacts', () => {
   const result = validate(fixture()); expect(result.status).toBe(0); expect(JSON.parse(result.stdout).status).toBe('pass');
 });
+mediaTest('final walkthrough validation decodes genuine JPEG and PNG while rejecting corrupt or expired pixels', () => {
+  const report = fixture(), observation = report.exploration[0]!;
+  const events = readFileSync(join(dir, observation.trace), 'utf8').split('\n').map(line => JSON.parse(line));
+  const pngBytes = readFileSync(resolve(__dirname, '../sim/fixtures/active-saved-meal.png'));
+  const jpeg = (name: string) => {
+    const output = join(dir, `${name}.jpg`);
+    execFileSync('ffmpeg', ['-v', 'error', '-i', resolve(__dirname, `../sim/fixtures/${name}.png`),
+      '-frames:v', '1', '-q:v', '2', output], { timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'] });
+    return readFileSync(output);
+  };
+  const activeJpeg = jpeg('active-saved-meal'), expiredJpeg = jpeg('subscription-expired');
+  const check = (mimeType: string, pixels: Buffer) => {
+    const trace = [...events, { at: new Date().toISOString(), command: { name: 'take_screenshot' },
+      result: { content: [{ type: 'image', mimeType, data: pixels.toString('base64') }] } }]
+      .map(event => JSON.stringify(event)).join('\n');
+    writeFileSync(join(dir, observation.trace), trace); observation.sha256 = sha(trace);
+    report.finishedAt = new Date().toISOString();
+    return validate(report);
+  };
+  for (const [mime, pixels] of [['image/jpeg', activeJpeg], ['image/png', pngBytes]] as const) {
+    const result = check(mime, pixels);
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+  }
+  expect(check('image/png', activeJpeg).stderr).toContain('matching complete PNG or JPEG');
+  expect(check('image/jpeg', activeJpeg.subarray(0, -2)).stderr).toContain('matching complete PNG or JPEG');
+  expect(check('image/jpeg', Buffer.from('ffd8ff0000ffd9', 'hex')).stderr).toContain('Screenshot OCR command failed');
+  expect(check('image/jpeg', expiredJpeg).stderr).toContain('Unexpected subscription-expired screenshot');
+}, 30_000);
 deterministicTest('development proof retains assertions but never satisfies final publication', () => {
   const report = fixture();
   report.evidenceMode = 'development';
