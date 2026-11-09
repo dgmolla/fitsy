@@ -2,7 +2,7 @@
 // GitHub owns scheduling and check publication; reuse native/Metro/Maestro helpers.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,7 @@ import { changedFiles, isMain, repository, simulatorFlows } from '../verify/impa
 import { actionsSelection } from '../verify/simulator-actions.mjs';
 import { maestroApiArgs } from './backend-identity.mjs';
 import { releaseExceptions } from './journey-fixtures.mjs';
+import { appTreeHash } from './shared-native-cache.mjs';
 
 const controlDirectory = fileURLToPath(new URL('.', import.meta.url));
 const buildDirectory = join(repository, '.evidence/product-build');
@@ -100,10 +101,19 @@ async function runFlows(udid, work) {
   delete process.env.SIM_E2E_FIXTURES;
   const { startMetro, stopMetro, prepareEntitledEvidence, prepareBillingEvidence } = await import('./product-flow.mjs');
   const { runOwnedMaestro } = await import('./runner-controls.mjs');
-  const { assertFlowCommands } = await import('../verify/product-flow.mjs');
+  const { assertFlowCommands, publicConfigIdentity } = await import('../verify/product-flow.mjs');
   const { requireScreenRecognition, inspectScreenshotDirectory } = await import('./screen-guard.mjs');
   requireScreenRecognition();
-  command('xcrun', ['simctl', 'install', udid, prepareRuntimeApp(app, join(work, 'Fitsy.app'))]);
+  const runtimeApp = prepareRuntimeApp(app, join(work, 'Fitsy.app'));
+  command('xcrun', ['simctl', 'install', udid, runtimeApp]);
+  const identity = { source: command('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', 'rev-parse', 'HEAD']),
+    comparison, simulator: udid, appHash: appTreeHash(runtimeApp) };
+  // Keep an incomplete attempt marked until every required flow succeeds.
+  // Abrupt termination must retain the original diagnostics too.
+  const failureFile = join(work, 'failure.json');
+  const recordAttempt = details => writeFileSync(failureFile,
+    JSON.stringify({ ...identity, at: new Date().toISOString(), ...details }, null, 2) + '\n', { mode: 0o600 });
+  recordAttempt({ status: 'running', selected: names });
   const controller = new AbortController();
   const interrupt = () => controller.abort();
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
@@ -131,6 +141,8 @@ async function runFlows(udid, work) {
       const fixture = (catalog[name].tags || []).find(tag => tag.startsWith('fixture:'))?.slice(8) || 'unsubscribed-dev';
       process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL = accounts[fixture].email;
       process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD = accounts[fixture].password;
+      recordAttempt({ status: 'running', flow: name, fixture, configHash: publicConfigIdentity(repository).configHash,
+        flowHash: createHash('sha256').update(readFileSync(join(repository, 'apps/mobile/e2e/flows', `${name}.yaml`))).digest('hex') });
       try {
         await startMetro(profile, { maxWorkers: 1 });
         if (fixture === 'entitled-dev') await prepareEntitledEvidence(profile, udid, join(work, `${name}-active-setup`));
@@ -141,9 +153,27 @@ async function runFlows(udid, work) {
       } finally { await stopMetro(); }
     }
     console.log(JSON.stringify({ selected: names.length, passed: executable.length, excepted: exceptions, manual }));
+    rmSync(failureFile);
   } finally {
     process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
   }
+}
+
+function retainFailedAttempt(work) {
+  const failure = join(work, 'failure.json');
+  if (!existsSync(failure)) return;
+  // GitHub's RUNNER_TEMP and checkout are disposable. Raw Maestro receipts can
+  // contain credentials, so keep them on this host, never in public artifacts.
+  const parent = resolve(process.env.RUNNER_TEMP, '..', 'fitsy-simulator-failures');
+  mkdirSync(parent, { recursive: true, mode: 0o700 });
+  const stat = lstatSync(parent);
+  if (!stat.isDirectory() || stat.uid !== process.getuid() || (stat.mode & 0o077))
+    throw new Error('Failed-flow retention directory must be private and owned by this runner');
+  const destination = join(parent, `${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`);
+  if (existsSync(destination)) throw new Error('Failed-flow retention already exists; preserve both attempts for diagnosis');
+  const identityHash = createHash('sha256').update(readFileSync(failure)).digest('hex');
+  renameSync(work, destination);
+  console.log(`Private failed-flow evidence retained: ${destination}; identity sha256=${identityHash}`);
 }
 
 export async function main(action) {
@@ -160,13 +190,15 @@ export async function main(action) {
       if (existsSync(join(buildDirectory, 'metro.json'))) await (await import('./product-flow.mjs')).stopMetro();
       metroStopped = true;
     } finally {
-      if (existsSync(marker)) {
-        const { udid } = JSON.parse(readFileSync(marker, 'utf8'));
-        try {
-          if (devices().find(device => device.udid === udid)?.state !== 'Shutdown') command('xcrun', ['simctl', 'shutdown', udid]);
-          command('xcrun', ['simctl', 'erase', udid]);
-        } finally { command('bash', [join(controlDirectory, 'sim'), 'release']); }
-      }
+      try {
+        if (existsSync(marker)) {
+          const { udid } = JSON.parse(readFileSync(marker, 'utf8'));
+          try {
+            if (devices().find(device => device.udid === udid)?.state !== 'Shutdown') command('xcrun', ['simctl', 'shutdown', udid]);
+            command('xcrun', ['simctl', 'erase', udid]);
+          } finally { command('bash', [join(controlDirectory, 'sim'), 'release']); }
+        }
+      } finally { if (metroStopped) retainFailedAttempt(work); }
       // stopMetro deliberately retains ownership evidence when termination fails.
       // Keep its files and temporary data until the live consumer is recovered.
       if (metroStopped) for (const dir of [work, buildDirectory, join(repository, 'apps/mobile/ios'), join(repository, 'apps/mobile/.expo')])

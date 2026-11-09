@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, copyFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, copyFileSync, statSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -213,6 +213,48 @@ if(args.includes('boot')) process.exit(1);\n`;
   assert(calls.some(args => args.join(' ') === `simctl erase ${udid}`));
   assert(calls.some(args => args.at(-1) === 'release'));
   assert.equal(calls.some(args => args.includes('all') || args.includes('delete')), false);
+});
+
+test('real cleanup retains failed Maestro bytes privately and fails closed when retention is unavailable', t => {
+  const dir = temporary(t), checkout = join(dir, 'checkout'), temp = join(dir, 'runner-temp');
+  mkdirSync(checkout); mkdirSync(temp);
+  const archive = join(dir, 'fitsy-simulator-failures');
+  const cleanup = attempt => spawnSync(process.execPath, [join(root, 'scripts/sim/actions.mjs'), 'cleanup'], {
+    cwd: checkout, encoding: 'utf8', env: { ...env, FITSY_PRODUCT_ROOT: checkout, GITHUB_WORKSPACE: checkout,
+      GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS', RUNNER_TEMP: temp, GITHUB_RUN_ID: '24', GITHUB_RUN_ATTEMPT: String(attempt) },
+  });
+  const failure = JSON.stringify({ flow: 'paywall-access', source: 'a'.repeat(40), configHash: 'b'.repeat(64) });
+  const raw = 'original command receipt with synthetic-password and synthetic-session-token';
+  const prepare = attempt => {
+    const work = join(temp, `fitsy-simulator-24-${attempt}`);
+    mkdirSync(join(work, 'paywall-access'), { recursive: true });
+    writeFileSync(join(work, 'failure.json'), failure);
+    writeFileSync(join(work, 'paywall-access/commands-paywall-access.json'), raw);
+    return work;
+  };
+  const work = prepare(1), result = cleanup(1), retained = join(archive, '24-1');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(work), false);
+  assert.equal(readFileSync(join(retained, 'failure.json'), 'utf8'), failure);
+  assert.equal(readFileSync(join(retained, 'paywall-access/commands-paywall-access.json'), 'utf8'), raw);
+  assert.equal(statSync(archive).mode & 0o077, 0);
+  assert.doesNotMatch(result.stdout + result.stderr, /synthetic-password|synthetic-session-token/);
+  assert.match(result.stdout, /Private failed-flow evidence retained/);
+  assert.equal(cleanup(1).status, 0); // Repeated cleanup does not replace the retained attempt.
+  const next = prepare(2);
+  writeFileSync(join(archive, '24-2'), 'existing evidence must not be replaced');
+  const refused = cleanup(2);
+  assert.equal(refused.status, 1);
+  assert.equal(readFileSync(join(next, 'paywall-access/commands-paywall-access.json'), 'utf8'), raw);
+  assert.equal(readFileSync(join(archive, '24-2'), 'utf8'), 'existing evidence must not be replaced');
+  assert.doesNotMatch(refused.stdout + refused.stderr, /synthetic-password|synthetic-session-token/);
+  const unsafe = prepare(3);
+  chmodSync(archive, 0o755);
+  const publicDirectory = cleanup(3);
+  assert.equal(publicDirectory.status, 1);
+  assert.match(publicDirectory.stderr, /private and owned/);
+  assert.equal(readFileSync(join(unsafe, 'paywall-access/commands-paywall-access.json'), 'utf8'), raw);
+  assert.equal(existsSync(join(archive, '24-3')), false);
 });
 
 test('CLI cleanup fails and retains ownership when an owned Metro ignores SIGTERM', async t => {

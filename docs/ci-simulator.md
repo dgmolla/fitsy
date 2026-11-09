@@ -112,4 +112,10 @@ Before installation, Expo regenerates public RevenueCat configuration in a dispo
 Each job starts Metro from the checked-out candidate with current fixture credentials.
 Job logs name passed or failed flows; raw Maestro output and temporary bundles are removed during cleanup rather than uploaded with credentials.
 The always-run cleanup stops owned Metro, erases and shuts down only the claimed device, and removes generated iOS/build/temp data without deleting the reusable device.
+Failed or interrupted flow attempts retain their original job directory under `fitsy-simulator-failures/<run-id>-<attempt>` beside `RUNNER_TEMP`, outside the disposable checkout and temp directory.
+Its parent must be owned by the runner with mode0700; raw Maestro receipts can contain credentials and must never be uploaded to public Actions artifacts or pasted into issue comments.
+The retained attempt binds the checked-out source, comparison, simulator, runtime app, flow and public-config hashes, and keeps raw command/debug/screenshot evidence for the existing owner to diagnose.
+The log prints only the private path and identity-receipt digest.
+Retention failure blocks cleanup and preserves the original work; an existing archived attempt is never overwritten.
+Use the existing owned-resource cleanup procedure once its diagnosis and evidence dependencies end, with the unchanged inactivity cutoff.
 If the Mac loses power, stop the runner service, reconcile its existing simulator claim, shut down that dedicated device and restart the service before rerunning the failed check.
