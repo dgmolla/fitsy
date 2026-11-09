@@ -130,6 +130,18 @@ export function simulatorFlows(cwd = repository) {
   } catch { return []; } // The runner rejects a required but missing/empty catalog.
 }
 
+export function simulatorBudget(selection, cwd = repository) {
+  const { scope, flows } = selection || {}, catalog = simulatorFlows(cwd);
+  if (!['none', 'smoke', 'flow', 'full'].includes(scope) || !Array.isArray(flows) ||
+      new Set(flows).size !== flows.length || flows.some(name => typeof name !== 'string' || !catalog.includes(name)) ||
+      (scope === 'flow' && !flows.length) || (['none', 'smoke'].includes(scope) && flows.length))
+    throw new Error('Invalid simulator budget selection');
+  // Three maintained journeys fit the short regime. Larger selections need
+  // the existing full-run budget for setup, fixture/Metro transitions and cleanup.
+  const timeoutMinutes = scope === 'full' || flows.length > 3 ? 90 : 30;
+  return { timeoutMinutes, workerTimeoutSeconds: timeoutMinutes * 60 };
+}
+
 // Retain the path tiers as simulator policy without reviving the retired review
 // poller. The supported router establishes domain ownership; REVIEW.md's
 // severity and independent review rules are separate and remain unchanged.
@@ -214,12 +226,34 @@ function discoveryPreviewImpact(source, configKeys, range, cwd, env) {
   if (!range || range.unknown || configKeys.length) return null;
   const components = ['DiscoveryScreen.tsx', 'DiscoveryMap.tsx', 'DiscoveryMap.styles.ts', 'DiscoveryMapCard.tsx', 'DiscoveryCards.tsx']
     .map(name => `apps/mobile/components/${name}`);
+  const budgetControls = ['scripts/verify/simulator-actions.mjs', '.github/workflows/simulator.yml'];
   if (!components.every(path => source.includes(path)) || source.some(path => !components.includes(path) &&
-      path !== 'scripts/verify/impact-plan.mjs' && !/^apps\/mobile\/e2e\/flows\/onboarding-(guided|returning)-preview\.yaml$/.test(path))) return null;
+      path !== 'scripts/verify/impact-plan.mjs' && !budgetControls.includes(path) &&
+      !/^apps\/mobile\/e2e\/flows\/onboarding-(guided|returning)-preview\.yaml$/.test(path))) return null;
+  if (budgetControls.some(path => source.includes(path)) && !budgetControls.every(path => source.includes(path))) return null;
   const flows = ['map-search', 'map-search-location-denied', 'onboarding-assisted-targets', 'onboarding-guided-preview',
     'onboarding-out-of-area', 'onboarding-returning-preview', 'onboarding-search-highlight', 'onboarding-target-ranked-search',
     'paywall-access', 'subscription-expired-routing'];
   try {
+    for (const path of budgetControls.filter(path => source.includes(path))) {
+      const [before, after] = sourceVersions(path, range, cwd, env);
+      const expected = path.endsWith('.yml') ? before
+        .replace('      scope: ${{ steps.plan.outputs.scope }}', '      scope: ${{ steps.plan.outputs.scope }}\n' +
+          '      timeout_minutes: ${{ steps.plan.outputs.timeout_minutes }}\n      worker_timeout_seconds: ${{ steps.plan.outputs.worker_timeout_seconds }}')
+        .replace("${{ needs.select.outputs.scope == 'full' && 90 || 30 }}", '${{ fromJSON(needs.select.outputs.timeout_minutes) }}')
+        .replace("${{ needs.select.outputs.scope == 'full' && '5400' || '1800' }}", '${{ needs.select.outputs.worker_timeout_seconds }}') : before
+        .replace('isMain, simulatorSelection', 'isMain, simulatorSelection, simulatorBudget')
+        .replace('  const labels =', '  const result = selection => ({ ...selection, ...simulatorBudget(selection, options.cwd) });\n  const labels =')
+        .replace("return { required: true, scope: plan.scope === 'full' ? 'full' : 'flow', flows: plan.flows, reason: plan.reason };",
+          "return result({ required: true, scope: plan.scope === 'full' ? 'full' : 'flow', flows: plan.flows, reason: plan.reason });")
+        .replace('return { required: controls,', 'return result({ required: controls,')
+        .replace("journeys' : plan.reason };", "journeys' : plan.reason });")
+        .replace("for (const key of ['required', 'scope']) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${selection[key]}\\n`);",
+          "for (const [key, value] of Object.entries({ required: selection.required, scope: selection.scope,\n" +
+          "        timeout_minutes: selection.timeoutMinutes, worker_timeout_seconds: selection.workerTimeoutSeconds }))\n" +
+          "        appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\\n`);");
+      if (expected === before || expected !== after) return null;
+    }
     // These are the actual shared card and screen callers, including ordinary
     // paywall A and resubscribe. A new caller invalidates this bounded mapping.
     const callers = [...components.filter(path => !path.endsWith('.styles.ts')), 'apps/mobile/components/DiscoveryChrome.tsx',

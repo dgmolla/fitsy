@@ -137,6 +137,9 @@ The bounded Discovery map-preview adaptation has a source comparison exception c
 It reconstructs the candidate from the complete base modules, permits only the listed preview/default adaptations, and checks the existing caller inventory in both revisions.
 Any additional product change, new caller, missing source or public configuration change restores full coverage.
 The same plan reaches local, hosted, final collection and publication callers, retaining all six interactive categories.
+The hosted selector couples job and worker budgets: smoke and up to three selected flows use 30 minutes/1800 seconds; larger selections and full coverage use 90 minutes/5400 seconds.
+The existing native caller derives the corresponding 35/95-minute lease, preserving setup, fixture transitions and cleanup time without changing individual journey deadlines.
+Only the exact coupled workflow budget wiring is admitted with the bounded preview adaptation; unrelated workflow or runner changes restore full coverage.
 Independent review must approve a changed selector before native admission; a matching plan is not execution evidence.
 Mixed changes keep the broader coverage; render smoke never narrows high risk.
 The exact `needs-sim` PR label forces execution, using the affected selection when available and the full set otherwise.

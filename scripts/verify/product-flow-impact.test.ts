@@ -99,7 +99,7 @@ test('real Discovery entry changes select three journeys across CLI and publicat
         GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output }, encoding: 'utf8',
     });
     expect(hosted.status).toBe(0);
-    expect(readFileSync(output, 'utf8')).toBe('required=true\nscope=flow\n');
+    expect(readFileSync(output, 'utf8')).toBe('required=true\nscope=flow\ntimeout_minutes=30\nworker_timeout_seconds=1800\n');
     expect(JSON.parse(hosted.stdout.replace(/^Simulator: /, '')).flows).toEqual(expected);
   }
   git('checkout', '-q', '--detach', base);
@@ -212,6 +212,36 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
       "  return `${result.name}${m ? `, ${published ? 'Published' : 'Estimated'} nutrition, ${m.confidence.toLowerCase()} confidence, ${published ? '' : 'approximately '}${m.calories} kcal, protein ${m.proteinG}g` : \"\"}`;\n}"],
   };
   const prefix = 'apps/mobile/components/';
+  const budgetControls: Record<string, [string, string]> = {
+    '.github/workflows/simulator.yml': [
+      `permissions: { contents: read }
+      scope: \${{ steps.plan.outputs.scope }}
+    timeout-minutes: \${{ needs.select.outputs.scope == 'full' && 90 || 30 }}
+      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: \${{ needs.select.outputs.scope == 'full' && '5400' || '1800' }}`,
+      `permissions: { contents: read }
+      scope: \${{ steps.plan.outputs.scope }}
+      timeout_minutes: \${{ steps.plan.outputs.timeout_minutes }}
+      worker_timeout_seconds: \${{ steps.plan.outputs.worker_timeout_seconds }}
+    timeout-minutes: \${{ fromJSON(needs.select.outputs.timeout_minutes) }}
+      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: \${{ needs.select.outputs.worker_timeout_seconds }}`],
+    'scripts/verify/simulator-actions.mjs': [
+      `import { changedFiles, isMain, simulatorSelection } from './impact-plan.mjs';
+  const labels = [];
+  if (plan.required) return { required: true, scope: plan.scope === 'full' ? 'full' : 'flow', flows: plan.flows, reason: plan.reason };
+  return { required: controls, scope: controls ? 'smoke' : 'none', flows: [],
+    reason: controls ? 'Changed simulator controls require the three maintained hosted smoke journeys' : plan.reason };
+      for (const key of ['required', 'scope']) appendFileSync(process.env.GITHUB_OUTPUT, \`\${key}=\${selection[key]}\\n\`);`,
+      `import { changedFiles, isMain, simulatorSelection, simulatorBudget } from './impact-plan.mjs';
+  const result = selection => ({ ...selection, ...simulatorBudget(selection, options.cwd) });
+  const labels = [];
+  if (plan.required) return result({ required: true, scope: plan.scope === 'full' ? 'full' : 'flow', flows: plan.flows, reason: plan.reason });
+  return result({ required: controls, scope: controls ? 'smoke' : 'none', flows: [],
+    reason: controls ? 'Changed simulator controls require the three maintained hosted smoke journeys' : plan.reason });
+      for (const [key, value] of Object.entries({ required: selection.required, scope: selection.scope,
+        timeout_minutes: selection.timeoutMinutes, worker_timeout_seconds: selection.workerTimeoutSeconds }))
+        appendFileSync(process.env.GITHUB_OUTPUT, \`\${key}=\${value}\\n\`);`],
+  };
+  for (const [path, versions] of Object.entries(budgetControls)) write(path, versions[0]);
   for (const [name, versions] of Object.entries(modules)) write(prefix + name, versions[0]);
   for (const path of ['components/DiscoveryChrome.tsx', 'components/PaywallHero.tsx', 'app/welcome/preview.tsx',
     'app/welcome/resubscribe.tsx', 'app/(tabs)/search.tsx']) {
@@ -224,6 +254,7 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   const base = git('rev-parse', 'HEAD');
   const restore = () => { for (const [name, versions] of Object.entries(modules)) write(prefix + name, versions[1]); };
+  for (const [path, versions] of Object.entries(budgetControls)) write(path, versions[1]);
   restore();
   const cli = (file = 'scripts/verify/product-flow.mjs', args: string[] = ['--plan']) => {
     const result = spawnSync(process.execPath, [file, ...args], { cwd: directory, env: env(), encoding: 'utf8' });
@@ -256,8 +287,24 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
         GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output }, encoding: 'utf8',
     });
     expect(hosted.status).toBe(0);
-    expect(JSON.parse(hosted.stdout.replace(/^Simulator: /, '')).flows).toEqual(expected);
-    expect(readFileSync(output, 'utf8')).toBe('required=true\nscope=flow\n');
+    expect(JSON.parse(hosted.stdout.replace(/^Simulator: /, ''))).toMatchObject({ flows: expected,
+      scope: 'flow', timeoutMinutes: 90, workerTimeoutSeconds: 5400 });
+    expect(readFileSync(output, 'utf8')).toBe('required=true\nscope=flow\ntimeout_minutes=90\nworker_timeout_seconds=5400\n');
+  }
+  for (const [path, from, to] of [
+    ['.github/workflows/simulator.yml', 'contents: read', 'contents: write'],
+    ['.github/workflows/simulator.yml', 'fromJSON(needs.select.outputs.timeout_minutes)', '30'],
+    ['.github/workflows/simulator.yml', 'needs.select.outputs.worker_timeout_seconds', "'1800'"],
+    ['scripts/verify/simulator-actions.mjs', 'worker_timeout_seconds: selection.workerTimeoutSeconds', 'worker_timeout_seconds: 1800'],
+    ['scripts/verify/simulator-actions.mjs', 'required: true', 'required: false'],
+  ]) {
+    const original = budgetControls[path!]![1]; expect(original).toContain(from);
+    write(path!, original.replace(from!, to!));
+    expect(cli().simulator.scope).toBe('full'); write(path!, original);
+  }
+  for (const [path, versions] of Object.entries(budgetControls)) {
+    write(path, versions[0]);
+    expect(cli().simulator.scope).toBe('full'); write(path, versions[1]);
   }
   for (const [name, from, to] of [
     ['DiscoveryMap.tsx', 'slice(0, 3)', 'slice(0, 4)'],
