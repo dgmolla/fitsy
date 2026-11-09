@@ -425,13 +425,25 @@ env:
 - assertTrue: ${maestro.copiedText === 'chicken'}
 - tapOn:
     id: discovery-clear-search
+# Clearing starts a real search whose result layout can move the input.
+# Wait for that result before choosing native tap coordinates, then verify the
+# typed value before Enter so an unfocused keyboard cannot masquerade as input.
 - extendedWaitUntil:
     visible:
       id: discovery-search
     timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- waitForAnimationToEnd
 - tapOn:
     id: discovery-search
+- waitForAnimationToEnd
 - inputText: "pizza"
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'pizza'}
 - pressKey: Enter
 - extendedWaitUntil:
     visible:
