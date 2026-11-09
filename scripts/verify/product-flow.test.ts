@@ -53,13 +53,15 @@ function fixture() {
     exploration: [{ category: 'billing', result: 'pass', expected: 'cancel returns to paywall', observed: 'paywall remains usable', branches: ['primary', 'recovery'], trace: 'trace.json', sha256: sha(trace) }],
   };
 }
-function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate', fixtureConfigurations: Record<string, string> = {}) {
+function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate', fixtureConfigurations: Record<string, string> = {}, env = fixtureEnv()) {
   writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
-  return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:['cold-start-welcome','signin-options','billing-cancel']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)}, [], ${JSON.stringify(fixtureConfigurations)})`);
+  return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:['cold-start-welcome','signin-options','billing-cancel']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)}, [], ${JSON.stringify(fixtureConfigurations)})`, env);
 }
 
 deterministicTest('walkthrough fixture transitions retain original proof and reject altered, incomplete or stale bindings', () => {
   const original = fixture();
+  original.videoRequested = false;
+  for (const flow of original.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
   const start = Date.parse(original.startedAt);
   const at = (offset: number) => new Date(start + offset).toISOString();
   const report = { ...original, configHash: sha('free'), jsHash: sha('js'), backendDeployment: 'dev-deployment',
@@ -91,7 +93,9 @@ deterministicTest('walkthrough fixture transitions retain original proof and rej
     report.walkthroughSessions = [{ category: 'billing', receipt: 'session.json', sha256: sha(bytes), artifacts }];
   };
   saveSession();
-  expect(validate(report).status).toBe(0);
+  // Portable lifecycle validation must not inherit the Mac's media decoders.
+  const accepted = validate(report, 'final-candidate', {}, { ...fixtureEnv(), PATH: dir });
+  expect({ status: accepted.status, stderr: accepted.stderr }).toEqual({ status: 0, stderr: '' });
   expect(report.metro.pid).toBe(101);
   const restored = evaluate(`gate.walkthroughState(${JSON.stringify(report)}, ${JSON.stringify(dir)}).metro`);
   expect(JSON.parse(restored.stdout).pid).toBe(202);
